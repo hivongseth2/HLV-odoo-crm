@@ -1,9 +1,0 @@
-B1 : pull image
-docker compose up -d 
-
-B2 : khởi tạo db
-docker exec -it basic-odoo-1 odoo -d odoo -i base --without-demo=all
-
-
-option : Xóa Image 
- docker compose down -v
