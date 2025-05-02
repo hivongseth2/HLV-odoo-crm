@@ -1,14 +1,22 @@
 {
     'name': 'HLV Inventory Custom',
-    'version': '1.0',
-    'depends': ['base', 'stock', 'product', 'uom', 'sale'], 
+    'version': '1.0.0',
+    'summary': 'Customizations for Inventory Management',
+    'description': 'Custom inventory features for HLV Company using Odoo 18.',
     'author': 'Nguyen Thanh Luan',
-    'category': 'Inventory',
-    'description': 'Custom inventory features for HLV',
+    'category': 'Inventory/Inventory',
+    'depends': [
+        'stock',
+        'stock_account',
+        'product',
+        'uom',
+        'sale_management'
+    ],
     'data': [
-        'views/inventory_view.xml',
         'security/ir.model.access.csv',
+        'views/inventory_view.xml',
     ],
     'installable': True,
     'application': False,
+    'license': 'LGPL-3',
 }
