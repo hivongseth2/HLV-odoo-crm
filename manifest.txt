@@ -1,0 +1,14 @@
+{
+    'name': 'HLV Inventory Custom',
+    'version': '1.0',
+    'depends': ['base', 'stock', 'product', 'uom', 'sale'], 
+    'author': 'Nguyen Thanh Luan',
+    'category': 'Inventory',
+    'description': 'Custom inventory features for HLV',
+    'data': [
+        'views/inventory_view.xml',
+        'security/ir.model.access.csv',
+    ],
+    'installable': True,
+    'application': False,
+}
