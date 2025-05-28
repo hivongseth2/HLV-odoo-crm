@@ -1,0 +1,19 @@
+<odoo>
+  <record id="product_template_action_import" model="ir.actions.act_window">
+    <field name="name">Import Products</field>
+    <field name="res_model">product.import.wizard</field>
+    <field name="view_mode">form</field>
+    <field name="target">new</field>
+  </record>
+
+  <record id="product_template_button_import" model="ir.ui.view">
+    <field name="name">product.template.button.import</field>
+    <field name="model">product.template</field>
+    <field name="inherit_id" ref="product.product_template_only_form_view"/>
+    <field name="arch" type="xml">
+      <header position="inside">
+        <button name="%(product_template_action_import)d" type="action" string="Import Excel" class="oe_highlight"/>
+      </header>
+    </field>
+  </record>
+</odoo>
