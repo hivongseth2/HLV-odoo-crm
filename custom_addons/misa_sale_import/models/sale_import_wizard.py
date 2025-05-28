@@ -7,7 +7,7 @@ from io import BytesIO
 
 class SaleImportWizard(models.TransientModel):
     _name = 'sale.import.wizard'
-    _description = 'MISA Sale Order Import Wizard'
+    _description = 'MISA Sale Order Import Wizard HLV'
 
     file = fields.Binary(string='Excel File', required=True)
     file_name = fields.Char(string='File Name')
