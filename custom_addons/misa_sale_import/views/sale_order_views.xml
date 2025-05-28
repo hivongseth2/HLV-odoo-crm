@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_sales_order_import_button" model="ir.ui.view">
-        <field name="name">sale.order.import.button.tree</field>
+    <record id="view_sale_import_button_header" model="ir.ui.view">
+        <field name="name">sale.order.import.button.header</field>
         <field name="model">sale.order</field>
-        <field name="inherit_id" ref="sale.view_order_tree"/>
+        <field name="inherit_id" ref="sale.view_order_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//tree" position="before">
-                <header>
-                    <button name="%(action_sale_import_wizard)d"
-                            string="Import MISA Orders"
-                            type="action"
-                            class="btn-primary"
-                            icon="fa-upload"/>
-                </header>
+            <xpath expr="//header" position="inside">
+                <button name="%(action_sale_import_wizard)d"
+                        string="Import MISA Orders"
+                        type="action"
+                        class="btn-primary"
+                        icon="fa-upload"/>
             </xpath>
         </field>
     </record>
+
 </odoo>
