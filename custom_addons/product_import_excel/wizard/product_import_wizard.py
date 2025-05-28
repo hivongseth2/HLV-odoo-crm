@@ -1,12 +1,11 @@
-
 from odoo import models, fields, api
 import base64
+import tempfile
 import pandas as pd
-from io import BytesIO
 
 class ProductImportWizard(models.TransientModel):
-    _name = 'product.import.wizard'
-    _description = 'Import Products from Excel'
+    _name = "product.import.wizard"
+    _description = "Wizard to import product from Excel"
 
     file = fields.Binary(string="Excel File", required=True)
     filename = fields.Char(string="File Name")
@@ -15,40 +14,38 @@ class ProductImportWizard(models.TransientModel):
         if not self.file:
             return
 
-        stream = BytesIO(base64.b64decode(self.file))
-        df = pd.read_excel(stream, sheet_name=0)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+            tmp.write(base64.b64decode(self.file))
+            tmp.seek(0)
+            df = pd.read_excel(tmp.name)
 
         for _, row in df.iterrows():
-            code = row.get('Mã')
-            name = row.get('Tên')
-            uom_name = row.get('Đơn vị tính chính')
+            name = row.get('Tên hàng hóa')
+            default_code = row.get('Mã')
             barcode = row.get('Mã vạch', False)
-            price_purchase = row.get('Đơn giá mua gần nhất', 0.0)
-            price_sale_1 = row.get('Đơn giá bán 1', 0.0)
-            x_vat = row.get('Thuế suất GTGT', 0.0)
-            x_origin = row.get('Nguồn gốc', 'unknown')
-            type_raw = row.get('Tính chất', '').strip().lower()
+            x_origin = row.get('Nguồn gốc', '')
+            x_group = row.get('Nhóm VTHH', '')
+            x_property = row.get('Tính chất', '')
+            vat = row.get('Thuế suất GTGT', 10)
+            cost_price = row.get('Đơn giá mua gần nhất', 0.0)
+            price1 = row.get('Đơn giá bán 1', 0.0)
+            price2 = row.get('Đơn giá bán 2', 0.0)
+            price3 = row.get('Đơn giá bán 3', 0.0)
 
-            type_map = {'hàng hóa': 'product', 'dịch vụ': 'service'}
-            ptype = type_map.get(type_raw, 'product')
+            values = {
+                "name": name,
+                "default_code": default_code,
+                "barcode": barcode,
+                "standard_price": cost_price,
+                "list_price": price1,
+                "x_origin": x_origin,
+                "x_group": x_group,
+                "x_property": x_property,
+                "taxes_id": [(6, 0, [self._get_tax_id(vat)])],
+            }
 
-            uom = self.env['uom.uom'].search([('name', '=', uom_name)], limit=1)
-            if not uom:
-                uom = self.env['uom.uom'].create({'name': uom_name, 'category_id': 1})
+            self.env["product.template"].create(values)
 
-            existing = self.env['product.template'].search([('default_code', '=', code)], limit=1)
-            if existing:
-                continue
-
-            self.env['product.template'].create({
-                'name': name,
-                'default_code': code,
-                'barcode': barcode if barcode else False,
-                'type': ptype,
-                'list_price': price_sale_1 or 0.0,
-                'standard_price': price_purchase or 0.0,
-                'uom_id': uom.id,
-                'uom_po_id': uom.id,
-                'x_vat': x_vat,
-                'x_origin': x_origin
-            })
+    def _get_tax_id(self, vat):
+        tax = self.env['account.tax'].search([('amount', '=', vat), ('type_tax_use', '=', 'sale')], limit=1)
+        return tax.id if tax else False

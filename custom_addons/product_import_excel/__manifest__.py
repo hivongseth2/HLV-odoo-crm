@@ -1,14 +1,16 @@
 {
-    "name": "Product Import from Excel",
+    "name": "Product Import Excel",
     "version": "1.0",
-    "depends": ["product", "base"],
-    "author": "Custom",
-    "category": "Inventory",
-    "summary": "Import product from Excel",
+    "depends": ["base", "product"],
+    "author": "ChatGPT",
+    "category": "Tools",
+    "description": "Import products from Excel file",
     "data": [
-        "views/product_template_views.xml",
-        "wizard/product_import_wizard_view.xml"
+        "security/ir.model.access.csv",
+        "wizard/product_import_wizard_view.xml",
+        "views/product_import_action.xml",
+        "views/product_template_views.xml"
     ],
     "installable": True,
-    "application": False
+    "auto_install": False
 }
