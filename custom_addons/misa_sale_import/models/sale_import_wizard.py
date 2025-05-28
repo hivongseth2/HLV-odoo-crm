@@ -95,7 +95,7 @@ class SaleImportWizard(models.TransientModel):
                 product = self.env['product.product'].create({
                     'name': product_desc or product_code,
                     'default_code': product_code,
-                    'type': 'product',
+                    'type': 'consu',
                     'list_price': unit_price,
                 })
 
