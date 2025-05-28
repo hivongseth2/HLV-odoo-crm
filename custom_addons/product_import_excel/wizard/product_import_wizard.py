@@ -41,11 +41,20 @@ class ProductImportWizard(models.TransientModel):
                 "x_origin": x_origin,
                 "x_group": x_group,
                 "x_property": x_property,
-                "taxes_id": [(6, 0, [self._get_tax_id(vat)])],
+                "taxes_id": [(6, 0, [tid for tid in [self._get_tax_id(vat)] if tid])],
+
             }
 
             self.env["product.template"].create(values)
 
     def _get_tax_id(self, vat):
-        tax = self.env['account.tax'].search([('amount', '=', vat), ('type_tax_use', '=', 'sale')], limit=1)
+        try:
+            vat_float = float(vat)
+        except (ValueError, TypeError):
+            return False  # Bỏ qua nếu không hợp lệ
+
+        tax = self.env['account.tax'].search([
+            ('amount', '=', vat_float),
+            ('type_tax_use', '=', 'sale')
+        ], limit=1)
         return tax.id if tax else False
