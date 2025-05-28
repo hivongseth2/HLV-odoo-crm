@@ -1,17 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <record id="view_product_import_wizard" model="ir.ui.view">
-    <field name="name">product.import.wizard.form</field>
-    <field name="model">product.import.wizard</field>
-    <field name="arch" type="xml">
-      <form string="Import Products from Excel">
-        <group>
-          <field name="file" filename="filename"/>
-        </group>
-        <footer>
-          <button string="Import" type="object" name="action_import" class="btn-primary"/>
-          <button string="Cancel" class="btn-secondary" special="cancel"/>
-        </footer>
-      </form>
-    </field>
-  </record>
+    <record id="view_product_import_wizard" model="ir.ui.view">
+        <field name="name">product.import.wizard.form</field>
+        <field name="model">product.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Import Products from Excel">
+                <group>
+                  <field name="file" filename="filename"/>
+                </group>
+                <footer>
+                  <button name="action_import" type="object" string="Import" class="btn-primary"/>
+                  <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <act_window id="action_product_import_wizard"
+                name="Import Products"
+                res_model="product.import.wizard"
+                view_mode="form"
+                target="new"
+                view_id="view_product_import_wizard"/>
 </odoo>
