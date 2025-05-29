@@ -36,12 +36,12 @@ class ProductImportWizard(models.TransientModel):
             vat_float = self._safe_float(vat)
 
             values = {
-            "name": name,
-            "default_code": default_code,
-            "barcode": barcode,
-            "standard_price": self._safe_float(cost_price),
-            "list_price": self._safe_float(price1),
-            "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
+                "name": name,
+                "default_code": default_code,
+                "barcode": barcode,
+                "standard_price": self._safe_float(cost_price),
+                "list_price": self._safe_float(price1),
+                "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
             }
 
             if x_origin:
@@ -50,9 +50,6 @@ class ProductImportWizard(models.TransientModel):
                 values["x_group"] = x_group
             if x_property:
                 values["x_property"] = x_property
-
-                        
-                    
 
             self.env["product.template"].create(values)
 
