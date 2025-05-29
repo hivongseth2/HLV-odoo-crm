@@ -7,6 +7,7 @@
         "security/ir.model.access.csv"
     ],
     "installable": True,
-    "application": False,
-    "license": "OEEL-1"
+    "auto_install": False,
+    "category": "Tools",
+
 }
