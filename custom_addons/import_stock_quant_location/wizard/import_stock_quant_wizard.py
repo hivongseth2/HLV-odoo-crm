@@ -29,6 +29,11 @@ class ImportStockQuantWizard(models.TransientModel):
                 continue
 
             product = self.env["product.product"].search([("default_code", "=", str(product_code))], limit=1)
+            if not product:
+                product = self.env["product.product"].search([("barcode", "=", str(product_code))], limit=1)
+            if not product:
+                product = self.env["product.product"].search([("name", "=", str(product_code))], limit=1)
+
             location = self.env["stock.location"].search([("name", "=", str(location_name))], limit=1)
 
             if product and location:
