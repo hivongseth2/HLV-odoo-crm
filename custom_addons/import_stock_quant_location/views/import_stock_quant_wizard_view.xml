@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <record id="view_import_stock_quant_wizard_form" model="ir.ui.view">
+    <field name="name">import.stock.quant.wizard.form</field>
+    <field name="model">import.stock.quant.wizard</field>
+    <field name="arch" type="xml">
+      <form string="Import tồn kho theo vị trí">
+        <group>
+          <field name="file" filename="filename"/>
+          <field name="filename" readonly="1"/>
+        </group>
+        <footer>
+          <button name="action_import" type="object" class="btn-primary" string="Import"/>
+          <button string="Đóng" class="btn-secondary" special="cancel"/>
+        </footer>
+      </form>
+    </field>
+  </record>
+
+  <record id="action_import_stock_quant_wizard" model="ir.actions.act_window">
+    <field name="name">Import tồn kho theo vị trí</field>
+    <field name="res_model">import.stock.quant.wizard</field>
+    <field name="view_mode">form</field>
+    <field name="target">new</field>
+  </record>
+</odoo>
