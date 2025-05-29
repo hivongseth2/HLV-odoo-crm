@@ -103,7 +103,7 @@ class ProductImportWizard(models.TransientModel):
         return str(val).strip()
 
     def _get_or_create_m2o(self, model, name):
-        record = self.env[model].search([('name', '=', name)], limit=1)
+        record = self.env[model].sudo().search([('name', '=', name)], limit=1)
         if not record:
-            record = self.env[model].create({'name': name})
+            record = self.env[model].sudo().create({'name': name})
         return record.id
