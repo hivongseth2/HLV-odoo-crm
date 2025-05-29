@@ -4,6 +4,17 @@ import tempfile
 import pandas as pd
 import math
 
+class ProductTemplate(models.Model):
+    _inherit = "product.template"
+
+    x_group = fields.Selection([
+        ('mitsuboshi', 'MITSUBOSHI'),
+        ('gates', 'GATES'),
+        ('optibelt', 'OPTIBELT'),
+        ('dongil', 'DONGIL'),
+        ('khac', 'Khác'),
+    ], string="Nhóm VTHH")
+
 class ProductImportWizard(models.TransientModel):
     _name = "product.import.wizard"
     _description = "Wizard to import product from Excel"
@@ -21,12 +32,15 @@ class ProductImportWizard(models.TransientModel):
             df = pd.read_excel(tmp.name)
 
         for _, row in df.iterrows():
-            name = row.get('Tên')
+            name = row.get('Tên hàng hóa')
+            if not name or pd.isna(name):
+                continue  # Bỏ qua nếu không có tên
+
             default_code = row.get('Mã')
             barcode = row.get('Mã vạch', False)
 
             x_origin = self._clean_string(row.get('Nguồn gốc'))
-            x_group = self._clean_string(row.get('Nhóm VTHH'))
+            x_group = self._clean_string(row.get('Nhóm VTHH')).lower()
             x_property = self._clean_string(row.get('Tính chất'))
 
             vat = row.get('Thuế suất GTGT', 0)
@@ -36,7 +50,7 @@ class ProductImportWizard(models.TransientModel):
             vat_float = self._safe_float(vat)
 
             values = {
-                "name": name,
+                "name": str(name).strip(),
                 "default_code": default_code,
                 "barcode": barcode,
                 "standard_price": self._safe_float(cost_price),
@@ -46,7 +60,7 @@ class ProductImportWizard(models.TransientModel):
 
             if x_origin:
                 values["x_origin"] = x_origin
-            if x_group:
+            if x_group in ['mitsuboshi', 'gates', 'optibelt', 'dongil', 'khac']:
                 values["x_group"] = x_group
             if x_property:
                 values["x_property"] = x_property
@@ -70,4 +84,6 @@ class ProductImportWizard(models.TransientModel):
             return 0.0
 
     def _clean_string(self, val):
-        return '' if pd.isna(val) or val is None else str(val).strip()
+        if pd.isna(val) or val is None or str(val).strip().lower() == 'nan':
+            return ''
+        return str(val).strip()
