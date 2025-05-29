@@ -4,25 +4,30 @@ import tempfile
 import pandas as pd
 import math
 
+class ProductOrigin(models.Model):
+    _name = "product.origin"
+    _description = "Nguồn gốc sản phẩm"
+
+    name = fields.Char(required=True)
+
+class ProductGroup(models.Model):
+    _name = "product.group"
+    _description = "Nhóm VTHH"
+
+    name = fields.Char(required=True)
+
+class ProductProperty(models.Model):
+    _name = "product.property"
+    _description = "Tính chất sản phẩm"
+
+    name = fields.Char(required=True)
+
 class ProductTemplate(models.Model):
     _inherit = "product.template"
 
-    x_group = fields.Selection([
-        ('mitsuboshi', 'MITSUBOSHI'),
-        ('gates', 'GATES'),
-        ('optibelt', 'OPTIBELT'),
-        ('dongil', 'DONGIL'),
-        ('khac', 'Khác'),
-    ], string="Nhóm VTHH")
-
-    x_property = fields.Selection([
-        ('nguyen_lieu', 'Nguyên liệu'),
-        ('thanh_phan', 'Thành phần'),
-        ('thanh_pham', 'Thành phẩm'),
-        ('hang_hoa', 'Hàng hóa'),
-        ('cong_cu', 'Công cụ'),
-        ('khac', 'Khác')
-    ], string="Tính chất")
+    x_origin = fields.Many2one("product.origin", string="Nguồn gốc")
+    x_group = fields.Many2one("product.group", string="Nhóm VTHH")
+    x_property = fields.Many2one("product.property", string="Tính chất")
 
 class ProductImportWizard(models.TransientModel):
     _name = "product.import.wizard"
@@ -41,16 +46,16 @@ class ProductImportWizard(models.TransientModel):
             df = pd.read_excel(tmp.name)
 
         for _, row in df.iterrows():
-            name = row.get('Tên')
+            name = row.get('Tên hàng hóa')
             if not name or pd.isna(name):
                 continue  # Bỏ qua nếu không có tên
 
             default_code = row.get('Mã')
             barcode = row.get('Mã vạch', False)
 
-            x_origin = self._clean_string(row.get('Nguồn gốc'))
-            x_group_raw = self._clean_string(row.get('Nhóm VTHH')).lower()
-            x_property_raw = self._clean_string(row.get('Tính chất')).lower()
+            x_origin_name = self._clean_string(row.get('Nguồn gốc'))
+            x_group_name = self._clean_string(row.get('Nhóm VTHH'))
+            x_property_name = self._clean_string(row.get('Tính chất'))
 
             vat = row.get('Thuế suất GTGT', 0)
             cost_price = row.get('Đơn giá mua gần nhất', 0.0)
@@ -67,12 +72,12 @@ class ProductImportWizard(models.TransientModel):
                 "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
             }
 
-            if x_origin:
-                values["x_origin"] = x_origin
-            if x_group_raw in ['mitsuboshi', 'gates', 'optibelt', 'dongil', 'khac']:
-                values["x_group"] = x_group_raw
-            if x_property_raw in ['nguyen_lieu', 'thanh_phan', 'thanh_pham', 'hang_hoa', 'cong_cu', 'khac']:
-                values["x_property"] = x_property_raw
+            if x_origin_name:
+                values["x_origin"] = self._get_or_create_m2o("product.origin", x_origin_name)
+            if x_group_name:
+                values["x_group"] = self._get_or_create_m2o("product.group", x_group_name)
+            if x_property_name:
+                values["x_property"] = self._get_or_create_m2o("product.property", x_property_name)
 
             self.env["product.template"].create(values)
 
@@ -96,3 +101,9 @@ class ProductImportWizard(models.TransientModel):
         if pd.isna(val) or val is None or str(val).strip().lower() == 'nan':
             return ''
         return str(val).strip()
+
+    def _get_or_create_m2o(self, model, name):
+        record = self.env[model].search([('name', '=', name)], limit=1)
+        if not record:
+            record = self.env[model].create({'name': name})
+        return record.id
