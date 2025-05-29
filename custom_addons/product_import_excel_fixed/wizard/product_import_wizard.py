@@ -1,4 +1,3 @@
-
 from odoo import models, fields
 import base64
 import tempfile
@@ -13,7 +12,8 @@ class ProductImportWizard(models.TransientModel):
     filename = fields.Char(string="File Name")
 
     def action_import(self):
- 
+        if not self.file:
+            return
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             tmp.write(base64.b64decode(self.file))
@@ -31,12 +31,7 @@ class ProductImportWizard(models.TransientModel):
             cost_price = row.get('Đơn giá mua gần nhất', 0.0)
             price1 = row.get('Đơn giá bán 1', 0.0)
 
-            try:
-                vat_float = float(vat)
-                if math.isnan(vat_float):
-                    vat_float = 0.0
-            except (ValueError, TypeError):
-                vat_float = 0.0
+            vat_float = self._safe_float(vat)
 
             values = {
                 "name": name,
@@ -60,12 +55,10 @@ class ProductImportWizard(models.TransientModel):
             ('type_tax_use', '=', 'sale')
         ], limit=1)
         return [tax.id] if tax else []
-    
+
     def _safe_float(self, value):
         try:
             f = float(value)
             return 0.0 if math.isnan(f) else f
         except Exception:
             return 0.0
-    if not self.file:
-        return
