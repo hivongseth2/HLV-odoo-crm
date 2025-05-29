@@ -32,7 +32,7 @@ class ProductImportWizard(models.TransientModel):
             df = pd.read_excel(tmp.name)
 
         for _, row in df.iterrows():
-            name = row.get('Tên hàng hóa')
+            name = row.get('Tên')
             if not name or pd.isna(name):
                 continue  # Bỏ qua nếu không có tên
 
