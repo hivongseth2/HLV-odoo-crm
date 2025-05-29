@@ -15,6 +15,15 @@ class ProductTemplate(models.Model):
         ('khac', 'Khác'),
     ], string="Nhóm VTHH")
 
+    x_property = fields.Selection([
+        ('nguyen_lieu', 'Nguyên liệu'),
+        ('thanh_phan', 'Thành phần'),
+        ('thanh_pham', 'Thành phẩm'),
+        ('hang_hoa', 'Hàng hóa'),
+        ('cong_cu', 'Công cụ'),
+        ('khac', 'Khác')
+    ], string="Tính chất")
+
 class ProductImportWizard(models.TransientModel):
     _name = "product.import.wizard"
     _description = "Wizard to import product from Excel"
@@ -40,8 +49,8 @@ class ProductImportWizard(models.TransientModel):
             barcode = row.get('Mã vạch', False)
 
             x_origin = self._clean_string(row.get('Nguồn gốc'))
-            x_group = self._clean_string(row.get('Nhóm VTHH')).lower()
-            x_property = self._clean_string(row.get('Tính chất'))
+            x_group_raw = self._clean_string(row.get('Nhóm VTHH')).lower()
+            x_property_raw = self._clean_string(row.get('Tính chất')).lower()
 
             vat = row.get('Thuế suất GTGT', 0)
             cost_price = row.get('Đơn giá mua gần nhất', 0.0)
@@ -60,10 +69,10 @@ class ProductImportWizard(models.TransientModel):
 
             if x_origin:
                 values["x_origin"] = x_origin
-            if x_group in ['mitsuboshi', 'gates', 'optibelt', 'dongil', 'khac']:
-                values["x_group"] = x_group
-            if x_property:
-                values["x_property"] = x_property
+            if x_group_raw in ['mitsuboshi', 'gates', 'optibelt', 'dongil', 'khac']:
+                values["x_group"] = x_group_raw
+            if x_property_raw in ['nguyen_lieu', 'thanh_phan', 'thanh_pham', 'hang_hoa', 'cong_cu', 'khac']:
+                values["x_property"] = x_property_raw
 
             self.env["product.template"].create(values)
 
