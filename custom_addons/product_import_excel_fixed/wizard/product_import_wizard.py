@@ -24,9 +24,11 @@ class ProductImportWizard(models.TransientModel):
             name = row.get('Tên hàng hóa')
             default_code = row.get('Mã')
             barcode = row.get('Mã vạch', False)
-            x_origin = row.get('Nguồn gốc', '')
-            x_group = row.get('Nhóm VTHH', '')
-            x_property = row.get('Tính chất', '')
+
+            x_origin = self._clean_string(row.get('Nguồn gốc'))
+            x_group = self._clean_string(row.get('Nhóm VTHH'))
+            x_property = self._clean_string(row.get('Tính chất'))
+
             vat = row.get('Thuế suất GTGT', 0)
             cost_price = row.get('Đơn giá mua gần nhất', 0.0)
             price1 = row.get('Đơn giá bán 1', 0.0)
@@ -39,11 +41,15 @@ class ProductImportWizard(models.TransientModel):
                 "barcode": barcode,
                 "standard_price": self._safe_float(cost_price),
                 "list_price": self._safe_float(price1),
-                "x_origin": x_origin,
-                "x_group": x_group,
-                "x_property": x_property,
                 "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
             }
+
+            if x_origin:
+                values["x_origin"] = x_origin
+            if x_group:
+                values["x_group"] = x_group
+            if x_property:
+                values["x_property"] = x_property
 
             self.env["product.template"].create(values)
 
@@ -62,3 +68,6 @@ class ProductImportWizard(models.TransientModel):
             return 0.0 if math.isnan(f) else f
         except Exception:
             return 0.0
+
+    def _clean_string(self, val):
+        return '' if pd.isna(val) or val is None else str(val).strip()
