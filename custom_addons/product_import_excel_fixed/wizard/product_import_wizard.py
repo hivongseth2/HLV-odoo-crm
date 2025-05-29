@@ -61,11 +61,11 @@ class ProductImportWizard(models.TransientModel):
         ], limit=1)
         return [tax.id] if tax else []
     
-        def _safe_float(self, value):
-            try:
-                f = float(value)
-                return 0.0 if math.isnan(f) else f
-            except Exception:
-                return 0.0
-        if not self.file:
-            return
+    def _safe_float(self, value):
+        try:
+            f = float(value)
+            return 0.0 if math.isnan(f) else f
+        except Exception:
+            return 0.0
+    if not self.file:
+        return
