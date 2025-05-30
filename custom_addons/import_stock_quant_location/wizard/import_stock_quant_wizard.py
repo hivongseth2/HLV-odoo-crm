@@ -57,22 +57,33 @@ class ImportStockQuantWizard(models.TransientModel):
                     continue
 
                 location = self.env["stock.location"].search([
-                    "|", 
-                        ("complete_name", "=", str(location_name).strip()),
-                        ("barcode", "=", str(location_name).strip())
+                    "|",
+                    ("complete_name", "=", str(location_name).strip()),
+                    ("barcode", "=", str(location_name).strip())
                 ], limit=1)
                 if not location:
                     _logger.warning("⛔ Không tìm thấy vị trí '%s' ở dòng %s.", location_name, idx + 1)
                     skipped_count += 1
                     continue
 
-                self.env["stock.quant"].create({
-                    "product_id": product.id,
-                    "location_id": location.id,
-                    "inventory_quantity": quantity,
+                # Tạo phiếu kiểm kê và dòng kiểm kê tồn kho
+                inventory = self.env['stock.inventory'].create({
+                    'name': f'Import tồn kho từ file {self.filename}',
+                    'location_ids': [(4, location.id)],
                 })
 
-                _logger.info("✅ Đã tạo stock.quant cho sản phẩm '%s' tại vị trí '%s' với số lượng %.2f", product_code, location_name, quantity)
+                self.env['stock.inventory.line'].create({
+                    'inventory_id': inventory.id,
+                    'product_id': product.id,
+                    'product_uom_id': product.uom_id.id,
+                    'location_id': location.id,
+                    'product_qty': quantity,
+                })
+
+                inventory.action_start()
+                inventory.action_validate()
+
+                _logger.info("✅ Đã tạo tồn kho cho sản phẩm '%s' tại vị trí '%s' với số lượng %.2f", product_code, location_name, quantity)
                 imported_count += 1
 
             _logger.info("🎯 Import hoàn tất: %s dòng thành công, %s dòng bị bỏ qua.", imported_count, skipped_count)
@@ -80,4 +91,3 @@ class ImportStockQuantWizard(models.TransientModel):
         except Exception as e:
             _logger.exception("🔥 Lỗi khi import tồn kho: %s", str(e))
             raise
-
