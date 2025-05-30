@@ -4,10 +4,12 @@ from odoo import models, fields, api
 from odoo.exceptions import UserError
 from datetime import datetime
 from io import BytesIO
+import logging
 
 class SaleImportWizard(models.TransientModel):
     _name = 'sale.import.wizard'
     _description = 'MISA Sale Order Import Wizard HLV'
+    _logger = logging.getLogger(__name__)
 
     file = fields.Binary(string='Excel File', required=True)
     file_name = fields.Char(string='File Name')
