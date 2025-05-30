@@ -31,11 +31,6 @@ class ImportStockQuantWizard(models.TransientModel):
             imported_count = 0
             skipped_count = 0
 
-            inventory = self.env['stock.inventory.adjustment'].create({
-                "name": "Import tồn kho từ Excel",
-                "date": fields.Datetime.now(),
-            })
-
             for idx, row in df.iterrows():
                 product_code = row.get("Mã sản phẩm")
                 location_name = row.get("Vị trí")
@@ -72,17 +67,26 @@ class ImportStockQuantWizard(models.TransientModel):
                     skipped_count += 1
                     continue
 
-                self.env['stock.inventory.adjustment.line'].create({
+                inventory = self.env['stock.inventory'].create({
+                    "name": f"Import tồn kho {fields.Datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                    "product_ids": [(6, 0, [product.id])],
+                    "location_ids": [(6, 0, [location.id])],
+                })
+
+                inventory.action_start()
+
+                inventory_line = self.env['stock.inventory.line'].create({
                     "inventory_id": inventory.id,
                     "product_id": product.id,
                     "location_id": location.id,
                     "product_qty": quantity,
                 })
 
-                _logger.info("✅ Đã tạo inventory line cho sản phẩm '%s' tại vị trí '%s' với số lượng %.2f", product_code, location_name, quantity)
+                inventory.action_validate()
+
+                _logger.info("✅ Đã tạo điều chỉnh tồn kho cho sản phẩm '%s' tại vị trí '%s' với số lượng %.2f", product_code, location_name, quantity)
                 imported_count += 1
 
-            inventory.action_start()
             _logger.info("🎯 Import hoàn tất: %s dòng thành công, %s dòng bị bỏ qua.", imported_count, skipped_count)
 
         except Exception as e:
