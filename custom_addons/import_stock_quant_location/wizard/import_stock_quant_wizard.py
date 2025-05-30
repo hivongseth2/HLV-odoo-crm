@@ -43,19 +43,18 @@ class ImportStockQuantWizard(models.TransientModel):
                     skipped_count += 1
                     continue
 
-                product = self.env["product.product"].search([("default_code", "=", str(product_code))], limit=1)
-                if not product:
-                    product = self.env["product.product"].search([("reference_code", "=", str(product_code))], limit=1)
-                if not product:
-                    product = self.env["product.product"].search([("barcode", "=", str(product_code))], limit=1)
-                if not product:
-                    product = self.env["product.product"].search([("name", "=", str(product_code))], limit=1)
+                # Tìm sản phẩm
+                product = self.env["product.product"].search([
+                    "|", ("default_code", "=", str(product_code)), 
+                         ("barcode", "=", str(product_code))
+                ], limit=1)
 
                 if not product:
                     _logger.warning("⛔ Không tìm thấy sản phẩm '%s' ở dòng %s.", product_code, idx + 1)
                     skipped_count += 1
                     continue
 
+                # Tìm vị trí
                 location = self.env["stock.location"].search([
                     "|", 
                     ("complete_name", "=", str(location_name).strip()),
@@ -67,24 +66,26 @@ class ImportStockQuantWizard(models.TransientModel):
                     skipped_count += 1
                     continue
 
-                inventory = self.env['stock.inventory'].create({
-                    "name": f"Import tồn kho {fields.Datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                    "product_ids": [(6, 0, [product.id])],
-                    "location_ids": [(6, 0, [location.id])],
-                })
+                # Tạo hoặc cập nhật tồn kho
+                quant = self.env["stock.quant"].search([
+                    ("product_id", "=", product.id),
+                    ("location_id", "=", location.id)
+                ], limit=1)
 
-                inventory.action_start()
+                if quant:
+                    quant.sudo().write({
+                        'inventory_quantity': quantity,
+                    })
+                else:
+                    quant = self.env["stock.quant"].sudo().create({
+                        "product_id": product.id,
+                        "location_id": location.id,
+                        "inventory_quantity": quantity,
+                    })
 
-                inventory_line = self.env['stock.inventory.line'].create({
-                    "inventory_id": inventory.id,
-                    "product_id": product.id,
-                    "location_id": location.id,
-                    "product_qty": quantity,
-                })
+                quant.sudo()._apply_inventory()
 
-                inventory.action_validate()
-
-                _logger.info("✅ Đã tạo điều chỉnh tồn kho cho sản phẩm '%s' tại vị trí '%s' với số lượng %.2f", product_code, location_name, quantity)
+                _logger.info("✅ Đã cập nhật tồn kho cho '%s' tại '%s' số lượng %.2f", product_code, location_name, quantity)
                 imported_count += 1
 
             _logger.info("🎯 Import hoàn tất: %s dòng thành công, %s dòng bị bỏ qua.", imported_count, skipped_count)
