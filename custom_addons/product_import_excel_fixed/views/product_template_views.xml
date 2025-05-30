@@ -1,4 +1,4 @@
-
+<!-- 
 <odoo>
   <record id="product_template_action_import_button" model="ir.ui.view">
     <field name="name">product.template.import.excel.button</field>
@@ -10,4 +10,24 @@
       </header>
     </field>
   </record>
+</odoo> -->
+
+
+<odoo>
+    <!-- Wizard View đã có (giả sử là import.product.wizard) -->
+
+    <!-- Action mở Wizard -->
+    <record id="action_product_import_wizard" model="ir.actions.act_window">
+        <field name="name">Import sản phẩm từ MISA</field>
+        <field name="res_model">product.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Menu mới dưới Tồn kho > Sản phẩm -->
+    <menuitem id="menu_import_product_from_misa"
+              name="Import sản phẩm từ MISA"
+              parent="stock.menu_product_variant_config_stock"  <!-- Đây là menu gốc "Sản phẩm" trong Tồn kho -->
+              action="action_product_import_wizard"
+              sequence="99"/>
 </odoo>
