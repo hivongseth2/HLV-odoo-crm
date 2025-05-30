@@ -31,50 +31,56 @@ class ImportStockQuantWizard(models.TransientModel):
             imported_count = 0
             skipped_count = 0
 
+            inventory = self.env['stock.inventory'].create({
+                'name': 'Import tồn kho từ Excel',
+                'filter': 'partial',
+            })
+
             for idx, row in df.iterrows():
                 product_code = row.get("Mã sản phẩm")
                 location_name = row.get("Vị trí")
                 quantity = row.get("Số lượng", 0)
 
-                _logger.debug("→ Dòng %s: sản phẩm='%s', vị trí='%s', số lượng=%s", idx + 1, product_code, location_name, quantity)
-
                 if not product_code or not location_name:
-                    _logger.warning("⛔ Thiếu mã sản phẩm hoặc vị trí ở dòng %s. Bỏ qua.", idx + 1)
                     skipped_count += 1
                     continue
 
-                product = self.env["product.product"].search([("default_code", "=", str(product_code))], limit=1)
-                if not product:
-                    product = self.env["product.product"].search([("reference_code", "=", str(product_code))], limit=1)
-                if not product:
-                    product = self.env["product.product"].search([("barcode", "=", str(product_code))], limit=1)
-                if not product:
-                    product = self.env["product.product"].search([("name", "=", str(product_code))], limit=1)
+                product = self.env["product.product"].search([
+                    "|", "|", "|",
+                    ("default_code", "=", str(product_code)),
+                    ("barcode", "=", str(product_code)),
+                    ("reference_code", "=", str(product_code)),
+                    ("name", "=", str(product_code))
+                ], limit=1)
 
                 if not product:
-                    _logger.warning("⛔ Không tìm thấy sản phẩm '%s' ở dòng %s.", product_code, idx + 1)
+                    _logger.warning("Không tìm thấy sản phẩm '%s' ở dòng %s", product_code, idx + 1)
                     skipped_count += 1
                     continue
 
                 location = self.env["stock.location"].search([
-                    "|", 
-                        ("complete_name", "=", str(location_name).strip()),
-                        ("barcode", "=", str(location_name).strip())
+                    "|",
+                    ("complete_name", "=", str(location_name).strip()),
+                    ("barcode", "=", str(location_name).strip())
                 ], limit=1)
+
                 if not location:
-                    _logger.warning("⛔ Không tìm thấy vị trí '%s' ở dòng %s.", location_name, idx + 1)
+                    _logger.warning("Không tìm thấy vị trí '%s' ở dòng %s", location_name, idx + 1)
                     skipped_count += 1
                     continue
 
-                # Sử dụng stock.change.product.qty để cập nhật tồn kho
-                self.env['stock.change.product.qty'].create({
+                self.env['stock.inventory.line'].create({
+                    'inventory_id': inventory.id,
                     'product_id': product.id,
+                    'product_uom_id': product.uom_id.id,
                     'location_id': location.id,
-                    'new_quantity': quantity,
-                }).change_product_qty()
+                    'product_qty': quantity,
+                })
 
-                _logger.info("✅ Đã cập nhật tồn kho cho sản phẩm '%s' tại vị trí '%s' với số lượng %.2f", product_code, location_name, quantity)
                 imported_count += 1
+
+            inventory.action_start()
+            inventory.action_validate()
 
             _logger.info("🎯 Import hoàn tất: %s dòng thành công, %s dòng bị bỏ qua.", imported_count, skipped_count)
 
