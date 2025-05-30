@@ -5,7 +5,7 @@
     "category": "Inventory",
     "summary": "Import tồn kho theo từng vị trí cho sản phẩm",
     "author": "ChatGPT",
-    "depends": ["stock"],
+'depends': ['base', 'stock'],
     "data": [
         "views/import_stock_quant_wizard_view.xml",
         "security/ir.model.access.csv",
