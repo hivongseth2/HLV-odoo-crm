@@ -64,10 +64,10 @@ class SaleImportWizard(models.TransientModel):
                 
                 
             existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
-                if existing_order:
-                    _logger.warning("⛔ Đơn hàng %s đã tồn tại. Bỏ qua không tạo lại.", order_ref)
-                    sale_orders[order_ref] = existing_order
-                    continue
+            if existing_order:
+                _logger.warning("⛔ Đơn hàng %s đã tồn tại. Bỏ qua không tạo lại.", order_ref)
+                sale_orders[order_ref] = existing_order
+                continue
 
             sale_order = self.env['sale.order'].create({
                 'name': order_ref,
