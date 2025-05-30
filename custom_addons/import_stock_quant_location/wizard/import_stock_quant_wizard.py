@@ -54,7 +54,11 @@ class ImportStockQuantWizard(models.TransientModel):
                     skipped_count += 1
                     continue
 
-                location = self.env["stock.location"].search([("name", "=", str(location_name))], limit=1)
+                location = self.env["stock.location"].search([
+                    "|", 
+                        ("complete_name", "=", str(location_name).strip()),
+                        ("barcode", "=", str(location_name).strip())
+                ], limit=1)
                 if not location:
                     _logger.warning("⛔ Không tìm thấy vị trí '%s' ở dòng %s.", location_name, idx + 1)
                     skipped_count += 1
