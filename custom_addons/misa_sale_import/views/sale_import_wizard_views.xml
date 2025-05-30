@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<odoo>
+<!-- <odoo>
     <record id="view_sale_import_wizard_form" model="ir.ui.view">
         <field name="name">sale.import.wizard.form</field>
         <field name="model">sale.import.wizard</field>
@@ -23,4 +23,39 @@
         <field name="view_mode">form</field>
         <field name="target">new</field>
     </record>
+</odoo> -->
+
+<odoo>
+    <!-- View Form -->
+    <record id="view_sale_import_wizard_form" model="ir.ui.view">
+        <field name="name">sale.import.wizard.form</field>
+        <field name="model">sale.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Import MISA Sale Orders">
+                <group>
+                    <field name="file" filename="file_name"/>
+                    <field name="file_name" invisible="1"/>
+                </group>
+                <footer>
+                    <button name="action_import" string="Import" type="object" class="oe_highlight"/>
+                    <button string="Cancel" class="oe_link" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_sale_import_wizard" model="ir.actions.act_window">
+        <field name="name">Import đơn hàng từ MISA</field>
+        <field name="res_model">sale.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Menu Item: nằm dưới menu Đơn hàng -->
+    <menuitem id="menu_sale_import_wizard"
+              name="Import đơn hàng từ MISA"
+              parent="sale.sale_order_menu" 
+              action="action_sale_import_wizard"
+              sequence="99"/>
 </odoo>
