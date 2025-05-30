@@ -57,33 +57,23 @@ class ImportStockQuantWizard(models.TransientModel):
                     continue
 
                 location = self.env["stock.location"].search([
-                    "|",
-                    ("complete_name", "=", str(location_name).strip()),
-                    ("barcode", "=", str(location_name).strip())
+                    "|", 
+                        ("complete_name", "=", str(location_name).strip()),
+                        ("barcode", "=", str(location_name).strip())
                 ], limit=1)
                 if not location:
                     _logger.warning("⛔ Không tìm thấy vị trí '%s' ở dòng %s.", location_name, idx + 1)
                     skipped_count += 1
                     continue
 
-                # Tạo phiếu kiểm kê và dòng kiểm kê tồn kho
-                inventory = self.env['stock.inventory'].create({
-                    'name': f'Import tồn kho từ file {self.filename}',
-                    'location_ids': [(4, location.id)],
-                })
-
-                self.env['stock.inventory.line'].create({
-                    'inventory_id': inventory.id,
+                # Sử dụng stock.change.product.qty để cập nhật tồn kho
+                self.env['stock.change.product.qty'].create({
                     'product_id': product.id,
-                    'product_uom_id': product.uom_id.id,
                     'location_id': location.id,
-                    'product_qty': quantity,
-                })
+                    'new_quantity': quantity,
+                }).change_product_qty()
 
-                inventory.action_start()
-                inventory.action_validate()
-
-                _logger.info("✅ Đã tạo tồn kho cho sản phẩm '%s' tại vị trí '%s' với số lượng %.2f", product_code, location_name, quantity)
+                _logger.info("✅ Đã cập nhật tồn kho cho sản phẩm '%s' tại vị trí '%s' với số lượng %.2f", product_code, location_name, quantity)
                 imported_count += 1
 
             _logger.info("🎯 Import hoàn tất: %s dòng thành công, %s dòng bị bỏ qua.", imported_count, skipped_count)
