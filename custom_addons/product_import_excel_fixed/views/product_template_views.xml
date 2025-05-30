@@ -27,7 +27,7 @@
     <!-- Menu mới dưới Tồn kho > Sản phẩm -->
     <menuitem id="menu_import_product_from_misa"
               name="Import sản phẩm từ MISA"
-              parent="stock.menu_product_variant_config_stock"  <!-- Đây là menu gốc "Sản phẩm" trong Tồn kho -->
+              parent="stock.menu_product_variant_config_stock" 
               action="action_product_import_wizard"
               sequence="99"/>
 </odoo>
