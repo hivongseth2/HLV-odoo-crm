@@ -1,8 +1,10 @@
-
 from odoo import models, fields, api
 import pandas as pd
 import base64
 import tempfile
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class ImportStockQuantWizard(models.TransientModel):
     _name = "import.stock.quant.wizard"
@@ -12,33 +14,64 @@ class ImportStockQuantWizard(models.TransientModel):
     filename = fields.Char(string="Tên tập tin")
 
     def action_import(self):
+        _logger.info("=== Bắt đầu import tồn kho từ file Excel ===")
+
         if not self.file:
+            _logger.warning("Không có file được upload.")
             return
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-            tmp.write(base64.b64decode(self.file))
-            tmp.seek(0)
-            df = pd.read_excel(tmp.name)
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+                tmp.write(base64.b64decode(self.file))
+                tmp.seek(0)
+                df = pd.read_excel(tmp.name)
 
-        for _, row in df.iterrows():
-            product_code = row.get("Mã sản phẩm")
-            location_name = row.get("Vị trí")
-            quantity = row.get("Số lượng", 0)
+            _logger.info("Đọc file thành công: %s dòng dữ liệu", len(df))
 
-            if not product_code or not location_name:
-                continue
+            imported_count = 0
+            skipped_count = 0
 
-            product = self.env["product.product"].search([("default_code", "=", str(product_code))], limit=1)
-            if not product:
-                product = self.env["product.product"].search([("barcode", "=", str(product_code))], limit=1)
-            if not product:
-                product = self.env["product.product"].search([("name", "=", str(product_code))], limit=1)
+            for idx, row in df.iterrows():
+                product_code = row.get("Mã sản phẩm")
+                location_name = row.get("Vị trí")
+                quantity = row.get("Số lượng", 0)
 
-            location = self.env["stock.location"].search([("name", "=", str(location_name))], limit=1)
+                _logger.debug("→ Dòng %s: sản phẩm='%s', vị trí='%s', số lượng=%s", idx + 1, product_code, location_name, quantity)
 
-            if product and location:
+                if not product_code or not location_name:
+                    _logger.warning("⛔ Thiếu mã sản phẩm hoặc vị trí ở dòng %s. Bỏ qua.", idx + 1)
+                    skipped_count += 1
+                    continue
+
+                product = self.env["product.product"].search([("default_code", "=", str(product_code))], limit=1)
+                if not product:
+                    product = self.env["product.product"].search([("barcode", "=", str(product_code))], limit=1)
+                if not product:
+                    product = self.env["product.product"].search([("name", "=", str(product_code))], limit=1)
+
+                if not product:
+                    _logger.warning("⛔ Không tìm thấy sản phẩm '%s' ở dòng %s.", product_code, idx + 1)
+                    skipped_count += 1
+                    continue
+
+                location = self.env["stock.location"].search([("name", "=", str(location_name))], limit=1)
+                if not location:
+                    _logger.warning("⛔ Không tìm thấy vị trí '%s' ở dòng %s.", location_name, idx + 1)
+                    skipped_count += 1
+                    continue
+
                 self.env["stock.quant"].create({
                     "product_id": product.id,
                     "location_id": location.id,
                     "inventory_quantity": quantity,
                 })
+
+                _logger.info("✅ Đã tạo stock.quant cho sản phẩm '%s' tại vị trí '%s' với số lượng %.2f", product_code, location_name, quantity)
+                imported_count += 1
+
+            _logger.info("🎯 Import hoàn tất: %s dòng thành công, %s dòng bị bỏ qua.", imported_count, skipped_count)
+
+        except Exception as e:
+            _logger.exception("🔥 Lỗi khi import tồn kho: %s", str(e))
+            raise
+
