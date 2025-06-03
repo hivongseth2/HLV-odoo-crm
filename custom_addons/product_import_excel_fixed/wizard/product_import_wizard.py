@@ -78,7 +78,7 @@ class ProductImportWizard(models.TransientModel):
                 "uom_id": uom.id,
                 "uom_po_id": uom.id,
                 "tracking": 'none',
-                "type": 'product',
+                # "type": 'product',
             }
 
             if barcode:
@@ -141,3 +141,4 @@ class ProductImportWizard(models.TransientModel):
                 'rounding': 1.0,
             })
         return uom
+g
