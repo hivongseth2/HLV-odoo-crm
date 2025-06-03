@@ -70,7 +70,7 @@ class ProductImportWizard(models.TransientModel):
             "standard_price": self._safe_float(cost_price),
             "list_price": self._safe_float(price1),
             "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
-            "detailed_type": "product",
+            "type"  : 'product',  # hoặc 'consu', 'service' tùy loại sản phẩm
 
             }
             if barcode and not pd.isna(barcode) and str(barcode).strip().lower() != 'nan':
