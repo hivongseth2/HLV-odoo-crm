@@ -1,3 +1,34 @@
+from odoo import models, fields
+import base64
+import tempfile
+import pandas as pd
+import math
+
+class ProductOrigin(models.Model):
+    _name = "product.origin"
+    _description = "Nguồn gốc sản phẩm"
+
+    name = fields.Char(required=True)
+
+class ProductGroup(models.Model):
+    _name = "product.group"
+    _description = "Nhóm VTHH"
+
+    name = fields.Char(required=True)
+
+class ProductProperty(models.Model):
+    _name = "product.property"
+    _description = "Tính chất sản phẩm"
+
+    name = fields.Char(required=True)
+
+class ProductTemplate(models.Model):
+    _inherit = "product.template"
+
+    x_origin = fields.Many2one("product.origin", string="Nguồn gốc")
+    x_group = fields.Many2one("product.group", string="Nhóm VTHH")
+    x_property = fields.Many2one("product.property", string="Tính chất")
+
 class ProductImportWizard(models.TransientModel):
     _name = "product.import.wizard"
     _description = "Wizard to import product from Excel"
@@ -21,11 +52,11 @@ class ProductImportWizard(models.TransientModel):
 
             default_code = row.get('Mã')
             barcode = row.get('Mã vạch', False)
+            
 
             x_origin_name = self._clean_string(row.get('Nguồn gốc'))
             x_group_name = self._clean_string(row.get('Nhóm VTHH'))
             x_property_name = self._clean_string(row.get('Tính chất'))
-            uom_name = self._clean_string(row.get('Đơn vị tính'))  # Giả sử cột đơn vị tính tên là 'Đơn vị tính'
 
             vat = row.get('Thuế suất GTGT', 0)
             cost_price = row.get('Đơn giá mua gần nhất', 0.0)
@@ -33,28 +64,16 @@ class ProductImportWizard(models.TransientModel):
 
             vat_float = self._safe_float(vat)
 
-            # Lấy hoặc tạo đơn vị tính theo lowercase
-            uom_id = False
-            if uom_name:
-                uom_id = self._get_or_create_uom(uom_name)
-
-            # Kiểm tra sản phẩm theo default_code
-            product_obj = self.env["product.template"]
-            existing_product = False
-            if default_code:
-                existing_product = product_obj.search([('default_code', '=', default_code)], limit=1)
-
             values = {
-                "name": str(name).strip(),
-                "default_code": default_code,
-                "standard_price": self._safe_float(cost_price),
-                "list_price": self._safe_float(price1),
-                "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
-                "type": 'consu',
-                "tracking": 'none',
-                'is_storable': True,
-                "uom_id": uom_id,
-                "uom_po_id": uom_id,
+            "name": str(name).strip(),
+            "default_code": default_code,
+            "standard_price": self._safe_float(cost_price),
+            "list_price": self._safe_float(price1),
+            "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
+            "type"  : 'consu',
+            "tracking": 'none',
+            'is_storable': True,
+
             }
             if barcode and not pd.isna(barcode) and str(barcode).strip().lower() != 'nan':
                 values["barcode"] = barcode
@@ -66,34 +85,7 @@ class ProductImportWizard(models.TransientModel):
             if x_property_name:
                 values["x_property"] = self._get_or_create_m2o("product.property", x_property_name)
 
-            if existing_product:
-                # Cập nhật sản phẩm có sẵn
-                existing_product.write(values)
-            else:
-                # Tạo mới sản phẩm
-                product_obj.create(values)
-
-    def _get_or_create_uom(self, name):
-        # So sánh tên đơn vị tính không phân biệt hoa thường
-        uom_obj = self.env['uom.uom'].sudo()
-        name_lower = name.lower()
-        # Tìm đơn vị tính đã có theo lower name
-        uoms = uom_obj.search([])
-        for u in uoms:
-            if u.name and u.name.lower() == name_lower:
-                return u.id
-        # Nếu chưa có thì tạo mới
-        new_uom = uom_obj.create({'name': name, 'category_id': self._get_default_uom_category()})
-        return new_uom.id
-
-    def _get_default_uom_category(self):
-        # Lấy category mặc định (ví dụ category sản phẩm)
-        category = self.env['uom.category'].search([('name', '=', 'Unit')], limit=1)
-        if not category:
-            category = self.env['uom.category'].search([], limit=1)
-        return category.id if category else False
-
-    # Giữ nguyên các hàm hỗ trợ _clean_string, _safe_float, _get_tax_ids, _get_or_create_m2o
+            self.env["product.template"].create(values)
 
     def _get_tax_ids(self, vat_float):
         if not isinstance(vat_float, (int, float)) or math.isnan(vat_float):
