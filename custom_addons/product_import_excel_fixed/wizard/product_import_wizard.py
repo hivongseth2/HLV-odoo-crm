@@ -52,8 +52,7 @@ class ProductImportWizard(models.TransientModel):
 
             default_code = row.get('Mã')
             barcode = row.get('Mã vạch', False)
-            if pd.isna(barcode) or not barcode or str(barcode).strip().lower() == 'nan':
-                barcode = False  # hoặc None, tùy ý anh
+            
 
             x_origin_name = self._clean_string(row.get('Nguồn gốc'))
             x_group_name = self._clean_string(row.get('Nhóm VTHH'))
@@ -66,13 +65,14 @@ class ProductImportWizard(models.TransientModel):
             vat_float = self._safe_float(vat)
 
             values = {
-                "name": str(name).strip(),
-                "default_code": default_code,
-                "barcode": barcode,
-                "standard_price": self._safe_float(cost_price),
-                "list_price": self._safe_float(price1),
-                "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
+            "name": str(name).strip(),
+            "default_code": default_code,
+            "standard_price": self._safe_float(cost_price),
+            "list_price": self._safe_float(price1),
+            "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
             }
+            if barcode and not pd.isna(barcode) and str(barcode).strip().lower() != 'nan':
+                values["barcode"] = barcode
 
             if x_origin_name:
                 values["x_origin"] = self._get_or_create_m2o("product.origin", x_origin_name)
