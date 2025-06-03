@@ -73,7 +73,6 @@ class ProductImportWizard(models.TransientModel):
             "type"  : 'consu',
             "tracking": 'none',
             'is_storable': True,
-            "is_published": True,
 
             }
             if barcode and not pd.isna(barcode) and str(barcode).strip().lower() != 'nan':
