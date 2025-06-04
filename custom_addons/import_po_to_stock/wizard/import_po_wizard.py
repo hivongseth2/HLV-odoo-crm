@@ -88,11 +88,12 @@ class ImportPOWizard(models.TransientModel):
                     tmpl = self.env["product.template"].create({
                         "name": name,
                         "default_code": code,
-                        "type": "product",
+                        "type": "consu",
                         "uom_id": uom.id,
                         "uom_po_id": uom.id,
                         "purchase_ok": True,
                         "sale_ok": False,
+                        'is_storable': True,
                     })
                     product = tmpl.product_variant_id
                     _logger.info("Created product: %s", code)
