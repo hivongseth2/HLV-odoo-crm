@@ -1,13 +1,16 @@
 {
-    "name": "Enhanced Import PO to Stock",
-    "version": "1.1",
-    "depends": ["purchase", "stock"],
+    "name": "Import PO to Stock",
+    "version": "1.0",
+    "depends": ["stock", "purchase"],
     "author": "ChatGPT",
     "category": "Warehouse",
-    "description": "Import PO file, auto create products if missing, map warehouse by code, and generate incoming shipments.",
-    "data": ["views/import_po_wizard_view.xml",
-        "views/import_po_menu.xml"],
-    "installable": True,
     "license": "LGPL-3",
-    "application": False
+    "description": "Import PO Excel file, auto-create products, map warehouses, and generate incoming shipments.",
+    "data": [
+        "security/ir.model.access.csv",
+        "views/import_po_menu.xml",
+        "wizard/import_po_wizard_view.xml"
+    ],
+    "installable": True,
+    "auto_install": False
 }

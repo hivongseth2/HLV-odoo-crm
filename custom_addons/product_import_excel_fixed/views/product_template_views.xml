@@ -3,7 +3,7 @@
 
     <!-- Action mở Wizard -->
     <record id="action_product_import_wizard" model="ir.actions.act_window">
-        <field name="name">Import sản phẩm từ MISA</field>
+        <field name="name">Import prd MISA</field>
         <field name="res_model">product.import.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
@@ -11,7 +11,7 @@
 
     <!-- Menu mới dưới Tồn kho (gốc), không phải menu sản phẩm gốc -->
     <menuitem id="menu_import_product_from_misa"
-              name="Import sản phẩm từ MISA"
+              name="Import prd MISA"
               parent="stock.menu_stock_root"
               action="action_product_import_wizard"
               sequence="99"/>

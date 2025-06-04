@@ -20,13 +20,13 @@ class ImportPOWizard(models.TransientModel):
 
         grouped = {}
 
-        for index, row in df.iterrows():
+        for _, row in df.iterrows():
             product_code = str(row.get("Mã hàng", "")).strip()
             product_name = str(row.get("Tên hàng", "")).strip()
             qty = float(row.get("Số lượng", 0))
-            location_code = str(row.get("Mã kho", "")).strip()
+            warehouse_code = str(row.get("Mã kho", "")).strip()
 
-            if not product_code or not location_code or qty <= 0:
+            if not product_code or not warehouse_code or qty <= 0:
                 continue
 
             product = self.env['product.product'].search([('default_code', '=', product_code)], limit=1)
@@ -40,9 +40,9 @@ class ImportPOWizard(models.TransientModel):
                 })
                 product = tmpl.product_variant_id
 
-            warehouse = self.env['stock.warehouse'].search([('code', '=', location_code)], limit=1)
+            warehouse = self.env['stock.warehouse'].search([('code', '=', warehouse_code)], limit=1)
             if not warehouse:
-                continue  # skip if warehouse code not found
+                continue
 
             if warehouse.id not in grouped:
                 grouped[warehouse.id] = []
@@ -50,19 +50,17 @@ class ImportPOWizard(models.TransientModel):
             grouped[warehouse.id].append((product, qty))
 
         for warehouse_id, lines in grouped.items():
+            picking_type = self.env['stock.picking.type'].search([
+                ('code', '=', 'incoming'),
+                ('warehouse_id', '=', warehouse_id)
+            ], limit=1)
+            if not picking_type:
+                continue
+
             picking = self.env['stock.picking'].create({
-                'picking_type_id': self.env['stock.picking.type'].search([
-                    ('code', '=', 'incoming'),
-                    ('warehouse_id', '=', warehouse_id)
-                ], limit=1).id,
-                'location_id': self.env['stock.picking.type'].search([
-                    ('code', '=', 'incoming'),
-                    ('warehouse_id', '=', warehouse_id)
-                ], limit=1).default_location_src_id.id,
-                'location_dest_id': self.env['stock.picking.type'].search([
-                    ('code', '=', 'incoming'),
-                    ('warehouse_id', '=', warehouse_id)
-                ], limit=1).default_location_dest_id.id,
+                'picking_type_id': picking_type.id,
+                'location_id': picking_type.default_location_src_id.id,
+                'location_dest_id': picking_type.default_location_dest_id.id,
                 'origin': self.filename or _("PO Import")
             })
 

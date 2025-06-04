@@ -1,5 +1,4 @@
 <odoo>
-    <!-- Action mở Wizard -->
     <record id="action_import_po_wizard" model="ir.actions.act_window">
         <field name="name">Import từ PO Excel</field>
         <field name="res_model">import.po.wizard</field>
@@ -7,8 +6,7 @@
         <field name="target">new</field>
     </record>
 
-    <!-- Menu dưới Tồn kho (gốc) -->
-    <menuitem id="menu_import_po_from_excel"
+    <menuitem id="menu_import_po_excel"
               name="Import từ PO Excel"
               parent="stock.menu_stock_root"
               action="action_import_po_wizard"
