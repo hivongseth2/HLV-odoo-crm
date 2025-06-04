@@ -22,7 +22,7 @@ class ImportPOWizard(models.TransientModel):
         df = pd.read_excel(tmp_path, header=3)
         df.fillna("", inplace=True)
 
-        grouped_invoices = df.groupby("Số hóa đơn")
+        grouped_invoices = df.groupby("Đơn mua hàng")
 
         for invoice_number, group in grouped_invoices:
             if not invoice_number:
