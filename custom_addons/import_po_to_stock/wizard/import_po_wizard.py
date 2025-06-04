@@ -80,6 +80,8 @@ class ImportPOWizard(models.TransientModel):
                 # Find or create UOM
                 
                 uom_category = self.env['uom.category'].search([('name', 'ilike', 'unit')], limit=1)
+                if not uom_category:
+                    uom_category = self.env['uom.category'].create({'name': 'Unit'})
 
                 uom = self.env['uom.uom'].search([
                     ('name', 'ilike', uom_name),
@@ -94,9 +96,9 @@ class ImportPOWizard(models.TransientModel):
                         'uom_type': 'reference',
                         'rounding': 1.0,
                     })
-                    _logger.info("Created new UOM: %s", uom_name)
+                    _logger.info("Created new UOM: %s (category: %s)", uom_name, uom_category.name)
                 else:
-                    _logger.info("Using existing UOM: %s", uom_name)
+                    _logger.info("Using existing UOM: %s", uom.name)
 
                 # Find or create product
                 product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
