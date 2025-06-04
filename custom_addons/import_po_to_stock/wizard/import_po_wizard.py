@@ -90,15 +90,30 @@ class ImportPOWizard(models.TransientModel):
 
 
                 if not uom:
-                    uom = self.env['uom.uom'].create({
-                        'name': uom_name,
-                        'category_id': uom_category.id,
-                        'uom_type': 'reference',
-                        'rounding': 1.0,
-                    })
-                    _logger.info("Created new UOM: %s (category: %s)", uom_name, uom_category.name)
-                else:
-                    _logger.info("Using existing UOM: %s", uom.name)
+                    existing_ref = self.env['uom.uom'].search([
+                        ('category_id', '=', uom_category.id),
+                        ('uom_type', '=', 'reference')
+                    ], limit=1)
+                    
+                    if existing_ref:
+                        # Tạo UOM loại 'smaller' với factor = 1
+                        uom = self.env['uom.uom'].create({
+                            'name': uom_name,
+                            'category_id': uom_category.id,
+                            'uom_type': 'smaller',
+                            'factor': 1.0,
+                            'factor_inv': 1.0,
+                            'rounding': 1.0,
+                        })
+                        _logger.info("Created new non-reference UOM: %s (category: %s)", uom_name, uom_category.name)
+                    else:
+                        uom = self.env['uom.uom'].create({
+                            'name': uom_name,
+                            'category_id': uom_category.id,
+                            'uom_type': 'reference',
+                            'rounding': 1.0,
+                        })
+                        _logger.info("Created new reference UOM: %s (category: %s)", uom_name, uom_category.name)
 
                 # Find or create product
                 product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
