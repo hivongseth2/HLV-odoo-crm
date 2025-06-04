@@ -23,14 +23,9 @@
         <field name="target">new</field>
     </record>
 
-    <menuitem id="menu_import_po_root"
-              name="Nhập PO Excel"
-              parent="stock.menu_stock_warehouse_mgmt"
-              sequence="100"/>
-
     <menuitem id="menu_import_po_action"
               name="Import từ PO Excel"
-              parent="menu_import_po_root"
+              parent="stock.menu_stock_root"
               action="action_import_po_wizard"
-              sequence="1"/>
+              sequence="99"/>
 </odoo>

@@ -8,5 +8,6 @@
     "data": ["views/import_po_wizard_view.xml",
         "views/import_po_menu.xml"],
     "installable": True,
+    "license": "LGPL-3",
     "application": False
 }
