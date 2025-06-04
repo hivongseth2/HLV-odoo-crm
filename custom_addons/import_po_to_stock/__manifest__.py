@@ -7,5 +7,5 @@
     "description": "Import products from PO Excel file into stock locations based on warehouse name.",
     "data": ["views/import_po_wizard_view.xml"],
     "installable": True,
-    "application": False,
+    "application": False
 }

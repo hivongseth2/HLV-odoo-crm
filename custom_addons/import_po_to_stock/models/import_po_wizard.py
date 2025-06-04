@@ -1,4 +1,4 @@
-from odoo import models, fields, api
+from odoo import models, fields
 import base64
 import tempfile
 import pandas as pd
@@ -11,7 +11,6 @@ class ImportPOWizard(models.TransientModel):
     filename = fields.Char("File Name")
 
     def action_import(self):
-        # Save uploaded file to a temporary location
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             tmp.write(base64.b64decode(self.file))
             tmp_path = tmp.name
@@ -36,4 +35,3 @@ class ImportPOWizard(models.TransientModel):
                     'location_id': location.id,
                     'inventory_quantity': qty,
                 })
-
