@@ -106,7 +106,7 @@ class ImportPOWizard(models.TransientModel):
                     tmpl = self.env["product.template"].create({
                         "name": name,
                         "default_code": code,
-                        "type": "product",
+                        "type": "consu",
                         "uom_id": uom.id,
                         "uom_po_id": uom.id,
                         "purchase_ok": True,
