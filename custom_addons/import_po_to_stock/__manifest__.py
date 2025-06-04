@@ -1,11 +1,12 @@
 {
-    "name": "Import PO to Stock",
-    "version": "1.0",
+    "name": "Enhanced Import PO to Stock",
+    "version": "1.1",
     "depends": ["purchase", "stock"],
     "author": "ChatGPT",
     "category": "Warehouse",
-    "description": "Import products from PO Excel file into stock locations based on warehouse name.",
-    "data": ["views/import_po_wizard_view.xml"],
+    "description": "Import PO file, auto create products if missing, map warehouse by code, and generate incoming shipments.",
+    "data": ["views/import_po_wizard_view.xml",
+        "views/import_po_menu.xml"],
     "installable": True,
     "application": False
 }
