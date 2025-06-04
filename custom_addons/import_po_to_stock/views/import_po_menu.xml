@@ -1,29 +1,14 @@
 <odoo>
-    <record id="view_import_po_wizard" model="ir.ui.view">
-        <field name="name">import.po.wizard</field>
-        <field name="model">import.po.wizard</field>
-        <field name="arch" type="xml">
-            <form string="Import PO to Stock">
-                <group>
-                    <field name="file"/>
-                    <field name="filename"/>
-                </group>
-                <footer>
-                    <button string="Import" type="object" name="action_import" class="btn-primary"/>
-                    <button string="Cancel" class="btn-secondary" special="cancel"/>
-                </footer>
-            </form>
-        </field>
-    </record>
-
+    <!-- Action mở Wizard -->
     <record id="action_import_po_wizard" model="ir.actions.act_window">
-        <field name="name">Import PO Excel</field>
+        <field name="name">Import từ PO Excel</field>
         <field name="res_model">import.po.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
     </record>
 
-    <menuitem id="menu_import_po_action"
+    <!-- Menu dưới Tồn kho (gốc) -->
+    <menuitem id="menu_import_po_from_excel"
               name="Import từ PO Excel"
               parent="stock.menu_stock_root"
               action="action_import_po_wizard"
