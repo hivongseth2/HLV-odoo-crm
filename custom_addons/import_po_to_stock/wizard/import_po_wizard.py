@@ -2,6 +2,9 @@ from odoo import models, fields, _
 import base64
 import tempfile
 import pandas as pd
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class ImportPOWizard(models.TransientModel):
     _name = "import.po.wizard"
@@ -15,62 +18,94 @@ class ImportPOWizard(models.TransientModel):
             tmp.write(base64.b64decode(self.file))
             tmp_path = tmp.name
 
-        df = pd.read_excel(tmp_path)
+        _logger.info("Reading Excel file from path: %s", tmp_path)
+        df = pd.read_excel(tmp_path, header=3)
         df.fillna("", inplace=True)
 
-        grouped = {}
+        grouped_invoices = df.groupby("Số hóa đơn")
 
-        for _, row in df.iterrows():
-            product_code = str(row.get("Mã hàng", "")).strip()
-            product_name = str(row.get("Tên hàng", "")).strip()
-            qty = float(row.get("Số lượng", 0))
-            warehouse_code = str(row.get("Mã kho", "")).strip()
-
-            if not product_code or not warehouse_code or qty <= 0:
+        for invoice_number, group in grouped_invoices:
+            if not invoice_number:
+                _logger.warning("Skipping invoice with empty number.")
                 continue
 
-            product = self.env['product.product'].search([('default_code', '=', product_code)], limit=1)
-            if not product:
-                tmpl = self.env['product.template'].create({
-                    'name': product_name or product_code,
-                    'default_code': product_code,
-                    'type': 'product',
-                    'purchase_ok': True,
-                    'sale_ok': False,
+            first_row = group.iloc[0]
+            supplier_name = first_row["Tên nhà cung cấp"]
+            warehouse_name = first_row["Tên kho"]
+
+            # Create or get supplier
+            partner = self.env["res.partner"].search([("name", "=", supplier_name)], limit=1)
+            if not partner:
+                partner = self.env["res.partner"].create({
+                    "name": supplier_name,
+                    "supplier_rank": 1,
                 })
-                product = tmpl.product_variant_id
+                _logger.info("Created new supplier: %s", supplier_name)
+            else:
+                _logger.info("Using existing supplier: %s", supplier_name)
 
-            warehouse = self.env['stock.warehouse'].search([('code', '=', warehouse_code)], limit=1)
+            # Get warehouse by name
+            warehouse = self.env["stock.warehouse"].search([("name", "ilike", warehouse_name)], limit=1)
             if not warehouse:
+                _logger.warning("Warehouse not found for name: %s", warehouse_name)
                 continue
 
-            if warehouse.id not in grouped:
-                grouped[warehouse.id] = []
-
-            grouped[warehouse.id].append((product, qty))
-
-        for warehouse_id, lines in grouped.items():
-            picking_type = self.env['stock.picking.type'].search([
-                ('code', '=', 'incoming'),
-                ('warehouse_id', '=', warehouse_id)
+            picking_type = self.env["stock.picking.type"].search([
+                ("code", "=", "incoming"),
+                ("warehouse_id", "=", warehouse.id)
             ], limit=1)
             if not picking_type:
+                _logger.warning("No picking type found for warehouse %s", warehouse.name)
                 continue
 
-            picking = self.env['stock.picking'].create({
-                'picking_type_id': picking_type.id,
-                'location_id': picking_type.default_location_src_id.id,
-                'location_dest_id': picking_type.default_location_dest_id.id,
-                'origin': self.filename or _("PO Import")
+            picking = self.env["stock.picking"].create({
+                "partner_id": partner.id,
+                "picking_type_id": picking_type.id,
+                "location_id": picking_type.default_location_src_id.id,
+                "location_dest_id": picking_type.default_location_dest_id.id,
+                "origin": f"Hóa đơn {invoice_number}"
             })
+            _logger.info("Created picking for invoice %s", invoice_number)
 
-            for product, qty in lines:
-                self.env['stock.move'].create({
-                    'name': product.name,
-                    'product_id': product.id,
-                    'product_uom_qty': qty,
-                    'product_uom': product.uom_id.id,
-                    'picking_id': picking.id,
-                    'location_id': picking.location_id.id,
-                    'location_dest_id': picking.location_dest_id.id,
+            for _, row in group.iterrows():
+                code = str(row.get("Mã hàng")).strip()
+                name = str(row.get("Tên hàng")).strip()
+                uom_name = str(row.get("ĐVT")).strip()
+                qty = float(row.get("Số lượng mua", 0))
+
+                if not code or not name or qty <= 0:
+                    _logger.warning("Skipping invalid line: %s", row.to_dict())
+                    continue
+
+                # Find or create UOM
+                uom = self.env["uom.uom"].search([("name", "ilike", uom_name)], limit=1)
+                if not uom:
+                    uom = self.env["uom.uom"].search([], limit=1)  # fallback
+
+                # Find or create product
+                product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+                if not product:
+                    tmpl = self.env["product.template"].create({
+                        "name": name,
+                        "default_code": code,
+                        "type": "product",
+                        "uom_id": uom.id,
+                        "uom_po_id": uom.id,
+                        "purchase_ok": True,
+                        "sale_ok": False,
+                    })
+                    product = tmpl.product_variant_id
+                    _logger.info("Created product: %s", code)
+                else:
+                    _logger.info("Using existing product: %s", code)
+
+                self.env["stock.move"].create({
+                    "name": name,
+                    "product_id": product.id,
+                    "product_uom_qty": qty,
+                    "product_uom": uom.id,
+                    "picking_id": picking.id,
+                    "location_id": picking.location_id.id,
+                    "location_dest_id": picking.location_dest_id.id,
                 })
+                _logger.debug("Created move line for %s x%s", code, qty)
