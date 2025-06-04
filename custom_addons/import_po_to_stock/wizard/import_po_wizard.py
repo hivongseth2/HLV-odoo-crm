@@ -78,9 +78,25 @@ class ImportPOWizard(models.TransientModel):
                     continue
 
                 # Find or create UOM
-                uom = self.env["uom.uom"].search([("name", "ilike", uom_name)], limit=1)
+                
+                uom_category = self.env['uom.category'].search([('name', 'ilike', 'unit')], limit=1)
+
+                uom = self.env['uom.uom'].search([
+                    ('name', 'ilike', uom_name),
+                    ('category_id', '=', uom_category.id)
+                ], limit=1)
+
+
                 if not uom:
-                    uom = self.env["uom.uom"].search([], limit=1)  # fallback
+                    uom = self.env['uom.uom'].create({
+                        'name': uom_name,
+                        'category_id': uom_category.id,
+                        'uom_type': 'reference',
+                        'rounding': 1.0,
+                    })
+                    _logger.info("Created new UOM: %s", uom_name)
+                else:
+                    _logger.info("Using existing UOM: %s", uom_name)
 
                 # Find or create product
                 product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
@@ -88,7 +104,7 @@ class ImportPOWizard(models.TransientModel):
                     tmpl = self.env["product.template"].create({
                         "name": name,
                         "default_code": code,
-                        "type": "consu",
+                        "type": "product",
                         "uom_id": uom.id,
                         "uom_po_id": uom.id,
                         "purchase_ok": True,
