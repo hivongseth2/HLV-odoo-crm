@@ -79,7 +79,7 @@ class ImportPOWizard(models.TransientModel):
 
                 # Find or create UOM
                 
-                uom_category = self.env['uom.category'].search([('name', 'ilike', 'unit')], limit=1)
+                uom_category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
                 if not uom_category:
                     uom_category = self.env['uom.category'].create({'name': 'Đơn vị'})
 
