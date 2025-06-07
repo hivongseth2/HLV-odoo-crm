@@ -5,6 +5,8 @@
         <field name="arch" type="xml">
             <form string="Import Stock Transfers for HCM">
                 <group>
+                    <field name="warehouse_id"/>
+                    <field name="excel_hcm_keyword"/>
                     <field name="file" filename="filename"/>
                     <field name="filename"/>
                 </group>
