@@ -30,8 +30,7 @@ class ImportTransferWizard(models.TransientModel):
         for refno, group in grouped:
             direction = None
             first_row = group.iloc[0]
-            contact_name = str(first_row.get("contact_name", "")).strip()
-
+            
             from_code = str(first_row.get("from_stock_code")).strip().upper()
             to_code = str(first_row.get("to_stock_code")).strip().upper()
 
@@ -59,14 +58,24 @@ class ImportTransferWizard(models.TransientModel):
                 _logger.warning("Không tìm thấy picking type phù hợp cho kho %s", self.warehouse_id.name)
                 continue
 
+            contact_name = str(first_row.get("contact_name")).strip()
+            partner = False
+            if contact_name:
+                partner = self.env['res.partner'].search([('name', '=', contact_name)], limit=1)
+                if not partner:
+                    partner = self.env['res.partner'].create({'name': contact_name})
+                    _logger.info("Tạo liên hệ mới: %s", contact_name)
+                else:
+                    _logger.info("Dùng liên hệ có sẵn: %s", contact_name)
+
             picking = self.env['stock.picking'].create({
                 'picking_type_id': picking_type.id,
                 'location_id': picking_type.default_location_src_id.id,
                 'location_dest_id': picking_type.default_location_dest_id.id,
                 'origin': refno,
-                'note': contact_name  # ✅ Gán người liên hệ vào ghi chú phiếu
-
+                'partner_id': partner.id if partner else False,
             })
+
             _logger.info("Tạo phiếu %s (%s): %s", direction, picking_type.code, refno)
 
             for _, row in group.iterrows():
