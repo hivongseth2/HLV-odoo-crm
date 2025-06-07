@@ -43,10 +43,20 @@ class ImportTransferWizard(models.TransientModel):
                 _logger.warning("Không tìm thấy kho KHSG (HCM)")
                 continue
 
-            picking_type = self.env['stock.picking.type'].search([
-                ('code', '=', direction),
-                ('warehouse_id', '=', warehouse.id)
-            ], limit=1)
+            if direction == "outgoing":
+                # Chuyển thành phiếu PICK nội bộ nếu xuất từ HCM
+                picking_type = self.env['stock.picking.type'].search([
+                    ('code', '=', 'internal'),
+                    ('warehouse_id', '=', warehouse.id),
+                    ('sequence_code', 'ilike', 'PICK')  # đảm bảo là phiếu PICK
+                ], limit=1)
+            else:
+                # Nhập kho bình thường
+                picking_type = self.env['stock.picking.type'].search([
+                    ('code', '=', 'incoming'),
+                    ('warehouse_id', '=', warehouse.id)
+                ], limit=1)
+
 
             if not picking_type:
                 _logger.warning("Không tìm thấy picking type: %s", direction)
