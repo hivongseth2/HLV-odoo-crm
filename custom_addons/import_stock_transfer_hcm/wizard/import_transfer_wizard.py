@@ -67,7 +67,12 @@ class ImportTransferWizard(models.TransientModel):
 
             for _, row in group.iterrows():
                 product_code = str(row.get("inventory_item_code")).strip()
-                product_name = str(row.get("description")).strip()
+                product_name = str(row.get("description")).strip()                
+                try:
+                    cost = float(row.get("unit_price_finance", 0))
+                except Exception:
+                    cost = 0.0
+
                 uom_name = str(row.get("unit_name")).strip()
                 qty = float(row.get("quantity", 0))
 
@@ -106,6 +111,8 @@ class ImportTransferWizard(models.TransientModel):
                         "type": "consu",
                         'uom_id': uom.id,
                         'uom_po_id': uom.id,
+                        'standard_price': cost,  # ✅ GIÁ MUA
+
                         'purchase_ok': False,
                         'is_storable': True,
                         'sale_ok': False,
