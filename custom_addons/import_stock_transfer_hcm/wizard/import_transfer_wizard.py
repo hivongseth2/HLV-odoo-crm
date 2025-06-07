@@ -99,10 +99,12 @@ class ImportTransferWizard(models.TransientModel):
                     tmpl = self.env['product.template'].create({
                         'name': product_name,
                         'default_code': product_code,
-                        'type': 'product',
+                        "type": "consu",
                         'uom_id': uom.id,
                         'uom_po_id': uom.id,
                         'purchase_ok': False,
+                                                'is_storable': True,
+
                         'sale_ok': False,
                     })
                     product = tmpl.product_variant_id
