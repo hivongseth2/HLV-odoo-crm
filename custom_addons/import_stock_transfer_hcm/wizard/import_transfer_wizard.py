@@ -30,6 +30,8 @@ class ImportTransferWizard(models.TransientModel):
         for refno, group in grouped:
             direction = None
             first_row = group.iloc[0]
+            contact_name = str(first_row.get("contact_name", "")).strip()
+
             from_code = str(first_row.get("from_stock_code")).strip().upper()
             to_code = str(first_row.get("to_stock_code")).strip().upper()
 
@@ -61,7 +63,9 @@ class ImportTransferWizard(models.TransientModel):
                 'picking_type_id': picking_type.id,
                 'location_id': picking_type.default_location_src_id.id,
                 'location_dest_id': picking_type.default_location_dest_id.id,
-                'origin': refno
+                'origin': refno,
+                'note': contact_name  # ✅ Gán người liên hệ vào ghi chú phiếu
+
             })
             _logger.info("Tạo phiếu %s (%s): %s", direction, picking_type.code, refno)
 
