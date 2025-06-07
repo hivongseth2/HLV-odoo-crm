@@ -1,0 +1,14 @@
+<odoo>
+    <record id="action_import_transfer_wizard" model="ir.actions.act_window">
+        <field name="name">Import chuyển kho HCM</field>
+        <field name="res_model">import.transfer.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_import_transfer_hcm"
+              name="Import chuyển kho HCM"
+              parent="stock.menu_stock_root"
+              action="action_import_transfer_wizard"
+              sequence="99"/>
+</odoo>
