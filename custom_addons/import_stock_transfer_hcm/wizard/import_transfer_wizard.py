@@ -40,9 +40,9 @@ class ImportTransferWizard(models.TransientModel):
             else:
                 continue
 
-            warehouse = self.env['stock.warehouse'].search([('code', '=', 'HCM')], limit=1)
+            warehouse = self.env['stock.warehouse'].search([('code', '=', 'HoangLongVu_SaiGon')], limit=1)
             if not warehouse:
-                _logger.warning("Warehouse HCM not found.")
+                _logger.warning("Warehouse HoangLongVu_SaiGon not found.")
                 continue
 
             picking_type = self.env['stock.picking.type'].search([
