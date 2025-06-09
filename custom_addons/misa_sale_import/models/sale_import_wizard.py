@@ -90,7 +90,7 @@ class SaleImportWizard(models.TransientModel):
 
             product_code = str(row[16]).strip()
             product_desc = str(row[17]).strip()
-                    quantity = row[25]
+            quantity = row[25]
             total_qty = row[36]           # Tổng SL bán theo ĐVC (AK)
             unit_price = row[37]          # Đơn giá theo ĐVC (AL)
             total_price = row[39]         # Doanh số bán (AN)
