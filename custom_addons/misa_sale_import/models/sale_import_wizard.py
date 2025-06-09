@@ -97,6 +97,10 @@ class SaleImportWizard(models.TransientModel):
             discount = row[45]            # Chiết khấu (AS)
             tax_value = row[63]           # Thuế GTGT tiền (BL)
             total_payment = row[65]       # Tổng thanh toán (BN)
+            uom_name = str(row[32]).strip()
+
+            if not product_code or not quantity or not unit_price:
+                continue
 
             # Tính phần trăm chiết khấu
             discount_percent = 0.0
