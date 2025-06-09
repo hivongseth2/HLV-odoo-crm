@@ -90,29 +90,30 @@ class SaleImportWizard(models.TransientModel):
 
             product_code = str(row[16]).strip()
             product_desc = str(row[17]).strip()
-            quantity = row[25]
-            unit_price = row[30]
-            uom_name = str(row[32]).strip()
-            discount = row[45]       # AS – Chiết khấu (tiền)
-            tax_value = row[63]      # BL – Thuế GTGT (tiền)
+                    quantity = row[25]
+            total_qty = row[36]           # Tổng SL bán theo ĐVC (AK)
+            unit_price = row[37]          # Đơn giá theo ĐVC (AL)
+            total_price = row[39]         # Doanh số bán (AN)
+            discount = row[45]            # Chiết khấu (AS)
+            tax_value = row[63]           # Thuế GTGT tiền (BL)
+            total_payment = row[65]       # Tổng thanh toán (BN)
 
-            if not product_code or not quantity or not unit_price:
-                continue
-
-            # Tính chiết khấu %
+            # Tính phần trăm chiết khấu
             discount_percent = 0.0
-            if discount:
-                try:
-                    discount_percent = (float(discount) / (float(unit_price) * float(quantity))) * 100
-                except:
-                    discount_percent = 0.0
+            try:
+                gross_total = float(unit_price) * float(total_qty or 0)
+                if discount and gross_total:
+                    discount_percent = (float(discount) / gross_total) * 100
+            except:
+                discount_percent = 0.0
 
-            # Xử lý thuế
+            # Tính phần trăm thuế
             tax = False
-            if tax_value:
-                try:
-                    vat_percent = (float(tax_value) / (float(unit_price) * float(quantity))) * 100
-                    vat_percent = round(vat_percent / 5) * 5  # Làm tròn 5%, 10%...
+            try:
+                taxable_amount = gross_total - float(discount or 0)
+                if tax_value and taxable_amount:
+                    vat_percent = (float(tax_value) / taxable_amount) * 100
+                    vat_percent = round(vat_percent / 5) * 5
                     tax = self.env['account.tax'].search([
                         ('amount', '=', vat_percent),
                         ('type_tax_use', '=', 'sale')
@@ -123,8 +124,9 @@ class SaleImportWizard(models.TransientModel):
                             'amount': vat_percent,
                             'type_tax_use': 'sale',
                         })
-                except:
-                    tax = False
+            except:
+                tax = False
+
 
             # Tạo sản phẩm nếu chưa có
             product = self.env['product.product'].search([('default_code', '=', product_code)], limit=1)
