@@ -112,24 +112,30 @@ class SaleImportWizard(models.TransientModel):
                 discount_percent = 0.0
 
             # Tính phần trăm thuế
+            # Tính phần trăm thuế từ số tiền thuế
             tax = False
             try:
                 taxable_amount = gross_total - float(discount or 0)
                 if tax_value and taxable_amount:
                     vat_percent = (float(tax_value) / taxable_amount) * 100
-                    vat_percent = round(vat_percent / 5) * 5
+                    vat_percent = round(vat_percent, 2)  # ✅ Không làm tròn bội số 5
+
                     tax = self.env['account.tax'].search([
                         ('amount', '=', vat_percent),
-                        ('type_tax_use', '=', 'sale')
+                        ('type_tax_use', '=', 'sale'),
+                        ('price_include', '=', True)  # ✅ Phải khớp luôn kiểu giá
                     ], limit=1)
+
                     if not tax:
                         tax = self.env['account.tax'].create({
-                            'name': f'Thuế {vat_percent}%',
+                            'name': f'Thuế {vat_percent:.2f}%',
                             'amount': vat_percent,
                             'type_tax_use': 'sale',
+                            'price_include': True,  # ✅ Thuế đã bao gồm trong đơn giá
                         })
             except:
                 tax = False
+
 
 
             # Tạo sản phẩm nếu chưa có
