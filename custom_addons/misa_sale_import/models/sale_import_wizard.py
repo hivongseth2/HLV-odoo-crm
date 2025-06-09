@@ -1,3 +1,20 @@
+import base64
+import openpyxl
+from odoo import models, fields, api
+from odoo.exceptions import UserError
+from datetime import datetime
+from io import BytesIO
+import logging
+_logger = logging.getLogger(__name__)
+
+class SaleImportWizard(models.TransientModel):
+    _name = 'sale.import.wizard'
+    _description = 'MISA Sale Order Import Wizard HLV'
+
+    file = fields.Binary(string='Excel File', required=True)
+    file_name = fields.Char(string='File Name')
+
+
 def action_import(self):
     if not self.file:
         raise UserError('Please upload an Excel file.')
