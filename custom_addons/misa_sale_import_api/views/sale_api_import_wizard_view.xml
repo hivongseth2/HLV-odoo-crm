@@ -1,30 +1,18 @@
 <odoo>
-  <record id="action_sale_api_import_wizard" model="ir.actions.act_window">
-    <field name="name">Import MISA Sale Orders</field>
-    <field name="res_model">sale.api.import.wizard</field>
-    <field name="view_mode">form</field>
-    <field name="target">new</field>
-  </record>
-
-  <menuitem id="menu_misa_import"
-            name="Import từ MISA API"
-            parent="sale.sale_order_menu"
-            action="action_sale_api_import_wizard"
-            sequence="100"/>
-
-  <record id="view_sale_api_import_form" model="ir.ui.view">
+  <record id="view_sale_api_import_wizard_form" model="ir.ui.view">
     <field name="name">sale.api.import.wizard.form</field>
     <field name="model">sale.api.import.wizard</field>
     <field name="arch" type="xml">
-      <form string="Import MISA Sale Orders">
+      <form string="Import Sale Orders from MISA API">
         <group>
-          <field name="date_from"/>
-          <field name="date_to"/>
+          <field name="from_date"/>
+          <field name="to_date"/>
         </group>
         <footer>
-          <button name="button_import" string="Import" type="object" class="btn-primary"/>
-          <button string="Cancel" class="btn-secondary" special="cancel"/>
+          <button name="action_import" string="Import" type="object" class="btn-primary"/>
+          <button string="Cancel" special="cancel" class="btn-secondary"/>
         </footer>
       </form>
-    </record>
+    </field> <!-- 🔁 PHẢI đóng đúng thẻ field ở đây -->
+  </record>
 </odoo>
