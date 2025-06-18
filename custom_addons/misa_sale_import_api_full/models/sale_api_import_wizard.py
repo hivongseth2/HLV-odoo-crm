@@ -35,8 +35,7 @@ class SaleApiImportWizard(models.TransientModel):
 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         params = {
-            "from_date": self.from_date.strftime('%Y-%m-%d'),
-            "to_date": self.to_date.strftime('%Y-%m-%d')
+            
         }
 
         try:
