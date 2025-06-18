@@ -1,0 +1,15 @@
+<odoo>
+    <menuitem id="menu_sale_api_import_root" name="Import MISA API" parent="sale.sale_order_menu"/>
+
+    <record id="action_sale_api_import_wizard" model="ir.actions.act_window">
+        <field name="name">Import đơn hàng từ MISA</field>
+        <field name="res_model">sale.api.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_sale_api_import_wizard"
+              name="Import từ MISA API"
+              parent="menu_sale_api_import_root"
+              action="action_sale_api_import_wizard"/>
+</odoo>
