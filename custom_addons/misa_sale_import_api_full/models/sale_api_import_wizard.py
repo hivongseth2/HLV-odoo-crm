@@ -20,14 +20,17 @@ class SaleApiImportWizard(models.TransientModel):
             "client_secret": "iqFXzEnjLIpuSTdkwFhuvj1Y4jsD9zXHrUzZvF81bO8="
         }
 
+        headers = {
+            "Content-Type": "application/json"
+        }
+
         token = None
         try:
-            res = requests.post(token_url, json=payload)
+            res = requests.post(token_url, json=payload, headers=headers)
+            _logger.info("🔁 MISA token response: %s", res.text)
             res.raise_for_status()
-            token = res.json().get("access_token")
-            if res.status_code != 200:
-                _logger.error("❌ Không lấy được access_token từ MISA: %s - %s", res.status_code, res.text)
-                raise Exception("Không lấy được access_token từ MISA.")
+
+            token = res.json().get("data")
     
         except Exception as e:
             raise Exception(f"Lỗi lấy token: {e}")
