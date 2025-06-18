@@ -9,7 +9,7 @@
     </record>
 
     <menuitem id="menu_sale_api_import_wizard"
-              name="Import từ MISA API"
+              name="Import từ MISA API V3"
               parent="menu_sale_api_import_root"
               action="action_sale_api_import_wizard"/>
 </odoo>

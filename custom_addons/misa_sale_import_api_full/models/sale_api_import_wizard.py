@@ -2,6 +2,7 @@ import requests
 from odoo import models, fields, api
 from datetime import datetime
 import logging
+from dateutil import parser  # dùng thư viện này để xử lý ISO format
 
 _logger = logging.getLogger(__name__)
 
@@ -49,7 +50,9 @@ class SaleApiImportWizard(models.TransientModel):
         for order in orders:
             order_ref = order.get("sale_order_no")
             customer_name = order.get("account_name")
-            order_date = order.get("sale_order_date")
+            # order_date = order.get("sale_order_date")
+            order_date_str = order.get("sale_order_date")
+            order_date = parser.parse(order_date_str) if order_date_str else fields.Datetime.now()
             discount = float(order.get("discount_summary", 0.0))
             tax = float(order.get("tax_summary", 0.0))
             amount = float(order.get("sale_order_amount", 0.0))
