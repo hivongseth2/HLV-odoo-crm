@@ -1,5 +1,5 @@
 {
-    "name": "Import Sale Orders from MISA API",
+    "name": "Import Sale Orders from MISA API New",
     "version": "1.0",
     "summary": "Import đơn hàng từ MISA thông qua API",
     "category": "Sales",
