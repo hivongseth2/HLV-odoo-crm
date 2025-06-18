@@ -1,5 +1,6 @@
 import requests
 import json
+from odoo import models, fields, api
 
 class SaleApiImportWizard(models.TransientModel):
     _name = 'sale.api.import.wizard'
