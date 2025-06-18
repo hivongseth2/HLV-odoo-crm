@@ -25,6 +25,10 @@ class SaleApiImportWizard(models.TransientModel):
             res = requests.post(token_url, json=payload)
             res.raise_for_status()
             token = res.json().get("access_token")
+            if resp.status_code != 200:
+                _logger.error("❌ Không lấy được access_token từ MISA: %s - %s", res.status_code, res.text)
+                raise Exception("Không lấy được access_token từ MISA.")
+    
         except Exception as e:
             raise Exception(f"Lỗi lấy token: {e}")
 
