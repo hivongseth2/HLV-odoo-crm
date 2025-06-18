@@ -52,7 +52,9 @@ class SaleApiImportWizard(models.TransientModel):
             customer_name = order.get("account_name")
             # order_date = order.get("sale_order_date")
             order_date_str = order.get("sale_order_date")
-            order_date = parser.parse(order_date_str) if order_date_str else fields.Datetime.now()
+            # order_date = parser.parse(order_date_str) if order_date_str else fields.Datetime.now()
+            order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else fields.Datetime.now()
+
             discount = float(order.get("discount_summary", 0.0))
             tax = float(order.get("tax_summary", 0.0))
             amount = float(order.get("sale_order_amount", 0.0))
