@@ -37,12 +37,12 @@ class SaleApiImportWizard(models.TransientModel):
         page = 1
         page_size = 50
 
-        while page <= 50:
+        while page <= 500:
             params = {
                 "page": page,
                 "pageSize": page_size,
                 "orderBy": "sale_order_date",
-                "isDescending": False
+                "isDescending": True
             }
             try:
                 response = requests.get(orders_url, headers=headers, params=params)
