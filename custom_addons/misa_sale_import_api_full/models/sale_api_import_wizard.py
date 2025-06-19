@@ -86,7 +86,8 @@ class SaleApiImportWizard(models.TransientModel):
                     'name': order_ref,
                     'partner_id': partner.id,
                     'date_order': order_date,
-                    'amount_total': amount
+                    'amount_total': amount,
+                    'state': 'sale',
                 })
 
                 for line in order.get("sale_order_product_mappings", []):
@@ -145,7 +146,8 @@ class SaleApiImportWizard(models.TransientModel):
                         'discount': discount_percent
                     })
 
-                _logger.info("✅ Đã tạo đơn hàng: %s cho %s", order_ref, customer_name)
+                sale_order.action_confirm()
+                _logger.info("✅ Đã tạo và xác nhận đơn hàng: %s cho %s", order_ref, customer_name)
 
             page += 1
 
