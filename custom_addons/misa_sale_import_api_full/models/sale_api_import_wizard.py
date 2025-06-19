@@ -37,7 +37,7 @@ class SaleApiImportWizard(models.TransientModel):
         page = 1
         page_size = 50
 
-        while page <= 500:
+        while page <= 50:
             params = {
                 "page": page,
                 "pageSize": page_size,
