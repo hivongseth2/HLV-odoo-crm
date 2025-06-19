@@ -40,7 +40,7 @@ class SaleApiImportWizard(models.TransientModel):
         # Cập nhật ngày kết thúc là cuối ngày
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
-        while page <= 1000:  # Giới hạn tối đa 1000 trang
+        while page <= 500:  # Giới hạn tối đa 1000 trang
             params = {
                 "page": page,
                 "pageSize": page_size,
