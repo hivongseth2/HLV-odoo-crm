@@ -40,11 +40,11 @@ class SaleApiImportWizard(models.TransientModel):
         # Cập nhật ngày kết thúc là cuối ngày
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
-        while page <= 50:
+        while page <= 100:
             params = {
                 "page": page,
                 "pageSize": page_size,
-                "orderBy": "created_date",
+                "orderBy": "sale_order_date",
                 "isDescending": True
             }
             try:
