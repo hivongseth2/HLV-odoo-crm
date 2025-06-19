@@ -35,9 +35,9 @@ class SaleApiImportWizard(models.TransientModel):
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         page = 1
-        page_size = 20
+        page_size = 5
 
-        # Cập nhật ngày kết thúc là cuối ngày
+        start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
         while page <= 50:
@@ -62,8 +62,11 @@ class SaleApiImportWizard(models.TransientModel):
                 order_date_str = order.get("created_date")
                 order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else fields.Datetime.now()
 
-                if order_date < datetime.combine(self.from_date, datetime.min.time()) or order_date > end_datetime:
+                if order_date < start_datetime:
                     continue
+                if order_date > end_datetime:
+                    _logger.info("🛑 Gặp đơn vượt quá ngày, dừng vòng lặp: %s", order.get("sale_order_no"))
+                    return {'type': 'ir.actions.act_window_close'}
 
                 product_lines = order.get("sale_order_product_mappings", [])
                 filtered_lines = [l for l in product_lines if l.get("stock_name") == "HCM"]
