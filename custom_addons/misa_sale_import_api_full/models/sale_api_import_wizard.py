@@ -65,7 +65,9 @@ class SaleApiImportWizard(models.TransientModel):
                 if order_date < datetime.combine(self.from_date, datetime.min.time()) or order_date > end_datetime:
                     continue
 
-                if order.get("stock_name") != "HCM":
+                product_lines = order.get("sale_order_product_mappings", [])
+                filtered_lines = [l for l in product_lines if l.get("stock_name") == "HCM"]
+                if not filtered_lines:
                     continue
 
                 order_ref = order.get("sale_order_no")
@@ -92,7 +94,7 @@ class SaleApiImportWizard(models.TransientModel):
                     'amount_total': amount,
                 })
 
-                for line in order.get("sale_order_product_mappings", []):
+                for line in filtered_lines:
                     product_code = line.get("product_code")
                     description = line.get("description") or product_code
                     qty = float(line.get("amount", 1))
