@@ -1,6 +1,6 @@
 import requests 
 from odoo import models, fields, api
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser  # để xử lý ISO datetime
 import logging
 
@@ -35,13 +35,16 @@ class SaleApiImportWizard(models.TransientModel):
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         page = 1
-        page_size = 50
+        page_size = 20
 
-        while page <= 100:
+        # Cập nhật ngày kết thúc là cuối ngày
+        end_datetime = datetime.combine(self.to_date, datetime.max.time())
+
+        while page <= 50:
             params = {
                 "page": page,
                 "pageSize": page_size,
-                "orderBy": "sale_order_date",
+                "orderBy": "created_date",
                 "isDescending": True
             }
             try:
@@ -56,10 +59,13 @@ class SaleApiImportWizard(models.TransientModel):
                 break
 
             for order in orders:
-                order_date_str = order.get("sale_order_date")
+                order_date_str = order.get("created_date")
                 order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else fields.Datetime.now()
 
-                if not (self.from_date <= order_date.date() <= self.to_date):
+                if order_date < datetime.combine(self.from_date, datetime.min.time()) or order_date > end_datetime:
+                    continue
+
+                if order.get("stock_name") != "HCM":
                     continue
 
                 order_ref = order.get("sale_order_no")
