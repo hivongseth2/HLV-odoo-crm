@@ -152,3 +152,16 @@ class SaleApiImportWizard(models.TransientModel):
             page += 1
 
         return {'type': 'ir.actions.act_window_close'}
+
+    def action_delete_test_orders(self):
+        misa_orders = self.env['sale.order'].search([
+            ('name', 'ilike', 'DH%')
+        ])
+        for order in misa_orders:
+            if order.state != 'cancel':
+                order.action_cancel()
+            order.order_line.unlink()
+            order.unlink()
+
+        _logger.info("🧹 Đã xoá toàn bộ đơn hàng MISA test.")
+        return {'type': 'ir.actions.act_window_close'}
