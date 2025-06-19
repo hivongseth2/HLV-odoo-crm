@@ -36,9 +36,8 @@ class SaleApiImportWizard(models.TransientModel):
 
         page = 1
         page_size = 50
-        stop = False
 
-        while not stop and page <= 50:
+        while page <= 50:
             params = {
                 "page": page,
                 "pageSize": page_size,
@@ -59,10 +58,8 @@ class SaleApiImportWizard(models.TransientModel):
             for order in orders:
                 order_date_str = order.get("sale_order_date")
                 order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else fields.Datetime.now()
-                if order_date.date() > self.to_date:
-                    stop = True
-                    break
-                if order_date.date() < self.from_date:
+
+                if not (self.from_date <= order_date.date() <= self.to_date):
                     continue
 
                 order_ref = order.get("sale_order_no")
@@ -87,7 +84,6 @@ class SaleApiImportWizard(models.TransientModel):
                     'partner_id': partner.id,
                     'date_order': order_date,
                     'amount_total': amount,
-                    'state': 'sale',
                 })
 
                 for line in order.get("sale_order_product_mappings", []):
@@ -152,19 +148,3 @@ class SaleApiImportWizard(models.TransientModel):
             page += 1
 
         return {'type': 'ir.actions.act_window_close'}
-
-    def action_delete_test_orders(self):
-        misa_orders = self.env['sale.order'].search([
-            ('name', 'ilike', 'DH%')
-        ])
-        for order in misa_orders:
-            if order.state != 'cancel':
-                order.action_cancel()
-            order.order_line.unlink()
-            order.unlink()
-
-        _logger.info("🧹 Đã xoá toàn bộ đơn hàng MISA test.")
-        return {'type': 'ir.actions.act_window_close'}
-
-    def action_open_delete_button(self):
-        return self.action_delete_test_orders()
