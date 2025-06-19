@@ -1,8 +1,8 @@
 import requests
 from odoo import models, fields, api
 from datetime import datetime
+from dateutil import parser  # để xử lý ISO datetime
 import logging
-from dateutil import parser  # dùng thư viện này để xử lý ISO format
 
 _logger = logging.getLogger(__name__)
 
@@ -20,10 +20,8 @@ class SaleApiImportWizard(models.TransientModel):
             "client_id": "odoo",
             "client_secret": "iqFXzEnjLIpuSTdkwFhuvj1Y4jsD9zXHrUzZvF81bO8="
         }
-        headers = {
-            "Content-Type": "application/json"
-        }
-        token = None
+        headers = {"Content-Type": "application/json"}
+
         try:
             res = requests.post(token_url, json=payload, headers=headers)
             _logger.info("🔐 Token response: %s", res.text)
@@ -35,28 +33,25 @@ class SaleApiImportWizard(models.TransientModel):
             raise Exception(f"Lỗi lấy token từ MISA: {e}")
 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        params = {
-            
-        }
+        all_orders = []
 
         try:
-            response = requests.get(orders_url, headers=headers, params=params)
+            response = requests.get(orders_url, headers=headers)
             _logger.info("📦 Order response: %s", response.text)
             response.raise_for_status()
-            orders = response.json().get("data", [])
+            all_orders = response.json().get("data", [])
         except Exception as e:
             raise Exception(f"Lỗi khi lấy đơn hàng từ API MISA: {e}")
 
-        for order in orders:
+        for order in all_orders:
             order_ref = order.get("sale_order_no")
             customer_name = order.get("account_name")
-            # order_date = order.get("sale_order_date")
             order_date_str = order.get("sale_order_date")
-            # order_date = parser.parse(order_date_str) if order_date_str else fields.Datetime.now()
             order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else fields.Datetime.now()
 
-            discount = float(order.get("discount_summary", 0.0))
-            tax = float(order.get("tax_summary", 0.0))
+            if not (self.from_date <= order_date.date() <= self.to_date):
+                continue
+
             amount = float(order.get("sale_order_amount", 0.0))
 
             if not order_ref or not customer_name:
@@ -84,16 +79,47 @@ class SaleApiImportWizard(models.TransientModel):
                 description = line.get("description") or product_code
                 qty = float(line.get("amount", 1))
                 price_unit = float(line.get("price", 0))
-                discount_amt = float(line.get("discount", 0))
                 discount_percent = float(line.get("discount_percent", 0))
+                uom_name = line.get("unit", "Cái").strip()
+
+                category = self.env['uom.category'].search([('name', '=', 'Unit')], limit=1)
+                if not category:
+                    category = self.env['uom.category'].create({'name': 'Unit'})
+
+                uom = self.env['uom.uom'].search([
+                    ('name', '=', uom_name),
+                    ('category_id', '=', category.id)
+                ], limit=1)
+
+                if not uom:
+                    existing_ref = self.env['uom.uom'].search([
+                        ('category_id', '=', category.id),
+                        ('uom_type', '=', 'reference')
+                    ], limit=1)
+
+                    uom = self.env['uom.uom'].create({
+                        'name': uom_name,
+                        'category_id': category.id,
+                        'uom_type': 'smaller' if existing_ref else 'reference',
+                        'factor': 1.0,
+                        'factor_inv': 1.0,
+                        'rounding': 1.0,
+                    })
 
                 product = self.env['product.product'].search([('default_code', '=', product_code)], limit=1)
                 if not product:
-                    product = self.env['product.product'].create({
+                    template = self.env['product.template'].create({
                         'name': description,
                         'default_code': product_code,
+                        'type': 'consu',
+                        'uom_id': uom.id,
+                        'uom_po_id': uom.id,
                         'list_price': price_unit,
+                        'purchase_ok': False,
+                        'sale_ok': False,
+                        'is_storable': True,
                     })
+                    product = template.product_variant_id
 
                 self.env['sale.order.line'].create({
                     'order_id': sale_order.id,
