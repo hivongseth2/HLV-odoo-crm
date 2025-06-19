@@ -165,3 +165,6 @@ class SaleApiImportWizard(models.TransientModel):
 
         _logger.info("🧹 Đã xoá toàn bộ đơn hàng MISA test.")
         return {'type': 'ir.actions.act_window_close'}
+
+    def action_open_delete_button(self):
+        return self.action_delete_test_orders()
