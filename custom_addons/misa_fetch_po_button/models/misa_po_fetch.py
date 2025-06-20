@@ -32,11 +32,10 @@ class MisaPOFetch(models.TransientModel):
                     "UserId":"df0cb33b-b139-49f5-ac24-f9f860b4e987",
                     "isc":false
                 })
-       
-       
+
         }
 
-       payload = {
+        payload = {
             "filter": [
                 {
                     "property": 3654,
