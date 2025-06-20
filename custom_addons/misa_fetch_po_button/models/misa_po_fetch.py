@@ -126,14 +126,18 @@ class MisaPOFetch(models.TransientModel):
                     _logger.info("📦 Đang gọi API chi tiết PO %s", refid)
                     _logger.info("👉 Payload gửi đi: %s", json.dumps(detail_payload, indent=2))
                     _logger.info("📨 Response text: %s", detail_res.text)
-                    self.env["purchase.order.line"].create({
-                        "order_id": po_rec.id,
-                        "name": name,
-                        "product_id": product.id,
-                        "product_qty": qty,
-                        "product_uom": uom.id,
-                        "price_unit": price
-                    })
+                    if product and product.uom_id.category_id.id == uom.category_id.id:
+                        self.env["purchase.order.line"].create({
+                            "order_id": po_rec.id,
+                            "name": name,
+                            "product_id": product.id,
+                            "product_qty": qty,
+                            "product_uom": uom.id,
+                            "price_unit": price
+                        })
+                    else:
+                        _logger.warning("❌ Bỏ qua sản phẩm %s vì UOM không khớp loại.", code)
+
 
     def _get_or_create_partner(self, name):
         partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
@@ -141,11 +145,12 @@ class MisaPOFetch(models.TransientModel):
             partner = self.env["res.partner"].create({"name": name, "supplier_rank": 1})
         return partner
     def _get_or_create_uom(self, name):
+        # Ưu tiên dùng đúng đơn vị tên "Cái" đã có trong hệ thống (tránh tạo mới)
         uom = self.env['uom.uom'].search([('name', '=', name)], limit=1)
         if uom:
             return uom
 
-        # Nếu chưa có thì tạo mới kèm theo category "Đơn vị"
+        # Nếu không có thì tạo mới trong cùng category "Đơn vị"
         cat = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
         if not cat:
             cat = self.env['uom.category'].create({'name': 'Đơn vị'})
@@ -158,18 +163,23 @@ class MisaPOFetch(models.TransientModel):
         })
         return uom
 
-    def _get_or_create_product(self, code, name, uom):
-        product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
-        if not product:
-            tmpl = self.env["product.template"].create({
-                "name": name,
-                "default_code": code,
-                "type": "consu",
-                "uom_id": uom.id,
-                "uom_po_id": uom.id,
-                "purchase_ok": True,
-                "sale_ok": False,
-                "is_storable": True,
-            })
-            product = tmpl.product_variant_id
+def _get_or_create_product(self, code, name, uom):
+    product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+    if product:
+        # Kiểm tra xem UOM hiện tại có cùng category không
+        if product.uom_id.category_id.id != uom.category_id.id:
+            _logger.warning("⚠️ UOM không cùng loại. Bỏ qua sản phẩm %s", code)
+            return None
         return product
+
+    tmpl = self.env["product.template"].create({
+        "name": name,
+        "default_code": code,
+        "type": "consu",
+        "uom_id": uom.id,
+        "uom_po_id": uom.id,
+        "purchase_ok": True,
+        "sale_ok": False,
+        "is_storable": True,
+    })
+    return tmpl.product_variant_id
