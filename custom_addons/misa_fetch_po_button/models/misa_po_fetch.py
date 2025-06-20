@@ -123,9 +123,6 @@ class MisaPOFetch(models.TransientModel):
                     
                     _logger.info("📦 Đang gọi API chi tiết PO %s", refid)
                     _logger.info("👉 Payload gửi đi: %s", json.dumps(detail_payload, indent=2))
-                    _logger.info("👉 URL gọi: %s", detail_url)
-                    _logger.info("👉 Headers: %s", headers)
-                    _logger.info("⏳ Status response: %s", detail_res.status_code)
                     _logger.info("📨 Response text: %s", detail_res.text)
                     self.env["purchase.order.line"].create({
                         "order_id": po_rec.id,
