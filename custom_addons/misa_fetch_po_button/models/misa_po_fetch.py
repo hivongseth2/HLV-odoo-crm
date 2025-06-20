@@ -88,7 +88,7 @@ class MisaPOFetch(models.TransientModel):
                 po_rec = self.env["purchase.order"].create({
                     "partner_id": partner.id,
                     "origin": refno,
-                    "note": memo,
+                    # "note": memo,
                 })
                 # Gọi chi tiết đơn hàng
                 detail_payload = {
