@@ -118,7 +118,9 @@ class MisaPOFetch(models.TransientModel):
                     name = line.get("inventory_item_name", "SP MISA")
                     qty = float(line.get("quantity", 1))
                     price = float(line.get("unit_price", 0))
-                    uom = self._get_or_create_uom("Cái")
+                    unit_name = line.get("unit_name", "Cái").strip()
+                    
+                    uom = self._get_or_create_uom(unit_name)
                     product = self._get_or_create_product(code, name, uom)
                     
                     _logger.info("📦 Đang gọi API chi tiết PO %s", refid)
@@ -139,17 +141,23 @@ class MisaPOFetch(models.TransientModel):
             partner = self.env["res.partner"].create({"name": name, "supplier_rank": 1})
         return partner
     def _get_or_create_uom(self, name):
-        cat = self.env["uom.category"].search([("name", "ilike", "đơn vị")], limit=1) or \
-            self.env["uom.category"].create({"name": "Đơn vị"})
-        uom = self.env["uom.uom"].search([("name", "ilike", name), ("category_id", "=", cat.id)], limit=1)
-        if not uom:
-            uom = self.env["uom.uom"].create({
-                "name": name,
-                "category_id": cat.id,
-                "uom_type": "reference",
-                "rounding": 1.0,
-            })
+        uom = self.env['uom.uom'].search([('name', '=', name)], limit=1)
+        if uom:
+            return uom
+
+        # Nếu chưa có thì tạo mới kèm theo category "Đơn vị"
+        cat = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
+        if not cat:
+            cat = self.env['uom.category'].create({'name': 'Đơn vị'})
+
+        uom = self.env['uom.uom'].create({
+            'name': name,
+            'category_id': cat.id,
+            'uom_type': 'reference',
+            'rounding': 1.0,
+        })
         return uom
+
     def _get_or_create_product(self, code, name, uom):
         product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
         if not product:
