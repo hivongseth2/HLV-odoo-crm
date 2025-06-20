@@ -85,61 +85,56 @@ class MisaPOFetch(models.TransientModel):
             memo = po.get("journal_memo", "")
             partner = self._get_or_create_partner(supplier_name)
 
-                po_rec = self.env["purchase.order"].create({
-                    "partner_id": partner.id,
-                    "origin": refno,
-                    "note": memo,
+            po_rec = self.env["purchase.order"].create({
+                "partner_id": partner.id,
+                "origin": refno,
+                "note": memo,
+            })
+            # Gọi chi tiết đơn hàng
+            detail_payload = {
+                "columns": [2157, 1355, 4670, 1195, 1065, 5683, 5274, 3870, 5279, 308],
+                "filter": [{
+                    "property": 3993,
+                    "operator": 7,
+                    "operand": 1,
+                    "value": refid,
+                    "data_type": 10
+                }],
+                "loadMode": 2,
+                "pageIndex": 1,
+                "pageSize": 20,
+                "sort": json.dumps([{"property": 4555, "desc": False, "data_type": 4, "operand": 1}]),
+                "summaryColumns": [3488, 3870, 308, 1844, 2241],
+                "useSp": False,
+                "view": 35
+            }
+            detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
+                                    headers=headers, json=detail_payload)
+            if detail_res.status_code != 200:
+                _logger.warning("Không lấy được chi tiết PO %s", refid)
+                continue
+            for line in detail_res.json().get("Data", {}).get("PageData", []):
+                code = line.get("inventory_item_code", "SP-MISA")
+                name = line.get("inventory_item_name", "SP MISA")
+                qty = float(line.get("quantity", 1))
+                price = float(line.get("unit_price", 0))
+                uom = self._get_or_create_uom("Cái")
+                product = self._get_or_create_product(code, name, uom)
+                
+                _logger.info("📦 Đang gọi API chi tiết PO %s", refid)
+                _logger.info("👉 Payload gửi đi: %s", json.dumps(detail_payload, indent=2))
+                _logger.info("👉 URL gọi: %s", detail_url)
+                _logger.info("👉 Headers: %s", headers)
+                _logger.info("⏳ Status response: %s", detail_res.status_code)
+                _logger.info("📨 Response text: %s", detail_res.text)
+                self.env["purchase.order.line"].create({
+                    "order_id": po_rec.id,
+                    "name": name,
+                    "product_id": product.id,
+                    "product_qty": qty,
+                    "product_uom": uom.id,
+                    "price_unit": price
                 })
-
-                # Gọi chi tiết đơn hàng
-                detail_payload = {
-                    "columns": [2157, 1355, 4670, 1195, 1065, 5683, 5274, 3870, 5279, 308],
-                    "filter": [{
-                        "property": 3993,
-                        "operator": 7,
-                        "operand": 1,
-                        "value": refid,
-                        "data_type": 10
-                    }],
-                    "loadMode": 2,
-                    "pageIndex": 1,
-                    "pageSize": 20,
-                    "sort": json.dumps([{"property": 4555, "desc": False, "data_type": 4, "operand": 1}]),
-                    "summaryColumns": [3488, 3870, 308, 1844, 2241],
-                    "useSp": False,
-                    "view": 35
-                }
-
-                detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
-                                        headers=headers, json=detail_payload)
-                if detail_res.status_code != 200:
-                    _logger.warning("Không lấy được chi tiết PO %s", refid)
-                    continue
-
-                for line in detail_res.json().get("Data", {}).get("PageData", []):
-                    code = line.get("inventory_item_code", "SP-MISA")
-                    name = line.get("inventory_item_name", "SP MISA")
-                    qty = float(line.get("quantity", 1))
-                    price = float(line.get("unit_price", 0))
-                    uom = self._get_or_create_uom("Cái")
-                    product = self._get_or_create_product(code, name, uom)
-                    
-                    _logger.info("📦 Đang gọi API chi tiết PO %s", refid)
-                    _logger.info("👉 Payload gửi đi: %s", json.dumps(detail_payload, indent=2))
-                    _logger.info("👉 URL gọi: %s", detail_url)
-                    _logger.info("👉 Headers: %s", headers)
-                    _logger.info("⏳ Status response: %s", detail_res.status_code)
-                    _logger.info("📨 Response text: %s", detail_res.text)
-
-
-                    self.env["purchase.order.line"].create({
-                        "order_id": po_rec.id,
-                        "name": name,
-                        "product_id": product.id,
-                        "product_qty": qty,
-                        "product_uom": uom.id,
-                        "price_unit": price
-                    })
 
     def _get_or_create_partner(self, name):
         partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
