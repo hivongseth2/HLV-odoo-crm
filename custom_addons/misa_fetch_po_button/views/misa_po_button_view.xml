@@ -1,3 +1,4 @@
+
 <odoo>
     <record id="view_misa_po_fetch_form" model="ir.ui.view">
         <field name="name">misa.po.fetch.form</field>
@@ -6,8 +7,10 @@
             <form string="MISA PO Fetch">
                 <sheet>
                     <group>
-                        <field name="name"/>
-                        <button name="action_fetch_po" string="Fetch PO từ MISA" type="object" class="btn-primary"/>
+                        <button name="action_fetch_po"
+                                string="Fetch PO từ MISA"
+                                type="object"
+                                class="btn-primary"/>
                     </group>
                 </sheet>
             </form>
@@ -15,12 +18,15 @@
     </record>
 
     <record id="action_misa_po_fetch" model="ir.actions.act_window">
-        <field name="name">Lấy PO từ MISA</field>
+        <field name="name">MISA PO Fetch</field>
         <field name="res_model">misa.po.fetch</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
     </record>
 
-    <menuitem id="menu_misa_po_fetch_root" name="MISA"/>
-    <menuitem id="menu_misa_po_fetch" name="Lấy PO" parent="menu_misa_po_fetch_root" action="action_misa_po_fetch"/>
+    <menuitem id="menu_misa_po_root" name="MISA"/>
+    <menuitem id="menu_misa_po_fetch"
+              name="Lấy PO"
+              parent="menu_misa_po_root"
+              action="action_misa_po_fetch"/>
 </odoo>

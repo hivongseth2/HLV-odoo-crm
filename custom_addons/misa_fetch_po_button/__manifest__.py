@@ -1,11 +1,12 @@
+
 {
-    "name": "MISA Fetch PO Button",
+    "name": "Fetch PO từ MISA",
     "version": "1.0",
-    "depends": ["base"],
+    "depends": ["purchase"],
     "author": "ChatGPT",
-    "category": "Custom",
-    "description": "Nút gọi API MISA để lấy danh sách PO",
+    "category": "Tools",
     "data": ["views/misa_po_button_view.xml"],
     "installable": True,
-    "application": False
+    "auto_install": False,
+    "application": False,
 }
