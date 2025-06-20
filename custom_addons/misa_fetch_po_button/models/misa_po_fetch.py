@@ -14,20 +14,51 @@ class MisaPOFetch(models.TransientModel):
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
             "x-device": "04aadfced5b04995ecfacb0a7da5c50c",
-
-            "X-MISA-Context": '{"TenantId":"47ab503b-99d5-4eb8-aa11-24927abb3585","TenantCode":"3R2PY2F4","DatabaseId":"f4b18d63-6c99-4a53-b974-f6208e84fced","BranchId":"53a073a0-5381-4493-820f-51ea32ebe990","WorkingBook":0,"Language":"vi","IncludeDependentBranch":"false","SessionId":"ssdf0cb33bb13949f5ac24f9f860b4e987.04aadfced5b04995ecfacb0a7da5c50c.f4b18d636c994a53b974f6208e84fced.638860290625845472","DBType":1,"AuthType":0,"AmisSessionId":"NAA3AGEAYgA1ADAAMwBiADkAOQBkADUANABlAGIAOABhAGEAMQAxADIANAA5ADIANwBhAGIAYgAzADUAOAA1ADAAYgBlADEAMgAyAGIAMAA3AGIANAAyADQAZAAzAGMAOQA1AGQAYQBjAGEANAAxADYAZQAxADIAMwBhADAAYQA=","HasAgent":false,"UserType":1,"art":0,"UserId":"df0cb33b-b139-49f5-ac24-f9f860b4e987","isc":false}',
+            "X-MISA-Context": json.dumps({
+                    "TenantId":"47ab503b-99d5-4eb8-aa11-24927abb3585",
+                    "TenantCode":"3R2PY2F4",
+                    "DatabaseId":"f4b18d63-6c99-4a53-b974-f6208e84fced",
+                    "BranchId":"53a073a0-5381-4493-820f-51ea32ebe990",
+                    "WorkingBook":0,
+                    "Language":"vi",
+                    "IncludeDependentBranch":"false",
+                    "SessionId":"ssdf0cb33bb13949f5ac24f9f860b4e987.04aadfced5b04995ecfacb0a7da5c50c.f4b18d636c994a53b974f6208e84fced.638860290625845472",
+                    "DBType":1,
+                    "AuthType":0,
+                    "AmisSessionId":"NAA3AGEAYgA1ADAAMwBiADkAOQBkADUANABlAGIAOABhAGEAMQAxADIANAA5ADIANwBhAGIAYgAzADUAOAA1ADAAYgBlADEAMgAyAGIAMAA3AGIANAAyADQAZAAzAGMAOQA1AGQAYQBjAGEANAAxADYAZQAxADIAMwBhADAAYQA=",
+                    "HasAgent":false,
+                    "UserType":1,
+                    "art":0,
+                    "UserId":"df0cb33b-b139-49f5-ac24-f9f860b4e987",
+                    "isc":false
+                })
+       
+       
         }
 
-        payload = {
-            "filter": [],
+       payload = {
+            "filter": [
+                {
+                    "property": 3654,
+                    "value": "2025-05-31T17:00:00.00Z",
+                    "operator": 10,
+                    "operand": 1,
+                    "data_type": 3
+                }
+            ],
             "loadMode": 2,
             "pageIndex": 1,
-            "pageSize": 10,
-            "sort": "",
-            "summaryColumns": [],
+            "pageSize": 20,
+            "sort": json.dumps([
+                {"property": 3654, "desc": True, "data_type": 3, "operand": 1},
+                {"property": 3972, "desc": True, "data_type": 3, "operand": 1},
+                {"property": 4018, "desc": True, "data_type": 1, "operand": 1}
+            ]),
+            "summaryColumns": [5080, 5730, 5128, 5059],
             "useSp": False,
             "view": 40
         }
+
 
         response = requests.post(
             "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2",
