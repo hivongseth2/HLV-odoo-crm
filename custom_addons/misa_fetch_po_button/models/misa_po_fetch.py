@@ -35,6 +35,9 @@ class MisaPOFetch(models.TransientModel):
             json=payload
         )
 
+        _logger.info("Raw status: %s", response.status_code)
+        _logger.info("Response text: %s", response.text)
+        _logger.info("Headers: %s", response.headers)
 
         if response.status_code == 200:
             # _logger.info("GET PO: %s", response.json())
