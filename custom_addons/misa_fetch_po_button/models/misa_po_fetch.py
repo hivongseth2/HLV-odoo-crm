@@ -163,23 +163,23 @@ class MisaPOFetch(models.TransientModel):
         })
         return uom
 
-def _get_or_create_product(self, code, name, uom):
-    product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
-    if product:
-        # Kiểm tra xem UOM hiện tại có cùng category không
-        if product.uom_id.category_id.id != uom.category_id.id:
-            _logger.warning("⚠️ UOM không cùng loại. Bỏ qua sản phẩm %s", code)
-            return None
-        return product
+    def _get_or_create_product(self, code, name, uom):
+        product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+        if product:
+            # Kiểm tra xem UOM hiện tại có cùng category không
+            if product.uom_id.category_id.id != uom.category_id.id:
+                _logger.warning("⚠️ UOM không cùng loại. Bỏ qua sản phẩm %s", code)
+                return None
+            return product
 
-    tmpl = self.env["product.template"].create({
-        "name": name,
-        "default_code": code,
-        "type": "consu",
-        "uom_id": uom.id,
-        "uom_po_id": uom.id,
-        "purchase_ok": True,
-        "sale_ok": False,
-        "is_storable": True,
-    })
-    return tmpl.product_variant_id
+        tmpl = self.env["product.template"].create({
+            "name": name,
+            "default_code": code,
+            "type": "consu",
+            "uom_id": uom.id,
+            "uom_po_id": uom.id,
+            "purchase_ok": True,
+            "sale_ok": False,
+            "is_storable": True,
+        })
+        return tmpl.product_variant_id
