@@ -8,7 +8,6 @@ _logger = logging.getLogger(__name__)
 class MisaPOFetch(models.TransientModel):
     _name = "misa.po.fetch"
     _description = "MISA PO Fetch"
-
     def action_fetch_po(self):
         access_token = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJkZjBjYjMzYi1iMTM5LTQ5ZjUtYWMyNC1mOWY4NjBiNGU5ODciLCJ1bmEiOiJOR1VZRU5USEFOSExVQU4iLCJhdXQiOiIwIiwidWVtIjoibmd1eWVubHVhbjEzMDMwMUBnbWFpbC5jb20iLCJuYmYiOjE3NTA0MDcwNjIsImV4cCI6MTc1MDQ5MzQ5MCwiaWF0IjoxNzUwNDA3MDYyLCJpc3MiOiJNSVNBSlNDIn0.dISLn9Vd2j5rRDWHi0wFDyfdDlk4-PeDIDHpp-5Dh4Q"
         headers = {
@@ -35,6 +34,10 @@ class MisaPOFetch(models.TransientModel):
             headers=headers,
             json=payload
         )
+
+
+        _logger.info("GET PO: %s", response.json())
+
 
         if response.status_code == 200:
             po_data_list = response.json().get("data", [])
