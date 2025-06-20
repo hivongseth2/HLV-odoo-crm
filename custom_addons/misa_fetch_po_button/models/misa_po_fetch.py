@@ -36,10 +36,9 @@ class MisaPOFetch(models.TransientModel):
         )
 
 
-        _logger.info("GET PO: %s", response.json())
-
-
         if response.status_code == 200:
+            _logger.info("GET PO: %s", response.json())
+
             po_data_list = response.json().get("data", [])
             for po_data in po_data_list:
                 supplier_name = po_data.get("account_object_name")
