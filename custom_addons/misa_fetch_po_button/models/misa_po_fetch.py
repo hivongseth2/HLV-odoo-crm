@@ -78,63 +78,100 @@ class MisaPOFetch(models.TransientModel):
             # po_data_list = response.json().get("data", [])
             po_data_list = response.json().get("Data", {}).get("PageData", [])
 
-            for po_data in po_data_list:
-                supplier_name = po_data.get("account_object_name")
-                product_name = po_data.get("journal_memo", "SP MISA")
-                qty = 1
-                price_unit = float(po_data.get("total_amount_oc", 1.0))
-                code = po_data.get("refno", "SP-MISA")
-                uom_name = "Cái"
+        for po in po_data_list:
+            refid = po.get("refid")
+            supplier_name = po.get("account_object_name")
+            refno = po.get("refno", "PO-MISA")
+            memo = po.get("journal_memo", "")
+            partner = self._get_or_create_partner(supplier_name)
 
-                # Tìm hoặc tạo NCC
-                partner = self.env["res.partner"].search([("name", "=", supplier_name)], limit=1)
-                if not partner:
-                    partner = self.env["res.partner"].create({
-                        "name": supplier_name,
-                        "supplier_rank": 1,
-                    })
-                    _logger.info("Created new supplier: %s", supplier_name)
-
-                # Tìm hoặc tạo ĐVT
-                uom_category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
-                if not uom_category:
-                    uom_category = self.env['uom.category'].create({'name': 'Đơn vị'})
-                uom = self.env['uom.uom'].search([
-                    ('name', 'ilike', uom_name),
-                    ('category_id', '=', uom_category.id)
-                ], limit=1)
-                if not uom:
-                    uom = self.env['uom.uom'].create({
-                        'name': uom_name,
-                        'category_id': uom_category.id,
-                        'uom_type': 'reference',
-                        'rounding': 1.0,
-                    })
-
-                # Tìm hoặc tạo sản phẩm
-                product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
-                if not product:
-                    tmpl = self.env["product.template"].create({
-                        "name": product_name,
-                        "default_code": code,
-                        "type": "product",
-                        "uom_id": uom.id,
-                        "uom_po_id": uom.id,
-                        "purchase_ok": True,
-                        "sale_ok": False,
-                        'is_storable': True,
-                    })
-                    product = tmpl.product_variant_id
-
-                # Tạo đơn hàng mua
-                self.env["purchase.order"].create({
+                po_rec = self.env["purchase.order"].create({
                     "partner_id": partner.id,
-                    "order_line": [(0, 0, {
-                        "name": product_name,
+                    "origin": refno,
+                    "note": memo,
+                })
+
+                # Gọi chi tiết đơn hàng
+                detail_payload = {
+                    "columns": [2157, 1355, 4670, 1195, 1065, 5683, 5274, 3870, 5279, 308],
+                    "filter": [{
+                        "property": 3993,
+                        "operator": 7,
+                        "operand": 1,
+                        "value": refid,
+                        "data_type": 10
+                    }],
+                    "loadMode": 2,
+                    "pageIndex": 1,
+                    "pageSize": 20,
+                    "sort": json.dumps([{"property": 4555, "desc": False, "data_type": 4, "operand": 1}]),
+                    "summaryColumns": [3488, 3870, 308, 1844, 2241],
+                    "useSp": False,
+                    "view": 35
+                }
+
+                detail_res = requests.post("https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
+                                        headers=headers, json=detail_payload)
+                if detail_res.status_code != 200:
+                    _logger.warning("Không lấy được chi tiết PO %s", refid)
+                    continue
+
+                for line in detail_res.json().get("Data", {}).get("PageData", []):
+                    code = line.get("inventory_item_code", "SP-MISA")
+                    name = line.get("inventory_item_name", "SP MISA")
+                    qty = float(line.get("quantity", 1))
+                    price = float(line.get("unit_price", 0))
+                    uom = self._get_or_create_uom("Cái")
+                    product = self._get_or_create_product(code, name, uom)
+                    
+                    _logger.info("📦 Đang gọi API chi tiết PO %s", refid)
+                    _logger.info("👉 Payload gửi đi: %s", json.dumps(detail_payload, indent=2))
+                    _logger.info("👉 URL gọi: %s", detail_url)
+                    _logger.info("👉 Headers: %s", headers)
+                    _logger.info("⏳ Status response: %s", detail_res.status_code)
+                    _logger.info("📨 Response text: %s", detail_res.text)
+
+
+                    self.env["purchase.order.line"].create({
+                        "order_id": po_rec.id,
+                        "name": name,
                         "product_id": product.id,
                         "product_qty": qty,
                         "product_uom": uom.id,
-                        "price_unit": price_unit
-                    })]
+                        "price_unit": price
+                    })
+
+        def _get_or_create_partner(self, name):
+            partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
+            if not partner:
+                partner = self.env["res.partner"].create({"name": name, "supplier_rank": 1})
+            return partner
+
+        def _get_or_create_uom(self, name):
+            cat = self.env["uom.category"].search([("name", "ilike", "đơn vị")], limit=1) or \
+                self.env["uom.category"].create({"name": "Đơn vị"})
+            uom = self.env["uom.uom"].search([("name", "ilike", name), ("category_id", "=", cat.id)], limit=1)
+            if not uom:
+                uom = self.env["uom.uom"].create({
+                    "name": name,
+                    "category_id": cat.id,
+                    "uom_type": "reference",
+                    "rounding": 1.0,
                 })
-                _logger.info("Created PO for supplier: %s", supplier_name)
+            return uom
+
+        def _get_or_create_product(self, code, name, uom):
+            product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+            if not product:
+                tmpl = self.env["product.template"].create({
+                    "name": name,
+                    "default_code": code,
+                    "type": "product",
+                    "uom_id": uom.id,
+                    "uom_po_id": uom.id,
+                    "purchase_ok": True,
+                    "sale_ok": False,
+                    "is_storable": True,
+                })
+                product = tmpl.product_variant_id
+            return product
