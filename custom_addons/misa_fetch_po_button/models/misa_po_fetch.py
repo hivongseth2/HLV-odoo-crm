@@ -37,9 +37,13 @@ class MisaPOFetch(models.TransientModel):
 
 
         if response.status_code == 200:
-            _logger.info("GET PO: %s", response.json())
+            # _logger.info("GET PO: %s", response.json())
+            _logger.info("FULL RESPONSE: %s", json.dumps(response.json(), indent=2))
 
-            po_data_list = response.json().get("data", [])
+
+            # po_data_list = response.json().get("data", [])
+            po_data_list = response.json().get("Data", {}).get("PageData", [])
+
             for po_data in po_data_list:
                 supplier_name = po_data.get("account_object_name")
                 product_name = po_data.get("journal_memo", "SP MISA")
