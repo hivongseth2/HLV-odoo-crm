@@ -2,6 +2,7 @@
 from odoo import models, fields, _
 import requests
 import logging
+import json
 
 _logger = logging.getLogger(__name__)
 
