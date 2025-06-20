@@ -1,14 +1,22 @@
-
 <odoo>
+    <!-- Action mở form -->
+    <record id="action_misa_po_fetch_main" model="ir.actions.act_window">
+        <field name="name">Lấy PO từ MISA</field>
+        <field name="res_model">misa.po.fetch</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field> <!-- Hiển thị dạng form bình thường -->
+    </record>
+
+    <!-- Giao diện form chứa nút gọi -->
     <record id="view_misa_po_fetch_form" model="ir.ui.view">
         <field name="name">misa.po.fetch.form</field>
         <field name="model">misa.po.fetch</field>
         <field name="arch" type="xml">
-            <form string="MISA PO Fetch">
+            <form string="Lấy PO từ MISA">
                 <sheet>
                     <group>
                         <button name="action_fetch_po"
-                                string="Fetch PO từ MISA"
+                                string="Lấy PO từ MISA"
                                 type="object"
                                 class="btn-primary"/>
                     </group>
@@ -17,16 +25,10 @@
         </field>
     </record>
 
-    <record id="action_misa_po_fetch" model="ir.actions.act_window">
-        <field name="name">MISA PO Fetch</field>
-        <field name="res_model">misa.po.fetch</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
-    </record>
-
-    <menuitem id="menu_misa_po_root" name="MISA"/>
-    <menuitem id="menu_misa_po_fetch"
-              name="Lấy PO"
-              parent="menu_misa_po_root"
-              action="action_misa_po_fetch"/>
+    <!-- Menu dưới Kho -->
+    <menuitem id="menu_import_misa_po"
+              name="Lấy PO từ MISA"
+              parent="stock.menu_stock_root"
+              action="action_misa_po_fetch_main"
+              sequence="100"/>
 </odoo>
