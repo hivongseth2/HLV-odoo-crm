@@ -141,37 +141,35 @@ class MisaPOFetch(models.TransientModel):
                         "price_unit": price
                     })
 
-        def _get_or_create_partner(self, name):
-            partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
-            if not partner:
-                partner = self.env["res.partner"].create({"name": name, "supplier_rank": 1})
-            return partner
-
-        def _get_or_create_uom(self, name):
-            cat = self.env["uom.category"].search([("name", "ilike", "đơn vị")], limit=1) or \
-                self.env["uom.category"].create({"name": "Đơn vị"})
-            uom = self.env["uom.uom"].search([("name", "ilike", name), ("category_id", "=", cat.id)], limit=1)
-            if not uom:
-                uom = self.env["uom.uom"].create({
-                    "name": name,
-                    "category_id": cat.id,
-                    "uom_type": "reference",
-                    "rounding": 1.0,
-                })
-            return uom
-
-        def _get_or_create_product(self, code, name, uom):
-            product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
-            if not product:
-                tmpl = self.env["product.template"].create({
-                    "name": name,
-                    "default_code": code,
-                    "type": "product",
-                    "uom_id": uom.id,
-                    "uom_po_id": uom.id,
-                    "purchase_ok": True,
-                    "sale_ok": False,
-                    "is_storable": True,
-                })
-                product = tmpl.product_variant_id
-            return product
+    def _get_or_create_partner(self, name):
+        partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
+        if not partner:
+            partner = self.env["res.partner"].create({"name": name, "supplier_rank": 1})
+        return partner
+    def _get_or_create_uom(self, name):
+        cat = self.env["uom.category"].search([("name", "ilike", "đơn vị")], limit=1) or \
+            self.env["uom.category"].create({"name": "Đơn vị"})
+        uom = self.env["uom.uom"].search([("name", "ilike", name), ("category_id", "=", cat.id)], limit=1)
+        if not uom:
+            uom = self.env["uom.uom"].create({
+                "name": name,
+                "category_id": cat.id,
+                "uom_type": "reference",
+                "rounding": 1.0,
+            })
+        return uom
+    def _get_or_create_product(self, code, name, uom):
+        product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+        if not product:
+            tmpl = self.env["product.template"].create({
+                "name": name,
+                "default_code": code,
+                "type": "product",
+                "uom_id": uom.id,
+                "uom_po_id": uom.id,
+                "purchase_ok": True,
+                "sale_ok": False,
+                "is_storable": True,
+            })
+            product = tmpl.product_variant_id
+        return product
