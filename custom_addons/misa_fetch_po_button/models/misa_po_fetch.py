@@ -12,7 +12,7 @@ class MisaPOFetch(models.TransientModel):
     def action_fetch_po(self):
         access_token = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJkZjBjYjMzYi1iMTM5LTQ5ZjUtYWMyNC1mOWY4NjBiNGU5ODciLCJ1bmEiOiJOR1VZRU5USEFOSExVQU4iLCJhdXQiOiIwIiwidWVtIjoibmd1eWVubHVhbjEzMDMwMUBnbWFpbC5jb20iLCJuYmYiOjE3NTA0MDcwNjIsImV4cCI6MTc1MDQ5MzQ5MCwiaWF0IjoxNzUwNDA3MDYyLCJpc3MiOiJNSVNBSlNDIn0.dISLn9Vd2j5rRDWHi0wFDyfdDlk4-PeDIDHpp-5Dh4Q"
         headers = {
-            "Authorization": f"Bearer {access_token}",
+            "Authorization": f"{access_token}",
             "Content-Type": "application/json",
             "x-device": "04aadfced5b04995ecfacb0a7da5c50c",
             "X-MISA-Context": json.dumps({
