@@ -40,7 +40,7 @@ class MisaPOFetch(models.TransientModel):
             "filter": [
                 {
                     "property": 3654,
-                    "value": "2025-05-31T17:00:00.00Z",
+                    "value": "2025-06-T2017:00:00.00Z",
                     "operator": 10,
                     "operand": 1,
                     "data_type": 3
