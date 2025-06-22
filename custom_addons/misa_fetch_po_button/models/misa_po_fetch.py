@@ -22,6 +22,11 @@ class MisaPOFetch(models.TransientModel):
             raise Exception("❌ Lỗi đăng nhập MISA")
         data = response.json().get("Data", {})
         return data.get("AccessToken", {}).get("Token", "")
+    
+    
+    
+
+
 
     def _fetch_po_list(self, headers, payload):
         url = "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2"
@@ -30,6 +35,7 @@ class MisaPOFetch(models.TransientModel):
         if response.status_code == 401:
             _logger.warning("🔁 Token hết hạn, đang đăng nhập lại...")
             new_token = self._get_misa_token()
+            _logger.info("🔑 Đăng nhập thành công, token mới: %s", new_token)
             headers["Authorization"] = f"Bearer {new_token}"
             response = requests.post(url, headers=headers, json=payload)
         return response
@@ -62,13 +68,15 @@ class MisaPOFetch(models.TransientModel):
             }
 
         payload = {
-            "filter": [{
-                "property": 3654,
-                "value": "2025-06-20T17:00:00.00Z",
-                "operator": 10,
-                "operand": 1,
-                "data_type": 3
-            }],
+            "filter": [
+                {
+                    "property": 3654,
+                    "value": "2025-05-31T17:00:00.00Z",
+                    "operator": 10,
+                    "operand": 1,
+                    "data_type": 3
+                }
+            ],
             "loadMode": 2,
             "pageIndex": 1,
             "pageSize": 20,
