@@ -42,8 +42,9 @@ class MisaPOFetch(models.TransientModel):
 
     def action_fetch_po(self):
         access_token = self._get_misa_token()
+        
         headers = {
-                "Authorization": f"{access_token}",
+                "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
                 "x-device": "04aadfced5b04995ecfacb0a7da5c50c",
                 "X-MISA-Context": json.dumps({
