@@ -15,8 +15,9 @@ class MisaPOFetch(models.TransientModel):
             "UserName": "Hoanglongvuco@gmail.com",
             "Password": "Hoanglongvu@2025"
         }
-        headers = {"Content-Type": "application/json"}
+        headers = {"content-type": "application/json"}
         response = requests.post(login_url, json=payload, headers=headers)
+        _logger.warning("Đăng nhập MISA với user: %s", response.json())
         if response.status_code != 200:
             raise Exception("❌ Lỗi đăng nhập MISA")
         data = response.json().get("Data", {})
@@ -25,6 +26,7 @@ class MisaPOFetch(models.TransientModel):
     def _fetch_po_list(self, headers, payload):
         url = "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2"
         response = requests.post(url, headers=headers, json=payload)
+        _logger.info("Response text: %s", response.text)
         if response.status_code == 401:
             _logger.warning("🔁 Token hết hạn, đang đăng nhập lại...")
             new_token = self._get_misa_token()
