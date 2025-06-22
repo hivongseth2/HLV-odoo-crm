@@ -81,7 +81,7 @@ class MisaPOFetch(models.TransientModel):
             for po in po_data_list:
                 refid = po.get("refid")
                 supplier_name = po.get("account_object_name")
-                refno = po.get("refno", "PO-MISA")
+                refno = po.get("refno_finance", "PO-MISA")
                 memo = po.get("journal_memo", "")
                 partner = self._get_or_create_partner(supplier_name)
 
@@ -114,8 +114,8 @@ class MisaPOFetch(models.TransientModel):
                     _logger.warning("Không lấy được chi tiết PO %s", refid)
                     continue
                 for line in detail_res.json().get("Data", {}).get("PageData", []):
-                    code = line.get("inventory_item_code", "SP-MISA")
-                    name = line.get("inventory_item_name", "SP MISA")
+                    code = line.get("inventory_item_code", "unknown_code").strip()
+                    name = line.get("description", "unknown product").strip()
                     qty = float(line.get("quantity", 1))
                     price = float(line.get("unit_price", 0))
                     unit_name = line.get("unit_name", "Cái").strip()
