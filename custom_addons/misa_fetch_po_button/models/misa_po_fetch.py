@@ -2,6 +2,7 @@ from odoo import models, fields, _
 import requests
 import logging
 import json
+from datetime import datetime, timedelta
 
 _logger = logging.getLogger(__name__)
 
@@ -42,7 +43,8 @@ class MisaPOFetch(models.TransientModel):
 
     def action_fetch_po(self):
         access_token = self._get_misa_token()
-        
+        today_utc = (datetime.utcnow() - timedelta(hours=7)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat() + "Z"
+
         headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
@@ -72,7 +74,7 @@ class MisaPOFetch(models.TransientModel):
             "filter": [
                 {
                     "property": 3654,
-                    "value": "2025-05-31T17:00:00.00Z",
+                    "value": today_utc,
                     "operator": 10,
                     "operand": 1,
                     "data_type": 3

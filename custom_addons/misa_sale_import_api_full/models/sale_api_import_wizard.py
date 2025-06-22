@@ -94,9 +94,9 @@ class SaleApiImportWizard(models.TransientModel):
                     discount_percent = float(line.get("discount_percent", 0))
                     uom_name = line.get("unit", "Cái").strip()
 
-                    category = self.env['uom.category'].search([('name', '=', 'Unit')], limit=1)
+                    category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
                     if not category:
-                        category = self.env['uom.category'].create({'name': 'Unit'})
+                        category =  self.env['uom.category'].create({'name': 'Đơn vị'})
 
                     uom = self.env['uom.uom'].search([
                         ('name', '=', uom_name),

@@ -1,10 +1,10 @@
 <odoo>
-    <!-- Action mở form -->
+    <!-- Action mở form dạng dialog -->
     <record id="action_misa_po_fetch_main" model="ir.actions.act_window">
         <field name="name">Lấy PO từ MISA</field>
         <field name="res_model">misa.po.fetch</field>
         <field name="view_mode">form</field>
-        <field name="target">current</field> <!-- Hiển thị dạng form bình thường -->
+        <field name="target">new</field> <!-- ✅ Đây là thay đổi chính: mở dialog -->
     </record>
 
     <!-- Giao diện form chứa nút gọi -->
@@ -13,14 +13,13 @@
         <field name="model">misa.po.fetch</field>
         <field name="arch" type="xml">
             <form string="Lấy PO từ MISA">
-                <sheet>
-                    <group>
-                        <button name="action_fetch_po"
-                                string="Lấy PO từ MISA"
-                                type="object"
-                                class="btn-primary"/>
-                    </group>
-                </sheet>
+                <footer>
+                    <button name="action_fetch_po"
+                            string="Lấy PO từ MISA"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
             </form>
         </field>
     </record>
