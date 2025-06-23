@@ -135,14 +135,11 @@ class MisaPOFetch(models.TransientModel):
             for po in page_data:
                 refid = po.get("refid")
                 supplier_name = po.get("account_object_name")
-                refno = po.get("refno_finance", "PO-MISA")
+                refno = po.get("refno", "PO-MISA")
                 memo = po.get("journal_memo", "")
                 partner = self._get_or_create_partner(supplier_name)
 
-                po_rec = self.env["purchase.order"].create({
-                    "partner_id": partner.id,
-                    "origin": refno,
-                })
+
 
 
 
@@ -182,6 +179,10 @@ class MisaPOFetch(models.TransientModel):
                 if not has_hcm:
                     _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
                     continue
+                po_rec = self.env["purchase.order"].create({
+                    "partner_id": partner.id,
+                    "origin": refno,
+                })
 
                 for line in lines:
                     code = line.get("inventory_item_code", "unknown_code").strip()
