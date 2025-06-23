@@ -73,25 +73,35 @@ class MisaPOFetch(models.TransientModel):
         payload = {
             "filter": [
                 {
-                    "property": 3654,
-                    "value": today_utc,
-                    "operator": 10,
-                    "operand": 1,
-                    "data_type": 3
+                "property": 4658,
+                "value": 3,
+                "operator": 7,
+                "operand": 1,
+                "data_type": 4
+                },
+                {
+                "property": 3972,
+                "value": "2025-05-31T17:00:00.00Z",
+                "operator": 10,
+                "operand": 1,
+                "data_type": 3
+                },
+                {
+                "property": 3972,
+                "value": "2025-06-23T01:28:34.842Z",
+                "operator": 12,
+                "operand": 1,
+                "data_type": 3
                 }
             ],
             "loadMode": 2,
             "pageIndex": 1,
             "pageSize": 20,
-            "sort": json.dumps([
-                {"property": 3654, "desc": True, "data_type": 3, "operand": 1},
-                {"property": 3972, "desc": True, "data_type": 3, "operand": 1},
-                {"property": 4018, "desc": True, "data_type": 1, "operand": 1}
-            ]),
-            "summaryColumns": [5080, 5730, 5128, 5059],
+            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+            "summaryColumns": [5039, 5104, 247],
             "useSp": False,
-            "view": 40
-        }
+            "view": 2
+            }
 
         response = self._fetch_po_list(headers, payload)
         _logger.info("Raw status: %s", response.status_code)
@@ -124,7 +134,7 @@ class MisaPOFetch(models.TransientModel):
                 }],
                 "loadMode": 2,
                 "pageIndex": 1,
-                "pageSize": 20,
+                "pageSize": 50,
                 "sort": json.dumps([{"property": 4555, "desc": False, "data_type": 4, "operand": 1}]),
                 "summaryColumns": [3488, 3870, 308, 1844, 2241],
                 "useSp": False,
