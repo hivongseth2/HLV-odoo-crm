@@ -171,7 +171,7 @@ class MisaPOFetch(models.TransientModel):
                     "name": name,
                     "product_id": product.id,
                     "product_qty": qty,
-                    "product_uom": uom.id,
+                    "product_uom":  product.uom_id.id,
                     "price_unit": price
                 })
 
@@ -222,7 +222,7 @@ class MisaPOFetch(models.TransientModel):
         })
 
 
-    def _get_or_create_product(self, code, name, uom):
+    def _get_or_create_product(self, code, name, unit_name):
         product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
         if product:
             _logger.info("🔁 Tìm thấy sản phẩm %s. Dùng UOM gốc: %s", code, product.uom_id.name)
