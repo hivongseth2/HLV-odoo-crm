@@ -2,13 +2,16 @@ from odoo import models, fields, _
 import requests
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,time
 
 _logger = logging.getLogger(__name__)
 
 class MisaPOFetch(models.TransientModel):
     _name = "misa.po.fetch"
     _description = "MISA PO Fetch"
+    date_from = fields.Date(string="Từ ngày", required=True)
+    date_to = fields.Date(string="Đến ngày", required=True)
+
 
     def _get_misa_token(self):
         login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
@@ -43,7 +46,10 @@ class MisaPOFetch(models.TransientModel):
 
     def action_fetch_po(self):
         access_token = self._get_misa_token()
-        today_utc = (datetime.utcnow() - timedelta(hours=7)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat() + "Z"
+
+        date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
+        date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
+
 
         headers = {
                 "Authorization": f"Bearer {access_token}",
@@ -81,14 +87,14 @@ class MisaPOFetch(models.TransientModel):
                 },
                 {
                 "property": 3972,
-                "value": "2025-05-31T17:00:00.00Z",
+                "value": date_from_utc.isoformat() + "Z",
                 "operator": 10,
                 "operand": 1,
                 "data_type": 3
                 },
                 {
                 "property": 3972,
-                "value": "2025-06-23T01:28:34.842Z",
+                "value": date_to_utc.isoformat() + "Z",
                 "operator": 12,
                 "operand": 1,
                 "data_type": 3
