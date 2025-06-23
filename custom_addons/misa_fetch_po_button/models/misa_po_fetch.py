@@ -163,20 +163,18 @@ class MisaPOFetch(models.TransientModel):
                 unit_name = line.get("unit_name", "Cái").strip()
                 vat_rate = float(line.get("vat_rate", 0))
 
-                uom = self._get_or_create_uom(unit_name)
-                product = self._get_or_create_product(code, name, uom)
+                # uom = self._get_or_create_uom(unit_name)
+                product = self._get_or_create_product(code, name, unit_name)
 
-                if product and product.uom_id.category_id.id == uom.category_id.id:
-                    self.env["purchase.order.line"].create({
-                        "order_id": po_rec.id,
-                        "name": name,
-                        "product_id": product.id,
-                        "product_qty": qty,
-                        "product_uom": uom.id,
-                        "price_unit": price
-                    })
-                else:
-                    _logger.warning("❌ Bỏ qua sản phẩm %s vì UOM không khớp loại.", code)
+                self.env["purchase.order.line"].create({
+                    "order_id": po_rec.id,
+                    "name": name,
+                    "product_id": product.id,
+                    "product_qty": qty,
+                    "product_uom": uom.id,
+                    "price_unit": price
+                })
+
 
     def _get_or_create_partner(self, name):
         partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
@@ -227,10 +225,10 @@ class MisaPOFetch(models.TransientModel):
     def _get_or_create_product(self, code, name, uom):
         product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
         if product:
-            if product.uom_id.category_id.id != uom.category_id.id:
-                _logger.warning("⚠️ UOM không cùng loại. Bỏ qua sản phẩm %s", code)
-                return None
+            _logger.info("🔁 Tìm thấy sản phẩm %s. Dùng UOM gốc: %s", code, product.uom_id.name)
             return product
+        uom = self._get_or_create_uom(unit_name)
+
 
         tmpl = self.env["product.template"].create({
             "name": name,
@@ -242,4 +240,6 @@ class MisaPOFetch(models.TransientModel):
             "sale_ok": False,
             "is_storable": True,
         })
+        _logger.info("🆕 Tạo sản phẩm %s với UOM: %s", code, uom.name)
+
         return tmpl.product_variant_id
