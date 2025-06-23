@@ -185,21 +185,44 @@ class MisaPOFetch(models.TransientModel):
         return partner
 
     def _get_or_create_uom(self, name):
-        uom = self.env['uom.uom'].search([('name', '=', name)], limit=1)
+        name = name.strip().title()  # ✅ CHUẨN HÓA TÊN
+
+        UoM = self.env['uom.uom']
+        UoMCat = self.env['uom.category']
+
+        # Tìm UoM theo tên
+        uom = UoM.search([('name', '=', name)], limit=1)
         if uom:
             return uom
 
-        cat = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
+        # Tìm hoặc tạo category
+        cat = UoMCat.search([('name', 'ilike', 'đơn vị')], limit=1)
         if not cat:
-            cat = self.env['uom.category'].create({'name': 'Đơn vị'})
+            cat = UoMCat.create({'name': 'Đơn vị'})
 
-        uom = self.env['uom.uom'].create({
+        # Kiểm tra xem đã có reference UoM trong category chưa
+        ref_uom = UoM.search([
+            ('category_id', '=', cat.id),
+            ('uom_type', '=', 'reference')
+        ], limit=1)
+
+        if not ref_uom:
+            # Nếu chưa có, đây sẽ là UoM chuẩn
+            uom_type = 'reference'
+            factor = 1.0
+        else:
+            # Nếu đã có, tạo UoM phụ thuộc (same name but scaled)
+            uom_type = 'bigger'  # hoặc 'smaller', tùy ngữ cảnh
+            factor = 1.0  # cần xác định hợp lý, ví dụ: 1 cái = 1 ref
+
+        return UoM.create({
             'name': name,
             'category_id': cat.id,
-            'uom_type': 'reference',
+            'uom_type': uom_type,
+            'factor_inv': factor,
             'rounding': 1.0,
         })
-        return uom
+
 
     def _get_or_create_product(self, code, name, uom):
         product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
