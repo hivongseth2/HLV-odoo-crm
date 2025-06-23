@@ -183,7 +183,7 @@ class MisaPOFetch(models.TransientModel):
         return partner
 
     def _get_or_create_uom(self, name):
-        name = name.strip().title()  # ✅ CHUẨN HÓA TÊN
+        name = name.strip().title()  
 
         UoM = self.env['uom.uom']
         UoMCat = self.env['uom.category']
