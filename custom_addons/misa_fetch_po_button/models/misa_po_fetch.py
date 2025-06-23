@@ -109,84 +109,101 @@ class MisaPOFetch(models.TransientModel):
             "view": 2
             }
 
-        response = self._fetch_po_list(headers, payload)
-        _logger.info("Raw status: %s", response.status_code)
-        _logger.info("Response text: %s", response.text)
-
-        if response.status_code != 200:
-            return
-
-        po_data_list = response.json().get("Data", {}).get("PageData", [])
-        for po in po_data_list:
-            refid = po.get("refid")
-            supplier_name = po.get("account_object_name")
-            refno = po.get("refno_finance", "PO-MISA")
-            memo = po.get("journal_memo", "")
-            partner = self._get_or_create_partner(supplier_name)
-
-            po_rec = self.env["purchase.order"].create({
-                "partner_id": partner.id,
-                "origin": refno,
-            })
-
+        page_index = 1
+        while True:
+            payload["pageIndex"] = page_index
+            _logger.info("📄 Đang fetch trang %s...", page_index)
+            
+            response = self._fetch_po_list(headers, payload)
+            
         
-            
-            detail_payload = {
-                "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
-                "filter": [
-                    {
-                    "property": 3993,
-                    "operator": 7,
-                    "operand": 1,
-                    "value": refid,
-                    "data_type": 10
-                    }
-                ],
-                "loadMode": 2,
-                "pageIndex": 1,
-                "pageSize": 20,
-                "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
-                "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
-                "useSp": False,
-                "view": 92
-                }
 
+            if response.status_code != 200:
+                _logger.warning("❌ Gọi API thất bại ở trang %s", page_index)
+                break
+                
 
-            detail_res = requests.post(
-                "https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
-                headers=headers, json=detail_payload
-            )
-
-            if detail_res.status_code != 200:
-                _logger.warning("Không lấy được chi tiết PO %s", refid)
-                continue
+            po_data_list = response.json().get("Data", {}).get("PageData", [])
             
             
-            lines = detail_res.json().get("Data", {}).get("PageData", [])
-            has_hcm = any(line.get("stock_code", "").strip().upper() == "HCM" for line in lines)
-            if not has_hcm:
-                _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
-                continue
+            page_data = response.json().get("Data", {}).get("PageData", [])
+            if not page_data:
+                _logger.info("✅ Hết dữ liệu, dừng ở trang %s", page_index)
+                break
+            
+            
+            for po in page_data:
+                refid = po.get("refid")
+                supplier_name = po.get("account_object_name")
+                refno = po.get("refno_finance", "PO-MISA")
+                memo = po.get("journal_memo", "")
+                partner = self._get_or_create_partner(supplier_name)
 
-            for line in lines:
-                code = line.get("inventory_item_code", "unknown_code").strip()
-                name = line.get("description", "unknown product").strip()
-                qty = float(line.get("quantity", 1))
-                price = float(line.get("unit_price", 0))
-                unit_name = line.get("unit_name", "Cái").strip()
-                vat_rate = float(line.get("vat_rate", 0))
-
-                # uom = self._get_or_create_uom(unit_name)
-                product = self._get_or_create_product(code, name, unit_name)
-
-                self.env["purchase.order.line"].create({
-                    "order_id": po_rec.id,
-                    "name": name,
-                    "product_id": product.id,
-                    "product_qty": qty,
-                    "product_uom":  product.uom_id.id,
-                    "price_unit": price
+                po_rec = self.env["purchase.order"].create({
+                    "partner_id": partner.id,
+                    "origin": refno,
                 })
+
+
+
+                detail_payload = {
+                    "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                    "filter": [
+                        {
+                        "property": 3993,
+                        "operator": 7,
+                        "operand": 1,
+                        "value": refid,
+                        "data_type": 10
+                        }
+                    ],
+                    "loadMode": 2,
+                    "pageIndex": 1,
+                    "pageSize": 20,
+                    "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
+                    "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
+                    "useSp": False,
+                    "view": 92
+                    }
+
+
+                detail_res = requests.post(
+                    "https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
+                    headers=headers, json=detail_payload
+                )
+
+                if detail_res.status_code != 200:
+                    _logger.warning("Không lấy được chi tiết PO %s", refid)
+                    continue
+                
+                
+                lines = detail_res.json().get("Data", {}).get("PageData", [])
+                has_hcm = any(line.get("stock_code", "").strip().upper() == "HCM" for line in lines)
+                if not has_hcm:
+                    _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
+                    continue
+
+                for line in lines:
+                    code = line.get("inventory_item_code", "unknown_code").strip()
+                    name = line.get("description", "unknown product").strip()
+                    qty = float(line.get("quantity", 1))
+                    price = float(line.get("unit_price", 0))
+                    unit_name = line.get("unit_name", "Cái").strip()
+                    vat_rate = float(line.get("vat_rate", 0))
+
+                    # uom = self._get_or_create_uom(unit_name)
+                    product = self._get_or_create_product(code, name, unit_name)
+
+                    self.env["purchase.order.line"].create({
+                        "order_id": po_rec.id,
+                        "name": name,
+                        "product_id": product.id,
+                        "product_qty": qty,
+                        "product_uom":  product.uom_id.id,
+                        "price_unit": price
+                    })
+            page_index += 1
+
 
 
     def _get_or_create_partner(self, name):
