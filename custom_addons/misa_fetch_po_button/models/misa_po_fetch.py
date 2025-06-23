@@ -154,8 +154,15 @@ class MisaPOFetch(models.TransientModel):
             if detail_res.status_code != 200:
                 _logger.warning("Không lấy được chi tiết PO %s", refid)
                 continue
+            
+            
+            lines = detail_res.json().get("Data", {}).get("PageData", [])
+            has_hcm = any(line.get("stock_code", "").strip().upper() == "HCM" for line in lines)
+            if not has_hcm:
+                _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
+                continue
 
-            for line in detail_res.json().get("Data", {}).get("PageData", []):
+            for line in lines:
                 code = line.get("inventory_item_code", "unknown_code").strip()
                 name = line.get("description", "unknown product").strip()
                 qty = float(line.get("quantity", 1))

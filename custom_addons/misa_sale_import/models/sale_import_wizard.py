@@ -151,7 +151,7 @@ class SaleImportWizard(models.TransientModel):
             # Đơn vị tính
             uom = self.env['uom.uom'].search([('name', '=', uom_name)], limit=1)
             if not uom:
-                uom = self.env['uom.uom'].search([('name', '=', 'Units')], limit=1)
+                uom = self.env['uom.uom'].search([('name', '=', 'Cái')], limit=1)
 
             self.env['sale.order.line'].create({
                 'order_id': sale_orders[order_ref].id,
