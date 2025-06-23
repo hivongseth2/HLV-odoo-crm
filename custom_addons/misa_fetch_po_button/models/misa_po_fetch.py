@@ -123,23 +123,28 @@ class MisaPOFetch(models.TransientModel):
                 "origin": refno,
             })
 
+        
+            
             detail_payload = {
-                "columns": [2157, 1355, 4670, 1195, 1065, 5683, 5274, 3870, 5279, 308],
-                "filter": [{
+                "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                "filter": [
+                    {
                     "property": 3993,
                     "operator": 7,
                     "operand": 1,
                     "value": refid,
                     "data_type": 10
-                }],
+                    }
+                ],
                 "loadMode": 2,
                 "pageIndex": 1,
-                "pageSize": 50,
-                "sort": json.dumps([{"property": 4555, "desc": False, "data_type": 4, "operand": 1}]),
-                "summaryColumns": [3488, 3870, 308, 1844, 2241],
+                "pageSize": 20,
+                "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
+                "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
                 "useSp": False,
-                "view": 35
-            }
+                "view": 92
+                }
+
 
             detail_res = requests.post(
                 "https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
@@ -156,6 +161,7 @@ class MisaPOFetch(models.TransientModel):
                 qty = float(line.get("quantity", 1))
                 price = float(line.get("unit_price", 0))
                 unit_name = line.get("unit_name", "Cái").strip()
+                vat_rate = float(line.get("vat_rate", 0))
 
                 uom = self._get_or_create_uom(unit_name)
                 product = self._get_or_create_product(code, name, uom)
