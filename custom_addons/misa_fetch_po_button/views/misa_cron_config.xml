@@ -1,9 +1,9 @@
 <odoo>
     <record id="ir_cron_misa_fetch_po" model="ir.cron">
         <field name="name">Lấy PO từ MISA định kỳ</field>
-        <field name="model">misa.cron.fetch</field> <!-- Thay ref bằng model -->
+        <field name="model">misa.cron.fetch</field>
         <field name="state">code</field>
-        <field name="code">model._fetch_po_periodically()</field>
+        <field name="code">self.env['misa.cron.fetch']._fetch_po_periodically()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">minutes</field>
         <field name="numbercall">-1</field>
@@ -13,9 +13,9 @@
 
     <record id="ir_cron_misa_fetch_transfer" model="ir.cron">
         <field name="name">Lấy Internal Transfer từ MISA định kỳ</field>
-        <field name="model">misa.cron.fetch</field> <!-- Thay ref bằng model -->
+        <field name="model">misa.cron.fetch</field>
         <field name="state">code</field>
-        <field name="code">model._fetch_transfer_periodically()</field>
+        <field name="code">self.env['misa.cron.fetch']._fetch_transfer_periodically()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">minutes</field>
         <field name="numbercall">-1</field>
