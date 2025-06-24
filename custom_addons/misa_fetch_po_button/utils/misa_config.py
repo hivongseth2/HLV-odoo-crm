@@ -32,7 +32,7 @@ class MisaConfig(models.AbstractModel):
         return {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
-            "X-MISA-Context": json.dumps(self._get_misa_context()),,  # Chuyển sang string nếu cần
+            "X-MISA-Context": json.dumps(self.get_misa_context()),  # Chuyển sang string nếu cần
             "X-MISA-BranchID": context['BranchId'],
             "X-MISA-Language": "vi",
             "X-MISA-WorkingBook": "0",
