@@ -37,9 +37,9 @@ class SaleApiImportWizard(models.TransientModel):
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         page = 1
-        page_size = 50
+        page_size = 1
 
-        while page <= 50:
+        while page <= page_size:
             params = {
                 "page": page,
                 "pageSize": page_size,
