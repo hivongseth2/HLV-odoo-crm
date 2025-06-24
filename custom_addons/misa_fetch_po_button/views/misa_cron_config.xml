@@ -2,9 +2,11 @@
     <!-- Cron job cho PO -->
     <record id="ir_cron_misa_fetch_po" model="ir.cron">
         <field name="name">Lấy PO từ MISA định kỳ</field>
+        <!-- Tìm model_id an toàn bằng env -->
         <field name="model_id" eval="env['ir.model'].search([('model', '=', 'misa.cron.fetch')], limit=1).id"/>
         <field name="state">code</field>
-        <field name="code">self.env['misa.cron.fetch']._fetch_po_periodically()"<field/>
+        <!-- Gọi hàm của model -->
+        <field name="code">model._fetch_po_periodically()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">minutes</field>
         <field name="numbercall">-1</field>
@@ -17,7 +19,7 @@
         <field name="name">Lấy Internal Transfer từ MISA định kỳ</field>
         <field name="model_id" eval="env['ir.model'].search([('model', '=', 'misa.cron.fetch')], limit=1).id"/>
         <field name="state">code</field>
-        <field name="code">self.env['misa.cron.fetch']._fetch_transfer_periodically()"</field>
+        <field name="code">model._fetch_transfer_periodically()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">minutes</field>
         <field name="numbercall">-1</field>
