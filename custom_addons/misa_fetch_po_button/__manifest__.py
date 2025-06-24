@@ -1,7 +1,7 @@
 {
     'name': 'MISA PO Fetch Button',
     'version': '1.0',
-    'depends': ['base','stock','purchase'],
+    'depends': ['base','stock','purchase','sale'],
     'author': 'Luan',
     'category': 'Purchases',
     'description': 'Fetch PO from MISA and create in Odoo',
