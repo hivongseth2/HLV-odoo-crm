@@ -1,8 +1,7 @@
-from odoo import models, fields, _ 
-import requests
+from odoo import models, fields, _
 import logging
 import json
-from datetime import datetime, timedelta,time
+from datetime import datetime, timedelta
 
 _logger = logging.getLogger(__name__)
 
@@ -12,92 +11,60 @@ class MisaPOFetch(models.TransientModel):
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
 
-
-    def _get_misa_token(self):
-        login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
-        payload = {
-            "UserName": "Hoanglongvuco@gmail.com",
-            "Password": "Hoanglongvu@2025"
-        }
-        headers = {"content-type": "application/json"}
-        response = requests.post(login_url, json=payload, headers=headers)
-        _logger.warning("Đăng nhập MISA với user: %s", response.json())
-        if response.status_code != 200:
-            raise Exception("❌ Lỗi đăng nhập MISA")
-        data = response.json().get("Data", {})
-        return data.get("AccessToken", {}).get("Token", "")
-    
-    
-    
-
-
-
-    def _fetch_po_list(self, headers, payload):
-        url = "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2"
-        response = requests.post(url, headers=headers, json=payload)
-        _logger.info("Response text: %s", response.text)
-        if response.status_code == 401:
-            _logger.warning("🔁 Token hết hạn, đang đăng nhập lại...")
-            new_token = self._get_misa_token()
-            _logger.info("🔑 Đăng nhập thành công, token mới: %s", new_token)
-            headers["Authorization"] = f"Bearer {new_token}"
-            response = requests.post(url, headers=headers, json=payload)
-        return response
-
     def action_fetch_po(self):
-        access_token = self._get_misa_token()
+        misa_utils = self.env['misa.api.utils']
+        odoo_utils = self.env['odoo.utils']
+        access_token = misa_utils._get_misa_token()
 
         date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
         date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
 
-
         headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-                "x-device": "04aadfced5b04995ecfacb0a7da5c50c",
-                "X-MISA-Context": json.dumps({
-                        "TenantId":"47ab503b-99d5-4eb8-aa11-24927abb3585",
-                        "TenantCode":"3R2PY2F4",
-                        "DatabaseId":"f4b18d63-6c99-4a53-b974-f6208e84fced",
-                        "BranchId":"53a073a0-5381-4493-820f-51ea32ebe990",
-                        "WorkingBook":0,
-                        "Language":"vi",
-                        "IncludeDependentBranch":False,
-                        "SessionId":"ssdf0cb33bb13949f5ac24f9f860b4e987.04aadfced5b04995ecfacb0a7da5c50c.f4b18d636c994a53b974f6208e84fced.638860290625845472",
-                        "DBType":1,
-                        "AuthType":0,
-                        "AmisSessionId":"NAA3AGEAYgA1ADAAMwBiADkAOQBkADUANABlAGIAOABhAGEAMQAxADIANAA5ADIANwBhAGIAYgAzADUAOAA1ADAAYgBlADEAMgAyAGIAMAA3AGIANAAyADQAZAAzAGMAOQA1AGQAYQBjAGEANAAxADYAZQAxADIAMwBhADAAYQA=",
-                        "HasAgent":False,
-                        "UserType":1,
-                        "art":0,
-                        "UserId":"df0cb33b-b139-49f5-ac24-f9f860b4e987",
-                        "isc":False
-                    })
-
-            }
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "x-device": "04aadfced5b04995ecfacb0a7da5c50c",
+            "X-MISA-Context": json.dumps({
+                "TenantId":"47ab503b-99d5-4eb8-aa11-24927abb3585",
+                "TenantCode":"3R2PY2F4",
+                "DatabaseId":"f4b18d63-6c99-4a53-b974-f6208e84fced",
+                "BranchId":"53a073a0-5381-4493-820f-51ea32ebe990",
+                "WorkingBook":0,
+                "Language":"vi",
+                "IncludeDependentBranch":False,
+                "SessionId":".",
+                "DBType":1,
+                "AuthType":0,
+                "AmisSessionId":"=",
+                "HasAgent":False,
+                "UserType":1,
+                "art":0,
+                "UserId":"df0cb33b-b139-49f5-ac24-f9f860b4e987",
+                "isc":False
+            })
+        }
 
         payload = {
             "filter": [
                 {
-                "property": 4658,
-                "value": 3,
-                "operator": 7,
-                "operand": 1,
-                "data_type": 4
+                    "property": 4658,
+                    "value": 3,
+                    "operator": 7,
+                    "operand": 1,
+                    "data_type": 4
                 },
                 {
-                "property": 3972,
-                "value": date_from_utc.isoformat() + "Z",
-                "operator": 10,
-                "operand": 1,
-                "data_type": 3
+                    "property": 3972,
+                    "value": date_from_utc.isoformat() + "Z",
+                    "operator": 10,
+                    "operand": 1,
+                    "data_type": 3
                 },
                 {
-                "property": 3972,
-                "value": date_to_utc.isoformat() + "Z",
-                "operator": 12,
-                "operand": 1,
-                "data_type": 3
+                    "property": 3972,
+                    "value": date_to_utc.isoformat() + "Z",
+                    "operator": 12,
+                    "operand": 1,
+                    "data_type": 3
                 }
             ],
             "loadMode": 2,
@@ -107,51 +74,43 @@ class MisaPOFetch(models.TransientModel):
             "summaryColumns": [5039, 5104, 247],
             "useSp": False,
             "view": 2
-            }
+        }
 
         page_index = 1
         while True:
             payload["pageIndex"] = page_index
             _logger.info("📄 Đang fetch trang %s...", page_index)
             
-            response = self._fetch_po_list(headers, payload)
-            
-        
+            response = misa_utils._fetch_with_retry(
+                "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2",
+                headers, payload
+            )
 
             if response.status_code != 200:
                 _logger.warning("❌ Gọi API thất bại ở trang %s", page_index)
                 break
-                
 
-            po_data_list = response.json().get("Data", {}).get("PageData", [])
-            
-            
             page_data = response.json().get("Data", {}).get("PageData", [])
             if not page_data:
                 _logger.info("✅ Hết dữ liệu, dừng ở trang %s", page_index)
                 break
-            
-            
+
             for po in page_data:
                 refid = po.get("refid")
                 supplier_name = po.get("account_object_name")
                 refno = po.get("refno", "PO-MISA")
                 memo = po.get("journal_memo", "")
-                partner = self._get_or_create_partner(supplier_name)
-
-
-
-
+                partner = odoo_utils._get_or_create_partner(supplier_name)
 
                 detail_payload = {
                     "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
                     "filter": [
                         {
-                        "property": 3993,
-                        "operator": 7,
-                        "operand": 1,
-                        "value": refid,
-                        "data_type": 10
+                            "property": 3993,
+                            "operator": 7,
+                            "operand": 1,
+                            "value": refid,
+                            "data_type": 10
                         }
                     ],
                     "loadMode": 2,
@@ -161,24 +120,23 @@ class MisaPOFetch(models.TransientModel):
                     "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
                     "useSp": False,
                     "view": 92
-                    }
+                }
 
-
-                detail_res = requests.post(
+                detail_res = misa_utils._fetch_with_retry(
                     "https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
-                    headers=headers, json=detail_payload
+                    headers, detail_payload
                 )
 
                 if detail_res.status_code != 200:
                     _logger.warning("Không lấy được chi tiết PO %s", refid)
                     continue
-                
-                
+
                 lines = detail_res.json().get("Data", {}).get("PageData", [])
                 has_hcm = any(line.get("stock_code", "").strip().upper() == "HCM" for line in lines)
                 if not has_hcm:
                     _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
                     continue
+
                 po_rec = self.env["purchase.order"].create({
                     "partner_id": partner.id,
                     "origin": refno,
@@ -192,85 +150,21 @@ class MisaPOFetch(models.TransientModel):
                     unit_name = line.get("unit_name", "Cái").strip()
                     vat_rate = float(line.get("vat_rate", 0))
 
-                    # uom = self._get_or_create_uom(unit_name)
-                    product = self._get_or_create_product(code, name, unit_name)
+                    product = odoo_utils._get_or_create_product(
+                        code=code,
+                        name=name,
+                        unit_name=unit_name,
+                        cost=price,
+                        purchase_ok=True,
+                        sale_ok=False
+                    )
 
                     self.env["purchase.order.line"].create({
                         "order_id": po_rec.id,
                         "name": name,
                         "product_id": product.id,
                         "product_qty": qty,
-                        "product_uom":  product.uom_id.id,
+                        "product_uom": product.uom_id.id,
                         "price_unit": price
                     })
             page_index += 1
-
-
-
-    def _get_or_create_partner(self, name):
-        partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
-        if not partner:
-            partner = self.env["res.partner"].create({"name": name, "supplier_rank": 1})
-        return partner
-
-    def _get_or_create_uom(self, name):
-        name = name.strip().title()  
-
-        UoM = self.env['uom.uom']
-        UoMCat = self.env['uom.category']
-
-        # Tìm UoM theo tên
-        uom = UoM.search([('name', '=', name)], limit=1)
-        if uom:
-            return uom
-
-        # Tìm hoặc tạo category
-        cat = UoMCat.search([('name', 'ilike', 'đơn vị')], limit=1)
-        if not cat:
-            cat = UoMCat.create({'name': 'Đơn vị'})
-
-        # Kiểm tra xem đã có reference UoM trong category chưa
-        ref_uom = UoM.search([
-            ('category_id', '=', cat.id),
-            ('uom_type', '=', 'reference')
-        ], limit=1)
-
-        if not ref_uom:
-            # Nếu chưa có, đây sẽ là UoM chuẩn
-            uom_type = 'reference'
-            factor = 1.0
-        else:
-            # Nếu đã có, tạo UoM phụ thuộc (same name but scaled)
-            uom_type = 'bigger'  # hoặc 'smaller', tùy ngữ cảnh
-            factor = 1.0  # cần xác định hợp lý, ví dụ: 1 cái = 1 ref
-
-        return UoM.create({
-            'name': name,
-            'category_id': cat.id,
-            'uom_type': uom_type,
-            'factor_inv': factor,
-            'rounding': 1.0,
-        })
-
-
-    def _get_or_create_product(self, code, name, unit_name):
-        product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
-        if product:
-            _logger.info("🔁 Tìm thấy sản phẩm %s. Dùng UOM gốc: %s", code, product.uom_id.name)
-            return product
-        uom = self._get_or_create_uom(unit_name)
-
-
-        tmpl = self.env["product.template"].create({
-            "name": name,
-            "default_code": code,
-            "type": "consu",
-            "uom_id": uom.id,
-            "uom_po_id": uom.id,
-            "purchase_ok": True,
-            "sale_ok": False,
-            "is_storable": True,
-        })
-        _logger.info("🆕 Tạo sản phẩm %s với UOM: %s", code, uom.name)
-
-        return tmpl.product_variant_id
