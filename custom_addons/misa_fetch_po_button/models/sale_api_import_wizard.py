@@ -1,7 +1,7 @@
 import requests
 from odoo import models, fields, api
-from datetime import datetime
-from dateutil import parser
+from datetime import datetime, timedelta
+from dateutil import parser  # để xử lý ISO datetime
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -14,8 +14,6 @@ class SaleApiImportWizard(models.TransientModel):
     to_date = fields.Date(string="Đến ngày", required=True)
 
     def action_import_from_api(self):
-        odoo_utils = self.env['odoo.utils']
-
         token_url = "https://crmconnect.misa.vn/api/v2/Account"
         orders_url = "https://crmconnect.misa.vn/api/v2/SaleOrders"
         payload = {
@@ -37,7 +35,10 @@ class SaleApiImportWizard(models.TransientModel):
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         page = 1
-        page_size = 10
+        page_size = 20
+
+        start_datetime = datetime.combine(self.from_date, datetime.min.time())
+        end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
         while page <= 50:
             params = {
@@ -48,10 +49,7 @@ class SaleApiImportWizard(models.TransientModel):
             }
             try:
                 response = requests.get(orders_url, headers=headers, params=params)
-                
-                
-
-                _logger.info("📦 Order page--- %s: %s", page, response.text)
+                _logger.info("📦 Order page %s: %s", page, response.text)
                 response.raise_for_status()
                 orders = response.json().get("data", [])
             except Exception as e:
@@ -61,10 +59,18 @@ class SaleApiImportWizard(models.TransientModel):
                 break
 
             for order in orders:
-                order_date_str = order.get("sale_order_date")
-                order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else datetime.now()
+                order_date_str = order.get("created_date")
+                order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else fields.Datetime.now()
 
-                if not (self.from_date <= order_date.date() <= self.to_date):
+                if order_date < start_datetime:
+                    continue
+                if order_date > end_datetime:
+                    _logger.info("🛑 Gặp đơn vượt quá ngày, dừng vòng lặp: %s", order.get("sale_order_no"))
+                    return {'type': 'ir.actions.act_window_close'}
+
+                product_lines = order.get("sale_order_product_mappings", [])
+                filtered_lines = [l for l in product_lines if l.get("stock_name") == "HCM"]
+                if not filtered_lines:
                     continue
 
                 order_ref = order.get("sale_order_no")
@@ -75,7 +81,9 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
                     continue
 
-                partner = odoo_utils._get_or_create_partner(customer_name)
+                partner = self.env['res.partner'].search([('name', '=', customer_name)], limit=1)
+                if not partner:
+                    partner = self.env['res.partner'].create({'name': customer_name})
 
                 existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
                 if existing_order:
@@ -89,7 +97,7 @@ class SaleApiImportWizard(models.TransientModel):
                     'amount_total': amount,
                 })
 
-                for line in order.get("sale_order_product_mappings", []):
+                for line in filtered_lines:
                     product_code = line.get("product_code")
                     description = line.get("description") or product_code
                     qty = float(line.get("amount", 1))
@@ -97,15 +105,44 @@ class SaleApiImportWizard(models.TransientModel):
                     discount_percent = float(line.get("discount_percent", 0))
                     uom_name = line.get("unit", "Cái").strip()
 
-                    product = odoo_utils._get_or_create_product(
-                        code=product_code,
-                        name=description,
-                        unit_name=uom_name,
-                        cost=price_unit,
-                        product_type="consu",
-                        purchase_ok=False,
-                        sale_ok=True
-                    )
+                    category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
+                    if not category:
+                        category = self.env['uom.category'].create({'name': 'Đơn vị'})
+
+                    uom = self.env['uom.uom'].search([
+                        ('name', '=', uom_name),
+                        ('category_id', '=', category.id)
+                    ], limit=1)
+
+                    if not uom:
+                        existing_ref = self.env['uom.uom'].search([
+                            ('category_id', '=', category.id),
+                            ('uom_type', '=', 'reference')
+                        ], limit=1)
+
+                        uom = self.env['uom.uom'].create({
+                            'name': uom_name,
+                            'category_id': category.id,
+                            'uom_type': 'smaller' if existing_ref else 'reference',
+                            'factor': 1.0,
+                            'factor_inv': 1.0,
+                            'rounding': 1.0,
+                        })
+
+                    product = self.env['product.product'].search([('default_code', '=', product_code)], limit=1)
+                    if not product:
+                        template = self.env['product.template'].create({
+                            'name': description,
+                            'default_code': product_code,
+                            'type': 'consu',
+                            'uom_id': uom.id,
+                            'uom_po_id': uom.id,
+                            'list_price': price_unit,
+                            'purchase_ok': False,
+                            'sale_ok': False,
+                            'is_storable': True,
+                        })
+                        product = template.product_variant_id
 
                     self.env['sale.order.line'].create({
                         'order_id': sale_order.id,
