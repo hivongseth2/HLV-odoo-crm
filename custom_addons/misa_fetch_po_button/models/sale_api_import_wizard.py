@@ -39,7 +39,7 @@ class SaleApiImportWizard(models.TransientModel):
         page = 1
         page_size = 1
 
-        while page <= page_size:
+        while page <= 1:
             params = {
                 "page": page,
                 "pageSize": page_size,
@@ -48,6 +48,10 @@ class SaleApiImportWizard(models.TransientModel):
             }
             try:
                 response = requests.get(orders_url, headers=headers, params=params)
+                
+                
+                _logger.info("📦 Order page %s: %s", page, params.text)
+
                 _logger.info("📦 Order page %s: %s", page, response.text)
                 response.raise_for_status()
                 orders = response.json().get("data", [])
