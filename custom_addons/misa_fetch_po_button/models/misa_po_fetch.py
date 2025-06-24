@@ -1,0 +1,149 @@
+from odoo import models, fields, _
+import logging
+import json
+from datetime import datetime, timedelta
+
+_logger = logging.getLogger(__name__)
+
+class MisaPOFetch(models.TransientModel):
+    _name = "misa.po.fetch"
+    _description = "MISA PO Fetch"
+    date_from = fields.Date(string="Từ ngày", required=True)
+    date_to = fields.Date(string="Đến ngày", required=True)
+
+    def action_fetch_po(self):
+        misa_utils = self.env['misa.api.utils']
+        odoo_utils = self.env['odoo.utils']
+        misa_config = self.env['misa.config']
+        access_token = misa_utils._get_misa_token()
+
+        date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
+        date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
+
+        headers = misa_config.get_default_headers(access_token)
+
+        payload = {
+            "filter": [
+                {
+                    "property": 4658,
+                    "value": 3,
+                    "operator": 7,
+                    "operand": 1,
+                    "data_type": 4
+                },
+                {
+                    "property": 3972,
+                    "value": date_from_utc.isoformat() + "Z",
+                    "operator": 10,
+                    "operand": 1,
+                    "data_type": 3
+                },
+                {
+                    "property": 3972,
+                    "value": date_to_utc.isoformat() + "Z",
+                    "operator": 12,
+                    "operand": 1,
+                    "data_type": 3
+                }
+            ],
+            "loadMode": 2,
+            "pageIndex": 1,
+            "pageSize": 20,
+            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+            "summaryColumns": [5039, 5104, 247],
+            "useSp": False,
+            "view": 2
+        }
+
+        page_index = 1
+        while True:
+            payload["pageIndex"] = page_index
+            _logger.info("📄 Đang fetch trang %s...", page_index)
+            
+            response = misa_utils._fetch_with_retry(
+                "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2",
+                headers, payload
+            )
+
+            if response.status_code != 200:
+                _logger.warning("❌ Gọi API thất bại ở trang %s", page_index)
+                break
+
+            page_data = response.json().get("Data", {}).get("PageData", [])
+            if not page_data:
+                _logger.info("✅ Hết dữ liệu, dừng ở trang %s", page_index)
+                break
+
+            for po in page_data:
+                refid = po.get("refid")
+                supplier_name = po.get("account_object_name")
+                refno = po.get("refno", "PO-MISA")
+                memo = po.get("journal_memo", "")
+                partner = odoo_utils._get_or_create_partner(supplier_name)
+
+                detail_payload = {
+                    "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                    "filter": [
+                        {
+                            "property": 3993,
+                            "operator": 7,
+                            "operand": 1,
+                            "value": refid,
+                            "data_type": 10
+                        }
+                    ],
+                    "loadMode": 2,
+                    "pageIndex": 1,
+                    "pageSize": 20,
+                    "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
+                    "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
+                    "useSp": False,
+                    "view": 92
+                }
+
+                detail_res = misa_utils._fetch_with_retry(
+                    "https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
+                    headers, detail_payload
+                )
+
+                if detail_res.status_code != 200:
+                    _logger.warning("Không lấy được chi tiết PO %s", refid)
+                    continue
+
+                lines = detail_res.json().get("Data", {}).get("PageData", [])
+                has_hcm = any(line.get("stock_code", "").strip().upper() == "HCM" for line in lines)
+                if not has_hcm:
+                    _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
+                    continue
+
+                po_rec = self.env["purchase.order"].create({
+                    "partner_id": partner.id,
+                    "origin": refno,
+                })
+
+                for line in lines:
+                    code = line.get("inventory_item_code", "unknown_code").strip()
+                    name = line.get("description", "unknown product").strip()
+                    qty = float(line.get("quantity", 1))
+                    price = float(line.get("unit_price", 0))
+                    unit_name = line.get("unit_name", "Cái").strip()
+                    vat_rate = float(line.get("vat_rate", 0))
+
+                    product = odoo_utils._get_or_create_product(
+                        code=code,
+                        name=name,
+                        unit_name=unit_name,
+                        cost=price,
+                        purchase_ok=True,
+                        sale_ok=False
+                    )
+
+                    self.env["purchase.order.line"].create({
+                        "order_id": po_rec.id,
+                        "name": name,
+                        "product_id": product.id,
+                        "product_qty": qty,
+                        "product_uom": product.uom_id.id,
+                        "price_unit": price
+                    })
+            page_index += 1

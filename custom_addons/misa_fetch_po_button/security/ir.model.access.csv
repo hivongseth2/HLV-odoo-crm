@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_misa_po_fetch_user,misa.po.fetch,model_misa_po_fetch,base.group_user,1,1,1,1
+access_misa_transfer_fetch_user,misa.transfer.fetch,model_misa_transfer_fetch,base.group_user,1,1,1,1
+access_sale_api_import_wizard,sale.api.import.wizard,model_sale_api_import_wizard,base.group_user,1,1,1,1

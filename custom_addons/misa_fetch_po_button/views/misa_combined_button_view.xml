@@ -1,0 +1,114 @@
+<odoo>
+    <!-- Action cho PO -->
+    <record id="action_misa_po_fetch_main" model="ir.actions.act_window">
+        <field name="name">Lấy PO từ MISA</field>
+        <field name="res_model">misa.po.fetch</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Action cho Internal Transfer -->
+    <record id="action_misa_transfer_fetch_main" model="ir.actions.act_window">
+        <field name="name">Lấy Internal Transfer từ MISA</field>
+        <field name="res_model">misa.transfer.fetch</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Action cho Sale Order -->
+    <record id="action_sale_api_import_wizard_main" model="ir.actions.act_window">
+        <field name="name">Lấy Sale Order từ MISA API</field>
+        <field name="res_model">sale.api.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Giao diện form cho PO -->
+    <record id="view_misa_po_fetch_form" model="ir.ui.view">
+        <field name="name">misa.po.fetch.form</field>
+        <field name="model">misa.po.fetch</field>
+        <field name="arch" type="xml">
+            <form string="Lấy PO từ MISA">
+                <group>
+                    <field name="date_from" required="1"/>
+                    <field name="date_to" required="1"/>
+                </group>
+                <footer>
+                    <button name="action_fetch_po"
+                            string="Lấy PO từ MISA"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Giao diện form cho Internal Transfer -->
+    <record id="view_misa_transfer_fetch_form" model="ir.ui.view">
+        <field name="name">misa.transfer.fetch.form</field>
+        <field name="model">misa.transfer.fetch</field>
+        <field name="arch" type="xml">
+            <form string="Lấy Internal Transfer từ MISA">
+                <group>
+                    <field name="date_from" required="1"/>
+                    <field name="date_to" required="1"/>
+                    <field name="warehouse_id" required="1"/>
+                    <field name="excel_hcm_keyword" required="1"/>
+                </group>
+                <footer>
+                    <button name="action_fetch_transfers"
+                            string="Lấy Transfer từ MISA"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Giao diện form cho Sale Order -->
+    <record id="view_sale_api_import_wizard_form" model="ir.ui.view">
+        <field name="name">sale.api.import.wizard.form</field>
+        <field name="model">sale.api.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Import Sale Orders from MISA API">
+                <group>
+                    <field name="from_date"  required="1"/>
+                    <field name="to_date"  required="1"/>
+                </group>
+                <footer>
+                    <button name="action_import_from_api" string="Import" type="object" class="oe_highlight"/>
+                    <button string="Cancel" class="oe_link" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Menu cha (dropdown) -->
+    <menuitem id="menu_misa_import_root"
+              name="Nhập dữ liệu từ MISA"
+              parent="stock.menu_stock_root"
+              sequence="99"/>
+
+    <!-- Menu con cho PO -->
+    <menuitem id="menu_import_misa_po"
+              name="Lấy PO từ MISA"
+              parent="menu_misa_import_root"
+              action="action_misa_po_fetch_main"
+              sequence="100"/>
+
+    <!-- Menu con cho Internal Transfer -->
+    <menuitem id="menu_import_misa_transfer"
+              name="Lấy Internal Transfer từ MISA"
+              parent="menu_misa_import_root"
+              action="action_misa_transfer_fetch_main"
+              sequence="101"/>
+
+    <!-- Menu con cho Sale Order -->
+    <menuitem id="menu_import_sale_api"
+              name="Lấy Sale Order từ MISA API"
+              parent="menu_misa_import_root"
+              action="action_sale_api_import_wizard_main"
+              sequence="102"/>
+</odoo>
