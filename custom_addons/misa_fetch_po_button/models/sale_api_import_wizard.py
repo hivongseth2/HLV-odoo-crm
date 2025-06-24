@@ -50,9 +50,9 @@ class SaleApiImportWizard(models.TransientModel):
                 response = requests.get(orders_url, headers=headers, params=params)
                 
                 
-                _logger.info("📦 Order page %s: %s", page, params.text)
+                _logger.info("📦 Order page--- %s: %s", page, params.text)
 
-                _logger.info("📦 Order page %s: %s", page, response.text)
+                _logger.info("📦 Order page--- %s: %s", page, response.text)
                 response.raise_for_status()
                 orders = response.json().get("data", [])
             except Exception as e:
