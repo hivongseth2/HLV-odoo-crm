@@ -74,8 +74,8 @@
         <field name="arch" type="xml">
             <form string="Import Sale Orders from MISA API">
                 <group>
-                    <field name="from_date"/>
-                    <field name="to_date"/>
+                    <field name="from_date"  required="1"/>
+                    <field name="to_date"  required="1"/>
                 </group>
                 <footer>
                     <button name="action_import_from_api" string="Import" type="object" class="oe_highlight"/>
