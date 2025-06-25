@@ -119,7 +119,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'factor_inv': 1.0,
                             'rounding': 1.0,
                         })
-
+# xử lý chỗ này sau 
                     product = self.env['product.product'].search([('default_code', '=', product_code)], limit=1)
                     if not product:
                         template = self.env['product.template'].create({
