@@ -103,7 +103,10 @@ class SaleApiImportWizard(models.TransientModel):
                     qty = float(line.get("amount", 1))
                     price_unit = float(line.get("price", 0))
                     discount_percent = float(line.get("discount_percent", 0))
-                    uom_name = line.get("unit", "Cái").strip()
+                    # uom_name = line.get("unit", "Cái").strip()
+                    
+                    uom_name = (line.get("unit") or "Cái").strip()
+
 
                     category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
                     if not category:
