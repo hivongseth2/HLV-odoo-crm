@@ -143,6 +143,40 @@ class SaleApiImportWizard(models.TransientModel):
                             'is_storable': True,
                         })
                         product = template.product_variant_id
+                        # ✅ Xử lý combo nếu có dấu "+"
+                        if '+' in product_code:
+                            sub_codes = product_code.split('+')
+                            for sub_code in sub_codes:
+                                sub_code = sub_code.strip()
+                                sub_product = self.env['product.product'].search([('default_code', '=', sub_code)], limit=1)
+                                if sub_product:
+                                    quant = self.env['stock.quant'].search([
+                                        ('product_id', '=', sub_product.id),
+                                        ('location_id.usage', '=', 'internal')
+                                    ], limit=1)
+                                    if quant:
+                                        quant.quantity = max(0, quant.quantity - qty)
+                                    else:
+                                        _logger.warning(f"🚫 Không tìm thấy tồn kho sản phẩm con: {sub_code}")
+                                else:
+                                    _logger.warning(f"🚫 Không tìm thấy sản phẩm con trong hệ thống: {sub_code}")
+
+                            # Cộng tồn cho combo
+                            combo_quant = self.env['stock.quant'].search([
+                                ('product_id', '=', product.id),
+                                ('location_id.usage', '=', 'internal')
+                            ], limit=1)
+                            if combo_quant:
+                                combo_quant.quantity += qty
+                            else:
+                                internal_location = self.env['stock.location'].search([('usage', '=', 'internal')], limit=1)
+                                if internal_location:
+                                    self.env['stock.quant'].create({
+                                        'product_id': product.id,
+                                        'location_id': internal_location.id,
+                                        'quantity': qty
+                                    })
+
 
                     self.env['sale.order.line'].create({
                         'order_id': sale_order.id,
