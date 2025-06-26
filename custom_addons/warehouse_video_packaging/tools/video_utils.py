@@ -1,5 +1,5 @@
 
-import os, subprocess, pygame, numpy as np, threading
+import os, subprocess, numpy as np, threading
 from datetime import datetime
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
@@ -8,19 +8,20 @@ RTSP_URL = 'rtsp://admin:HoangLongVu@192.168.1.31:554/h264/ch1/main'
 OUTPUT_DIR = '/opt/odoo/warehouse_videos'
 MAX_DURATION = 120
 
-pygame.mixer.init(frequency=44100, size=-16, channels=2)
+# pygame.mixer.init(frequency=44100, size=-16, channels=2)
 
-def generate_beep():
-    sr = 44100
-    t = np.linspace(0, 0.5, int(sr * 0.5), endpoint=False)
-    wave = 0.5 * np.sin(2 * np.pi * 440 * t)
-    stereo_wave = (np.array([wave, wave]).T * 32767).astype(np.int16)
-    return pygame.sndarray.make_sound(np.ascontiguousarray(stereo_wave))
+# def generate_beep():
+#     sr = 44100
+#     t = np.linspace(0, 0.5, int(sr * 0.5), endpoint=False)
+#     wave = 0.5 * np.sin(2 * np.pi * 440 * t)
+#     stereo_wave = (np.array([wave, wave]).T * 32767).astype(np.int16)
+#     return pygame.sndarray.make_sound(np.ascontiguousarray(stereo_wave))
 
-beep_sound = generate_beep()
+# beep_sound = generate_beep()
 
 def play_notification():
-    beep_sound.play()
+    # beep_sound.play()
+    print("🔔 Beep!")
 
 def start_recording(barcode):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
