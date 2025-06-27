@@ -3,6 +3,8 @@
     <record id="view_packaging_video_tree" model="ir.ui.view">
         <field name="name">stock.picking.tree.video</field>
         <field name="model">stock.picking</field>
+        <field name="type">tree</field> <!-- 💥 Đây là dòng quan trọng -->
+
         <field name="arch" type="xml">
         <tree>
             <field name="video_file_name"/>
