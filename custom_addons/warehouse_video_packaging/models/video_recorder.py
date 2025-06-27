@@ -1,5 +1,4 @@
 
-import os
 from odoo import models, fields
 from ..tools.video_utils import start_recording, stop_process, upload_async
 

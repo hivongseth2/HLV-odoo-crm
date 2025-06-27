@@ -1,26 +1,20 @@
 
-import os, subprocess, numpy as np, threading
+import os
+import subprocess
+import threading
 from datetime import datetime
-from pydrive.auth import GoogleAuth
-from pydrive.drive import GoogleDrive
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 RTSP_URL = 'rtsp://admin:HoangLongVu@192.168.1.31:554/h264/ch1/main'
-OUTPUT_DIR = '/opt/odoo/warehouse_videos'
+OUTPUT_DIR = '/tmp/warehouse_videos'
 MAX_DURATION = 120
 
-# pygame.mixer.init(frequency=44100, size=-16, channels=2)
-
-# def generate_beep():
-#     sr = 44100
-#     t = np.linspace(0, 0.5, int(sr * 0.5), endpoint=False)
-#     wave = 0.5 * np.sin(2 * np.pi * 440 * t)
-#     stereo_wave = (np.array([wave, wave]).T * 32767).astype(np.int16)
-#     return pygame.sndarray.make_sound(np.ascontiguousarray(stereo_wave))
-
-# beep_sound = generate_beep()
+SCOPES = ['https://www.googleapis.com/auth/drive']
+SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(__file__), 'credentials', 'service_account.json')
 
 def play_notification():
-    # beep_sound.play()
     print("🔔 Beep!")
 
 def start_recording(barcode):
@@ -51,37 +45,45 @@ def stop_process(proc):
         except:
             proc.kill()
 
-def init_drive():
-    gauth = GoogleAuth()
-    gauth.LocalWebserverAuth()
-    return GoogleDrive(gauth)
+def get_drive_service():
+    creds = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    return build('drive', 'v3', credentials=creds)
 
-drive = init_drive()
-
-def get_or_create_folder(name, parent_id=None):
-    query = f"title='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+def get_or_create_folder(service, name="KHO_HCM", parent_id=None):
+    query = f"name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
     if parent_id:
         query += f" and '{parent_id}' in parents"
-    folder_list = drive.ListFile({'q': query}).GetList()
-    if folder_list:
-        return folder_list[0]['id']
-    metadata = {'title': name, 'mimeType': 'application/vnd.google-apps.folder'}
+    results = service.files().list(q=query, spaces='drive',
+                                   fields="files(id, name)").execute()
+    items = results.get('files', [])
+    if items:
+        return items[0]['id']
+    file_metadata = {
+        'name': name,
+        'mimeType': 'application/vnd.google-apps.folder'
+    }
     if parent_id:
-        metadata['parents'] = [{'id': parent_id}]
-    folder = drive.CreateFile(metadata)
-    folder.Upload()
+        file_metadata['parents'] = [parent_id]
+    folder = service.files().create(body=file_metadata,
+                                    fields='id').execute()
     return folder['id']
 
 def upload_to_drive(filepath):
+    service = get_drive_service()
     file_name = os.path.basename(filepath)
     today_str = datetime.now().strftime("%d_%m_%Y")
-    root_id = get_or_create_folder("KHO_HCM")
-    day_id = get_or_create_folder(today_str, root_id)
-    clip_id = get_or_create_folder("clip", day_id)
 
-    gfile = drive.CreateFile({'title': file_name, 'parents': [{'id': clip_id}]})
-    gfile.SetContentFile(filepath)
-    gfile.Upload()
+    root_id = get_or_create_folder(service, "KHO_HCM")
+    day_id = get_or_create_folder(service, today_str, root_id)
+    clip_id = get_or_create_folder(service, "clip", day_id)
+
+    file_metadata = {
+        'name': file_name,
+        'parents': [clip_id]
+    }
+    media = MediaFileUpload(filepath, mimetype='video/mp4')
+    service.files().create(body=file_metadata, media_body=media).execute()
 
 def upload_async(filepath):
     def worker():

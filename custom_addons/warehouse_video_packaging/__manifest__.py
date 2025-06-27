@@ -4,7 +4,7 @@
     "depends": ["base"],
     "author": "Hoang Long Vu",
     "category": "Warehouse",
-    "summary": "Quay video đóng gói và upload lên Google Drive",
+    "summary": "Quay video đóng gói và upload lên Google Drive bằng Service Account",
     "installable": True,
     "application": False
 }
