@@ -1,15 +1,13 @@
 <odoo>
     <!-- Tree view: liệt kê video -->
     <record id="view_packaging_video_tree" model="ir.ui.view">
-        <field name="name">stock.picking.tree.video</field>
-        <field name="model">stock.picking</field>
-        <field name="arch" type="xml">
+    <field name="name">stock.picking.tree.video</field>
+    <field name="model">stock.picking</field>
+    <field name="arch" type="xml">
         <tree>
-            <field name="video_file_name"/>
-            <field name="video_state"/>
-            <field name="video_url"/>
+        <field name="name"/>
         </tree>
-        </field>
+    </field>
     </record>
 
     <!-- Form view -->
