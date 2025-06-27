@@ -1,2 +1,2 @@
 from . import stock_picking
-from . import video_recorder
+# from . import video_recorder
