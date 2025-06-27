@@ -1,10 +1,15 @@
 {
-    "name": "Warehouse Packaging Video Recorder",
+    "name": "Warehouse Video Packaging",
     "version": "1.0",
-    "depends": ["base"],
-    "author": "Hoang Long Vu",
+    "depends": ["stock"],
+    "author": "ChatGPT + Vũ Đức Tập",
     "category": "Warehouse",
-    "summary": "Quay video đóng gói và upload lên Google Drive bằng Service Account",
+    "summary": "Record and upload packaging videos from warehouse operations",
+    "data": [
+        "security/ir.model.access.csv",
+        "views/packaging_video_view.xml"
+    ],
     "installable": True,
-    "application": False
+    "application": False,
+    "auto_install": False
 }
