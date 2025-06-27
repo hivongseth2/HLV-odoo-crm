@@ -44,7 +44,7 @@ class SaleApiImportWizard(models.TransientModel):
             params = {
                 "page": page,
                 "pageSize": page_size,
-                "orderBy": "sale_order_date",
+                "orderBy": "created_date",
                 "isDescending": True
             }
             try:
