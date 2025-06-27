@@ -5,10 +5,9 @@
     <field name="model">stock.picking</field>
     <field name="arch" type="xml">
       <tree>
-        <field name="name"/>
+        <field name="video_file_name"/>
         <field name="video_state"/>
         <field name="video_url"/>
-        <field name="create_date"/>
       </tree>
     </field>
   </record>
@@ -21,7 +20,7 @@
       <form>
         <sheet>
           <group>
-            <field name="name"/>
+            <field name="video_file_name"/>
             <field name="video_state"/>
             <field name="video_url"/>
           </group>
