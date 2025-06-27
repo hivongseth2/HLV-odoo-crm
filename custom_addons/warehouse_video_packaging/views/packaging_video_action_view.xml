@@ -1,20 +1,20 @@
 <odoo>
-  <!-- Tree view: list all videos -->
-  <record id="view_stock_picking_video_tree_custom" model="ir.ui.view">
-    <field name="name">stock.picking.video.tree.custom</field>
+  <!-- List view -->
+  <record id="view_stock_picking_video_list_custom" model="ir.ui.view">
+    <field name="name">stock.picking.video.list.custom</field>
     <field name="model">stock.picking</field>
     <field name="arch" type="xml">
-      <tree string="Video Đóng Gói">
+      <list string="Video Đóng Gói">
         <field name="name"/>
         <field name="video_file_name"/>
         <field name="video_state"/>
         <field name="video_url"/>
         <field name="create_date"/>
-      </tree>
+      </list>
     </field>
   </record>
 
-  <!-- Form view: show video info -->
+  <!-- Form view -->
   <record id="view_stock_picking_video_form_custom" model="ir.ui.view">
     <field name="name">stock.picking.video.form.custom</field>
     <field name="model">stock.picking</field>
@@ -32,12 +32,12 @@
     </field>
   </record>
 
-  <!-- Action mở list -->
+  <!-- Action -->
   <record id="action_stock_picking_video_list_custom" model="ir.actions.act_window">
     <field name="name">Quản Lý Video Đóng Hàng</field>
     <field name="res_model">stock.picking</field>
-    <field name="view_mode">tree,form</field>
-    <field name="view_id" ref="view_stock_picking_video_tree_custom"/>
+    <field name="view_mode">list,form</field>
+    <field name="view_id" ref="view_stock_picking_video_list_custom"/>
     <field name="target">current</field>
   </record>
 
