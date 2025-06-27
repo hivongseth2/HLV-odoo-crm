@@ -1,4 +1,4 @@
-from odoo import models, fields, api
+from odoo import models, fields
 from ..tools import video_utils
 
 import logging
@@ -22,7 +22,6 @@ class StockPicking(models.Model):
         _logger.info("🟢 GỌI action_put_in_pack() TRIGGERED >>>>>>>>>>")
         res = super().action_put_in_pack()
         for picking in self:
-            _logger.info(f"📦 Picking: {picking.name} | Video State: {picking.video_state}")
             if picking.video_state == 'idle':
                 picking.video_state = 'recording'
                 picking.video_file_name = f"{picking.name}.mp4"
@@ -30,6 +29,8 @@ class StockPicking(models.Model):
                 picking._video_process = proc
                 picking.video_url = output
                 _logger.info(f"🎥 BẮT ĐẦU QUAY: {output}")
+            else:
+                _logger.info(f"ℹ️ Phiếu {picking.name} đã ở trạng thái: {picking.video_state}")
         return res
 
     def button_validate(self):
