@@ -1,44 +1,42 @@
 <odoo>
-  <!-- Tree view: liệt kê video -->
-  <record id="view_packaging_video_tree" model="ir.ui.view">
-    <field name="name">stock.picking.tree.video</field>
-    <field name="model">stock.picking</field>
-    <field name="arch" type="xml">
-      <tree>
-        <field name="video_file_name"/>
-        <field name="video_state"/>
-        <field name="video_url"/>
-      </tree>
-    </field>
-  </record>
-
-  <!-- Form view -->
-  <record id="view_packaging_video_form" model="ir.ui.view">
-    <field name="name">stock.picking.form.video</field>
-    <field name="model">stock.picking</field>
-    <field name="arch" type="xml">
-      <form>
-        <sheet>
-          <group>
+    <!-- Tree view: liệt kê video -->
+    <record id="view_packaging_video_tree" model="ir.ui.view">
+        <field name="name">stock.picking.tree.video</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+        <tree>
             <field name="video_file_name"/>
             <field name="video_state"/>
             <field name="video_url"/>
-          </group>
-        </sheet>
-      </form>
-    </field>
-  </record>
+        </tree>
+        </field>
+    </record>
 
-  <!-- Action mở list -->
-  <record id="action_packaging_video_list" model="ir.actions.act_window">
-    <field name="name">Danh sách Video Đóng Hàng</field>
-    <field name="res_model">stock.picking</field>
-    <field name="view_mode">tree,form</field>
-    <field name="target">current</field>
-  </record>
+    <!-- Form view -->
+    <record id="view_packaging_video_form" model="ir.ui.view">
+        <field name="name">stock.picking.form.video</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+        <form>
+            <sheet>
+            <group>
+                <field name="video_file_name"/>
+                <field name="video_state"/>
+                <field name="video_url"/>
+            </group>
+            </sheet>
+        </form>
+        </field>
+    </record>
 
-  <!-- Menu -->
-  <menuitem id="menu_packaging_video_root"
+    <record id="action_packaging_video_list" model="ir.actions.act_window">
+        <field name="name">Danh sách Video Đóng Hàng</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="target">current</field>
+    </record>
+
+    <menuitem id="menu_packaging_video_root"
             name="Video Đóng Hàng"
             parent="stock.menu_stock_root"
             action="action_packaging_video_list"/>
