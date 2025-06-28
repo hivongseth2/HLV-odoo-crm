@@ -34,11 +34,12 @@
         <footer>
           <button name="start_recording_button" type="object"
                   string="Bắt đầu quay" class="btn-primary"
-                  attrs="{'invisible': [('state', '!=', 'idle')]}"/>
+                  invisible="state != 'idle'"/>
 
           <button name="stop_recording_button" type="object"
                   string="Dừng quay" class="btn-danger"
-                  attrs="{'invisible': [('state', '!=', 'recording')]}"/>
+                  invisible="state != 'recording'"/>
+
         </footer>
       </sheet>
     </form>
