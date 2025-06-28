@@ -17,10 +17,7 @@ SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(__file__), 'credentials', 's
 
 # ========== ĐƯỜNG DẪN FFMPEG PORTABLE ==========
 
-FFMPEG_PATH = os.path.abspath(os.path.join(
-    os.path.dirname(__file__),
-    '../../../ffmpeg-bin/ffmpeg-7.0.2-amd64-static/ffmpeg'
-))
+FFMPEG_PATH = '/home/odoo/custom_addons/warehouse_video_packaging/ffmpeg-bin/ffmpeg-7.0.2-amd64-static/ffmpeg'
 
 
 # Nếu chạy trên Windows (optional)
