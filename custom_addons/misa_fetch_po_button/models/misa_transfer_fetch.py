@@ -29,7 +29,7 @@ class MisaTransferFetch(models.TransientModel):
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
             "filter": [
-                {"property": 4041, "value": "[2030,2031,2032]", "operator": 13, "data_type": 4, "operand": 1},
+              
                 {"property": 3654, "value": date_from_utc.isoformat() + "Z", "operator": 10, "data_type": 3, "operand": 1},
                 {"property": 3654, "value": date_to_utc.isoformat() + "Z", "operator": 12, "data_type": 3, "operand": 1}
             ],
