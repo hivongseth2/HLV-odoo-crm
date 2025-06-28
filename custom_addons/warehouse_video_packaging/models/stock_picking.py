@@ -27,9 +27,7 @@ class StockPicking(models.Model):
                 picking.video_state = 'recording'
                 picking.video_file_name = f"{picking.name}.mp4"
                 proc, output = video_utils.start_recording(picking.name)
-                # picking._video_process = proc
-                # picking._video_process_runtime = proc
-                 VIDEO_PROCESS_MAP[picking.id] = proc
+                VIDEO_PROCESS_MAP[picking.id] = proc
                 picking.video_url = output
                 _logger.info(f"🎥 BẮT ĐẦU QUAY: {output}")
             else:
