@@ -4,8 +4,11 @@ from ..tools import video_utils
 import logging
 _logger = logging.getLogger(__name__)
 
+
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
+
+    # Biến class dùng để lưu process tạm thời (không lưu DB)
     VIDEO_PROCESS_MAP = {}
 
     video_state = fields.Selection([
@@ -17,8 +20,6 @@ class StockPicking(models.Model):
     video_file_name = fields.Char("Tên file video")
     video_url = fields.Char("Link video Drive")
 
-    _video_process = None
-
     def action_put_in_pack(self):
         _logger.info("🟢 GỌI action_put_in_pack() TRIGGERED >>>>>>>>>>")
         res = super().action_put_in_pack()
@@ -27,7 +28,8 @@ class StockPicking(models.Model):
                 picking.video_state = 'recording'
                 picking.video_file_name = f"{picking.name}.mp4"
                 proc, output = video_utils.start_recording(picking.name)
-                VIDEO_PROCESS_MAP[picking.id] = proc
+                # Lưu process vào biến class
+                type(self).VIDEO_PROCESS_MAP[picking.id] = proc
                 picking.video_url = output
                 _logger.info(f"🎥 BẮT ĐẦU QUAY: {output}")
             else:
@@ -39,10 +41,12 @@ class StockPicking(models.Model):
         res = super().button_validate()
         for picking in self:
             if picking.video_state == 'recording':
-                proc = VIDEO_PROCESS_MAP.get(picking.id)
+                proc = type(self).VIDEO_PROCESS_MAP.get(picking.id)
                 if proc:
                     video_utils.stop_process(proc)
-                    del VIDEO_PROCESS_MAP[picking.id]
+                    del type(self).VIDEO_PROCESS_MAP[picking.id]
+                    _logger.info(f"🛑 DỪNG GHI VIDEO: {picking.name}")
                 video_utils.upload_async(picking.video_url)
                 picking.write({'video_state': 'uploaded'})
+                _logger.info(f"📤 UPLOAD FILE: {picking.video_url}")
         return res
