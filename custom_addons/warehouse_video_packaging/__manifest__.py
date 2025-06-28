@@ -7,7 +7,6 @@
     "summary": "Record and upload packaging videos from warehouse operations",
     "data": [
         "security/ir.model.access.csv",
-        "views/packaging_video_view.xml",
         "views/packaging_video_action_view.xml"
     ],
     "installable": True,
