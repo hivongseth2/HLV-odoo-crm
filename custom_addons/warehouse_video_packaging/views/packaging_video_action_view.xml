@@ -33,12 +33,17 @@
     </field>
   </record>
 
-  <record id="action_warehouse_video_session" model="ir.actions.act_window">
-    <field name="name">Quản Lý Video Đóng Gói</field>
-    <field name="res_model">warehouse.video.session</field>
-    <field name="view_mode">tree,form</field>
-  </record>
+<record id="action_warehouse_video_session" model="ir.actions.act_window">
+  <field name="name">Video Đóng Gói</field>
+  <field name="res_model">warehouse.video.session</field>
+  <field name="view_mode">list,form</field>
+</record>
 
-  <menuitem id="menu_warehouse_video_session" name="Video Đóng Gói" parent="stock.menu_stock_root"
-            action="action_warehouse_video_session"/>
+<menuitem
+  id="menu_warehouse_video_session"
+  name="Video Đóng Gói"
+  parent="stock.menu_stock_operations"
+  sequence="50"
+  action="action_warehouse_video_session"/>
+
 </odoo>
