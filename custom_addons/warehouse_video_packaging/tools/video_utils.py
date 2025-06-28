@@ -19,8 +19,9 @@ SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(__file__), 'credentials', 's
 
 FFMPEG_PATH = os.path.abspath(os.path.join(
     os.path.dirname(__file__),
-    '..', 'ffmpeg-bin', 'ffmpeg-7.0.2-amd64-static', 'ffmpeg'
+    '../../../ffmpeg-bin/ffmpeg-7.0.2-amd64-static/ffmpeg'
 ))
+
 
 # Nếu chạy trên Windows (optional)
 if os.name == 'nt' and not FFMPEG_PATH.endswith('.exe'):
