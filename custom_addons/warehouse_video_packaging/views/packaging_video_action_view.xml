@@ -1,4 +1,6 @@
+
 <odoo>
+<!-- list -->
   <record id="view_warehouse_video_session_list" model="ir.ui.view">
     <field name="name">warehouse.video.session.list</field>
     <field name="model">warehouse.video.session</field>
@@ -13,7 +15,7 @@
       </list>
     </field>
   </record>
-
+<!-- form -->
   <record id="view_warehouse_video_session_form" model="ir.ui.view">
     <field name="name">warehouse.video.session.form</field>
     <field name="model">warehouse.video.session</field>
@@ -31,6 +33,16 @@
         </sheet>
       </form>
     </field>
+    <footer>
+  <button name="start_recording_button" type="object"
+          string="Bắt đầu quay" class="btn-primary"
+          attrs="{'invisible': [('state', '!=', 'idle')]}"/>
+
+  <button name="stop_recording_button" type="object"
+          string="Dừng quay" class="btn-danger"
+          attrs="{'invisible': [('state', '!=', 'recording')]}"/>
+</footer>
+
   </record>
 
 <record id="action_warehouse_video_session" model="ir.actions.act_window">

@@ -50,3 +50,13 @@ class WarehouseVideoSession(models.Model):
             'end_time': fields.Datetime.now()
         })
         _logger.info(f"⏹️ Dừng & upload: {self.file_url}")
+        
+        
+    def start_recording_button(self):
+    for rec in self:
+        rec.start_recording(rec.barcode)
+
+    def stop_recording_button(self):
+        for rec in self:
+            rec.stop_recording()
+
