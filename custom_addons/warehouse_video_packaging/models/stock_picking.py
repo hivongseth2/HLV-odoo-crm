@@ -26,7 +26,8 @@ class StockPicking(models.Model):
                 picking.video_state = 'recording'
                 picking.video_file_name = f"{picking.name}.mp4"
                 proc, output = video_utils.start_recording(picking.name)
-                picking._video_process = proc
+                # picking._video_process = proc
+                picking._video_process_runtime = proc
                 picking.video_url = output
                 _logger.info(f"🎥 BẮT ĐẦU QUAY: {output}")
             else:
@@ -38,7 +39,7 @@ class StockPicking(models.Model):
         res = super().button_validate()
         for picking in self:
             if picking.video_state == 'recording':
-                video_utils.stop_process(picking._video_process)
+                video_utils.stop_process(picking._video_process_runtime)
                 video_utils.upload_async(picking.video_url)
                 picking.write({'video_state': 'uploaded'})
                 _logger.info(f"📤 UPLOAD FILE: {picking.video_url}")
