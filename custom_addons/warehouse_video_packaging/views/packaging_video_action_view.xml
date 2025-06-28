@@ -34,11 +34,11 @@
         <footer>
           <button name="start_recording_button" type="object"
                   string="Bắt đầu quay" class="btn-primary"
-                  invisible="state != 'idle'"/>
+                />
 
           <button name="stop_recording_button" type="object"
                   string="Dừng quay" class="btn-danger"
-                  invisible="state != 'recording'"/>
+                  />
 
         </footer>
       </sheet>
