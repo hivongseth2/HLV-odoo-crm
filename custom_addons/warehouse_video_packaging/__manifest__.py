@@ -10,7 +10,7 @@
         "views/packaging_video_view.xml",
         "views/packaging_video_action_view.xml"
     ],
-    "installable": true,
-    "application": false,
-    "auto_install": false
+    "installable": True,
+    "application": False,
+    "auto_install": False
 }
