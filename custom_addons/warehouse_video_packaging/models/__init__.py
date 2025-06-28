@@ -1,1 +1,1 @@
-from . import stock_picking
+from . import warehouse_video_session
