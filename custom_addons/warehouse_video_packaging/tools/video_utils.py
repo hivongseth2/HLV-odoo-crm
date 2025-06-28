@@ -1,6 +1,5 @@
-
 import os
-import subprocess
+import ffmpeg
 import threading
 from datetime import datetime
 from google.oauth2 import service_account
@@ -9,7 +8,7 @@ from googleapiclient.http import MediaFileUpload
 
 RTSP_URL = 'rtsp://admin:HoangLongVu@192.168.1.31:554/h264/ch1/main'
 OUTPUT_DIR = '/tmp/warehouse_videos'
-MAX_DURATION = 120
+MAX_DURATION = 120  # in seconds
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 SERVICE_ACCOUNT_FILE = os.path.join(os.path.dirname(__file__), 'credentials', 'service_account.json')
@@ -22,28 +21,21 @@ def start_recording(barcode):
     output_file = os.path.join(OUTPUT_DIR, f"{barcode}.mp4")
     play_notification()
 
-    cmd = [
-        "ffmpeg", "-rtsp_transport", "tcp", "-i", RTSP_URL,
-        "-t", str(MAX_DURATION),
-        "-filter_complex",
-        "[0:v]split=2[main][zoom];[zoom]crop=640:360:320:180,scale=320:180[zoomed];[main][zoomed]overlay=W-w-10:H-h-10[out]",
-        "-map", "[out]",
-        "-vcodec", "libx264", "-preset", "ultrafast",
-        "-pix_fmt", "yuv420p", "-movflags", "+faststart",
-        output_file
-    ]
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return proc, output_file
-
-def stop_process(proc):
-    if proc and proc.poll() is None:
-        try:
-            proc.stdin.write(b"q\n")
-            proc.stdin.flush()
-            proc.wait(timeout=10)
-        except:
-            proc.kill()
+    # Dùng ffmpeg-python
+    try:
+        (
+            ffmpeg
+            .input(RTSP_URL, rtsp_transport='tcp', t=MAX_DURATION)
+            .filter_multi_output('split')[0]
+            .filter('crop', 640, 360, 320, 180)
+            .filter('scale', 320, 180)
+            .overlay(ffmpeg.input(RTSP_URL, rtsp_transport='tcp', t=MAX_DURATION))
+            .output(output_file, vcodec='libx264', preset='ultrafast', pix_fmt='yuv420p', movflags='+faststart')
+            .run(overwrite_output=True)
+        )
+    except ffmpeg.Error as e:
+        print('FFmpeg error:', e.stderr.decode())
+    return output_file
 
 def get_drive_service():
     creds = service_account.Credentials.from_service_account_file(

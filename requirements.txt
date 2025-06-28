@@ -2,3 +2,7 @@ pygame
 numpy
 pydrive
 ffmpeg
+ffmpeg-python 
+google-api-python-client 
+google-auth 
+google-auth-oauthlib
