@@ -6,7 +6,7 @@ _logger = logging.getLogger(__name__)
 
 class WarehouseVideoAPI(http.Controller):
     @http.route(['/warehouse_video_packaging/api/scan_pick'],  type='json', auth='public', methods=['POST'], csrf=False)
-    def api_scan_pick(self, **post):
+    def api_scan_pick(self,barcode=None):
         barcode = post.get('barcode')
         if not barcode:
             return {"error": "Missing barcode"}
