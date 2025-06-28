@@ -3,14 +3,14 @@
     <field name="name">warehouse.video.session.list</field>
     <field name="model">warehouse.video.session</field>
     <field name="arch" type="xml">
-      <tree string="Sessions">
+      <list string="Sessions">
         <field name="barcode"/>
         <field name="state"/>
         <field name="file_name"/>
         <field name="file_url"/>
         <field name="start_time"/>
         <field name="end_time"/>
-      </tree>
+      </list>
     </field>
   </record>
 
