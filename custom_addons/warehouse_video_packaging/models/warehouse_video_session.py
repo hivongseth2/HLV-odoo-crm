@@ -38,6 +38,23 @@ class WarehouseVideoSession(models.Model):
         type(self).VIDEO_PROCESS[session.id] = proc
         _logger.info(f"✅ Bắt đầu quay: {output}")
         return session
+    
+    
+    
+    # chuẩn
+    def start_recording_session(self):
+        for rec in self:
+            file_name = f"{rec.barcode}.mp4"
+            proc, output = video_utils.start_recording(rec.barcode)
+            rec.write({
+                'state': 'recording',
+                'file_name': file_name,
+                'file_url': output,
+                'start_time': fields.Datetime.now()
+            })
+            type(self).VIDEO_PROCESS[rec.id] = proc
+            _logger.info(f"✅ Bắt đầu quay: {output}")
+
 
     def stop_recording(self):
         proc = type(self).VIDEO_PROCESS.get(self.id)
@@ -54,7 +71,7 @@ class WarehouseVideoSession(models.Model):
         
     def start_recording_button(self):
         for rec in self:
-            rec.start_recording(rec.barcode)
+            rec.start_recording_session()
 
     def stop_recording_button(self):
         for rec in self:
