@@ -37,40 +37,40 @@ class MisaApiUtils(models.AbstractModel):
 
 
     def _fetch_login_crm_token(self):
-    """Fetch CRM token for MISA"""
-    login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {self._get_misa_token()}",
-    }
-    payload = {
-        "userName": "ThanhLuan1303@",
-        "password": "thanhluan.hlv@gmail.com",
-    }
-    response = requests.post(login_url, headers=headers, json=payload)
-    # Log toàn bộ headers
-    logging.warning("===> RESPONSE HEADERS <===")
-    for k, v in response.headers.items():
-        logging.warning(f"{k}: {v}")
-    if response.status_code != 200:
-        raise Exception(f"Login failed: {response.status_code} - {response.text}")
-    # Step 2: Parse từ Set-Cookie
-    set_cookie_header = response.headers.get("Set-Cookie", "")
-    logging.warning(f"===> Raw Set-Cookie: {set_cookie_header}")
-    # Nếu có nhiều Set-Cookie thì split từng cái
-    set_cookies = set_cookie_header.split('\n') if '\n' in set_cookie_header else set_cookie_header.split(',')
-    x_sessionid = None
-    x_tenantid = None
-    for cookie in set_cookies:
-        if 'x-sessionid=' in cookie:
-            match = re.search(r'x-sessionid=([^;]+)', cookie)
-            if match:
-                x_sessionid = match.group(1)
-        elif 'x-tenantid=' in cookie:
-            match = re.search(r'x-tenantid=([^;]+)', cookie)
-            if match:
-                x_tenantid = match.group(1)
-    logging.warning(f"x-sessionid: {x_sessionid}")
-    logging.warning(f"x-tenantid: {x_tenantid}")
-    if not x_sessionid or not x_tenantid:
-        raise Exception("Missing required cookies from login response.")
+        """Fetch CRM token for MISA"""
+        login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._get_misa_token()}",
+        }
+        payload = {
+            "userName": "ThanhLuan1303@",
+            "password": "thanhluan.hlv@gmail.com",
+        }
+        response = requests.post(login_url, headers=headers, json=payload)
+        # Log toàn bộ headers
+        logging.warning("===> RESPONSE HEADERS <===")
+        for k, v in response.headers.items():
+            logging.warning(f"{k}: {v}")
+        if response.status_code != 200:
+            raise Exception(f"Login failed: {response.status_code} - {response.text}")
+        # Step 2: Parse từ Set-Cookie
+        set_cookie_header = response.headers.get("Set-Cookie", "")
+        logging.warning(f"===> Raw Set-Cookie: {set_cookie_header}")
+        # Nếu có nhiều Set-Cookie thì split từng cái
+        set_cookies = set_cookie_header.split('\n') if '\n' in set_cookie_header else set_cookie_header.split(',')
+        x_sessionid = None
+        x_tenantid = None
+        for cookie in set_cookies:
+            if 'x-sessionid=' in cookie:
+                match = re.search(r'x-sessionid=([^;]+)', cookie)
+                if match:
+                    x_sessionid = match.group(1)
+            elif 'x-tenantid=' in cookie:
+                match = re.search(r'x-tenantid=([^;]+)', cookie)
+                if match:
+                    x_tenantid = match.group(1)
+        logging.warning(f"x-sessionid: {x_sessionid}")
+        logging.warning(f"x-tenantid: {x_tenantid}")
+        if not x_sessionid or not x_tenantid:
+            raise Exception("Missing required cookies from login response.")
