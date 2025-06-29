@@ -49,7 +49,7 @@ class MisaApiUtils(models.AbstractModel):
         }
         payload = {
             "PassWord": "ThanhLuan1303@",
-            "userName": "thanhluan.hlv@gmail.com",
+            "UserName": "thanhluan.hlv@gmail.com",
         }
 
         # Step 1: Gửi request login
@@ -59,11 +59,11 @@ class MisaApiUtils(models.AbstractModel):
         if response.status_code != 200:
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
 
-        # Lấy tất cả cookie từ session
+        # Lấy tất cả cookie từ session sau login
         cookies_dict = {cookie.name: cookie.value for cookie in session.cookies}
         _logger.warning("Cookies nhận được sau login: %s", cookies_dict)
 
-        # Step 2: Gọi HTML page CRM để lấy thêm cookie nếu có
+        # Step 2: Gọi HTML page CRM để lấy thêm cookie
         crm_url = "https://amisapp.misa.vn/CRM/"
         crm_headers = {
             "User-Agent": "Mozilla/5.0",
@@ -84,18 +84,13 @@ class MisaApiUtils(models.AbstractModel):
         if not x_sessionid or not x_tenantid:
             raise Exception("Missing required cookies from login response.")
 
-        # Xây dựng cookie header
-        cookie_header = (
-            f"x-sessionid={x_sessionid}; "
-            f"x-tenantid={x_tenantid}; "
-        )
+        # Xây dựng cookie header với tất cả cookie
+        cookie_header = ""
         for name, value in cookies_dict.items():
-            if name not in ["x-sessionid", "x-tenantid"]:
-                cookie_header += f"{name}={value}; "
-
+            cookie_header += f"{name}={value}; "
         cookie_header += "x-login-from=basic"
 
-        # Gọi lại CRM với cookie header để lấy token (nếu cần)
+        # Gọi lại CRM với cookie header để lấy token
         crm_response = session.get(crm_url, headers={"Cookie": cookie_header, "User-Agent": "Mozilla/5.0"})
         if crm_response.status_code != 200:
             raise Exception(f"CRM page fetch failed: {crm_response.status_code}")
