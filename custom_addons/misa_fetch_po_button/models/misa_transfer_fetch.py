@@ -115,6 +115,7 @@ class MisaTransferFetch(models.TransientModel):
                 partner = odoo_utils._get_or_create_partner(contact_name) if contact_name else False
 
                 picking = self.env['stock.picking'].create({
+                    'name': ref_info.get('refno_finance', ''),
                     'picking_type_id': picking_type.id,
                     'location_id': picking_type.default_location_src_id.id,
                     'location_dest_id': picking_type.default_location_dest_id.id,
