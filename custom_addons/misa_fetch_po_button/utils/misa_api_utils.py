@@ -37,7 +37,6 @@ class MisaApiUtils(models.AbstractModel):
             response = requests.post(url, headers=headers, json=payload)
         return response
 
-
     def _fetch_login_crm_token(self):
         """Fetch CRM token for MISA"""
         login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
@@ -46,8 +45,8 @@ class MisaApiUtils(models.AbstractModel):
             "Authorization": f"Bearer {self._get_misa_token()}",
         }
         payload = {
-            "Password": "ThanhLuan1303@",
-            "UserName": "thanhluan.hlv@gmail.com",
+            "userName": "ThanhLuan1303@",
+            "password": "thanhluan.hlv@gmail.com",
         }
 
         # Step 1: Gửi request login
@@ -58,27 +57,25 @@ class MisaApiUtils(models.AbstractModel):
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
 
         # Step 2: Lấy tất cả cookie từ response
-        cookies_dict = dict_from_cookiejar(response.cookies)
+        cookies_dict = {cookie.name: cookie.value for cookie in response.cookies}  # Trích xuất trực tiếp
         _logger.warning("Cookies nhận được: %s", cookies_dict)
 
         # Kiểm tra các cookie cần thiết
         x_sessionid = cookies_dict.get("x-sessionid")
         x_tenantid = cookies_dict.get("x-tenantid")
-        x_deviceid = cookies_dict.get("x-deviceid")  # Thêm nếu cần
-        ts_cookie = cookies_dict.get("TS01b5a6fe")   # Thêm nếu cần
 
         if not x_sessionid or not x_tenantid:
             raise Exception("Missing required cookies from login response.")
 
-        # Xây dựng cookie header với tất cả cookie cần thiết
+        # Xây dựng cookie header với tất cả cookie
         cookie_header = (
             f"x-sessionid={x_sessionid}; "
             f"x-tenantid={x_tenantid}; "
         )
-        if x_deviceid:
-            cookie_header += f"x-deviceid={x_deviceid}; "
-        if ts_cookie:
-            cookie_header += f"TS01b5a6fe={ts_cookie}; "
+        # Thêm các cookie khác nếu cần
+        for name, value in cookies_dict.items():
+            if name not in ["x-sessionid", "x-tenantid"]:
+                cookie_header += f"{name}={value}; "
 
         cookie_header += "x-login-from=basic"
 
