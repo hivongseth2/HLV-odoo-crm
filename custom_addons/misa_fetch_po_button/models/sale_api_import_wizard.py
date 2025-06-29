@@ -9,11 +9,12 @@ _logger = logging.getLogger(__name__)
 class SaleApiImportWizard(models.TransientModel):
     _name = 'sale.api.import.wizard'
     _description = 'Import Sale Orders from MISA API'
-    misa_utils = self.env['misa.api.utils']
 
     from_date = fields.Date(string="Từ ngày", required=True)
     to_date = fields.Date(string="Đến ngày", required=True)
     def action_import_from_api(self):
+        misa_utils = self.env['misa.api.utils']
+
         token_url = "https://crmconnect.misa.vn/api/v2/Account"
         orders_url = "https://crmconnect.misa.vn/api/v2/SaleOrders"
         payload = {
