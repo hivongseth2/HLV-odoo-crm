@@ -96,7 +96,7 @@ class OdooUtils(models.AbstractModel):
                 _logger.warning("⚠️ Bỏ qua dòng không hợp lệ: %s", line)
                 continue
 
-            product = _get_or_create_product(
+            product = self._get_or_create_product(
                 code=product_code,
                 name=product_name,
                 unit_name=uom_name,
