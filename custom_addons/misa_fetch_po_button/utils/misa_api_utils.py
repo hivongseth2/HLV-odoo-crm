@@ -144,7 +144,8 @@ class MisaApiUtils(models.AbstractModel):
         # Parse JSON response để lấy delivery number (giả định nằm trong trường DeliveryOrderNumber)
         try:
             response_data = api_response.json()
-            # delivery_number = response_data.get("DeliveryOrderNumber")  
+            # delivery_number = response_data.get("DeliveryOrderNumber") 
+            delivery_number =  sale_order_id
             delivery_number = response_data["Data"]["CurrentData"]["DeliveryOrderNumber"]
             if not delivery_number:
                 raise Exception("Delivery number not found in response")
