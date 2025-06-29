@@ -65,9 +65,9 @@ class SaleApiImportWizard(models.TransientModel):
 
                 if order_date < start_datetime:
                     continue
-                if order_date > end_datetime:
-                    _logger.info("🛑 Gặp đơn vượt quá ngày, dừng vòng lặp: %s", order.get("sale_order_no"))
-                    return {'type': 'ir.actions.act_window_close'}
+                # if order_date > end_datetime:
+                #     _logger.info("🛑 Gặp đơn vượt quá ngày, dừng vòng lặp: %s", order.get("sale_order_no"))
+                #     return {'type': 'ir.actions.act_window_close'}
 
                 product_lines = order.get("sale_order_product_mappings", [])
                 filtered_lines = [l for l in product_lines if l.get("stock_name") == "HCM"]
