@@ -13,7 +13,7 @@ class LoginMisa(models.TransientModel):
         misa_utils = self.env['misa.api.utils']
         access_token = misa_utils._fetch_login_crm_token()
         if access_token:
-            _logger.info("✅ Đăng nhập MISA thành công")
+            _logger.info("✅ Đăng nhập MISA thành công: %s", access_token)
         else:
             _logger.warning("❌ Đăng nhập MISA thất bại")
 
