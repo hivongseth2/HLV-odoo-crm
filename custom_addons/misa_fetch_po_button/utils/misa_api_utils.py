@@ -129,7 +129,7 @@ class MisaApiUtils(models.AbstractModel):
             "MISAEntityState": "2"
         }
 
-        api_response = session.get(api_url, headers=api_headers, json=api_payload)
+        api_response = session.post(api_url, headers=api_headers, json=api_payload)
         _logger.warning("API response headers: %s", dict(api_response.headers))
         _logger.warning("API response text: %s", api_response.text)
 
