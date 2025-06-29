@@ -100,8 +100,49 @@ class MisaApiUtils(models.AbstractModel):
 
         # Step 3: Regex tìm token
         match = re.search(r'"token"\s*:\s*"(?P<token>ey[\w\-\.]+)"', html_content)
+        
 
         if not match:
             raise Exception("Token not found in CRM HTML")
 
         return match.group("token")
+    
+    
+    
+    
+    def get_delivery_number(self, sale_order_id):
+        # Lấy session từ login
+        session = self._fetch_login_crm_token()
+        
+        # Gửi request GET để lấy delivery number
+        api_url = f"https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
+        api_headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._fetch_login_crm_token()}",
+            "User-Agent": "PostmanRuntime/7.44.1",
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+        }
+        api_payload = {
+            "ID": str(sale_order_id),
+            "MISAEntityState": "2"
+        }
+
+        api_response = session.get(api_url, headers=api_headers, json=api_payload)
+        _logger.warning("API response headers: %s", dict(api_response.headers))
+        _logger.warning("API response text: %s", api_response.text)
+
+        if api_response.status_code != 200:
+            raise Exception(f"API call failed: {api_response.status_code} - {api_response.text}")
+
+        # Parse JSON response để lấy delivery number (giả định nằm trong trường DeliveryOrderNumber)
+        try:
+            response_data = api_response.json()
+            # delivery_number = response_data.get("DeliveryOrderNumber")  
+            delivery_number = response_data["Data"]["CurrentData"]["DeliveryOrderNumber"]
+            if not delivery_number:
+                raise Exception("Delivery number not found in response")
+            return delivery_number
+        except ValueError as e:
+            raise Exception(f"Failed to parse JSON response: {e}")
