@@ -47,7 +47,8 @@ class MisaApiUtils(models.AbstractModel):
         login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self._get_misa_token()}",
+            # "Authorization": f"Bearer {self._get_misa_token()}",
+            "User-Agent": "PostmanRuntime/7.29.0"
         }
         payload = {
             "PassWord": "ThanhLuan1303@",
