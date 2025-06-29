@@ -127,6 +127,7 @@ class MisaApiUtils(models.AbstractModel):
             "Accept": "*/*",
             "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
+            "companycode": "3R2PY2F4",
         }
         api_payload = {
             "ID": str(sale_order_id),
