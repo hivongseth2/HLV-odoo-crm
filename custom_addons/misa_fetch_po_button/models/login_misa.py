@@ -11,7 +11,7 @@ class LoginMisa(models.TransientModel):
     username = fields.Char(string="Tài khoản", required=True)
     password = fields.Char(string="Mật khẩu", required=True)
 
-    def action_login(self):
+    def login_misa (self):
         misa_utils = self.env['misa.api.utils']
         access_token = misa_utils._get_misa_token(self.username, self.password)
         if access_token:
