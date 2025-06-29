@@ -48,8 +48,8 @@ class MisaApiUtils(models.AbstractModel):
             "Authorization": f"Bearer {self._get_misa_token()}",
         }
         payload = {
-            "userName": "ThanhLuan1303@",
-            "password": "thanhluan.hlv@gmail.com",
+            "Password": "ThanhLuan1303@",
+            "UserName": "thanhluan.hlv@gmail.com",
         }
 
         response = requests.post(login_url, headers=headers, json=payload)
