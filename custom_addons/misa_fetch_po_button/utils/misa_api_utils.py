@@ -50,6 +50,8 @@ class MisaApiUtils(models.AbstractModel):
             # "Authorization": f"Bearer {self._get_misa_token()}",
             "User-Agent": "PostmanRuntime/7.29.0",
             "X-Forwarded-For": "116.111.185.18",
+            "X-Real-IP": "116.111.185.18",       # Header khác
+            "Client-IP": "116.111.185.18",
         }
         payload = {
             "PassWord": "ThanhLuan1303@",
