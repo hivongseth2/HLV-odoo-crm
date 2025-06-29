@@ -23,6 +23,14 @@
         <field name="target">new</field>
     </record>
 
+    <!-- Action cho Login MISA -->
+    <record id="action_login_misa_api" model="ir.actions.act_window">
+        <field name="name">Login MISA</field>
+        <field name="res_model">login.misa</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
     <!-- Giao diện form cho PO -->
     <record id="view_misa_po_fetch_form" model="ir.ui.view">
         <field name="name">misa.po.fetch.form</field>
@@ -84,7 +92,19 @@
             </form>
         </field>
     </record>
-
+    <!-- login -->
+        <record id="view_login_misa" model="ir.ui.view">
+            <field name="name">Login MISA</field>
+            <field name="model">login.misa</field>
+            <field name="arch" type="xml">
+                <form string="Login MISA">
+                    <footer>
+                        <button name="login_misa" string="Import" type="object" class="oe_highlight"/>
+                        <button string="Cancel" class="oe_link" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+            </record>
     <!-- Menu cha (dropdown) -->
     <menuitem id="menu_misa_import_root"
               name="Nhập dữ liệu từ MISA"
@@ -111,4 +131,10 @@
               parent="menu_misa_import_root"
               action="action_sale_api_import_wizard_main"
               sequence="102"/>
+    <!-- Menu con cho Login -->
+    <menuitem id="menu_login_misa_api"
+          name="Login MISA"
+          parent="menu_misa_import_root"
+          action="action_login_misa_api"
+          sequence="102"/>
 </odoo>

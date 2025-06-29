@@ -1,7 +1,7 @@
 import requests
 import logging
 from odoo import models
-
+import re
 _logger = logging.getLogger(__name__)
 
 class MisaApiUtils(models.AbstractModel):
@@ -34,3 +34,64 @@ class MisaApiUtils(models.AbstractModel):
             headers["Authorization"] = f"Bearer {new_token}"
             response = requests.post(url, headers=headers, json=payload)
         return response
+
+
+    def _fetch_login_crm_token(self):
+        """Fetch CRM token for MISA"""
+        login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._get_misa_token()}",
+        }
+        payload = {
+            "userName": "ThanhLuan1303@",
+            "password": "thanhluan.hlv@gmail.com",
+        }
+
+        # Step 1: Gửi request login
+        session = requests.Session()
+        login_response = session.post(login_url, headers=headers, json=payload)
+        _logger.info("Response text: %s", login_response.text)
+
+
+        # Check login success
+        if login_response.status_code != 200:
+            raise Exception(f"Login failed: {login_response.status_code} - {login_response.text}")
+
+        # Step 2: Lấy cookie từ response
+        cookies = session.cookies.get_dict()
+        x_sessionid = cookies.get("x-sessionid")
+        x_tenantid = cookies.get("x-tenantid")
+
+        if not x_sessionid or not x_tenantid:
+            raise Exception("Missing required cookies from login response.")
+
+        # Tạo header Cookie
+        cookie_header = (
+            f"x-sessionid={x_sessionid}; "
+            f"x-tenantid={x_tenantid}; "
+            f"x-login-from=basic"
+        )
+
+        # Step 3: Gọi tiếp trang CRM HTML
+        crm_url = "https://amisapp.misa.vn/CRM/"
+        crm_headers = {
+            "Cookie": cookie_header,
+            "User-Agent": "Mozilla/5.0",  # giả lập browser nếu cần
+        }
+
+        crm_response = session.get(crm_url, headers=crm_headers)
+
+        if crm_response.status_code != 200:
+            raise Exception(f"CRM page fetch failed: {crm_response.status_code}")
+
+        html_content = crm_response.text
+
+        # Step 4: Regex token từ HTML
+        match = re.search(r'"token"\s*:\s*"(?P<token>ey[\w\-\.]+)"', html_content)
+
+        if not match:
+            raise Exception("Token not found in HTML content")
+
+        token = match.group("token")
+        return token
