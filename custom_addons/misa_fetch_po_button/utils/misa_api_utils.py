@@ -44,54 +44,55 @@ class MisaApiUtils(models.AbstractModel):
             "Authorization": f"Bearer {self._get_misa_token()}",
         }
         payload = {
-            "PassWord": "ThanhLuan1303@",
-            "UserName": "thanhluan.hlv@gmail.com",
+            "userName": "ThanhLuan1303@",
+            "password": "thanhluan.hlv@gmail.com",
         }
 
         # Step 1: Gửi request login
-        session = requests.Session()
-        login_response = session.post(login_url, headers=headers, json=payload)
-        _logger.info("Response text: %s", login_response.text)
+        response = requests.post(login_url, headers=headers, json=payload)
 
+        if response.status_code != 200:
+            raise Exception(f"Login failed: {response.status_code} - {response.text}")
 
-        # Check login success
-        if login_response.status_code != 200:
-            raise Exception(f"Login failed: {login_response.status_code} - {login_response.text}")
+        # Step 2: Parse từ raw Set-Cookie headers
+        set_cookies = response.headers.getlist('Set-Cookie') if hasattr(response.headers, 'getlist') else response.headers.get('Set-Cookie', '').split(',')
 
-        # Step 2: Lấy cookie từ response
-        cookies = session.cookies.get_dict()
-        x_sessionid = cookies.get("x-sessionid")
-        x_tenantid = cookies.get("x-tenantid")
+        x_sessionid = None
+        x_tenantid = None
+
+        for cookie in set_cookies:
+            if 'x-sessionid=' in cookie:
+                x_sessionid = re.search(r'x-sessionid=([^;]+)', cookie).group(1)
+            elif 'x-tenantid=' in cookie:
+                x_tenantid = re.search(r'x-tenantid=([^;]+)', cookie).group(1)
 
         if not x_sessionid or not x_tenantid:
             raise Exception("Missing required cookies from login response.")
 
-        # Tạo header Cookie
         cookie_header = (
             f"x-sessionid={x_sessionid}; "
             f"x-tenantid={x_tenantid}; "
             f"x-login-from=basic"
         )
 
-        # Step 3: Gọi tiếp trang CRM HTML
+        # Step 3: Gọi HTML page CRM
         crm_url = "https://amisapp.misa.vn/CRM/"
         crm_headers = {
             "Cookie": cookie_header,
-            "User-Agent": "Mozilla/5.0",  # giả lập browser nếu cần
+            "User-Agent": "Mozilla/5.0",
         }
 
-        crm_response = session.get(crm_url, headers=crm_headers)
+        crm_response = requests.get(crm_url, headers=crm_headers)
 
         if crm_response.status_code != 200:
             raise Exception(f"CRM page fetch failed: {crm_response.status_code}")
 
         html_content = crm_response.text
 
-        # Step 4: Regex token từ HTML
+        # Step 4: Regex tìm token
         match = re.search(r'"token"\s*:\s*"(?P<token>ey[\w\-\.]+)"', html_content)
 
         if not match:
-            raise Exception("Token not found in HTML content")
+            raise Exception("Token not found in CRM HTML")
 
-        token = match.group("token")
-        return token
+        return match.group("token")
