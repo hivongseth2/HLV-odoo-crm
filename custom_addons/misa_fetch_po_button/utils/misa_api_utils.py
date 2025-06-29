@@ -61,17 +61,22 @@ class MisaApiUtils(models.AbstractModel):
         if response.status_code != 200:
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
 
-        # Lấy tất cả Set-Cookie từ headers
-        set_cookies = response.headers.getlist('Set-Cookie')
+        # Log tất cả header response
+        _logger.warning("All response headers: %s", dict(response.headers))
+
+        # Lấy và phân tích Set-Cookie từ headers
+        set_cookie_header = response.headers.get('Set-Cookie')
         cookies_dict = {}
-        for cookie_str in set_cookies:
-            # Phân tích từng Set-Cookie
-            parts = cookie_str.split(';')[0].split('=')
-            if len(parts) == 2:
-                name, value = parts[0].strip(), parts[1].strip()
-                # Chỉ ghi đè nếu cookie mới không hết hạn ngay (expires=1970)
-                if name not in cookies_dict or 'expires=Thu, 01 Jan 1970' not in cookie_str:
-                    cookies_dict[name] = value
+        if set_cookie_header:
+            # Tách các cookie nếu có nhiều giá trị (phân tách bởi dấu phẩy hoặc newline)
+            cookie_strs = set_cookie_header.split(',')
+            for cookie_str in cookie_strs:
+                parts = cookie_str.split(';')[0].split('=')
+                if len(parts) == 2:
+                    name, value = parts[0].strip(), parts[1].strip()
+                    # Chỉ thêm nếu không hết hạn ngay (expires=1970)
+                    if name not in cookies_dict or 'expires=Thu, 01 Jan 1970' not in cookie_str:
+                        cookies_dict[name] = value
         _logger.warning("Cookies nhận được từ Set-Cookie headers: %s", cookies_dict)
 
         # Kiểm tra các cookie cần thiết
