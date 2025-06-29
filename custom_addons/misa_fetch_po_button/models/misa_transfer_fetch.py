@@ -114,14 +114,47 @@ class MisaTransferFetch(models.TransientModel):
                 contact_name = ref_info.get('contact_name', '').strip()
                 partner = odoo_utils._get_or_create_partner(contact_name) if contact_name else False
 
-                picking = self.env['stock.picking'].create({
-                    'name': ref_info.get('refno_finance', ''),
-                    'picking_type_id': picking_type.id,
-                    'location_id': picking_type.default_location_src_id.id,
-                    'location_dest_id': picking_type.default_location_dest_id.id,
-                    'origin': ref_info.get('refno_finance', ''),
-                    'partner_id': partner.id if partner else False,
-                })
+                # picking = self.env['stock.picking'].create({
+                #     'name': ref_info.get('refno_finance', ''),
+                #     'picking_type_id': picking_type.id,
+                #     'location_id': picking_type.default_location_src_id.id,
+                #     'location_dest_id': picking_type.default_location_dest_id.id,
+                #     'origin': ref_info.get('refno_finance', ''),
+                #     'partner_id': partner.id if partner else False,
+                # })
+                
+                
+                try:
+                    picking = self.env['stock.picking'].create({
+                        'name': ref_info.get('refno_finance', ''),
+                        'picking_type_id': picking_type.id,
+                        'location_id': picking_type.default_location_src_id.id,
+                        'location_dest_id': picking_type.default_location_dest_id.id,
+                        'origin': ref_info.get('refno_finance', ''),
+                        'partner_id': partner.id if partner else False,
+                    })
+                    _logger.info("🆕 Tạo phiếu mới: %s", picking.name)
+
+                except Exception as e:
+                    picking = self.env['stock.picking'].search([('name', '=', ref_info.get('refno_finance'))], limit=1)
+                    if not picking:
+                        _logger.warning("❌ Không tìm thấy phiếu sau khi lỗi: %s", e)
+                        continue
+
+                    # Cập nhật các field nếu cần
+                    picking.write({
+                        'picking_type_id': picking_type.id,
+                        'location_id': picking_type.default_location_src_id.id,
+                        'location_dest_id': picking_type.default_location_dest_id.id,
+                        'origin': ref_info.get('refno_finance', ''),
+                        'partner_id': partner.id if partner else False,
+                    })
+                    # Xoá stock.move cũ (tuỳ chọn)
+                    # picking.move_ids.unlink()
+                    # _logger.info("♻️ Cập nhật phiếu có sẵn: %s", picking.name)
+                    odoo_utils._update_picking_lines(picking, ref_info.get("lines", []))
+
+
 
                 _logger.info("Tạo phiếu %s (%s): %s", direction, picking_type.code, ref_info.get('refno_finance'))
 

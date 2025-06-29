@@ -71,3 +71,70 @@ class OdooUtils(models.AbstractModel):
         })
         _logger.info("🆕 Tạo sản phẩm %s với UOM: %s", code, uom.name)
         return tmpl.product_variant_id
+    
+    
+    def _update_picking_lines(self, picking, lines):
+        """
+        Cập nhật các dòng move của stock.picking theo danh sách lines mới từ MISA.
+        - Tạo mới nếu chưa có.
+        - Cập nhật số lượng nếu khác.
+        - Xóa nếu không còn tồn tại trong lines.
+        """
+        existing_moves = {(m.product_id.default_code or '', m.product_id.id): m for m in picking.move_lines}
+
+        misa_lines = {}
+        for line in lines:
+            product_code = str(line.get("inventory_item_code", "")).strip()
+            product_name = str(line.get("description", "")).strip()
+            uom_name = str(line.get("unit_name", "Cái")).strip()
+            qty = float(line.get("quantity", 0))
+            cost = float(line.get("unit_price_finance", 0) or 0)
+
+            if not product_code or not product_name or qty <= 0:
+                _logger.warning("⚠️ Bỏ qua dòng không hợp lệ: %s", line)
+                continue
+
+            product = self.env["odoo_utils"]._get_or_create_product(
+                code=product_code,
+                name=product_name,
+                unit_name=uom_name,
+                cost=cost,
+                product_type="consu",
+                purchase_ok=False,
+                sale_ok=False
+            )
+
+            misa_lines[(product_code, product.id)] = {
+                'product': product,
+                'qty': qty,
+                'name': product_name
+            }
+
+        # Cập nhật hoặc thêm mới
+        for key, line_data in misa_lines.items():
+            product = line_data['product']
+            qty = line_data['qty']
+            name = line_data['name']
+
+            if key in existing_moves:
+                move = existing_moves[key]
+                if float(move.product_uom_qty) != float(qty):
+                    _logger.info("🔄 Cập nhật dòng %s: %s -> %s", product.default_code, move.product_uom_qty, qty)
+                    move.write({'product_uom_qty': qty})
+                existing_moves.pop(key)  # Đã xử lý rồi
+            else:
+                self.env['stock.move'].create({
+                    'name': name,
+                    'product_id': product.id,
+                    'product_uom_qty': qty,
+                    'product_uom': product.uom_id.id,
+                    'picking_id': picking.id,
+                    'location_id': picking.location_id.id,
+                    'location_dest_id': picking.location_dest_id.id,
+                })
+                _logger.info("➕ Thêm dòng mới: %s x%s", product.default_code, qty)
+
+        # Xóa những dòng không còn
+        for move in existing_moves.values():
+            _logger.info("❌ Xóa dòng thừa: %s x%s", move.product_id.default_code, move.product_uom_qty)
+            move.unlink()
