@@ -142,16 +142,14 @@ class MisaTransferFetch(models.TransientModel):
                         continue
 
                     # Cập nhật các field nếu cần
-                    picking.write({
-                        'picking_type_id': picking_type.id,
-                        'location_id': picking_type.default_location_src_id.id,
-                        'location_dest_id': picking_type.default_location_dest_id.id,
-                        'origin': ref_info.get('refno_finance', ''),
-                        'partner_id': partner.id if partner else False,
-                    })
-                    # Xoá stock.move cũ (tuỳ chọn)
-                    # picking.move_ids.unlink()
-                    # _logger.info("♻️ Cập nhật phiếu có sẵn: %s", picking.name)
+                    # picking.write({
+                    #     'picking_type_id': picking_type.id,
+                    #     'location_id': picking_type.default_location_src_id.id,
+                    #     'location_dest_id': picking_type.default_location_dest_id.id,
+                    #     'origin': ref_info.get('refno_finance', ''),
+                    #     'partner_id': partner.id if partner else False,
+                    # })
+
                     odoo_utils._update_picking_lines(picking, ref_info.get("lines", []))
 
 
