@@ -120,7 +120,7 @@ class MisaTransferFetch(models.TransientModel):
 
                 if picking:
                     _logger.info("🔁 Phiếu đã tồn tại: %s", picking.name)
-                    odoo_utils._update_picking_lines(picking, ref_info.get("lines", []))
+                    odoo_utils._update_picking_lines(picking,lines)
 
                 else:
                     # Tạo phiếu mới nếu chưa có
