@@ -112,7 +112,7 @@ class MisaApiUtils(models.AbstractModel):
     
     def get_delivery_number(self, sale_order_id):
         # Lấy session từ login
-        session = self._fetch_login_crm_token()
+        session = requests.Session()
         
         # Gửi request GET để lấy delivery number
         api_url = f"https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
