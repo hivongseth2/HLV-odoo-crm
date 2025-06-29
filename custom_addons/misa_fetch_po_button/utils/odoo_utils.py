@@ -80,8 +80,10 @@ class OdooUtils(models.AbstractModel):
         - Cập nhật số lượng nếu khác.
         - Xóa nếu không còn tồn tại trong lines.
         """
-        existing_moves = {(m.product_id.default_code or '', m.product_id.id): m for m in picking.move_lines}
-
+        existing_moves = {
+            (m.product_id.default_code or '', m.product_id.id): m
+            for m in picking.move_ids_without_package
+        }
         misa_lines = {}
         for line in lines:
             product_code = str(line.get("inventory_item_code", "")).strip()
