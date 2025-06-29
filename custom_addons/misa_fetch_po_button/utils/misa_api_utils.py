@@ -38,6 +38,7 @@ class MisaApiUtils(models.AbstractModel):
         return response
 
 
+
     def _fetch_login_crm_token(self):
         """Fetch CRM token for MISA"""
         # Sử dụng session để duy trì cookie
@@ -60,15 +61,17 @@ class MisaApiUtils(models.AbstractModel):
         if response.status_code != 200:
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
 
-        # Lấy tất cả Set-Cookie từ headers thô
-        set_cookies = [h[1] for h in response.headers.items() if h[0].lower() == 'set-cookie']
+        # Lấy tất cả Set-Cookie từ headers
+        set_cookies = response.headers.getlist('Set-Cookie')
         cookies_dict = {}
         for cookie_str in set_cookies:
             # Phân tích từng Set-Cookie
             parts = cookie_str.split(';')[0].split('=')
             if len(parts) == 2:
                 name, value = parts[0].strip(), parts[1].strip()
-                cookies_dict[name] = value
+                # Chỉ ghi đè nếu cookie mới không hết hạn ngay (expires=1970)
+                if name not in cookies_dict or 'expires=Thu, 01 Jan 1970' not in cookie_str:
+                    cookies_dict[name] = value
         _logger.warning("Cookies nhận được từ Set-Cookie headers: %s", cookies_dict)
 
         # Kiểm tra các cookie cần thiết
