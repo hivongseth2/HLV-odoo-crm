@@ -44,8 +44,8 @@ class MisaApiUtils(models.AbstractModel):
             "Authorization": f"Bearer {self._get_misa_token()}",
         }
         payload = {
-            "userName": "ThanhLuan1303@",
-            "password": "thanhluan.hlv@gmail.com",
+            "PassWord": "ThanhLuan1303@",
+            "UserName": "thanhluan.hlv@gmail.com",
         }
 
         # Step 1: Gửi request login
