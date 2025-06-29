@@ -2,6 +2,8 @@ import requests
 import logging
 from odoo import models
 import re
+from requests.utils import dict_from_cookiejar
+
 _logger = logging.getLogger(__name__)
 
 class MisaApiUtils(models.AbstractModel):
