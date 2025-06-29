@@ -114,11 +114,15 @@ class MisaApiUtils(models.AbstractModel):
         # Lấy session từ login
         session = requests.Session()
         
+        token = self._fetch_login_crm_token()
+        _logger.warning("Token lấy được: %s", token)
+
+        
         # Gửi request GET để lấy delivery number
         api_url = f"https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
         api_headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self._fetch_login_crm_token()}",
+            "Authorization": f"Bearer {token}",
             "User-Agent": "PostmanRuntime/7.44.1",
             "Accept": "*/*",
             "Accept-Encoding": "gzip, deflate, br",
