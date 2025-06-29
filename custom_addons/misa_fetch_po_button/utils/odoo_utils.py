@@ -105,12 +105,16 @@ class OdooUtils(models.AbstractModel):
                 purchase_ok=False,
                 sale_ok=False
             )
+            key = (product_code, product.id)
+            if key in misa_lines:
+                misa_lines[key]['qty'] += qty  # cộng dồn số lượng
+            else:
+                misa_lines[key] = {
+                    'product': product,
+                    'qty': qty,
+                    'name': product_name
+                }
 
-            misa_lines[(product_code, product.id)] = {
-                'product': product,
-                'qty': qty,
-                'name': product_name
-            }
 
         # Cập nhật hoặc thêm mới
         for key, line_data in misa_lines.items():
