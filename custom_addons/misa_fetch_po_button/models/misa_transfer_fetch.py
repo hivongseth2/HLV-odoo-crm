@@ -114,16 +114,7 @@ class MisaTransferFetch(models.TransientModel):
                 contact_name = ref_info.get('contact_name', '').strip()
                 partner = odoo_utils._get_or_create_partner(contact_name) if contact_name else False
 
-                # picking = self.env['stock.picking'].create({
-                #     'name': ref_info.get('refno_finance', ''),
-                #     'picking_type_id': picking_type.id,
-                #     'location_id': picking_type.default_location_src_id.id,
-                #     'location_dest_id': picking_type.default_location_dest_id.id,
-                #     'origin': ref_info.get('refno_finance', ''),
-                #     'partner_id': partner.id if partner else False,
-                # })
-                
-                
+
                 # Tìm phiếu đã có sẵn
                 picking = self.env['stock.picking'].search([('name', '=', ref_info.get('refno_finance'))], limit=1)
 
@@ -151,11 +142,11 @@ class MisaTransferFetch(models.TransientModel):
                         uom_name = str(line.get("unit_name", "Cái")).strip()
                         qty = float(line.get("quantity", 0))
                         cost = float(line.get("unit_price_finance", 0) or 0)
-    
+
                         if not product_code or not product_name or qty <= 0:
                             _logger.warning("Bỏ qua dòng không hợp lệ: %s", line)
                             continue
-                        
+
                         product = odoo_utils._get_or_create_product(
                             code=product_code,
                             name=product_name,
@@ -165,7 +156,7 @@ class MisaTransferFetch(models.TransientModel):
                             purchase_ok=False,
                             sale_ok=False
                         )
-    
+
                         self.env['stock.move'].create({
                             'name': product_name,
                             'product_id': product.id,
