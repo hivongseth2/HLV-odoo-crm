@@ -9,10 +9,10 @@ _logger = logging.getLogger(__name__)
 class SaleApiImportWizard(models.TransientModel):
     _name = 'sale.api.import.wizard'
     _description = 'Import Sale Orders from MISA API'
+    misa_utils = self.env['misa.api.utils']
 
     from_date = fields.Date(string="Từ ngày", required=True)
     to_date = fields.Date(string="Đến ngày", required=True)
-
     def action_import_from_api(self):
         token_url = "https://crmconnect.misa.vn/api/v2/Account"
         orders_url = "https://crmconnect.misa.vn/api/v2/SaleOrders"
@@ -60,7 +60,7 @@ class SaleApiImportWizard(models.TransientModel):
 
             for order in orders:
                 order_date_str = order.get("created_date")
-                order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else fields.Datetime.now()
+                order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else datetime.now()
 
                 if order_date < start_datetime:
                     continue
@@ -74,6 +74,7 @@ class SaleApiImportWizard(models.TransientModel):
                     continue
 
                 order_ref = order.get("sale_order_no")
+                id = order.get("id")
                 customer_name = order.get("account_name")
                 amount = float(order.get("sale_order_amount", 0.0))
 
@@ -103,10 +104,7 @@ class SaleApiImportWizard(models.TransientModel):
                     qty = float(line.get("amount", 1))
                     price_unit = float(line.get("price", 0))
                     discount_percent = float(line.get("discount_percent", 0))
-                    # uom_name = line.get("unit", "Cái").strip()
-                    
                     uom_name = (line.get("unit") or "Cái").strip()
-
 
                     category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
                     if not category:
@@ -156,9 +154,26 @@ class SaleApiImportWizard(models.TransientModel):
                         'discount': discount_percent
                     })
 
+                # Lấy DeliveryOrderNumber từ API MISA
+                delivery_order_number = misa_utils.get_delivery_number(id)  # Giả định order_ref là ID
+                _logger.info("📋 Delivery Order Number: %s", delivery_order_number)
+
+                # Xác nhận đơn hàng để tạo stock.picking
                 sale_order.action_confirm()
                 _logger.info("✅ Đã tạo và xác nhận đơn hàng: %s cho %s", order_ref, customer_name)
 
-            page += 1
+                # Gán DeliveryOrderNumber làm mã phiếu pick
+                pickings = sale_order.picking_ids
+                if pickings:
+                    picking = pickings[0]  # Lấy phiếu pick đầu tiên
+                    # Kiểm tra tính duy nhất trước khi gán
+                    existing_picking = self.env['stock.picking'].search([('name', '=', delivery_order_number)], limit=1)
+                    if existing_picking:
+                        _logger.warning("⚠️ Mã phiếu pick %s đã tồn tại, tạo mã mới: %s", delivery_order_number, f"{delivery_order_number}_{picking.id}")
+                        picking.name = f"{delivery_order_number}_{picking.id}"
+                    else:
+                        picking.name = delivery_order_number  # Gán trực tiếp làm mã phiếu pick
+                    _logger.info("📦 Đã gán mã phiếu pick: %s cho đơn hàng %s", picking.name, order_ref)
 
-        return {'type': 'ir.actions.act_window_close'}
+            page += 1
+            return {'type': 'ir.actions.act_window_close'}
