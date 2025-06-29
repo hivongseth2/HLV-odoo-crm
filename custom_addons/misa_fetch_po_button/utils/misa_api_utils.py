@@ -36,7 +36,7 @@ class MisaApiUtils(models.AbstractModel):
         return response
 
 
-    def _fetch_login_crm_token(self):
+        def _fetch_login_crm_token(self):
         """Fetch CRM token for MISA"""
         login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
         headers = {
@@ -48,53 +48,38 @@ class MisaApiUtils(models.AbstractModel):
             "password": "thanhluan.hlv@gmail.com",
         }
 
-        # Step 1: Gửi request login
         response = requests.post(login_url, headers=headers, json=payload)
-        _logger.warning("Đăng nhập MISA với user: %s", response.json())
 
+        # Log toàn bộ headers
+        logging.warning("===> RESPONSE HEADERS <===")
+        for k, v in response.headers.items():
+            logging.warning(f"{k}: {v}")
 
         if response.status_code != 200:
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
 
-        # Step 2: Parse từ raw Set-Cookie headers
-        set_cookies = response.headers.getlist('Set-Cookie') if hasattr(response.headers, 'getlist') else response.headers.get('Set-Cookie', '').split(',')
+        # Step 2: Parse từ Set-Cookie
+        set_cookie_header = response.headers.get("Set-Cookie", "")
+        logging.warning(f"===> Raw Set-Cookie: {set_cookie_header}")
+
+        # Nếu có nhiều Set-Cookie thì split từng cái
+        set_cookies = set_cookie_header.split('\n') if '\n' in set_cookie_header else set_cookie_header.split(',')
 
         x_sessionid = None
         x_tenantid = None
 
         for cookie in set_cookies:
             if 'x-sessionid=' in cookie:
-                x_sessionid = re.search(r'x-sessionid=([^;]+)', cookie).group(1)
+                match = re.search(r'x-sessionid=([^;]+)', cookie)
+                if match:
+                    x_sessionid = match.group(1)
             elif 'x-tenantid=' in cookie:
-                x_tenantid = re.search(r'x-tenantid=([^;]+)', cookie).group(1)
+                match = re.search(r'x-tenantid=([^;]+)', cookie)
+                if match:
+                    x_tenantid = match.group(1)
+
+        logging.warning(f"x-sessionid: {x_sessionid}")
+        logging.warning(f"x-tenantid: {x_tenantid}")
 
         if not x_sessionid or not x_tenantid:
             raise Exception("Missing required cookies from login response.")
-
-        cookie_header = (
-            f"x-sessionid={x_sessionid}; "
-            f"x-tenantid={x_tenantid}; "
-            f"x-login-from=basic"
-        )
-
-        # Step 3: Gọi HTML page CRM
-        crm_url = "https://amisapp.misa.vn/CRM/"
-        crm_headers = {
-            "Cookie": cookie_header,
-            "User-Agent": "Mozilla/5.0",
-        }
-
-        crm_response = requests.get(crm_url, headers=crm_headers)
-
-        if crm_response.status_code != 200:
-            raise Exception(f"CRM page fetch failed: {crm_response.status_code}")
-
-        html_content = crm_response.text
-
-        # Step 4: Regex tìm token
-        match = re.search(r'"token"\s*:\s*"(?P<token>ey[\w\-\.]+)"', html_content)
-
-        if not match:
-            raise Exception("Token not found in CRM HTML")
-
-        return match.group("token")
