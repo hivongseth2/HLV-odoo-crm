@@ -50,6 +50,8 @@ class MisaApiUtils(models.AbstractModel):
 
         # Step 1: Gửi request login
         response = requests.post(login_url, headers=headers, json=payload)
+        _logger.warning("Đăng nhập MISA với user: %s", response.json())
+
 
         if response.status_code != 200:
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
