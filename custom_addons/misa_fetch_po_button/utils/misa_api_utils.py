@@ -61,7 +61,7 @@ class MisaApiUtils(models.AbstractModel):
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
 
         # Lấy tất cả Set-Cookie từ headers thô
-        set_cookies = [h[1] for h in response._headers.items() if h[0].lower() == 'set-cookie']
+        set_cookies = [h[1] for h in response.headers.items() if h[0].lower() == 'set-cookie']
         cookies_dict = {}
         for cookie_str in set_cookies:
             # Phân tích từng Set-Cookie
