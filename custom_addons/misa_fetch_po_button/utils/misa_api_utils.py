@@ -41,17 +41,16 @@ class MisaApiUtils(models.AbstractModel):
 
     def _fetch_login_crm_token(self):
         """Fetch CRM token for MISA"""
-        # Sử dụng session để duy trì cookie
+        # Sử dụng session để duy trì cookie, bao gồm cả HttpOnly
         session = requests.Session()
         
         login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
         headers = {
             "Content-Type": "application/json",
-            # "Authorization": f"Bearer {self._get_misa_token()}",
-            "User-Agent": "PostmanRuntime/7.29.0",
-            "X-Forwarded-For": "116.111.185.18",
-            "X-Real-IP": "116.111.185.18",       # Header khác
-            "Client-IP": "116.111.185.18",
+            "User-Agent": "PostmanRuntime/7.44.1",
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
         }
         payload = {
             "PassWord": "ThanhLuan1303@",
@@ -61,36 +60,25 @@ class MisaApiUtils(models.AbstractModel):
         # Step 1: Gửi request login
         response = session.post(login_url, headers=headers, json=payload)
         _logger.warning("Đăng nhập MISA với response: %s", response.json())
+        _logger.warning("All response headers: %s", dict(response.headers))
+        _logger.warning("Full response text: %s", response.text)
+        _logger.warning("All cookies in session: %s", dict(session.cookies.get_dict()))  # Log tất cả cookie
 
         if response.status_code != 200:
             raise Exception(f"Login failed: {response.status_code} - {response.text}")
 
-        # Log tất cả header response
-        _logger.warning("All response headers: %s", dict(response.headers))
+        # Lấy tất cả cookie từ session (bao gồm HttpOnly)
+        cookies_dict = session.cookies.get_dict()
+        _logger.warning("Cookies nhận được từ session: %s", cookies_dict)
 
-        # Lấy và phân tích Set-Cookie từ headers
-        set_cookie_header = response.headers.get('Set-Cookie')
-        cookies_dict = {}
-        if set_cookie_header:
-            # Tách các cookie nếu có nhiều giá trị (phân tách bởi dấu phẩy hoặc newline)
-            cookie_strs = set_cookie_header.split(',')
-            for cookie_str in cookie_strs:
-                parts = cookie_str.split(';')[0].split('=')
-                if len(parts) == 2:
-                    name, value = parts[0].strip(), parts[1].strip()
-                    # Chỉ thêm nếu không hết hạn ngay (expires=1970)
-                    if name not in cookies_dict or 'expires=Thu, 01 Jan 1970' not in cookie_str:
-                        cookies_dict[name] = value
-        _logger.warning("Cookies nhận được từ Set-Cookie headers: %s", cookies_dict)
-
-        # Kiểm tra các cookie cần thiết
+        # Kiểm tra các cookie cần thiết (dựa vào session)
         x_sessionid = cookies_dict.get("x-sessionid")
         x_tenantid = cookies_dict.get("x-tenantid")
 
         if not x_sessionid or not x_tenantid:
             raise Exception("Missing required cookies from login response.")
 
-        # Xây dựng cookie header
+        # Xây dựng cookie header từ session
         cookie_header = ""
         for name, value in cookies_dict.items():
             cookie_header += f"{name}={value}; "
@@ -100,7 +88,7 @@ class MisaApiUtils(models.AbstractModel):
         crm_url = "https://amisapp.misa.vn/CRM/"
         crm_headers = {
             "Cookie": cookie_header,
-            "User-Agent": "Mozilla/5.0",
+            "User-Agent": "PostmanRuntime/7.44.1",
         }
         crm_response = session.get(crm_url, headers=crm_headers)
 
