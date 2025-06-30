@@ -12,7 +12,9 @@ class SaleApiImportWizard(models.TransientModel):
 
     from_date = fields.Date(string="Từ ngày", required=True)
     to_date = fields.Date(string="Đến ngày", required=True)
+
     def action_import_from_api(self):
+        odoo_utils = self.env['odoo.utils']  # Initialize OdooUtils
         misa_utils = self.env['misa.api.utils']
 
         token_url = "https://crmconnect.misa.vn/api/v2/Account"
@@ -83,9 +85,8 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
                     continue
 
-                partner = self.env['res.partner'].search([('name', '=', customer_name)], limit=1)
-                if not partner:
-                    partner = self.env['res.partner'].create({'name': customer_name})
+                # Use OdooUtils to get or create partner
+                partner = odoo_utils._get_or_create_partner(customer_name)
 
                 existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
                 if existing_order:
@@ -107,44 +108,16 @@ class SaleApiImportWizard(models.TransientModel):
                     discount_percent = float(line.get("discount_percent", 0))
                     uom_name = (line.get("unit") or "Cái").strip()
 
-                    category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
-                    if not category:
-                        category = self.env['uom.category'].create({'name': 'Đơn vị'})
-
-                    uom = self.env['uom.uom'].search([
-                        ('name', '=', uom_name),
-                        ('category_id', '=', category.id)
-                    ], limit=1)
-
-                    if not uom:
-                        existing_ref = self.env['uom.uom'].search([
-                            ('category_id', '=', category.id),
-                            ('uom_type', '=', 'reference')
-                        ], limit=1)
-
-                        uom = self.env['uom.uom'].create({
-                            'name': uom_name,
-                            'category_id': category.id,
-                            'uom_type': 'smaller' if existing_ref else 'reference',
-                            'factor': 1.0,
-                            'factor_inv': 1.0,
-                            'rounding': 1.0,
-                        })
-
-                    product = self.env['product.product'].search([('default_code', '=', product_code)], limit=1)
-                    if not product:
-                        template = self.env['product.template'].create({
-                            'name': description,
-                            'default_code': product_code,
-                            'type': 'consu',
-                            'uom_id': uom.id,
-                            'uom_po_id': uom.id,
-                            'list_price': price_unit,
-                            'purchase_ok': False,
-                            'sale_ok': False,
-                            'is_storable': True,
-                        })
-                        product = template.product_variant_id
+                    # Use OdooUtils to get or create product
+                    product = odoo_utils._get_or_create_product(
+                        code=product_code,
+                        name=description,
+                        unit_name=uom_name,
+                        cost=price_unit,
+                        product_type="consu",
+                        purchase_ok=False,
+                        sale_ok=False
+                    )
 
                     self.env['sale.order.line'].create({
                         'order_id': sale_order.id,
@@ -156,7 +129,7 @@ class SaleApiImportWizard(models.TransientModel):
                     })
 
                 # Lấy DeliveryOrderNumber từ API MISA
-                delivery_order_number = misa_utils.get_delivery_number(id)  # Giả định order_ref là ID
+                delivery_order_number = misa_utils.get_delivery_number(id)
                 _logger.info("📋 Delivery Order Number: %s", delivery_order_number)
 
                 # Xác nhận đơn hàng để tạo stock.picking
@@ -173,7 +146,7 @@ class SaleApiImportWizard(models.TransientModel):
                         _logger.warning("⚠️ Mã phiếu pick %s đã tồn tại, tạo mã mới: %s", delivery_order_number, f"{delivery_order_number}_{picking.id}")
                         picking.name = f"{delivery_order_number}_{picking.id}"
                     else:
-                        picking.name = delivery_order_number  # Gán trực tiếp làm mã phiếu pick
+                        picking.name = delivery_order_number
                     _logger.info("📦 Đã gán mã phiếu pick: %s cho đơn hàng %s", picking.name, order_ref)
 
             page += 1
