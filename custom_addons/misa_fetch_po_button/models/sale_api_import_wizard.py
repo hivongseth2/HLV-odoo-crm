@@ -14,6 +14,10 @@ class SaleApiImportWizard(models.TransientModel):
     to_date = fields.Date(string="Đến ngày", required=True)
 
     def action_import_from_api(self):
+        odoo_utils = self.env['odoo.utils']  # Initialize OdooUtils
+        misa_utils = self.env['misa.api.utils']
+        crm_token = misa_utils._fetch_login_crm_token()  # Get MISA token
+
         token_url = "https://crmconnect.misa.vn/api/v2/Account"
         orders_url = "https://crmconnect.misa.vn/api/v2/SaleOrders"
         payload = {
@@ -60,7 +64,7 @@ class SaleApiImportWizard(models.TransientModel):
 
             for order in orders:
                 order_date_str = order.get("created_date")
-                order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else fields.Datetime.now()
+                order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else datetime.now()
 
                 if order_date < start_datetime:
                     continue
@@ -74,6 +78,7 @@ class SaleApiImportWizard(models.TransientModel):
                     continue
 
                 order_ref = order.get("sale_order_no")
+                id = order.get("id")
                 customer_name = order.get("account_name")
                 amount = float(order.get("sale_order_amount", 0.0))
 
@@ -81,9 +86,8 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
                     continue
 
-                partner = self.env['res.partner'].search([('name', '=', customer_name)], limit=1)
-                if not partner:
-                    partner = self.env['res.partner'].create({'name': customer_name})
+                # Use OdooUtils to get or create partner
+                partner = odoo_utils._get_or_create_partner(customer_name)
 
                 existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
                 if existing_order:
@@ -103,59 +107,88 @@ class SaleApiImportWizard(models.TransientModel):
                     qty = float(line.get("amount", 1))
                     price_unit = float(line.get("price", 0))
                     discount_percent = float(line.get("discount_percent", 0))
-                    uom_name = line.get("unit", "Cái").strip()
+                    uom_name = (line.get("unit") or "Cái").strip()
 
-                    category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
-                    if not category:
-                        category = self.env['uom.category'].create({'name': 'Đơn vị'})
+                    if "+" in product_code:
+                        combo_codes = product_code.split("+")
+                        combo_products = []
+                        all_exist = True
 
-                    uom = self.env['uom.uom'].search([
-                        ('name', '=', uom_name),
-                        ('category_id', '=', category.id)
-                    ], limit=1)
+                        for code in combo_codes:
+                            code = code.strip()
+                            product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
 
-                    if not uom:
-                        existing_ref = self.env['uom.uom'].search([
-                            ('category_id', '=', category.id),
-                            ('uom_type', '=', 'reference')
-                        ], limit=1)
+                            if not product:
+                                _logger.warning("🔍 Không thấy %s trong hệ thống, thử gọi MISA để tạo mới...", code)
+                                try:
+                                    tmpl = odoo_utils.get_misa_product(token, code)
+                                    product = tmpl.product_variant_id
+                                    _logger.info("✅ Đã tạo mới sản phẩm con %s từ MISA", code)
+                                except Exception as e:
+                                    _logger.error("🚫 Không tạo được sản phẩm %s từ MISA: %s", code, str(e))
+                                    all_exist = False
+                                    break
 
-                        uom = self.env['uom.uom'].create({
-                            'name': uom_name,
-                            'category_id': category.id,
-                            'uom_type': 'smaller' if existing_ref else 'reference',
-                            'factor': 1.0,
-                            'factor_inv': 1.0,
-                            'rounding': 1.0,
-                        })
+                            if product:
+                                combo_products.append(product)
+                            else:
+                                all_exist = False
+                                break
 
-                    product = self.env['product.product'].search([('default_code', '=', product_code)], limit=1)
-                    if not product:
-                        template = self.env['product.template'].create({
+                        if all_exist:
+                            for product in combo_products:
+                                self.env['sale.order.line'].create({
+                                    'order_id': sale_order.id,
+                                    'product_id': product.id,
+                                    'name': f"{description} - [{product.default_code}]",
+                                    'product_uom_qty': qty,
+                                    'price_unit': price_unit / len(combo_products),
+                                    'discount': discount_percent
+                                })
+                        else:
+                            _logger.error("🚫 Bỏ qua combo vì thiếu sản phẩm con: %s", product_code)
+
+                    else:
+                        product = odoo_utils._get_or_create_product(
+                            code=product_code,
+                            name=description,
+                            unit_name=uom_name,
+                            cost=price_unit,
+                            product_type="consu",
+                            purchase_ok=False,
+                            sale_ok=False
+                        )
+
+                        self.env['sale.order.line'].create({
+                            'order_id': sale_order.id,
+                            'product_id': product.id,
                             'name': description,
-                            'default_code': product_code,
-                            'type': 'consu',
-                            'uom_id': uom.id,
-                            'uom_po_id': uom.id,
-                            'list_price': price_unit,
-                            'purchase_ok': False,
-                            'sale_ok': False,
-                            'is_storable': True,
+                            'product_uom_qty': qty,
+                            'price_unit': price_unit,
+                            'discount': discount_percent
                         })
-                        product = template.product_variant_id
 
-                    self.env['sale.order.line'].create({
-                        'order_id': sale_order.id,
-                        'product_id': product.id,
-                        'name': description,
-                        'product_uom_qty': qty,
-                        'price_unit': price_unit,
-                        'discount': discount_percent
-                    })
 
+                # Lấy DeliveryOrderNumber từ API MISA
+                delivery_order_number = misa_utils.get_delivery_number(sale_order_id=id,order_ref=order_ref,token = crm_token)
+                _logger.info("📋 Delivery Order Number: %s", delivery_order_number)
+
+                # Xác nhận đơn hàng để tạo stock.picking
                 sale_order.action_confirm()
                 _logger.info("✅ Đã tạo và xác nhận đơn hàng: %s cho %s", order_ref, customer_name)
 
-            page += 1
+                # Gán DeliveryOrderNumber làm mã phiếu pick
+                pickings = sale_order.picking_ids
+                if pickings:
+                    picking = pickings[0]  # Lấy phiếu pick đầu tiên
+                    # Kiểm tra tính duy nhất trước khi gán
+                    existing_picking = self.env['stock.picking'].search([('name', '=', delivery_order_number)], limit=1)
+                    if existing_picking:
+                        _logger.warning("⚠️ Mã phiếu pick %s đã tồn tại, NEXT tạo mã mới: %s", delivery_order_number, f"{delivery_order_number}_{picking.id}")
+                        # picking.name = f"{delivery_order_number}_{picking.id}"
+                    else:
+                        picking.name = delivery_order_number
+                    _logger.info("📦 Đã gán mã phiếu pick: %s cho đơn hàng %s", picking.name, order_ref)
 
+            page += 1
         return {'type': 'ir.actions.act_window_close'}

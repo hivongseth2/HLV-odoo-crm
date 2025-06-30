@@ -103,7 +103,9 @@ class SaleApiImportWizard(models.TransientModel):
                     qty = float(line.get("amount", 1))
                     price_unit = float(line.get("price", 0))
                     discount_percent = float(line.get("discount_percent", 0))
-                    uom_name = line.get("unit", "Cái").strip()
+                    # uom_name = line.get("unit", "Đơn vị").strip()
+                    uom_name = (line.get("unit") or "Cái").strip()
+
 
                     category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
                     if not category:
@@ -128,7 +130,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'factor_inv': 1.0,
                             'rounding': 1.0,
                         })
-
+# xử lý chỗ này sau 
                     product = self.env['product.product'].search([('default_code', '=', product_code)], limit=1)
                     if not product:
                         template = self.env['product.template'].create({
