@@ -109,9 +109,9 @@ class MisaApiUtils(models.AbstractModel):
     
     
     
-    def get_delivery_number(self, sale_order_id, order_ref=None):
+    def get_delivery_number(self, sale_order_id, token, order_ref=None):
         session = requests.Session()
-        token = self._fetch_login_crm_token()
+        token = token
 
         def _call_api_with_token(token):
             api_url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
