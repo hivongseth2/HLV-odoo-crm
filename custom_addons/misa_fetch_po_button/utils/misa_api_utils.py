@@ -109,51 +109,48 @@ class MisaApiUtils(models.AbstractModel):
     
     
     
-    def get_delivery_number(self, sale_order_id, token, order_ref=None):
+    
+    def get_delivery_number(self, sale_order_id, order_ref=None, token):
+        # Lấy session từ login
         session = requests.Session()
-        misa_token = token
         
-        def _call_api_with_token(token):
-            api_url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
-            api_headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {token}",
-                "User-Agent": "PostmanRuntime/7.44.1",
-                "Accept": "*/*",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Connection": "keep-alive",
-                "companycode": "3R2PY2F4",
-            }
-            api_payload = {
-                "ID": str(sale_order_id),
-                "MISAEntityState": "2"
-            }
-            
-            _logger.warning("token headers: %s", token)
-            return session.post(api_url, headers=api_headers, json=api_payload)
+        token = token
+        _logger.warning("Token lấy được: %s", token)
 
-        # Lần gọi đầu
-        response = _call_api_with_token(misa_token)
+        
+        # Gửi request GET để lấy delivery number
+        api_url = f"https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
+        api_headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "PostmanRuntime/7.44.1",
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "companycode": "3R2PY2F4",
+        }
+        api_payload = {
+            "ID": str(sale_order_id),
+            "MISAEntityState": "2"
+        }
 
-        # Nếu lỗi xác thực, thử lại 1 lần với token mới
-        if response.status_code in [401, 403]:
-            _logger.warning("Token cũ hết hạn hoặc không hợp lệ, thử lại với token mới")
-            misa_token = self._fetch_login_crm_token()
-            response = _call_api_with_token(misa_token)
+        api_response = session.post(api_url, headers=api_headers, json=api_payload)
+        _logger.warning("API response headers: %s", dict(api_response.headers))
+        _logger.warning("API response text: %s", api_response.text)
 
-        _logger.warning("API response headers: %s", dict(response.headers))
-        _logger.warning("API response text: %s", response.text)
+        if api_response.status_code != 200:
+            raise Exception(f"API call failed: {api_response.status_code} - {api_response.text}")
 
-        if response.status_code != 200:
-            raise Exception(f"API call failed: {response.status_code} - {response.text}")
-
+        # Parse JSON response để lấy delivery number (giả định nằm trong trường DeliveryOrderNumber)
         try:
-            data = response.json()
-            delivery_number = data.get("Data", {}).get("CurrentData", {}).get("DeliveryOrderNumber")
+            response_data = api_response.json()
+            delivery_number = response_data.get("Data", {}).get("CurrentData", {}).get("DeliveryOrderNumber")
+            
             if not delivery_number:
                 delivery_number = order_ref
+
         except Exception as e:
-            _logger.error("❌ Lỗi khi xử lý response: %s", e)
+            print(f"❌ Lỗi khi xử lý response: {e}. Dùng tạm sale_order_id.")
             delivery_number = sale_order_id
 
         return delivery_number
