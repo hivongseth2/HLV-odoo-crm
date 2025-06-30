@@ -184,8 +184,8 @@ class SaleApiImportWizard(models.TransientModel):
                     # Kiểm tra tính duy nhất trước khi gán
                     existing_picking = self.env['stock.picking'].search([('name', '=', delivery_order_number)], limit=1)
                     if existing_picking:
-                        _logger.warning("⚠️ Mã phiếu pick %s đã tồn tại, tạo mã mới: %s", delivery_order_number, f"{delivery_order_number}_{picking.id}")
-                        picking.name = f"{delivery_order_number}_{picking.id}"
+                        _logger.warning("⚠️ Mã phiếu pick %s đã tồn tại, NEXT tạo mã mới: %s", delivery_order_number, f"{delivery_order_number}_{picking.id}")
+                        # picking.name = f"{delivery_order_number}_{picking.id}"
                     else:
                         picking.name = delivery_order_number
                     _logger.info("📦 Đã gán mã phiếu pick: %s cho đơn hàng %s", picking.name, order_ref)
