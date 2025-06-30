@@ -16,7 +16,7 @@ class SaleApiImportWizard(models.TransientModel):
     def action_import_from_api(self):
         odoo_utils = self.env['odoo.utils']  # Initialize OdooUtils
         misa_utils = self.env['misa.api.utils']
-        token = misa_utils._fetch_login_crm_token()  # Get MISA token
+        crm_token = misa_utils._fetch_login_crm_token()  # Get MISA token
 
         token_url = "https://crmconnect.misa.vn/api/v2/Account"
         orders_url = "https://crmconnect.misa.vn/api/v2/SaleOrders"
@@ -158,7 +158,7 @@ class SaleApiImportWizard(models.TransientModel):
 
 
                 # Lấy DeliveryOrderNumber từ API MISA
-                delivery_order_number = misa_utils.get_delivery_number(sale_order_id=id,order_ref=order_ref,token = token)
+                delivery_order_number = misa_utils.get_delivery_number(sale_order_id=id,order_ref=order_ref,token = crm_token)
                 _logger.info("📋 Delivery Order Number: %s", delivery_order_number)
 
                 # Xác nhận đơn hàng để tạo stock.picking

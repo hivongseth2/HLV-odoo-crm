@@ -138,7 +138,6 @@ class MisaApiUtils(models.AbstractModel):
         api_response = session.post(api_url, headers=api_headers, json=api_payload)
         _logger.warning("API response headers: %s", dict(api_response.headers))
         _logger.warning("API response text: %s", api_response.text)
-        _logger.warning("API response json: %s", api_response.json())
 
         if api_response.status_code != 200:
             raise Exception(f"API call failed: {api_response.status_code} - {api_response.text}")
