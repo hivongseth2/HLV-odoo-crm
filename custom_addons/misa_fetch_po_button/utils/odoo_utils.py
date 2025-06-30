@@ -187,9 +187,6 @@ class OdooUtils(models.AbstractModel):
                 cost = product_data.get("unit_cost") or 0.0
                 unit_name = product_data.get("usage_unit") or "Cái"
 
-            product_data = data[0]
-
-
             purchase_ok = True
             sale_ok = True
 
