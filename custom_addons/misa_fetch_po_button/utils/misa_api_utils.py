@@ -111,8 +111,7 @@ class MisaApiUtils(models.AbstractModel):
     
     def get_delivery_number(self, sale_order_id, token, order_ref=None):
         session = requests.Session()
-        token = token
-
+        misa_token = token
         def _call_api_with_token(token):
             api_url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
             api_headers = {
@@ -131,13 +130,13 @@ class MisaApiUtils(models.AbstractModel):
             return session.post(api_url, headers=api_headers, json=api_payload)
 
         # Lần gọi đầu
-        response = _call_api_with_token(token)
+        response = _call_api_with_token(misa_token)
 
         # Nếu lỗi xác thực, thử lại 1 lần với token mới
         if response.status_code in [401, 403]:
             _logger.warning("Token cũ hết hạn hoặc không hợp lệ, thử lại với token mới")
-            token = self._fetch_login_crm_token()
-            response = _call_api_with_token(token)
+            misa_token = self._fetch_login_crm_token()
+            response = _call_api_with_token(misa_token)
 
         _logger.warning("API response headers: %s", dict(response.headers))
         _logger.warning("API response text: %s", response.text)
