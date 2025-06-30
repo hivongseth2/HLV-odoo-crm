@@ -173,17 +173,25 @@ class OdooUtils(models.AbstractModel):
             if not res_json.get("success"):
                 raise Exception(f"❌ MISA báo lỗi: {res_json.get('error_message')}")
 
-            data = res_json.get("data")
+            data = res_json.get("data")  or []
+            # không tim thấy thì tạo mã tạm
+
             if not data or not isinstance(data, list):
-                raise Exception("❌ Không tìm thấy thông tin sản phẩm.")
+                _logger.warning("⚠️ MISA không trả về dữ liệu sản phẩm cho mã: %s. Tạo tạm với mã thôi.", code)
+                name = code
+                cost = 0.0
+                unit_name = "Cái"
+            else:
+                product_data = data[0]
+                name = product_data.get("product_name") or code
+                cost = product_data.get("unit_cost") or 0.0
+                unit_name = product_data.get("usage_unit") or "Cái"
 
             product_data = data[0]
 
-            name = product_data.get("product_name") or code
-            cost = product_data.get("unit_cost") or 0.0
+
             purchase_ok = True
             sale_ok = True
-            unit_name = product_data.get("usage_unit") or "Cái"
 
             uom = self._get_or_create_uom(unit_name)
             tmpl = self.env["product.template"].create({
