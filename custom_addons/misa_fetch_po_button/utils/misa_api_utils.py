@@ -114,6 +114,9 @@ class MisaApiUtils(models.AbstractModel):
         # Lấy session từ login
         session = requests.Session()
         _logger.warning("Token lấy được: %s", token)
+        _logger.warning("sale_order_id: %s", sale_order_id)
+        _logger.warning("order_ref:  %s", order_ref )
+
 
         
         # Gửi request GET để lấy delivery number
