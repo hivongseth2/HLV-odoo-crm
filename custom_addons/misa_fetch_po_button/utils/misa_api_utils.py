@@ -108,9 +108,9 @@ class MisaApiUtils(models.AbstractModel):
         return match.group("token")
     
     
-    
-    
-    def get_delivery_number(self, sale_order_id, order_ref=None, token):
+
+
+    def get_delivery_number(self, sale_order_id, order_ref=None, token=None):
         # Lấy session từ login
         session = requests.Session()
         
