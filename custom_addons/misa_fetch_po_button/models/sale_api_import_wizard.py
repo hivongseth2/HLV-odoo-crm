@@ -108,25 +108,53 @@ class SaleApiImportWizard(models.TransientModel):
                     discount_percent = float(line.get("discount_percent", 0))
                     uom_name = (line.get("unit") or "Cái").strip()
 
-                    # Use OdooUtils to get or create product
-                    product = odoo_utils._get_or_create_product(
-                        code=product_code,
-                        name=description,
-                        unit_name=uom_name,
-                        cost=price_unit,
-                        product_type="consu",
-                        purchase_ok=False,
-                        sale_ok=False
-                    )
+                    # Xử lý sản phẩm combo
+                    if "+" in product_code:
+                        combo_codes = product_code.split("+")
+                        combo_products = []
+                        all_exist = True
 
-                    self.env['sale.order.line'].create({
-                        'order_id': sale_order.id,
-                        'product_id': product.id,
-                        'name': description,
-                        'product_uom_qty': qty,
-                        'price_unit': price_unit,
-                        'discount': discount_percent
-                    })
+                        for code in combo_codes:
+                            code = code.strip()
+                            product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+                            if not product:
+                                _logger.warning("❌ Không tìm thấy sản phẩm con: %s trong combo %s", code, product_code)
+                                all_exist = False
+                                break
+                            combo_products.append(product)
+
+                        if all_exist:
+                            for product in combo_products:
+                                self.env['sale.order.line'].create({
+                                    'order_id': sale_order.id,
+                                    'product_id': product.id,
+                                    'name': f"{description} - [{product.default_code}]",
+                                    'product_uom_qty': qty,
+                                    'price_unit': price_unit / len(combo_products),  # chia giá nếu cần
+                                    'discount': discount_percent
+                                })
+                        else:
+                            _logger.error("🚫 Bỏ qua combo vì thiếu sản phẩm con: %s", product_code)
+                    else:
+                        product = odoo_utils._get_or_create_product(
+                            code=product_code,
+                            name=description,
+                            unit_name=uom_name,
+                            cost=price_unit,
+                            product_type="consu",
+                            purchase_ok=False,
+                            sale_ok=False
+                        )
+
+                        self.env['sale.order.line'].create({
+                            'order_id': sale_order.id,
+                            'product_id': product.id,
+                            'name': description,
+                            'product_uom_qty': qty,
+                            'price_unit': price_unit,
+                            'discount': discount_percent
+                        })
+
 
                 # Lấy DeliveryOrderNumber từ API MISA
                 delivery_order_number = misa_utils.get_delivery_number(id, order_ref)

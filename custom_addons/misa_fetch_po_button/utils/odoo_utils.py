@@ -103,7 +103,9 @@ class OdooUtils(models.AbstractModel):
                 cost=cost,
                 product_type="consu",
                 purchase_ok=False,
-                sale_ok=False
+                sale_ok=False,
+                is_storable=True
+
             )
             key = (product_code, product.id)
             if key in misa_lines:
