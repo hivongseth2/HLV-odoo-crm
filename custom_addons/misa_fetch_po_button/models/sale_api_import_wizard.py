@@ -121,7 +121,7 @@ class SaleApiImportWizard(models.TransientModel):
                             if not product:
                                 _logger.warning("🔍 Không thấy %s trong hệ thống, thử gọi MISA để tạo mới...", code)
                                 try:
-                                    tmpl = self.get_misa_product(token, code)
+                                    tmpl = odoo_utils.get_misa_product(token, code)
                                     product = tmpl.product_variant_id
                                     _logger.info("✅ Đã tạo mới sản phẩm con %s từ MISA", code)
                                 except Exception as e:
