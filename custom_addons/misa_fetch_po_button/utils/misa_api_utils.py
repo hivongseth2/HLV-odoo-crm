@@ -112,6 +112,7 @@ class MisaApiUtils(models.AbstractModel):
     def get_delivery_number(self, sale_order_id, token, order_ref=None):
         session = requests.Session()
         misa_token = token
+        
         def _call_api_with_token(token):
             api_url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
             api_headers = {
@@ -127,6 +128,8 @@ class MisaApiUtils(models.AbstractModel):
                 "ID": str(sale_order_id),
                 "MISAEntityState": "2"
             }
+            
+            _logger.warning("token headers: %s", token)
             return session.post(api_url, headers=api_headers, json=api_payload)
 
         # Lần gọi đầu
