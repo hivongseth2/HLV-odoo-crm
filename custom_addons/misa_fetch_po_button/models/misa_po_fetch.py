@@ -25,13 +25,6 @@ class MisaPOFetch(models.TransientModel):
         payload = {
             "filter": [
                 {
-                    "property": 4658,
-                    "value": 3,
-                    "operator": 7,
-                    "operand": 1,
-                    "data_type": 4
-                },
-                {
                     "property": 3972,
                     "value": date_from_utc.isoformat() + "Z",
                     "operator": 10,

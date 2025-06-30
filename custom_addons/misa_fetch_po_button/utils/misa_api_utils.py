@@ -110,7 +110,7 @@ class MisaApiUtils(models.AbstractModel):
     
     
     
-    def get_delivery_number(self, sale_order_id):
+    def get_delivery_number(self, sale_order_id, order_ref=None):
         # Lấy session từ login
         session = requests.Session()
         
@@ -147,8 +147,7 @@ class MisaApiUtils(models.AbstractModel):
             delivery_number = response_data.get("Data", {}).get("CurrentData", {}).get("DeliveryOrderNumber")
             
             if not delivery_number:
-                print("⚠️  Delivery number not found in response, dùng tạm sale_order_id.")
-                delivery_number = sale_order_id
+                delivery_number = order_ref
 
         except Exception as e:
             print(f"❌ Lỗi khi xử lý response: {e}. Dùng tạm sale_order_id.")
