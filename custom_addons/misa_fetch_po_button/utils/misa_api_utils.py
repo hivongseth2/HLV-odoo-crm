@@ -113,8 +113,6 @@ class MisaApiUtils(models.AbstractModel):
     def get_delivery_number(self, sale_order_id, order_ref=None, token=None):
         # Lấy session từ login
         session = requests.Session()
-        
-        token = token
         _logger.warning("Token lấy được: %s", token)
 
         
