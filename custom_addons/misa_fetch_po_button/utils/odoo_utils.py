@@ -146,3 +146,81 @@ class OdooUtils(models.AbstractModel):
         for move in existing_moves.values():
             _logger.info("❌ Xóa dòng thừa: %s x%s", move.product_id.default_code, move.product_uom_qty)
             move.unlink()
+            
+            
+    def get_misa_product(self, token, code):
+        code = code.strip()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Clientid": "odoo"
+        }
+        params = {
+            "code": code
+        }
+        product_url = "https://crmconnect.misa.vn/api/v2/Products/code"
+
+        try:
+            response = requests.get(product_url, headers=headers, params=params)
+            _logger.warning("🔄 API response: %s", response.text)
+
+            if response.status_code != 200:
+                raise Exception(f"❌ MISA trả về mã lỗi: {response.status_code}")
+
+            res_json = response.json()
+
+            if not res_json.get("success"):
+                raise Exception(f"❌ MISA báo lỗi: {res_json.get('error_message')}")
+
+            data = res_json.get("data")
+            if not data or not isinstance(data, list):
+                raise Exception("❌ Không tìm thấy thông tin sản phẩm.")
+
+            product_data = data[0]
+
+            name = product_data.get("product_name") or code
+            cost = product_data.get("unit_cost") or 0.0
+            purchase_ok = True
+            sale_ok = True
+            unit_name = product_data.get("usage_unit") or "Cái"
+
+            uom = self._get_or_create_uom(unit_name)
+            tmpl = self.env["product.template"].create({
+                "name": name,
+                "default_code": code,
+                "type": "consu",  # hoặc `product_type` nếu có biến này ở đâu đó
+                "uom_id": uom.id,
+                "uom_po_id": uom.id,
+                "standard_price": cost,
+                "purchase_ok": purchase_ok,
+                "sale_ok": sale_ok,
+                "is_storable": True,
+            })
+            _logger.info("🆕 Tạo sản phẩm %s với UOM từ MISA: %s", code, uom.name)
+            return tmpl.product_variant_id
+
+        except Exception as e:
+            _logger.error("💥 Lỗi khi lấy sản phẩm từ MISA: %s", str(e))
+            raise
+
+    
+    
+    
+    def _get_token_api_crm():
+        token_url = "https://crmconnect.misa.vn/api/v2/Account"
+        payload = {
+            "client_id": "odoo",
+            "client_secret": "iqFXzEnjLIpuSTdkwFhuvj1Y4jsD9zXHrUzZvF81bO8="
+        }
+        headers = {"Content-Type": "application/json"}
+
+        try:
+            res = requests.post(token_url, json=payload, headers=headers)
+            _logger.info("🔐 Token response: %s", res.text)
+            res.raise_for_status()
+            token = res.json().get("data")
+            if not token:
+                raise Exception("❌ MISA không trả về access_token")
+            return token
+        except Exception as e:
+            raise Exception(f"Lỗi lấy token từ MISA: {e}")

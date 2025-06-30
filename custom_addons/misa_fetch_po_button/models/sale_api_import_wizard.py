@@ -109,7 +109,6 @@ class SaleApiImportWizard(models.TransientModel):
                     discount_percent = float(line.get("discount_percent", 0))
                     uom_name = (line.get("unit") or "Cái").strip()
 
-                    # Xử lý sản phẩm combo
                     if "+" in product_code:
                         combo_codes = product_code.split("+")
                         combo_products = []
@@ -118,11 +117,23 @@ class SaleApiImportWizard(models.TransientModel):
                         for code in combo_codes:
                             code = code.strip()
                             product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+
                             if not product:
-                                _logger.warning("❌ Không tìm thấy sản phẩm con: %s trong combo %s", code, product_code)
+                                _logger.warning("🔍 Không thấy %s trong hệ thống, thử gọi MISA để tạo mới...", code)
+                                try:
+                                    tmpl = self.get_misa_product(token, code)
+                                    product = tmpl.product_variant_id
+                                    _logger.info("✅ Đã tạo mới sản phẩm con %s từ MISA", code)
+                                except Exception as e:
+                                    _logger.error("🚫 Không tạo được sản phẩm %s từ MISA: %s", code, str(e))
+                                    all_exist = False
+                                    break
+
+                            if product:
+                                combo_products.append(product)
+                            else:
                                 all_exist = False
                                 break
-                            combo_products.append(product)
 
                         if all_exist:
                             for product in combo_products:
@@ -131,11 +142,12 @@ class SaleApiImportWizard(models.TransientModel):
                                     'product_id': product.id,
                                     'name': f"{description} - [{product.default_code}]",
                                     'product_uom_qty': qty,
-                                    'price_unit': price_unit / len(combo_products),  # chia giá nếu cần
+                                    'price_unit': price_unit / len(combo_products),
                                     'discount': discount_percent
                                 })
                         else:
                             _logger.error("🚫 Bỏ qua combo vì thiếu sản phẩm con: %s", product_code)
+
                     else:
                         product = odoo_utils._get_or_create_product(
                             code=product_code,
