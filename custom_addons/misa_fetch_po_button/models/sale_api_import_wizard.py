@@ -158,7 +158,7 @@ class SaleApiImportWizard(models.TransientModel):
 
 
                 # Lấy DeliveryOrderNumber từ API MISA
-                delivery_order_number = misa_utils.get_delivery_number(id,order_ref,token)
+                delivery_order_number = misa_utils.get_delivery_number(sale_order_id=id,order_ref=order_ref,token = token)
                 _logger.info("📋 Delivery Order Number: %s", delivery_order_number)
 
                 # Xác nhận đơn hàng để tạo stock.picking
