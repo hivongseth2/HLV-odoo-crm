@@ -38,13 +38,13 @@ class SaleApiImportWizard(models.TransientModel):
 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-        page = 1
+        page = 0
         page_size = 20
 
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
-        while page <= 50:
+        while page <= 10:
             params = {
                 "page": page,
                 "pageSize": page_size,
