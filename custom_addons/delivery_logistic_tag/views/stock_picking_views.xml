@@ -8,7 +8,8 @@
                 <group string="Delivery Documents">
                     <field name="delivery_note_attachment" filename="delivery_note_filename"/>
                 </group>
-                <button name="%(delivery_logistic_tag.report_logistic_tag)d" string="Print Logistic Tag" type="action" class="btn-primary"/>
+                <button name=\"print_logistic_tag\" type=\"object\" string=\"Print Logistic Tag\" class=\"btn-primary\"/>
+
             </xpath>
         </field>
     </record>
