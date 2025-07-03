@@ -6,12 +6,12 @@
       <field name="inherit_id" ref="stock.view_picking_form"/>
       <field name="arch" type="xml">
         <xpath expr="//header" position="inside">
-          <button name="%(hoanglongvu_delivery_note.action_report_delivery_note)d"
+          <button type="action"
+                  name="action_report_delivery_note"
                   string="In Biên Bản Giao Nhận"
-                  type="action"
                   class="btn-primary"/>
 
-          <button name="%(hoanglongvu_delivery_note.action_report_logistic_tag)d"
+          <button name="action_report_logistic_tag"
                   string="In Logistic Tag"
                   type="action"
                   class="btn-secondary"/>
