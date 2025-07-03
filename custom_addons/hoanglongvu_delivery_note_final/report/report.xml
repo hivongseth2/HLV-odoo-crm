@@ -1,23 +1,23 @@
 <odoo>
-    <data>
-        <report id="action_report_delivery_note"
-            model="stock.picking"
-            string="Biên Bản Giao Nhận Hàng"
-            report_type="qweb-pdf"
-            name="hoanglongvu_delivery_note.report_delivery_note"
-            file="hoanglongvu_delivery_note.report_delivery_note"
-            print_report_name="'BBGH - %s' % (object.name)"
-            binding_model_id="model_stock_picking"
-            binding_type="report"/>
+  <data>
+    <report id="action_report_delivery_note"
+        model="stock.picking"
+        string="Biên Bản Giao Nhận Hàng"
+        report_type="qweb-pdf"
+        name="hoanglongvu_delivery_note.report_delivery_note"
+        file="hoanglongvu_delivery_note.report_delivery_note"
+        print_report_name="'BBGH - %s' % (object.name)"
+        binding_model_id="model_stock_picking"
+        binding_type="report"/>
 
-        <report id="action_report_logistic_tag"
-            model="stock.picking"
-            string="Logistic Tag"
-            report_type="qweb-pdf"
-            name="hoanglongvu_delivery_note.report_logistic_tag"
-            file="hoanglongvu_delivery_note.report_logistic_tag"
-            print_report_name="'Logistic Tag - %s' % (object.name)"
-            binding_model_id="model_stock_picking"
-            binding_type="report"/> 
-    </data>
+    <report id="action_report_logistic_tag"
+        model="stock.picking"
+        string="Logistic Tag"
+        report_type="qweb-pdf"
+        name="hoanglongvu_delivery_note.report_logistic_tag"
+        file="hoanglongvu_delivery_note.report_logistic_tag"
+        print_report_name="'Logistic Tag - %s' % (object.name)"
+        binding_model_id="model_stock_picking"
+        binding_type="report"/>
+  </data>
 </odoo>
