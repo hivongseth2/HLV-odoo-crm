@@ -1,0 +1,20 @@
+<odoo>
+    <record id="view_picking_form_inherit_print" model="ir.ui.view">
+      <field name="name">stock.picking.inherit.print</field>
+      <field name="model">stock.picking</field>
+      <field name="inherit_id" ref="stock.view_picking_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//header" position="inside">
+          <button name="%(hoanglongvu_delivery_note.action_report_delivery_note)d"
+                  string="In Biên Bản Giao Nhận"
+                  type="action"
+                  class="btn-primary"/>
+
+          <button name="%(hoanglongvu_delivery_note.action_report_logistic_tag)d"
+                  string="In Logistic Tag"
+                  type="action"
+                  class="btn-secondary"/>
+        </xpath>
+      </field>
+    </record>
+</odoo>

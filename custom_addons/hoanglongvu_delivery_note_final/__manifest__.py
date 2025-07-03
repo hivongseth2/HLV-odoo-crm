@@ -6,7 +6,8 @@
     "description": "Print Biên Bản Giao Nhận & Logistic Tag trực tiếp từ Delivery Order",
     "data": [
         "security/ir.model.access.csv",
-        "report/report.xml"
+        "report/report.xml",
+        "views/views.xml"
     ],
     "installable": True,
     "application": False
