@@ -5,7 +5,7 @@
       <field name="model">stock.picking</field>
       <field name="report_type">qweb-pdf</field>
       <field name="report_name">hoanglongvu_delivery_note.report_delivery_note</field>
-      <field name="binding_model_id" ref="model_stock_picking"/>
+      <field name="binding_model_id">471</field>
       <field name="binding_type">report</field>
     </record>
 
@@ -14,7 +14,7 @@
       <field name="model">stock.picking</field>
       <field name="report_type">qweb-pdf</field>
       <field name="report_name">hoanglongvu_delivery_note.report_logistic_tag</field>
-      <field name="binding_model_id" ref="model_stock_picking"/>
+      <field name="binding_model_id">471</field>
       <field name="binding_type">report</field>
     </record>
   </data>
