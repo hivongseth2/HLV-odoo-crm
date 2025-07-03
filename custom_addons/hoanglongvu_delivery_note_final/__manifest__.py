@@ -3,7 +3,7 @@
     "version": "1.0",
     "depends": ["stock"],
     "category": "Warehouse",
-    "description": "Print Biên Bản Giao Nhận & Logistic Tag trực tiếp từ Delivery Order",
+    "description": "In Biên Bản Giao Nhận và Logistic Tag trực tiếp từ Delivery Order mới",
     "data": [
         "security/ir.model.access.csv",
         "report/report.xml",
