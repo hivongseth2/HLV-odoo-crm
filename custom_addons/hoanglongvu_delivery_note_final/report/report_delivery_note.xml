@@ -1,38 +1,40 @@
 <odoo>
-  <template id="report_delivery_note">
-    <t t-call="web.basic_layout">
-      <div class="page">
-        <h2>BIÊN BẢN GIAO NHẬN HÀNG</h2>
-        <p><strong>Supplier:</strong> Hoàng Long Vũ</p>
-        <p><strong>Buyer PO:</strong> <t t-esc="o.origin"/></p>
-        <p><strong>Delivery Address:</strong> <t t-esc="o.partner_id.street"/></p>
-        <p><strong>Receiver:</strong> <t t-esc="o.partner_id.name"/></p>
-        <p><strong>Shipment No.:</strong> <t t-esc="o.name"/></p>
+  <data>
+    <template id="report_delivery_note">
+      <t t-call="web.basic_layout">
+        <div class="page">
+          <h2>BIÊN BẢN GIAO NHẬN HÀNG</h2>
+          <p><strong>Supplier:</strong> Hoàng Long Vũ</p>
+          <p><strong>Buyer PO:</strong> <t t-esc="o.origin"/></p>
+          <p><strong>Delivery Address:</strong> <t t-esc="o.partner_id.street"/></p>
+          <p><strong>Receiver:</strong> <t t-esc="o.partner_id.name"/></p>
+          <p><strong>Shipment No.:</strong> <t t-esc="o.name"/></p>
 
-        <table border="1" width="100%">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Description</th>
-              <th>Qty</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr t-foreach="o.move_ids_without_package" t-as="line">
-              <td><t t-esc="line.product_id.default_code"/></td>
-              <td><t t-esc="line.product_id.display_name"/></td>
-              <td><t t-esc="line.quantity_done"/></td>
-            </tr>
-          </tbody>
-        </table>
+          <table border="1" width="100%">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Description</th>
+                <th>Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr t-foreach="o.move_ids_without_package" t-as="line">
+                <td><t t-esc="line.product_id.default_code"/></td>
+                <td><t t-esc="line.product_id.display_name"/></td>
+                <td><t t-esc="line.quantity_done"/></td>
+              </tr>
+            </tbody>
+          </table>
 
-        <p>Supplier Signature: ___________________</p>
-        <p>Customer Signature: ___________________</p>
+          <p>Supplier Signature: ___________________</p>
+          <p>Customer Signature: ___________________</p>
 
-        <div>
-          <img t-att-src="'/report/barcode/Code128/%s' % o.name"/>
+          <div>
+            <img t-att-src="'/report/barcode/Code128/%s' % o.name"/>
+          </div>
         </div>
-      </div>
-    </t>
-  </template>
+      </t>
+    </template>
+  </data>
 </odoo>
