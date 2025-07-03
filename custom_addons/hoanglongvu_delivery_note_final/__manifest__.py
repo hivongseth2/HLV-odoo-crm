@@ -7,9 +7,9 @@
     "data": [
         "security/ir.model.access.csv",
         "report/report.xml",
-        "views/views.xml",
-        "report/report_delivery_note.xml",
-        "report/report_logistic_tag.xml",
+        "views/views.xml"
+        # "report/report_delivery_note.xml",
+        # "report/report_logistic_tag.xml",
 
 
     ],
