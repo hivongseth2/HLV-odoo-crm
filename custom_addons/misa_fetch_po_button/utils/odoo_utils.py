@@ -105,7 +105,6 @@ class OdooUtils(models.AbstractModel):
                 product_type="consu",
                 purchase_ok=False,
                 sale_ok=False,
-                is_storable=True
 
             )
             key = (product_code, product.id)
