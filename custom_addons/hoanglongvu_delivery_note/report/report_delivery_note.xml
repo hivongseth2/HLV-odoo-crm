@@ -20,11 +20,14 @@
                 </tr>
               </thead>
               <tbody>
-                <tr t-foreach="o.move_ids_without_package" t-as="line">
-                  <td><t t-esc="line.product_id.default_code"/></td>
-                  <td><t t-esc="line.product_id.display_name"/></td>
-                  <td><t t-esc="line.quantity_done"/></td>
-                </tr>
+                <tr t-foreach="o.move_ids_without_package" t-as="move">
+                  <td><t t-esc="move.product_id.default_code"/></td>
+                  <td><t t-esc="move.product_id.display_name"/></td>
+                  <td>
+                    <t t-esc="sum([ml.qty_done for ml in move.move_line_ids])"/>
+                  </td>
+              </tr>
+
               </tbody>
             </table>
 
