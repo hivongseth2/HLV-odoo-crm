@@ -29,7 +29,7 @@ class MisaTransferFetch(models.TransientModel):
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
             "filter": [
-              
+                {"property": 4041, "value": "[2030,2031,2032]", "operator": 13, "data_type": 4, "operand": 1},
                 {"property": 3654, "value": date_from_utc.isoformat() + "Z", "operator": 10, "data_type": 3, "operand": 1},
                 {"property": 3654, "value": date_to_utc.isoformat() + "Z", "operator": 12, "data_type": 3, "operand": 1}
             ],
@@ -95,15 +95,32 @@ class MisaTransferFetch(models.TransientModel):
                     continue
 
                 direction = None
-                from_code = str(lines[0].get("from_stock_code", "")).strip().upper()
-                to_code = str(lines[0].get("to_stock_code", "")).strip().upper()
+                # from_code = str(lines[0].get("from_stock_code", "")).strip().upper()
+                # to_code = str(lines[0].get("to_stock_code", "")).strip().upper()
 
-                if from_code == keyword:
-                    direction = "outgoing"
-                elif to_code == keyword:
-                    direction = "incoming"
-                else:
-                    _logger.info("Bỏ qua chứng từ %s không liên quan đến từ khóa %s", refid, keyword)
+                # if from_code == keyword:
+                #     direction = "outgoing"
+                # elif to_code == keyword:
+                #     direction = "incoming"
+                # else:
+                #     _logger.info("Bỏ qua chứng từ %s không liên quan đến từ khóa %s", refid, keyword)
+                #     continue
+                
+                
+                related_lines = []
+                for line in lines:
+                    from_code = str(line.get("from_stock_code", "")).strip().upper()
+                    to_code = str(line.get("to_stock_code", "")).strip().upper()
+
+                    if from_code == keyword:
+                        line["direction"] = "outgoing"
+                        related_lines.append(line)
+                    elif to_code == keyword:
+                        line["direction"] = "incoming"
+                        related_lines.append(line)
+
+                if not related_lines:
+                    _logger.info("Bỏ qua chứng từ %s vì không có dòng nào liên quan đến từ khóa %s", refid, keyword)
                     continue
 
                 picking_type = self._get_picking_type(direction)
@@ -120,10 +137,14 @@ class MisaTransferFetch(models.TransientModel):
 
                 if picking:
                     _logger.info("🔁 Phiếu đã tồn tại: %s", picking.name)
-                    odoo_utils._update_picking_lines(picking,lines)
-
+                    odoo_utils._update_picking_lines(picking, related_lines)  # phải chỉnh lại để dùng lines có direction
                 else:
-                    # Tạo phiếu mới nếu chưa có
+                    # Tạo phiếu mới dựa trên dòng đầu tiên liên quan
+                    picking_type = self._get_picking_type(related_lines[0]["direction"])
+                    if not picking_type:
+                        _logger.warning("Không tìm thấy picking type phù hợp cho kho %s", self.warehouse_id.name)
+                        continue
+
                     picking = self.env['stock.picking'].create({
                         'name': ref_info.get('refno_finance', ''),
                         'picking_type_id': picking_type.id,
@@ -134,9 +155,9 @@ class MisaTransferFetch(models.TransientModel):
                     })
                     _logger.info("🆕 Tạo phiếu mới: %s", picking.name)
 
-                
+                            
 
-                    for line in lines:
+                    for line in related_lines:
                         product_code = str(line.get("inventory_item_code", "")).strip()
                         product_name = str(line.get("description", "")).strip()
                         uom_name = str(line.get("unit_name", "Cái")).strip()
