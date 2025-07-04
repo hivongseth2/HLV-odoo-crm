@@ -68,7 +68,7 @@ class OdooUtils(models.AbstractModel):
             "standard_price": cost,
             "purchase_ok": purchase_ok,
             "sale_ok": sale_ok,
-            "is_storable": True,
+            "is_storable": True
         })
         _logger.info("🆕 Tạo sản phẩm %s với UOM: %s", code, uom.name)
         return tmpl.product_variant_id
