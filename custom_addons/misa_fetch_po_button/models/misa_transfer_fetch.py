@@ -94,7 +94,7 @@ class MisaTransferFetch(models.TransientModel):
                     _logger.info("Không có chi tiết cho chứng từ %s", refid)
                     continue
 
-                # direction = None
+                direction = None
                 # from_code = str(lines[0].get("from_stock_code", "")).strip().upper()
                 # to_code = str(lines[0].get("to_stock_code", "")).strip().upper()
 
