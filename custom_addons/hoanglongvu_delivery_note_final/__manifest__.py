@@ -1,5 +1,5 @@
 {
-    "name": "Hoang Long Vu Delivery Note",
+    "name": "Hoang Long Vu In phiếu",
     "version": "1.0",
     "depends": ["stock"],
     "category": "Warehouse",
