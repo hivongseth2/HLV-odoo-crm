@@ -1,0 +1,49 @@
+<odoo>
+  <data>
+    <!-- Paper format ngang cho delivery note -->
+    <record id="paperformat_delivery_note_landscape" model="report.paperformat">
+      <field name="name">Delivery Note Landscape</field>
+      <field name="format">A4</field>
+      <field name="orientation">Landscape</field>
+      <field name="margin_top">10</field>
+      <field name="margin_bottom">10</field>
+      <field name="margin_left">10</field>
+      <field name="margin_right">10</field>
+      <field name="header_line" eval="False"/>
+      <field name="header_spacing">0</field>
+    </record>
+
+    <!-- Paper format ngang cho logistic tag -->
+    <record id="paperformat_logistic_tag_landscape" model="report.paperformat">
+      <field name="name">Logistic Tag Landscape</field>
+      <field name="format">A5</field>
+      <field name="orientation">Landscape</field>
+      <field name="margin_top">5</field>
+      <field name="margin_bottom">5</field>
+      <field name="margin_left">5</field>
+      <field name="margin_right">5</field>
+      <field name="header_line" eval="False"/>
+      <field name="header_spacing">0</field>
+    </record>
+
+    <record id="action_report_delivery_note" model="ir.actions.report">
+      <field name="name">Biên Bản Giao Nhận Hàng</field>
+      <field name="model">stock.picking</field>
+      <field name="report_type">qweb-pdf</field>
+      <field name="report_name">hoanglongvu_delivery_note.report_delivery_note</field>
+      <field name="binding_model_id" ref="stock.model_stock_picking"/>
+      <field name="binding_type">report</field>
+      <field name="paperformat_id" ref="hoanglongvu_delivery_note.paperformat_delivery_note_landscape"/>
+    </record>
+
+    <record id="action_report_logistic_tag" model="ir.actions.report">
+      <field name="name">Logistic Tag</field>
+      <field name="model">stock.move</field>
+      <field name="report_type">qweb-pdf</field>
+      <field name="report_name">hoanglongvu_delivery_note.report_logistic_tag</field>
+      <field name="binding_model_id" ref="stock.model_stock_move"/>
+      <field name="binding_type">report</field>
+      <field name="paperformat_id" ref="hoanglongvu_delivery_note.paperformat_logistic_tag_landscape"/>
+    </record>
+  </data>
+</odoo>

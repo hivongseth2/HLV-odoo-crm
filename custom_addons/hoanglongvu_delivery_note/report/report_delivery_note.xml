@@ -1,0 +1,245 @@
+<odoo>
+  <data>
+    <template id="report_delivery_note">
+      <t t-call="web.basic_layout">
+        <t t-foreach="docs" t-as="o">
+          <div class="page" style="font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 15px;">
+            
+            <!-- Header với logo và thông tin công ty - NO BORDER -->
+            <table style="width:100%; margin-bottom: 15px; border-collapse: collapse;  border-color:white">
+              <tr>
+                <td style="width: 12%; vertical-align: middle; padding: 5px;">
+                  <!-- Logo từ company -->
+                  <div style="padding: 8px; text-align: center; height: 80px; display: flex; align-items: center; justify-content: center;">
+                    <t t-if="o.company_id.logo">
+                      <img t-att-src="image_data_uri(o.company_id.logo)" style="max-width: 100%; max-height: 70px; object-fit: contain;" />
+                    </t>
+                    <t t-else="">
+                      <span style="font-size: 9px; color: #666;">Your logo</span>
+                    </t>
+                  </div>
+                </td>
+                <td style="width: 60%; vertical-align: top; padding: 5px 15px;">
+                  <h2 style="margin: 0; font-weight: bold; font-size: 16px; color: #333; text-transform: uppercase;" t-esc="o.company_id.name"/>
+                  <div style="margin: 3px 0; font-size: 10px; color: #555;">
+                    <t t-if="o.company_id.street">
+                      <span t-esc="o.company_id.street"/>
+                      <t t-if="o.company_id.street2">, <span t-esc="o.company_id.street2"/></t>
+                    </t>
+                    <t t-if="o.company_id.city">
+                      <br/><span t-esc="o.company_id.city"/>
+                      <t t-if="o.company_id.state_id">, <span t-esc="o.company_id.state_id.name"/></t>
+                      <t t-if="o.company_id.zip"> <span t-esc="o.company_id.zip"/></t>
+                      <t t-if="o.company_id.country_id">, <span t-esc="o.company_id.country_id.name"/></t>
+                    </t>
+                  </div>
+                  <div style="margin: 3px 0; font-size: 10px; color: #555;">
+                    <t t-if="o.company_id.phone">Điện thoại: <span t-esc="o.company_id.phone"/></t>
+                    <t t-if="o.company_id.email"> | Email: <span t-esc="o.company_id.email"/></t>
+                    <t t-if="o.company_id.website"> | Website: <span t-esc="o.company_id.website"/></t>
+                  </div>
+                </td>
+                <td style="width: 28%; vertical-align: top; text-align: right; padding: 5px;">
+                  <!-- Barcode -->
+                  <div style="text-align: right;">
+                    <img t-att-src="'/report/barcode/Code128/%s' % o.name" style="width:180px; height: 40px;" />
+                    <div style="font-size: 9px; margin-top: 3px; color: #666;">
+                      <span t-esc="o.name"/>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Đường kẻ ngang -->
+            <hr style="border: none; border-top: 2px solid #333; margin: 15px 0;"/>
+
+            <!-- Tiêu đề chính - NO BORDER -->
+            <table style="width: 100%; margin-bottom: 15px; padding: 10px; border-collapse: collapse;  border-color:white">
+              <tr>
+                <td style="width: 65%; text-align: center; vertical-align: middle;">
+                  <h1 style="margin: 0; font-weight: bold; font-size: 18px; color: #333; text-transform: uppercase;">
+                    BIÊN BẢN GIAO NHẬN HÀNG (Delivery Note)
+                  </h1>
+                </td>
+                <td style="width: 35%; text-align: right; font-weight: bold; font-size: 12px; color: #333; vertical-align: middle;">
+                  Số BBGH (Shipment Order No.): <span style="color: #d32f2f;" t-esc="o.name"/>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Bảng thông tin 3 cột -->
+            <table style="width:100%; border: 2px solid #333; border-collapse:collapse; margin-bottom: 15px;">
+              <tr>
+                <td style="border: 1px solid #333; padding: 10px; width: 33.33%; vertical-align: top; background-color: #f9f9f9;">
+                  <div style="font-weight: bold; color: #333; margin-bottom: 8px;">Nhà cung cấp (Supplier)</div>
+                  <div style="margin-bottom: 5px;">
+                    <span style="font-weight: 500;">Mã NCC:</span> <span t-esc="o.company_id.partner_id.ref or o.company_id.id"/>
+                  </div>
+                  <div style="margin-bottom: 5px;">
+                    <span style="font-weight: 500;">Tên:</span> <span t-esc="o.company_id.name"/>
+                  </div>
+                  <div>
+                    <span style="font-weight: 500;">Delivery type:</span> <span t-esc="o.picking_type_id.name or ''"/>
+                  </div>
+                </td>
+                <td style="border: 1px solid #333; padding: 10px; width: 33.33%; vertical-align: top;">
+                  <div style="font-weight: bold; color: #333; margin-bottom: 8px;">Bên bán hàng (Seller)</div>
+                  <div style="margin-bottom: 5px;">
+                    <span style="font-weight: 500;">Công ty:</span> <span t-esc="o.company_id.name"/>
+                  </div>
+                  <div style="margin-bottom: 5px;">
+                    <span style="font-weight: 500;">Marketing Team:</span> <span t-esc="o.sale_id.team_id.name if o.sale_id else 'Sales'"/>
+                  </div>
+                  <div>
+                    <span style="font-weight: 500;">Marketing PIC:</span> <span t-esc="o.sale_id.user_id.name if o.sale_id else o.user_id.name or ''"/>
+                  </div>
+                </td>
+                <td style="border: 1px solid #333; padding: 10px; width: 33.33%; vertical-align: top; background-color: #f9f9f9;">
+                  <div style="font-weight: bold; color: #333; margin-bottom: 8px;">Bên mua hàng (Buyer)</div>
+                  <div style="margin-bottom: 5px;">
+                    <span style="font-weight: 500;">Khách hàng:</span> <span t-esc="o.partner_id.name"/>
+                  </div>
+                  <div style="margin-bottom: 5px;">
+                    <span style="font-weight: 500;">Nhà máy (Plant):</span> <span t-esc="o.location_dest_id.name"/>
+                  </div>
+                  <div style="margin-bottom: 5px;">
+                    <span style="font-weight: 500;">Bộ phận (Dept):</span> <span t-esc="o.sale_id.team_id.name if o.sale_id else 'N/A'"/>
+                  </div>
+                  <div>
+                    <span style="font-weight: 500;">Người phụ trách (PIC):</span> <span t-esc="o.partner_id.name"/>
+                  </div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Bảng sản phẩm chi tiết -->
+            <table style="width:100%; border: 2px solid #333; border-collapse:collapse; margin-bottom: 15px;">
+              <thead>
+                <tr style="background-color: #e8e8e8;">
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 4%; font-weight: bold;">TT<br/>(No)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 8%; font-weight: bold;">Ngày PO<br/>(PO Date)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 10%; font-weight: bold;">Số PO<br/>(HLV PO#)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 10%; font-weight: bold;">Mã hàng<br/>(Item Code)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 22%; font-weight: bold;">[Maker] Tên hàng<br/>([Maker] Item Name)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 18%; font-weight: bold;">[Model] Quy cách<br/>([Model] Spec.)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 6%; font-weight: bold;">ĐVT<br/>(Unit)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 6%; font-weight: bold;">SL<br/>(Q'ty)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 10%; font-weight: bold;">Buyer PO No<br/>(PO Seq)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 6%; font-weight: bold;">BGMS Code<br/>(Remark)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <t t-if="o.move_line_ids and len(o.move_line_ids) > 0">
+                  <tr t-foreach="o.move_line_ids" t-as="line" t-att-style="'background-color: %s;' % ('#f9f9f9' if line_index % 2 == 0 else '#ffffff')">
+                    <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 10px;">
+                      <span t-esc="line_index + 1"/>
+                    </td>
+                    <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 10px;">
+                      <span t-esc="o.scheduled_date.strftime('%Y%m%d') if o.scheduled_date else ''"/>
+                    </td>
+                    <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 10px;">
+                      <span t-esc="o.origin or o.name"/>
+                    </td>
+                    <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 10px; font-weight: 500;">
+                      <span t-esc="line.product_id.default_code or ''"/>
+                    </td>
+                    <td style="border: 1px solid #333; padding: 6px; font-size: 10px;">
+                      <span t-esc="line.product_id.name or ''"/>
+                    </td>
+                    <td style="border: 1px solid #333; padding: 6px; font-size: 9px;">
+                      <span t-esc="line.product_id.description_sale or line.product_id.description or ''"/>
+                    </td>
+                    <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 10px;">
+                      <span t-esc="line.product_uom_id.name or ''"/>
+                    </td>
+                    <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 10px; font-weight: bold; color: #d32f2f;">
+                      <span t-esc="int(line.qty_done or line.product_uom_qty or 0)"/>
+                    </td>
+                    <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 9px;">
+                      <span t-esc="o.sale_id.client_order_ref if o.sale_id else ''"/>
+                    </td>
+                    <td style="border: 1px solid #333; padding: 6px; font-size: 9px;">
+                      <span t-esc="''"/>
+                    </td>
+                  </tr>
+                </t>
+                <t t-else="">
+                  <tr>
+                    <td colspan="10" style="border: 1px solid #333; padding: 20px; text-align:center; font-style: italic; color: #666;">
+                      Không có dữ liệu sản phẩm
+                    </td>
+                  </tr>
+                </t>
+              </tbody>
+            </table>
+
+            <!-- Địa chỉ giao hàng - NO BORDER -->
+            <div style="margin-bottom: 15px; padding: 10px; background-color: #f9f9f9; border-radius: 4px;">
+              <div style="font-weight: bold; color: #333; margin-bottom: 5px;">Giao hàng đến (Delivery to):</div>
+              <t t-if="o.partner_id">
+                <div style="margin-bottom: 3px;">
+                  <span style="font-weight: 500;">Khách hàng:</span> <span t-esc="o.partner_id.name"/>
+                </div>
+                <div style="margin-bottom: 3px;">
+                  <span style="font-weight: 500;">Địa chỉ:</span>
+                  <span t-esc="o.partner_id.street or ''"/>
+                  <t t-if="o.partner_id.street2">, <span t-esc="o.partner_id.street2"/></t>
+                  <t t-if="o.partner_id.city">, <span t-esc="o.partner_id.city"/></t>
+                  <t t-if="o.partner_id.state_id">, <span t-esc="o.partner_id.state_id.name"/></t>
+                  <t t-if="o.partner_id.zip"> <span t-esc="o.partner_id.zip"/></t>
+                  <t t-if="o.partner_id.country_id">, <span t-esc="o.partner_id.country_id.name"/></t>
+                </div>
+                <div>
+                  <t t-if="o.partner_id.phone or o.partner_id.mobile">
+                    <span style="font-weight: 500;">Điện thoại:</span> <span t-esc="o.partner_id.phone or o.partner_id.mobile"/>
+                  </t>
+                  <t t-if="o.partner_id.email"> | <span style="font-weight: 500;">Email:</span> <span t-esc="o.partner_id.email"/></t>
+                </div>
+              </t>
+            </div>
+
+            <!-- Phần ký tên -->
+            <div style="margin-top: 20px;">
+              <div style="font-weight: bold; color: #333; margin-bottom: 10px;">Ký và ghi rõ họ tên (Sign here):</div>
+              
+              <table style="width:100%; border: 2px solid #333; border-collapse:collapse; height: 120px;">
+                <tr>
+                  <td style="border: 1px solid #333; text-align:center; vertical-align: top; padding: 12px; width: 25%; background-color: #f9f9f9;">
+                    <div style="font-weight: bold; color: #333; margin-bottom: 5px;">Nhà cung cấp</div>
+                    <div style="font-style: italic; color: #666; font-size: 10px; margin-bottom: 30px;">(Supplier signature)</div>
+                    <div style="margin-top: 35px; font-style: italic; color: #666; font-size: 10px;">
+                      Date : ....../......./
+                    </div>
+                  </td>
+                  <td style="border: 1px solid #333; text-align:center; vertical-align: top; padding: 12px; width: 25%;">
+                    <div style="font-weight: bold; color: #333; margin-bottom: 5px;">HLV Thủ Kho</div>
+                    <div style="font-style: italic; color: #666; font-size: 10px; margin-bottom: 30px;">(HLV Warehouse signature)</div>
+                    <div style="margin-top: 35px; font-style: italic; color: #666; font-size: 10px;">
+                      Date : ....../......./
+                    </div>
+                  </td>
+                  <td style="border: 1px solid #333; text-align:center; vertical-align: top; padding: 12px; width: 25%; background-color: #f9f9f9;">
+                    <div style="font-weight: bold; color: #333; margin-bottom: 5px;">Khách hàng-Thủ kho</div>
+                    <div style="font-style: italic; color: #666; font-size: 10px; margin-bottom: 30px;">(Customer Warehouse Signature)</div>
+                    <div style="margin-top: 35px; font-style: italic; color: #666; font-size: 10px;">
+                      Date : ....../......./
+                    </div>
+                  </td>
+                  <td style="border: 1px solid #333; text-align:center; vertical-align: top; padding: 12px; width: 25%;">
+                    <div style="font-weight: bold; color: #333; margin-bottom: 5px;">Khách hàng - Người nhận hàng</div>
+                    <div style="font-style: italic; color: #666; font-size: 10px; margin-bottom: 30px;">(Customer - Receiver's signature)</div>
+                    <div style="margin-top: 35px; font-style: italic; color: #666; font-size: 10px;">
+                      Date : ....../......./
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+          </div>
+        </t>
+      </t>
+    </template>
+  </data>
+</odoo>

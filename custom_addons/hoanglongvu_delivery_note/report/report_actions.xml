@@ -1,0 +1,21 @@
+<!-- <odoo>
+  <data>
+    <record id="action_report_delivery_note"  model="report.paperformat">
+      <field name="name">Biên Bản Giao Nhận Hàng</field>
+      <field name="model">stock.picking</field>
+      <field name="report_type">qweb-pdf</field>
+      <field name="report_name">hoanglongvu_delivery_note.report_delivery_note</field>
+      <field name="binding_model_id" ref="stock.model_stock_picking"/>
+      <field name="binding_type">report</field>
+    </record>
+
+    <record id="action_report_logistic_tag" model="ir.actions.report">
+      <field name="name">Logistic Tag</field>
+      <field name="model">stock.move</field>
+      <field name="report_type">qweb-pdf</field>
+      <field name="report_name">hoanglongvu_delivery_note.report_logistic_tag</field>
+      <field name="binding_model_id" ref="stock.model_stock_move"/>
+      <field name="binding_type">report</field>
+    </record>
+  </data>
+</odoo> -->
