@@ -118,15 +118,15 @@
               <thead>
                 <tr style="background-color: #e8e8e8;">
                   <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 4%; font-weight: bold;">TT<br/>(No)</th>
-                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 8%; font-weight: bold;">Ngày PO<br/>(PO Date)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 10%; font-weight: bold;">Ngày PO<br/>(PO Date)</th>
                   <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 10%; font-weight: bold;">Số PO<br/>(HLV PO#)</th>
                   <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 10%; font-weight: bold;">Mã hàng<br/>(Item Code)</th>
-                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 22%; font-weight: bold;">[Maker] Tên hàng<br/>([Maker] Item Name)</th>
-                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 18%; font-weight: bold;">[Model] Quy cách<br/>([Model] Spec.)</th>
-                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 6%; font-weight: bold;">ĐVT<br/>(Unit)</th>
-                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 6%; font-weight: bold;">SL<br/>(Q'ty)</th>
-                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 10%; font-weight: bold;">Buyer PO No<br/>(PO Seq)</th>
-                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 6%; font-weight: bold;">BGMS Code<br/>(Remark)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 22%; font-weight: bold;">Tên hàng<br/>(Item Name)</th>
+                  <!-- <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 18%; font-weight: bold;">[Model] Quy cách<br/>([Model] Spec.)</th> -->
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 8%; font-weight: bold;">ĐVT<br/>(Unit)</th>
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 8%; font-weight: bold;">SL<br/>(Q'ty)</th>
+                  <!-- <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 10%; font-weight: bold;">Buyer PO No<br/>(PO Seq)</th> -->
+                  <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 18%; font-weight: bold;">Ghi chú <br/>(Note)</th>
                 </tr>
               </thead>
               <tbody>
@@ -147,18 +147,18 @@
                     <td style="border: 1px solid #333; padding: 6px; font-size: 10px;">
                       <span t-esc="line.product_id.name or ''"/>
                     </td>
-                    <td style="border: 1px solid #333; padding: 6px; font-size: 9px;">
+                    <!-- <td style="border: 1px solid #333; padding: 6px; font-size: 9px;">
                       <span t-esc="line.product_id.description_sale or line.product_id.description or ''"/>
-                    </td>
+                    </td> -->
                     <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 10px;">
                       <span t-esc="line.product_uom_id.name or ''"/>
                     </td>
                     <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 10px; font-weight: bold; color: #d32f2f;">
                       <span t-esc="int(line.qty_done or line.product_uom_qty or 0)"/>
                     </td>
-                    <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 9px;">
+                    <!-- <td style="border: 1px solid #333; padding: 6px; text-align: center; font-size: 9px;">
                       <span t-esc="o.sale_id.client_order_ref if o.sale_id else ''"/>
-                    </td>
+                    </td> -->
                     <td style="border: 1px solid #333; padding: 6px; font-size: 9px;">
                       <span t-esc="''"/>
                     </td>
