@@ -10,7 +10,7 @@
               <tr>
                 <td style="width: 12%; vertical-align: top; padding: 5px;">
                   <!-- Logo từ company -->
-                  <div style="border: 2px solid #333; padding: 8px; text-align: center; height: 60px; display: flex; align-items: center; justify-content: center;">
+                  <div style="border: 0px solid #333; padding: 8px; text-align: center; height: 60px; display: flex; align-items: center; justify-content: center;">
                     <t t-if="o.company_id.logo">
                       <img t-att-src="image_data_uri(o.company_id.logo)" style="max-width: 80px; max-height: 50px;"/>
                     </t>
@@ -55,7 +55,7 @@
             <hr style="border: none; border-top: 2px solid #333; margin: 15px 0;"/>
 
             <!-- Tiêu đề chính -->
-            <table style="width: 100%; margin-bottom: 15px; border-collapse: collapse;">
+            <table style="width: 100%; margin-bottom: 15px;padding:10px; border-collapse: collapse;">
               <tr>
                 <td style="width: 65%; text-align: center; vertical-align: middle;">
                   <h1 style="margin: 0; font-weight: bold; font-size: 18px; color: #333; text-transform: uppercase;">
