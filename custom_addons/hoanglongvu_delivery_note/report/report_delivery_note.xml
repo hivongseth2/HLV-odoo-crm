@@ -6,7 +6,7 @@
           <div class="page" style="font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 15px;">
             
             <!-- Header với logo và thông tin công ty -->
-            <table style="width:100%; margin-bottom: 15px; border-collapse: collapse;">
+            <table style="width:100%; margin-bottom: 15px; border-collapse: collapse; border:none">
               <tr>
                 <td style="width: 12%; vertical-align: top; padding: 5px;">
                   <!-- Logo từ company -->
@@ -56,13 +56,13 @@
 
             <!-- Tiêu đề chính -->
             <table style="width: 100%; margin-bottom: 15px;padding:10px; border-collapse: collapse;">
-              <tr>
-                <td style="width: 65%; text-align: center; vertical-align: middle;">
+              <tr style="border:none">
+                <td style="width: 65%; text-align: center; vertical-align: middle;border:none">
                   <h1 style="margin: 0; font-weight: bold; font-size: 18px; color: #333; text-transform: uppercase;">
                     BIÊN BẢN GIAO NHẬN HÀNG (Delivery Note)
                   </h1>
                 </td>
-                <td style="width: 35%; text-align: right; font-weight: bold; font-size: 12px; color: #333; vertical-align: middle;">
+                <td style="width: 35%; text-align: right; font-weight: bold; font-size: 12px; color: #333; vertical-align: middle;border:none">
                   Số BBGH (Shipment Order No.): <span style="color: #d32f2f;" t-esc="o.name"/>
                 </td>
               </tr>
