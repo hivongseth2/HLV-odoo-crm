@@ -12,7 +12,7 @@
                   type="object"
                   string="In Delivery Note"
                   class="btn-secondary"
-                  attrs="{'invisible': [('state', 'not in', ['assigned', 'done'])]}"/>
+               />
         </xpath>
       </field>
     </record>
