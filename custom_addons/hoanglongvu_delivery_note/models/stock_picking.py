@@ -5,8 +5,11 @@ class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
     def print_delivery_note(self):
-        """In delivery note cho picking"""
-        return self.env.ref('hoanglongvu_delivery_note.action_report_delivery_note').report_action(self)
+        """In delivery note cho picking - chỉ cho delivery orders"""
+        if self.picking_type_code == 'outgoing':
+            return self.env.ref('hoanglongvu_delivery_note.action_report_delivery_note').report_action(self)
+        return False
+
 
 class StockMove(models.Model):
     _inherit = 'stock.move'
