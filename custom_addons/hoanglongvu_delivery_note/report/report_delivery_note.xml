@@ -12,7 +12,7 @@
                   <!-- Logo từ company -->
                   <div style="border: 0px solid #333; padding: 8px; text-align: center; height: 60px; display: flex; align-items: center; justify-content: center;">
                     <t t-if="o.company_id.logo">
-                      <img t-att-src="image_data_uri(o.company_id.logo)" style="max-width: 120px; max-height: 90px;"/>
+                      <img t-att-src="image_data_uri(o.company_id.logo)" style="max-width: 120px; max-height: 70px;"/>
                     </t>
                     <t t-else="">
                       <span style="font-size: 9px; color: #666;">Your logo</span>
