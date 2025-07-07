@@ -11,19 +11,18 @@
           <button name="print_delivery_note"
                   type="object"
                   string="In Delivery Note"
-                  class="btn-secondary"
-               />
+                  class="btn-secondary"/>
         </xpath>
       </field>
     </record>
 
-    <!-- Kế thừa tree view của move_ids_without_package -->
-   <record id="view_move_picking_tree_inherit_logistic_tag" model="ir.ui.view">
-      <field name="name">stock.move.tree.inherit.logistic.tag</field>
+    <!-- Kế thừa đúng tree view đang dùng trong widget -->
+    <record id="view_stock_move_operations_inherit_logistic_tag" model="ir.ui.view">
+      <field name="name">stock.move.operations.inherit.logistic.tag</field>
       <field name="model">stock.move</field>
-      <field name="inherit_id" ref="stock.view_move_picking_tree"/>
+      <field name="inherit_id" ref="stock.view_stock_move_operations"/>
       <field name="arch" type="xml">
-        <xpath expr="//field[@name='quantity_done']" position="after">
+        <xpath expr="//field[@name='quantity']" position="after">
           <button name="print_logistic_tag_line"
                   type="object"
                   string="Tag"
@@ -32,5 +31,6 @@
         </xpath>
       </field>
     </record>
+
   </data>
 </odoo>
