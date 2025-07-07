@@ -1,45 +1,202 @@
 <odoo>
   <data>
     <template id="report_delivery_note">
-      <t t-call="web.basic_layout">
-        <t t-foreach="docs" t-as="o">
-          <div class="page">
-            <h2>BIÊN BẢN GIAO NHẬN HÀNG</h2>
-            <p><strong>Supplier:</strong> Hoàng Long Vũ</p>
-            <p><strong>Buyer PO:</strong> <t t-esc="o.origin"/></p>
-            <p><strong>Delivery Address:</strong> <t t-esc="o.partner_id.street"/></p>
-            <p><strong>Receiver:</strong> <t t-esc="o.partner_id.name"/></p>
-            <p><strong>Shipment No.:</strong> <t t-esc="o.name"/></p>
+         <t t-call="web.basic_layout">
+    <t t-foreach="docs" t-as="o">
+      <div class="page" style="font-family: Arial, sans-serif; font-size: 12px;">
+        
+        <!-- Header với logo và thông tin công ty -->
+        <table style="width:100%; margin-bottom: 10px;">
+          <tr>
+            <td style="width: 15%; vertical-align: top;">
+              <!-- Logo từ company -->
+              <t t-if="o.company_id.logo">
+                <img t-att-src="image_data_uri(o.company_id.logo)" style="max-width: 80px; max-height: 60px;"/>
+              </t>
+              <t t-else="">
+                <div style="width: 80px; height: 60px; border: 1px solid #ccc; text-align: center; line-height: 60px; font-size: 10px;">
+                  Logo
+                </div>
+              </t>
+            </td>
+            <td style="width: 60%; vertical-align: top; padding-left: 10px;">
+              <h3 style="margin: 0; font-weight: bold;" t-esc="o.company_id.name"/>
+              <p style="margin: 2px 0; font-size: 11px;">
+                <span t-esc="o.company_id.street or ''"/>
+                <t t-if="o.company_id.street2">, <span t-esc="o.company_id.street2"/></t>
+                <t t-if="o.company_id.city">, <span t-esc="o.company_id.city"/></t>
+                <t t-if="o.company_id.state_id">, <span t-esc="o.company_id.state_id.name"/></t>
+                <t t-if="o.company_id.country_id">, <span t-esc="o.company_id.country_id.name"/></t>
+              </p>
+              <p style="margin: 2px 0; font-size: 11px;">
+                <t t-if="o.company_id.phone">Điện thoại: <span t-esc="o.company_id.phone"/></t>
+                <t t-if="o.company_id.email"> Email: <span t-esc="o.company_id.email"/></t>
+              </p>
+            </td>
+            <td style="width: 25%; vertical-align: top; text-align: right;">
+              <!-- Barcode -->
+              <div style="text-align: right;">
+                <img t-att-src="'/report/barcode/Code128/%s' % o.name" style="width:180px; height: 40px;"/>
+                <div style="font-size: 10px; margin-top: 2px;">
+                  <span t-esc="o.name"/>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </table>
 
-            <table border="1" width="100%">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th>Description</th>
-                  <th>Qty</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr t-foreach="o.move_ids_without_package" t-as="move">
-                  <td><t t-esc="move.product_id.default_code"/></td>
-                  <td><t t-esc="move.product_id.display_name"/></td>
-                  <td>
-                    <t t-esc="sum([ml.qty_done for ml in move.move_line_ids])"/>
-                  </td>
+        <!-- Đường kẻ ngang -->
+        <hr style="border: 1px solid black; margin: 10px 0;"/>
+
+        <!-- Tiêu đề chính -->
+        <table style="width: 100%; margin-bottom: 10px;">
+          <tr>
+            <td style="width: 70%; text-align: center;">
+              <h3 style="margin: 0; font-weight: bold;">BIÊN BẢN GIAO NHẬN HÀNG (Delivery Note)</h3>
+            </td>
+            <td style="width: 30%; text-align: right; font-weight: bold;">
+              Số BBGH (Shipment Order No.) : <span t-esc="o.name"/>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Bảng thông tin 3 cột -->
+        <table style="width:100%; border:1px solid black; border-collapse:collapse; margin-bottom: 10px;">
+          <tr>
+            <td style="border:1px solid black; padding: 8px; width: 33.33%; vertical-align: top;">
+              <strong>Nhà cung cấp (Supplier)</strong> : <span t-esc="o.company_id.name"/><br/><br/>
+              <strong>Delivery type</strong> : <span t-esc="o.picking_type_id.name or ''"/>
+            </td>
+            <td style="border:1px solid black; padding: 8px; width: 33.33%; vertical-align: top;">
+              <strong>Bên bán hàng (Seller)</strong> : <span t-esc="o.company_id.name"/><br/><br/>
+              <strong>Sales Team</strong> : <span t-esc="o.sale_id.team_id.name if o.sale_id else ''"/><br/><br/>
+              <strong>Salesperson</strong> : <span t-esc="o.sale_id.user_id.name if o.sale_id else ''"/>
+            </td>
+            <td style="border:1px solid black; padding: 8px; width: 33.33%; vertical-align: top;">
+              <strong>Bên mua hàng (Buyer)</strong> : <span t-esc="o.partner_id.name"/><br/><br/>
+              <strong>Địa chỉ (Address)</strong> : <span t-esc="o.partner_id.street or ''"/><br/><br/>
+              <strong>Điện thoại (Phone)</strong> : <span t-esc="o.partner_id.phone or o.partner_id.mobile or ''"/><br/><br/>
+              <strong>Người liên hệ (Contact)</strong> : <span t-esc="o.partner_id.name"/>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Bảng sản phẩm chi tiết -->
+        <table style="width:100%; border:1px solid black; border-collapse:collapse; margin-bottom: 10px;">
+          <thead>
+            <tr style="background-color: #f0f0f0;">
+              <th style="border:1px solid black; padding: 5px; font-size: 10px; text-align: center; width: 5%;">TT<br/>(No)</th>
+              <th style="border:1px solid black; padding: 5px; font-size: 10px; text-align: center; width: 8%;">Ngày<br/>(Date)</th>
+              <th style="border:1px solid black; padding: 5px; font-size: 10px; text-align: center; width: 12%;">Số đơn hàng<br/>(Order No)</th>
+              <th style="border:1px solid black; padding: 5px; font-size: 10px; text-align: center; width: 12%;">Mã hàng<br/>(Item Code)</th>
+              <th style="border:1px solid black; padding: 5px; font-size: 10px; text-align: center; width: 25%;">Tên hàng<br/>(Item Name)</th>
+              <th style="border:1px solid black; padding: 5px; font-size: 10px; text-align: center; width: 15%;">Mô tả<br/>(Description)</th>
+              <th style="border:1px solid black; padding: 5px; font-size: 10px; text-align: center; width: 8%;">ĐVT<br/>(Unit)</th>
+              <th style="border:1px solid black; padding: 5px; font-size: 10px; text-align: center; width: 8%;">SL<br/>(Q'ty)</th>
+              <th style="border:1px solid black; padding: 5px; font-size: 10px; text-align: center; width: 7%;">Ghi chú<br/>(Remark)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <t t-if="o.move_line_ids and len(o.move_line_ids) &gt; 0">
+              <tr t-foreach="o.move_line_ids" t-as="line">
+                <td style="border:1px solid black; padding: 4px; text-align: center; font-size: 10px;">
+                  <span t-esc="line_index + 1"/>
+                </td>
+                <td style="border:1px solid black; padding: 4px; text-align: center; font-size: 10px;">
+                  <span t-esc="o.scheduled_date.strftime('%d/%m/%Y') if o.scheduled_date else ''"/>
+                </td>
+                <td style="border:1px solid black; padding: 4px; text-align: center; font-size: 10px;">
+                  <span t-esc="o.origin or o.name"/>
+                </td>
+                <td style="border:1px solid black; padding: 4px; text-align: center; font-size: 10px;">
+                  <span t-esc="line.product_id.default_code or ''"/>
+                </td>
+                <td style="border:1px solid black; padding: 4px; font-size: 10px;">
+                  <span t-esc="line.product_id.name or ''"/>
+                </td>
+                <td style="border:1px solid black; padding: 4px; font-size: 10px;">
+                  <span t-esc="line.product_id.description_sale or line.product_id.description or ''"/>
+                </td>
+                <td style="border:1px solid black; padding: 4px; text-align: center; font-size: 10px;">
+                  <span t-esc="line.product_uom_id.name or ''"/>
+                </td>
+                <td style="border:1px solid black; padding: 4px; text-align: center; font-size: 10px;">
+                  <span t-esc="'{:,.0f}'.format(line.qty_done or line.product_uom_qty or 0)"/>
+                </td>
+                <td style="border:1px solid black; padding: 4px; font-size: 10px;">
+                  <span t-esc="''"/>
+                </td>
               </tr>
+            </t>
+            <t t-else="">
+              <tr>
+                <td colspan="9" style="border:1px solid black; padding: 20px; text-align:center; font-style: italic;">
+                  Không có dữ liệu sản phẩm
+                </td>
+              </tr>
+            </t>
+          </tbody>
+        </table>
 
-              </tbody>
-            </table>
+        <!-- Địa chỉ giao hàng -->
+        <div style="margin-bottom: 15px;">
+          <strong>Giao hàng đến (Delivery to) :</strong>
+          <t t-if="o.partner_id">
+            <span t-esc="o.partner_id.name"/>,
+            <span t-esc="o.partner_id.street or ''"/>
+            <t t-if="o.partner_id.street2">, <span t-esc="o.partner_id.street2"/></t>
+            <t t-if="o.partner_id.city">, <span t-esc="o.partner_id.city"/></t>
+            <t t-if="o.partner_id.state_id">, <span t-esc="o.partner_id.state_id.name"/></t>
+            <t t-if="o.partner_id.country_id">, <span t-esc="o.partner_id.country_id.name"/></t>
+            <br/>
+            <t t-if="o.partner_id.phone or o.partner_id.mobile">
+              Điện thoại: <span t-esc="o.partner_id.phone or o.partner_id.mobile"/>
+            </t>
+          </t>
+        </div>
 
-            <p>Supplier Signature: ___________________</p>
-            <p>Customer Signature: ___________________</p>
+        <!-- Phần ký tên -->
+        <div style="margin-top: 20px;">
+          <strong>Ký và ghi rõ họ tên (Sign here):</strong>
+        </div>
+        
+        <table style="width:100%; border:1px solid black; border-collapse:collapse; margin-top: 10px; height: 120px;">
+          <tr>
+            <td style="border:1px solid black; text-align:center; vertical-align: top; padding: 10px; width: 25%;">
+              <strong>Nhà cung cấp</strong><br/>
+              <em>(Supplier signature)</em><br/><br/><br/><br/>
+              <div style="margin-top: 40px;">
+                <em>Date : ....../......./</em>
+              </div>
+            </td>
+            <td style="border:1px solid black; text-align:center; vertical-align: top; padding: 10px; width: 25%;">
+              <strong>Thủ kho</strong><br/>
+              <em>(Warehouse signature)</em><br/><br/><br/><br/>
+              <div style="margin-top: 40px;">
+                <em>Date : ....../......./</em>
+              </div>
+            </td>
+            <td style="border:1px solid black; text-align:center; vertical-align: top; padding: 10px; width: 25%;">
+              <strong>Khách hàng-Thủ kho</strong><br/>
+              <em>(Customer Warehouse Signature)</em><br/><br/><br/><br/>
+              <div style="margin-top: 40px;">
+                <em>Date : ....../......./</em>
+              </div>
+            </td>
+            <td style="border:1px solid black; text-align:center; vertical-align: top; padding: 10px; width: 25%;">
+              <strong>Khách hàng - Người nhận hàng</strong><br/>
+              <em>(Customer - Receiver's signature)</em><br/><br/><br/><br/>
+              <div style="margin-top: 40px;">
+                <em>Date : ....../......./</em>
+              </div>
+            </td>
+          </tr>
+        </table>
 
-            <div>
-              <img t-att-src="'/report/barcode/Code128/%s' % o.name"/>
-            </div>
-          </div>
-        </t>
-      </t>
+      </div>
+    </t>
+  </t>
+
     </template>
   </data>
 </odoo>
