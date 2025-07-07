@@ -6,7 +6,7 @@
           <div class="page" style="font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 15px;">
             
             <!-- Header với logo và thông tin công ty - NO BORDER -->
-            <table style="width:100%; margin-bottom: 15px; border-collapse: collapse;">
+            <table style="width:100%; margin-bottom: 15px; border-collapse: collapse;  border-color:white">
               <tr>
                 <td style="width: 12%; vertical-align: middle; padding: 5px;">
                   <!-- Logo từ company -->
@@ -55,7 +55,7 @@
             <hr style="border: none; border-top: 2px solid #333; margin: 15px 0;"/>
 
             <!-- Tiêu đề chính - NO BORDER -->
-            <table style="width: 100%; margin-bottom: 15px; padding: 10px; border-collapse: collapse;">
+            <table style="width: 100%; margin-bottom: 15px; padding: 10px; border-collapse: collapse;  border-color:white">
               <tr>
                 <td style="width: 65%; text-align: center; vertical-align: middle;">
                   <h1 style="margin: 0; font-weight: bold; font-size: 18px; color: #333; text-transform: uppercase;">
