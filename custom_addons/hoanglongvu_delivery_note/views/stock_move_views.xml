@@ -1,0 +1,38 @@
+<odoo>
+  <data>
+    <record id="view_move_tree_inherit_logistic_tag_button" model="ir.ui.view">
+      <field name="name">stock.move.tree.inherit.logistic.tag.button</field>
+      <field name="model">stock.move</field>
+      <field name="inherit_id" ref="stock.view_move_tree"/>
+      <field name="arch" type="xml">
+        <xpath expr="//tree" position="attributes">
+          <attribute name="decoration-info">state == 'done'</attribute>
+        </xpath>
+        <xpath expr="//field[@name='state']" position="after">
+          <button name="print_logistic_tag_line"
+                  type="object"
+                  string="In Tag"
+                  title="In Logistic Tag"
+                  icon="fa-print"
+                  attrs="{'invisible': [('state', 'not in', ['assigned', 'done'])]}"/>
+        </xpath>
+      </field>
+    </record>
+
+    <!-- Thêm button vào form view của stock.move -->
+    <record id="view_move_form_inherit_logistic_tag_button" model="ir.ui.view">
+      <field name="name">stock.move.form.inherit.logistic.tag.button</field>
+      <field name="model">stock.move</field>
+      <field name="inherit_id" ref="stock.view_move_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//header" position="inside">
+          <button name="print_logistic_tag_line"
+                  type="object"
+                  string="In Logistic Tag"
+                  class="btn-primary"
+                  attrs="{'invisible': [('state', 'not in', ['assigned', 'done'])]}"/>
+        </xpath>
+      </field>
+    </record>
+  </data>
+</odoo>
