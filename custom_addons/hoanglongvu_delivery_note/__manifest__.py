@@ -14,7 +14,7 @@
         "report/report_logistic_tag.xml",
         'report/report_actions.xml',
         'report/report_logistic_tag.xml',
-        # 'views/stock_move_views.xml',
+        'views/stock_move_views.xml',
         'views/stock_picking_views_simple.xml',
 
 
