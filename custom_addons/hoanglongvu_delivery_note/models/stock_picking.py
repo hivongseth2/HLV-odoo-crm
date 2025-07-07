@@ -5,6 +5,7 @@ class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
     def print_delivery_note(self):
+        """In delivery note cho picking"""
         return self.env.ref('hoanglongvu_delivery_note.action_report_delivery_note').report_action(self)
 
 class StockMove(models.Model):
@@ -22,6 +23,13 @@ class StockMove(models.Model):
     
     def get_supplier_code(self):
         """Lấy mã nhà cung cấp"""
-        if self.picking_id.partner_id and self.picking_id.partner_id.supplier_rank > 0:
-            return self.picking_id.partner_id.ref or self.picking_id.partner_id.id
+        if self.picking_id.partner_id and hasattr(self.picking_id.partner_id, 'supplier_rank') and self.picking_id.partner_id.supplier_rank > 0:
+            return self.picking_id.partner_id.ref or str(self.picking_id.partner_id.id)
         return self.picking_id.company_id.partner_id.ref or str(self.picking_id.company_id.id)
+
+class StockMoveLine(models.Model):
+    _inherit = 'stock.move.line'
+    
+    def print_logistic_tag_line(self):
+        """In logistic tag cho move line"""
+        return self.move_id.print_logistic_tag_line()

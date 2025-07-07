@@ -1,0 +1,31 @@
+<odoo>
+  <data>
+    <!-- Thêm button in logistic tag vào picking form -->
+    <record id="view_picking_form_inherit_delivery_note" model="ir.ui.view">
+      <field name="name">stock.picking.form.inherit.delivery.note</field>
+      <field name="model">stock.picking</field>
+      <field name="inherit_id" ref="stock.view_picking_form"/>
+      <field name="arch" type="xml">
+        <!-- Thêm button in delivery note -->
+        <xpath expr="//header/button[@name='button_validate']" position="after">
+          <button name="print_delivery_note"
+                  type="object"
+                  string="In Delivery Note"
+                  class="btn-secondary"
+                  attrs="{'invisible': [('state', 'not in', ['assigned', 'done'])]}"/>
+        </xpath>
+        
+        <!-- Thêm button in tag cho từng move line -->
+        <xpath expr="//field[@name='move_ids_without_package']//tree//field[@name='quantity_done']" position="after">
+          <button name="print_logistic_tag_line"
+                  type="object"
+                  string="Tag"
+                  title="In Logistic Tag"
+                  icon="fa-print"
+                  class="btn-sm btn-link"
+                  attrs="{'invisible': [('state', 'not in', ['assigned', 'done'])]}"/>
+        </xpath>
+      </field>
+    </record>
+  </data>
+</odoo>
