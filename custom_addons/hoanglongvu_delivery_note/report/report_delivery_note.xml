@@ -12,7 +12,7 @@
                   <!-- Logo từ company -->
                   <div style="border: 0px solid #333; padding: 8px; text-align: center; height: 60px; display: flex; align-items: center; justify-content: center;">
                     <t t-if="o.company_id.logo">
-                      <img t-att-src="image_data_uri(o.company_id.logo)" style="max-width: 80px; max-height: 50px;"/>
+                      <img t-att-src="image_data_uri(o.company_id.logo)" style="max-width: 120px; max-height: 90px;"/>
                     </t>
                     <t t-else="">
                       <span style="font-size: 9px; color: #666;">Your logo</span>
@@ -42,7 +42,7 @@
                 <td style="width: 28%; vertical-align: top; text-align: right; padding: 5px;">
                   <!-- Barcode -->
                   <div style="text-align: right;">
-                    <img t-att-src="'/report/barcode/Code128/%s' % o.name" style="width:180px; height: 40px; border: 1px solid #ddd;"/>
+                    <img t-att-src="'/report/barcode/Code128/%s' % o.name" style="width:180px; height: 40px; "/>
                     <div style="font-size: 9px; margin-top: 3px; color: #666;">
                       <span t-esc="o.name"/>
                     </div>
@@ -69,7 +69,7 @@
             </table>
 
             <!-- Bảng thông tin 3 cột -->
-            <table style="width:100%; border: 2px solid #333; border-collapse:collapse; margin-bottom: 15px;">
+            <table style="width:100%; border: 0px solid #333; border-collapse:collapse; margin-bottom: 15px;">
               <tr>
                 <td style="border: 1px solid #333; padding: 10px; width: 33.33%; vertical-align: top; background-color: #f9f9f9;">
                   <div style="font-weight: bold; color: #333; margin-bottom: 8px;">Nhà cung cấp (Supplier)</div>
@@ -114,7 +114,7 @@
             </table>
 
             <!-- Bảng sản phẩm chi tiết -->
-            <table style="width:100%; border: 2px solid #333; border-collapse:collapse; margin-bottom: 15px;">
+            <table style="width:100%; border: 0px solid #333; border-collapse:collapse; margin-bottom: 15px;">
               <thead>
                 <tr style="background-color: #e8e8e8;">
                   <th style="border: 1px solid #333; padding: 8px; font-size: 10px; text-align: center; width: 4%; font-weight: bold;">TT<br/>(No)</th>
@@ -175,7 +175,7 @@
             </table>
 
             <!-- Địa chỉ giao hàng -->
-            <div style="margin-bottom: 15px; padding: 10px; background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+            <div style="margin-bottom: 15px; padding: 10px; background-color: #f9f9f9; border: 0px solid #ddd; border-radius: 4px;">
               <div style="font-weight: bold; color: #333; margin-bottom: 5px;">Giao hàng đến (Delivery to):</div>
               <t t-if="o.partner_id">
                 <div style="margin-bottom: 3px;">
@@ -203,7 +203,7 @@
             <div style="margin-top: 20px;">
               <div style="font-weight: bold; color: #333; margin-bottom: 10px;">Ký và ghi rõ họ tên (Sign here):</div>
               
-              <table style="width:100%; border: 2px solid #333; border-collapse:collapse; height: 120px;">
+              <table style="width:100%; border: 0px solid #333; border-collapse:collapse; height: 120px;">
                 <tr>
                   <td style="border: 1px solid #333; text-align:center; vertical-align: top; padding: 12px; width: 25%; background-color: #f9f9f9;">
                     <div style="font-weight: bold; color: #333; margin-bottom: 5px;">Nhà cung cấp</div>
