@@ -11,10 +11,7 @@
                   string="In Biên Bản Giao Nhận"
                   class="btn-primary"/>
 
-          <button type="object"
-                  name="print_logistic_tag"
-                  string="In Logistic Tag"
-                  class="btn-secondary"/>
+
         </xpath>
       </field>
     </record>

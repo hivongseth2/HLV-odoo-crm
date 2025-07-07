@@ -5,9 +5,9 @@
         <div class="page">
           <h3>LOGISTIC TAG</h3>
           <p><strong>Supplier:</strong> Hoàng Long Vũ</p>
-          <p><strong>Buyer PO:</strong> <t t-esc="o.origin"/></p>
-          <p><strong>Receiver:</strong> <t t-esc="o.partner_id.name"/></p>
-          <p><strong>Shipment:</strong> <t t-esc="o.name"/></p>
+          <p><strong>Buyer PO:</strong> <t t-esc="o.picking_id.origin"/></p>
+          <p><strong>Receiver:</strong> <t t-esc="o.picking_id.partner_id.name"/></p>
+          <p><strong>Shipment:</strong> <t t-esc="o.picking_id.name"/></p>
 
           <table border="1" width="100%">
             <thead>
@@ -18,16 +18,16 @@
               </tr>
             </thead>
             <tbody>
-              <tr t-foreach="o.move_ids_without_package" t-as="line">
-                <td><t t-esc="line.product_id.default_code"/></td>
-                <td><t t-esc="line.product_id.display_name"/></td>
-                <td><t t-esc="line.quantity_done"/></td>
+              <tr>
+                <td><t t-esc="o.product_id.default_code"/></td>
+                <td><t t-esc="o.product_id.display_name"/></td>
+                <td><t t-esc="o.quantity_done"/></td>
               </tr>
             </tbody>
           </table>
 
           <div>
-            <img t-att-src="'/report/barcode/Code128/%s' % o.name"/>
+            <img t-att-src="'/report/barcode/Code128/%s' % o.picking_id.name"/>
           </div>
         </div>
       </t>

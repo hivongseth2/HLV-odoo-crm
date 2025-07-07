@@ -1,0 +1,17 @@
+<odoo>
+  <data>
+    <record id="view_picking_form_inherit_print" model="ir.ui.view">
+      <field name="name">stock.picking.inherit.print.move.line</field>
+      <field name="model">stock.picking</field>
+      <field name="inherit_id" ref="stock.view_picking_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//field[@name='move_ids_without_package']/tree" position="inside">
+          <button name="print_logistic_tag_line"
+                  type="object"
+                  string="In Logistic Tag"
+                  icon="fa-print"/>
+        </xpath>
+      </field>
+    </record>
+  </data>
+</odoo>
