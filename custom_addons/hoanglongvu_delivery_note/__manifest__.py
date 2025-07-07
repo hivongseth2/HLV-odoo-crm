@@ -8,11 +8,11 @@
         "security/ir.model.access.csv",
         "report/report.xml",
         "views/views.xml",
+        'report/paperformat.xml',
 
         "report/report_delivery_note.xml",
         "report/report_logistic_tag.xml",
         'report/report_actions.xml',
-        'report/paperformat.xml',
         'reports/report_logistic_tag.xml',
         'views/stock_move_views.xml',
 
