@@ -3,160 +3,160 @@
     <template id="report_logistic_tag">
       <t t-call="web.basic_layout">
         <t t-foreach="docs" t-as="o">
-          <div class="page" style="font-family: Arial, sans-serif; font-size: 11px; padding: 5mm;">
+          <div class="page" style="font-family: Arial, sans-serif; font-size: 11px; padding: 10mm;">
             
             <!-- Header -->
-            <div style="text-align: center; font-weight: bold; font-size: 14px; margin-bottom: 8px;">
+            <div style="text-align: center; font-weight: bold; font-size: 16px; margin-bottom: 10px;">
               Logistic Tag
             </div>
 
             <!-- Bảng thông tin chính -->
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid black; margin-bottom: 5px;">
+            <table style="width: 100%; border-collapse: collapse; border: 2px solid black; margin-bottom: 8px;">
               <tr>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 33%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 33%; background-color: #f0f0f0;">
                   Delivery Date
                 </td>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 33%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 33%; background-color: #f0f0f0;">
                   Order No.
                 </td>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 34%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 34%; background-color: #f0f0f0;">
                   Buyer PO No.
                 </td>
               </tr>
               <tr>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
+                <td style="border: 1px solid black; padding: 5px; text-align: center; font-size: 12px;">
                   <span t-esc="o.picking_id.scheduled_date.strftime('%Y-%m-%d') if o.picking_id.scheduled_date else ''"/>
                 </td>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
+                <td style="border: 1px solid black; padding: 5px; text-align: center; font-size: 12px;">
                   <span t-esc="o.picking_id.origin or o.picking_id.name"/>
                 </td>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
+                <td style="border: 1px solid black; padding: 5px; text-align: center; font-size: 12px;">
                   <span t-esc="o.get_buyer_po_number()"/>
                 </td>
               </tr>
             </table>
 
             <!-- Bảng thông tin giao hàng -->
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid black; margin-bottom: 5px;">
+            <table style="width: 100%; border-collapse: collapse; border: 2px solid black; margin-bottom: 8px;">
               <tr>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 33%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 33%; background-color: #f0f0f0;">
                   Delivery Type
                 </td>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 33%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 33%; background-color: #f0f0f0;">
                   Warehouse
                 </td>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 34%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 34%; background-color: #f0f0f0;">
                   Supplier
                 </td>
               </tr>
               <tr>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
+                <td style="border: 1px solid black; padding: 5px; text-align: center;">
                   <span t-esc="o.picking_id.picking_type_id.name"/>
                 </td>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
-                  <span t-esc="o.picking_id.location_id.name"/>
+                <td style="border: 1px solid black; padding: 5px; text-align: center;">
+                  <span t-esc="o.picking_id.location_id.display_name"/>
                 </td>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
+                <td style="border: 1px solid black; padding: 5px; text-align: center;">
                   <span t-esc="o.get_supplier_code()"/>
                 </td>
               </tr>
             </table>
 
             <!-- Thông tin sản phẩm -->
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid black; margin-bottom: 5px;">
+            <table style="width: 100%; border-collapse: collapse; border: 2px solid black; margin-bottom: 8px;">
               <tr>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center;" colspan="3">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; background-color: #f0f0f0;" colspan="3">
                   Item Name / Model / Description / Origin
                 </td>
               </tr>
               <tr>
-                <td style="border: 1px solid black; padding: 3px; font-size: 10px;" colspan="3">
-                  <span t-esc="o.product_id.name"/>
+                <td style="border: 1px solid black; padding: 8px; font-size: 11px;" colspan="3">
+                  <strong><span t-esc="o.product_id.name"/></strong>
                   <t t-if="o.product_id.default_code"> / <span t-esc="o.product_id.default_code"/></t>
-                  <t t-if="o.product_id.description_sale"> / <span t-esc="o.product_id.description_sale"/></t>
+                  <t t-if="o.product_id.description_sale"><br/><span t-esc="o.product_id.description_sale"/></t>
                 </td>
               </tr>
             </table>
 
             <!-- Bảng mã sản phẩm và số lượng -->
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid black; margin-bottom: 5px;">
+            <table style="width: 100%; border-collapse: collapse; border: 2px solid black; margin-bottom: 8px;">
               <tr>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 40%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 40%; background-color: #f0f0f0;">
                   Item Code (IMG)
                 </td>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 40%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 40%; background-color: #f0f0f0;">
                   Buyer Item Code
                 </td>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 20%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 20%; background-color: #f0f0f0;">
                   Qty
                 </td>
               </tr>
               <tr>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
+                <td style="border: 1px solid black; padding: 5px; text-align: center; font-size: 12px;">
                   <span t-esc="o.product_id.default_code or ''"/>
                 </td>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
-                  <span t-esc="o.product_id.barcode or ''"/>
+                <td style="border: 1px solid black; padding: 5px; text-align: center; font-size: 12px;">
+                  <span t-esc="o.product_id.barcode or o.product_id.default_code or ''"/>
                 </td>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
+                <td style="border: 1px solid black; padding: 5px; text-align: center; font-size: 14px; font-weight: bold;">
                   <span t-esc="int(o.quantity_done or o.product_uom_qty or 0)"/>
                 </td>
               </tr>
             </table>
 
             <!-- Thông tin khách hàng -->
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid black; margin-bottom: 5px;">
+            <table style="width: 100%; border-collapse: collapse; border: 2px solid black; margin-bottom: 8px;">
               <tr>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 33%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 33%; background-color: #f0f0f0;">
                   Customer
                 </td>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 33%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 33%; background-color: #f0f0f0;">
                   Plant
                 </td>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 34%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 34%; background-color: #f0f0f0;">
                   Division
                 </td>
               </tr>
               <tr>
-                <td style="border: 1px solid black; padding: 3px; text-align: center; font-size: 10px;">
+                <td style="border: 1px solid black; padding: 5px; text-align: center; font-size: 10px;">
                   <span t-esc="o.picking_id.partner_id.name"/>
                 </td>
-                <td style="border: 1px solid black; padding: 3px; text-align: center;">
-                  <span t-esc="o.picking_id.location_dest_id.name"/>
+                <td style="border: 1px solid black; padding: 5px; text-align: center;">
+                  <span t-esc="o.picking_id.location_dest_id.display_name"/>
                 </td>
-                <td style="border: 1px solid black; padding: 3px; text-align: center; font-size: 9px;">
-                  <span t-esc="o.sale_line_id.order_id.team_id.name if o.sale_line_id else ''"/>
+                <td style="border: 1px solid black; padding: 5px; text-align: center; font-size: 10px;">
+                  <span t-esc="o.sale_line_id.order_id.team_id.name if o.sale_line_id else 'N/A'"/>
                 </td>
               </tr>
             </table>
 
             <!-- Thông tin người mua và người nhận -->
-            <table style="width: 100%; border-collapse: collapse; border: 1px solid black; margin-bottom: 8px;">
+            <table style="width: 100%; border-collapse: collapse; border: 2px solid black; margin-bottom: 15px;">
               <tr>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 50%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 50%; background-color: #f0f0f0;">
                   Purchaser
                 </td>
-                <td style="border: 1px solid black; padding: 3px; font-weight: bold; text-align: center; width: 50%;">
+                <td style="border: 1px solid black; padding: 5px; font-weight: bold; text-align: center; width: 50%; background-color: #f0f0f0;">
                   Receiver
                 </td>
               </tr>
               <tr>
-                <td style="border: 1px solid black; padding: 3px; text-align: center; font-size: 10px;">
-                  <span t-esc="o.sale_line_id.order_id.user_id.name if o.sale_line_id else o.picking_id.user_id.name"/>
+                <td style="border: 1px solid black; padding: 8px; text-align: center; font-size: 10px;">
+                  <span t-esc="o.sale_line_id.order_id.user_id.name if o.sale_line_id else o.picking_id.user_id.name or 'N/A'"/>
                 </td>
-                <td style="border: 1px solid black; padding: 3px; text-align: center; font-size: 10px;">
+                <td style="border: 1px solid black; padding: 8px; text-align: center; font-size: 10px;">
                   <span t-esc="o.picking_id.partner_id.name"/>
                 </td>
               </tr>
             </table>
 
             <!-- Barcode và số shipment -->
-            <div style="text-align: center;">
-              <div style="font-weight: bold; font-size: 12px; margin-bottom: 3px;">
-                <span t-esc="o.picking_id.name"/>  1-1
+            <div style="text-align: center; margin-top: 15px;">
+              <div style="font-weight: bold; font-size: 14px; margin-bottom: 5px;">
+                <span t-esc="o.picking_id.name"/> &nbsp;&nbsp; 1-1
               </div>
               <img t-att-src="'/report/barcode/Code128/%s' % o.picking_id.name" 
-                   style="height: 25px; width: 80%;"/>
+                   style="height: 30px; width: 70%;"/>
             </div>
 
           </div>

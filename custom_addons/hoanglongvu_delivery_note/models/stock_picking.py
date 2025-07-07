@@ -23,7 +23,7 @@ class StockMove(models.Model):
     
     def get_supplier_code(self):
         """Lấy mã nhà cung cấp"""
-        if self.picking_id.partner_id and hasattr(self.picking_id.partner_id, 'supplier_rank') and self.picking_id.partner_id.supplier_rank > 0:
+        if hasattr(self.picking_id.partner_id, 'supplier_rank') and self.picking_id.partner_id.supplier_rank > 0:
             return self.picking_id.partner_id.ref or str(self.picking_id.partner_id.id)
         return self.picking_id.company_id.partner_id.ref or str(self.picking_id.company_id.id)
 
@@ -31,5 +31,5 @@ class StockMoveLine(models.Model):
     _inherit = 'stock.move.line'
     
     def print_logistic_tag_line(self):
-        """In logistic tag cho move line"""
+        """In logistic tag cho move line - chuyển đổi sang stock.move để in"""
         return self.move_id.print_logistic_tag_line()
