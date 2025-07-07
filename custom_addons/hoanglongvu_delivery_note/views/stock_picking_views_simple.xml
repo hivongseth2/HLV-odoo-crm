@@ -1,4 +1,4 @@
-<odoo>
+<!-- <odoo>
   <data>
     <!-- Thêm button in logistic tag vào picking form -->
     <record id="view_picking_form_inherit_delivery_note" model="ir.ui.view">
@@ -28,4 +28,4 @@
       </field>
     </record>
   </data>
-</odoo>
+</odoo> -->
