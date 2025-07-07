@@ -12,7 +12,7 @@
 
         "report/report_delivery_note.xml",
         "report/report_logistic_tag.xml",
-        'report/report_actions.xml',
+        # 'report/report_actions.xml',
         'report/report_logistic_tag.xml',
         # 'views/stock_move_views.xml',
         'views/stock_move_line_views.xml'

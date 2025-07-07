@@ -1,6 +1,6 @@
-<!-- <odoo>
+<odoo>
   <data>
-    <record id="action_report_delivery_note" model="ir.actions.report">
+    <record id="action_report_delivery_note"  model="report.paperformat">
       <field name="name">Biên Bản Giao Nhận Hàng</field>
       <field name="model">stock.picking</field>
       <field name="report_type">qweb-pdf</field>
@@ -18,4 +18,4 @@
       <field name="binding_type">report</field>
     </record>
   </data>
-</odoo> -->
+</odoo>
