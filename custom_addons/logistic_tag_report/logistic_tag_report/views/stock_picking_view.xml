@@ -1,0 +1,16 @@
+
+<odoo>
+    <record id="view_picking_form_logistic_tag" model="ir.ui.view">
+        <field name="name">stock.picking.form.logistic.tag</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="print_logistic_tag"
+                        string="Print Logistic Tag"
+                        type="object"
+                        class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
