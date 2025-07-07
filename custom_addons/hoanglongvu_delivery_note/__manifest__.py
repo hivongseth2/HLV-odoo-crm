@@ -8,7 +8,7 @@
         "security/ir.model.access.csv",
         "report/report.xml",
         "views/views.xml",
-        "views/views_logistic_tag.xml"
+        "views/views_logistic_tag.xml",
         "report/report_delivery_note.xml",
         "report/report_logistic_tag.xml"
 
