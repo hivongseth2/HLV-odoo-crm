@@ -1,5 +1,5 @@
 <odoo>
-  <template id="report_sale_order_label_document">
+  <template id="report_sale_order_label">
     <t t-call="web.basic_layout">
       <t t-foreach="docs" t-as="o">
         <div style="width: 40mm; height: 30mm; font-size: 9pt; border: 1px solid black;">
