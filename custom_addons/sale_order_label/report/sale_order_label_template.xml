@@ -1,0 +1,16 @@
+<odoo>
+  <template id="sale_order_label_template">
+    <t t-call="web.html_container">
+      <t t-foreach="docs" t-as="o">
+        <div style="width: 40mm; height: 30mm; padding: 2mm; font-size: 9pt; border: 1px solid black;">
+          <strong>Đơn hàng:</strong> <t t-esc="o.name"/><br/>
+          <strong>Ngày:</strong> <t t-esc="o.date_order.strftime('%d/%m/%Y')"/><br/>
+          <strong>Khách:</strong> <t t-esc="o.partner_id.name"/><br/>
+          <div style="margin-top: 4mm;">
+            <img t-att-src="'/report/barcode/Code128/%s' % o.name" style="width:100%; height:10mm;" />
+          </div>
+        </div>
+      </t>
+    </t>
+  </template>
+</odoo>

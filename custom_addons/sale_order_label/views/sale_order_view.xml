@@ -1,0 +1,16 @@
+<odoo>
+  <record id="view_order_form_inherit_label" model="ir.ui.view">
+    <field name="name">sale.order.form.inherit.label</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//header" position="inside">
+        <button name="action_print_label"
+                type="object"
+                string="In nhãn đơn hàng"
+                class="btn-primary"
+                icon="fa-print"/>
+      </xpath>
+    </field>
+  </record>
+</odoo>
