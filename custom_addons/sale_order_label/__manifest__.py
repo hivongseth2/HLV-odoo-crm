@@ -7,7 +7,7 @@
     "data": [
         "views/sale_order_view.xml",
         "report/sale_order_label_template.xml",
-        "report/sale_order_label_report.xml",
+        "report/sale_order_label_report.xml"
     ],
     "installable": True,
     "application": False,
