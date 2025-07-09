@@ -4,8 +4,8 @@
       string="Order Label"
       model="sale.order"
       report_type="qweb-pdf"
-      name="sale_order_label.report_sale_order_label"
-      file="sale_order_label.report_sale_order_label"
+      name="sale_order_label.report_sale_order_label_document"
+      file="sale_order_label.report_sale_order_label_document"
       print_report_name="'Order Label - %s' % (object.name)"
   />
 </odoo>
