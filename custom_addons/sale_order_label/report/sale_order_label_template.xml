@@ -1,8 +1,8 @@
 <odoo>
   <template id="report_sale_order_label_document">
-    <t t-call="web.basic_layout">
+    <t t-call="web.minimal_layout">
       <t t-foreach="docs" t-as="o">
-        <div style="width: 40mm; height: 30mm; font-size: 9pt; border: 1px solid black;">
+        <div style="width: 40mm; height: 30mm; font-size: 9pt; border: 1px solid black; page-break-after: always; padding: 1mm;">
           <strong>Đơn hàng:</strong> <t t-esc="o.name"/><br/>
           <strong>Ngày:</strong> <t t-esc="o.date_order.strftime('%d/%m/%Y')"/><br/>
           <strong>Khách:</strong> <t t-esc="o.partner_id.name"/><br/>
