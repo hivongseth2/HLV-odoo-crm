@@ -50,7 +50,8 @@ class MisaTransferFetch(models.TransientModel):
                 "https://actapp.misa.vn/g1/api/in/v1/in_inward_outward_list/paging_filter_v2",
                 headers, payload
             )
-
+            
+            _logger.warning("warning: %s", response.text)
             if response.status_code != 200:
                 _logger.info("response: %s", response.text)
 
