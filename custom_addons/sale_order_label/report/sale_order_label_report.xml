@@ -1,34 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <odoo>
   <data>
     <!-- Paper format optional nếu cần custom khổ giấy -->
-        <record id="paperformat_order_label" model="report.paperformat">
-        <field name="name">Label 40x30mm</field>
-        <field name="default" eval="False"/>
-        <field name="format">Custom</field>
-        <field name="page_height">30</field> 
-        <field name="page_width">40</field>  <!-- mm -->
-        <field name="orientation">Portrait</field>
-        <field name="margin_top">0</field>
-        <field name="margin_bottom">0</field>
-        <field name="margin_left">0</field>
-        <field name="margin_right">0</field>
-        <field name="header_line" eval="False"/>
-        <field name="header_spacing">0</field>
-        </record>
-
-
+    <record id="paperformat_order_label" model="report.paperformat">
+      <field name="name">Label 40x30mm</field>
+      <field name="default" eval="False"/>
+      <field name="format">Custom</field>
+      <field name="page_height">30</field>
+      <field name="page_width">40</field> <!-- mm -->
+      <field name="orientation">Portrait</field>
+      <field name="margin_top">0</field>
+      <field name="margin_bottom">0</field>
+      <field name="margin_left">0</field>
+      <field name="margin_right">0</field>
+      <field name="header_line" eval="False"/>
+      <field name="header_spacing">0</field>
+    </record>
 
     <!-- Report definition -->
     <record id="action_report_sale_order_label" model="ir.actions.report">
       <field name="name">Sale Order Label</field>
       <field name="model">sale.order</field>
       <field name="report_type">qweb-pdf</field>
-      <!-- <field name="paperformat_id" ref="sale_order_label.paperformat_order_label"/> -->
-
       <field name="report_name">sale_order_label.report_sale_order_label_document</field>
       <field name="binding_model_id" ref="sale.model_sale_order"/>
       <field name="binding_type">report</field>
-      <!-- Nếu có custom paper format thì thêm dòng này -->
       <field name="paperformat_id" ref="sale_order_label.paperformat_order_label"/>
     </record>
   </data>
