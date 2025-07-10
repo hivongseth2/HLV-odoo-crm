@@ -44,11 +44,11 @@ class SaleApiImportWizard(models.TransientModel):
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
-        while page <= 10:
+        while page <= 30:
             params = {
                 "page": page,
                 "pageSize": page_size,
-                "orderBy": "created_date",
+                "orderBy": "sale_order_date",
                 "isDescending": True
             }
             try:
@@ -58,9 +58,6 @@ class SaleApiImportWizard(models.TransientModel):
                 orders = response.json().get("data", [])
             except Exception as e:
                 raise Exception(f"Lỗi khi lấy đơn hàng từ API MISA: {e}")
-
-            if not orders:
-                break
 
             for order in orders:
                 order_date_str = order.get("created_date")
