@@ -11,15 +11,21 @@ class MisaApiUtils(models.AbstractModel):
     _description = 'MISA API Utilities'
 
     def _get_misa_token(self):
-           # Step 1: Đăng nhập lấy cookie
+        # Step 1: Đăng nhập lấy cookie
         login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
         login_payload = {
             "UserName": "Hoanglongvuco@gmail.com",
             "Password": "Hoanglongvu@2025"
         }
         headers_login = {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Content-Length": str(len(str(login_payload).replace("'", '"'))),  # optional nhưng an toàn
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+            "Origin": "https://amisapp.misa.vn",
+            "Referer": "https://amisapp.misa.vn/",
+            "Accept": "application/json, text/plain, */*"
         }
+
 
         session = requests.Session()
         response = session.post(login_url, json=login_payload, headers=headers_login)
