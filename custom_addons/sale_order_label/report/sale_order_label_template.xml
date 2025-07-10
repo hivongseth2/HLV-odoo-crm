@@ -1,7 +1,7 @@
 <odoo>
   <template id="report_sale_order_label_document">
     <t t-call="web.minimal_layout">
-      <main>
+      <main> <!-- Đảm bảo có phần tử main -->
         <t t-foreach="docs" t-as="o">
           <div style="width: 40mm; height: 30mm; font-size: 9pt; border: 1px solid black; page-break-after: always; padding: 1mm;">
             <strong>Đơn hàng:</strong> <t t-esc="o.name"/><br/>
@@ -11,7 +11,7 @@
             </div>
           </div>
         </t>
-      </main>
+      </main> <!-- Đảm bảo phần tử main được đóng đúng -->
     </t>
   </template>
 </odoo>
