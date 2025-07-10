@@ -23,7 +23,9 @@ class MisaApiUtils(models.AbstractModel):
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
             "Origin": "https://amisapp.misa.vn",
             "Referer": "https://amisapp.misa.vn/",
-            "Accept": "application/json, text/plain, */*"
+            "Accept": "application/json, text/plain, */*",
+            "Host": "amisapp.misa.vn",
+
         }
 
 
