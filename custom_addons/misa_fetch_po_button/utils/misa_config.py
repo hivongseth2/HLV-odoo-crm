@@ -28,7 +28,6 @@ class MisaConfig(models.AbstractModel):
 
     def get_default_headers(self, access_token):
         """Trả về headers mặc định cho MISA API."""
-        print('token',access_token)
         context = self.get_misa_context()
         return {
             "Authorization": f"Bearer {access_token}",

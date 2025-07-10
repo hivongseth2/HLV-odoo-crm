@@ -52,6 +52,7 @@ class MisaTransferFetch(models.TransientModel):
             )
             
             _logger.warning("warning: %s", response.text)
+            _logger.info("status %s",response.status_code)
             if response.status_code != 200:
                 _logger.info("response: %s", response.text)
 
