@@ -11,32 +11,56 @@ class MisaApiUtils(models.AbstractModel):
     _description = 'MISA API Utilities'
 
     def _get_misa_token(self):
-        """Get MISA access token"""
+           # Step 1: Đăng nhập lấy cookie
         login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
-        payload = {
+        login_payload = {
             "UserName": "Hoanglongvuco@gmail.com",
             "Password": "Hoanglongvu@2025"
         }
-        headers = {"content-type": "application/json"}
-        response = requests.post(login_url, json=payload, headers=headers)
-        _logger.warning("Đăng nhập MISA với user: %s", response.json())
-        if response.status_code != 200:
-            raise Exception("❌ Lỗi đăng nhập MISA")
-        data = response.json().get("Data", {})
-        return data.get("AccessToken", {}).get("Token", "")
+        headers_login = {
+            "Content-Type": "application/json"
+        }
 
-    def _fetch_with_retry(self, url, headers, payload):
-        """Fetch API with retry on token expiration"""
-        response = requests.post(url, headers=headers, json=payload)
-        _logger.info("Response text: %s", response.text)
-        if response.status_code == 401:
-            _logger.warning("🔁 Token hết hạn, đang đăng nhập lại...")
-            new_token = self._get_misa_token()
-            _logger.info("🔑 Đăng nhập thành công, token mới: %s", new_token)
-            headers["Authorization"] = f"Bearer {new_token}"
-            response = requests.post(url, headers=headers, json=payload)
-        return response
+        session = requests.Session()
+        response = session.post(login_url, json=login_payload, headers=headers_login)
 
+        _logger.warning("Login response: %s", response.json())
+
+        if response.status_code != 200 or not response.json().get("Success"):
+            raise Exception("❌ Lỗi đăng nhập bước 1")
+
+        # Step 2: Lấy cookie cần thiết
+        cookies_dict = session.cookies.get_dict()
+        _logger.warning("Cookies nhận được: %s", cookies_dict)
+
+        x_sessionid = cookies_dict.get("x-sessionid")
+        x_tenantid = cookies_dict.get("x-tenantid")
+
+        if not x_sessionid or not x_tenantid:
+            raise Exception("❌ Thiếu x-sessionid hoặc x-tenantid trong cookie")
+
+        # Step 3: Gọi API lấy token thật
+        token_url = "https://actapp.misa.vn/g1/api/auth/v1/account/login/misa_id"
+        form_data = {
+            "sid": x_sessionid,
+            "dbid": "f4b18d63-6c99-4a53-b974-f6208e84fced",
+            "tid": x_tenantid,
+            "mid": "1547cc69-a995-421e-9134-7736dabe6cb9"
+        }
+        headers_token = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "x-device": "693017cdc24074e96e4756afbf2b6ab6"
+        }
+
+        response2 = session.post(token_url, data=form_data, headers=headers_token)
+        json_data = response2.json()
+        _logger.warning("Response lấy token: %s", json_data)
+
+        if not response2.ok or not json_data.get("Success"):
+            raise Exception("❌ Lỗi khi lấy AccessToken bước 2")
+
+        access_token = json_data.get("Data", {}).get("AccessToken", {}).get("Token", "")
+        return access_token
 
 
     def _fetch_login_crm_token(self):
