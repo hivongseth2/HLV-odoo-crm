@@ -25,9 +25,11 @@ class MisaApiUtils(models.AbstractModel):
             "Referer": "https://amisapp.misa.vn/",
             "Accept": "application/json, text/plain, */*",
             "Host": "amisapp.misa.vn",
+            "TenantID":"039c3227-6ba8-49ba-93f5-bde3e8e1f533"
 
         }
 
+        _logger.info("content_lenght %s",str(len(str(login_payload).replace("'", '"'))))
 
         session = requests.Session()
         response = session.post(login_url, json=login_payload, headers=headers_login)
