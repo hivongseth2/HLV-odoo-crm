@@ -38,13 +38,13 @@ class SaleApiImportWizard(models.TransientModel):
 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-        page = 1
+        page = 0
         page_size = 20
 
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
-        while page <= 50:
+        while page <= 1:
             params = {
                 "page": page,
                 "pageSize": page_size,
@@ -58,9 +58,6 @@ class SaleApiImportWizard(models.TransientModel):
                 orders = response.json().get("data", [])
             except Exception as e:
                 raise Exception(f"Lỗi khi lấy đơn hàng từ API MISA: {e}")
-
-            if not orders:
-                break
 
             for order in orders:
                 order_date_str = order.get("created_date")
