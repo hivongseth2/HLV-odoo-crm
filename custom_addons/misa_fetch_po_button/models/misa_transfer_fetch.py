@@ -52,7 +52,9 @@ class MisaTransferFetch(models.TransientModel):
             )
 
             if response.status_code != 200:
-                _logger.info("response:" , response.text)
+                _logger.info("response: %s", response.text)
+
+
                 _logger.warning("❌ Gọi API thất bại ở trang %s", page_index)
                 break
 
