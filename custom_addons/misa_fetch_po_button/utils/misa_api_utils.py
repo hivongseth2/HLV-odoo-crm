@@ -25,7 +25,8 @@ class MisaApiUtils(models.AbstractModel):
             "Referer": "https://amisapp.misa.vn/",
             "Accept": "application/json, text/plain, */*",
             "Host": "amisapp.misa.vn",
-            "TenantID":"039c3227-6ba8-49ba-93f5-bde3e8e1f533"
+            "TenantID":"039c3227-6ba8-49ba-93f5-bde3e8e1f533",
+            "cookie":"x-culture=vi; _gid=GA1.2.129736177.1752161341; x-deviceid=cd54430e-8811-4acd-8585-a3709bc0cfd8; _ga_2B9RDZ4E89=GS2.1.s1752161339$o1$g1$t1752161619$j53$l0$h0; x-lastapp=Apps%3B%2Fmarket%2F; x-tenantid=47ab503b-99d5-4eb8-aa11-24927abb3585; _gat_gtag_UA_34323757_8=1; _ga_4N8J1W6EBF=GS2.1.s1752161340$o1$g1$t1752161738$j60$l0$h0; _ga=GA1.1.1231489114.1752161339; _ga_0G4YSV5CQ8=GS2.1.s1752161340$o1$g1$t1752161738$j60$l0$h0"
 
         }
 
