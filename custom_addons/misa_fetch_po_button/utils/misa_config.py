@@ -36,5 +36,6 @@ class MisaConfig(models.AbstractModel):
             "X-MISA-BranchID": context['BranchId'],
             "X-MISA-Language": "vi",
             "X-MISA-WorkingBook": "0",
-            "X-Device": "04aadfced5b04995ecfacb0a7da5c50c"
+            "X-Device": "04aadfced5b04995ecfacb0a7da5c50c",
+            "Host":" actapp.misa.vn"
         }
