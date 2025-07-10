@@ -5,8 +5,8 @@
         <t t-foreach="docs" t-as="o">
           <div style="width: 40mm; height: 30mm; font-size: 9pt; page-break-after: always; padding: 1mm;">
             <strong>Đơn hàng:</strong> <t t-esc="o.name"/><br/>
-            <!-- <strong>Ngày:</strong> <t t-esc="o.date_order.strftime('%d/%m/%Y')"/><br/>
-            <strong>Khách:</strong> <t t-esc="o.partner_id.name"/><br/> -->
+            <!-- <strong>Ngày:</strong> <t t-esc="o.date_order.strftime('%d/%m/%Y')"/><br/> -->
+            <!-- <strong>Khách:</strong> <t t-esc="o.partner_id.name"/><br/> -->
             <div style="margin-top: 4mm;">
               <img t-att-src="'/report/barcode/Code128/%s' % o.name" style="width:100%; height:10mm;" />
             </div>
