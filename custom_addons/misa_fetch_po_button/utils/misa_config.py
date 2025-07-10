@@ -12,7 +12,7 @@ class MisaConfig(models.AbstractModel):
         """Trả về headers mặc định cho MISA API."""
         context = self.get_misa_context()
         return {
-            "Authorization": f"Bearer {access_token}",
+            "Authorization": f"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiIxNTQ3Y2M2OS1hOTk1LTQyMWUtOTEzNC03NzM2ZGFiZTZjYjkiLCJ1bmEiOiJBRE1JTiIsImF1dCI6IjAiLCJ1ZW0iOiJob2FuZ2xvbmd2dWNvQGdtYWlsLmNvbSIsIm5iZiI6MTc1MjE0MDYzOSwiZXhwIjoxNzUyMjI2OTE4LCJpYXQiOjE3NTIxNDA2MzksImlzcyI6Ik1JU0FKU0MifQ.TqBoBC2zwgH7JPO6I3GJUax4uCBpA-OW2diVWQcJQc4",
             "Content-Type": "application/json",
             "X-MISA-Context": json.dumps(self.get_misa_context()),  # Chuyển sang string nếu cần
             "X-MISA-BranchID": context['BranchId'],
