@@ -28,6 +28,7 @@ class MisaConfig(models.AbstractModel):
 
     def get_default_headers(self, access_token):
         """Trả về headers mặc định cho MISA API."""
+        print('token',access_token)
         context = self.get_misa_context()
         return {
             "Authorization": f"Bearer {access_token}",
@@ -39,5 +40,6 @@ class MisaConfig(models.AbstractModel):
             "X-Device": "04aadfced5b04995ecfacb0a7da5c50c",
             "Host":"actapp.misa.vn",
             "Content-Length":574,
+            "Connection":"keep-alive"
             
         }
