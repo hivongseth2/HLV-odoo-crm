@@ -23,7 +23,8 @@ class MisaApiUtils(models.AbstractModel):
         if response.status_code != 200:
             raise Exception("❌ Lỗi đăng nhập MISA")
         data = response.json().get("Data", {})
-        return data.get("AccessToken", {}).get("Token", "")
+        # return data.get("AccessToken", {}).get("Token", "")
+        return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiIxNTQ3Y2M2OS1hOTk1LTQyMWUtOTEzNC03NzM2ZGFiZTZjYjkiLCJ1bmEiOiJBRE1JTiIsImF1dCI6IjAiLCJ1ZW0iOiJob2FuZ2xvbmd2dWNvQGdtYWlsLmNvbSIsIm5iZiI6MTc1MjE2NDA5MiwiZXhwIjoxNzUyMjQ4OTI1LCJpYXQiOjE3NTIxNjQwOTIsImlzcyI6Ik1JU0FKU0MifQ.NGBClyc6mQhPqqTWB0R6TPyG2HRdqdrUeMMsH0mrAAQ"
 
     def _fetch_with_retry(self, url, headers, payload):
         """Fetch API with retry on token expiration"""
