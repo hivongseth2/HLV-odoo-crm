@@ -39,7 +39,7 @@ class MisaConfig(models.AbstractModel):
             "X-MISA-WorkingBook": "0",
             "X-Device": "04aadfced5b04995ecfacb0a7da5c50c",
             "Host":"actapp.misa.vn",
-            "Content-Length":574,
+            "Content-Length":"574",
             "Connection":"keep-alive"
             
         }
