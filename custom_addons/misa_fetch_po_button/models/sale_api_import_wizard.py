@@ -29,7 +29,7 @@ class SaleApiImportWizard(models.TransientModel):
 
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         page = 1
-        while page == 1:
+        while True:
             payload = misa_config.get_crm_sale_order_payload(start_datetime, page)
             try:
                 response = requests.post(orders_url, headers=sale_headers, json=payload) 
@@ -45,8 +45,8 @@ class SaleApiImportWizard(models.TransientModel):
             # có order thì đi gọi lấy danh sách sản phẩm trong product đó 
                 id = order.get("ID")
                 payload = {
-                                "ID":"id",
-                                "MISAEntityState":"2"
+                            "ID":"id",
+                            "MISAEntityState":"2"
                             }
                 
 
@@ -173,6 +173,7 @@ class SaleApiImportWizard(models.TransientModel):
                     else:
                         picking.name = delivery_order_number
                     _logger.info("📦 Đã gán mã phiếu pick: %s cho đơn hàng %s", picking.name, order_ref)
-
+            if len(orders) < 20:
+                            break
             page += 1
         return {'type': 'ir.actions.act_window_close'}
