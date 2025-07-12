@@ -215,18 +215,8 @@ class MisaApiUtils(models.AbstractModel):
     
     
 
-    def get_list_product_by_order_crm(self, payload, token=None):
+    def get_list_product_by_order_crm(self,api_url,id,header, payload):
         session = requests.Session()
-        api_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/DataSubPaging"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-            "User-Agent": "PostmanRuntime/7.44.1",
-            "Accept": "*/*",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "companycode": "3R2PY2F4",
-        }
 
         response = session.post(api_url, headers=headers, json=payload)
 

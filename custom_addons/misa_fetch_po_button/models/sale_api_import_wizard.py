@@ -23,6 +23,7 @@ class SaleApiImportWizard(models.TransientModel):
 
         token_url = "https://crmconnect.misa.vn/api/v2/Account"
         orders_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/Grid"
+        order_detail_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/Grid"
 
         sale_headers = misa_config.get_crm_header(crm_token)
 
@@ -43,8 +44,14 @@ class SaleApiImportWizard(models.TransientModel):
 
             # có order thì đi gọi lấy danh sách sản phẩm trong product đó 
                 id = order.get("ID")
+                payload = {
+                    {
+                                "ID":"id",
+                                "MISAEntityState":"2"
+                            }
+                }
 
-                product_lines = misa_utils.get_list_product_by_order_crm(id)
+                product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url,payload,sale_headers)
 
                 filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
                 if not filtered_lines:
