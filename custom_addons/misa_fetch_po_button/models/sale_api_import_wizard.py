@@ -55,7 +55,8 @@ class SaleApiImportWizard(models.TransientModel):
                     continue
 
                 order_ref = order.get("SaleOrderNo")
-                customer_name = order.get("AccountIDText") |  order.get("SaleOrderName")
+                customer_name = order.get("AccountIDText") or order.get("SaleOrderName")
+
                 amount = float(order.get("SaleOrderAmount", 0.0))
                 order_date = order.get("SaleOrderDate")
                 # detail_order_payload = misa_config.get_list_product_by_order_crm(id)
