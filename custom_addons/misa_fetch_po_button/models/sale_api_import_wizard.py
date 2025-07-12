@@ -33,7 +33,6 @@ class SaleApiImportWizard(models.TransientModel):
             payload = misa_config.get_crm_sale_order_payload(start_datetime, page)
             try:
                 response = requests.post(orders_url, headers=sale_headers, json=payload) 
-                _logger.info("📦 Order page %s: %s", page, response.text)
                 response.raise_for_status()
                 orders = response.json().get("Data", [])
             except Exception as e:
@@ -178,5 +177,5 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.info("📦 Đã gán mã phiếu pick: %s cho đơn hàng %s", picking.name, order_ref)
             if len(orders) < 20:
                             break
-        page += 1
+            page += 1
         return {'type': 'ir.actions.act_window_close'}
