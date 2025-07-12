@@ -42,6 +42,8 @@ class SaleApiImportWizard(models.TransientModel):
             for order in orders:
 
             # có order thì đi gọi lấy danh sách sản phẩm trong product đó 
+                id = order.get("ID")
+
                 product_lines = misa_utils.get_list_product_by_order_crm(id)
 
                 filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
@@ -49,11 +51,10 @@ class SaleApiImportWizard(models.TransientModel):
                     continue
 
                 order_ref = order.get("SaleOrderNo")
-                id = order.get("ID")
                 customer_name = order.get("AccountIDText") |  order.get("SaleOrderName")
                 amount = float(order.get("SaleOrderAmount", 0.0))
                 order_date = order.get("SaleOrderDate")
-                detail_order_payload = misa_config.get_list_product_by_order_crm(id)
+                # detail_order_payload = misa_config.get_list_product_by_order_crm(id)
 
                 if not order_ref or not customer_name:
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
