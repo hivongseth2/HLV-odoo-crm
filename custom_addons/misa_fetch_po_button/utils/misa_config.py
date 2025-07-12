@@ -51,7 +51,7 @@ class MisaConfig(models.AbstractModel):
                 }
             ],
             "Start": 0,
-            "Page": page,
+            # "Page": page, 
             "PageSize": 20,
             "Filters": [
                 {
