@@ -218,7 +218,7 @@ class MisaApiUtils(models.AbstractModel):
     def get_list_product_by_order_crm(self,api_url,header, payload):
         session = requests.Session()
 
-        response = session.post(api_url, headers=headers, json=payload)
+        response = session.post(api_url, headers=header, json=payload)
 
         if response.status_code != 200:
             raise Exception(f"API call failed: {response.status_code} - {response.text}")
