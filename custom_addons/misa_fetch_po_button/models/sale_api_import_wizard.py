@@ -45,11 +45,10 @@ class SaleApiImportWizard(models.TransientModel):
             # có order thì đi gọi lấy danh sách sản phẩm trong product đó 
                 id = order.get("ID")
                 payload = {
-                    {
                                 "ID":"id",
                                 "MISAEntityState":"2"
                             }
-                }
+                
 
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url,payload,sale_headers)
 
