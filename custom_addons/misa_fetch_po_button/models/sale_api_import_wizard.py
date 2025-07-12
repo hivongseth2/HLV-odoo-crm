@@ -23,7 +23,7 @@ class SaleApiImportWizard(models.TransientModel):
 
         token_url = "https://crmconnect.misa.vn/api/v2/Account"
         orders_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/Grid"
-        order_detail_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/Grid"
+        order_detail_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/DataSubPaging"
 
         sale_headers = misa_config.get_crm_header(crm_token)
 
