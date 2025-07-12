@@ -40,72 +40,72 @@ class MisaConfig(models.AbstractModel):
         }
         
     def get_crm_sale_order_payload(self,date,page):
-        return   {
-        "Columns": "SUQsUmV2ZW51ZVN0YXR1c0lELFJldmVudWVTdGF0dXNJRFRleHQsU2FsZU9yZGVyTm8sU2FsZU9yZGVyTmFtZSxTYWxlT3JkZXJBbW91bnQsU2FsZU9yZGVyRGF0ZSxCb29rRGF0ZSxPd25lcklELE93bmVySURUZXh0LE9yZ2FuaXphdGlvblVuaXRJRCxPcmdhbml6YXRpb25Vbml0SURUZXh0LERlbGl2ZXJ5U3RhdHVzSUQsRGVsaXZlcnlTdGF0dXNJRFRleHQsUGF5U3RhdHVzSUQsUGF5U3RhdHVzSURUZXh0LEJpbGxpbmdDb3VudHJ5SUQsQmlsbGluZ0NvdW50cnlJRFRleHQsQmlsbGluZ1Byb3ZpbmNlSUQsQmlsbGluZ1Byb3ZpbmNlSURUZXh0LEJpbGxpbmdEaXN0cmljdElELEJpbGxpbmdEaXN0cmljdElEVGV4dCxCaWxsaW5nV2FyZElELEJpbGxpbmdXYXJkSURUZXh0LERlbGl2ZXJ5T3JkZXJOdW1iZXIsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsSXNQYXJlbnRTYWxlT3JkZXIsT3Bwb3J0dW5pdHlJRCxPcHBvcnR1bml0eUlEVGV4dCxSb2xlT3duZXJJRCxJc1VzZUN1cnJlbmN5LEV4Y2hhbmdlUmF0ZSxQYXJlbnRJRCxQYXJlbnRJRFRleHQsUXVvdGVJRCxRdW90ZUlEVGV4dCxBY2NvdW50SUQsQWNjb3VudElEVGV4dCxDb250YWN0SUQsQ29udGFjdElEVGV4dCxFYXJuaW5nUG9pbnQsRXhjaGFuZ2VQb2ludCxQYWlkRGF0ZSxEZWxpdmVyeURhdGUsQXBwcm92ZWRTdGF0dXNJRCxUYWdJRCxUYWdJRFRleHQsRXhwZWN0ZWREZWxpdmVyeURhdGUsRGVsaXZlcnlQYXJ0bmVySUQsRGVsaXZlcnlQYXJ0bmVyU3RhdHVzSUQsRGVsaXZlcnlQYXJ0bmVyU3RhdHVzSURUZXh0LEVjb21tZXJjZUlELFByb2R1Y3Rpb25Db25maXJtYXRpb25TdGF0dXNJRCxQcm9kdWN0aW9uQ29uZmlybWF0aW9uU3RhdHVzSURUZXh0LFByb2R1Y3Rpb25EYXRl",
-        "Sorts": [
-            {
-                "SortBy": "ModifiedDate",
-                "Type": 0,
-                "SortDirection": 1
-            }
-        ],
-        "Start": 20,
-        "Page": page,
-        "PageSize": 20,
-        "Filters": [
-            {
-                "Value": "2025-07-10T17:00:00.000Z",
-                "IsDefaultFilter": False,
-                "IsCustomField": False,
-                "IsRelatedField": False,
-                "ModuleRelated": "",
-                "FromFilterCustom": False,
-                "ValueDisplayText": "",
-                "isValueDateNumber": False,
-                "IsSearchModule": False,
-                "ConfigDisplayRelatedField": "",
-                "ConfigSubDisplayRelatedField": "",
-                "ConfigSearchField": [],
-                "ConfigUrlCbx": "",
-                "FilterObjects": [],
-                "dataOperator": [],
-                "IsProductCategory": False,
-                "SelectedDataList": [],
-                "IsCustomTypeDecimalDigits": False,
-                "IsFromFormula": False,
-                "Operator": 11,
-                "Addition": 1,
-                "Property": "SaleOrderDate",
-                "InputType": 7,
-                "FieldType": 0,
-                "FieldName": "SaleOrderDate",
-                "OperatorBeforeDetectChanges": 11,
-                "InputTypeOrigin": 7,
-                "DisplayField": "Ngày đặt hàng",
-                "DisplayOperator": "Là",
-                "DisplayValue": "11/07/2025",
-                "ValueOrigin": "2025-07-10T17:00:00.000Z"
-            }
-        ],
-        "Formula": "",
-        "LayoutCode": "SaleOrder",
-        "DefaultTotal": True,
-        "IsMappingData": False,
-        "MappingValueObject": {},
-        "IsApproved": False,
-        "CustomPagingData": {},
-        "IsUsedELTS": True,
-        "ListGmailPage": [],
-        "ListFacebookPage": {},
-        "IsListPaging": True,
-        "IsGetCache": True,
-        "IsCheckInactive": False,
-        "IsConverted": False,
-        "SessionID": "5e9f0a14-286f-631d-8183-3fc80b5b0157",
-        "LayoutCodeCheckPermission": "SaleOrder",
-        "AISearchKeyword": ""
-    }
-        
+        return  {
+            "Columns": "SUQsUmV2ZW51ZVN0YXR1c0lELFJldmVudWVTdGF0dXNJRFRleHQsU2FsZU9yZGVyTm8sU2FsZU9yZGVyTmFtZSxTYWxlT3JkZXJBbW91bnQsU2FsZU9yZGVyRGF0ZSxCb29rRGF0ZSxPd25lcklELE93bmVySURUZXh0LE9yZ2FuaXphdGlvblVuaXRJRCxPcmdhbml6YXRpb25Vbml0SURUZXh0LERlbGl2ZXJ5U3RhdHVzSUQsRGVsaXZlcnlTdGF0dXNJRFRleHQsUGF5U3RhdHVzSUQsUGF5U3RhdHVzSURUZXh0LEJpbGxpbmdDb3VudHJ5SUQsQmlsbGluZ0NvdW50cnlJRFRleHQsQmlsbGluZ1Byb3ZpbmNlSUQsQmlsbGluZ1Byb3ZpbmNlSURUZXh0LEJpbGxpbmdEaXN0cmljdElELEJpbGxpbmdEaXN0cmljdElEVGV4dCxCaWxsaW5nV2FyZElELEJpbGxpbmdXYXJkSURUZXh0LERlbGl2ZXJ5T3JkZXJOdW1iZXIsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsSXNQYXJlbnRTYWxlT3JkZXIsT3Bwb3J0dW5pdHlJRCxPcHBvcnR1bml0eUlEVGV4dCxSb2xlT3duZXJJRCxJc1VzZUN1cnJlbmN5LEV4Y2hhbmdlUmF0ZSxQYXJlbnRJRCxQYXJlbnRJRFRleHQsUXVvdGVJRCxRdW90ZUlEVGV4dCxBY2NvdW50SUQsQWNjb3VudElEVGV4dCxDb250YWN0SUQsQ29udGFjdElEVGV4dCxFYXJuaW5nUG9pbnQsRXhjaGFuZ2VQb2ludCxQYWlkRGF0ZSxEZWxpdmVyeURhdGUsQXBwcm92ZWRTdGF0dXNJRCxUYWdJRCxUYWdJRFRleHQsRXhwZWN0ZWREZWxpdmVyeURhdGUsRGVsaXZlcnlQYXJ0bmVySUQsRGVsaXZlcnlQYXJ0bmVyU3RhdHVzSUQsRGVsaXZlcnlQYXJ0bmVyU3RhdHVzSURUZXh0LEVjb21tZXJjZUlELFByb2R1Y3Rpb25Db25maXJtYXRpb25TdGF0dXNJRCxQcm9kdWN0aW9uQ29uZmlybWF0aW9uU3RhdHVzSURUZXh0LFByb2R1Y3Rpb25EYXRl",
+            "Sorts": [
+                {
+                    "SortBy": "ModifiedDate",
+                    "Type": 0,
+                    "SortDirection": 1
+                }
+            ],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 20,
+            "Filters": [
+                {
+                    "Value": "2025-07-11T17:00:00.000Z",
+                    "IsDefaultFilter": False,
+                    "IsCustomField": False,
+                    "IsRelatedField": False,
+                    "ModuleRelated": "",
+                    "FromFilterCustom": False,
+                    "ValueDisplayText": "",
+                    "isValueDateNumber": False,
+                    "IsSearchModule": False,
+                    "ConfigDisplayRelatedField": "",
+                    "ConfigSubDisplayRelatedField": "",
+                    "ConfigSearchField": [],
+                    "ConfigUrlCbx": "",
+                    "FilterObjects": [],
+                    "dataOperator": [],
+                    "IsProductCategory": False,
+                    "SelectedDataList": [],
+                    "IsCustomTypeDecimalDigits": False,
+                    "IsFromFormula": False,
+                    "Operator": 11,
+                    "Addition": 1,
+                    "Property": "SaleOrderDate",
+                    "InputType": 7,
+                    "FieldType": 0,
+                    "FieldName": "SaleOrderDate",
+                    "OperatorBeforeDetectChanges": 11,
+                    "InputTypeOrigin": 7,
+                    "DisplayField": "Ngày đặt hàng",
+                    "DisplayOperator": "Là",
+                    "DisplayValue": "12/07/2025",
+                    "ValueOrigin": "2025-07-11T17:00:00.000Z"
+                }
+            ],
+            "Formula": "",
+            "LayoutCode": "SaleOrder",
+            "DefaultTotal": True,
+            "IsMappingData": False,
+            "MappingValueObject": {},
+            "IsApproved": False,
+            "CustomPagingData": {},
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": "864e2811-5edd-5ccc-6b85-178b59007e93",
+            "LayoutCodeCheckPermission": "SaleOrder",
+            "AISearchKeyword": ""
+        }
+                
         
     def get_crm_sale_order_detail_payload(id):
         
