@@ -11,6 +11,8 @@ class SaleApiImportWizard(models.TransientModel):
     _description = 'Import Sale Orders from MISA API'
 
     from_date = fields.Date(string="Từ ngày", required=True)
+    to_date = fields.Date(string="Đến ngày", required=True)
+
 
     def action_import_from_api(self):
         odoo_utils = self.env['odoo.utils']  
