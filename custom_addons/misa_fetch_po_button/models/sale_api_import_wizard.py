@@ -31,7 +31,7 @@ class SaleApiImportWizard(models.TransientModel):
         while page == 1:
             payload = misa_config.get_crm_sale_order_payload(start_datetime, page)
             try:
-                response = requests.get(orders_url, headers=sale_headers, payload=payload) 
+                response = requests.post(orders_url, headers=sale_headers, payload=payload) 
                 _logger.info("📦 Order page %s: %s", page, response.text)
                 response.raise_for_status()
                 orders = response.json().get("Data", [])
