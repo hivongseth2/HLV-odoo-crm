@@ -178,5 +178,5 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.info("📦 Đã gán mã phiếu pick: %s cho đơn hàng %s", picking.name, order_ref)
             if len(orders) < 20:
                             break
-            page += 1
+        page += 1
         return {'type': 'ir.actions.act_window_close'}
