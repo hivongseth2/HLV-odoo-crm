@@ -60,7 +60,7 @@ class SaleApiImportWizard(models.TransientModel):
 
                 amount = float(order.get("SaleOrderAmount", 0.0))
                 # order_date = order.get("SaleOrderDate")
-                order_date = parse(order.get("SaleOrderDate"))
+                order_date = parse(order.get("SaleOrderDate")).replace(tzinfo=None)
 
                 # detail_order_payload = misa_config.get_list_product_by_order_crm(id)
 
