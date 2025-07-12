@@ -36,7 +36,8 @@ class SaleApiImportWizard(models.TransientModel):
                 response.raise_for_status()
                 orders = response.json().get("Data", [])
             except Exception as e:
-                raise Exception(f"Lỗi khi lấy đơn hàng từ API MISA: {e}")
+                
+                raise Exception(f"Lỗi khi lấy đơn hàng từ API MISA: {e} {payload}")
 
             for order in orders:
 
