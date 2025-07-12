@@ -9,7 +9,6 @@ _logger = logging.getLogger(__name__)
 class MisaApiUtils(models.AbstractModel):
     _name = 'misa.api.utils'
     _description = 'MISA API Utilities'
-    misa_config = self.env['misa.config']
 
 
     def _get_misa_token(self):
