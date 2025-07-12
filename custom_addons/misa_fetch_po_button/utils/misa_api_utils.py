@@ -215,15 +215,32 @@ class MisaApiUtils(models.AbstractModel):
     
     
 
-    def get_list_product_by_order_crm(self,api_url,header, payload):
-        session = requests.Session()
+    # def get_list_product_by_order_crm(self,api_url,header, payload):
+    #     session = requests.Session()
 
+    #     response = session.post(api_url, headers=header, json=payload)
+    #     _logger.warning("📦response %s", response)
+    #     if response.status_code != 200:
+    #         raise Exception(f"API call failed: {response.status_code} - {response.text}")
+
+    #     try:
+    #         return response.json().get("Data", [])
+    #     except Exception as e:
+    #         raise Exception(f"Lỗi khi xử lý response JSON: {e}")
+
+
+    def get_list_product_by_order_crm(self, api_url, header, payload):
+        session = requests.Session()
         response = session.post(api_url, headers=header, json=payload)
         _logger.warning("📦response %s", response)
+
         if response.status_code != 200:
             raise Exception(f"API call failed: {response.status_code} - {response.text}")
 
         try:
-            return response.json().get("Data", [])
+            data = response.json().get("Data", [])
+            # 👇 Loại bỏ combo (IsSetProduct == True)
+            filtered_data = [item for item in data if not item.get("IsSetProduct", False)]
+            return filtered_data
         except Exception as e:
             raise Exception(f"Lỗi khi xử lý response JSON: {e}")
