@@ -215,7 +215,7 @@ class MisaApiUtils(models.AbstractModel):
     
     
 
-    def get_list_product_by_order_crm(self,api_url,id,header, payload):
+    def get_list_product_by_order_crm(self,api_url,header, payload):
         session = requests.Session()
 
         response = session.post(api_url, headers=headers, json=payload)
