@@ -35,8 +35,8 @@ class MisaConfig(models.AbstractModel):
             "Authorization": f"Bearer {token}",
             "companycode":"3R2PY2F4",
             "connection":"keep-alive",
-            "content-length:":"2448",
-            "content-type:":"application/json",
+            "content-length":"2448",
+            "content-type":"application/json",
             
         }
         
