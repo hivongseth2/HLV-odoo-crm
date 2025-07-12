@@ -11,73 +11,46 @@ class SaleApiImportWizard(models.TransientModel):
     _description = 'Import Sale Orders from MISA API'
 
     from_date = fields.Date(string="Từ ngày", required=True)
-    to_date = fields.Date(string="Đến ngày", required=True)
 
     def action_import_from_api(self):
-        odoo_utils = self.env['odoo.utils']  # Initialize OdooUtils
+        odoo_utils = self.env['odoo.utils']  
         misa_utils = self.env['misa.api.utils']
-        crm_token = misa_utils._fetch_login_crm_token()  # Get MISA token
+        misa_config = self.env['misa.config']
+
+        crm_token = misa_utils._fetch_login_crm_token() 
 
         token_url = "https://crmconnect.misa.vn/api/v2/Account"
-        orders_url = "https://crmconnect.misa.vn/api/v2/SaleOrders"
-        payload = {
-            "client_id": "odoo",
-            "client_secret": "iqFXzEnjLIpuSTdkwFhuvj1Y4jsD9zXHrUzZvF81bO8="
-        }
-        headers = {"Content-Type": "application/json"}
+        orders_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/Grid"
 
-        try:
-            res = requests.post(token_url, json=payload, headers=headers)
-            _logger.info("🔐 Token response: %s", res.text)
-            res.raise_for_status()
-            token = res.json().get("data")
-            if not token:
-                raise Exception("❌ MISA không trả về access_token")
-        except Exception as e:
-            raise Exception(f"Lỗi lấy token từ MISA: {e}")
-
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-        page = 0
-        page_size = 20
+        sale_headers = misa_config.get_default_headers(crm_token)
 
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
-        end_datetime = datetime.combine(self.to_date, datetime.max.time())
-
-        while page <= 1:
-            params = {
-                "page": page,
-                "pageSize": page_size,
-                "orderBy": "sale_order_date",
-                "isDescending": True
-            }
+        const page = 1
+        while page == 1:
+            payload = misa_config.get_crm_sale_order_payload(start_datetime, page)
             try:
-                response = requests.get(orders_url, headers=headers, params=params)
+                response = requests.get(orders_url, headers=sale_headers, params=payload) 
                 _logger.info("📦 Order page %s: %s", page, response.text)
                 response.raise_for_status()
-                orders = response.json().get("data", [])
+                orders = response.json().get("Data", [])
             except Exception as e:
                 raise Exception(f"Lỗi khi lấy đơn hàng từ API MISA: {e}")
 
             for order in orders:
-                order_date_str = order.get("created_date")
-                order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else datetime.now()
 
-                if order_date < start_datetime:
-                    continue
-                if order_date > end_datetime:
-                    _logger.info("🛑 Gặp đơn vượt quá ngày, dừng vòng lặp: %s", order.get("sale_order_no"))
-                    return {'type': 'ir.actions.act_window_close'}
+            # có order thì đi gọi lấy danh sách sản phẩm trong product đó 
+                product_lines = misa_config.get_list_product_by_order_crm(id)
 
-                product_lines = order.get("sale_order_product_mappings", [])
-                filtered_lines = [l for l in product_lines if l.get("stock_name") == "HCM"]
+                filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
                 if not filtered_lines:
                     continue
 
-                order_ref = order.get("sale_order_no")
-                id = order.get("id")
-                customer_name = order.get("account_name")
-                amount = float(order.get("sale_order_amount", 0.0))
+                order_ref = order.get("SaleOrderNo")
+                id = order.get("ID")
+                customer_name = order.get("AccountIDText") |  order.get("SaleOrderName")
+                amount = float(order.get("SaleOrderAmount", 0.0))
+                order_date = order.get("SaleOrderDate")
+                detail_order_payload = misa_config.get_list_product_by_order_crm(id)
 
                 if not order_ref or not customer_name:
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
@@ -97,14 +70,18 @@ class SaleApiImportWizard(models.TransientModel):
                     'date_order': order_date,
                     'amount_total': amount,
                 })
+                
+                
+                product_list = misa_utils
+                
 
                 for line in filtered_lines:
-                    product_code = line.get("product_code")
-                    description = line.get("description") or product_code
-                    qty = float(line.get("amount", 1))
-                    price_unit = float(line.get("price", 0))
-                    discount_percent = float(line.get("discount_percent", 0))
-                    uom_name = (line.get("unit") or "Cái").strip()
+                    product_code = line.get("ProductIDText")
+                    description = line.get("Description") or product_code
+                    qty = float(line.get("Amount", 1))
+                    price_unit = float(line.get("Price", 0))
+                    discount_percent = float(line.get("DiscountPercent", 0))
+                    uom_name = (line.get("UnitIDText") or "Cái").strip()
 
                     if "+" in product_code:
                         combo_codes = product_code.split("+")
@@ -118,7 +95,7 @@ class SaleApiImportWizard(models.TransientModel):
                             if not product:
                                 _logger.warning("🔍 Không thấy %s trong hệ thống, thử gọi MISA để tạo mới...", code)
                                 try:
-                                    tmpl = odoo_utils.get_misa_product(token, code)
+                                    tmpl = odoo_utils.get_misa_product(crm_token, code)
                                     product = tmpl.product_variant_id
                                     _logger.info("✅ Đã tạo mới sản phẩm con %s từ MISA", code)
                                 except Exception as e:
