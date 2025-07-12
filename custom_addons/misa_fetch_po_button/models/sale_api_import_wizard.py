@@ -50,7 +50,7 @@ class SaleApiImportWizard(models.TransientModel):
                             }
                 
 
-                product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url,payload,sale_headers)
+                product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url,sale_headers,payload)
 
                 filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
                 if not filtered_lines:
