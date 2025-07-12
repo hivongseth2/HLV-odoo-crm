@@ -48,9 +48,12 @@ class SaleApiImportWizard(models.TransientModel):
                             "ID":id,
                             "MISAEntityState":"2"
                             }
-                
+                _logger.warning("payload Order payload %s",  payload)
+
 
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url,sale_headers,payload)
+                
+                _logger.warning("📦 Order product_lines %s",  product_lines)
 
                 filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
                 if not filtered_lines:
