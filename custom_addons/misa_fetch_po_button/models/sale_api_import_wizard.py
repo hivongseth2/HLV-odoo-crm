@@ -3,6 +3,7 @@ from odoo import models, fields, api
 from datetime import datetime, timedelta
 from dateutil import parser  # để xử lý ISO datetime
 import logging
+from dateutil.parser import parse
 
 _logger = logging.getLogger(__name__)
 
@@ -58,7 +59,9 @@ class SaleApiImportWizard(models.TransientModel):
                 customer_name = order.get("AccountIDText") or order.get("SaleOrderName")
 
                 amount = float(order.get("SaleOrderAmount", 0.0))
-                order_date = order.get("SaleOrderDate")
+                # order_date = order.get("SaleOrderDate")
+                order_date = parse(order.get("SaleOrderDate"))
+
                 # detail_order_payload = misa_config.get_list_product_by_order_crm(id)
 
                 if not order_ref or not customer_name:
