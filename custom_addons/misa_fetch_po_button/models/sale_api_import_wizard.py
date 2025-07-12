@@ -45,7 +45,7 @@ class SaleApiImportWizard(models.TransientModel):
             # có order thì đi gọi lấy danh sách sản phẩm trong product đó 
                 id = order.get("ID")
                 payload = {
-                            "ID":"id",
+                            "ID":id,
                             "MISAEntityState":"2"
                             }
                 
