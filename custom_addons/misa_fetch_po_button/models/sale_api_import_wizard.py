@@ -42,7 +42,7 @@ class SaleApiImportWizard(models.TransientModel):
             for order in orders:
 
             # có order thì đi gọi lấy danh sách sản phẩm trong product đó 
-                product_lines = misa_config.get_list_product_by_order_crm(id)
+                product_lines = misa_utils.get_list_product_by_order_crm(id)
 
                 filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
                 if not filtered_lines:
