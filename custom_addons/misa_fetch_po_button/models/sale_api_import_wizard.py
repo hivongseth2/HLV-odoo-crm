@@ -29,9 +29,11 @@ class SaleApiImportWizard(models.TransientModel):
         sale_headers = misa_config.get_crm_header(crm_token)
 
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
+        end_datetime = datetime.combine(self.to_date, datetime.max.time())
+
         page = 1
         while True:
-            payload = misa_config.get_crm_sale_order_payload(start_datetime, page)
+            payload = misa_config.get_crm_sale_order_payload(start_datetime,end_datetime, page)
             try:
                 response = requests.post(orders_url, headers=sale_headers, json=payload) 
                 response.raise_for_status()

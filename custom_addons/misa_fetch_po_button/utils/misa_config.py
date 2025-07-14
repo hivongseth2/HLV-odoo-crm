@@ -41,29 +41,33 @@ class MisaConfig(models.AbstractModel):
             
         }
         # payload listorder
-    def get_crm_sale_order_payload(self, date, page):
-        # Chuẩn hóa page
+    def get_crm_sale_order_payload(self, start_date, end_date, page):
         page_size = 20
         start = (page - 1) * page_size if page > 0 else 0
 
-        # Xử lý định dạng ngày
-        if isinstance(date, str):
-            try:
-                date_obj = datetime.fromisoformat(date)
-            except ValueError:
-                raise ValueError("Date string must be ISO format: 'YYYY-MM-DDTHH:MM:SS'")
-        elif isinstance(date, datetime):
-            date_obj = date
-        else:
-            raise TypeError("Date must be a string or datetime object")
+        def parse_date(date):
+            if isinstance(date, str):
+                try:
+                    return datetime.fromisoformat(date)
+                except ValueError:
+                    raise ValueError("Date string must be ISO format: 'YYYY-MM-DDTHH:MM:SS'")
+            elif isinstance(date, datetime):
+                return date
+            else:
+                raise TypeError("Date must be a string or datetime object")
 
-        # Format cho các trường liên quan đến ngày
-        iso_date = date_obj.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        display_value = date_obj.strftime("%d/%m/%Y")
+        start_obj = parse_date(start_date)
+        end_obj = parse_date(end_date)
+
+        # Format ngày theo chuẩn
+        iso_start = start_obj.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        iso_end = end_obj.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        display_value = f"{start_obj.strftime('%d/%m/%Y')} - {end_obj.strftime('%d/%m/%Y')}"
+        value_json = f'{{"FirstVal":"{iso_start}","SecondVal":"{iso_end}"}}'
 
         return {
             "Columns": "SUQsUmV2ZW51ZVN0YXR1c0lELFJldmVudWVTdGF0dXNJRFRleHQsU2FsZU9yZGVyTm8sU2FsZU9yZGVyTmFtZSxTYWxlT3JkZXJBbW91bnQsU2FsZU9yZGVyRGF0ZSxCb29rRGF0ZSxPd25lcklELE93bmVySURUZXh0LE9yZ2FuaXphdGlvblVuaXRJRCxPcmdhbml6YXRpb25Vbml0SURUZXh0LERlbGl2ZXJ5U3RhdHVzSUQsRGVsaXZlcnlTdGF0dXNJRFRleHQsUGF5U3RhdHVzSUQsUGF5U3RhdHVzSURUZXh0LEJpbGxpbmdDb3VudHJ5SUQsQmlsbGluZ0NvdW50cnlJRFRleHQsQmlsbGluZ1Byb3ZpbmNlSUQsQmlsbGluZ1Byb3ZpbmNlSURUZXh0LEJpbGxpbmdEaXN0cmljdElELEJpbGxpbmdEaXN0cmljdElEVGV4dCxCaWxsaW5nV2FyZElELEJpbGxpbmdXYXJkSURUZXh0LERlbGl2ZXJ5T3JkZXJOdW1iZXIsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsSXNQYXJlbnRTYWxlT3JkZXIsT3Bwb3J0dW5pdHlJRCxPcHBvcnR1bml0eUlEVGV4dCxSb2xlT3duZXJJRCxJc1VzZUN1cnJlbmN5LEV4Y2hhbmdlUmF0ZSxQYXJlbnRJRCxQYXJlbnRJRFRleHQsUXVvdGVJRCxRdW90ZUlEVGV4dCxBY2NvdW50SUQsQWNjb3VudElEVGV4dCxDb250YWN0SUQsQ29udGFjdElEVGV4dCxFYXJuaW5nUG9pbnQsRXhjaGFuZ2VQb2ludCxQYWlkRGF0ZSxEZWxpdmVyeURhdGUsQXBwcm92ZWRTdGF0dXNJRCxUYWdJRCxUYWdJRFRleHQsRXhwZWN0ZWREZWxpdmVyeURhdGUsRGVsaXZlcnlQYXJ0bmVySUQsRGVsaXZlcnlQYXJ0bmVyU3RhdHVzSUQsRGVsaXZlcnlQYXJ0bmVyU3RhdHVzSURUZXh0LEVjb21tZXJjZUlELFByb2R1Y3Rpb25Db25maXJtYXRpb25TdGF0dXNJRCxQcm9kdWN0aW9uQ29uZmlybWF0aW9uU3RhdHVzSURUZXh0LFByb2R1Y3Rpb25EYXRl",
-
+            # giữ nguyên danh sách column như bạn đã có
             "Sorts": [
                 {
                     "SortBy": "ModifiedDate",
@@ -76,7 +80,7 @@ class MisaConfig(models.AbstractModel):
             "PageSize": page_size,
             "Filters": [
                 {
-                    "Value": iso_date,
+                    "Value": value_json,
                     "IsDefaultFilter": False,
                     "IsCustomField": False,
                     "IsRelatedField": False,
@@ -95,18 +99,20 @@ class MisaConfig(models.AbstractModel):
                     "SelectedDataList": [],
                     "IsCustomTypeDecimalDigits": False,
                     "IsFromFormula": False,
-                    "Operator": 11,
+                    "Operator": 29,
                     "Addition": 1,
                     "Property": "SaleOrderDate",
                     "InputType": 7,
                     "FieldType": 0,
                     "FieldName": "SaleOrderDate",
-                    "OperatorBeforeDetectChanges": 11,
+                    "OperatorBeforeDetectChanges": 29,
                     "InputTypeOrigin": 7,
+                    "Value1": iso_start,
+                    "Value2": iso_end,
                     "DisplayField": "Ngày đặt hàng",
-                    "DisplayOperator": "Là",
+                    "DisplayOperator": "Trong khoảng",
                     "DisplayValue": display_value,
-                    "ValueOrigin": iso_date
+                    "ValueOrigin": value_json
                 }
             ],
             "Formula": "",
