@@ -1,0 +1,41 @@
+<odoo>
+  <template id="scan_ui_template" name="Custom Barcode Scan UI">
+    <t t-call="web.layout">
+      <div class="container mt-5">
+        <h2>🔍 Quét mã phiếu</h2>
+        <input type="text" id="barcode_input" class="form-control" placeholder="Quét hoặc nhập mã phiếu..." autofocus="autofocus"/>
+        <div id="scan_status" class="mt-3 text-info"></div>
+      </div>
+
+      <script>
+        document.addEventListener("DOMContentLoaded", function () {
+          const input = document.getElementById("barcode_input");
+          const status = document.getElementById("scan_status");
+
+          input.addEventListener("keypress", function (e) {
+            if (e.key === "Enter" && input.value.trim()) {
+              const barcode = input.value.trim();
+              status.innerText = "⏳ Đang xử lý mã: " + barcode;
+
+              fetch("/custom_barcode_scan/ui/scan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ barcode })
+              })
+              .then((res) => res.json())
+              .then((action) => {
+                status.innerText = "✅ Mở phiếu...";
+                window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+              })
+              .catch((err) => {
+                status.innerText = "❌ Lỗi: " + err;
+              });
+
+              input.value = "";
+            }
+          });
+        });
+      </script>
+    </t>
+  </template>
+</odoo>
