@@ -1,9 +1,8 @@
 from odoo import http
 from odoo.http import request
-from odoo.addons.stock_barcode.controllers.main import StockBarcodeController
 
 
-class StockBarcodeControllerInherit(StockBarcodeController):
+class StockPickingBarcodeOverride(http.Controller):
 
     @http.route(['/stock_barcode/get_barcode_view_state'], type='json', auth='user')
     def get_barcode_view_state(self, model_name, barcode):
@@ -19,4 +18,4 @@ class StockBarcodeControllerInherit(StockBarcodeController):
                 if next_picking:
                     return next_picking.get_barcode_view_state(next_picking.name)
 
-        return super().get_barcode_view_state(model_name, barcode)
+        return request.env[model_name].get_barcode_view_state(barcode)
