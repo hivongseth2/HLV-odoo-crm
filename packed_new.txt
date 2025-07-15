@@ -1,0 +1,154 @@
+<t t-name="stock.report_package_barcode">
+    <t t-call="web.basic_layout">
+        <t t-foreach="docs" t-as="o">
+            <div class="page">
+                <div class="oe_structure"/>
+                
+                <!-- HEADER: Logistic Tag Title -->
+                <div class="row mb-4">
+                    <div class="col-12 text-center">
+                        <h2 style="font-weight: bold; margin-bottom: 20px;">Logistic Tag</h2>
+                    </div>
+                </div>
+
+                <!-- Main Information Table -->
+                <table class="table table-bordered" style="margin-bottom: 0;">
+                    <!-- First Row: Delivery Date, Order No, Buyer PO No -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center; width: 33.33%;">Delivery Date</td>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center; width: 33.33%;">Order No.</td>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center; width: 33.33%;">Buyer PO No.</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: center;">
+                            <span t-field="o.pack_date" t-options="{'widget': 'date'}">2025-06-28</span>
+                        </td>
+                        <td style="text-align: center;">
+                            <span t-field="o.name">1000420057</span>
+                        </td>
+                        <td style="text-align: center;">
+                            <span>2112416144</span> <!-- This would need to be added to the model -->
+                        </td>
+                    </tr>
+
+                    <!-- Second Row: Delivery Type, Warehouse, Supplier -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Delivery Type</td>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Warehouse</td>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Supplier</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: center;">
+                            <span>IMV Warehouse</span> <!-- This would need to be added to the model -->
+                        </td>
+                        <td style="text-align: center;">
+                            <span t-field="o.location_id.name">Ryobi</span>
+                        </td>
+                        <td style="text-align: center;">
+                            <span>30009393</span> <!-- This would need to be added to the model -->
+                        </td>
+                    </tr>
+
+                    <!-- Item Description Row -->
+                    <tr>
+                        <td colspan="3" style="background-color: #f8f9fa; font-weight: bold; text-align: center;">
+                            Item Name / Model / Description / Origin
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="3" style="text-align: center; padding: 10px;">
+                            <t t-set="package_quants" t-value="o.quant_ids.filtered('quantity')"/>
+                            <t t-foreach="package_quants.product_id" t-as="product">
+                                <div>
+                                    <span t-field="product.display_name"/>
+                                    <t t-if="product.default_code"> / <span t-field="product.default_code"/></t>
+                                    <t t-if="product.categ_id"> / <span t-field="product.categ_id.name"/></t>
+                                </div>
+                            </t>
+                        </td>
+                    </tr>
+
+                    <!-- Item Code and Quantity Row -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Item Code (IMG)</td>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Buyer Item Code</td>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Qty</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: center;">
+                            <t t-foreach="package_quants.product_id" t-as="product">
+                                <span t-field="product.default_code">1021452500 (Y)</span>
+                            </t>
+                        </td>
+                        <td style="text-align: center;">
+                            <span>RI00100E-004242</span> <!-- This would need to be added to the model -->
+                        </td>
+                        <td style="text-align: center;">
+                            <t t-set="total_qty" t-value="sum(package_quants.mapped('quantity'))"/>
+                            <span t-out="total_qty">100</span>
+                        </td>
+                    </tr>
+
+                    <!-- Customer, Plant, Division Row -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Customer</td>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Plant</td>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Division</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align: center;">
+                            <span>SEHC-P</span> <!-- This would need to be added to the model -->
+                        </td>
+                        <td style="text-align: center;">
+                            <span>FACTORY</span> <!-- This would need to be added to the model -->
+                        </td>
+                        <td style="text-align: center;">
+                            <span>Human Resources Team</span> <!-- This would need to be added to the model -->
+                        </td>
+                    </tr>
+
+                    <!-- Purchaser Row -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Purchaser</td>
+                        <td colspan="2" style="text-align: center;">
+                            <span>Tran Thi Huong / 84-0962-729973</span> <!-- This would need to be added to the model -->
+                        </td>
+                    </tr>
+
+                    <!-- Receiver Row -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; font-weight: bold; text-align: center;">Receiver</td>
+                        <td colspan="2" style="text-align: center;">
+                            <span>NGUYEN HUU MINH / 0386488265</span> <!-- This would need to be added to the model -->
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Bottom Section with Package Reference and Barcode -->
+                <div class="row mt-4">
+                    <div class="col-6">
+                        <h3 style="font-weight: bold;">
+                            <span t-field="o.name">2001279380</span>
+                        </h3>
+                    </div>
+                    <div class="col-6 text-right">
+                        <span style="font-weight: bold;">1-1</span>
+                    </div>
+                </div>
+
+                <!-- Barcode Section -->
+                <div class="row mt-3">
+                    <div class="col-12 text-center">
+                        <div t-field="o.name" t-options="{'widget': 'barcode', 'width': 600, 'height': 100, 'img_style': 'width:400px;height:60px;'}">
+                            <div class="bg-light border-1 rounded d-flex flex-column align-items-center justify-content-center px-1 py-2 opacity-75 text-muted text-center">
+                                (package barcode)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="oe_structure"/>
+            </div>
+        </t>
+    </t>
+</t>
