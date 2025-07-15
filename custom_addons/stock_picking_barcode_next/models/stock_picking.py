@@ -20,5 +20,5 @@ class StockPicking(models.Model):
             if next_picking:
                 return next_picking.get_barcode_view_state(next_picking.name)
 
-        # Mặc định fallback
+        # Mặc định fallback 213
         return super().get_barcode_view_state(barcode)
