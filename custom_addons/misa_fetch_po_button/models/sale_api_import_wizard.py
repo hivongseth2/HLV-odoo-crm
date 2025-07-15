@@ -53,10 +53,19 @@ class SaleApiImportWizard(models.TransientModel):
             
             
             #AccountIDText: TIKTOK HOÀNG LONG VŨ , SHOPEE TRANG MILWAUKEE, SHOPEE TRANG TBCN HLV,SHOPEE TRANG DEWALT STANLEY
-                delivery_order_number = order.get('DeliveryOrderNumber')
+                # delivery_order_number = order.get('DeliveryOrderNumber')
                 customer_name = order.get("AccountIDText") or order.get("SaleOrderName")
-                if customer_name in e_accounts and not delivery_order_number:
+                # if customer_name in e_accounts and not delivery_order_number:
+                #     continue
+                
+                if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
                     continue
+
+                
+                if customer_name in e_accounts:
+                    delivery_order_number = order.get('DeliveryOrderNumber')
+                else:
+                    delivery_order_number = order.get('SaleOrderNo')
 
                 id = order.get("ID")
                 payload = misa_config.get_crm_sale_order_detail_payload(id)
