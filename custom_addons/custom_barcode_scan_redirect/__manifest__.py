@@ -5,7 +5,7 @@
     "author": "ChatGPT Dev",
     "category": "Warehouse",
     "summary": "Redirect barcode scan to next picking if current is done, then load Odoo's native barcode view.",
-    "installable": true,
-    "application": false,
+    "installable": True,
+    "application": False,
     "license": "LGPL-3"
 }
