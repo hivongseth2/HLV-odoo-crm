@@ -45,13 +45,19 @@ class MisaTransferFetch(models.TransientModel):
         while True:
             payload["pageIndex"] = page_index
             _logger.info("📄 Đang fetch trang %s...", page_index)
+            _logger.info("access token",access_token)
 
             response = misa_utils._fetch_with_retry(
                 "https://actapp.misa.vn/g1/api/in/v1/in_inward_outward_list/paging_filter_v2",
                 headers, payload
             )
-
+            
+            _logger.warning("warning: %s", response.text)
+            _logger.info("status %s",response.status_code)
             if response.status_code != 200:
+                _logger.info("response: %s", response.text)
+
+
                 _logger.warning("❌ Gọi API thất bại ở trang %s", page_index)
                 break
 
