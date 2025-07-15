@@ -5,7 +5,7 @@
     "author": "ChatGPT Dev",
     "category": "Warehouse",
     "summary": "Tự động mở phiếu tiếp theo khi quét mã phiếu đã hoàn thành.",
-    "installable": True,
-    "application": False,
-    "license": "LGPL-3",
+    "installable": true,
+    "application": false,
+    "license": "LGPL-3"
 }
