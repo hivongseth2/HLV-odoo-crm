@@ -10,7 +10,8 @@ class CustomBarcodeScanController(http.Controller):
         return request.render("custom_barcode_scan_redirect.scan_ui_template")
 
     @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user')
-    def scan_ui_api(self, barcode):
+    def scan_ui_api(self):
+        barcode = request.jsonrequest.get("barcode")
         Picking = request.env['stock.picking'].sudo()
         picking = Picking.search([('name', '=', barcode)], limit=1)
 
@@ -25,7 +26,6 @@ class CustomBarcodeScanController(http.Controller):
                 }
             }
 
-        # Nếu phiếu đã done và có group liên kết
         if picking.state == 'done' and picking.group_id:
             next_picking = Picking.search([
                 ('group_id', '=', picking.group_id.id),
@@ -45,5 +45,4 @@ class CustomBarcodeScanController(http.Controller):
                     }
                 }
 
-        # Nếu phiếu chưa done, mở luôn
         return picking.action_view()
