@@ -29,22 +29,24 @@ document.addEventListener("DOMContentLoaded", function () {
         })
         //    body: JSON.stringify({ barcode })
     })
-      .then((res) => res.json())
-      .then((action) => {
-        if (action?.type === "ir.actions.client" && action.tag === "display_notification") {
-          setStatus("warning", "⚠️ " + action.params.message);
-        } else {
-          // 🔥 Nếu là action (barcode scanner hoặc act_window)
-          setStatus("success", "✅ Mở phiếu...");
+    .then((response) => {
+    const action = response.result;
 
-          if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
-            window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
-          } else {
-            // fallback cho các trường hợp dev mode không bật
-            window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
-          }
-        }
-      })
+    if (action?.type === "ir.actions.client" && action.tag === "display_notification") {
+      setStatus("warning", "⚠️ " + action.params.message);
+    } else if (action?.type) {
+      setStatus("success", "✅ Mở phiếu...");
+
+      if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
+        window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+      } else {
+        window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
+      }
+    } else {
+      setStatus("danger", "❌ Không thể xử lý action.");
+    }
+  })
+
 
     input.value = "";
   };
