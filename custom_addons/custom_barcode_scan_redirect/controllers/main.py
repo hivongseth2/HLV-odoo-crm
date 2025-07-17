@@ -12,11 +12,11 @@ class CustomBarcodeScanController(http.Controller):
 
     @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user', csrf=False)
     def scan_ui_api(self, **kwargs):
+        _logger = logging.getLogger(__name__)
         barcode = kwargs.get("barcode")
         _logger.info(f"[SCAN] Barcode: {barcode}")
 
-        Picking = request.env['stock.picking'].sudo()
-        picking = Picking.search([('name', '=', barcode)], limit=1)
+        picking = request.env['stock.picking'].sudo().search([('name', '=', barcode)], limit=1)
 
         if not picking:
             return {
@@ -29,8 +29,9 @@ class CustomBarcodeScanController(http.Controller):
                 }
             }
 
+        # Nếu phiếu đã done và có group => tìm phiếu tiếp theo
         if picking.state == 'done' and picking.group_id:
-            next_picking = Picking.search([
+            next_picking = request.env['stock.picking'].sudo().search([
                 ('group_id', '=', picking.group_id.id),
                 ('id', '!=', picking.id),
                 ('state', 'in', ['confirmed', 'assigned', 'waiting'])
@@ -48,12 +49,6 @@ class CustomBarcodeScanController(http.Controller):
                     }
                 }
 
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'stock_barcode_client_action',
-            'target': 'fullscreen',
-            'params': {
-                'model': 'stock.picking',
-                'res_id': picking.id,
-            }
-        }
+        # ✅ Trả về action thật từ record => để Odoo xử lý chính xác sau đó gọi get_barcode_data
+        action = request.env['stock.picking'].browse(picking.id).action_client_barcode()
+        return {"action": action}
