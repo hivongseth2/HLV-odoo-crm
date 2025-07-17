@@ -4,8 +4,12 @@ from odoo.http import request
 
 class CustomBarcodeScanController(http.Controller):
 
-    @http.route('/custom_barcode_scan', type='json', auth='user')
-    def custom_barcode_scan(self, barcode):
+    @http.route('/custom_barcode_scan/ui', type='http', auth='user', website=True)
+    def scan_ui_page(self, **kwargs):
+        return request.render('custom_barcode_scan_redirect.scan_ui_template', {})
+
+    @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user')
+    def scan_ui_api(self, barcode):
         StockPicking = request.env['stock.picking']
         picking = StockPicking.search([('name', '=', barcode)], limit=1)
 
@@ -15,17 +19,15 @@ class CustomBarcodeScanController(http.Controller):
                 ('state', 'not in', ['done', 'cancel']),
                 ('id', '!=', picking.id)
             ], order='scheduled_date asc', limit=1)
-
             if next_picking:
                 return next_picking.get_barcode_view_state(next_picking.name)
-
             return {
                 "type": "ir.actions.client",
                 "tag": "display_notification",
                 "params": {
                     "title": "Thông báo",
-                    "message": "Tất cả phiếu trong quy trình đã hoàn thành.",
-                    "sticky": False,
+                    "message": "Đã hoàn tất mọi phiếu.",
+                    "sticky": False
                 }
             }
 
@@ -37,7 +39,7 @@ class CustomBarcodeScanController(http.Controller):
             "tag": "display_notification",
             "params": {
                 "title": "Không tìm thấy phiếu",
-                "message": f"Không tìm thấy phiếu với mã: {barcode}",
-                "sticky": False,
+                "message": f"Không có phiếu với mã {barcode}",
+                "sticky": False
             }
         }
