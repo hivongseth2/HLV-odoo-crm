@@ -33,17 +33,18 @@ document.addEventListener("DOMContentLoaded", function () {
       .then((action) => {
         if (action?.type === "ir.actions.client" && action.tag === "display_notification") {
           setStatus("warning", "⚠️ " + action.params.message);
-        } else if (action?.type === 'ir.actions.act_window') {
+        } else {
+          // 🔥 Nếu là action (barcode scanner hoặc act_window)
+          setStatus("success", "✅ Mở phiếu...");
+
           if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
             window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
           } else {
+            // fallback cho các trường hợp dev mode không bật
             window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
           }
         }
       })
-      .catch((err) => {
-        setStatus("danger", "❌ Lỗi: " + err);
-      });
 
     input.value = "";
   };
