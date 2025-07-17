@@ -12,11 +12,11 @@ class CustomBarcodeScanController(http.Controller):
 
     @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user', csrf=False)
     def scan_ui_api(self, **kwargs):
-        _logger = logging.getLogger(__name__)
         barcode = kwargs.get("barcode")
         _logger.info(f"[SCAN] Barcode: {barcode}")
 
-        picking = request.env['stock.picking'].sudo().search([('name', '=', barcode)], limit=1)
+        Picking = request.env['stock.picking'].sudo()
+        picking = Picking.search([('name', '=', barcode)], limit=1)
 
         if not picking:
             return {
@@ -29,9 +29,9 @@ class CustomBarcodeScanController(http.Controller):
                 }
             }
 
-        # Nếu phiếu đã done và có group => tìm phiếu tiếp theo
+        # Nếu phiếu hiện tại đã done, tìm phiếu kế tiếp cùng group
         if picking.state == 'done' and picking.group_id:
-            next_picking = request.env['stock.picking'].sudo().search([
+            next_picking = Picking.search([
                 ('group_id', '=', picking.group_id.id),
                 ('id', '!=', picking.id),
                 ('state', 'in', ['confirmed', 'assigned', 'waiting'])
@@ -49,6 +49,22 @@ class CustomBarcodeScanController(http.Controller):
                     }
                 }
 
-        # ✅ Trả về action thật từ record => để Odoo xử lý chính xác sau đó gọi get_barcode_data
-        action = request.env['stock.picking'].browse(picking.id).action_client_barcode()
-        return {"action": action}
+        try:
+            # Dùng action đã định nghĩa sẵn trong stock_barcode
+            action = request.env.ref("stock_barcode.stock_barcode_picking_client_action").read()[0]
+            action["params"] = {
+                "model": "stock.picking",
+                "res_id": picking.id,
+            }
+            return action
+        except Exception as e:
+            _logger.exception("Lỗi khi load action stock_barcode_picking_client_action")
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'message': f"Lỗi nội bộ khi mở giao diện mã vạch: {str(e)}",
+                    'type': 'danger',
+                    'sticky': False,
+                }
+            }
