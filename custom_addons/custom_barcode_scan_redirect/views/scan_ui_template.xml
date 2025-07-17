@@ -105,7 +105,11 @@
                 if (window.odoo && window.odoo.__DEBUG__ && window.odoo.__DEBUG__.services) {
                   window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
                 } else {
-                  window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
+                  window.location.href = '/web/action?' + new URLSearchParams({
+                  params: JSON.stringify(action),
+                  type: 'ir.actions.act_window',
+                });
+
                 }
               }
             })
