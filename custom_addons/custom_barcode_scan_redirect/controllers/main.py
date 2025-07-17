@@ -9,7 +9,9 @@ class CustomBarcodeScanController(http.Controller):
 
     @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user', csrf=False)
     def scan_ui_api(self, **kwargs):
-        barcode = kwargs.get("barcode")
+        # barcode = kwargs.get("barcode")
+        barcode = kwargs.get("params", {}).get("barcode")
+        
         Picking = request.env['stock.picking'].sudo()
         picking = Picking.search([('name', '=', barcode)], limit=1)
 
