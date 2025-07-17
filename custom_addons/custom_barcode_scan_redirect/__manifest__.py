@@ -6,6 +6,7 @@
     "category": "Warehouse",
     "summary": "Scan barcode and redirect to next picking",
     "data": [
+        "views/menu.xml",
         "views/scan_ui_template.xml"
     ],
     "installable": True,
