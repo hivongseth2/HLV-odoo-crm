@@ -1,5 +1,6 @@
 from odoo import http
 from odoo.http import request
+import logging
 
 class CustomBarcodeScanController(http.Controller):
 
@@ -10,7 +11,12 @@ class CustomBarcodeScanController(http.Controller):
     @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user', csrf=False)
     def scan_ui_api(self, **kwargs):
         # barcode = kwargs.get("barcode")
+        _logger = logging.getLogger(__name__)
+
+        _logger.info(f"Received kwargs: {kwargs}")
+
         barcode = kwargs.get("params", {}).get("barcode")
+        
         
         Picking = request.env['stock.picking'].sudo()
         picking = Picking.search([('name', '=', barcode)], limit=1)
