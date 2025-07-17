@@ -17,7 +17,7 @@ class CustomBarcodeScanController(http.Controller):
         Picking = request.env['stock.picking'].sudo()
         picking = Picking.search([('name', '=', barcode)], limit=1)
         
-        _logger = logging.getLogger("picking",picking)
+        _logger = logging.getLogger("picking {picking}")
 
 
         if not picking:
