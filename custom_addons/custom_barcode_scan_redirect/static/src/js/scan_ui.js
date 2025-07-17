@@ -35,25 +35,18 @@ document.addEventListener("DOMContentLoaded", function () {
           if (!action) return setStatus("danger", "❌ Không có action từ server.");
 
           if (action.type === "ir.actions.client" && action.tag === "display_notification") {
-            setStatus("warning", "⚠️ " + action.params.message);
-          } else if (action.type) {
-            setStatus("success", "✅ Mở phiếu...");
+        setStatus("warning", "⚠️ " + action.params.message);
+      } else {
+        setStatus("success", "✅ Mở phiếu...");
 
-            if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
-              window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
-            } else {
-              // fallback mở đúng bằng action id nếu có
-              const actionId = action.id || null;
-              if (actionId) {
-                window.location.href = `/web#action=${actionId}&id=${action.params?.res_id || ''}&model=${action.params?.model}&view_type=form`;
-              } else {
-                window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
-              }
-            }
-          } else {
-            setStatus("danger", "❌ 123 Không thể xử lý action.");
-          }
-        })
+        if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
+          window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+        } else {
+          // fallback nhẹ
+          window.location.href = "/web";
+        }
+      }
+    })
 
       .catch(err => {
         console.error("❌ Lỗi fetch:", err);
