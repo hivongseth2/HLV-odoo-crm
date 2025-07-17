@@ -73,7 +73,7 @@ class CustomBarcodeScanController(http.Controller):
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
-                    'message': "Phiếu không có loại giao nhận.",
+                    'message': f"Phiếu {picking.name} chưa có loại giao nhận (`picking_type_id`) nào.",
                     'type': 'danger',
                     'sticky': False,
                 }
@@ -82,10 +82,13 @@ class CustomBarcodeScanController(http.Controller):
         try:
             action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
             action.update({
-                'context': {'active_id': picking_id},
+                'context': {
+                    'active_id': picking.id,
+                    'default_picking_type_id': picking.picking_type_id.id,  # ⚠️ CẦN thiết để barcode không lỗi
+                },
                 'params': {
                     'model': 'stock.picking',
-                    'res_id': picking_id,
+                    'res_id': picking.id,
                 }
             })
             return action
