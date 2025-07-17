@@ -29,7 +29,7 @@ class CustomBarcodeScanController(http.Controller):
                 }
             }
 
-        # Nếu phiếu hiện tại đã done, tìm phiếu kế tiếp cùng group
+        # Nếu phiếu đã done, tìm phiếu liên kết tiếp theo trong cùng group
         if picking.state == 'done' and picking.group_id:
             next_picking = Picking.search([
                 ('group_id', '=', picking.group_id.id),
@@ -50,15 +50,23 @@ class CustomBarcodeScanController(http.Controller):
                 }
 
         try:
-            # Dùng action đã định nghĩa sẵn trong stock_barcode
-            action = request.env.ref("stock_barcode.stock_barcode_picking_client_action").read()[0]
-            action["params"] = {
-                "model": "stock.picking",
-                "res_id": picking.id,
+            # Lấy action id chuẩn từ stock_barcode
+            action_id = request.env.ref("stock_barcode.stock_barcode_picking_client_action").id
+
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'stock_barcode_client_action',
+                'target': 'fullscreen',
+                'id': action_id,  # BẮT BUỘC để tránh lỗi "Tác vụ không tồn tại"
+                'context': {
+                    'active_model': 'stock.picking',
+                    'active_id': picking.id,
+                    'active_ids': [picking.id],
+                }
             }
-            return action
+
         except Exception as e:
-            _logger.exception("Lỗi khi load action stock_barcode_picking_client_action")
+            _logger.exception("Lỗi khi lấy action stock_barcode_picking_client_action")
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
