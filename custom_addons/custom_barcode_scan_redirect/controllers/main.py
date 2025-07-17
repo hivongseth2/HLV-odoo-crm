@@ -32,9 +32,10 @@ class CustomBarcodeScanController(http.Controller):
         if picking.state == 'done' and picking.group_id:
             next_picking = Picking.search([
                 ('group_id', '=', picking.group_id.id),
-                ('id', '!=', picking.id),
+                ('id', '>', picking.id),  # chỉ tìm phiếu "sau"
                 ('state', 'in', ['confirmed', 'assigned', 'waiting'])
-            ], limit=1)
+            ], order='id asc', limit=1)
+
             if next_picking:
                 return self._get_barcode_action(next_picking.id)
 
@@ -53,12 +54,48 @@ class CustomBarcodeScanController(http.Controller):
 
     def _get_barcode_action(self, picking_id):
         """ Helper trả action barcode scanner đầy đủ """
-        action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
-        action.update({
-            'context': {'active_id': picking_id},
-            'params': {
-                'model': 'stock.picking',
-                'res_id': picking_id,
+        Picking = request.env['stock.picking'].sudo()
+        picking = Picking.browse(picking_id)
+
+        if not picking.exists():
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'message': "Không tìm thấy phiếu cần mở.",
+                    'type': 'danger',
+                    'sticky': False,
+                }
             }
-        })
-        return action
+
+        if not picking.picking_type_id:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'message': "Phiếu không có loại giao nhận.",
+                    'type': 'danger',
+                    'sticky': False,
+                }
+            }
+
+        try:
+            action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
+            action.update({
+                'context': {'active_id': picking_id},
+                'params': {
+                    'model': 'stock.picking',
+                    'res_id': picking_id,
+                }
+            })
+            return action
+        except ValueError:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'message': "Không tìm thấy action barcode mặc định.",
+                    'type': 'danger',
+                    'sticky': False,
+                }
+            }
