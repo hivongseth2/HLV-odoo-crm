@@ -52,13 +52,24 @@ class CustomBarcodeScanController(http.Controller):
         return self._get_barcode_action(picking.id)
 
     def _get_barcode_action(self, picking_id):
-        """ Helper trả action barcode scanner đầy đủ """
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+
+        if not picking.exists() or len(picking) != 1:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'message': f"Không thể xác định chính xác phiếu để mở barcode (ID: {picking_id})",
+                    'type': 'danger',
+                }
+            }
+
         action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
         action.update({
-            'context': {'active_id': picking_id},
+            'context': {'active_id': picking.id},
             'params': {
                 'model': 'stock.picking',
-                'res_id': picking_id,
+                'res_id': picking.id,
             }
         })
         return action
