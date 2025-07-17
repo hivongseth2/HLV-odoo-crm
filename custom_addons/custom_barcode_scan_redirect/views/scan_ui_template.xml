@@ -72,7 +72,9 @@
       </div>
 
 
-      <script type="text/javascript" src="/custom_barcode_scan/static/src/js/scan_ui.js"/>
+      <!-- <script type="text/javascript" src="/custom_barcode_scan/static/src/js/scan_ui.js"/> -->
+      <script type="text/javascript" src="/custom_barcode_scan_redirect/static/src/js/scan_ui.js"/>
+
 
     </t>
   </template>
