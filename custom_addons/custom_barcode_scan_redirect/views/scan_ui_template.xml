@@ -1,13 +1,17 @@
 <odoo>
   <template id="scan_ui_template" name="Custom Barcode Scan UI">
     <t t-call="web.layout">
-      <div class="container mt-5" style="max-width: 600px;">
-        <h2 class="mb-4 text-center">📦 Quét Phiếu Kho</h2>
-        <div class="input-group mb-3">
-          <input type="text" id="barcode_input" class="form-control form-control-lg" placeholder="Quét hoặc nhập mã phiếu..." autofocus="autofocus"/>
-          <button class="btn btn-primary" onclick="triggerScan()">Quét</button>
+      <div class="container py-5" style="max-width: 500px; font-family: 'Segoe UI', sans-serif;">
+        <div class="card shadow-sm rounded-4">
+          <div class="card-body">
+            <h3 class="text-center mb-4">📦 Quét Phiếu Kho</h3>
+            <div class="input-group mb-3">
+              <input type="text" id="barcode_input" class="form-control form-control-lg border-primary" placeholder="Quét hoặc nhập mã phiếu..." autofocus="autofocus"/>
+              <button class="btn btn-primary px-4" onclick="triggerScan()">Quét</button>
+            </div>
+            <div id="scan_status" class="alert" role="alert" style="display:none;"></div>
+          </div>
         </div>
-        <div id="scan_status" class="alert alert-info" role="alert" style="display:none;"></div>
       </div>
 
       <script type="text/javascript"><![CDATA[
@@ -15,11 +19,17 @@
           const input = document.getElementById("barcode_input");
           const status = document.getElementById("scan_status");
 
-          window.triggerScan = function () {
-            if (!input.value.trim()) return;
-            const barcode = input.value.trim();
+          function setStatus(type, message) {
             status.style.display = "block";
-            status.innerText = "⏳ Đang xử lý mã: " + barcode;
+            status.className = "alert alert-" + type;
+            status.innerText = message;
+          }
+
+          window.triggerScan = function () {
+            const barcode = input.value.trim();
+            if (!barcode) return setStatus("warning", "⚠️ Vui lòng nhập mã phiếu.");
+
+            setStatus("info", "⏳ Đang xử lý mã: " + barcode);
 
             fetch("/custom_barcode_scan/ui/scan", {
               method: "POST",
@@ -32,39 +42,24 @@
             .then((res) => res.json())
             .then((action) => {
               if (action && action.type === "ir.actions.client" && action.tag === "display_notification") {
-                status.className = "alert alert-warning";
-                status.innerText = "⚠️ " + action.params.message;
+                setStatus("warning", "⚠️ " + action.params.message);
               } else {
-                status.className = "alert alert-success";
-                status.innerText = "✅ Mở phiếu...";
+                setStatus("success", "✅ Mở phiếu...");
                 window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
               }
             })
             .catch((err) => {
-              status.className = "alert alert-danger";
-              status.innerText = "❌ Lỗi: " + err;
+              setStatus("danger", "❌ Lỗi: " + err);
             });
 
             input.value = "";
           };
 
           input.addEventListener("keypress", function (e) {
-            if (e.key === "Enter") {
-              triggerScan();
-            }
+            if (e.key === "Enter") triggerScan();
           });
         });
       ]]></script>
     </t>
   </template>
-
-  <record id="action_custom_barcode_ui" model="ir.actions.act_url">
-    <field name="name">Scan Phiếu (UI)</field>
-    <field name="type">ir.actions.act_url</field>
-    <field name="url">/custom_barcode_scan/ui</field>
-    <field name="target">self</field>
-  </record>
-
-  <menuitem id="menu_custom_barcode_ui" name="🔍 Quét Phiếu Kho" parent="stock.menu_stock_warehouse_mgmt"
-            action="action_custom_barcode_ui" sequence="99"/>
 </odoo>
