@@ -67,7 +67,8 @@
             })
               .then((res) => res.json())
               .then((action) => {
-                if (action?.type === "ir.actions.client" && action.tag === "display_notification") {
+             if (action?.type === "ir.actions.client" &amp;&amp; action.tag === "display_notification") {
+
                   setStatus("warning", "⚠️ " + action.params.message);
                 } else if (action?.type === 'ir.actions.act_window') {
                   if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
