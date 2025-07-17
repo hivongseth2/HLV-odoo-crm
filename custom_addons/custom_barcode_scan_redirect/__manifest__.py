@@ -10,5 +10,10 @@
     ],
     "installable": True,
     "application": False,
-    "license": "LGPL-3"
+    "license": "LGPL-3",
+    'assets': {
+    'web.assets_frontend': [
+        'custom_barcode_scan_redirect/static/src/js/scan_ui.js',
+    ]
+}
 }
