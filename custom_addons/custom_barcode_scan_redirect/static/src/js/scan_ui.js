@@ -20,34 +20,37 @@ document.addEventListener("DOMContentLoaded", function () {
         "Content-Type": "application/json",
         "X-Requested-With": "XMLHttpRequest"
       },
-            body: JSON.stringify({
-            jsonrpc: "2.0",
-            method: "call",
-            params: {
-            barcode: barcode
-            }
-        })
-        //    body: JSON.stringify({ barcode })
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: { barcode }
+      })
     })
-    .then((response) => {
-    console.log(response,'res')
-    const action = response.result;
+      .then(res => res.json()) // 👈 Quan trọng! Parse body JSON trước
+      .then(response => {
+        console.log("🚀 Response JSON:", response);
 
-    if (action?.type === "ir.actions.client" && action.tag === "display_notification") {
-      setStatus("warning", "⚠️ " + action.params.message);
-    } else if (action?.type) {
-      setStatus("success", "✅ Mở phiếu...");
+        const action = response.result;
+        if (!action) return setStatus("danger", "❌ Không có action từ server.");
 
-      if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
-        window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
-      } else {
-        window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
-      }
-    } else {
-      setStatus("danger", "❌ Không thể xử lý action.");
-    }
-  })
+        if (action.type === "ir.actions.client" && action.tag === "display_notification") {
+          setStatus("warning", "⚠️ " + action.params.message);
+        } else if (action.type) {
+          setStatus("success", "✅ Mở phiếu...");
 
+          if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
+            window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+          } else {
+            window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
+          }
+        } else {
+          setStatus("danger", "❌ Không thể xử lý action.");
+        }
+      })
+      .catch(err => {
+        console.error("❌ Lỗi fetch:", err);
+        setStatus("danger", "❌ Lỗi khi gọi API.");
+      });
 
     input.value = "";
   };
