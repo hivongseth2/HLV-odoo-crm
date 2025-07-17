@@ -38,7 +38,15 @@ document.addEventListener("DOMContentLoaded", function () {
         setStatus("success", "✅ Mở phiếu...");
 
         if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
-          await window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+          // await window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+          if (action.id && !action.type) {
+  // Nếu chỉ có ID → gọi lại để lấy full action
+              const fullAction = await window.odoo.__DEBUG__.services["web.action_service"].loadAction(action.id);
+              await window.odoo.__DEBUG__.services["web.action_service"].doAction(fullAction);
+            } else {
+              await window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+            }
+
         } else {
           // fallback
           window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));

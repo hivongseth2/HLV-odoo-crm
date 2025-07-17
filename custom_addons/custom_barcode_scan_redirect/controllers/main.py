@@ -53,43 +53,32 @@ class CustomBarcodeScanController(http.Controller):
 
     def _get_barcode_action(self, picking_id):
         _logger = logging.getLogger(__name__)
-        Picking = request.env['stock.picking'].sudo()
-        picking = Picking.browse(picking_id)
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
 
-        if not picking.exists():
+        if not picking.exists() or not picking.picking_type_id:
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
-                    'message': f"Phiếu #{picking_id} không tồn tại.",
+                    'message': "Phiếu không hợp lệ hoặc thiếu loại chuyển kho.",
                     'type': 'danger',
                     'sticky': False,
                 }
             }
 
-        if not picking.picking_type_id:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'message': "Phiếu không có loại chuyển kho, không thể mở giao diện barcode.",
-                    'type': 'danger',
-                    'sticky': False,
-                }
-            }
+        # Lấy action gốc nhưng chỉ giữ phần cần thiết
+        action_id = request.env.ref('stock_barcode.stock_barcode_picking_client_action').id
 
-        action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
-
-        action.update({
-                'context': {
-                    'active_id': picking.id,
-                    'default_picking_type_id': picking.picking_type_id.id,  # Bắt buộc để tránh lỗi singleton
-                },
-                'params': {
-                    'model': 'stock.picking',
-                    'res_id': picking.id,
-                }
-            })
-
-        _logger.info(f"[ACTION] Gửi barcode_action cho phiếu: {picking.name} | Picking Type: {picking.picking_type_id.name}")
-        return action
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'stock_barcode_client_action',
+            'res_model': 'stock.picking',
+            'res_id': picking.id,
+            'target': 'fullscreen',
+            'context': {
+                'active_id': picking.id,
+                'default_picking_type_id': picking.picking_type_id.id,
+            },
+            # 👇 Quan trọng! Truyền ID để frontend gọi lại load action chuẩn
+            'id': action_id
+        }
