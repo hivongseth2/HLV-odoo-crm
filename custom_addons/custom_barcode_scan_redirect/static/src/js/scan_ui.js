@@ -30,6 +30,7 @@ document.addEventListener("DOMContentLoaded", function () {
         //    body: JSON.stringify({ barcode })
     })
     .then((response) => {
+    console.log(response,'res')
     const action = response.result;
 
     if (action?.type === "ir.actions.client" && action.tag === "display_notification") {
