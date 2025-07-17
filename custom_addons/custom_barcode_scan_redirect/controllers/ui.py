@@ -26,4 +26,4 @@ class CustomBarcodeScanUIController(http.Controller):
         if picking:
             return picking.get_barcode_view_state(picking.name)
 
-        return {"type": "ir.actions.client", "tag": "display_notification", "params": {"title": "Không tìm thấy", "message": f"Không có phiếu với mã {barcode}", "sticky": False}}
+        return {"type": "ir.actions.client", "tag": "display_notification", "params": {"title": "Không tìm thấy", "message": f"Không có phiếu với mã  {barcode}", "sticky": False}}
