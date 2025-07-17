@@ -73,7 +73,9 @@
                   if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
                     window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
                   } else {
-                    window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
+                    <!-- window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action)); -->
+                    window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action)).replace(/&/g, '%26');
+
                   }
                 }
               })
