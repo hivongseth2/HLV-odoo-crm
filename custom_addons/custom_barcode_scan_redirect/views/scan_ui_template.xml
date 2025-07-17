@@ -5,7 +5,7 @@
         <div class="scan-card">
           <h2>📦 Quét Phiếu Kho</h2>
           <div class="scan-form">
-            <input id="barcode_input" type="text" placeholder="Nhập mã phiếu..." autofocus />
+            <input id="barcode_input" type="text" placeholder="Nhập mã phiếu..." autofocus="autofocus" />
             <button onclick="triggerScan()">Quét</button>
           </div>
           <div id="scan_status" class="scan-status" style="display: none;"></div>
