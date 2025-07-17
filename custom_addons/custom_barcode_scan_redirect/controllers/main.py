@@ -52,26 +52,40 @@ class CustomBarcodeScanController(http.Controller):
         return self._get_barcode_action(picking.id)
 
     def _get_barcode_action(self, picking_id):
-        Picking = request.env['stock.picking'].sudo()
-        picking = Picking.browse(picking_id)
+        """ Helper trả action barcode scanner đầy đủ """
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
 
         if not picking.exists():
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
-                    'message': "Không tìm thấy phiếu cần mở.",
+                    'message': f"Phiếu #{picking_id} không tồn tại.",
                     'type': 'danger',
                     'sticky': False,
                 }
             }
 
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'stock_barcode_client_action',
-            'target': 'fullscreen',
+        if not picking.picking_type_id:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'message': f"Phiếu không có loại chuyển kho (`picking_type_id`) nên không thể mở bằng barcode.",
+                    'type': 'danger',
+                    'sticky': False,
+                }
+            }
+
+        action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
+        action.update({
             'context': {
                 'active_id': picking.id,
-                'default_picking_type_id': picking.picking_type_id.id,  # quan trọng để barcode không lỗi
+                'default_picking_type_id': picking.picking_type_id.id,
+            },
+            'params': {
+                'model': 'stock.picking',
+                'res_id': picking.id,
             }
-        }
+        })
+        return action
