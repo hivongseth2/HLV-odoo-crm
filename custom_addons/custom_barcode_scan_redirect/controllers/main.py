@@ -10,29 +10,15 @@ class CustomBarcodeScanController(http.Controller):
 
     @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user', csrf=False)
     def scan_ui_api(self, **kwargs):
-        # barcode = kwargs.get("barcode")
         _logger = logging.getLogger(__name__)
 
         _logger.info(f"Received kwargs: {kwargs}")
         barcode = kwargs.get("barcode")
         _logger.info(f"barcode: {barcode}")
-
-        # barcode = kwargs.get("params", {}).get("barcode")
         
         
         Picking = request.env['stock.picking'].sudo()
         picking = Picking.search([('name', '=', barcode)], limit=1)
-
-        if not picking:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'message': f"Mã '{barcode}' không tồn tại!",
-                    'type': 'danger',
-                    'sticky': False,
-                }
-            }
 
         if picking.state == 'done' and picking.group_id:
             next_picking = Picking.search([
@@ -41,7 +27,13 @@ class CustomBarcodeScanController(http.Controller):
                 ('state', 'in', ['confirmed', 'assigned', 'waiting'])
             ], limit=1)
             if next_picking:
-                return next_picking.action_view()
+                return {
+                    'type': 'ir.actions.act_window',
+                    'res_model': 'stock.picking',
+                    'res_id': next_picking.id,
+                    'view_mode': 'form',
+                    'target': 'current',
+                }
             else:
                 return {
                     'type': 'ir.actions.client',
@@ -53,4 +45,10 @@ class CustomBarcodeScanController(http.Controller):
                     }
                 }
 
-        return picking.action_view()
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.picking',
+            'res_id': picking.id,
+            'view_mode': 'form',
+            'target': 'current',
+        }
