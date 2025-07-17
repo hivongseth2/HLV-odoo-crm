@@ -20,14 +20,14 @@ document.addEventListener("DOMContentLoaded", function () {
         "Content-Type": "application/json",
         "X-Requested-With": "XMLHttpRequest"
       },
-        //     body: JSON.stringify({
-        //     jsonrpc: "2.0",
-        //     method: "call",
-        //     params: {
-        //     barcode: barcode
-        //     }
-        // })
-           body: JSON.stringify({ barcode })
+            body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "call",
+            params: {
+            barcode: barcode
+            }
+        })
+        //    body: JSON.stringify({ barcode })
     })
       .then((res) => res.json())
       .then((action) => {
