@@ -36,14 +36,9 @@ class CustomBarcodeScanController(http.Controller):
                 ('state', 'in', ['confirmed', 'assigned', 'waiting'])
             ], limit=1)
             if next_picking:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'barcode_scanner',
-                    'params': {
-                        'model': 'stock.picking',
-                        'res_id': next_picking.id,
-                    }
-                }
+                action = request.env.ref('stock_barcode.stock_picking_barcode_action').sudo().read()[0]
+                action['res_id'] = next_picking.id
+                return action
             else:
                 return {
                     'type': 'ir.actions.client',
@@ -55,12 +50,7 @@ class CustomBarcodeScanController(http.Controller):
                     }
                 }
 
-        # Nếu chưa done, mở scanner luôn
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'barcode_scanner',
-            'params': {
-                'model': 'stock.picking',
-                'res_id': picking.id,
-            }
-        }
+        # Nếu chưa done, mở scanner cho phiếu hiện tại
+        action = request.env.ref('stock_barcode.stock_picking_barcode_action').sudo().read()[0]
+        action['res_id'] = picking.id
+        return action
