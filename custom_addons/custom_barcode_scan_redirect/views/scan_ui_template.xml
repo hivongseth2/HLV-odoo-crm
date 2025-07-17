@@ -2,15 +2,15 @@
   <template id="scan_ui_template" name="Custom Barcode Scan UI">
     <t t-call="web.layout">
       <div class="container mt-5" style="max-width: 600px;">
-        <h2 class="mb-4 text-center text-primary fw-bold">📦 Quét Phiếu Kho</h2>
-        <div class="input-group input-group-lg mb-3">
-          <input type="text" id="barcode_input" class="form-control" placeholder="Quét hoặc nhập mã phiếu..." autofocus="autofocus"/>
-          <button class="btn btn-success" onclick="triggerScan()">🔍 Quét</button>
+        <h2 class="mb-4 text-center">📦 Quét Phiếu Kho</h2>
+        <div class="input-group mb-3">
+          <input type="text" id="barcode_input" class="form-control form-control-lg" placeholder="Quét hoặc nhập mã phiếu..." autofocus="autofocus"/>
+          <button class="btn btn-primary" onclick="triggerScan()">Quét</button>
         </div>
-        <div id="scan_status" class="alert alert-info text-center" role="alert" style="display:none;"></div>
+        <div id="scan_status" class="alert alert-info" role="alert" style="display:none;"></div>
       </div>
 
-      <script type="text/javascript">
+      <script type="text/javascript"><![CDATA[
         document.addEventListener("DOMContentLoaded", function () {
           const input = document.getElementById("barcode_input");
           const status = document.getElementById("scan_status");
@@ -19,7 +19,6 @@
             if (!input.value.trim()) return;
             const barcode = input.value.trim();
             status.style.display = "block";
-            status.className = "alert alert-info text-center";
             status.innerText = "⏳ Đang xử lý mã: " + barcode;
 
             fetch("/custom_barcode_scan/ui/scan", {
@@ -30,19 +29,19 @@
               },
               body: JSON.stringify({ barcode })
             })
-            .then(res => res.json())
-            .then(action => {
-              if (action && action.type) {
-                status.className = "alert alert-success text-center";
+            .then((res) => res.json())
+            .then((action) => {
+              if (action && action.type === "ir.actions.client" && action.tag === "display_notification") {
+                status.className = "alert alert-warning";
+                status.innerText = "⚠️ " + action.params.message;
+              } else {
+                status.className = "alert alert-success";
                 status.innerText = "✅ Mở phiếu...";
                 window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
-              } else {
-                status.className = "alert alert-warning text-center";
-                status.innerText = action.error || action.warning || "Không rõ phản hồi.";
               }
             })
-            .catch(err => {
-              status.className = "alert alert-danger text-center";
+            .catch((err) => {
+              status.className = "alert alert-danger";
               status.innerText = "❌ Lỗi: " + err;
             });
 
@@ -55,7 +54,7 @@
             }
           });
         });
-      </script>
+      ]]></script>
     </t>
   </template>
 
@@ -66,7 +65,6 @@
     <field name="target">self</field>
   </record>
 
-  <menuitem id="menu_custom_barcode_ui" name="🔍 Quét Phiếu Kho"
-            parent="stock.menu_stock_warehouse_mgmt" action="action_custom_barcode_ui"
-            sequence="99"/>
+  <menuitem id="menu_custom_barcode_ui" name="🔍 Quét Phiếu Kho" parent="stock.menu_stock_warehouse_mgmt"
+            action="action_custom_barcode_ui" sequence="99"/>
 </odoo>
