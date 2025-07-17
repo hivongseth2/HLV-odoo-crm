@@ -5,8 +5,8 @@
     "author": "ChatGPT Dev",
     "category": "Warehouse",
     "summary": "Custom scan route with redirect logic and UI interface.",
-    "installable": true,
-    "application": false,
+    "installable": True,
+    "application": False,
     "license": "LGPL-3",
     "data": ["views/scan_ui_template.xml"]
 }
