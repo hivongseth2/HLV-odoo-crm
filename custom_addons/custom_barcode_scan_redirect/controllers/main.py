@@ -1,6 +1,7 @@
-# === controllers/main.py ===
-from odoo import http,route
+from odoo import http
 from odoo.http import request
+from odoo.http import route
+
 
 class CustomBarcodeScanController(http.Controller):
     
