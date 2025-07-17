@@ -13,9 +13,9 @@
     "application": False,
     "license": "LGPL-3",
     'assets': {
-    'web.assets_backend': [
-    'custom_barcode_scan_redirect/static/src/js/scan_ui.js',
-],
+        'web.assets_backend': [
+            'custom_barcode_scan_redirect/static/src/js/scan_ui.js',
+        ],
+    }
 
-}
 }

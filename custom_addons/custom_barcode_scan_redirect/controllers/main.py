@@ -81,13 +81,15 @@ class CustomBarcodeScanController(http.Controller):
         action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
 
         action.update({
-            'context': {
-                'active_id': picking.id,
-                'default_picking_type_id': picking.picking_type_id.id,
-                'res_model': 'stock.picking',
-                'res_id': picking.id,
-            }
-        })
+                'context': {
+                    'active_id': picking.id,
+                    'default_picking_type_id': picking.picking_type_id.id,  # Bắt buộc để tránh lỗi singleton
+                },
+                'params': {
+                    'model': 'stock.picking',
+                    'res_id': picking.id,
+                }
+            })
 
         _logger.info(f"[ACTION] Gửi barcode_action cho phiếu: {picking.name} | Picking Type: {picking.picking_type_id.name}")
         return action
