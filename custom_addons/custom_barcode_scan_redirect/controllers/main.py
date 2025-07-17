@@ -14,8 +14,10 @@ class CustomBarcodeScanController(http.Controller):
         _logger = logging.getLogger(__name__)
 
         _logger.info(f"Received kwargs: {kwargs}")
+        barcode = kwargs.get("barcode")
+        _logger.info(f"barcode: {barcode}")
 
-        barcode = kwargs.get("params", {}).get("barcode")
+        # barcode = kwargs.get("params", {}).get("barcode")
         
         
         Picking = request.env['stock.picking'].sudo()
