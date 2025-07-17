@@ -16,9 +16,6 @@ class CustomBarcodeScanController(http.Controller):
 
         Picking = request.env['stock.picking'].sudo()
         picking = Picking.search([('name', '=', barcode)], limit=1)
-        
-        _logger = logging.getLogger("picking {picking}")
-
 
         if not picking:
             return {
@@ -35,10 +32,9 @@ class CustomBarcodeScanController(http.Controller):
         if picking.state == 'done' and picking.group_id:
             next_picking = Picking.search([
                 ('group_id', '=', picking.group_id.id),
-                ('id', '>', picking.id),  # chỉ tìm phiếu "sau"
+                ('id', '!=', picking.id),
                 ('state', 'in', ['confirmed', 'assigned', 'waiting'])
-            ], order='id asc', limit=1)
-
+            ], limit=1)
             if next_picking:
                 return self._get_barcode_action(next_picking.id)
 
@@ -56,57 +52,13 @@ class CustomBarcodeScanController(http.Controller):
         return self._get_barcode_action(picking.id)
 
     def _get_barcode_action(self, picking_id):
-        _logger = logging.getLogger(__name__)
-
-        if not self or len(self) != 1:
-            _logger.warning("Expected one picking_type_id but got: %s", self.ids)
-            return {}  # hoặc raise lỗi custom nếu muốn rõ ràng hơn
         """ Helper trả action barcode scanner đầy đủ """
-        Picking = request.env['stock.picking'].sudo()
-        picking = Picking.browse(picking_id)
-
-        if not picking.exists():
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'message': "Không tìm thấy phiếu cần mở.",
-                    'type': 'danger',
-                    'sticky': False,
-                }
+        action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
+        action.update({
+            'context': {'active_id': picking_id},
+            'params': {
+                'model': 'stock.picking',
+                'res_id': picking_id,
             }
-
-        if not picking.picking_type_id:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'message': f"Phiếu {picking.name} chưa có loại giao nhận (`picking_type_id`) nào.",
-                    'type': 'danger',
-                    'sticky': False,
-                }
-            }
-
-        try:
-            action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
-            action.update({
-                'context': {
-                    'active_id': picking.id,
-                    'default_picking_type_id': picking.picking_type_id.id,  # ⚠️ CẦN thiết để barcode không lỗi
-                },
-                'params': {
-                    'model': 'stock.picking',
-                    'res_id': picking.id,
-                }
-            })
-            return action
-        except ValueError:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'message': "Không tìm thấy action barcode mặc định.",
-                    'type': 'danger',
-                    'sticky': False,
-                }
-            }
+        })
+        return action
