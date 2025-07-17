@@ -53,9 +53,14 @@ class CustomBarcodeScanController(http.Controller):
         return self._get_barcode_action(picking.id)
 
     def _get_barcode_action(self, picking_id):
+        _logger = logging.getLogger(__name__)
+
+        if not self or len(self) != 1:
+            _logger.warning("Expected one picking_type_id but got: %s", self.ids)
+            return {}  # hoặc raise lỗi custom nếu muốn rõ ràng hơn
         """ Helper trả action barcode scanner đầy đủ """
-        Picking = request.env['stock.picking'].sudo()
-        picking = Picking.browse(picking_id)
+        picking = request.env['stock.picking'].sudo()
+        picking = picking.browse(picking_id)
 
         if not picking.exists():
             return {
