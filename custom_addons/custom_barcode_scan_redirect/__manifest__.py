@@ -1,12 +1,12 @@
 {
     "name": "Custom Barcode Scan Redirect",
-    "version": "18.0.1.0.0",
-    "depends": ["stock", "stock_barcode", "web"],
-    "author": "ChatGPT Dev",
+    "version": "1.0",
     "category": "Warehouse",
-    "summary": "Custom scan route with redirect logic and UI interface.",
+    "summary": "Quét phiếu và tự động chuyển sang phiếu tiếp theo nếu phiếu hiện tại đã done",
+    "depends": ["stock", "stock_barcode"],
+    "data": ["views/scan_ui_template.xml"],
+    "assets": {},
     "installable": True,
     "application": False,
-    "license": "LGPL-3",
-    "data": ["views/scan_ui_template.xml"]
+    "license": "LGPL-3"
 }

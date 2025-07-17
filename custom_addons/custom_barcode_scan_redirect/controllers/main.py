@@ -1,46 +1,40 @@
 from odoo import http
 from odoo.http import request
-
+import json
 
 class CustomBarcodeScanController(http.Controller):
 
-    @http.route('/custom_barcode_scan/ui', type='http', auth='user', website=True)
+    @http.route('/custom_barcode_scan/ui', auth='user', website=True)
     def scan_ui_page(self, **kwargs):
-        return request.render('custom_barcode_scan_redirect.scan_ui_template', {})
+        return request.render("custom_barcode_scan_redirect.scan_ui_template", {})
 
-    @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user')
+    @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user', methods=['POST'])
     def scan_ui_api(self, **kwargs):
-        barcode = kwargs.get('barcode')
-        StockPicking = request.env['stock.picking']
-        picking = StockPicking.search([('name', '=', barcode)], limit=1)
-
-        if picking and picking.state == 'done' and picking.group_id:
-            next_picking = StockPicking.search([
-                ('group_id', '=', picking.group_id.id),
-                ('state', 'not in', ['done', 'cancel']),
-                ('id', '!=', picking.id)
-            ], order='scheduled_date asc', limit=1)
-            if next_picking:
-                return next_picking.get_barcode_view_state(next_picking.name)
-            return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "title": "Thông báo",
-                    "message": "Đã hoàn tất mọi phiếu.",
-                    "sticky": False
+        barcode = kwargs.get("barcode")
+        if not barcode:
+            return {"error": "Barcode is missing"}
+        picking = request.env["stock.picking"].sudo().search([("name", "=", barcode)], limit=1)
+        if not picking:
+            return {"error": "Không tìm thấy phiếu với mã: %s" % barcode}
+        if picking.state == "done":
+            next_pick = request.env["stock.picking"].sudo().search([
+                ("state", "not in", ["done", "cancel"]),
+                ("id", ">", picking.id)
+            ], limit=1, order="id asc")
+            if next_pick:
+                return {
+                    "type": "ir.actions.act_window",
+                    "res_model": "stock.picking",
+                    "res_id": next_pick.id,
+                    "view_mode": "form",
+                    "target": "current",
                 }
-            }
-
-        if picking:
-            return picking.get_barcode_view_state(picking.name)
-
+            else:
+                return {"warning": "Phiếu hiện tại đã hoàn tất và không còn phiếu kế tiếp."}
         return {
-            "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": "Không tìm thấy phiếu",
-                "message": f"Không có phiếu với mã {barcode}",
-                "sticky": False
-            }
+            "type": "ir.actions.act_window",
+            "res_model": "stock.picking",
+            "res_id": picking.id,
+            "view_mode": "form",
+            "target": "current",
         }
