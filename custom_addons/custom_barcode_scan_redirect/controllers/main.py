@@ -36,39 +36,29 @@ class CustomBarcodeScanController(http.Controller):
                 ('state', 'in', ['confirmed', 'assigned', 'waiting'])
             ], limit=1)
             if next_picking:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'stock_barcode_client_action',
-                    'target': 'fullscreen',
-                    'params': {
-                        'model': 'stock.picking',
-                        'res_id': next_picking.id,
-                    },
-                    'context': {
-                        'active_id': next_picking.id,
-                    }
-                }
-            else:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'message': "Không tìm thấy phiếu liên kết tiếp theo!",
-                        'type': 'warning',
-                        'sticky': False,
-                    }
-                }
+                return self._get_barcode_action(next_picking.id)
 
-        # Nếu chưa done => mở view barcode
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'stock_barcode_client_action',
-            'target': 'fullscreen',
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'message': "Không tìm thấy phiếu liên kết tiếp theo!",
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        # Nếu chưa done => mở view barcode của phiếu hiện tại
+        return self._get_barcode_action(picking.id)
+
+    def _get_barcode_action(self, picking_id):
+        """ Helper trả action barcode scanner đầy đủ """
+        action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
+        action.update({
+            'context': {'active_id': picking_id},
             'params': {
                 'model': 'stock.picking',
-                'res_id': picking.id,
-            },
-            'context': {
-                'active_id': picking.id,
+                'res_id': picking_id,
             }
-        }
+        })
+        return action

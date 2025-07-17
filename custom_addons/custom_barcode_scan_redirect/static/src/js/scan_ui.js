@@ -28,25 +28,30 @@ document.addEventListener("DOMContentLoaded", function () {
     })
       .then(res => res.json()) // 👈 Quan trọng! Parse body JSON trước
       .then(response => {
-        console.log("🚀 Response JSON:", response);
+          const action = response.result;
+          if (!action) return setStatus("danger", "❌ Không có action từ server.");
 
-        const action = response.result;
-        if (!action) return setStatus("danger", "❌ Không có action từ server.");
+          if (action.type === "ir.actions.client" && action.tag === "display_notification") {
+            setStatus("warning", "⚠️ " + action.params.message);
+          } else if (action.type) {
+            setStatus("success", "✅ Mở phiếu...");
 
-        if (action.type === "ir.actions.client" && action.tag === "display_notification") {
-          setStatus("warning", "⚠️ " + action.params.message);
-        } else if (action.type) {
-          setStatus("success", "✅ Mở phiếu...");
-
-          if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
-            window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+            if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
+              window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+            } else {
+              // fallback mở đúng bằng action id nếu có
+              const actionId = action.id || null;
+              if (actionId) {
+                window.location.href = `/web#action=${actionId}&id=${action.params?.res_id || ''}&model=${action.params?.model}&view_type=form`;
+              } else {
+                window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
+              }
+            }
           } else {
-            window.location.href = '/web#action=' + encodeURIComponent(JSON.stringify(action));
+            setStatus("danger", "❌ Không thể xử lý action.");
           }
-        } else {
-          setStatus("danger", "❌ Không thể xử lý action.");
-        }
-      })
+        })
+
       .catch(err => {
         console.error("❌ Lỗi fetch:", err);
         setStatus("danger", "❌ Lỗi khi gọi API.");
