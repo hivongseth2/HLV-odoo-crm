@@ -16,6 +16,9 @@ class CustomBarcodeScanController(http.Controller):
 
         Picking = request.env['stock.picking'].sudo()
         picking = Picking.search([('name', '=', barcode)], limit=1)
+        
+        _logger = logging.getLogger("picking",picking)
+
 
         if not picking:
             return {
@@ -59,8 +62,8 @@ class CustomBarcodeScanController(http.Controller):
             _logger.warning("Expected one picking_type_id but got: %s", self.ids)
             return {}  # hoặc raise lỗi custom nếu muốn rõ ràng hơn
         """ Helper trả action barcode scanner đầy đủ """
-        picking = request.env['stock.picking'].sudo()
-        picking = picking.browse(picking_id)
+        Picking = request.env['stock.picking'].sudo()
+        picking = Picking.browse(picking_id)
 
         if not picking.exists():
             return {
