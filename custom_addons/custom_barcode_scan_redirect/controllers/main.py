@@ -28,7 +28,7 @@ class CustomBarcodeScanController(http.Controller):
                 }
             }
 
-        # Nếu phiếu đã done, tìm phiếu tiếp theo trong group
+        # Nếu phiếu đã done và có group => tìm phiếu tiếp theo
         if picking.state == 'done' and picking.group_id:
             next_picking = Picking.search([
                 ('group_id', '=', picking.group_id.id),
@@ -36,9 +36,18 @@ class CustomBarcodeScanController(http.Controller):
                 ('state', 'in', ['confirmed', 'assigned', 'waiting'])
             ], limit=1)
             if next_picking:
-                action = request.env.ref('stock_barcode.stock_picking_barcode_action').sudo().read()[0]
-                action['res_id'] = next_picking.id
-                return action
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'stock_barcode_client_action',
+                    'target': 'fullscreen',
+                    'params': {
+                        'model': 'stock.picking',
+                        'res_id': next_picking.id,
+                    },
+                    'context': {
+                        'active_id': next_picking.id,
+                    }
+                }
             else:
                 return {
                     'type': 'ir.actions.client',
@@ -50,7 +59,16 @@ class CustomBarcodeScanController(http.Controller):
                     }
                 }
 
-        # Nếu chưa done, mở scanner cho phiếu hiện tại
-        action = request.env.ref('stock_barcode.stock_picking_barcode_action').sudo().read()[0]
-        action['res_id'] = picking.id
-        return action
+        # Nếu chưa done => mở view barcode
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'stock_barcode_client_action',
+            'target': 'fullscreen',
+            'params': {
+                'model': 'stock.picking',
+                'res_id': picking.id,
+            },
+            'context': {
+                'active_id': picking.id,
+            }
+        }
