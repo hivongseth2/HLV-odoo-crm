@@ -84,6 +84,8 @@ class CustomBarcodeScanController(http.Controller):
             'context': {
                 'active_id': picking.id,
                 'default_picking_type_id': picking.picking_type_id.id,
+                'res_model': 'stock.picking',
+                'res_id': picking.id,
             }
         })
 
