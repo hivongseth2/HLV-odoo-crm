@@ -71,60 +71,6 @@
         <div id="scan_status" class="scan-status"></div>
       </div>
 
-      <!-- <script type="text/javascript"><![CDATA[
-        document.addEventListener("DOMContentLoaded", function () {
-          const input = document.getElementById("barcode_input");
-          const status = document.getElementById("scan_status");
-
-          function setStatus(type, message) {
-            status.style.display = "block";
-            status.className = "scan-status " + type;
-            status.innerText = message;
-          }
-
-          window.triggerScan = function () {
-            const barcode = input.value.trim();
-            if (!barcode) return setStatus("warning", "⚠️ Vui lòng nhập mã phiếu.");
-
-            setStatus("info", "⏳ Đang xử lý mã: " + barcode);
-
-            fetch("/custom_barcode_scan/ui/scan", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-Requested-With": "XMLHttpRequest"
-              },
-              body: JSON.stringify({ barcode })
-            })
-            .then((res) => res.json())
-            .then((action) => {
-              if (action && action.type === "ir.actions.client" && action.tag === "display_notification") {
-                setStatus("warning", "⚠️ " + action.params.message);
-              } else {
-                setStatus("success", "✅ Mở phiếu...");
-                if (window.odoo && window.odoo.__DEBUG__ && window.odoo.__DEBUG__.services) {
-                  window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
-                } else {
-                  window.location.href = '/web/action?' + new URLSearchParams({
-                  params: JSON.stringify(action),
-                  type: 'ir.actions.act_window',
-                });
-
-                }
-              }
-            })
-            .catch((err) => {
-              setStatus("danger", "❌ Lỗi: " + err);
-            });
-
-            input.value = "";
-          };
-
-          input.addEventListener("keypress", function (e) {
-            if (e.key === "Enter") triggerScan();
-          });
-        });
-      ]]></script> -->
 
       <script type="text/javascript" src="/custom_barcode_scan/static/src/js/scan_ui.js"/>
 

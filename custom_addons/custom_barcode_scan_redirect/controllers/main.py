@@ -1,8 +1,12 @@
 # === controllers/main.py ===
-from odoo import http
+from odoo import http,route
 from odoo.http import request
 
 class CustomBarcodeScanController(http.Controller):
+    
+    @route(['/custom_barcode_scan/ui'], type='http', auth='user')
+    def scan_ui(self):
+        return request.render("custom_barcode_scan_redirect.scan_ui_template")
 
     @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user')
     def scan_ui_api(self, barcode):
