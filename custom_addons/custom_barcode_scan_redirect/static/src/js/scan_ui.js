@@ -28,6 +28,9 @@ document.addEventListener("DOMContentLoaded", function () {
     })
       .then(res => res.json()) // 👈 Quan trọng! Parse body JSON trước
       .then(response => {
+
+        console.log(response);
+        
           const action = response.result;
           if (!action) return setStatus("danger", "❌ Không có action từ server.");
 
