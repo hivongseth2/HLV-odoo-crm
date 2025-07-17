@@ -1,40 +1,44 @@
+# === controllers/main.py ===
 from odoo import http
-from odoo.http import request, route
-from odoo.tools import html_escape
-
+from odoo.http import request
 
 class CustomBarcodeScanController(http.Controller):
 
-    @route(['/custom_barcode_scan/ui'], type='http', auth='user')
-    def scan_ui(self):
-        return request.render("custom_barcode_scan_redirect.scan_ui_template")
+    @http.route('/custom_barcode_scan/ui/scan', type='json', auth='user')
+    def scan_ui_api(self, barcode):
+        Picking = request.env['stock.picking'].sudo()
+        picking = Picking.search([('name', '=', barcode)], limit=1)
 
-    @route(['/custom_barcode_scan/ui/scan'], type='json', auth='user')
-    def scan_ui_api(self, **kwargs):
-        barcode = kwargs.get('barcode')
-        if not barcode:
+        if not picking:
             return {
-                "type": "ir.actions.client",
-                "tag": "display_notification",
-                "params": {
-                    "message": "Không tìm thấy mã phiếu!",
-                    "type": "warning",
-                    "sticky": False,
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'message': f"Mã '{barcode}' không tồn tại!",
+                    'type': 'danger',
+                    'sticky': False,
                 }
             }
-        domain = [('state', '!=', 'cancel'), ('name', '=', barcode)]
-        picking = request.env['stock.picking'].sudo().search(domain, limit=1)
-        if not picking:
-            return {"type": "ir.actions.client", "tag": "display_notification",
-                    "params": {"title": "Không tìm thấy phiếu", "message": html_escape(barcode), "type": "danger"}}
-        if picking.state == 'done':
-            next_pick = request.env['stock.picking'].sudo().search([
+
+        # Nếu phiếu đã done và có group liên kết
+        if picking.state == 'done' and picking.group_id:
+            next_picking = Picking.search([
                 ('group_id', '=', picking.group_id.id),
-                ('state', 'not in', ['cancel', 'done']),
-                ('id', '!=', picking.id)
-            ], limit=1, order='id asc')
-            if next_pick:
-                return next_pick.get_barcode_action()
-            return {"type": "ir.actions.client", "tag": "display_notification",
-                    "params": {"title": "Đã hoàn thành", "message": "Không còn phiếu nào tiếp theo", "type": "success"}}
-        return picking.get_barcode_action()
+                ('id', '!=', picking.id),
+                ('state', 'in', ['confirmed', 'assigned', 'waiting'])
+            ], limit=1)
+            if next_picking:
+                return next_picking.action_view()
+            else:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'message': "Không tìm thấy phiếu liên kết tiếp theo!",
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+
+        # Nếu phiếu chưa done, mở luôn
+        return picking.action_view()
