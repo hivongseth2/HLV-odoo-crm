@@ -16,62 +16,62 @@ class CustomBarcodeScanController(http.Controller):
         _logger.info(f"[SCAN] Barcode: {barcode}")
 
         Picking = request.env['stock.picking'].sudo()
-        picking = Picking.search([('name', '=', barcode)], limit=1)
+        current_picking = Picking.search([('name', '=', barcode)], limit=1)
 
-        if not picking:
+        if not current_picking:
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
-                    'message': f"Không tìm thấy phiếu với mã: {barcode}",
+                    'message': f"❌ Không tìm thấy phiếu với mã: {barcode}",
                     'type': 'danger',
                     'sticky': False,
                 }
             }
 
-        # Nếu phiếu đã done, tìm phiếu liên kết tiếp theo trong cùng group
-        if picking.state == 'done' and picking.group_id:
+        # Nếu phiếu đã done → tìm phiếu tiếp theo trong cùng group (chưa done)
+        if current_picking.state == 'done' and current_picking.group_id:
             next_picking = Picking.search([
-                ('group_id', '=', picking.group_id.id),
-                ('id', '!=', picking.id),
-                ('state', 'in', ['confirmed', 'assigned', 'waiting'])
-            ], limit=1)
+                ('group_id', '=', current_picking.group_id.id),
+                ('id', '!=', current_picking.id),
+                ('state', 'not in', ['done', 'cancel']),
+            ], order='scheduled_date asc', limit=1)
+
             if next_picking:
-                picking = next_picking
+                _logger.info(f"[SCAN] Phiếu đã hoàn tất. Nhảy sang phiếu kế tiếp: {next_picking.name}")
+                current_picking = next_picking
             else:
                 return {
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
                     'params': {
-                        'message': "Không tìm thấy phiếu liên kết tiếp theo!",
-                        'type': 'warning',
+                        'message': "✅ Phiếu đã hoàn tất và không còn phiếu tiếp theo trong nhóm!",
+                        'type': 'success',
                         'sticky': False,
                     }
                 }
 
         try:
-            # Lấy action id chuẩn từ stock_barcode
             action_id = request.env.ref("stock_barcode.stock_barcode_picking_client_action").id
-
             return {
                 'type': 'ir.actions.client',
                 'tag': 'stock_barcode_client_action',
                 'target': 'fullscreen',
-                'id': action_id,  # BẮT BUỘC để tránh lỗi "Tác vụ không tồn tại"
+                'id': action_id,
                 'context': {
                     'active_model': 'stock.picking',
-                    'active_id': picking.id,
-                    'active_ids': [picking.id],
+                    'active_id': current_picking.id,
+                    'active_ids': [current_picking.id],
                 }
             }
 
         except Exception as e:
-            _logger.exception("Lỗi khi lấy action stock_barcode_picking_client_action")
+            _logger.exception("🔥 Lỗi khi lấy action stock_barcode_picking_client_action")
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
-                    'message': f"Lỗi nội bộ khi mở giao diện mã vạch: {str(e)}",
+                    'message': f"🚨 Lỗi khi mở giao diện barcode: {str(e)}",
                     'type': 'danger',
                     'sticky': False,
                 }
