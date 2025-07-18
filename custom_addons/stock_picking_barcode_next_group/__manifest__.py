@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*- 
 {
     'name': 'Stock Barcode Auto Next Picking HLV',
     'version': '0.1',
