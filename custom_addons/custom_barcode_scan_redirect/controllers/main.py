@@ -62,9 +62,6 @@ class CustomBarcodeScanController(http.Controller):
                 }
             }
 
-
-
-
         except Exception as e:
             _logger.exception("🔥 Lỗi khi lấy action stock_barcode_picking_client_action")
             return {

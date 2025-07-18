@@ -8,7 +8,7 @@ document.addEventListener("DOMContentLoaded", function () {
     status.style.display = "block";
   }
 
-  window.triggerScan = async function () {
+  async function triggerScan() {
     const barcode = input.value.trim();
     if (!barcode) return setStatus("warning", "⚠️ Vui lòng nhập mã phiếu.");
 
@@ -19,36 +19,42 @@ document.addEventListener("DOMContentLoaded", function () {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest"
+          "X-Requested-With": "XMLHttpRequest",
         },
         body: JSON.stringify({
           jsonrpc: "2.0",
           method: "call",
-          params: { barcode }
-        })
+          params: { barcode },
+        }),
       });
 
       const response = await res.json();
       const action = response.result;
+
       if (!action) return setStatus("danger", "❌ Không có action từ server.");
 
+      // Thông báo đơn giản
       if (action.type === "ir.actions.client" && action.tag === "display_notification") {
-        setStatus("warning", "⚠️ " + action.params.message);
-      } else {
-        setStatus("success", "✅ Mở phiếu...");
+        return setStatus("warning", "⚠️ " + action.params.message);
+      }
 
-        if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
-          // OWL: để Odoo tự gọi get_barcode_data
-          // await window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
-          if (action.action_id) {
-            await window.odoo.__DEBUG__.services["web.action_service"].doAction(action.action_id, {
-              additional_context: action.context
-            });
-          }
+      setStatus("success", "✅ Mở phiếu...");
 
+      if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
+        const actionService = window.odoo.__DEBUG__.services["web.action_service"];
+        if (action.action_id) {
+          await actionService.doAction(action.action_id, {
+            additional_context: action.context || {},
+          });
         } else {
-          // fallback nhẹ
-          window.location.href = "/web#action=" + encodeURIComponent(JSON.stringify(action));
+          console.warn("⚠️ Action không có action_id:", action);
+          setStatus("danger", "❌ Action không hợp lệ từ server.");
+        }
+      } else {
+        // fallback nếu không có OWL
+        setStatus("info", "🔄 Chuyển hướng bằng fallback...");
+        if (action.action_id) {
+          window.location.href = `/web#action=${action.action_id}&active_id=${action.context?.active_id}`;
         }
       }
     } catch (err) {
@@ -57,9 +63,12 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     input.value = "";
-  };
+    input.focus(); // auto focus lại sau khi scan
+  }
 
   input.addEventListener("keypress", function (e) {
     if (e.key === "Enter") triggerScan();
   });
+
+  input.focus(); // focus khi load
 });
