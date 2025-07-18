@@ -12,7 +12,7 @@
     'auto_install': False,
     'assets': {
         'web.assets_backend': [
-            'stock_picking_barcode_next/static/src/js/barcode_picking_override.js',
+            'stock_picking_barcode_next_group/static/src/js/barcode_picking_override.js',
         ],
     },
 }
