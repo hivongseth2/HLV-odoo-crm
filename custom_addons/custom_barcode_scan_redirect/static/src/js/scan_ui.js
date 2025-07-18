@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       if (!action) return setStatus("danger", "❌ Không có action từ server.");
 
-      // Thông báo đơn giản
+      // Thông báo lỗi/hoàn tất
       if (action.type === "ir.actions.client" && action.tag === "display_notification") {
         return setStatus("warning", "⚠️ " + action.params.message);
       }
@@ -47,12 +47,12 @@ document.addEventListener("DOMContentLoaded", function () {
             additional_context: action.context || {},
           });
         } else {
-          console.warn("⚠️ Action không có action_id:", action);
+          console.warn("⚠️ Không có action_id:", action);
           setStatus("danger", "❌ Action không hợp lệ từ server.");
         }
       } else {
-        // fallback nếu không có OWL
-        setStatus("info", "🔄 Chuyển hướng bằng fallback...");
+        // Fallback nếu OWL không sẵn
+        setStatus("info", "🔄 Chuyển hướng fallback...");
         if (action.action_id) {
           window.location.href = `/web#action=${action.action_id}&active_id=${action.context?.active_id}`;
         }
@@ -63,12 +63,15 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     input.value = "";
-    input.focus(); // auto focus lại sau khi scan
+    input.focus();
   }
+
+  // 🔥 Gán hàm vào window
+  window.triggerScan = triggerScan;
 
   input.addEventListener("keypress", function (e) {
     if (e.key === "Enter") triggerScan();
   });
 
-  input.focus(); // focus khi load
+  input.focus();
 });
