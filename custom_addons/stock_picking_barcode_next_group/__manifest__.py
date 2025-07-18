@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*- 
+# -*- coding: utf-8 -*-
 {
-    'name': 'Stock Barcode Auto Next Picking HLV',
-    'version': '0.1',
+    'name': 'Stock Picking Barcode Next Group',
+    'version': '16.0.1.0.1',
     'category': 'Inventory',
-    'summary': 'Auto switch to next picking after done in Odoo Barcode',
+    'summary': 'Auto navigate to next picking in group after done in Barcode UI',
     'author': 'anh yêu ❤️',
     'license': 'LGPL-3',
     'depends': ['stock_barcode'],
