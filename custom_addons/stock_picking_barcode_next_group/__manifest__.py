@@ -1,15 +1,11 @@
-# -*- coding: utf-8 -*-
 {
-    'name': 'Stock Picking Barcode Next Group',
-    'version': '0.1',
-    'category': 'Inventory',
-    'summary': 'Auto navigate to next picking in group after done in Barcode UI',
-    'author': 'anh yêu ❤️',
-    'license': 'LGPL-3',
-    'depends': ['stock_barcode'],
-    'installable': True,
-    'application': False,
-    'auto_install': False,
-    
+    "name": "Stock Picking Barcode Next Group",
+    "version": "0.1",
+    "category": "Warehouse",
+    "summary": "Automatically jumps to the next picking in group after done",
+    "depends": ["stock_barcode"],
+    "data": [],
+    "installable": True,
+    "auto_install": False,
+    "license": "LGPL-3"
 }
-
