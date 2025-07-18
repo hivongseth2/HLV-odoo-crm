@@ -1,8 +1,8 @@
 {
     "name": "Stock Picking Barcode Next Group",
-    "version": "0.1",
+    "version": "0.2",
     "category": "Warehouse",
-    "summary": "Automatically jumps to the next picking in group after done",
+    "summary": "Override barcode logic to jump to next picking in group",
     "depends": ["stock_barcode"],
     "data": [],
     "installable": True,

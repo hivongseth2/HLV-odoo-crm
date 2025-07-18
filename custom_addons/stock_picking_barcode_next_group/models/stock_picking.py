@@ -5,15 +5,13 @@ class StockPicking(models.Model):
 
     @api.model
     def _get_barcode_data(self, barcode):
-        picking = self.search(['|', ('name', '=', barcode), ('barcode', '=', barcode)], limit=1)
-
-        if picking and picking.state == 'done' and picking.group_id:
+        record = self.search([('name', '=', barcode)], limit=1)
+        if record and record.state == 'done' and record.group_id:
             next_picking = self.search([
-                ('group_id', '=', picking.group_id.id),
-                ('id', '!=', picking.id),
+                ('group_id', '=', record.group_id.id),
+                ('id', '!=', record.id),
                 ('state', 'not in', ['done', 'cancel']),
             ], order='scheduled_date asc', limit=1)
             if next_picking:
-                picking = next_picking
-
-        return super()._get_barcode_data(picking.name if picking else barcode)
+                record = next_picking
+        return super()._get_barcode_data(record.name if record else barcode)
