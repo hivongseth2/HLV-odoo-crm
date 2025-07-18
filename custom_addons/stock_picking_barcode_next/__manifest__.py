@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 {
-    'name': 'Stock Barcode Auto Next Picking',
+    'name': 'Stock Barcode Auto Next Picking HLV',
     'version': '0.1',
     'category': 'Inventory',
     'summary': 'Auto switch to next picking after done in Odoo Barcode',
