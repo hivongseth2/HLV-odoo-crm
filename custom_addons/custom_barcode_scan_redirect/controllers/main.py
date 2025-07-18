@@ -54,16 +54,16 @@ class CustomBarcodeScanController(http.Controller):
         try:
             action_id = request.env.ref("stock_barcode.stock_barcode_picking_client_action").id
             return {
-                'type': 'ir.actions.client',
-                'tag': 'stock_barcode_client_action',
-                'target': 'fullscreen',
-                'id': action_id,
-                'context': {
-                    'active_model': 'stock.picking',
-                    'active_id': current_picking.id,
-                    'active_ids': [current_picking.id],
+                "action_id": action_id,
+                "context": {
+                    "active_model": "stock.picking",
+                    "active_id": current_picking.id,
+                    "active_ids": [current_picking.id],
                 }
             }
+
+
+
 
         except Exception as e:
             _logger.exception("🔥 Lỗi khi lấy action stock_barcode_picking_client_action")

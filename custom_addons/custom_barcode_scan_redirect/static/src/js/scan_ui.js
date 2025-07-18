@@ -39,7 +39,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
           // OWL: để Odoo tự gọi get_barcode_data
-          await window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+          // await window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+          if (action.action_id) {
+            await window.odoo.__DEBUG__.services["web.action_service"].doAction(action.action_id, {
+              additional_context: action.context
+            });
+          }
+
         } else {
           // fallback nhẹ
           window.location.href = "/web#action=" + encodeURIComponent(JSON.stringify(action));
