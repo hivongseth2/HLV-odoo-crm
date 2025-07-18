@@ -1,12 +1,11 @@
 {
-    "name": "Stock Barcode Patch: Next Picking Logic",
-    "summary": "Override barcode scan to jump to next picking in same group if current is done",
+    "name": "Stock Picking Barcode Next Group",
     "version": "1.0",
-    "category": "Warehouse",
-    "author": "Anh Yeu & ChatGPT",
     "depends": ["stock_barcode"],
+    "category": "Warehouse",
+    "description": "Override barcode scan logic to go to next picking in same group if current is done",
     "data": [],
     "installable": True,
-    "auto_install": False,
     "application": False,
+    "auto_install": False,
 }
