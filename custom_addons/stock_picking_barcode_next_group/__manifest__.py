@@ -1,11 +1,12 @@
+
 {
-    "name": "Stock Picking Barcode Next Group",
-    "version": "0.2",
-    "category": "Warehouse",
-    "summary": "Override barcode logic to jump to next picking in group",
+    "name": "Stock Picking Barcode Next Group (Final)",
+    "summary": "Override barcode scan_from_main_menu to jump to next picking if current is done",
+    "version": "16.0.1.0.1",
+    "category": "Inventory",
+    "author": "Anh Yêu",
+    "license": "LGPL-3",
     "depends": ["stock_barcode"],
-    "data": [],
     "installable": True,
     "auto_install": False,
-    "license": "LGPL-3"
 }
