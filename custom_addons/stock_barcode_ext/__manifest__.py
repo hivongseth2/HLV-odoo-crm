@@ -1,6 +1,6 @@
 {
     'name': 'Stock Barcode Auto Next',
-    'version': '16.0.1.0.0',
+    "version": "1.0",
     'category': 'Inventory',
     'summary': 'Tự động chuyển sang phiếu kế tiếp nếu phiếu đã hoàn tất trong stock_barcode',
     'author': 'anh yêu ❤️',
