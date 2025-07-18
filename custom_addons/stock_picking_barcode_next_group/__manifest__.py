@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Stock Picking Barcode Next Group',
-    'version': '16.0.1.0.1',
+    'version': '0.1',
     'category': 'Inventory',
     'summary': 'Auto navigate to next picking in group after done in Barcode UI',
     'author': 'anh yêu ❤️',
