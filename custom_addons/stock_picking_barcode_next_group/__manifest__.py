@@ -15,5 +15,4 @@
             'stock_picking_barcode_next_group/static/src/js/barcode_picking_override.js',
         ],
     },
-
 }
