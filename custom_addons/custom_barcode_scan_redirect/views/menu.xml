@@ -1,4 +1,5 @@
 <odoo>
+
   <record id="action_custom_barcode_ui" model="ir.actions.act_url">
     <field name="name">Scan Phiếu (UI)</field>
     <field name="type">ir.actions.act_url</field>
