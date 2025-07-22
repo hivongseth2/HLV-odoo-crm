@@ -33,30 +33,24 @@ document.addEventListener("DOMContentLoaded", function () {
 
       if (!action) return setStatus("danger", "❌ Không có action từ server.");
 
-      // Thông báo lỗi/hoàn tất
       if (action.type === "ir.actions.client" && action.tag === "display_notification") {
         return setStatus("warning", "⚠️ " + action.params.message);
       }
 
-      setStatus("success", "✅ Mở phiếu...");
+      setStatus("success", "✅ Phiếu: " + action.picking.name);
 
-      if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
-        const actionService = window.odoo.__DEBUG__.services["web.action_service"];
-        if (action.action_id) {
-          await actionService.doAction(action.action_id, {
-            additional_context: action.context || {},
-          });
-        } else {
-          console.warn("⚠️ Không có action_id:", action);
-          setStatus("danger", "❌ Action không hợp lệ từ server.");
-        }
-      } else {
-        // Fallback nếu OWL không sẵn
-        setStatus("info", "🔄 Chuyển hướng fallback...");
-        if (action.action_id) {
-          window.location.href = `/web#action=${action.action_id}&active_id=${action.context?.active_id}`;
-        }
-      }
+      const container = document.getElementById("scan_status");
+      container.innerHTML += `
+        <div style="margin-top: 12px">
+          <strong>Khách:</strong> ${action.picking.partner}<br/>
+          <strong>Ngày:</strong> ${action.picking.scheduled_date}<br/>
+          <strong>Trạng thái:</strong> ${action.picking.state}<br/>
+          <strong>Sản phẩm:</strong>
+          <ul>
+            ${action.picking.products.map(p => `<li>${p.product_name}: ${p.qty_done}/${p.qty_total}</li>`).join("")}
+          </ul>
+        </div>
+      `;
     } catch (err) {
       console.error("❌ Lỗi fetch:", err);
       setStatus("danger", "❌ Lỗi khi gọi API.");
@@ -66,9 +60,7 @@ document.addEventListener("DOMContentLoaded", function () {
     input.focus();
   }
 
-  // 🔥 Gán hàm vào window
   window.triggerScan = triggerScan;
-
   input.addEventListener("keypress", function (e) {
     if (e.key === "Enter") triggerScan();
   });

@@ -3,7 +3,7 @@ from odoo.http import request
 import logging
 
 _logger = logging.getLogger(__name__)
-# 222
+
 class CustomBarcodeScanController(http.Controller):
 
     @http.route(['/custom_barcode_scan/ui'], type='http', auth='user')
@@ -29,7 +29,6 @@ class CustomBarcodeScanController(http.Controller):
                 }
             }
 
-        # Nếu phiếu đã done → tìm phiếu tiếp theo trong cùng group (chưa done)
         if current_picking.state == 'done' and current_picking.group_id:
             next_picking = Picking.search([
                 ('group_id', '=', current_picking.group_id.id),
@@ -52,23 +51,27 @@ class CustomBarcodeScanController(http.Controller):
                 }
 
         try:
-            action_id = request.env.ref("stock_barcode.stock_barcode_picking_client_action").id
             return {
-                "action_id": action_id,
-                "context": {
-                    "active_model": "stock.picking",
-                    "active_id": current_picking.id,
-                    "active_ids": [current_picking.id],
+                'status': 'ok',
+                'picking': {
+                    'name': current_picking.name,
+                    'state': current_picking.state,
+                    'scheduled_date': str(current_picking.scheduled_date),
+                    'partner': current_picking.partner_id.name,
+                    'products': [{
+                        'product_name': move.product_id.display_name,
+                        'qty_done': move.quantity_done,
+                        'qty_total': move.product_uom_qty,
+                    } for move in current_picking.move_ids_without_package]
                 }
             }
-
         except Exception as e:
-            _logger.exception("🔥 Lỗi khi lấy action stock_barcode_picking_client_action")
+            _logger.exception("🔥 Lỗi khi xử lý phiếu")
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
-                    'message': f"🚨 Lỗi khi mở giao diện barcode: {str(e)}",
+                    'message': f"🚨 Lỗi: {str(e)}",
                     'type': 'danger',
                     'sticky': False,
                 }

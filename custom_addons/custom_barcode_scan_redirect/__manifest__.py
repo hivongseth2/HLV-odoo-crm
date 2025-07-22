@@ -1,22 +1,19 @@
 {
     "name": "Custom Barcode Scan Redirect",
-    "version": "1.0",
-    "depends": ["stock", "stock_barcode"],
-    "author": "Anh Yêu ❤️",
+    "version": "1.2",
     "category": "Warehouse",
-    "summary": "Scan barcode and redirect to next picking",
+    "summary": "Custom UI for scanning barcodes with in-place handling",
+    "author": "anh yêu",
+    "depends": ["stock", "stock_barcode", "web"],
     "data": [
-        "views/menu.xml",
-        "views/scan_ui_template.xml"
+        "views/scan_template.xml",
+        "views/menu.xml"
     ],
-    "installable": True,
-    "application": False,
-    "license": "LGPL-3",
-    'assets': {
-        'web.assets_frontend': [
-            'custom_barcode_scan_redirect/static/src/js/scan_ui.js',
-        ],
-    }
-
-
+    "assets": {
+        "web.assets_backend": [
+            "/custom_barcode_scan_redirect/static/src/js/scan_ui.js"
+        ]
+    },
+    "installable": true,
+    "application": false
 }
