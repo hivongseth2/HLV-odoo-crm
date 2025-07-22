@@ -30,6 +30,13 @@ class SaleApiImportWizard(models.TransientModel):
 
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
+        stock_mapping = {
+            "HCM": "KHSG/Stock",
+            "BENCAM": "KBC/Tồn kho",
+            "HIENDUC": "KHD/Tồn kho"
+        }
+
+
         e_accounts = {
             "TIKTOK HOÀNG LONG VŨ",
             "SHOPEE TRANG MILWAUKEE",
@@ -74,25 +81,48 @@ class SaleApiImportWizard(models.TransientModel):
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url,sale_headers,payload)
                 
                 _logger.warning("📦 Order product_lines %s",  product_lines)
+                
+                stock_id = product_lines[0].get("StockIDText") if product_lines else None
 
-                filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
+                # Bỏ qua nếu kho không nằm trong danh sách cho phép
+                if stock_id not in stock_mapping:
+                    _logger.warning("📛 Kho %s không nằm trong mapping, bỏ qua đơn hàng %s", stock_id, order.get("SaleOrderNo"))
+                    continue
+
+                # filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
+                # filtered_lines = [l for l in product_lines if l.get("StockIDText") in stock_mapping]
+                filtered_lines = [l for l in product_lines if l.get("StockIDText") == stock_id]
+
+
                 if not filtered_lines:
+                    continue
+                
+                # tìm locaiton
+                
+                location_name = stock_mapping.get(stock_id)
+                location = self.env['stock.location'].search([
+                    ('complete_name', '=', location_name)
+                ], limit=1)
+
+                if not location:
+                    _logger.warning("❌ Không tìm thấy stock.location cho kho %s (%s)", stock_id, location_name)
+                    continue
+                warehouse = self.env['stock.warehouse'].search([
+                    ('view_location_id', '=', location.location_id.id)
+                ], limit=1)
+
+                if not warehouse:
+                    _logger.warning("🚫 Không tìm thấy warehouse cho kho: %s", stock_id)
                     continue
 
                 order_ref = order.get("SaleOrderNo")
 
                 amount = float(order.get("SaleOrderAmount", 0.0))
-                # order_date = order.get("SaleOrderDate")
                 order_date = parse(order.get("SaleOrderDate")).replace(tzinfo=None)
-                # delivery_order_number = order.get('DeliveryOrderNumber')
-
-                # detail_order_payload = misa_config.get_list_product_by_order_crm(id)
-
                 if not order_ref or not customer_name:
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
                     continue
 
-                # Use OdooUtils to get or create partner
                 partner = odoo_utils._get_or_create_partner(customer_name)
 
                 existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
@@ -105,6 +135,8 @@ class SaleApiImportWizard(models.TransientModel):
                     'partner_id': partner.id,
                     'date_order': order_date,
                     'amount_total': amount,
+                    'warehouse_id': warehouse.id,  # ⬅️ Gán kho tại đây
+
                 })
                                 
 

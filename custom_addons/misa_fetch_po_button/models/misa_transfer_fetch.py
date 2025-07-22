@@ -101,17 +101,7 @@ class MisaTransferFetch(models.TransientModel):
                     continue
 
                 direction = None
-                # from_code = str(lines[0].get("from_stock_code", "")).strip().upper()
-                # to_code = str(lines[0].get("to_stock_code", "")).strip().upper()
 
-                # if from_code == keyword:
-                #     direction = "outgoing"
-                # elif to_code == keyword:
-                #     direction = "incoming"
-                # else:
-                #     _logger.info("Bỏ qua chứng từ %s không liên quan đến từ khóa %s", refid, keyword)
-                #     continue
-                
                 
                 related_lines = []
                 for line in lines:
