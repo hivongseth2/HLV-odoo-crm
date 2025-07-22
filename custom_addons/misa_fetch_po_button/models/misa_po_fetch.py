@@ -108,10 +108,19 @@ class MisaPOFetch(models.TransientModel):
                 if not has_hcm:
                     _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
                     continue
+                
+                
+                
+                existing_po = self.env["purchase.order"].search([("name", "=", refno)], limit=1)
+                if existing_po:
+                    _logger.info("⚠️ Bỏ qua đơn hàng %s vì name %s đã tồn tại", refid, refno)
+                    continue
 
                 po_rec = self.env["purchase.order"].create({
                     "partner_id": partner.id,
                     "origin": refno,
+                    "name": refno, 
+
                 })
 
                 for line in lines:
