@@ -6,7 +6,7 @@
     "author": "anh yêu",
     "depends": ["stock", "stock_barcode", "web"],
     "data": [
-        "views/scan_template.xml",
+        "views/scan_ui_template.xml",
         "views/menu.xml"
     ],
     "assets": {
@@ -14,6 +14,6 @@
             "/custom_barcode_scan_redirect/static/src/js/scan_ui.js"
         ]
     },
-    "installable": true,
-    "application": false
+    "installable": True,
+    "application": False
 }
