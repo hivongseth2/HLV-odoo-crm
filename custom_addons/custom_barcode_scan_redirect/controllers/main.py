@@ -3,7 +3,7 @@ from odoo.http import request
 import logging
 
 _logger = logging.getLogger(__name__)
-
+# 222
 class CustomBarcodeScanController(http.Controller):
 
     @http.route(['/custom_barcode_scan/ui'], type='http', auth='user')
