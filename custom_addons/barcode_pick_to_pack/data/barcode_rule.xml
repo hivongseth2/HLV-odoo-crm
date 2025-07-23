@@ -3,10 +3,9 @@
   <record id="barcode_rule_pick_done_redirect" model="barcode.rule">
     <field name="name">Redirect Pick Done to Pack</field>
     <field name="type">python</field>
-    <field name="model_name">stock.picking</field>
     <field name="sequence">0</field>
     <field name="python_code"><![CDATA[
-if record.state == 'done':
+if record._name == 'stock.picking' and record.state == 'done':
     pack = env['stock.picking'].search([
         ('origin', '=', record.name),
         ('state', 'not in', ['done', 'cancel']),
