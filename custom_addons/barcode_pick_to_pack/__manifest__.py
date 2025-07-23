@@ -1,11 +1,11 @@
 {
-    "name": "Barcode Pick to Pack Redirect",
+    "name": "Barcode Pick Done Redirect to Pack",
     "version": "0.1",
     "category": "Inventory",
     "depends": ["stock", "stock_barcode"],
     "author": "ChatGPT x anh yêu",
-    "summary": "Redirect barcode scan from pick to related pack.",
+    "description": "When scanning a done pick, redirect to related pack (not done) using barcode.rule.",
+    "data": ["data/barcode_rule.xml"],
     "installable": True,
-    "application": False,
     "auto_install": False
 }
