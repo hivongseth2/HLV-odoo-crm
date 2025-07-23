@@ -8,21 +8,22 @@
     <field name="barcode_pattern">.*</field>
     <field name="sequence">0</field>
     <field name="python_code"><![CDATA[
-    pack = env['stock.picking'].search([
-        ('origin', '=', record.name),
-        ('state', 'not in', ['done', 'cancel']),
-        ('picking_type_id.code', '=', 'outgoing')
-    ], limit=1)
+pack = env['stock.picking'].search([
+    ('origin', '=', record.name),
+    ('state', 'not in', ['done', 'cancel']),
+    ('picking_type_id.code', '=', 'outgoing')
+], limit=1)
 
-    if pack:
-        action = {
-            'type': 'ir.actions.client',
-            'tag': 'reload',
-            'params': {
-                'barcode_picking_id': pack.id
-            }
+if pack:
+    action = {
+        'type': 'ir.actions.client',
+        'tag': 'reload',
+        'params': {
+            'barcode_picking_id': pack.id
         }
-    else:
-        action = {'warning': 'Không tìm thấy phiếu pack liên quan chưa done.'}
+    }
+else:
+    action = {'warning': 'Không tìm thấy phiếu pack liên quan chưa done.'}
     ]]></field>
+  </record>
 </odoo>
