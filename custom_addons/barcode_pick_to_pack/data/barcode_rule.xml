@@ -3,7 +3,7 @@
   <record id="barcode_rule_pick_done_redirect" model="barcode.rule">
     <field name="name">Redirect Pick Done to Pack</field>
     <field name="type">python</field>
-    <field name="model_id" ref="stock.model_stock_picking"/>
+    <field name="model_id" ref="stock.picking"/>
     <field name="domain">[("state", "=", "done")]</field>
     <field name="barcode_pattern">.*</field>
     <field name="sequence">0</field>
