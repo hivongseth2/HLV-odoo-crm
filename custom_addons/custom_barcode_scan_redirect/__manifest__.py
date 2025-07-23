@@ -2,7 +2,7 @@
     "name": "Custom Barcode Scan Redirect",
     "version": "1.0",
     "depends": ["stock", "stock_barcode"],
-    "author": "Anh Yêu ❤️",
+    "author": "Anh Yêu 123❤️",
     "category": "Warehouse",
     "summary": "Scan barcode and redirect to next picking",
     "data": [
