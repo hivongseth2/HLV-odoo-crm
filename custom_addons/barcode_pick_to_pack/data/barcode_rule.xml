@@ -7,7 +7,7 @@
     <field name="domain">[("state", "=", "done")]</field>
     <field name="barcode_pattern">.*</field>
     <field name="sequence">0</field>
-    <field name="python_code">
+    <field name="python_code"><![CDATA[
 pack = env['stock.picking'].search([
     ('origin', '=', record.name),
     ('state', 'not in', ['done', 'cancel']),
@@ -24,6 +24,6 @@ if pack:
     }
 else:
     action = {'warning': 'Không tìm thấy phiếu pack liên quan chưa done.'}
-    </field>
+    ]]></field>
   </record>
 </odoo>
