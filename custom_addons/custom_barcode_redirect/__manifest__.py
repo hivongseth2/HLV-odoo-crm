@@ -1,6 +1,6 @@
 {
     "name": "Custom Barcode Redirect",
-    "version": "16.0.1.0.0",
+    "version": "0.1",
     "category": "Inventory",
     "depends": ["stock", "stock_barcode"],
     "author": "ChatGPT x anh yêu",
