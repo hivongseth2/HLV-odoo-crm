@@ -1,6 +1,6 @@
 {
     "name": "Redirect Pick to Pack Button",
-    "version": "16.0.1.0.0",
+    "version": "0.1",
     "depends": ["stock"],
     "category": "Stock",
     "description": "Adds a button to redirect from a done pick to its corresponding pack picking.",
