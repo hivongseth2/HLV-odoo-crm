@@ -1,17 +1,13 @@
 {
-    "name": "Stock Barcode Redirect to Pack",
-    "version": "16.0.1",
-    "license": "LGPL-3",
-    "category": "Inventory",
-    "depends": ["stock_barcode",'web', 'stock'],
-
-    'assets': {
-        'web.assets_backend': [
-            '/stock_pick_to_pack_button_1/static/src/js/redirect_to_pack.js',
-        ],
-    },
-
-
-    "installable": True,
-    "application": False
+    'name': 'Auto Jump to Pack After Pick Done',
+    'version': '1.0',
+    'category': 'Inventory',
+    'summary': 'Automatically jump to next pack picking after pick is done',
+    'author': 'Tluan',
+    'depends': ['stock', 'stock_barcode'],
+    'data': [
+        'views/stock_barcode_templates.xml',
+    ],
+    'installable': True,
+    'application': False,
 }
