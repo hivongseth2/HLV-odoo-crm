@@ -1,14 +1,16 @@
 {
-    "name": "Redirect Pick to Pack Button",
-    "version": "0.1",
-    "depends": ["stock"],
-    "category": "Stock",
-    "description": "Adds a button to redirect from a done pick to its corresponding pack picking.",
-    "data": [
-        # "security/ir.model.access.csv",
-        "views/pick_button_view.xml"
-    ],
+    "name": "Stock Pick to Pack Button",
+    "version": "16.0.1",
+    "depends": ["stock_barcode"],
+    "category": "Warehouse",
+    "description": "Add button to redirect from done pick to pack in barcode UI",
+    "author": "ChatGPT",
     "installable": True,
-    "auto_install": False,
-    "application": False
+    "application": False,
+    "license": "LGPL-3",
+    "assets": {
+        "web.assets_backend": [
+            "stock_pick_to_pack_button/static/src/js/redirect_pack_button.js"
+        ]
+    }
 }
