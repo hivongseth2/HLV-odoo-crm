@@ -3,11 +3,13 @@
     "version": "0.1",
     "category": "Stock",
     "depends": ["stock_barcode"],
-    "assets": {
-        "stock_barcode.assets": [
-            "barcode_pick_to_pack_js/static/src/js/barcode_override.js",
-        ]
-    },
+
     "installable": True,
     "application": False,
+    "assets": {
+    "web.assets_backend": [
+        "barcode_pick_to_pack/static/src/js/barcode_picking_redirect.js",
+    ],
+}
+
 }
