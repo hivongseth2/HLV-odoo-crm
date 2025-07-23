@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-  <template id="assets_backend" name="stock barcode redirect to pack assets" inherit_id="web.assets_backend">
+  <template id="assets_backend" inherit_id="web.assets_backend" name="Pick to Pack Redirect JS">
     <xpath expr="." position="inside">
       <script type="module" src="/stock_pick_to_pack_button/static/src/js/redirect_to_pack.js"/>
     </xpath>
