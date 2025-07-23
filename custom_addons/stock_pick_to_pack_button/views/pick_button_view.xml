@@ -9,8 +9,8 @@
         <button name="action_redirect_to_pack"
                 type="object"
                 string="Go to Pack"
-                attrs="{'invisible': [('state', '!=', 'done')]}"
-                class="btn-primary"/>
+                class="btn-primary"
+                invisible="state != 'done'"/>
       </xpath>
     </field>
   </record>
