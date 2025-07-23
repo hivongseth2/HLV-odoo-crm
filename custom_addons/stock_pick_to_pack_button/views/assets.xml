@@ -1,0 +1,7 @@
+<odoo>
+    <template id="assets_backend" name="stock barcode redirect to pack assets" inherit_id="web.assets_backend">
+        <xpath expr="." position="inside">
+            <script type="module" src="/stock_barcode_redirect_to_pack/static/src/js/redirect_to_pack.js"/>
+        </xpath>
+    </template>
+</odoo>
