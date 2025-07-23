@@ -1,26 +1,33 @@
 /** @odoo-module **/
 
-import { PickingClientAction } from "@stock_barcode/js/picking_client_action";
-import { patch } from "@web/core/utils/patch";
+import { registry } from "@web/core/registry";
+import { BarcodeMainComponent } from "@stock_barcode/components/barcode_main";
 
-patch(PickingClientAction.prototype, {
+const patchBarcode = {
     async setup() {
         await this._super(...arguments);
+        if (this.env.services.action.current?.res_model === 'stock.picking') {
+            const picking = this.env.services.action.current?.context?.barcode_picking_data;
+            if (picking?.state === 'done' && picking?.origin) {
+                const pack = await this.orm.searchRead('stock.picking', [
+                    ['origin', '=', picking.name],
+                    ['state', 'not in', ['done', 'cancel']],
+                    ['picking_type_id.code', '=', 'outgoing'],
+                ], ['id'], { limit: 1 });
 
-        if (this.picking?.state === 'done') {
-            const packId = await this.rpc("/stock/barcode/redirect_to_pack", {
-                origin: this.picking.name,
-            });
-
-            if (packId) {
-                this.env.services.action.doAction({
-                    type: 'ir.actions.client',
-                    tag: 'barcode_picking_client_action',
-                    params: {
-                        barcode_picking_id: packId,
-                    },
-                });
+                if (pack.length) {
+                    this.env.services.action.doAction({
+                        type: 'ir.actions.client',
+                        tag: 'barcode_picking_client_action',
+                        params: { barcode_picking_id: pack[0].id },
+                    });
+                }
             }
         }
     }
+};
+
+registry.category("actions").add("barcode_picking_client_action", {
+    ...BarcodeMainComponent,
+    ...patchBarcode,
 });
