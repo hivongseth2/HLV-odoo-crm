@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="view_picking_form_inherit_redirect_pack" model="ir.ui.view">
+    <field name="name">stock.picking.form.redirect.pack</field>
+    <field name="model">stock.picking</field>
+    <field name="inherit_id" ref="stock.view_picking_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//header" position="inside">
+        <button name="action_redirect_to_pack"
+                type="object"
+                string="Go to Pack"
+                attrs="{'invisible': [('state', '!=', 'done')]}"
+                class="btn-primary"/>
+      </xpath>
+    </field>
+  </record>
+</odoo>
