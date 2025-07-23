@@ -2,7 +2,7 @@
 <odoo>
     <template id="assets_backend" inherit_id="web.assets_backend">
         <xpath expr="." position="inside">
-            <script type="text/javascript" src="/stock_pick_to_pack_button_1/static/src/js/stock_barcode.js"/>
+            <script type="text/javascript" src="/custom_auto_pack/static/src/js/stock_barcode.js"/>
         </xpath>
     </template>
 </odoo>
