@@ -1,5 +1,7 @@
-<template id="stock_pick_to_pack_button.assets" inherit_id="web.assets_backend" name="Pick to Pack Redirect Assets">
-  <xpath expr="." position="inside">
-    <script type="module" src="/stock_pick_to_pack_button/static/src/js/redirect_to_pack.js"/>
-  </xpath>
-</template>
+<odoo>
+  <template id="assets_backend_custom" inherit_id="web.assets_backend" name="Pick to Pack JS">
+    <xpath expr="." position="inside">
+      <script type="module" src="/stock_pick_to_pack_button/static/src/js/redirect_to_pack.js"/>
+    </xpath>
+  </template>
+</odoo>
