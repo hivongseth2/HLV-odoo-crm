@@ -25,5 +25,5 @@ if pack:
 else:
     action = {'warning': 'Không tìm thấy phiếu pack liên quan chưa done.'}
     ]]></field>
-  </record>
+</record>
 </odoo>
