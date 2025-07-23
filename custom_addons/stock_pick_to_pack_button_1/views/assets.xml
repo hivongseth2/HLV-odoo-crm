@@ -1,7 +1,7 @@
 <odoo>
   <template id="assets_backend_custom" inherit_id="web.assets_backend" name="Pick to Pack JS">
     <xpath expr="." position="inside">
-      <script type="module" src="/stock_pick_to_pack_button/static/src/js/redirect_to_pack.js"/>
+      <script type="module" src="/stock_pick_to_pack_button_1/static/src/js/redirect_to_pack.js"/>
     </xpath>
   </template>
 </odoo>

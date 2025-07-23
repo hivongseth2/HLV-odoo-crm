@@ -9,7 +9,7 @@
     ],
     'assets': {
         'web.assets_backend': [
-            'stock_pick_to_pack_button/static/src/js/redirect_to_pack.js',
+            'stock_pick_to_pack_button_1/static/src/js/redirect_to_pack.js',
         ],
     },
 
