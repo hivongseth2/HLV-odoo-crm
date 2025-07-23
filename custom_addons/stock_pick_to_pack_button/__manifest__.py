@@ -9,7 +9,7 @@
     ],
     "assets": {
         "web.assets_backend": [
-            "/stock_barcode_redirect_to_pack/static/src/js/redirect_to_pack.js"
+            "/stock_pick_to_pack_button/static/src/js/redirect_to_pack.js"
         ]
     },
     "installable": True,
