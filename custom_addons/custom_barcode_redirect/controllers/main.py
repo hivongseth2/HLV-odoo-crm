@@ -1,33 +1,33 @@
-from odoo.addons.stock_barcode.controllers.main import StockBarcodeController
-from odoo.http import route, request
-import json
+from odoo import http
+from odoo.http import request
 
-class CustomBarcodeController(StockBarcodeController):
+class CustomBarcodeController(http.Controller):
 
-    @route('/barcode/scanner', type='json', auth='user')
-    def barcode_scanner(self, barcode):
-        res = super().barcode_scanner(barcode)
+    @http.route('/barcode/custom_scanner', type='json', auth='user')
+    def custom_barcode_scanner(self, barcode):
+        Picking = request.env['stock.picking'].sudo()
 
-        if res.get('error') == 'No result found':
-            pick = request.env['stock.picking'].sudo().search([
-                ('name', '=', barcode),
-                ('state', '=', 'done')
-            ], limit=1)
+        # Tìm phiếu pick đã done
+        pick = Picking.search([
+            ('name', '=', barcode),
+            ('state', '=', 'done')
+        ], limit=1)
 
-            if pick:
-                pack = request.env['stock.picking'].sudo().search([
-                    ('origin', '=', pick.name),
-                    ('state', 'not in', ['done', 'cancel']),
-                    ('picking_type_id.code', '=', 'outgoing')
-                ], limit=1)
+        if not pick:
+            return {'error': 'Không tìm thấy phiếu pick đã hoàn tất.'}
 
-                if pack:
-                    return {
-                        'type': 'picking',
-                        'res_id': pack.id,
-                        'action': '/stock_barcode/' + str(pack.id)
-                    }
+        # Tìm phiếu pack liên quan chưa done
+        pack = Picking.search([
+            ('origin', '=', pick.name),
+            ('state', 'not in', ['done', 'cancel']),
+            ('picking_type_id.code', '=', 'outgoing')
+        ], limit=1)
 
-                return {'error': 'Không tìm thấy phiếu pack liên quan'}
+        if pack:
+            return {
+                'type': 'picking',
+                'res_id': pack.id,
+                'action': f'/stock_barcode/{pack.id}'
+            }
 
-        return res
+        return {'error': 'Không tìm thấy phiếu pack chưa hoàn tất.'}
