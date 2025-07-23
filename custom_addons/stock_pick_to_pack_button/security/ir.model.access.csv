@@ -1,2 +1,2 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_stock_picking_redirect_user,access.stock.picking.redirect.user,stock.picking,base.group_user,1,0,0,0
+access_stock_picking_user,stock.picking user,stock.picking,base.group_user,1,0,0,0
