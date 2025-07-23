@@ -3,25 +3,27 @@
   <record id="barcode_rule_pick_done_redirect" model="barcode.rule">
     <field name="name">Redirect Pick Done to Pack</field>
     <field name="type">python</field>
+    <field name="model_name">stock.picking</field>
+    <field name="domain">[("state", "=", "done")]</field>
+    <field name="barcode_pattern">.*</field>
     <field name="sequence">0</field>
     <field name="python_code"><![CDATA[
-if record._name == 'stock.picking' and record.state == 'done':
-    pack = env['stock.picking'].search([
-        ('origin', '=', record.name),
-        ('state', 'not in', ['done', 'cancel']),
-        ('picking_type_id.code', '=', 'outgoing')
-    ], limit=1)
+pack = env['stock.picking'].search([
+    ('origin', '=', record.name),
+    ('state', 'not in', ['done', 'cancel']),
+    ('picking_type_id.code', '=', 'outgoing')
+], limit=1)
 
-    if pack:
-        action = {
-            'type': 'ir.actions.client',
-            'tag': 'barcode_picking_client_action',
-            'params': {
-                'barcode_picking_id': pack.id
-            }
+if pack:
+    action = {
+        'type': 'ir.actions.client',
+        'tag': 'barcode_picking_client_action',
+        'params': {
+            'barcode_picking_id': pack.id
         }
-    else:
-        action = {'warning': 'Không tìm thấy phiếu pack liên quan chưa done.'}
+    }
+else:
+    action = {'warning': 'Không tìm thấy phiếu pack liên quan chưa done.'}
     ]]></field>
   </record>
 </odoo>

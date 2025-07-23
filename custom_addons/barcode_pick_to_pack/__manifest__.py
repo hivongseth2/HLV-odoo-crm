@@ -1,16 +1,10 @@
 {
-    "name": "Barcode Pick to Pack (JS Override)",
+    "name": "Redirect Pick Done to Pack",
     "version": "0.1",
-    "category": "Stock",
     "depends": ["stock_barcode"],
-
+    "data": [
+        "data/barcode_rule.xml"
+    ],
     "installable": True,
     "application": False,
-    "assets": {
-    "web.assets_backend": [
-        "barcode_pick_to_pack/static/src/js/barcode_picking_redirect.js",
-    ],
-}
-
-
 }
