@@ -3,7 +3,7 @@
     "version": "16.0.1",
     "license": "LGPL-3",
     "category": "Inventory",
-    "depends": ["stock_barcode"],
+    "depends": ["stock_barcode",'web', 'stock'],
     "data": [
         "views/assets.xml"
     ],
