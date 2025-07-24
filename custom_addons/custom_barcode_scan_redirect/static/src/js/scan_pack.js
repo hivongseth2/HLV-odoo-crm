@@ -29,7 +29,9 @@ document.addEventListener("DOMContentLoaded", function () {
         params: {
           picking_id: pickingId,
           barcode,
-          delta
+          delta,
+          line_id: lineId  
+
         }
       })
     })
@@ -83,15 +85,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
   list.querySelectorAll(".btn-plus").forEach(btn =>
     btn.addEventListener("click", () =>
-      updateQty(btn.dataset.barcode, 1)
+      updateQty(btn.dataset.barcode, 1, btn.closest("li")?.dataset.lineId)
     )
   );
 
   list.querySelectorAll(".btn-minus").forEach(btn =>
     btn.addEventListener("click", () =>
-      updateQty(btn.dataset.barcode, -1)
+      updateQty(btn.dataset.barcode, -1, btn.closest("li")?.dataset.lineId)
     )
   );
+
 
   completeBtn.addEventListener("click", function () {
     if (!confirm("Xác nhận hoàn tất đóng gói phiếu?")) return;

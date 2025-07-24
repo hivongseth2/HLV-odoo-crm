@@ -291,6 +291,9 @@ class CustomBarcodeScanController(http.Controller):
         picking_id = kwargs.get("picking_id")
         barcode = kwargs.get("barcode")
         delta = int(kwargs.get("delta", 1))
+        line_id = kwargs.get("line_id")
+        updated_lines = []
+
 
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         moves = picking.move_ids_without_package.filtered(lambda m: m.product_id.barcode == barcode)
@@ -308,6 +311,21 @@ class CustomBarcodeScanController(http.Controller):
 
         for move in moves:
             sorted_lines = move.move_line_ids.sorted(key=lambda ml: ml.qty_done)
+            if line_id:
+                target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
+                if target_ml:
+                    ml = target_ml[0]
+                    if delta > 0 and ml.qty_done < move.product_uom_qty:
+                        ml.qty_done = min(ml.qty_done + delta, move.product_uom_qty)
+                    elif delta < 0 and ml.qty_done > 0:
+                        ml.qty_done = max(0, ml.qty_done + delta)
+                    updated_lines.append({
+                        "line_id": ml.id,
+                        "product": move.product_id.display_name,
+                        "done_qty": ml.qty_done,
+                        "required_qty": move.product_uom_qty
+                    })
+                    break  # Xử lý xong dòng được chọn
 
             if delta > 0:
                 for ml in sorted_lines:
