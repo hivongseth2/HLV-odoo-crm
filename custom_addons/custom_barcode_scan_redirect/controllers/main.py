@@ -147,8 +147,12 @@ class CustomBarcodeScanController(http.Controller):
                 target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
                 if target_ml:
                     ml = target_ml[0]
-                    if delta > 0 and ml.qty_done < move.product_uom_qty:
-                        ml.qty_done = min(ml.qty_done + delta, move.product_uom_qty)
+                    total_done = sum(m.qty_done for m in move.move_line_ids)
+                    remain_qty = move.product_uom_qty - total_done
+
+                    if delta > 0 and remain_qty > 0:
+                        add_qty = min(delta, remain_qty)
+                        ml.qty_done += add_qty
                     elif delta < 0 and ml.qty_done > 0:
                         ml.qty_done = max(0, ml.qty_done + delta)
 
@@ -160,22 +164,28 @@ class CustomBarcodeScanController(http.Controller):
                     })
                     break
 
+
             # --- Nếu scan barcode ---
             if not line_id:
                 if delta > 0:
                     # ✅ Chỉ cộng đúng 1 dòng đầu tiên chưa đủ
                     for ml in sorted_lines:
-                        if ml.qty_done < move.product_uom_qty:
-                            new_qty = min(ml.qty_done + delta, move.product_uom_qty)
-                            ml.qty_done = new_qty
+                        total_done = sum(m.qty_done for m in move.move_line_ids)  # ✅ Tính động
+                        if total_done >= move.product_uom_qty:
+                            break  # ❌ Đừng cộng nữa nếu đã đủ rồi
 
-                            updated_lines.append({
-                                "line_id": ml.id,
-                                "product": move.product_id.display_name,
-                                "done_qty": new_qty,  # ✅ dùng giá trị đã tính, không rely vào cache
-                                "required_qty": move.product_uom_qty
-                            })
-                            return {"scanned": updated_lines}
+                        remaining = move.product_uom_qty - total_done
+                        add_qty = min(delta, remaining)
+                        ml.qty_done += add_qty
+
+                        updated_lines.append({
+                            "line_id": ml.id,
+                            "product": move.product_id.display_name,
+                            "done_qty": ml.qty_done,
+                            "required_qty": move.product_uom_qty
+                        })
+                        return {"scanned": updated_lines}
+
 
 
                     # Nếu không có dòng nào thì tạo mới
