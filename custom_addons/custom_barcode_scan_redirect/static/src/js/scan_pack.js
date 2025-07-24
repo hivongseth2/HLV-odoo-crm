@@ -91,34 +91,55 @@ document.addEventListener("DOMContentLoaded", function () {
       updateQty(btn.dataset.barcode, -1)
     )
   );
+completeBtn.addEventListener("click", function () {
+  if (!confirm("Xác nhận hoàn tất đóng gói phiếu?")) return;
 
-  completeBtn.addEventListener("click", function () {
-    if (!confirm("Xác nhận hoàn tất đóng gói phiếu?")) return;
+  // Check nếu còn dòng nào chưa đủ số lượng
+  const items = document.querySelectorAll("#product_list .product-item");
+  let isValid = true;
+  let missingProducts = [];
 
-    fetch("/pack_scan/complete_picking", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "call",
-        params: {
-          picking_id: pickingId
-        }
-      })
-    })
-      .then(res => res.json())
-      .then(response => {
-        if (response.error) {
-          alert("❌ " + response.error);
-        } else {
-          alert(response.message || "✅ Phiếu đã hoàn tất!");
-          window.location.href = "/custom_barcode_scan/ui";
-        }
-      });
+  items.forEach(item => {
+    const name = item.querySelector("strong").innerText;
+    const done = parseFloat(item.querySelector(".done").innerText);
+    const required = parseFloat(item.querySelectorAll("span")[2].innerText);
+
+    if (done < required) {
+      isValid = false;
+      missingProducts.push(`${name} (${done}/${required})`);
+    }
   });
 
-  setFocus();
+  if (!isValid) {
+    alert("❌ Chưa quét đủ các sản phẩm sau:\n\n- " + missingProducts.join("\n- "));
+    return;
+  }
+
+  // Nếu đủ hết thì cho gửi request hoàn tất
+  fetch("/pack_scan/complete_picking", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest"
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "call",
+      params: {
+        picking_id: pickingId
+      }
+    })
+  })
+    .then(res => res.json())
+    .then(response => {
+      if (response.error) {
+        alert("❌ " + response.error);
+      } else {
+        alert(response.message || "✅ Phiếu đã hoàn tất!");
+        window.location.href = "/custom_barcode_scan/ui";
+      }
+    });
+});
+
+setFocus();
 });
