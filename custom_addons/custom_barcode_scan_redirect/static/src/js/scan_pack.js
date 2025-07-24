@@ -40,9 +40,9 @@ document.addEventListener("DOMContentLoaded", function () {
         if (el) {
           el.querySelector(".done").innerText = item.done_qty;
           if (item.done_qty >= item.required_qty) {
-            el.style.backgroundColor = "#d4edda"; // xanh lá nhẹ
+            el.classList.add("completed");
           } else {
-            el.style.backgroundColor = "#f8f9fa"; // về mặc định
+            el.classList.remove("completed");
           }
         }
       });
@@ -61,22 +61,18 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // 👇 Thêm nút + / - vào từng item
-  Array.from(list.children).forEach(li => {
-    const barcode = li.dataset.barcode;
-    const control = document.createElement("div");
-    control.innerHTML = `
-      <button class="btn-minus" style="margin-right: 5px;">➖</button>
-      <button class="btn-plus">➕</button>
-    `;
-    control.style.float = "right";
-    li.appendChild(control);
+  list.querySelectorAll(".btn-plus").forEach(btn =>
+    btn.addEventListener("click", () =>
+      updateQty(btn.dataset.barcode, 1)
+    )
+  );
 
-    control.querySelector(".btn-plus").addEventListener("click", () => updateQty(barcode, 1));
-    control.querySelector(".btn-minus").addEventListener("click", () => updateQty(barcode, -1));
-  });
+  list.querySelectorAll(".btn-minus").forEach(btn =>
+    btn.addEventListener("click", () =>
+      updateQty(btn.dataset.barcode, -1)
+    )
+  );
 
-  // 👇 Hoàn tất phiếu
   completeBtn.addEventListener("click", function () {
     if (!confirm("Xác nhận hoàn tất đóng gói phiếu?")) return;
 
