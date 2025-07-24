@@ -24,7 +24,9 @@
                 </div>
                 <div style="display: flex; align-items: center; gap: 5px;">
                   <button class="btn-minus" t-att-data-barcode="line.product_id.barcode">−</button>
-                  <span class="done">0</span> /
+                  <!-- <span class="done">0</span> / -->
+                  <span class="done"><t t-esc="sum(line.move_line_ids.mapped('qty_done'))"/></span>
+                    /
                   <span><t t-esc="line.product_uom_qty"/></span>
                   <button class="btn-plus" t-att-data-barcode="line.product_id.barcode">＋</button>
                 </div>

@@ -53,8 +53,12 @@ document.addEventListener("DOMContentLoaded", function () {
       let remainingQty = item.done_qty;
 
       matchingElements.forEach(el => {
-        const required = parseFloat(el.querySelectorAll("span")[2].innerText); // lấy qty yêu cầu
+        // const required = parseFloat(el.querySelectorAll("span")[2].innerText); // lấy qty yêu cầu
         const doneEl = el.querySelector(".done");
+        const done = parseFloat(doneEl?.innerText || 0);
+        requiredSpans = item.querySelectorAll("span");
+        const required = parseFloat(requiredSpans[1]?.innerText || 0);  // cẩn thận index
+
         const current = Math.min(remainingQty, required);
         doneEl.innerText = current;
         remainingQty -= current;
