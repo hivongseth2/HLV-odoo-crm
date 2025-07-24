@@ -43,36 +43,21 @@ document.addEventListener("DOMContentLoaded", function () {
           setFocus();
           return;
         }
+      result.scanned.forEach(item => {
+        const el = document.querySelector(`[data-line-id="${item.line_id}"]`);
+        if (!el) return;
 
-    result.scanned.forEach(item => {
-      const matchingElements = Array.from(list.children).filter(li =>
-        li.dataset.barcode === barcode
-      );
-
-      // Nếu có nhiều dòng cùng barcode, phân bổ qty_done lần lượt
-      let remainingQty = item.done_qty;
-      matchingElements.forEach(el => {
-        const spanEls = el.querySelectorAll("span");
-        if (spanEls.length < 2) return; // tránh lỗi nếu không đủ span
-
-        const required = parseFloat(spanEls[1].innerText || 0);
         const doneEl = el.querySelector(".done");
-        if (!doneEl) return;
+        doneEl.innerText = item.done_qty;
 
-        const current = Math.min(remainingQty, required);
-        doneEl.innerText = current;
-        remainingQty -= current;
-
-        if (current >= required) {
+        const required = parseFloat(el.querySelectorAll("span")[2].innerText);
+        if (item.done_qty >= required) {
           el.classList.add("completed");
         } else {
           el.classList.remove("completed");
         }
       });
 
-      
-
-    });
 
       playSuccess();
       setFocus();
