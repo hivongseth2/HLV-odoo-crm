@@ -120,7 +120,7 @@ class CustomBarcodeScanController(http.Controller):
     def scan_pack_item(self, **kwargs):
         picking_id = kwargs.get("picking_id")
         barcode = kwargs.get("barcode")
-        delta = kwargs.get("delta", 1)
+        delta = int(kwargs.get("delta", 1))  # +1 hoặc -1
 
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         moves = picking.move_ids_without_package.filtered(lambda l: l.product_id.barcode == barcode)
@@ -129,52 +129,36 @@ class CustomBarcodeScanController(http.Controller):
             return {"error": "❌ Mã sản phẩm không khớp trong phiếu!"}
 
         scanned = []
-        remaining_delta = delta
-
         for move in moves:
-            # Lọc các dòng chưa đủ số lượng
-            lines = move.move_line_ids.filtered(lambda l: l.qty_done < l.product_uom_qty)
-            if not lines and move.product_uom_qty <= sum(ml.qty_done for ml in move.move_line_ids):
-                continue  # đã đủ, skip
+            required_qty = move.product_uom_qty
+            move_line = move.move_line_ids and move.move_line_ids[0]
 
-            if lines:
-                for ml in lines:
-                    need = move.product_uom_qty - ml.qty_done
-                    to_add = min(remaining_delta, need)
-                    ml.qty_done += to_add
-                    remaining_delta -= to_add
-                    if remaining_delta <= 0:
-                        break
+            if move_line:
+                new_qty = move_line.qty_done + delta
+                new_qty = max(0, min(new_qty, required_qty))
+                move_line.qty_done = new_qty
             else:
-                # Tạo mới move_line nếu chưa có
-                need = move.product_uom_qty
-                to_add = min(remaining_delta, need)
-                request.env['stock.move.line'].sudo().create({
-                    'picking_id': picking.id,
-                    'move_id': move.id,
-                    'product_id': move.product_id.id,
-                    'product_uom_id': move.product_uom.id,
-                    'qty_done': to_add,
-                    'location_id': move.location_id.id,
-                    'location_dest_id': move.location_dest_id.id,
-                })
-                remaining_delta -= to_add
+                if delta > 0:
+                    request.env['stock.move.line'].sudo().create({
+                        'picking_id': picking.id,
+                        'move_id': move.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'qty_done': min(delta, required_qty),
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                    })
 
             total_done = sum(ml.qty_done for ml in move.move_line_ids)
 
             scanned.append({
                 "product": move.product_id.display_name,
                 "done_qty": total_done,
-                "required_qty": move.product_uom_qty
+                "required_qty": required_qty
             })
 
-            if remaining_delta <= 0:
-                break
-
-        if remaining_delta > 0:
-            return {"error": "⚠️ Đã quét dư so với số lượng yêu cầu!"}
-
         return {"scanned": scanned}
+
 
     
     @http.route('/pack_scan/complete_picking', type='json', auth='user')
