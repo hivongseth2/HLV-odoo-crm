@@ -1,55 +1,39 @@
 <odoo>
   <template id="pack_scan_template" name="Pack Scan Template">
     <t t-call="web.layout">
+      <t t-set="css_files" t-value="[
+        '/custom_barcode_scan_redirect/static/src/css/pack_scan.css'
+      ]"/>
+      <t t-foreach="css_files" t-as="href">
+        <link rel="stylesheet" type="text/css" t-att-href="href"/>
+      </t>
+
       <div class="oe_structure">
-        <div class="scan-wrapper" style="max-width: 750px; margin: 40px auto; padding: 30px; background: #ffffff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); font-family: 'Segoe UI', sans-serif;">
-          <h2 style="text-align: center; margin-bottom: 30px; color: #17a2b8;">
-            🚚 Đóng Gói Phiếu: <span style="color: #007bff;"><t t-esc="picking.name"/></span>
+        <div class="scan-wrapper">
+          <h2>
+            🚚 Đóng Gói Phiếu: <span><t t-esc="picking.name"/></span>
           </h2>
 
-          <div style="margin-bottom: 20px;">
-            <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus"
-                   style="padding: 14px 18px; width: 100%; border: 1px solid #ccc; border-radius: 8px; font-size: 16px;" />
-          </div>
+          <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus" />
 
-          <ul id="product_list" style="list-style: none; padding-left: 0; margin-bottom: 30px;">
+          <ul id="product_list">
             <t t-foreach="lines" t-as="line">
-             <li t-att-data-barcode="line.product_id.barcode"
-                class="product-item"
-                style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 10px; background-color: #f8f9fa;">
-
-              <div style="flex: 1; max-width: 70%;">
-                <strong style="word-wrap: break-word;"><t t-esc="line.product_id.display_name"/></strong>
-              </div>
-
-              <div style="display: flex; align-items: center; gap: 5px;">
-                <button class="btn-minus"
-                        t-att-data-barcode="line.product_id.barcode"
-                        style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer;">
-                  −
-                </button>
-
-                <span class="done" style="font-weight: bold; color: #28a745;">0</span>
-                /
-                <span style="color: #6c757d;"><t t-esc="line.product_uom_qty"/></span>
-
-                <button class="btn-plus"
-                        t-att-data-barcode="line.product_id.barcode"
-                        style="background: #28a745; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer;">
-                  ＋
-                </button>
-              </div>
-            </li>
-
+              <li t-att-data-barcode="line.product_id.barcode" class="product-item">
+                <div style="flex: 1; max-width: 70%;">
+                  <strong><t t-esc="line.product_id.display_name"/></strong>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                  <button class="btn-minus" t-att-data-barcode="line.product_id.barcode">−</button>
+                  <span class="done">0</span> /
+                  <span><t t-esc="line.product_uom_qty"/></span>
+                  <button class="btn-plus" t-att-data-barcode="line.product_id.barcode">＋</button>
+                </div>
+              </li>
             </t>
           </ul>
 
           <div style="text-align: center;">
-            <button id="complete_pack_btn"
-                    style="padding: 14px 28px; font-size: 16px; background-color: #28a745; color: white;
-                           border: none; border-radius: 10px; cursor: pointer;">
-              ✅ Hoàn tất 
-            </button>
+            <button id="complete_pack_btn">✅ Hoàn tất</button>
           </div>
         </div>
 

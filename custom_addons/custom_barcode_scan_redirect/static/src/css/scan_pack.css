@@ -1,0 +1,93 @@
+.scan-wrapper {
+  max-width: 750px;
+  margin: 40px auto;
+  padding: 30px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.scan-wrapper h2 {
+  text-align: center;
+  margin-bottom: 30px;
+  color: #17a2b8;
+}
+
+.scan-wrapper h2 span {
+  color: #007bff;
+}
+
+#pack_barcode_input {
+  padding: 14px 18px;
+  width: 100%;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+#product_list {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 30px;
+}
+
+.product-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  background-color: #f8f9fa;
+}
+
+.product-item.completed {
+  background-color: #d4edda !important;
+}
+
+.product-item.over {
+  background-color: #fff3cd !important;
+}
+
+.product-item strong {
+  word-wrap: break-word;
+  display: block;
+}
+
+.product-item .btn-plus,
+.product-item .btn-minus {
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: white;
+}
+
+.btn-minus {
+  background: #dc3545;
+}
+
+.btn-plus {
+  background: #28a745;
+}
+
+#complete_pack_btn {
+  padding: 14px 28px;
+  font-size: 16px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.product-item.completed {
+  background-color: #d4edda !important;
+}
+
+.product-item.over {
+  background-color: #fff3cd !important;
+}
