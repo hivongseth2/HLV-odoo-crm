@@ -8,7 +8,16 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => input.focus(), 100);
   }
 
-  function updateQty(barcode, delta = 1) {
+
+  
+  function playSuccess() {
+    new Audio("/custom_barcode_scan_redirect/static/src/sound/success.mp3").play();
+  }
+
+  function playError() {
+    new Audio("/custom_barcode_scan_redirect/static/src/sound/error.mp3").play();
+  }
+function updateQty(barcode, delta = 1) {
     fetch("/pack_scan/scan_item", {
       method: "POST",
       headers: {
@@ -20,8 +29,8 @@ document.addEventListener("DOMContentLoaded", function () {
         method: "call",
         params: {
           picking_id: pickingId,
-          barcode: barcode,
-          delta: delta
+          barcode,
+          delta
         }
       })
     })
@@ -30,19 +39,29 @@ document.addEventListener("DOMContentLoaded", function () {
       const result = response.result;
       if (result.error) {
         alert(result.error);
+        playError();
+        setFocus();
         return;
       }
 
       result.scanned.forEach(item => {
-        const el = Array.from(list.children).find(li =>
+        const el = [...list.children].find(li =>
           li.dataset.barcode === barcode
         );
         if (el) {
           el.querySelector(".done").innerText = item.done_qty;
-          if (item.done_qty >= item.required_qty) {
-            el.classList.add("completed");
-          } else {
+
+          if (item.done_qty > item.required_qty) {
             el.classList.remove("completed");
+            el.classList.add("over");
+            playError();
+          } else if (item.done_qty === item.required_qty) {
+            el.classList.remove("over");
+            el.classList.add("completed");
+            playSuccess();
+          } else {
+            el.classList.remove("completed", "over");
+            playSuccess();
           }
         }
       });
