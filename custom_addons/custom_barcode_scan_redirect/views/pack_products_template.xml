@@ -1,0 +1,18 @@
+<odoo>
+  <template id="pack_products_template" name="Pack Products UI">
+    <t t-call="web.layout">
+      <div class="scan-wrapper">
+        <h2>📦 Sản phẩm trong Phiếu: <t t-esc="picking.name"/></h2>
+        <ul>
+          <t t-foreach="move_lines" t-as="line">
+            <li>
+              <strong><t t-esc="line.product_id.display_name"/></strong> — 
+              SL: <t t-esc="line.product_uom_qty"/> <t t-esc="line.product_uom.name"/>
+            </li>
+          </t>
+        </ul>
+        <a href="/custom_barcode_scan/ui" style="margin-top: 20px; display: inline-block; background: #007bff; color: white; padding: 10px 16px; border-radius: 8px;">🔙 Quét Phiếu Khác</a>
+      </div>
+    </t>
+  </template>
+</odoo>
