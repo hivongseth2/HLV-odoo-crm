@@ -32,6 +32,9 @@ document.addEventListener("DOMContentLoaded", function () {
         const action = response.result;
         if (!action) return setStatus("danger", "❌ Không có action từ server.");
 
+        console.log(response);
+        
+
         if (action.type === "ir.actions.client" && action.tag === "display_notification") {
           setStatus("warning", "⚠️ " + action.params.message);
         } else {
@@ -39,7 +42,9 @@ document.addEventListener("DOMContentLoaded", function () {
           if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
             window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
           } else {
-            window.location.href = "/web";
+            // window.location.href = "/web";
+            console.log(response);
+            
           }
         }
       })
