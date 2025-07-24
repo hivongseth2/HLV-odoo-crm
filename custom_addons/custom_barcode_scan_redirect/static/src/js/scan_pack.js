@@ -44,27 +44,29 @@ document.addEventListener("DOMContentLoaded", function () {
           return;
         }
 
-        result.scanned.forEach(item => {
-          const el = [...list.children].find(li =>
-            li.dataset.barcode === barcode
-          );
-          if (el) {
-            el.querySelector(".done").innerText = item.done_qty;
+    result.scanned.forEach(item => {
+      const matchingElements = Array.from(list.children).filter(li =>
+        li.dataset.barcode === barcode
+      );
 
-            if (item.done_qty > item.required_qty) {
-              el.classList.remove("completed");
-              el.classList.add("over");
-              playError();
-            } else if (item.done_qty === item.required_qty) {
-              el.classList.remove("over");
-              el.classList.add("completed");
-              playSuccess();
-            } else {
-              el.classList.remove("completed", "over");
-              playSuccess();
-            }
-          }
-        });
+      // Nếu có nhiều dòng cùng barcode, phân bổ qty_done lần lượt
+      let remainingQty = item.done_qty;
+
+      matchingElements.forEach(el => {
+        const required = parseFloat(el.querySelectorAll("span")[2].innerText); // lấy qty yêu cầu
+        const doneEl = el.querySelector(".done");
+        const current = Math.min(remainingQty, required);
+        doneEl.innerText = current;
+        remainingQty -= current;
+
+        if (current >= required) {
+          el.classList.add("completed");
+        } else {
+          el.classList.remove("completed");
+        }
+      });
+    });
+
 
         setFocus();
       });
@@ -132,13 +134,16 @@ completeBtn.addEventListener("click", function () {
   })
     .then(res => res.json())
     .then(response => {
-      if (response.error) {
-        alert("❌ " + response.error);
-      } else {
-        alert(response.message || "✅ Phiếu đã hoàn tất!");
-        window.location.href = "/custom_barcode_scan/ui";
-      }
-    });
+    if (response.error || response.result?.error) {
+      const msg = response.error?.message || response.result?.error || "❌ Có lỗi xảy ra!";
+      alert(msg);
+      return;
+    }
+
+    alert(response.message || "✅ Phiếu đã hoàn tất!");
+    window.location.href = "/custom_barcode_scan/ui";
+  });
+
 });
 
 setFocus();
