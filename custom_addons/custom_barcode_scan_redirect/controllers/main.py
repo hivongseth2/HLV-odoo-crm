@@ -154,13 +154,11 @@ class CustomBarcodeScanController(http.Controller):
                         add_qty = min(delta, remain_qty)
                         new_qty = ml.qty_done + add_qty
                         ml.write({'qty_done': new_qty})
-                        ml.invalidate_cache(['qty_done'])
-                        ml = ml.sudo().browse(ml.id)
+                        ml = ml.sudo().browse(ml.id)  # Reload lại để lấy giá trị mới
 
                     elif delta < 0 and ml.qty_done > 0:
                         new_qty = max(0, ml.qty_done + delta)
                         ml.write({'qty_done': new_qty})
-                        ml.invalidate_cache(['qty_done'])
                         ml = ml.sudo().browse(ml.id)
 
 
