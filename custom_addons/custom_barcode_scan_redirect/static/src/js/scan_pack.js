@@ -8,8 +8,6 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => input.focus(), 100);
   }
 
-
-  
   function playSuccess() {
     new Audio("/custom_barcode_scan_redirect/static/src/sound/success.mp3").play();
   }
@@ -17,52 +15,61 @@ document.addEventListener("DOMContentLoaded", function () {
   function playError() {
     new Audio("/custom_barcode_scan_redirect/static/src/sound/error.mp3").play();
   }
+
   function updateQty(barcode, delta = 1) {
-      fetch("/pack_scan/scan_item", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "call",
-          params: {
-            picking_id: pickingId,
-            barcode,
-            delta
-          }
-        })
+    fetch("/pack_scan/scan_item", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: {
+          picking_id: pickingId,
+          barcode,
+          delta
+        }
       })
+    })
       .then(res => res.json())
       .then(response => {
         const result = response.result;
-        if (result.error) {
+        if (result?.error) {
           alert(result.error);
           playError();
           setFocus();
           return;
         }
-      result.scanned.forEach(item => {
-        const el = document.querySelector(`[data-line-id="${item.line_id}"]`);
-        if (!el) return;
 
-        const doneEl = el.querySelector(".done");
-        doneEl.innerText = item.done_qty;
-
-        const required = parseFloat(el.querySelectorAll("span")[2].innerText);
-        if (item.done_qty >= required) {
-          el.classList.add("completed");
-        } else {
-          el.classList.remove("completed");
+        if (!result?.scanned?.length) {
+          playError();
+          setFocus();
+          return;
         }
-      });
 
+        result.scanned.forEach(item => {
+          const el = document.querySelector(`[data-line-id="${item.line_id}"]`);
+          if (!el) return;
 
-      playSuccess();
-      setFocus();
+          const doneEl = el.querySelector(".done");
+          const requiredEl = el.querySelectorAll("span")[1]; // span sau dấu "/"
+          const required = parseFloat(requiredEl?.innerText || 0);
+
+          doneEl.innerText = item.done_qty;
+
+          if (item.done_qty >= required) {
+            el.classList.add("completed");
+          } else {
+            el.classList.remove("completed");
+          }
+        });
+
+        playSuccess();
+        setFocus();
       });
-    }
+  }
 
   input.addEventListener("keypress", function (e) {
     if (e.key === "Enter") {
@@ -85,63 +92,59 @@ document.addEventListener("DOMContentLoaded", function () {
       updateQty(btn.dataset.barcode, -1)
     )
   );
-completeBtn.addEventListener("click", function () {
-  if (!confirm("Xác nhận hoàn tất đóng gói phiếu?")) return;
 
-  // Check nếu còn dòng nào chưa đủ số lượng
-  const items = document.querySelectorAll("#product_list .product-item");
-  let isValid = true;
-  let missingProducts = [];
+  completeBtn.addEventListener("click", function () {
+    if (!confirm("Xác nhận hoàn tất đóng gói phiếu?")) return;
 
-  items.forEach(item => {
-    const name = item.querySelector("strong").innerText;
-    // const done = parseFloat(item.querySelector(".done").innerText);
-    // const required = parseFloat(item.querySelectorAll("span")[2].innerText);
-    const doneEl = item.querySelector(".done");
-    const spanEls = item.querySelectorAll("span");
+    const items = document.querySelectorAll("#product_list .product-item");
+    let isValid = true;
+    let missingProducts = [];
 
-    const done = parseFloat(doneEl?.innerText || 0);
-    const required = parseFloat(spanEls[1]?.innerText || 0);
+    items.forEach(item => {
+      const name = item.querySelector("strong").innerText;
+      const doneEl = item.querySelector(".done");
+      const spanEls = item.querySelectorAll("span");
 
-    if (done < required) {
-      isValid = false;
-      missingProducts.push(`${name} (${done}/${required})`);
-    }
-  });
+      const done = parseFloat(doneEl?.innerText || 0);
+      const required = parseFloat(spanEls[1]?.innerText || 0);
 
-  if (!isValid) {
-    alert("❌ Chưa quét đủ các sản phẩm sau:\n\n- " + missingProducts.join("\n- "));
-    return;
-  }
-
-  // Nếu đủ hết thì cho gửi request hoàn tất
-  fetch("/pack_scan/complete_picking", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Requested-With": "XMLHttpRequest"
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      method: "call",
-      params: {
-        picking_id: pickingId
+      if (done < required) {
+        isValid = false;
+        missingProducts.push(`${name} (${done}/${required})`);
       }
-    })
-  })
-    .then(res => res.json())
-    .then(response => {
-    if (response.error || response.result?.error) {
-      const msg = response.error?.message || response.result?.error || "❌ Có lỗi xảy ra!";
-      alert(msg);
+    });
+
+    if (!isValid) {
+      alert("❌ Chưa quét đủ các sản phẩm sau:\n\n- " + missingProducts.join("\n- "));
       return;
     }
 
-  alert(response.message || "✅ Phiếu đã hoàn tất!");
-  window.location.href = "/custom_barcode_scan/ui";
-});
+    fetch("/pack_scan/complete_picking", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: {
+          picking_id: pickingId
+        }
+      })
+    })
+      .then(res => res.json())
+      .then(response => {
+        if (response.error || response.result?.error) {
+          const msg = response.error?.message || response.result?.error || "❌ Có lỗi xảy ra!";
+          alert(msg);
+          return;
+        }
 
-});
+        alert(response.message || "✅ Phiếu đã hoàn tất!");
+        window.location.href = "/custom_barcode_scan/ui";
+      });
+  });
 
-setFocus();
+  setFocus();
 });
