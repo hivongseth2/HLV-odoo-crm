@@ -160,12 +160,15 @@ class CustomBarcodeScanController(http.Controller):
                         new_qty = max(0, ml.qty_done + delta)
                         ml.write({'qty_done': new_qty})
                         ml = ml.sudo().browse(ml.id)
+                        ml_data = ml.sudo().read(['qty_done'])[0]  # Bypass cache hoàn toàn
+
+                        
 
 
                     updated_lines.append({
                         "line_id": ml.id,
                         "product": move.product_id.display_name,
-                        "done_qty":new_qty,
+                        "done_qty":ml_data['qty_done'],  
                         "required_qty": move.product_uom_qty
                     })
                     break
