@@ -246,25 +246,23 @@ class CustomBarcodeScanController(http.Controller):
 
         # Duyệt từng move có dòng move_line chưa đủ để update
         for move in moves:
-            # Dòng move_line nào chưa đủ thì update vào
-            sorted_lines = move.move_line_ids.sorted(key=lambda ml: ml.qty_done)
+            sorted_lines = move.move_line_ids.sorted(key=lambda ml: ml.qty_done, reverse=(delta < 0))
             for ml in sorted_lines:
-                if ml.qty_done < move.product_uom_qty:
-                    new_qty = ml.qty_done + delta
-                    if delta > 0:
-                        ml.qty_done = min(new_qty, move.product_uom_qty)
-                    else:
-                        ml.qty_done = max(0, ml.qty_done - abs(delta))
+                if delta > 0 and ml.qty_done < move.product_uom_qty:
+                    ml.qty_done = min(ml.qty_done + delta, move.product_uom_qty)
+                elif delta < 0 and ml.qty_done > 0:
+                    ml.qty_done = max(0, ml.qty_done + delta)
+                else:
+                    continue
 
-                    updated_lines.append({
-                        "line_id": ml.id,
-                        "product": move.product_id.display_name,
-                        "done_qty": ml.qty_done,
-                        "required_qty": move.product_uom_qty
-                    })
-                    break
+                updated_lines.append({
+                    "line_id": ml.id,
+                    "product": move.product_id.display_name,
+                    "done_qty": ml.qty_done,
+                    "required_qty": move.product_uom_qty
+                })
+                break
             else:
-                # Nếu không có move_line nào thì tạo mới nếu delta > 0
                 if delta > 0:
                     new_ml = request.env['stock.move.line'].sudo().create({
                         'picking_id': picking.id,
@@ -282,7 +280,8 @@ class CustomBarcodeScanController(http.Controller):
                         "done_qty": new_ml.qty_done,
                         "required_qty": move.product_uom_qty
                     })
-            break  # chỉ update 1 dòng mỗi lần
+            break
+
 
         return {"scanned": updated_lines}
 
