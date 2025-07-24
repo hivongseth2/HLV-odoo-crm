@@ -100,7 +100,7 @@ document.addEventListener("DOMContentLoaded", function () {
           alert("❌ " + response.error);
         } else {
           alert(response.message || "✅ Phiếu đã hoàn tất!");
-          window.location.href = "/web";
+          window.location.href = "/custom_barcode_scan/ui";
         }
       });
   });
