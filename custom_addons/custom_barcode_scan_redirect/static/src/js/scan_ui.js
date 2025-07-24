@@ -44,7 +44,7 @@ document.addEventListener("DOMContentLoaded", function () {
         } else if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
           window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
         } else {
-          window.location.href = "/web"; // fallback cuối cùng
+          window.location.href = "/web"; 
         }
 
         }
