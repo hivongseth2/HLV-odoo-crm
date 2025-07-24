@@ -23,11 +23,24 @@
                   <strong><t t-esc="line.product_id.display_name"/></strong>
                 </div>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                  <button class="btn-minus" data-barcode="<t t-esc="line.product_id.barcode"/>" style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer;">−</button>
+                  <!-- <button class="btn-minus" data-barcode="<t t-esc="line.product_id.barcode"/>" style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer;">−</button> -->
+                  
+                  
+                  <button class="btn-minus"
+                          t-att-data-barcode="line.product_id.barcode"
+                          style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer;">
+                    −
+                  </button>
                   <span class="done" style="font-weight: bold; color: #28a745;">0</span>
                   /
                   <span style="color: #6c757d;"><t t-esc="line.product_uom_qty"/></span>
-                  <button class="btn-plus" data-barcode="<t t-esc="line.product_id.barcode"/>" style="background: #28a745; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer;">＋</button>
+                  <!-- <button class="btn-plus" data-barcode="<t t-esc="line.product_id.barcode"/>" style="background: #28a745; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer;">＋</button> -->
+                
+                <button class="btn-plus"
+                          t-att-data-barcode="line.product_id.barcode"
+                          style="background: #28a745; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer;">
+                    ＋
+                  </button>
                 </div>
               </li>
             </t>
