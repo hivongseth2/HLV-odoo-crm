@@ -18,8 +18,8 @@
     "license": "LGPL-3",
     "assets": {
         "web.assets_frontend": [
-            "custom_barcode_pack_scan/static/src/js/scan_pack.js",
-             "custom_barcode_pack_scan/static/src/js/scan_ui.js"
+            "custom_barcode_scan_redirect/static/src/js/scan_pack.js",
+             "custom_barcode_scan_redirect/static/src/js/scan_ui.js"
         ]
     }
 }
