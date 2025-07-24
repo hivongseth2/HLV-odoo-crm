@@ -98,12 +98,22 @@ class CustomBarcodeScanController(http.Controller):
         
     @http.route('/custom_barcode_scan/pack_view/<int:picking_id>', type='http', auth='user')
     def view_pack_products(self, picking_id):
-            picking = request.env['stock.picking'].sudo().browse(picking_id)
-            lines = picking.move_lines.filtered(lambda m: m.product_id)
-            return request.render("custom_barcode_scan_redirect.pack_scan_template", {
-                'picking': picking,
-                'lines': lines,
-            })
+        _logger = logging.getLogger(__name__)
+        _logger.info(f"🔍 Đang vào pack_view với ID: {picking_id}")
+
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            _logger.error("❌ Không tìm thấy phiếu pack!")
+            return request.not_found()
+
+        lines = picking.move_lines.filtered(lambda m: m.product_id)
+        _logger.info(f"📦 Tổng dòng move line có product: {len(lines)}")
+
+        return request.render("custom_barcode_scan_redirect.pack_scan_template", {
+            'picking': picking,
+            'lines': lines,
+        })
+
 
     @http.route('/pack_scan/scan_item', type='json', auth='user')
     def scan_pack_item(self, **kwargs):
