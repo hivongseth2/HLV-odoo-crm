@@ -51,13 +51,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // Nếu có nhiều dòng cùng barcode, phân bổ qty_done lần lượt
       let remainingQty = item.done_qty;
-
       matchingElements.forEach(el => {
-        // const required = parseFloat(el.querySelectorAll("span")[2].innerText); // lấy qty yêu cầu
+        const spanEls = el.querySelectorAll("span");
+        if (spanEls.length < 2) return; // tránh lỗi nếu không đủ span
+
+        const required = parseFloat(spanEls[1].innerText || 0);
         const doneEl = el.querySelector(".done");
-        const done = parseFloat(doneEl?.innerText || 0);
-        requiredSpans = item.querySelectorAll("span");
-        const required = parseFloat(requiredSpans[1]?.innerText || 0);  // cẩn thận index
+        if (!doneEl) return;
 
         const current = Math.min(remainingQty, required);
         doneEl.innerText = current;
@@ -69,10 +69,13 @@ document.addEventListener("DOMContentLoaded", function () {
           el.classList.remove("completed");
         }
       });
+
+      
+
     });
 
-
-        setFocus();
+      playSuccess();
+      setFocus();
       });
     }
 
@@ -107,8 +110,13 @@ completeBtn.addEventListener("click", function () {
 
   items.forEach(item => {
     const name = item.querySelector("strong").innerText;
-    const done = parseFloat(item.querySelector(".done").innerText);
-    const required = parseFloat(item.querySelectorAll("span")[2].innerText);
+    // const done = parseFloat(item.querySelector(".done").innerText);
+    // const required = parseFloat(item.querySelectorAll("span")[2].innerText);
+    const doneEl = item.querySelector(".done");
+    const spanEls = item.querySelectorAll("span");
+
+    const done = parseFloat(doneEl?.innerText || 0);
+    const required = parseFloat(spanEls[1]?.innerText || 0);
 
     if (done < required) {
       isValid = false;
@@ -144,9 +152,9 @@ completeBtn.addEventListener("click", function () {
       return;
     }
 
-    alert(response.message || "✅ Phiếu đã hoàn tất!");
-    window.location.href = "/custom_barcode_scan/ui";
-  });
+  alert(response.message || "✅ Phiếu đã hoàn tất!");
+  window.location.href = "/custom_barcode_scan/ui";
+});
 
 });
 
