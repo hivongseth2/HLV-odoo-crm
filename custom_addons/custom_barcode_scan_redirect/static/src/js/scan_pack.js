@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", function () {
     new Audio("/custom_barcode_scan_redirect/static/src/sound/error.mp3").play();
   }
 
-  function updateQty(barcode, delta = 1) {
+  function updateQty(barcode, delta = 1, lineId = null) {
     fetch("/pack_scan/scan_item", {
       method: "POST",
       headers: {
