@@ -2,7 +2,7 @@
   <template id="pack_scan_template" name="Pack Scan Template">
     <t t-call="web.layout">
       <t t-set="css_files" t-value="[
-        '/custom_barcode_scan_redirect/static/src/css/pack_scan.css'
+        '/custom_barcode_scan_redirect/static/src/css/scan_pack.css'
       ]"/>
       <t t-foreach="css_files" t-as="href">
         <link rel="stylesheet" type="text/css" t-att-href="href"/>
