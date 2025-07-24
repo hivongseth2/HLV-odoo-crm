@@ -166,20 +166,17 @@ class CustomBarcodeScanController(http.Controller):
                     # ✅ Chỉ cộng đúng 1 dòng đầu tiên chưa đủ
                     for ml in sorted_lines:
                         if ml.qty_done < move.product_uom_qty:
-                            # ml.qty_done = min(ml.qty_done + delta, move.product_uom_qty)
-                            ml.qty_done += delta
-
-                            ml.flush(['qty_done'])  # 👈 đảm bảo ghi xuống DB nếu đang ở trong vòng context
-                            ml.invalidate_cache(['qty_done'])  # 👈 xoá cache
-                            ml = ml.sudo().browse(ml.id)  # 👈 reload lại để chắc chắn
+                            new_qty = min(ml.qty_done + delta, move.product_uom_qty)
+                            ml.qty_done = new_qty
 
                             updated_lines.append({
                                 "line_id": ml.id,
                                 "product": move.product_id.display_name,
-                                "done_qty": ml.qty_done,
+                                "done_qty": new_qty,  # ✅ dùng giá trị đã tính, không rely vào cache
                                 "required_qty": move.product_uom_qty
                             })
                             return {"scanned": updated_lines}
+
 
                     # Nếu không có dòng nào thì tạo mới
                     new_ml = request.env['stock.move.line'].sudo().create({
