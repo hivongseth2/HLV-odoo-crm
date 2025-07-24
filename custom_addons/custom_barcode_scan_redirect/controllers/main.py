@@ -106,7 +106,9 @@ class CustomBarcodeScanController(http.Controller):
             _logger.error("❌ Không tìm thấy phiếu pack!")
             return request.not_found()
 
-        lines = picking.move_lines.filtered(lambda m: m.product_id)
+        # lines = picking.move_lines.filtered(lambda m: m.product_id)
+        lines = picking.move_ids_without_package.filtered(lambda m: m.product_id)
+
         _logger.info(f"📦 Tổng dòng move line có product: {len(lines)}")
 
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
