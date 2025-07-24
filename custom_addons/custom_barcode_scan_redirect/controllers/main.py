@@ -116,36 +116,38 @@ class CustomBarcodeScanController(http.Controller):
             'lines': lines,
         })
 
-
     @http.route('/pack_scan/scan_item', type='json', auth='user')
     def scan_pack_item(self, **kwargs):
         picking_id = kwargs.get("picking_id")
         barcode = kwargs.get("barcode")
+        delta = int(kwargs.get("delta", 1))  # Mặc định cộng 1, nhưng có thể là -1
 
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         moves = picking.move_ids_without_package.filtered(lambda l: l.product_id.barcode == barcode)
 
         if not moves:
-            return {"error": "Mã sản phẩm không khớp trong phiếu!"}
+            return {"error": "❌ Mã sản phẩm không khớp trong phiếu!"}
 
         scanned = []
         for move in moves:
-            # Lấy move_line đầu tiên (giả sử chỉ có 1 dòng cho đơn giản)
+            # Lấy move_line đầu tiên có thể tăng/giảm hoặc tạo mới nếu cần
             move_line = move.move_line_ids and move.move_line_ids[0]
+
             if move_line:
-                if move_line.qty_done < move.product_uom_qty:
-                    move_line.qty_done += 1
+                new_qty = move_line.qty_done + delta
+                new_qty = max(0, min(new_qty, move.product_uom_qty))  # Không âm, không vượt quá yêu cầu
+                move_line.qty_done = new_qty
             else:
-                # Nếu chưa có move_line, tạo mới
-                request.env['stock.move.line'].sudo().create({
-                    'picking_id': picking.id,
-                    'move_id': move.id,
-                    'product_id': move.product_id.id,
-                    'product_uom_id': move.product_uom.id,
-                    'qty_done': 1,
-                    'location_id': move.location_id.id,
-                    'location_dest_id': move.location_dest_id.id,
-                })
+                if delta > 0:
+                    request.env['stock.move.line'].sudo().create({
+                        'picking_id': picking.id,
+                        'move_id': move.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'qty_done': min(delta, move.product_uom_qty),
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                    })
 
             total_done = sum(ml.qty_done for ml in move.move_line_ids)
 
@@ -156,4 +158,22 @@ class CustomBarcodeScanController(http.Controller):
             })
 
         return {"scanned": scanned}
+
+    
+    @http.route('/pack_scan/complete_picking', type='json', auth='user')
+    def complete_pack_picking(self, **kwargs):
+        picking_id = kwargs.get("picking_id")
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại."}
+        if picking.state not in ['assigned', 'confirmed', 'in_progress']:
+            return {"error": f"Phiếu không ở trạng thái cho phép xác nhận (hiện tại: {picking.state})."}
+
+        try:
+            picking.button_validate()
+            return {"success": True, "message": f"✅ Phiếu {picking.name} đã được xác nhận!"}
+        except Exception as e:
+            return {"error": str(e)}
+
 

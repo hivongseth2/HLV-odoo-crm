@@ -1,10 +1,14 @@
-
 document.addEventListener("DOMContentLoaded", function () {
   const input = document.getElementById("pack_barcode_input");
   const list = document.getElementById("product_list");
+  const completeBtn = document.getElementById("complete_pack_btn");
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
-  function updateQty(barcode) {
+  function setFocus() {
+    setTimeout(() => input.focus(), 100);
+  }
+
+  function updateQty(barcode, delta = 1) {
     fetch("/pack_scan/scan_item", {
       method: "POST",
       headers: {
@@ -16,7 +20,8 @@ document.addEventListener("DOMContentLoaded", function () {
         method: "call",
         params: {
           picking_id: pickingId,
-          barcode: barcode
+          barcode: barcode,
+          delta: delta
         }
       })
     })
@@ -34,8 +39,15 @@ document.addEventListener("DOMContentLoaded", function () {
         );
         if (el) {
           el.querySelector(".done").innerText = item.done_qty;
+          if (item.done_qty >= item.required_qty) {
+            el.style.backgroundColor = "#d4edda"; // xanh lá nhẹ
+          } else {
+            el.style.backgroundColor = "#f8f9fa"; // về mặc định
+          }
         }
       });
+
+      setFocus();
     });
   }
 
@@ -48,4 +60,50 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
   });
+
+  // 👇 Thêm nút + / - vào từng item
+  Array.from(list.children).forEach(li => {
+    const barcode = li.dataset.barcode;
+    const control = document.createElement("div");
+    control.innerHTML = `
+      <button class="btn-minus" style="margin-right: 5px;">➖</button>
+      <button class="btn-plus">➕</button>
+    `;
+    control.style.float = "right";
+    li.appendChild(control);
+
+    control.querySelector(".btn-plus").addEventListener("click", () => updateQty(barcode, 1));
+    control.querySelector(".btn-minus").addEventListener("click", () => updateQty(barcode, -1));
+  });
+
+  // 👇 Hoàn tất phiếu
+  completeBtn.addEventListener("click", function () {
+    if (!confirm("Xác nhận hoàn tất đóng gói phiếu?")) return;
+
+    fetch("/pack_scan/complete_picking", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: {
+          picking_id: pickingId
+        }
+      })
+    })
+      .then(res => res.json())
+      .then(response => {
+        if (response.error) {
+          alert("❌ " + response.error);
+        } else {
+          alert(response.message || "✅ Phiếu đã hoàn tất!");
+          window.location.href = "/web";
+        }
+      });
+  });
+
+  setFocus();
 });
