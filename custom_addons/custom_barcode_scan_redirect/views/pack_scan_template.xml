@@ -4,7 +4,7 @@
     <t t-call="web.layout">
       <div class="scan-wrapper">
         <h2>🚚 Đóng Gói Phiếu: <t t-esc="picking.name"/></h2>
-        <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus style="padding: 10px; width: 100%; margin-bottom: 20px;" />
+        <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus" style="padding: 10px; width: 100%; margin-bottom: 20px;" />
         <ul id="product_list">
           <t t-foreach="lines" t-as="line">
             <li data-barcode="{ line.product_id.barcode }">

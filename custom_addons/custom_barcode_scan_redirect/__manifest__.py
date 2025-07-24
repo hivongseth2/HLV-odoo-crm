@@ -7,7 +7,11 @@
     "category": "Warehouse",
     "summary": "Scan từng sản phẩm trong phiếu Pack bằng barcode",
     "data": [
-        "views/pack_scan_template.xml"
+        "views/pack_scan_template.xml",
+        "views/menu.xml",
+        "views/scan_ui_template.xml",
+
+
     ],
     "installable": True,
     "application": False,
