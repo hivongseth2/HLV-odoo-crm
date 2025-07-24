@@ -239,49 +239,69 @@ class CustomBarcodeScanController(http.Controller):
         total_required = sum(m.product_uom_qty for m in moves)
         total_done = sum(sum(ml.qty_done for ml in m.move_line_ids) for m in moves)
 
+        # Nếu quét dư
         if delta > 0 and total_done >= total_required:
             return {"error": "⚠️ Sản phẩm này đã được quét đủ!"}
 
+        # Nếu trừ khi chưa có gì
+        if delta < 0 and total_done <= 0:
+            return {"error": "⚠️ Không thể trừ nữa, chưa quét sản phẩm nào!"}
+
         remaining_delta = delta
 
-        # ✅ Duyệt qua từng dòng chưa đủ để cộng lần lượt
-        for move in moves:
-            required = move.product_uom_qty
-            for ml in move.move_line_ids.sorted(key=lambda l: l.qty_done):
-                available_space = required - ml.qty_done
-                if available_space <= 0:
-                    continue
-                add_qty = min(available_space, remaining_delta)
-                ml.qty_done += add_qty
-                remaining_delta -= add_qty
-                if remaining_delta <= 0:
-                    break
-
-            if remaining_delta <= 0:
-                break
-
-        # Nếu vẫn còn dư `delta`, tạo dòng mới
-        if remaining_delta > 0:
+        if delta > 0:
+            # ➕ Cộng vào các dòng chưa đủ
             for move in moves:
-                move_done = sum(ml.qty_done for ml in move.move_line_ids)
-                remaining_move = move.product_uom_qty - move_done
-                if remaining_move <= 0:
-                    continue
-                create_qty = min(remaining_delta, remaining_move)
-                request.env['stock.move.line'].sudo().create({
-                    'picking_id': picking.id,
-                    'move_id': move.id,
-                    'product_id': move.product_id.id,
-                    'product_uom_id': move.product_uom.id,
-                    'qty_done': create_qty,
-                    'location_id': move.location_id.id,
-                    'location_dest_id': move.location_dest_id.id,
-                })
-                remaining_delta -= create_qty
+                required = move.product_uom_qty
+                for ml in move.move_line_ids.sorted(key=lambda l: l.qty_done):
+                    available_space = required - ml.qty_done
+                    if available_space <= 0:
+                        continue
+                    add_qty = min(available_space, remaining_delta)
+                    ml.qty_done += add_qty
+                    remaining_delta -= add_qty
+                    if remaining_delta <= 0:
+                        break
+
                 if remaining_delta <= 0:
                     break
 
-        # 🔁 Trả lại danh sách `scanned` sau khi cộng
+            # Tạo dòng mới nếu vẫn còn delta
+            if remaining_delta > 0:
+                for move in moves:
+                    remaining_move = move.product_uom_qty - sum(ml.qty_done for ml in move.move_line_ids)
+                    if remaining_move <= 0:
+                        continue
+                    create_qty = min(remaining_delta, remaining_move)
+                    request.env['stock.move.line'].sudo().create({
+                        'picking_id': picking.id,
+                        'move_id': move.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'qty_done': create_qty,
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                    })
+                    remaining_delta -= create_qty
+                    if remaining_delta <= 0:
+                        break
+
+        elif delta < 0:
+            # ➖ Trừ từ các dòng đã có qty_done
+            for move in reversed(moves):  # Đảo lại để ưu tiên trừ từ dòng tạo sau
+                for ml in reversed(move.move_line_ids.sorted(key=lambda l: l.qty_done)):
+                    if ml.qty_done <= 0:
+                        continue
+                    subtract_qty = min(ml.qty_done, abs(remaining_delta))
+                    ml.qty_done -= subtract_qty
+                    remaining_delta += subtract_qty  # delta là âm nên cộng vào
+
+                    if remaining_delta >= 0:
+                        break
+                if remaining_delta >= 0:
+                    break
+
+        # Trả danh sách sau khi quét
         scanned = []
         for move in moves:
             done_qty = sum(ml.qty_done for ml in move.move_line_ids)
@@ -292,6 +312,7 @@ class CustomBarcodeScanController(http.Controller):
             })
 
         return {"scanned": scanned}
+
 
 
     @http.route('/pack_scan/complete_picking', type='json', auth='user')
