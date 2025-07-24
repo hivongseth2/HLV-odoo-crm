@@ -123,19 +123,37 @@ class CustomBarcodeScanController(http.Controller):
         barcode = kwargs.get("barcode")
 
         picking = request.env['stock.picking'].sudo().browse(picking_id)
-        lines = picking.move_ids_without_package.filtered(lambda l: l.product_id.barcode == barcode)
+        moves = picking.move_ids_without_package.filtered(lambda l: l.product_id.barcode == barcode)
 
-        if not lines:
+        if not moves:
             return {"error": "Mã sản phẩm không khớp trong phiếu!"}
 
         scanned = []
-        for line in lines:
-            new_qty = line.qty_done + 1 if line.qty_done < line.product_uom_qty else line.qty_done
-            line.qty_done = new_qty  # <- update vào db luôn nếu muốn
+        for move in moves:
+            # Lấy move_line đầu tiên (giả sử chỉ có 1 dòng cho đơn giản)
+            move_line = move.move_line_ids and move.move_line_ids[0]
+            if move_line:
+                if move_line.qty_done < move.product_uom_qty:
+                    move_line.qty_done += 1
+            else:
+                # Nếu chưa có move_line, tạo mới
+                request.env['stock.move.line'].sudo().create({
+                    'picking_id': picking.id,
+                    'move_id': move.id,
+                    'product_id': move.product_id.id,
+                    'product_uom_id': move.product_uom.id,
+                    'qty_done': 1,
+                    'location_id': move.location_id.id,
+                    'location_dest_id': move.location_dest_id.id,
+                })
+
+            total_done = sum(ml.qty_done for ml in move.move_line_ids)
+
             scanned.append({
-                "product": line.product_id.display_name,
-                "done_qty": new_qty,
-                "required_qty": line.product_uom_qty
+                "product": move.product_id.display_name,
+                "done_qty": total_done,
+                "required_qty": move.product_uom_qty
             })
 
         return {"scanned": scanned}
+
