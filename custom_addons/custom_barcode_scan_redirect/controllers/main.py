@@ -119,21 +119,23 @@ class CustomBarcodeScanController(http.Controller):
 
     @http.route('/pack_scan/scan_item', type='json', auth='user')
     def scan_pack_item(self, **kwargs):
-            picking_id = kwargs.get("picking_id")
-            barcode = kwargs.get("barcode")
+        picking_id = kwargs.get("picking_id")
+        barcode = kwargs.get("barcode")
 
-            picking = request.env['stock.picking'].sudo().browse(picking_id)
-            lines = picking.move_lines.filtered(lambda l: l.product_id.barcode == barcode)
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        lines = picking.move_ids_without_package.filtered(lambda l: l.product_id.barcode == barcode)
 
-            if not lines:
-                return {"error": "Mã sản phẩm không khớp trong phiếu!"}
+        if not lines:
+            return {"error": "Mã sản phẩm không khớp trong phiếu!"}
 
-            scanned = []
-            for line in lines:
-                scanned.append({
-                    "product": line.product_id.display_name,
-                    "done_qty": line.qty_done + 1 if line.qty_done < line.product_uom_qty else line.qty_done,
-                    "required_qty": line.product_uom_qty
-                })
+        scanned = []
+        for line in lines:
+            new_qty = line.qty_done + 1 if line.qty_done < line.product_uom_qty else line.qty_done
+            line.qty_done = new_qty  # <- update vào db luôn nếu muốn
+            scanned.append({
+                "product": line.product_id.display_name,
+                "done_qty": new_qty,
+                "required_qty": line.product_uom_qty
+            })
 
-            return {"scanned": scanned}
+        return {"scanned": scanned}
