@@ -100,7 +100,7 @@ class CustomBarcodeScanController(http.Controller):
     def view_pack_products(self, picking_id):
             picking = request.env['stock.picking'].sudo().browse(picking_id)
             lines = picking.move_lines.filtered(lambda m: m.product_id)
-            return request.render("custom_barcode_pack_scan.pack_scan_template", {
+            return request.render("custom_barcode_scan_redirect.pack_scan_template", {
                 'picking': picking,
                 'lines': lines,
             })
