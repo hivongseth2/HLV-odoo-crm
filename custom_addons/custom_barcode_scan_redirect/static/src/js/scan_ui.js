@@ -39,15 +39,14 @@ document.addEventListener("DOMContentLoaded", function () {
           setStatus("warning", "⚠️ " + action.params.message);
         } else {
           setStatus("success", "✅ Mở phiếu...");
-          if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
-            // window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
-                        console.log(response);
+        if (action.type === "ir.actions.act_url") {
+          window.location.href = action.url; // 👉 tự xử lý url redirect
+        } else if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
+          window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+        } else {
+          window.location.href = "/web"; // fallback cuối cùng
+        }
 
-          } else {
-            // window.location.href = "/web";
-            console.log(response);
-            
-          }
         }
       })
       .catch(err => {
