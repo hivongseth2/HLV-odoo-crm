@@ -285,15 +285,12 @@ class CustomBarcodeScanController(http.Controller):
 
     #     return {"scanned": updated_lines}
 
-
     @http.route('/pack_scan/scan_item', type='json', auth='user')
     def scan_pack_item(self, **kwargs):
         picking_id = kwargs.get("picking_id")
         barcode = kwargs.get("barcode")
         delta = int(kwargs.get("delta", 1))
         line_id = kwargs.get("line_id")
-        updated_lines = []
-
 
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         moves = picking.move_ids_without_package.filtered(lambda m: m.product_id.barcode == barcode)
@@ -311,6 +308,8 @@ class CustomBarcodeScanController(http.Controller):
 
         for move in moves:
             sorted_lines = move.move_line_ids.sorted(key=lambda ml: ml.qty_done)
+
+            # Nếu thao tác từ nút tay (+/-), ưu tiên line_id
             if line_id:
                 target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
                 if target_ml:
@@ -319,57 +318,57 @@ class CustomBarcodeScanController(http.Controller):
                         ml.qty_done = min(ml.qty_done + delta, move.product_uom_qty)
                     elif delta < 0 and ml.qty_done > 0:
                         ml.qty_done = max(0, ml.qty_done + delta)
+
                     updated_lines.append({
                         "line_id": ml.id,
                         "product": move.product_id.display_name,
                         "done_qty": ml.qty_done,
                         "required_qty": move.product_uom_qty
                     })
-                    break  # Xử lý xong dòng được chọn
+                    break  # xử lý đúng dòng rồi, thoát
 
-            if delta > 0:
-                for ml in sorted_lines:
-                    if ml.qty_done < move.product_uom_qty:
-                        ml.qty_done = min(ml.qty_done + delta, move.product_uom_qty)
+            # Nếu scan tự động, chọn dòng hợp lý
+            if not line_id:
+                if delta > 0:
+                    for ml in sorted_lines:
+                        if ml.qty_done < move.product_uom_qty:
+                            ml.qty_done = min(ml.qty_done + delta, move.product_uom_qty)
+                            updated_lines.append({
+                                "line_id": ml.id,
+                                "product": move.product_id.display_name,
+                                "done_qty": ml.qty_done,
+                                "required_qty": move.product_uom_qty
+                            })
+                            break
+                    else:
+                        # Nếu chưa có dòng nào thì mới tạo
+                        new_ml = request.env['stock.move.line'].sudo().create({
+                            'picking_id': picking.id,
+                            'move_id': move.id,
+                            'product_id': move.product_id.id,
+                            'product_uom_id': move.product_uom.id,
+                            'qty_done': min(delta, move.product_uom_qty),
+                            'location_id': move.location_id.id,
+                            'location_dest_id': move.location_dest_id.id,
+                        })
                         updated_lines.append({
-                            "line_id": ml.id,
+                            "line_id": new_ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": ml.qty_done,
+                            "done_qty": new_ml.qty_done,
                             "required_qty": move.product_uom_qty
                         })
-                        break
-                else:
-                    # Nếu chưa có move_line nào thì tạo mới
-                    new_ml = request.env['stock.move.line'].sudo().create({
-                        'picking_id': picking.id,
-                        'move_id': move.id,
-                        'product_id': move.product_id.id,
-                        'product_uom_id': move.product_uom.id,
-                        'qty_done': min(delta, move.product_uom_qty),
-                        'location_id': move.location_id.id,
-                        'location_dest_id': move.location_dest_id.id,
-                    })
 
-                    updated_lines.append({
-                        "line_id": new_ml.id,
-                        "product": move.product_id.display_name,
-                        "done_qty": new_ml.qty_done,
-                        "required_qty": move.product_uom_qty
-                    })
-
-            else:  # delta < 0
-                # ❗ Trừ từ dòng có qty_done > 0 lớn nhất xuống
-                sorted_lines = sorted_lines[::-1]
-                for ml in sorted_lines:
-                    if ml.qty_done > 0:
-                        ml.qty_done = max(0, ml.qty_done + delta)
-                        updated_lines.append({
-                            "line_id": ml.id,
-                            "product": move.product_id.display_name,
-                            "done_qty": ml.qty_done,
-                            "required_qty": move.product_uom_qty
-                        })
-                        break
+                else:  # delta < 0
+                    for ml in reversed(sorted_lines):
+                        if ml.qty_done > 0:
+                            ml.qty_done = max(0, ml.qty_done + delta)
+                            updated_lines.append({
+                                "line_id": ml.id,
+                                "product": move.product_id.display_name,
+                                "done_qty": ml.qty_done,
+                                "required_qty": move.product_uom_qty
+                            })
+                            break
 
         if not updated_lines:
             return {"error": "⚠️ Không có dòng nào để cập nhật!"}
