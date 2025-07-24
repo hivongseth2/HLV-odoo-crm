@@ -8,7 +8,8 @@
                  style="padding: 10px; width: 100%; margin-bottom: 20px;" />
           <ul id="product_list">
             <t t-foreach="lines" t-as="line">
-              <li data-barcode="<t t-esc='line.product_id.barcode'/>">
+              <li t-att-data-barcode="line.product_id.barcode">
+
                 <strong><t t-esc="line.product_id.display_name"/></strong>: 
                 <span class="done">0</span> / <t t-esc="line.product_uom_qty"/>
               </li>
