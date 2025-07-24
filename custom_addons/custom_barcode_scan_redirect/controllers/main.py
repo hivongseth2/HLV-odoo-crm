@@ -115,6 +115,9 @@ class CustomBarcodeScanController(http.Controller):
             'picking': picking,
             'lines': lines,
         })
+
+
+
     @http.route('/pack_scan/scan_item', type='json', auth='user')
     def scan_pack_item(self, **kwargs):
         picking_id = kwargs.get("picking_id")
@@ -164,6 +167,10 @@ class CustomBarcodeScanController(http.Controller):
                     for ml in sorted_lines:
                         if ml.qty_done < move.product_uom_qty:
                             ml.qty_done = min(ml.qty_done + delta, move.product_uom_qty)
+                            ml.flush(['qty_done'])  # 👈 đảm bảo ghi xuống DB nếu đang ở trong vòng context
+                            ml.invalidate_cache(['qty_done'])  # 👈 xoá cache
+                            ml = ml.sudo().browse(ml.id)  # 👈 reload lại để chắc chắn
+
                             updated_lines.append({
                                 "line_id": ml.id,
                                 "product": move.product_id.display_name,
