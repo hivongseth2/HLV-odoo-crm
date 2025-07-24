@@ -149,7 +149,7 @@ class CustomBarcodeScanController(http.Controller):
                     ml = target_ml[0]
                     total_done = sum(m.qty_done for m in move.move_line_ids)
                     remain_qty = move.product_uom_qty - total_done
-
+                    ml_data = ml.qty_done + add_qty
                     if delta > 0 and remain_qty > 0:
                         add_qty = min(delta, remain_qty)
                         new_qty = ml.qty_done + add_qty
