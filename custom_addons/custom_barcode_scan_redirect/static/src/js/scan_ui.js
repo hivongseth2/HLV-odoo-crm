@@ -40,7 +40,9 @@ document.addEventListener("DOMContentLoaded", function () {
         } else {
           setStatus("success", "✅ Mở phiếu...");
           if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
-            window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+            // window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
+                        console.log(response);
+
           } else {
             // window.location.href = "/web";
             console.log(response);
