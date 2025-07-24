@@ -85,13 +85,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
   list.querySelectorAll(".btn-plus").forEach(btn =>
     btn.addEventListener("click", () =>
-      updateQty(btn.dataset.barcode, 1, btn.closest("li")?.dataset.lineId)
+      updateQty(btn.dataset.barcode, 1, btn.dataset.lineId)
     )
   );
 
   list.querySelectorAll(".btn-minus").forEach(btn =>
     btn.addEventListener("click", () =>
-      updateQty(btn.dataset.barcode, -1, btn.closest("li")?.dataset.lineId)
+      updateQty(btn.dataset.barcode, -1, btn.dataset.lineId)
     )
   );
 
