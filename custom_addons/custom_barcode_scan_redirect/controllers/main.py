@@ -153,8 +153,15 @@ class CustomBarcodeScanController(http.Controller):
                     if delta > 0 and remain_qty > 0:
                         add_qty = min(delta, remain_qty)
                         ml.qty_done += add_qty
+                        ml.flush(['qty_done'])
+                        ml.invalidate_cache(['qty_done'])
+                        ml = ml.sudo().browse(ml.id)
+
                     elif delta < 0 and ml.qty_done > 0:
                         ml.qty_done = max(0, ml.qty_done + delta)
+                        ml.flush(['qty_done'])
+                        ml.invalidate_cache(['qty_done'])
+                        ml = ml.sudo().browse(ml.id)
 
                     updated_lines.append({
                         "line_id": ml.id,
@@ -164,19 +171,20 @@ class CustomBarcodeScanController(http.Controller):
                     })
                     break
 
-
             # --- Nếu scan barcode ---
             if not line_id:
                 if delta > 0:
-                    # ✅ Chỉ cộng đúng 1 dòng đầu tiên chưa đủ
                     for ml in sorted_lines:
-                        total_done = sum(m.qty_done for m in move.move_line_ids)  # ✅ Tính động
+                        total_done = sum(m.qty_done for m in move.move_line_ids)
                         if total_done >= move.product_uom_qty:
-                            break  # ❌ Đừng cộng nữa nếu đã đủ rồi
+                            break
 
                         remaining = move.product_uom_qty - total_done
                         add_qty = min(delta, remaining)
                         ml.qty_done += add_qty
+                        ml.flush(['qty_done'])
+                        ml.invalidate_cache(['qty_done'])
+                        ml = ml.sudo().browse(ml.id)
 
                         updated_lines.append({
                             "line_id": ml.id,
