@@ -1,19 +1,22 @@
-
 <odoo>
   <template id="pack_scan_template" name="Pack Scan Template">
     <t t-call="web.layout">
-      <div class="scan-wrapper">
-        <h2>🚚 Đóng Gói Phiếu: <t t-esc="picking.name"/></h2>
-        <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus" style="padding: 10px; width: 100%; margin-bottom: 20px;" />
-        <ul id="product_list">
-          <t t-foreach="lines" t-as="line">
-            <li data-barcode="{ line.product_id.barcode }">
-              <strong><t t-esc="line.product_id.display_name"/></strong>: <span class="done">0</span>/<t t-esc="line.product_uom_qty"/>
-            </li>
-          </t>
-        </ul>
+      <div class="oe_structure">
+        <div class="scan-wrapper" style="max-width: 600px; margin: auto; padding: 20px;">
+          <h2>🚚 Đóng Gói Phiếu: <t t-esc="picking.name"/></h2>
+          <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus"
+                 style="padding: 10px; width: 100%; margin-bottom: 20px;" />
+          <ul id="product_list">
+            <t t-foreach="lines" t-as="line">
+              <li data-barcode="<t t-esc='line.product_id.barcode'/>">
+                <strong><t t-esc="line.product_id.display_name"/></strong>: 
+                <span class="done">0</span> / <t t-esc="line.product_uom_qty"/>
+              </li>
+            </t>
+          </ul>
+        </div>
+        <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
       </div>
-      <script src="/custom_barcode_pack_scan/static/src/js/scan_pack.js"></script>
     </t>
   </template>
 </odoo>
