@@ -153,31 +153,63 @@ class CustomBarcodeScanController(http.Controller):
                     _logger.debug(f"[SCAN] 📦 Product: {move.product_id.display_name}")
                     _logger.debug(f"[SCAN] 🆔 line_id: {ml.id}, current_qty_done: {ml.qty_done}, total_done: {total_done}, required: {move.product_uom_qty}")
                     _logger.debug(f"[SCAN] ➕ delta: {delta}, remain_qty: {remain_qty}")
+                    # if delta > 0 and remain_qty > 0:
+                    #     add_qty = min(delta, remain_qty)
+                    #     new_qty = ml.qty_done + add_qty
+                    #     ml.write({'qty_done': new_qty})
+                    #     ml = ml.sudo().browse(ml.id)  # Reload lại để lấy giá trị mới
+                    #     _logger.debug(f"[SCAN] ✅ Adding qty: {add_qty} → new_qty_done: {new_qty}")
+                    #     _logger.debug(f"[SCAN]  ml: {ml}")
+
+
+                    # elif delta < 0 and ml.qty_done > 0:
+                    #     new_qty = max(0, ml.qty_done + delta)
+                    #     ml.write({'qty_done': new_qty})
+                    #     ml = ml.sudo().browse(ml.id)
+                    #     _logger.debug(f"[SCAN] ✅ Adding qty:  → delta < 0 qty>0: {new_qty}")
+                    #     _logger.debug(f"[SCAN]  ml: {ml}")
+                        
+
+
+                    # updated_lines.append({
+                    #     "line_id": ml.id,
+                    #     "product": move.product_id.display_name,
+                    #     "done_qty":new_qty,  
+                    #     "required_qty": move.product_uom_qty
+                    # })
+                    # break
+                    
                     if delta > 0 and remain_qty > 0:
                         add_qty = min(delta, remain_qty)
                         new_qty = ml.qty_done + add_qty
                         ml.write({'qty_done': new_qty})
-                        ml = ml.sudo().browse(ml.id)  # Reload lại để lấy giá trị mới
+                        ml = ml.sudo().browse(ml.id)
                         _logger.debug(f"[SCAN] ✅ Adding qty: {add_qty} → new_qty_done: {new_qty}")
                         _logger.debug(f"[SCAN]  ml: {ml}")
 
+                        updated_lines.append({
+                            "line_id": ml.id,
+                            "product": move.product_id.display_name,
+                            "done_qty": new_qty,
+                            "required_qty": move.product_uom_qty
+                        })
+                        break
 
                     elif delta < 0 and ml.qty_done > 0:
                         new_qty = max(0, ml.qty_done + delta)
                         ml.write({'qty_done': new_qty})
                         ml = ml.sudo().browse(ml.id)
-                        _logger.debug(f"[SCAN] ✅ Adding qty:  → delta < 0 qty>0: {new_qty}")
+                        _logger.debug(f"[SCAN] ✅ Reducing qty: {delta} → new_qty_done: {new_qty}")
                         _logger.debug(f"[SCAN]  ml: {ml}")
-                        
 
+                        updated_lines.append({
+                            "line_id": ml.id,
+                            "product": move.product_id.display_name,
+                            "done_qty": new_qty,
+                            "required_qty": move.product_uom_qty
+                        })
+                        break
 
-                    updated_lines.append({
-                        "line_id": ml.id,
-                        "product": move.product_id.display_name,
-                        "done_qty":new_qty,  
-                        "required_qty": move.product_uom_qty
-                    })
-                    break
 
             # # --- Nếu scan barcode ---
             # if not line_id:
