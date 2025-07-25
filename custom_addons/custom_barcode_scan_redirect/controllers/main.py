@@ -166,7 +166,7 @@ class CustomBarcodeScanController(http.Controller):
                         new_qty = max(0, ml.qty_done + delta)
                         ml.write({'qty_done': new_qty})
                         ml = ml.sudo().browse(ml.id)
-                        _logger.debug(f"[SCAN] ✅ Adding qty: {add_qty} → delta < 0 qty>0: {new_qty}")
+                        _logger.debug(f"[SCAN] ✅ Adding qty:  → delta < 0 qty>0: {new_qty}")
                         _logger.debug(f"[SCAN]  ml: {ml}")
                         
 
