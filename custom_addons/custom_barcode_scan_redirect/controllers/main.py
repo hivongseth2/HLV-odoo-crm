@@ -167,7 +167,7 @@ class CustomBarcodeScanController(http.Controller):
                             "required_qty": move.product_uom_qty
                         })
                         break
-                    elif delta < 0 and current_qty > 0:
+                    elif delta < 0 and total_done > 0:
                         reduce_qty = min(abs(delta), current_qty)
                         new_qty = current_qty - reduce_qty
                         ml.write({'qty_done': new_qty})
