@@ -169,13 +169,14 @@ class CustomBarcodeScanController(http.Controller):
                         break
                     elif delta < 0 and total_done > 0:
                         reduce_qty = min(abs(delta), current_qty)
-                        new_qty = current_qty - reduce_qty
+                        # new_qty = current_qty - reduce_qty
+                        new_qty = total_done  -1
                         ml.write({'qty_done': new_qty})
                         _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_qty_done: {new_qty}")
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": total_done  + delta ,
+                            "done_qty": total_done  -1 ,
                             "required_qty": move.product_uom_qty
                         })
                         break
