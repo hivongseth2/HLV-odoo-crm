@@ -159,16 +159,14 @@ class CustomBarcodeScanController(http.Controller):
 
                     if delta > 0 and remain_qty > 0:
                         add_qty = min(delta, remain_qty)
-                        # new_qty = current_qty + add_qty
-                        reduce_qty = min(abs(delta), current_qty)
-                        new_qty = max(0, current_qty - reduce_qty)
-
+                        new_qty = current_qty + add_qty
                         ml.write({'qty_done': new_qty})
-                        _logger.info(f"[SCAN] ✅ Added {add_qty} ")
+                        new_total_done = total_done - current_qty + new_qty
+                        _logger.info(f"[SCAN] ✅ Added {add_qty}, new_qty: {new_qty}, new_total_done: {new_total_done}")
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": total_done - current_qty + new_qty,  # Cập nhật tổng đúng sau khi sửa dòng này
+                            "done_qty": new_total_done,
                             "required_qty": move.product_uom_qty
                         })
                         break
