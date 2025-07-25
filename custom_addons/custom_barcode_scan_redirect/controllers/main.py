@@ -145,7 +145,9 @@ class CustomBarcodeScanController(http.Controller):
             if line_id:
                 target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
                 if target_ml:
-                    ml = target_ml[0]
+                    # ml = target_ml[0]
+                    # current_qty = ml.qty_done
+                    ml = ml.sudo().browse(ml.id)  # Ép load lại bản mới
                     current_qty = ml.qty_done
                     total_done = sum(l.qty_done for l in move.move_line_ids)
                     remain_qty = max(0, move.product_uom_qty - total_done)
@@ -157,7 +159,10 @@ class CustomBarcodeScanController(http.Controller):
 
                     if delta > 0 and remain_qty > 0:
                         add_qty = min(delta, remain_qty)
-                        new_qty = current_qty + add_qty
+                        # new_qty = current_qty + add_qty
+                        reduce_qty = min(abs(delta), current_qty)
+                        new_qty = max(0, current_qty - reduce_qty)
+
                         ml.write({'qty_done': new_qty})
                         _logger.info(f"[SCAN] ✅ Added {add_qty} ")
                         updated_lines.append({
@@ -170,13 +175,15 @@ class CustomBarcodeScanController(http.Controller):
                     elif delta < 0 and total_done > 0:
                         reduce_qty = min(abs(delta), current_qty)
                         # new_qty = current_qty - reduce_qty
-                        new_qty = total_done  -1
+                        # new_qty = total_done  -1
+                        new_qty = current_qty - reduce_qty
                         ml.write({'qty_done': new_qty})
-                        _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_qty_done: {new_qty}")
+                        new_total_done = total_done - current_qty + new_qty
+                        _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_qty: {new_qty} , new_qty_done:{new_total_done}")
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": total_done  -1 ,
+                            "done_qty": new_total_done ,
                             "required_qty": move.product_uom_qty
                         })
                         break
