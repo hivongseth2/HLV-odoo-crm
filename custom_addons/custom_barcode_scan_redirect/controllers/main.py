@@ -145,7 +145,7 @@ class CustomBarcodeScanController(http.Controller):
             if line_id:
                 target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
                 if target_ml:
-                    # ml = target_ml[0]
+                    ml = target_ml[0]
                     # current_qty = ml.qty_done
                     ml = ml.sudo().browse(ml.id)  # Ép load lại bản mới
                     current_qty = ml.qty_done
