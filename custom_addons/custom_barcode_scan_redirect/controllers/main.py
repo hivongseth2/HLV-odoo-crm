@@ -146,39 +146,36 @@ class CustomBarcodeScanController(http.Controller):
                 target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
                 if target_ml:
                     ml = target_ml[0]
+                    current_qty = ml.qty_done
                     total_done = sum(l.qty_done for l in move.move_line_ids)
                     remain_qty = max(0, move.product_uom_qty - total_done)
-
+                    
                     _logger.info(f"[SCAN] 📦 Product: {move.product_id.display_name}")
                     _logger.info(f"[SCAN] 🆔 line_id: {ml.id}, total_done: {total_done}, required: {move.product_uom_qty}")
                     _logger.info(f"[SCAN] ➕ delta: {delta}, remain_qty: {remain_qty}")
+                    _logger.info(f"[SCAN] ➕ curren_quantity: {current_qty}")
 
-                    if delta > 0 and total_done < move.product_uom_qty:
+                    if delta > 0 and remain_qty > 0:
                         add_qty = min(delta, remain_qty)
-                        new_qty = ml.qty_done + add_qty
+                        new_qty = current_qty + add_qty
                         ml.write({'qty_done': new_qty})
-                        new_total_done = total_done + add_qty
-                        _logger.info(f"[SCAN] ✅ Added {add_qty}, new_total_done: {new_total_done}")
-
+                        _logger.info(f"[SCAN] ✅ Added {add_qty} ")
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": new_total_done,
+                            "done_qty": total_done - current_qty + new_qty,  # Cập nhật tổng đúng sau khi sửa dòng này
                             "required_qty": move.product_uom_qty
                         })
                         break
-
-                    elif delta < 0 and ml.qty_done > 0:
-                        reduce_qty = min(abs(delta), ml.qty_done)
-                        new_qty = ml.qty_done - reduce_qty
+                    elif delta < 0 and current_qty > 0:
+                        reduce_qty = min(abs(delta), current_qty)
+                        new_qty = current_qty - reduce_qty
                         ml.write({'qty_done': new_qty})
-                        new_total_done = total_done - reduce_qty
-                        _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_total_done: {new_total_done}")
-
+                        _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_qty_done: {new_qty}")
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": new_total_done,
+                            "done_qty": total_done - current_qty + new_qty,
                             "required_qty": move.product_uom_qty
                         })
                         break
