@@ -175,7 +175,7 @@ class CustomBarcodeScanController(http.Controller):
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": total_done - current_qty + new_qty,
+                            "done_qty": total_done  + delta ,
                             "required_qty": move.product_uom_qty
                         })
                         break
