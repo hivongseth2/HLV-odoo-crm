@@ -143,7 +143,6 @@ class CustomBarcodeScanController(http.Controller):
         _logger.info(f"[SCAN] ➕ line_id: {line_id}, remain_qty: {moves}")
 
         for move in moves:
-            sorted_lines = move.move_line_ids.sorted(key=lambda ml: ml.qty_done)
 
             # --- Nếu nhấn tay, ưu tiên line_id ---
             if line_id:
@@ -156,33 +155,10 @@ class CustomBarcodeScanController(http.Controller):
                     _logger.info(f"[SCAN] 📦 Product: {move.product_id.display_name}")
                     _logger.info(f"[SCAN] 🆔 line_id: {ml.id}, current_qty_done: {new_qty}, total_done: {total_done}, required: {move.product_uom_qty}")
                     _logger.info(f"[SCAN] ➕ delta: {delta}, remain_qty: {remain_qty}")
-                    # if delta > 0 and remain_qty > 0:
-                    #     add_qty = min(delta, remain_qty)
-                    #     new_qty = ml.qty_done + add_qty
-                    #     ml.write({'qty_done': new_qty})
-                    #     ml = ml.sudo().browse(ml.id)  # Reload lại để lấy giá trị mới
-                    #     _logger.debug(f"[SCAN] ✅ Adding qty: {add_qty} → new_qty_done: {new_qty}")
-                    #     _logger.debug(f"[SCAN]  ml: {ml}")
 
-
-                    # elif delta < 0 and ml.qty_done > 0:
-                    #     new_qty = max(0, ml.qty_done + delta)
-                    #     ml.write({'qty_done': new_qty})
-                    #     ml = ml.sudo().browse(ml.id)
-                    #     _logger.debug(f"[SCAN] ✅ Adding qty:  → delta < 0 qty>0: {new_qty}")
-                    #     _logger.debug(f"[SCAN]  ml: {ml}")
-                        
-
-
-                    # updated_lines.append({
-                    #     "line_id": ml.id,
-                    #     "product": move.product_id.display_name,
-                    #     "done_qty":new_qty,  
-                    #     "required_qty": move.product_uom_qty
-                    # })
-                    # break
-                    
-                    if delta > 0 and remain_qty > 0:
+                    check_num = total_done + delta
+                    check_num1 = total_done - delta
+                    if delta > 0 and check_num <= move.product_uom_qty :
                         add_qty = min(delta, remain_qty)
                         new_qty = ml.qty_done + add_qty
                         ml.write({'qty_done': new_qty})
@@ -193,12 +169,12 @@ class CustomBarcodeScanController(http.Controller):
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": new_qty,
+                            "done_qty":  total_done + delta,
                             "required_qty": move.product_uom_qty
                         })
                         break
 
-                    elif delta < 0 and ml.qty_done > 0:
+                    elif delta < 0 and check_num1 > 0:
                         new_qty = max(0, ml.qty_done + delta)
                         ml.write({'qty_done': new_qty})
                         ml = ml.sudo().browse(ml.id)
@@ -208,67 +184,10 @@ class CustomBarcodeScanController(http.Controller):
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": new_qty,
+                            "done_qty": total_done + delta,
                             "required_qty": move.product_uom_qty
                         })
                         break
-
-
-            # # --- Nếu scan barcode ---
-            # if not line_id:
-            #     if delta > 0:
-            #         for ml in sorted_lines:
-            #             total_done = sum(m.qty_done for m in move.move_line_ids)
-            #             if total_done >= move.product_uom_qty:
-            #                 break
-
-            #             remaining = move.product_uom_qty - total_done
-            #             add_qty = min(delta, remaining)
-            #             new_qty = ml.qty_done + add_qty
-            #             ml.write({'qty_done': new_qty})
-            #             ml = ml.sudo().browse(ml.id)
-
-
-            #             updated_lines.append({
-            #                 "line_id": ml.id,
-            #                 "product": move.product_id.display_name,
-            #                 "done_qty": ml.qty_done,
-            #                 "required_qty": move.product_uom_qty
-            #             })
-            #             return {"scanned": updated_lines}
-
-
-
-            #         # Nếu không có dòng nào thì tạo mới
-            #         new_ml = request.env['stock.move.line'].sudo().create({
-            #             'picking_id': picking.id,
-            #             'move_id': move.id,
-            #             'product_id': move.product_id.id,
-            #             'product_uom_id': move.product_uom.id,
-            #             'qty_done': min(delta, move.product_uom_qty),
-            #             'location_id': move.location_id.id,
-            #             'location_dest_id': move.location_dest_id.id,
-            #         })
-            #         updated_lines.append({
-            #             "line_id": new_ml.id,
-            #             "product": move.product_id.display_name,
-            #             "done_qty": new_ml.qty_done,
-            #             "required_qty": move.product_uom_qty
-            #         })
-            #         return {"scanned": updated_lines}
-
-            #     else:  # delta < 0
-            #         # ✅ Trừ đúng dòng cuối có qty_done > 0
-            #         for ml in reversed(sorted_lines):
-            #             if ml.qty_done > 0:
-            #                 ml.qty_done = max(0, ml.qty_done + delta)
-            #                 updated_lines.append({
-            #                     "line_id": ml.id,
-            #                     "product": move.product_id.display_name,
-            #                     "done_qty": ml.qty_done,
-            #                     "required_qty": move.product_uom_qty
-            #                 })
-            #                 return {"scanned": updated_lines}
 
         if not updated_lines:
             return {"error": "⚠️ Không có dòng nào để cập nhật!"}
