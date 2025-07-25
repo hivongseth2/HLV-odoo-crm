@@ -140,7 +140,7 @@ class CustomBarcodeScanController(http.Controller):
 
         updated_lines = []
         
-        _logger.info.debug(f"[SCAN] ➕ line_id: {line_id}, remain_qty: {moves}")
+        _logger.info(f"[SCAN] ➕ line_id: {line_id}, remain_qty: {moves}")
 
         for move in moves:
             sorted_lines = move.move_line_ids.sorted(key=lambda ml: ml.qty_done)
