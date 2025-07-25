@@ -161,9 +161,9 @@ class CustomBarcodeScanController(http.Controller):
                     if delta > 0 and check_num <= move.product_uom_qty :
                         add_qty = min(delta, remain_qty)
                         new_qty = ml.qty_done + add_qty
-                        ml.write({'qty_done': new_qty})
+                        ml.write({'qty_done': check_num})
                         ml = ml.sudo().browse(ml.id)
-                        _logger.info(f"[SCAN] ✅ Adding qty: {add_qty} → new_qty_done: {new_qty}")
+                        _logger.info(f"[SCAN] ✅ Adding qty: {add_qty} → new_qty_done: {check_num}")
                         _logger.info(f"[SCAN]  ml: {ml}")
 
                         updated_lines.append({
@@ -176,9 +176,9 @@ class CustomBarcodeScanController(http.Controller):
 
                     elif delta < 0 and check_num1 > 0:
                         new_qty = max(0, ml.qty_done + delta)
-                        ml.write({'qty_done': new_qty})
+                        ml.write({'qty_done': check_num1})
                         ml = ml.sudo().browse(ml.id)
-                        _logger.info(f"[SCAN] ✅ Reducing qty: {delta} → new_qty_done: {new_qty}")
+                        _logger.info(f"[SCAN] ✅ Reducing qty: {delta} → new_qty_done: {check_num1}")
                         _logger.info(f"[SCAN]  ml: {ml}")
 
                         updated_lines.append({
