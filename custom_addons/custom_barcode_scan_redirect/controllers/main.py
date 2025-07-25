@@ -149,20 +149,17 @@ class CustomBarcodeScanController(http.Controller):
                     ml = target_ml[0]
                     total_done = sum(m.qty_done for m in move.move_line_ids)
                     remain_qty = move.product_uom_qty - total_done
-                    ml_data = None
                     if delta > 0 and remain_qty > 0:
                         add_qty = min(delta, remain_qty)
                         new_qty = ml.qty_done + add_qty
                         ml.write({'qty_done': new_qty})
                         ml = ml.sudo().browse(ml.id)  # Reload lại để lấy giá trị mới
-                        ml_data = ml.sudo().read(['qty_done'])[0]  # Bypass cache hoàn toàn
 
 
                     elif delta < 0 and ml.qty_done > 0:
                         new_qty = max(0, ml.qty_done + delta)
                         ml.write({'qty_done': new_qty})
                         ml = ml.sudo().browse(ml.id)
-                        ml_data = ml.sudo().read(['qty_done'])[0]  # Bypass cache hoàn toàn
 
                         
 
@@ -170,7 +167,7 @@ class CustomBarcodeScanController(http.Controller):
                     updated_lines.append({
                         "line_id": ml.id,
                         "product": move.product_id.display_name,
-                        "done_qty":ml_data['qty_done'],  
+                        "done_qty":new_qty,  
                         "required_qty": move.product_uom_qty
                     })
                     break
@@ -187,7 +184,6 @@ class CustomBarcodeScanController(http.Controller):
                         add_qty = min(delta, remaining)
                         new_qty = ml.qty_done + add_qty
                         ml.write({'qty_done': new_qty})
-                        ml.invalidate_cache(['qty_done'])
                         ml = ml.sudo().browse(ml.id)
 
 
