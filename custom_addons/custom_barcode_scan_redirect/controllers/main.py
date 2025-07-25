@@ -140,89 +140,45 @@ class CustomBarcodeScanController(http.Controller):
 
         updated_lines = []
         
-        _logger.info(f"[SCAN] ➕ line_id: {line_id}, remain_qty: {moves}")
 
-        # for move in moves:
-
-            # --- Nếu nhấn tay, ưu tiên line_id ---
-            # if line_id:
-            #     target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
-            #     if target_ml:
-            #         ml = target_ml[0]
-            #         new_qty = request.env['stock.move.line'].sudo().browse(ml.id).qty_done
-            #         total_done = sum(m.qty_done for m in move.move_line_ids)
-            #         remain_qty = move.product_uom_qty - total_done
-            #         _logger.info(f"[SCAN] 📦 Product: {move.product_id.display_name}")
-            #         _logger.info(f"[SCAN] 🆔 line_id: {ml.id}, current_qty_done: {new_qty}, total_done: {total_done}, required: {move.product_uom_qty}")
-            #         _logger.info(f"[SCAN] ➕ delta: {delta}, remain_qty: {remain_qty}")
-
-            #         check_num = total_done + delta
-            #         check_num1 = total_done - delta
-            #         if delta > 0 and check_num <= move.product_uom_qty :
-            #             add_qty = min(delta, remain_qty)
-            #             new_qty = ml.qty_done + add_qty
-            #             ml.write({'qty_done': check_num})
-            #             ml = ml.sudo().browse(ml.id)
-            #             _logger.info(f"[SCAN] ✅ Adding qty: {add_qty} → new_qty_done: {check_num}")
-            #             _logger.info(f"[SCAN]  ml: {ml}")
-
-            #             updated_lines.append({
-            #                 "line_id": ml.id,
-            #                 "product": move.product_id.display_name,
-            #                 "done_qty":  total_done + delta,
-            #                 "required_qty": move.product_uom_qty
-            #             })
-            #             break
-
-            #         elif delta < 0 and check_num1 > 0:
-            #             new_qty = max(0, ml.qty_done + delta)
-            #             ml.write({'qty_done': check_num1})
-            #             ml = ml.sudo().browse(ml.id)
-            #             _logger.info(f"[SCAN] ✅ Reducing qty: {delta} → new_qty_done: {check_num1}")
-            #             _logger.info(f"[SCAN]  ml: {ml}")
-
-            #             updated_lines.append({
-            #                 "line_id": ml.id,
-            #                 "product": move.product_id.display_name,
-            #                 "done_qty": total_done + delta,
-            #                 "required_qty": move.product_uom_qty
-            #             })
-            #             break
-            
-            
         for move in moves:
             if line_id:
                 target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
                 if target_ml:
                     ml = target_ml[0]
-                    current_qty = ml.qty_done
                     total_done = sum(l.qty_done for l in move.move_line_ids)
                     remain_qty = max(0, move.product_uom_qty - total_done)
-                    
+
                     _logger.info(f"[SCAN] 📦 Product: {move.product_id.display_name}")
-                    _logger.info(f"[SCAN] 🆔 line_id: {ml.id}, current_qty_done: {current_qty}, total_done: {total_done}, required: {move.product_uom_qty}")
+                    _logger.info(f"[SCAN] 🆔 line_id: {ml.id}, total_done: {total_done}, required: {move.product_uom_qty}")
                     _logger.info(f"[SCAN] ➕ delta: {delta}, remain_qty: {remain_qty}")
-                    if delta > 0 and remain_qty > 0:
+
+                    if delta > 0 and total_done < move.product_uom_qty:
                         add_qty = min(delta, remain_qty)
-                        new_qty = current_qty + add_qty
+                        new_qty = ml.qty_done + add_qty
                         ml.write({'qty_done': new_qty})
-                        _logger.info(f"[SCAN] ✅ Added {add_qty}, new_qty_done: {new_qty}")
+                        new_total_done = total_done + add_qty
+                        _logger.info(f"[SCAN] ✅ Added {add_qty}, new_total_done: {new_total_done}")
+
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": total_done - current_qty + new_qty,  # Cập nhật tổng đúng sau khi sửa dòng này
+                            "done_qty": new_total_done,
                             "required_qty": move.product_uom_qty
                         })
                         break
-                    elif delta < 0 and current_qty > 0:
-                        reduce_qty = min(abs(delta), current_qty)
-                        new_qty = current_qty - reduce_qty
+
+                    elif delta < 0 and ml.qty_done > 0:
+                        reduce_qty = min(abs(delta), ml.qty_done)
+                        new_qty = ml.qty_done - reduce_qty
                         ml.write({'qty_done': new_qty})
-                        _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_qty_done: {new_qty}")
+                        new_total_done = total_done - reduce_qty
+                        _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_total_done: {new_total_done}")
+
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
-                            "done_qty": total_done - current_qty + new_qty,
+                            "done_qty": new_total_done,
                             "required_qty": move.product_uom_qty
                         })
                         break
