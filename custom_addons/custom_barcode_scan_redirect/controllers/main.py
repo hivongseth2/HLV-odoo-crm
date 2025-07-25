@@ -139,6 +139,8 @@ class CustomBarcodeScanController(http.Controller):
             return {"error": "⚠️ Sản phẩm này đã được quét đủ!"}
 
         updated_lines = []
+        
+        _logger.debug(f"[SCAN] ➕ line_id: {line_id}, remain_qty: {moves}")
 
         for move in moves:
             sorted_lines = move.move_line_ids.sorted(key=lambda ml: ml.qty_done)
