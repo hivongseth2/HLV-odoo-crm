@@ -43,12 +43,12 @@
             <button id="complete_pack_btn">✅ Hoàn tất</button>
           </div>
         </div>
-
+      <script>
+        const pickingId = <t t-esc="picking.id"/>;
+        const pickingName = "<t t-esc='picking.name'/>";  <!-- sửa lỗi dấu nháy luôn -->
+      </script>
         <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
-        <script>
-          const pickingId = <t t-esc="picking.id"/>;
-          const pickingName = "<t t-esc="picking.name"/>";
-        </script>
+
 
       </div>
     </t>
