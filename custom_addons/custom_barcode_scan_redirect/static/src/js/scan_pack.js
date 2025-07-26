@@ -109,30 +109,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!val) return;
 
     if (val === originPickName) {
-      // ✅ Nếu là mã phiếu pick hiện tại → gọi hoàn tất luôn
-      fetch("/pack_scan/complete_picking", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "call",
-          params: { picking_id: pickingId }
-        })
-      })
-        .then(res => res.json())
-        .then(response => {
-          if (response.error) {
-            alert(response.error);
-            playError();
-          } else {
-            alert(response.message || "✅ Phiếu đã hoàn tất!");
-            playSuccess();
-            window.location.href = "/custom_barcode_scan/ui";
-          }
-        });
+      completeBtn.click();
 
       input.value = "";
       return;
