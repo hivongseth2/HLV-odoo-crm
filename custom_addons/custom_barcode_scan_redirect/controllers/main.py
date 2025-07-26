@@ -30,6 +30,19 @@ class CustomBarcodeScanController(http.Controller):
             }
 
         if picking.state == 'done' and picking.group_id:
+            
+            if picking.picking_type_id.code == 'outgoing':  #  nếu  có phân loại riêng cho PACK thì đổi lại
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'message': f"✅ Phiếu {picking.name} đã hoàn tất!",
+                        'type': 'info',
+                        'sticky': False,
+                    }
+                }
+            
+            
             next_picking = Picking.search([
                 ('group_id', '=', picking.group_id.id),
                 ('id', '!=', picking.id),
