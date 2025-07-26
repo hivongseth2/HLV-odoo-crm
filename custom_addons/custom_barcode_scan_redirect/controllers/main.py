@@ -110,11 +110,18 @@ class CustomBarcodeScanController(http.Controller):
         lines = picking.move_ids_without_package.filtered(lambda m: m.product_id)
 
         _logger.info(f"📦 Tổng dòng move line có product: {len(lines)}")
+        origin_pick = request.env['stock.picking'].sudo().search([
+                ('group_id', '=', picking.group_id.id),
+                ('picking_type_id.sequence_code', 'like', 'PICK'),  # hoặc theo name như 'HCM: Pick'
+                ('id', '!=', picking.id)
+            ], limit=1)
 
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
             'lines': lines,
-            'origin_pick_name': picking.group_id and picking.group_id.name or ''
+            # 'origin_pick_name': picking.group_id and picking.group_id.name or ''
+            'origin_pick_name': origin_pick.name if origin_pick else '',
+
         })
 
 
