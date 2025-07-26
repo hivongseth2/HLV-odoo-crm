@@ -45,6 +45,11 @@
         </div>
 
         <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
+        <script>
+          const pickingId = <t t-esc="picking.id"/>;
+          const pickingName = "<t t-esc="picking.name"/>";
+        </script>
+
       </div>
     </t>
   </template>
