@@ -82,7 +82,7 @@ class CustomBarcodeScanController(http.Controller):
             }
 
         # ❌ Nếu loại phiếu không phải là 'outgoing' hoặc 'pick' thì không mở barcode
-        if picking.picking_type_id.code not in ['outgoing', 'pick']:
+        if picking.picking_type_id.code not in ['out', 'pick']:
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
