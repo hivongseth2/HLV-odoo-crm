@@ -44,7 +44,8 @@ document.addEventListener("DOMContentLoaded", function () {
         } else if (window.odoo?.__DEBUG__?.services?.["web.action_service"]) {
           window.odoo.__DEBUG__.services["web.action_service"].doAction(action);
         } else {
-          window.location.href = "/web"; 
+          // window.location.href = "/custom_barcode_scan/ui"; 
+          setStatus("success", "Phiếu không ở trạng thái đóng gói, kiểm tra lại...");
         }
 
         }
