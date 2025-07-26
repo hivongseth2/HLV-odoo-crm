@@ -31,7 +31,7 @@ class CustomBarcodeScanController(http.Controller):
 
         if picking.state == 'done' and picking.group_id:
             
-            _logger.info(f"[SCAN] Barcode: {picking}")
+            _logger.info(f"[SCAN] Barcode: {picking.picking_type_id.code}")
             
             if picking.picking_type_id.code == 'outgoing':  #  nếu  có phân loại riêng cho PACK thì đổi lại
                 return {
