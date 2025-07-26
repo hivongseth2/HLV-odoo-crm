@@ -114,6 +114,7 @@ class CustomBarcodeScanController(http.Controller):
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
             'lines': lines,
+            'origin_pick_name': picking.group_id and picking.group_id.name or ''
         })
 
 

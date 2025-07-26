@@ -12,7 +12,9 @@
         <div class="scan-wrapper">
           <h2>
             🚚 Đóng Gói Phiếu: <span><t t-esc="picking.name"/></span>
+
           </h2>
+          <h4>🧾 Từ Phiếu Pick: <span style="color: #1663f1ff;"><t t-esc="origin_pick_name"/></span> </h4>
 
           <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus" />
 
@@ -45,7 +47,7 @@
         </div>
       <script>
         const pickingId = <t t-esc="picking.id"/>;
-        const pickingName = "<t t-esc='picking.name'/>";  <!-- sửa lỗi dấu nháy luôn -->
+        const originPickName = "<t t-esc='origin_pick_name'/>";
       </script>
         <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
 

@@ -108,7 +108,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const val = input.value.trim();
     if (!val) return;
 
-    if (val === pickingName) {
+    if (val === originPickName) {
       // ✅ Nếu là mã phiếu pick hiện tại → gọi hoàn tất luôn
       fetch("/pack_scan/complete_picking", {
         method: "POST",
