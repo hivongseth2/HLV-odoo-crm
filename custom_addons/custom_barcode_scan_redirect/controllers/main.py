@@ -35,16 +35,16 @@ class CustomBarcodeScanController(http.Controller):
             _logger.info(picking.picking_type_id.read()[0])
 
             
-            if  picking.state == 'done':  #  nếu  có phân loại riêng cho PACK thì đổi lại
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'message': f"✅ Phiếu {picking.name} đã hoàn tất!",
-                        'type': 'info',
-                        'sticky': False,
-                    }
-                }
+            # if  picking.state == 'done': 
+            #     return {
+            #         'type': 'ir.actions.client',
+            #         'tag': 'display_notification',
+            #         'params': {
+            #             'message': f"✅ Phiếu {picking.name} đã hoàn tất!",
+            #             'type': 'info',
+            #             'sticky': False,
+            #         }
+            #     }
             
             
             next_picking = Picking.search([
@@ -52,12 +52,32 @@ class CustomBarcodeScanController(http.Controller):
                 ('id', '!=', picking.id),
                 ('state', 'in', ['confirmed', 'assigned', 'waiting'])
             ], limit=1)
+            
+            
+            
             if next_picking:
-                return {
-                    'type': 'ir.actions.act_url',
-                    'url': f"/custom_barcode_scan/pack_view/{next_picking.id}",
-                    'target': 'self',
-                }
+                # return {
+                #     'type': 'ir.actions.act_url',
+                #     'url': f"/custom_barcode_scan/pack_view/{next_picking.id}",
+                #     'target': 'self',
+                # }
+                
+                if next_picking.picking_type_id.code == 'outgoing':
+                    return {
+                        'type': 'ir.actions.client',
+                        'tag': 'display_notification',
+                        'params': {
+                            'message': f"✅ Phiếu {picking.name} đã hoàn tất! Đang chờ xuất kho...",
+                            'type': 'info',
+                            'sticky': False,
+                        }
+                    }
+                else:
+                    return {
+                        'type': 'ir.actions.act_url',
+                        'url': f"/custom_barcode_scan/pack_view/{next_picking.id}",
+                        'target': 'self',
+                    }
 
             return {
                 'type': 'ir.actions.client',
