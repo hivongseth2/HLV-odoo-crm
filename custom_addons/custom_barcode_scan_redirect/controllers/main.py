@@ -81,6 +81,19 @@ class CustomBarcodeScanController(http.Controller):
                 }
             }
 
+        # ❌ Nếu loại phiếu không phải là 'outgoing' hoặc 'pick' thì không mở barcode
+        if picking.picking_type_id.code not in ['outgoing', 'pick']:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'message': f"Phiếu {picking.name} không thuộc loại Pick hoặc Out. Không thể mở giao diện barcode.",
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        # ✅ Nếu qua được tất cả điều kiện thì mở giao diện barcode như thường
         action = request.env.ref('stock_barcode.stock_barcode_picking_client_action').sudo().read()[0]
 
         action.update({
