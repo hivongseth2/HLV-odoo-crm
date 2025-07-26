@@ -80,7 +80,7 @@ class CustomBarcodeScanController(http.Controller):
                     'sticky': False,
                 }
             }
-
+        _logger.info(f"[ACTION] Gửi barcode_action cho phiếu: {picking.name} | Picking Type: {picking.picking_type_id.name}")
         # ❌ Nếu loại phiếu không phải là 'outgoing' hoặc 'pick' thì không mở barcode
         if picking.picking_type_id.code not in ['out', 'pick']:
             return {
