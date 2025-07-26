@@ -31,6 +31,8 @@ class CustomBarcodeScanController(http.Controller):
 
         if picking.state == 'done' and picking.group_id:
             
+            _logger.info(f"[SCAN] Barcode: {picking}")
+            
             if picking.picking_type_id.code == 'outgoing':  #  nếu  có phân loại riêng cho PACK thì đổi lại
                 return {
                     'type': 'ir.actions.client',
