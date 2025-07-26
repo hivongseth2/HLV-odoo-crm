@@ -35,7 +35,7 @@ class CustomBarcodeScanController(http.Controller):
             _logger.info(picking.picking_type_id.read()[0])
 
             
-            if picking.picking_type_id.code == 'internal':  #  nếu  có phân loại riêng cho PACK thì đổi lại
+            if  picking.state == 'done':  #  nếu  có phân loại riêng cho PACK thì đổi lại
                 return {
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
