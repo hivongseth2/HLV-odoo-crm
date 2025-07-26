@@ -91,15 +91,58 @@ document.addEventListener("DOMContentLoaded", function () {
       });
   }
 
+  // input.addEventListener("keypress", function (e) {
+  //   if (e.key === "Enter") {
+  //     const val = input.value.trim();
+  //     if (val) {
+  //       updateQty(val);
+  //       input.value = "";
+  //     }
+  //   }
+  // });
+
+
+
   input.addEventListener("keypress", function (e) {
-    if (e.key === "Enter") {
-      const val = input.value.trim();
-      if (val) {
-        updateQty(val);
-        input.value = "";
-      }
+  if (e.key === "Enter") {
+    const val = input.value.trim();
+    if (!val) return;
+
+    if (val === pickingName) {
+      // ✅ Nếu là mã phiếu pick hiện tại → gọi hoàn tất luôn
+      fetch("/pack_scan/complete_picking", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "call",
+          params: { picking_id: pickingId }
+        })
+      })
+        .then(res => res.json())
+        .then(response => {
+          if (response.error) {
+            alert(response.error);
+            playError();
+          } else {
+            alert(response.message || "✅ Phiếu đã hoàn tất!");
+            playSuccess();
+            window.location.href = "/custom_barcode_scan/ui";
+          }
+        });
+
+      input.value = "";
+      return;
     }
-  });
+
+    // Nếu không phải mã phiếu → quét sản phẩm như thường
+    updateQty(val);
+    input.value = "";
+  }
+});
 
   list.querySelectorAll(".btn-plus").forEach(btn =>
     btn.addEventListener("click", () =>

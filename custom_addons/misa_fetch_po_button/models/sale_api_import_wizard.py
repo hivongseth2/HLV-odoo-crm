@@ -38,10 +38,17 @@ class SaleApiImportWizard(models.TransientModel):
 
 
         e_accounts = {
-            "TIKTOK HOÀNG LONG VŨ",
-            "SHOPEE TRANG MILWAUKEE",
-            "SHOPEE TRANG TBCN HLV",
-            "SHOPEE TRANG DEWALT STANLEY"}
+                    "TIKTOK HOÀNG LONG VŨ",
+                    "SHOPEE TRANG MILWAUKEE",
+                    "SHOPEE TRANG TBCN HLV",
+                    "SHOPEE TRANG DEWALT STANLEY",
+                    "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE STANLEY",
+                    "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE",
+                    "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
+                    "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK"
+                    
+                    
+                    }   
 
         page = 1
         while True:
