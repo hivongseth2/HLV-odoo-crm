@@ -135,7 +135,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
   completeBtn.addEventListener("click", function () {
-    if (!confirm("Xác nhận hoàn tất đóng gói phiếu?")) return;
+    // if (!confirm("Xác nhận hoàn tất đóng gói phiếu?")) return;
 
     const items = document.querySelectorAll("#product_list .product-item");
     let isValid = true;
