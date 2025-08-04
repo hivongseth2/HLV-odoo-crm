@@ -1,6 +1,6 @@
 import requests 
 from odoo import models, fields, api
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser  # để xử lý ISO datetime
 import logging
 
@@ -35,7 +35,10 @@ class SaleApiImportWizard(models.TransientModel):
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
         page = 1
-        page_size = 50
+        page_size = 5
+
+        start_datetime = datetime.combine(self.from_date, datetime.min.time())
+        end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
         while page <= 50:
             params = {
@@ -56,10 +59,18 @@ class SaleApiImportWizard(models.TransientModel):
                 break
 
             for order in orders:
-                order_date_str = order.get("sale_order_date")
+                order_date_str = order.get("created_date")
                 order_date = parser.parse(order_date_str).replace(tzinfo=None) if order_date_str else fields.Datetime.now()
 
-                if not (self.from_date <= order_date.date() <= self.to_date):
+                if order_date < start_datetime:
+                    continue
+                if order_date > end_datetime:
+                    _logger.info("🛑 Gặp đơn vượt quá ngày, dừng vòng lặp: %s", order.get("sale_order_no"))
+                    return {'type': 'ir.actions.act_window_close'}
+
+                product_lines = order.get("sale_order_product_mappings", [])
+                filtered_lines = [l for l in product_lines if l.get("stock_name") == "HCM"]
+                if not filtered_lines:
                     continue
 
                 order_ref = order.get("sale_order_no")
@@ -86,7 +97,7 @@ class SaleApiImportWizard(models.TransientModel):
                     'amount_total': amount,
                 })
 
-                for line in order.get("sale_order_product_mappings", []):
+                for line in filtered_lines:
                     product_code = line.get("product_code")
                     description = line.get("description") or product_code
                     qty = float(line.get("amount", 1))
