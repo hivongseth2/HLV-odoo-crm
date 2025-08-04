@@ -50,7 +50,7 @@ class MisaTransferFetch(models.TransientModel):
         page_index = 1
         while True:
             payload["pageIndex"] = page_index
-            _logger.info("\ud83d\udcc4 \u0110ang fetch trang %s...", page_index)
+            _logger.info("\ud83d\udcc4 \u0110ang fetch123gi trang %s...", page_index)
 
             response = misa_utils._fetch_with_retry(
                 "https://actapp.misa.vn/g1/api/in/v1/in_inward_outward_list/paging_filter_v2",
