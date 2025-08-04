@@ -47,6 +47,12 @@ class MisaPOFetch(models.TransientModel):
             "useSp": False,
             "view": 2
         }
+        stock_mapping = {
+                "HCM": "TSN/Stock",
+                # "BENCAM": "KBC/Tồn kho",
+                # "HIENDUC": "KHD/Tồn kho"
+            }
+
 
         page_index = 1
         while True:
@@ -104,21 +110,43 @@ class MisaPOFetch(models.TransientModel):
                     continue
 
                 lines = detail_res.json().get("Data", {}).get("PageData", [])
-                has_hcm = any(line.get("stock_code", "").strip().upper() == "HCM" for line in lines)
-                if not has_hcm:
-                    _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
+                stock_code = lines[0].get("stock_code", "").strip().upper() if lines else None
+                if stock_code not in stock_mapping:
+                    _logger.warning("📛 Kho %s không nằm trong mapping, bỏ PO %s", stock_code, refno)
                     continue
-                
+                # has_hcm = any(line.get("stock_code", "").strip().upper() == "HCM" for line in lines)
+                # if not has_hcm:
+                #     _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
+                #     continue
+                location_name = stock_mapping[stock_code]
+                location = self.env['stock.location'].search([
+                    ('complete_name', '=', location_name)
+                ], limit=1)
+
+                if not location:
+                    _logger.warning("❌ Không tìm thấy stock.location cho kho %s (%s)", stock_code, location_name)
+                    continue
                 
                 
                 existing_po = self.env["purchase.order"].search([("name", "=", refno)], limit=1)
                 if existing_po:
                     _logger.info("⚠️ Bỏ qua đơn hàng %s vì name %s đã tồn tại", refid, refno)
                     continue
+                
+                warehouse = self.env['stock.warehouse'].search([
+                    ('view_location_id', '=', location.location_id.id)
+                ], limit=1)
+
+                if not warehouse:
+                    _logger.warning("❌ Không tìm thấy warehouse cho kho %s", stock_code)
+                    continue
+                picking_type = warehouse.in_type_id
 
                 po_rec = self.env["purchase.order"].create({
                     "partner_id": partner.id,
                     "origin": refno,
+                    "picking_type_id": picking_type.id,  # ⬅️ Gán đúng kiểu nhập kho
+
                     "name": refno, 
 
                 })
