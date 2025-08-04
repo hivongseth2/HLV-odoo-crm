@@ -15,10 +15,6 @@ class MisaTransferFetch(models.TransientModel):
     excel_hcm_keyword = fields.Char(string="Từ khóa HCM trong MISA", default="HCM", required=True)
 
 
-    stock_mapping = {
-    "HCM": "TSN/Stock",
-    "SHOWROOM161":"TSN/showroom" 
-}
 
     def action_fetch_transfers(self):
         misa_utils = self.env['misa.api.utils']
@@ -31,6 +27,12 @@ class MisaTransferFetch(models.TransientModel):
         date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
 
         headers = misa_config.get_default_headers(access_token)
+        
+        stock_mapping = {
+                "HCM": "TSN/Stock",
+                "SHOWROOM161":"TSN/showroom" 
+            }
+
 
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
