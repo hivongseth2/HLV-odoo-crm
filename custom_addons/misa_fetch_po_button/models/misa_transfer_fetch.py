@@ -33,7 +33,7 @@ class MisaTransferFetch(models.TransientModel):
                 "SHOWROOM161":"TSN/showroom" 
             }
 
-        default_location_path = "TSN/Buffer" 
+        default_location_path = "Partners/Vendors" 
 
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
@@ -127,6 +127,9 @@ class MisaTransferFetch(models.TransientModel):
                     # to_location = self.env['stock.location'].search([('complete_name', '=', stock_mapping.get(to_code))], limit=1)
                     from_location = self.env['stock.location'].search([('complete_name', '=', from_path)], limit=1)
                     to_location = self.env['stock.location'].search([('complete_name', '=', to_path)], limit=1)
+                    if not from_location or not to_location:
+                        _logger.warning("❌ Không tìm thấy location cho from: %s hoặc to: %s", from_code, to_code)
+                        continue  # bỏ qua dòng này
 
                     if from_code == keyword:
                         line["direction"] = "outgoing"
