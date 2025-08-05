@@ -33,6 +33,7 @@ class MisaTransferFetch(models.TransientModel):
                 "SHOWROOM161":"TSN/showroom" 
             }
 
+        default_location_path = "TSN/Buffer" 
 
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
@@ -117,9 +118,15 @@ class MisaTransferFetch(models.TransientModel):
                     # to_code = str(line.get("to_stock_code", "")).strip().upper()
                     from_code = str(line.get("from_stock_code", "")).strip().upper()
                     to_code = str(line.get("to_stock_code", "")).strip().upper()
-                    from_location = self.env['stock.location'].search([('complete_name', '=', stock_mapping.get(from_code))], limit=1)
-                    to_location = self.env['stock.location'].search([('complete_name', '=', stock_mapping.get(to_code))], limit=1)
-
+                    
+                    
+                    from_path = stock_mapping.get(from_code, default_location_path)
+                    to_path = stock_mapping.get(to_code, default_location_path)
+                    
+                    # from_location = self.env['stock.location'].search([('complete_name', '=', stock_mapping.get(from_code))], limit=1)
+                    # to_location = self.env['stock.location'].search([('complete_name', '=', stock_mapping.get(to_code))], limit=1)
+                    from_location = self.env['stock.location'].search([('complete_name', '=', from_path)], limit=1)
+                    to_location = self.env['stock.location'].search([('complete_name', '=', to_path)], limit=1)
 
                     if from_code == keyword:
                         line["direction"] = "outgoing"
