@@ -31,7 +31,7 @@ class SaleApiImportWizard(models.TransientModel):
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
         stock_mapping = {
-            "HCM": "TSN/Stock",
+            "HCM_TANG1": "TSN/Stock",
             # "BENCAM": "KBC/Tồn kho",
             # "HIENDUC": "KHD/Tồn kho"
         }
