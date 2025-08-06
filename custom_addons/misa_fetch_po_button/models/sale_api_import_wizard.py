@@ -31,7 +31,7 @@ class SaleApiImportWizard(models.TransientModel):
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
         stock_mapping = {
-            "HCM_TANG1": "TSN/Stock",
+            "HCM": "TSN/Stock",
             # "BENCAM": "KBC/Tồn kho",
             # "HIENDUC": "KHD/Tồn kho"
         }
@@ -49,7 +49,8 @@ class SaleApiImportWizard(models.TransientModel):
                     "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
                     'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN',
                     'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY'
-                    'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK'
+                    'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK',
+                    'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK',
                     
                     
                     }   
