@@ -49,7 +49,12 @@ class ProductImportWizard(models.TransientModel):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             tmp.write(base64.b64decode(self.file))
             tmp.seek(0)
-            df = pd.read_excel(tmp.name)
+            df = pd.read_excel(tmp.name, dtype={
+                    'Mã vạch': str,
+                    'ID EXTERNAL': str,
+                    'Mã': str
+                })
+
 
         Product = self.env["product.template"].sudo()
 
