@@ -14,7 +14,7 @@ function write(model, ids, vals) {
 }
 
 let t;
-const debounce = (fn, ms=400) => { clearTimeout(t); t = setTimeout(fn, ms); };
+const debounce = (fn, ms = 400) => { clearTimeout(t); t = setTimeout(fn, ms); };
 
 // --- PATCH 1: After every scan, attempt to persist changes ---
 patch(PickingClientAction.prototype, "autosave-after-scan-o18-fix", {
@@ -37,11 +37,11 @@ patch(PickingClientAction.prototype, "autosave-after-scan-o18-fix", {
         this._super();
         // Visual hint in console to confirm patch is loaded
         console.log("%c[Barcode Autosave] loaded for Odoo 18",
-                    "padding:2px 6px;border-radius:6px;background:#222;color:#9fe870");
+            "padding:2px 6px;border-radius:6px;background:#222;color:#9fe870");
         // Best effort: save when leaving page
         window.addEventListener("beforeunload", () => {
             if (this.model && this.model.save) {
-                try { this.model.save(); } catch(_) {}
+                try { this.model.save(); } catch (_) { }
             }
         });
     },
