@@ -61,8 +61,8 @@
                 <group>
                     <field name="date_from" required="1"/>
                     <field name="date_to" required="1"/>
-                    <field name="warehouse_id" required="1"/>
-                    <field name="excel_hcm_keyword" required="1"/>
+                    <!-- <field name="warehouse_id" required="1"/> -->
+                    <!-- <field name="excel_hcm_keyword" required="1"/> -->
                 </group>
                 <footer>
                     <button name="action_fetch_transfers"
