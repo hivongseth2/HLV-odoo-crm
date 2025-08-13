@@ -186,8 +186,18 @@ class ProductImportWizard(models.TransientModel):
                 return ''
         except Exception:
             pass
+        
+        # Nếu là số (int/float) thì convert thành chuỗi không có .0
+        if isinstance(val, (int, float)):
+            # Bỏ phần thập phân nếu không có giá trị
+            if float(val).is_integer():
+                return str(int(val)).strip()
+            else:
+                return str(val).strip()
+        
         s = str(val).strip()
         return '' if s.lower() == 'nan' else s
+
 
     def _get_or_create_m2o(self, model, name):
         record = self.env[model].sudo().search([('name', '=', name)], limit=1)
