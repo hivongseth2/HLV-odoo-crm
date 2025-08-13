@@ -12,6 +12,33 @@ class MisaTransferFetch(models.TransientModel):
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to   = fields.Date(string="Đến ngày", required=True)
 
+    # ===== Helper: lấy đúng picking type internal theo from_location =====
+    def _get_internal_picking_type_for_location(self, from_location):
+        """Trả về warehouse.int_type_id của warehouse chứa from_location."""
+        if not from_location:
+            return False
+
+        # Tìm warehouse có view_location_id là cha (trực tiếp/gián tiếp) của from_location
+        warehouse = self.env['stock.warehouse'].search([
+            ('view_location_id', 'parent_of', from_location.id)
+        ], limit=1)
+
+        if warehouse and warehouse.int_type_id:
+            return warehouse.int_type_id
+
+        # Fallback (nếu DB không đúng cây location): suy ra theo prefix của complete_name: "TSN/Stock" -> "TSN"
+        try:
+            wh_code = (from_location.complete_name or "").split('/')[0].strip()
+        except Exception:
+            wh_code = False
+
+        if wh_code:
+            wh2 = self.env['stock.warehouse'].search([('code', '=', wh_code)], limit=1)
+            if wh2 and wh2.int_type_id:
+                return wh2.int_type_id
+
+        return False
+
     def action_fetch_transfers(self):
         misa_utils  = self.env['misa.api.utils']
         odoo_utils  = self.env['odoo.utils']
@@ -19,20 +46,20 @@ class MisaTransferFetch(models.TransientModel):
 
         access_token = misa_utils._get_misa_token()
 
-        # MISA lưu UTC, hệ thống dùng Asia/Ho_Chi_Minh (+7)
+        # MISA (UTC) -> VN (+7)
         date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
         date_to_utc   = datetime.combine(self.date_to,   datetime.max.time()) - timedelta(hours=7)
 
         headers = misa_config.get_default_headers(access_token)
 
-        # Map code MISA -> đường dẫn complete_name của stock.location trong Odoo
+        # Map code MISA -> complete_name của stock.location trong Odoo
         stock_mapping = {
             "HCM":        "TSN/Stock",
             "SHOWROOM161":"TSN/showroom",
             "BENCAM":     "KBC/Tồn kho",
             "HIENDUC":    "KHD/Tồn kho",
         }
-        default_location_path = "Partners/Vendors"  # fallback (ít dùng)
+        default_location_path = "Partners/Vendors"
 
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},"
@@ -143,12 +170,14 @@ class MisaTransferFetch(models.TransientModel):
                     from_location = self.env['stock.location'].browse(from_id)
                     to_location   = self.env['stock.location'].browse(to_id)
 
-                    picking_type = self._get_internal_picking_type()
+                    # >>> lấy đúng "Internal Transfers" của warehouse chứa from_location
+                    picking_type = self._get_internal_picking_type_for_location(from_location)
                     if not picking_type:
-                        _logger.warning("Không tìm thấy picking type 'internal' cho công ty hiện tại")
+                        _logger.warning("Không tìm thấy picking type 'internal' cho from_location: %s",
+                                        from_location.display_name)
                         continue
 
-                    # Kiểm tra tồn tại theo (name/refno_finance + from/to) để tránh đè nhầm
+                    # Kiểm tra tồn tại (name + picking_type + from/to)
                     picking = self.env['stock.picking'].search([
                         ('name', '=', ref_info.get('refno_finance', '')),
                         ('picking_type_id', '=', picking_type.id),
@@ -157,18 +186,20 @@ class MisaTransferFetch(models.TransientModel):
                     ], limit=1)
 
                     if picking:
-                        _logger.info("🔁 Phiếu đã tồn tại: %s (from:%s -> to:%s)", picking.name, from_location.display_name, to_location.display_name)
-                        odoo_utils._update_picking_lines(picking, related_lines)  # hàm này cần hỗ trợ cập nhật theo from/to cố định
+                        _logger.info("🔁 Phiếu đã tồn tại: %s (from:%s -> to:%s)", picking.name,
+                                     from_location.display_name, to_location.display_name)
+                        odoo_utils._update_picking_lines(picking, related_lines)
                     else:
                         picking = self.env['stock.picking'].create({
                             'name': ref_info.get('refno_finance', ''),
-                            'picking_type_id': picking_type.id,
+                            'picking_type_id': picking_type.id,   # đúng lệnh Internal Transfers của kho
                             'location_id': from_id,
                             'location_dest_id': to_id,
                             'origin': ref_info.get('refno_finance', ''),
                             'partner_id': partner.id if partner else False,
                         })
-                        _logger.info("🆕 Tạo phiếu mới: %s (from:%s -> to:%s)", picking.name, from_location.display_name, to_location.display_name)
+                        _logger.info("🆕 Tạo phiếu mới: %s (from:%s -> to:%s)", picking.name,
+                                     from_location.display_name, to_location.display_name)
 
                         for line in related_lines:
                             product_code = str(line.get("inventory_item_code", "")).strip()
@@ -203,10 +234,3 @@ class MisaTransferFetch(models.TransientModel):
                             _logger.info("  + Tạo dòng chuyển: %s x%s", product_code, qty)
 
             page_index += 1
-
-    def _get_internal_picking_type(self):
-        """Lấy picking type 'internal' theo company hiện tại."""
-        return self.env['stock.picking.type'].search([
-            ('code', '=', 'internal'),
-            ('company_id', '=', self.env.company.id),
-        ], limit=1)
