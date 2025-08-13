@@ -30,7 +30,10 @@ class MisaTransferFetch(models.TransientModel):
         
         stock_mapping = {
                 "HCM": "TSN/Stock",
-                "SHOWROOM161":"TSN/showroom" 
+                "SHOWROOM161":"TSN/showroom",
+                "BENCAM": "KBC/Tồn kho",
+                "HIENDUC": "KHD/Tồn kho"
+                
             }
 
         default_location_path = "Partners/Vendors" 
