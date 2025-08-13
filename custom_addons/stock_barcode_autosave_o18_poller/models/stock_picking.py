@@ -1,27 +1,11 @@
 
 # -*- coding: utf-8 -*-
-from odoo import api, fields, models, _
-from odoo.exceptions import UserError
+from odoo import api, fields, models
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
 
     def barcode_autosave_create_lines(self, payload_lines):
-        """Create or update stock.move.line records immediately for autosave.
-        payload_lines: list of dicts with keys (best-effort, optional):
-          - product_id (int, required if move_id missing)
-          - qty_done (float, required)
-          - move_id (int, optional)
-          - lot_id (int, optional)
-          - package_id (int, optional)
-          - result_package_id (int, optional)
-          - uom_id (int, optional) -> product_uom_id
-          - location_id (int, optional)
-          - location_dest_id (int, optional)
-
-        Returns list of dicts: {client_key: str|None, line_id: int, qty_done: float}
-          client_key is echoed back if provided for client-side reconciliation.
-        """
         self.ensure_one()
         self.check_access_rights('write')
         self.check_access_rule('write')
@@ -40,15 +24,12 @@ class StockPicking(models.Model):
             product_id = line.get('product_id')
             if not move:
                 if not product_id:
-                    # Cannot proceed without product
                     continue
-                # try to find an open move for this product in this picking
                 move = self.move_ids_without_package.filtered(
                     lambda m: m.product_id.id == product_id and m.state not in ('done', 'cancel')
                 )[:1]
 
             if not move:
-                # As a last resort, create a draft move for this product
                 if not product_id:
                     continue
                 product = self.env['product.product'].browse(product_id).exists()
@@ -73,7 +54,6 @@ class StockPicking(models.Model):
                 'location_id': line.get('location_id') or move.location_id.id,
                 'location_dest_id': line.get('location_dest_id') or move.location_dest_id.id,
             }
-            # Optional fields
             for opt in ('lot_id', 'package_id', 'result_package_id'):
                 if line.get(opt):
                     vals[opt] = line[opt]
