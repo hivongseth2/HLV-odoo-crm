@@ -10,5 +10,5 @@
             "stock_barcode_autosave_o18_poller/static/src/js/autosave_poller.js"
         ]
     },
-    "installable": true
+    "installable": True
 }
