@@ -32,7 +32,6 @@ class GdriveOAuthController(http.Controller):
         ['/gdrive/oauth2/start'],
         type='http', auth='user', website=True, csrf=False)  # <- website=True
     def start(self, **kw):
-    def start(self, **kw):
         cid   = _get_param('gdrive.oauth_client_id')
         csec  = _get_param('gdrive.oauth_client_secret')
         redir = _get_param('gdrive.oauth_redirect_uri')
@@ -55,9 +54,9 @@ class GdriveOAuthController(http.Controller):
         request.session['gdrive_settings_path'] = settings_file
         return redirect(auth_url)
 
-        @http.route(
-        ['/gdrive/oauth2/callback'],
-        type='http', auth='user', website=True, csrf=False)  # <- website=True
+    @http.route(
+    ['/gdrive/oauth2/callback'],
+    type='http', auth='user', website=True, csrf=False)  # <- website=True
 
     def callback(self, **kw):
         code = kw.get('code')
