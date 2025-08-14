@@ -5,6 +5,10 @@ import logging
 from base64 import b64encode
 from werkzeug.utils import secure_filename
 from datetime import datetime
+import base64
+from werkzeug.utils import secure_filename
+from werkzeug.wrappers import Response
+from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType, RequestEntityTooLarge
 
 class CustomBarcodeScanController(http.Controller):
 
@@ -253,48 +257,51 @@ class CustomBarcodeScanController(http.Controller):
         except Exception as e:
             return {"error": str(e)}
         
-        
+     
     @http.route('/pack_scan/upload_video', type='http', auth='user', methods=['POST'], csrf=False)
     def upload_pack_video(self, **kwargs):
         _logger = logging.getLogger(__name__)
         httpreq = request.httprequest
+
         picking_id = httpreq.form.get('picking_id')
         if not picking_id:
-            return request.make_response("Missing picking_id", [('Content-Type', 'text/plain')], 400)
+            raise BadRequest("Missing picking_id")
+
         picking = request.env['stock.picking'].sudo().browse(int(picking_id))
         if not picking.exists():
-            return request.make_response("Picking not found", [('Content-Type', 'text/plain')], 404)
+            raise NotFound("Picking not found")
+
         file = httpreq.files.get('file')
         if not file:
-            return request.make_response("No file", [('Content-Type', 'text/plain')], 400)
-        filename = secure_filename(file.filename or '')
-        mimetype = file.mimetype or 'application/octet-stream'
-        # Chỉ cho 2 loại video phổ biến từ MediaRecorder
+            raise BadRequest("No file")
+
+        mimetype = (file.mimetype or 'application/octet-stream').split(';', 1)[0]
         allowed = {'video/webm', 'video/mp4', 'video/ogg'}
         if mimetype not in allowed:
-            return request.make_response("Unsupported mimetype", [('Content-Type', 'text/plain')], 415)
+            raise UnsupportedMediaType(f"Unsupported mimetype: {mimetype}")
+
         data = file.read()
-        if not data:
-            return request.make_response("Empty file", [('Content-Type', 'text/plain')], 400)
-        # Giới hạn dung lượng ~200MB để an toàn (tùy chỉnh)
-        if len(data) > 200 * 1024 * 1024:
-            return request.make_response("File too large", [('Content-Type', 'text/plain')], 413)
-        # Tạo tên file ngon nhìn cho dễ
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        size = len(data)
+
+        # Tôn trọng cấu hình giới hạn đính kèm của Odoo (mặc định 25MB)
+        max_mb = int(request.env['ir.config_parameter'].sudo().get_param('ir_attachment.max_size', '25') or '25')
+        max_bytes = max_mb * 1024 * 1024
+        if size > max_bytes:
+            raise RequestEntityTooLarge(f"File too large: {size} > {max_bytes} bytes (limit {max_mb}MB)")
+
+        filename = secure_filename(file.filename or '')
         if not filename:
-            ext = '.webm' if mimetype == 'video/webm' else '.mp4'
-            filename = f"{picking.name}_PACK_{ts}{ext}"
-        # Lưu attachment
-        Attachment = request.env['ir.attachment'].sudo()
-        att = Attachment.create({
+            ext = '.webm' if mimetype == 'video/webm' else ('.mp4' if mimetype == 'video/mp4' else '.ogg')
+            filename = f"{picking.name}_PACK_{request.env.cr.dbname}.webm".replace('/', '_')
+
+        att = request.env['ir.attachment'].sudo().create({
             'name': filename,
-            'datas': b64encode(data),
+            'datas': base64.b64encode(data).decode(),  # đảm bảo là str
             'mimetype': mimetype,
             'res_model': 'stock.picking',
             'res_id': picking.id,
-            'type': 'binary',
+            # 'public': False,  # tuỳ nhu cầu
         })
-        _logger.info(f"[VIDEO] Saved attachment {att.id} for picking {picking.name}")
-        return request.make_response("OK", [('Content-Type', 'text/plain')], 200)
-
+        _logger.info(f"[VIDEO] Saved attachment {att.id} for picking {picking.name} ({size} bytes, {mimetype})")
+        return Response("OK", status=200, content_type='text/plain; charset=utf-8')
 

@@ -217,8 +217,18 @@ async function startRecording() {
   try {
     statusText.textContent = 'Đang xin quyền camera...';
     const constraints = {
-      video: { facingMode: { ideal: 'environment' } }, // ưu tiên camera sau trên mobile
-      audio: true
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 640, max: 1280 },
+        height: { ideal: 360, max: 720 },
+        frameRate: { ideal: 20, max: 24 },
+      },
+      audio: { echoCancellation: true, noiseSuppression: true }
+    };
+    const mrOpts = {
+      mimeType,                    // 'video/webm;codecs=vp8,opus' là ổn
+      videoBitsPerSecond: 900_000, // ~0.9 Mbps
+      audioBitsPerSecond: 64_000,
     };
 
     // xin cả audio; nếu bị chặn audio thì fallback video-only
@@ -239,7 +249,9 @@ async function startRecording() {
     else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mimeType = 'video/webm;codecs=vp8,opus';
     else if (MediaRecorder.isTypeSupported('video/webm')) mimeType = 'video/webm';
 
-    mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
+    // mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
+    mediaRecorder = new MediaRecorder(mediaStream, mrOpts);
+
 
     recordedChunks = [];
     mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
@@ -289,12 +301,17 @@ async function stopRecording(auto = false) {
     try { mediaRecorder.stop(); } catch (e) { /* no-op */ }
   }
 }
-
 async function uploadRecording() {
   if (!recordedChunks.length) return;
-  const blob = new Blob(recordedChunks, { type: recordedChunks[0].type || 'video/webm' });
 
+  const blob = new Blob(recordedChunks, { type: recordedChunks[0].type || 'video/webm' });
   const fileName = `PACK_${pickingId}_${Date.now()}.webm`;
+
+  // gợi ý: cảnh báo sớm nếu file quá to (~25MB)
+  if (blob.size > 24 * 1024 * 1024) {
+    console.warn('[REC] blob too big ~', (blob.size / 1024 / 1024).toFixed(1), 'MB');
+  }
+
   const formData = new FormData();
   formData.append('file', blob, fileName);
   formData.append('picking_id', String(pickingId));
@@ -303,13 +320,20 @@ async function uploadRecording() {
     const resp = await fetch('/pack_scan/upload_video', {
       method: 'POST',
       body: formData,
-      // Không cần headers Content-Type (FormData tự set)
-      // csrf=False trên route server đã cho phép
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
     });
+
+    const txt = await resp.text().catch(() => '');
     if (!resp.ok) {
-      const txt = await resp.text();
-      console.error('[REC] upload fail:', txt);
-      alert('Tải video lên thất bại: ' + txt);
+      console.error('[REC] upload fail:', resp.status, txt);
+      if (resp.status === 413) {
+        alert('Video quá lớn (bị máy chủ chặn 413). Hãy quay ngắn hơn hoặc hạ chất lượng.');
+      } else {
+        alert(`Tải video lên thất bại (${resp.status}). ${txt || ''}`);
+      }
+    } else {
+      console.info('[REC] upload ok');
     }
   } catch (e) {
     console.error('[REC] upload error:', e);
