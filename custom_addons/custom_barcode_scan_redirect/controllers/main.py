@@ -35,18 +35,6 @@ class CustomBarcodeScanController(http.Controller):
             _logger.info(picking.picking_type_id.read()[0])
 
             
-            # if  picking.state == 'done': 
-            #     return {
-            #         'type': 'ir.actions.client',
-            #         'tag': 'display_notification',
-            #         'params': {
-            #             'message': f"✅ Phiếu {picking.name} đã hoàn tất!",
-            #             'type': 'info',
-            #             'sticky': False,
-            #         }
-            #     }
-            
-            
             next_picking = Picking.search([
                 ('group_id', '=', picking.group_id.id),
                 ('id', '!=', picking.id),
@@ -56,12 +44,6 @@ class CustomBarcodeScanController(http.Controller):
             
             
             if next_picking:
-                # return {
-                #     'type': 'ir.actions.act_url',
-                #     'url': f"/custom_barcode_scan/pack_view/{next_picking.id}",
-                #     'target': 'self',
-                # }
-                
                 if next_picking.picking_type_id.code == 'outgoing':
                     return {
                         'type': 'ir.actions.client',
@@ -210,10 +192,6 @@ class CustomBarcodeScanController(http.Controller):
                     total_done = sum(l.qty_done for l in move.move_line_ids)
                     remain_qty = max(0, move.product_uom_qty - total_done)
                     
-                    _logger.info(f"[SCAN] 📦 Product: {move.product_id.display_name}")
-                    _logger.info(f"[SCAN] 🆔 line_id: {ml.id}, total_done: {total_done}, required: {move.product_uom_qty}")
-                    _logger.info(f"[SCAN] ➕ delta: {delta}, remain_qty: {remain_qty}")
-                    _logger.info(f"[SCAN] ➕ curren_quantity: {current_qty}")
 
                     if delta > 0 and remain_qty > 0:
                         add_qty = min(delta, remain_qty)
@@ -230,8 +208,7 @@ class CustomBarcodeScanController(http.Controller):
                         break
                     elif delta < 0 and total_done > 0:
                         reduce_qty = min(abs(delta), current_qty)
-                        # new_qty = current_qty - reduce_qty
-                        # new_qty = total_done  -1
+
                         new_qty = current_qty - reduce_qty
                         ml.write({'qty_done': new_qty})
                         new_total_done = total_done - current_qty + new_qty
