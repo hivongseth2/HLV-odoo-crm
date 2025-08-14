@@ -75,10 +75,15 @@ class GdriveOAuthController(http.Controller):
 
         # Tạo flow & redirect
         gauth.GetFlow()
-        gauth.flow.params['access_type'] = 'offline'
-        gauth.flow.params['prompt'] = 'consent'
-        auth_url = gauth.GetAuthUrl()
 
+        # CHỈ dùng tham số mới "prompt", bỏ "approval_prompt"
+        p = gauth.flow.params
+        p['access_type'] = 'offline'
+        p['prompt'] = 'consent'
+        p['include_granted_scopes'] = 'true'
+        p.pop('approval_prompt', None)   # <-- dòng quan trọng
+
+        auth_url = gauth.GetAuthUrl()
         request.session['gdrive_settings_path'] = settings_file
         return redirect(auth_url)
     
