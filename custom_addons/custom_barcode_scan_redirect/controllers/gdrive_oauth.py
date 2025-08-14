@@ -14,23 +14,28 @@ def _get_param(key, default=None):
         return default
 
 def _build_settings_yaml(client_id, client_secret, redirect_uri, scopes_line):
-    scopes = [s.strip() for s in scopes_line.split()] if scopes_line else ["https://www.googleapis.com/auth/drive.file"]
-    scopes_block = "".join([f"  - {s}\n" for s in scopes])
-    return f"""client_config_backend: settings
-    client_config:
-    client_id: {client_id}
-    client_secret: {client_secret}
-    redirect_uri: {redirect_uri}
-    oauth_scope:
-    {scopes_block}get_refresh_token: True
-    save_credentials: False
-    """
+    # chấp nhận ngăn cách bằng dấu cách hoặc dấu phẩy
+    scopes = [s.strip() for s in (scopes_line or "").replace(",", " ").split() if s.strip()]
+    if not scopes:
+        scopes = ["https://www.googleapis.com/auth/drive.file"]
+    scopes_block = "\n".join([f"  - {s}" for s in scopes])
+
+    # LƯU Ý: mỗi khối phải xuống dòng rõ ràng
+    return (
+        "client_config_backend: settings\n"
+        "client_config:\n"
+        f"  client_id: \"{client_id}\"\n"
+        f"  client_secret: \"{client_secret}\"\n"
+        f"  redirect_uri: \"{redirect_uri}\"\n"
+        "oauth_scope:\n"
+        f"{scopes_block}\n"
+        "get_refresh_token: True\n"
+        "save_credentials: False\n"
+    )
 
 class GdriveOAuthController(http.Controller):
 
-    @http.route(
-        ['/gdrive/oauth2/start'],
-        type='http', auth='user', website=True, csrf=False)  # <- website=True
+    @http.route('/gdrive/oauth2/start', type='http', auth='user', website=True, csrf=False)
     def start(self, **kw):
         cid   = _get_param('gdrive.oauth_client_id')
         csec  = _get_param('gdrive.oauth_client_secret')
@@ -39,13 +44,28 @@ class GdriveOAuthController(http.Controller):
         if not (cid and csec and redir):
             return Response("Missing OAuth config (client_id/secret/redirect_uri).", status=500)
 
+        # 1) ghi settings.yaml
         tmpdir = os.path.join(os.path.expanduser('~'), '.gdrive_oauth')
         os.makedirs(tmpdir, exist_ok=True)
         settings_file = os.path.join(tmpdir, 'settings.yaml')
         with open(settings_file, 'w', encoding='utf-8') as f:
             f.write(_build_settings_yaml(cid, csec, redir, scopes))
 
+        # 2) ÉP cấu hình 'settings' ngay trong bộ nhớ (phòng khi YAML lỗi định dạng)
         gauth = GoogleAuth(settings_file)
+        sc_list = [s.strip() for s in (scopes or "").replace(",", " ").split() if s.strip()] or \
+                  ["https://www.googleapis.com/auth/drive.file"]
+        gauth.settings['client_config_backend'] = 'settings'
+        gauth.settings['client_config'] = {
+            'client_id': cid,
+            'client_secret': csec,
+            'redirect_uri': redir,
+        }
+        gauth.settings['oauth_scope'] = sc_list
+        gauth.settings['get_refresh_token'] = True
+        gauth.settings['save_credentials'] = False
+
+        # tạo flow và redirect
         gauth.GetFlow()
         gauth.flow.params['access_type'] = 'offline'
         gauth.flow.params['prompt'] = 'consent'
@@ -53,7 +73,6 @@ class GdriveOAuthController(http.Controller):
 
         request.session['gdrive_settings_path'] = settings_file
         return redirect(auth_url)
-
     @http.route(
     ['/gdrive/oauth2/callback'],
     type='http', auth='user', website=True, csrf=False)  # <- website=True
