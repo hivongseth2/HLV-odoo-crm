@@ -4,6 +4,7 @@ from werkzeug.utils import redirect
 from werkzeug.wrappers import Response
 import os, logging
 from pydrive2.auth import GoogleAuth
+from urllib.parse import urlencode              # <-- thêm
 
 _logger = logging.getLogger(__name__)
 G_AUTH_URI   = "https://accounts.google.com/o/oauth2/auth"
@@ -15,13 +16,10 @@ def _get_param(key, default=None):
     except Exception:
         return default
 def _build_settings_yaml(client_id, client_secret, redirect_uri, scopes_line):
-    # chấp nhận ngăn cách bằng dấu cách hoặc dấu phẩy
     scopes = [s.strip() for s in (scopes_line or "").replace(",", " ").split() if s.strip()]
     if not scopes:
         scopes = ["https://www.googleapis.com/auth/drive.file"]
     scopes_block = "\n".join([f"  - {s}" for s in scopes])
-
-    # YAML đầy đủ các khóa client_config (PyDrive2 yêu cầu)
     return (
         "client_config_backend: settings\n"
         "client_config:\n"
@@ -39,7 +37,6 @@ def _build_settings_yaml(client_id, client_secret, redirect_uri, scopes_line):
 
 class GdriveOAuthController(http.Controller):
 
-
     @http.route('/gdrive/oauth2/start', type='http', auth='user', website=True, csrf=False)
     def start(self, **kw):
         cid   = _get_param('gdrive.oauth_client_id')
@@ -49,42 +46,28 @@ class GdriveOAuthController(http.Controller):
         if not (cid and csec and redir):
             return Response("Missing OAuth config (client_id/secret/redirect_uri).", status=500)
 
-        # 1) Ghi settings.yaml
+        # 1) ghi settings.yaml dự phòng (để callback dùng token_uri)
         tmpdir = os.path.join(os.path.expanduser('~'), '.gdrive_oauth')
         os.makedirs(tmpdir, exist_ok=True)
         settings_file = os.path.join(tmpdir, 'settings.yaml')
         with open(settings_file, 'w', encoding='utf-8') as f:
             f.write(_build_settings_yaml(cid, csec, redir, scopes))
+        request.session['gdrive_settings_path'] = settings_file
 
-        # 2) Ép cấu hình trong bộ nhớ (phòng YAML bị lỗi format)
-        gauth = GoogleAuth(settings_file)
+        # 2) TỰ BUILD auth URL (bỏ hẳn approval_prompt)
         scope_list = [s.strip() for s in (scopes or "").replace(",", " ").split() if s.strip()] \
                      or ["https://www.googleapis.com/auth/drive.file"]
-        gauth.settings['client_config_backend'] = 'settings'
-        gauth.settings['client_config'] = {
-            'client_id': cid,
-            'client_secret': csec,
-            'redirect_uri': redir,
-            'auth_uri': G_AUTH_URI,
-            'token_uri': G_TOKEN_URI,
-            'revoke_uri': G_REVOKE_URI,
+        params = {
+            "response_type": "code",
+            "client_id": cid,
+            "redirect_uri": redir,
+            "scope": " ".join(scope_list),
+            "access_type": "offline",
+            "prompt": "consent",
+            "include_granted_scopes": "true",
         }
-        gauth.settings['oauth_scope'] = scope_list
-        gauth.settings['get_refresh_token'] = True
-        gauth.settings['save_credentials'] = False
-
-        # Tạo flow & redirect
-        gauth.GetFlow()
-
-        # CHỈ dùng tham số mới "prompt", bỏ "approval_prompt"
-        p = gauth.flow.params
-        p['access_type'] = 'offline'
-        p['prompt'] = 'consent'
-        p['include_granted_scopes'] = 'true'
-        p.pop('approval_prompt', None)   # <-- dòng quan trọng
-
-        auth_url = gauth.GetAuthUrl()
-        request.session['gdrive_settings_path'] = settings_file
+        auth_url = f"{G_AUTH_URI}?{urlencode(params)}"
+        _logger.info("OAuth start URL: %s", auth_url)
         return redirect(auth_url)
     
     @http.route(
