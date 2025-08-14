@@ -11,7 +11,7 @@ from werkzeug.wrappers import Response
 from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType, RequestEntityTooLarge
 from ..drive_uploader import get_drive_manager   # <— thêm import này
 import os                                  # <-- thêm dòng này
-
+from tempfile import NamedTemporaryFile   
 class CustomBarcodeScanController(http.Controller):
 
     @http.route(['/custom_barcode_scan/ui'], type='http', auth='user')
