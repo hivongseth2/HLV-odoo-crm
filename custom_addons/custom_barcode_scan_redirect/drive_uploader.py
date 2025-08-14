@@ -1,4 +1,5 @@
-import os, json, logging
+# -*- coding: utf-8 -*-
+import os, logging
 from datetime import datetime
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
@@ -10,20 +11,41 @@ _logger = logging.getLogger(__name__)
 OAUTH_DIR = os.path.join(os.path.expanduser('~'), '.gdrive_oauth')
 SETTINGS_FILE = os.path.join(OAUTH_DIR, 'settings_runtime.yaml')
 
+# Endpoint v2
+G_AUTH_URI   = "https://accounts.google.com/o/oauth2/v2/auth"
+G_TOKEN_URI  = "https://oauth2.googleapis.com/token"
+G_REVOKE_URI = "https://oauth2.googleapis.com/revoke"
+
 def _get_param(key, default=None):
     try:
         return request.env['ir.config_parameter'].sudo().get_param(key, default)
     except Exception:
         return default
 
-def _write_settings(scopes_line: str):
+def _write_settings():
+    cid   = _get_param('gdrive.oauth_client_id')
+    csec  = _get_param('gdrive.oauth_client_secret')
+    redir = _get_param('gdrive.oauth_redirect_uri')
+    scopes_line = _get_param('gdrive.oauth_scopes', 'https://www.googleapis.com/auth/drive.file')
+    scopes = [s.strip() for s in (scopes_line or '').replace(',', ' ').split() if s.strip()] \
+             or ['https://www.googleapis.com/auth/drive.file']
+
     os.makedirs(OAUTH_DIR, exist_ok=True)
-    scopes = [s.strip() for s in (scopes_line or "").split()] or ["https://www.googleapis.com/auth/drive.file"]
-    scopes_block = "".join([f"  - {s}\n" for s in scopes])
-    content = f"""client_config_backend: settings
-oauth_scope:
-{scopes_block}save_credentials: False
-"""
+    scopes_block = '\n'.join([f'  - {s}' for s in scopes])
+    content = (
+        "client_config_backend: settings\n"
+        "client_config:\n"
+        f"  client_id: \"{cid}\"\n"
+        f"  client_secret: \"{csec}\"\n"
+        f"  redirect_uri: \"{redir}\"\n"
+        f"  auth_uri: \"{G_AUTH_URI}\"\n"
+        f"  token_uri: \"{G_TOKEN_URI}\"\n"
+        f"  revoke_uri: \"{G_REVOKE_URI}\"\n"
+        "oauth_scope:\n"
+        f"{scopes_block}\n"
+        "get_refresh_token: True\n"
+        "save_credentials: False\n"
+    )
     with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
         f.write(content)
 
@@ -40,16 +62,14 @@ class DriveManager:
         if not creds_json:
             raise RuntimeError("Chưa kết nối Google Drive. Vào /gdrive/oauth2/start để cấp quyền.")
 
-        scopes = _get_param('gdrive.oauth_scopes', 'https://www.googleapis.com/auth/drive.file')
-        _write_settings(scopes)
-
+        _write_settings()  # đảm bảo file settings đầy đủ
         gauth = GoogleAuth(SETTINGS_FILE)
         gauth.credentials = OAuth2Credentials.from_json(creds_json)
+
         try:
             if gauth.access_token_expired:
                 gauth.Refresh()
         except Exception as e:
-            # refresh token có thể hết hạn/ bị revoke → xoá để user kết nối lại
             _logger.warning("Refresh token failed: %s", e)
             request.env['ir.config_parameter'].sudo().set_param('gdrive.user_credentials_json', '')
             raise RuntimeError("Token hết hạn hoặc bị thu hồi. Vào /gdrive/oauth2/start để kết nối lại.")
@@ -57,20 +77,20 @@ class DriveManager:
         self.drive = GoogleDrive(gauth)
         self.root_folder_name = _get_param('gdrive.root_folder', 'KHO_HCM')
         self.anyone_link = str(_get_param('gdrive.anyone_link', 'false')).lower() == 'true'
-        self.root_folder_id = self.get_or_create_folder(self.root_folder_name, parent_id=None)
-        _logger.info("✅ Google Drive OAuth ready. Root: %s (id=%s)", self.root_folder_name, self.root_folder_id)
+        self.root_folder_id = self.get_or_create_folder(self.root_folder_name)
 
-    def _listfile(self, query):
-        # My Drive, không dùng supportsAllDrives
-        return self.drive.ListFile({'q': query}).GetList()
+        _logger.info("✅ Google Drive OAuth ready. Root=%s (id=%s)", self.root_folder_name, self.root_folder_id)
+
+    def _list(self, q):
+        return self.drive.ListFile({'q': q}).GetList()
 
     def get_or_create_folder(self, name, parent_id=None):
         q = "mimeType='application/vnd.google-apps.folder' and trashed=false and title='%s'" % name.replace("'", "\\'")
         if parent_id:
             q += f" and '{parent_id}' in parents"
-        items = self._listfile(q)
-        if items:
-            return items[0]['id']
+        found = self._list(q)
+        if found:
+            return found[0]['id']
         meta = {'title': name, 'mimeType': 'application/vnd.google-apps.folder'}
         if parent_id:
             meta['parents'] = [{'id': parent_id}]
@@ -88,8 +108,7 @@ class DriveManager:
         try:
             parent_id = self._ensure_path()
             if not title:
-                base = os.path.splitext(os.path.basename(local_path))[0]
-                title = f"{base}.webm" if mimetype == 'video/webm' else os.path.basename(local_path)
+                title = os.path.basename(local_path)
 
             gfile = self.drive.CreateFile({'title': title, 'parents': [{'id': parent_id}]})
             if mimetype:
@@ -117,7 +136,6 @@ class DriveManager:
             _logger.error("❌ Drive upload failed: %s", e, exc_info=True)
             return False, None, None
 
-# Singleton
 _manager = None
 def get_drive_manager():
     global _manager
