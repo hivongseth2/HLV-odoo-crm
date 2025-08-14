@@ -154,7 +154,9 @@ class SaleApiImportWizard(models.TransientModel):
                     description = line.get("Description") or product_code
                     qty = float(line.get("Amount", 1))
                     price_unit = float(line.get("Price", 0))
-                    discount_percent = float(line.get("DiscountPercent", 0))
+                    # discount_percent = float(line.get("DiscountPercent", 0))
+                    discount_percent = float(line.get("DiscountPercent") or 0)
+
                     uom_name = (line.get("UnitIDText") or "Cái").strip()
 
                     if "+" in product_code:
