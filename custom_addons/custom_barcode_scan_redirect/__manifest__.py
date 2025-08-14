@@ -21,5 +21,7 @@
             "custom_barcode_scan_redirect/static/src/js/scan_pack.js",
              "custom_barcode_scan_redirect/static/src/js/scan_ui.js"
         ]
-    }
+    },
+    'external_dependencies': {'python': ['pydrive2']},
+
 }

@@ -9,6 +9,7 @@ import base64
 from werkzeug.utils import secure_filename
 from werkzeug.wrappers import Response
 from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType, RequestEntityTooLarge
+from ..drive_uploader import get_drive_manager   # <— thêm import này
 
 class CustomBarcodeScanController(http.Controller):
 
@@ -256,52 +257,54 @@ class CustomBarcodeScanController(http.Controller):
             return {"success": True, "message": f"✅ Phiếu {picking.name} đã được xác nhận!"}
         except Exception as e:
             return {"error": str(e)}
-        
-     
+    
+    ALLOWED_MIME = {'video/webm', 'video/mp4', 'video/ogg'}
+    MAX_UPLOAD_MB = 200
+
     @http.route('/pack_scan/upload_video', type='http', auth='user', methods=['POST'], csrf=False)
     def upload_pack_video(self, **kwargs):
         _logger = logging.getLogger(__name__)
         httpreq = request.httprequest
 
         picking_id = httpreq.form.get('picking_id')
-        if not picking_id:
-            raise BadRequest("Missing picking_id")
-
+        if not picking_id: raise BadRequest("Missing picking_id")
         picking = request.env['stock.picking'].sudo().browse(int(picking_id))
-        if not picking.exists():
-            raise NotFound("Picking not found")
+        if not picking.exists(): raise NotFound("Picking not found")
 
         file = httpreq.files.get('file')
-        if not file:
-            raise BadRequest("No file")
+        if not file: raise BadRequest("No file")
 
         mimetype = (file.mimetype or 'application/octet-stream').split(';', 1)[0]
-        allowed = {'video/webm', 'video/mp4', 'video/ogg'}
-        if mimetype not in allowed:
+        if mimetype not in ALLOWED_MIME:
             raise UnsupportedMediaType(f"Unsupported mimetype: {mimetype}")
 
         data = file.read()
-        size = len(data)
+        size_mb = len(data) / 1024 / 1024
+        if size_mb > MAX_UPLOAD_MB:
+            raise RequestEntityTooLarge(f"File too large: {size_mb:.1f}MB > {MAX_UPLOAD_MB}MB")
 
-        # Tôn trọng cấu hình giới hạn đính kèm của Odoo (mặc định 25MB)
-        max_mb = int(request.env['ir.config_parameter'].sudo().get_param('ir_attachment.max_size', '25') or '25')
-        max_bytes = max_mb * 1024 * 1024
-        if size > max_bytes:
-            raise RequestEntityTooLarge(f"File too large: {size} > {max_bytes} bytes (limit {max_mb}MB)")
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_name = secure_filename(file.filename or f"{picking.name}_PACK_{ts}.webm").replace('__', '_')
+        ext = os.path.splitext(safe_name)[1] or ('.webm' if mimetype == 'video/webm' else '')
 
-        filename = secure_filename(file.filename or '')
-        if not filename:
-            ext = '.webm' if mimetype == 'video/webm' else ('.mp4' if mimetype == 'video/mp4' else '.ogg')
-            filename = f"{picking.name}_PACK_{request.env.cr.dbname}.webm".replace('/', '_')
+        # Lưu tạm & upload
+        with NamedTemporaryFile(prefix='pack_', suffix=ext, delete=False) as tmp:
+            tmp.write(data)
+            tmp_path = tmp.name
 
-        att = request.env['ir.attachment'].sudo().create({
-            'name': filename,
-            'datas': base64.b64encode(data).decode(),  # đảm bảo là str
-            'mimetype': mimetype,
-            'res_model': 'stock.picking',
-            'res_id': picking.id,
-            # 'public': False,  # tuỳ nhu cầu
-        })
-        _logger.info(f"[VIDEO] Saved attachment {att.id} for picking {picking.name} ({size} bytes, {mimetype})")
+        try:
+            title = f"{picking.name}_PACK_{ts}{ext}".replace('/', '_')
+            ok, file_id, web_link = get_drive_manager().upload_file(tmp_path, title=title, mimetype=mimetype)
+            if not ok:
+                return Response("UPLOAD_FAILED", status=500, content_type='text/plain; charset=utf-8')
+        finally:
+            try: os.remove(tmp_path)
+            except: pass
+
+        # Ghi link vào chatter
+        try:
+            picking.message_post(body=f"📹 Video đóng gói: <a href='{web_link}' target='_blank'>{web_link}</a>")
+        except Exception:
+            pass
+
         return Response("OK", status=200, content_type='text/plain; charset=utf-8')
-
