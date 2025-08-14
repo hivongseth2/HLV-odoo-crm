@@ -202,39 +202,51 @@ async function startRecording() {
   const statusText = document.getElementById('recText');
   const preview = document.getElementById('recPreview');
 
+  // Nếu thiếu phần tử UI thì bỏ qua để không crash
+  if (!statusText || !preview) {
+    console.warn('[REC] Missing UI elements (recStatus/recText/recPreview)');
+    return;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    statusText.textContent = 'Trình duyệt không hỗ trợ camera.';
+    console.error('[REC] mediaDevices/getUserMedia unsupported');
+    return;
+  }
+
   try {
     statusText.textContent = 'Đang xin quyền camera...';
-    mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(async (err) => {
-      // fallback: không audio cho dễ cấp quyền
-      return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    });
+    const constraints = {
+      video: { facingMode: { ideal: 'environment' } }, // ưu tiên camera sau trên mobile
+      audio: true
+    };
+
+    // xin cả audio; nếu bị chặn audio thì fallback video-only
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (errAudio) {
+      console.warn('[REC] audio denied, fallback video-only:', errAudio?.name, errAudio?.message);
+      mediaStream = await navigator.mediaDevices.getUserMedia({ video: constraints.video, audio: false });
+    }
 
     preview.srcObject = mediaStream;
+    // Một số trình duyệt cần gọi play() sau khi gán srcObject
+    try { await preview.play(); } catch (e) { /* ignore */ }
 
-    // Chọn mimetype tốt nhất mà browser hỗ trợ
+    // chọn mimetype tốt nhất
     let mimeType = '';
-    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-      mimeType = 'video/webm;codecs=vp9,opus';
-    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-      mimeType = 'video/webm;codecs=vp8,opus';
-    } else if (MediaRecorder.isTypeSupported('video/webm')) {
-      mimeType = 'video/webm';
-    } else {
-      // fallback hiếm gặp
-      mimeType = '';
-    }
+    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) mimeType = 'video/webm;codecs=vp9,opus';
+    else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mimeType = 'video/webm;codecs=vp8,opus';
+    else if (MediaRecorder.isTypeSupported('video/webm')) mimeType = 'video/webm';
 
     mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
 
     recordedChunks = [];
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) recordedChunks.push(e.data);
-    };
+    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
     mediaRecorder.onstart = () => {
       isRecording = true;
       statusText.textContent = 'Đang ghi hình...';
-      statusDot.classList.add('on');
-      // auto stop sau MAX_DURATION_MS
+      statusDot && statusDot.classList.add('on');
       stopTimer = setTimeout(() => stopRecording(true), MAX_DURATION_MS);
     };
     mediaRecorder.onstop = async () => {
@@ -243,19 +255,32 @@ async function startRecording() {
       statusText.textContent = 'Đang tải video lên...';
       await uploadRecording();
       statusText.textContent = 'Đã lưu video.';
-      statusDot.classList.remove('on');
-      // Tắt camera để giải phóng
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(t => t.stop());
-        mediaStream = null;
-      }
+      statusDot && statusDot.classList.remove('on');
+      if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
     };
 
-    // Bắt đầu ghi, gom chunk mỗi 10s để mượt
-    mediaRecorder.start(10_000);
+    mediaRecorder.start(10_000); // chunk mỗi 10s
   } catch (err) {
-    statusText.textContent = 'Không thể mở camera.';
-    console.error('[REC] start error:', err);
+    const name = err?.name || 'Error';
+    const msg = err?.message || String(err);
+    console.error('[REC] start error:', name, msg, err);
+
+    // Thông điệp gợi ý nguyên nhân
+    let hint = '';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      hint = 'Truy cập camera bị từ chối. Hãy nhấn “Cho phép” hoặc mở lại quyền camera trong trình duyệt.';
+    } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      hint = 'Không tìm thấy thiết bị camera.';
+    } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+      hint = 'Camera đang bận hoặc bị hệ thống chặn.';
+    } else if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+      hint = 'Thiết lập camera không phù hợp.';
+    } else if (name === 'SecurityError') {
+      hint = 'Trang không an toàn hoặc bị chính sách chặn.';
+    } else if (name === 'TypeError') {
+      hint = 'Thiếu tham số khi gọi getUserMedia.';
+    }
+    statusText.textContent = 'Không thể mở camera. ' + hint;
   }
 }
 
