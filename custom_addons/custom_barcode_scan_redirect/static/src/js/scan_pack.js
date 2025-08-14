@@ -118,6 +118,7 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   setFocus();
+  diag();
   setTimeout(startRecording, 400);
 });
 
@@ -129,6 +130,8 @@ let isRecording = false;
 const MAX_DURATION_MS = 10 * 60 * 1000; // 10 phút
 let stopTimer = null;
 
+
+
 async function startRecording() {
   const statusDot = document.getElementById('recStatus');
   const statusText = document.getElementById('recText');
@@ -137,72 +140,95 @@ async function startRecording() {
   if (!statusText || !preview) { console.warn('[REC] Missing UI elements'); return; }
   if (mediaRecorder) return;
 
+  // Không an toàn => chặn
+  if (!window.isSecureContext) {
+    statusText.textContent = 'Trang không chạy HTTPS nên bị chặn camera.';
+    return;
+  }
   if (!navigator.mediaDevices?.getUserMedia) {
-    statusText.textContent = 'Trình duyệt không hỗ trợ camera.'; return;
+    statusText.textContent = 'Trình duyệt không hỗ trợ camera.';
+    return;
   }
 
-  try {
-    statusText.textContent = 'Đang xin quyền camera...';
-    const constraints = {
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 640, max: 1280 }, height: { ideal: 360, max: 720 }, frameRate: { ideal: 20, max: 24 } },
-      audio: { echoCancellation: true, noiseSuppression: true }
-    };
+  // Thử lần lượt: (1) video+audio (2) video-only (3) video:true (4) camera trước
+  const trials = [
+    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 640, max: 1280 }, height: { ideal: 360, max: 720 }, frameRate: { ideal: 20, max: 24 } }, audio: { echoCancellation: true, noiseSuppression: true } },
+    { video: { facingMode: { ideal: 'environment' } }, audio: false },
+    { video: true, audio: false },
+    { video: { facingMode: 'user' }, audio: false },
+  ];
 
+  statusText.textContent = 'Đang xin quyền camera...';
+
+  let lastErr = null;
+  for (const c of trials) {
     try {
-      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-    } catch (errAudio) {
-      console.warn('[REC] audio denied, fallback video-only:', errAudio?.name, errAudio?.message);
-      mediaStream = await navigator.mediaDevices.getUserMedia({ video: constraints.video, audio: false });
+      mediaStream = await navigator.mediaDevices.getUserMedia(c);
+      break; // OK
+    } catch (e) {
+      lastErr = e;
+      console.warn('[REC] getUserMedia failed with', c, e?.name, e?.message);
+      continue;
     }
-
-    preview.srcObject = mediaStream;
-    try { await preview.play(); } catch { }
-
-    let mimeType = '';
-    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) mimeType = 'video/webm;codecs=vp9,opus';
-    else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mimeType = 'video/webm;codecs=vp8,opus';
-    else if (MediaRecorder.isTypeSupported('video/webm')) mimeType = 'video/webm';
-
-    const mrOpts = mimeType ? {
-      mimeType,
-      videoBitsPerSecond: 900_000,
-      audioBitsPerSecond: 64_000,
-    } : {};
-
-    mediaRecorder = new MediaRecorder(mediaStream, mrOpts);
-    recordedChunks = [];
-
-    mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
-    mediaRecorder.onstart = () => {
-      isRecording = true;
-      statusText.textContent = 'Đang ghi hình...';
-      statusDot && statusDot.classList.add('on');
-      stopTimer = setTimeout(() => stopRecording(), MAX_DURATION_MS);
-    };
-    mediaRecorder.onstop = async () => {
-      isRecording = false;
-      clearTimeout(stopTimer);
-      statusText.textContent = 'Đang tải video lên...';
-      await uploadRecording();
-      statusText.textContent = 'Đã lưu video.';
-      statusDot && statusDot.classList.remove('on');
-      if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
-    };
-
-    mediaRecorder.start(10_000); // chunk mỗi 10s
-  } catch (err) {
-    const name = err?.name || 'Error';
-    const msg = err?.message || String(err);
-    console.error('[REC] start error:', name, msg, err);
-    let hint = '';
-    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') hint = 'Hãy bật quyền camera.';
-    else if (name === 'NotFoundError') hint = 'Không tìm thấy thiết bị camera.';
-    else if (name === 'NotReadableError') hint = 'Camera đang bận.';
-    else if (name === 'OverconstrainedError') hint = 'Thiết lập camera không phù hợp.';
-    else if (name === 'SecurityError') hint = 'Trang không an toàn/chính sách chặn.';
-    document.getElementById('recText').textContent = 'Không thể mở camera. ' + hint;
   }
+
+  if (!mediaStream) {
+    const name = lastErr?.name || 'Error';
+    let hint = 'Không thể mở camera.';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      hint = 'Truy cập bị từ chối. Nhấn vào icon ổ khóa → Cho phép Camera rồi tải lại trang.';
+    } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      hint = 'Không tìm thấy thiết bị camera.';
+    } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+      hint = 'Camera đang bận app khác. Hãy đóng app camera/zalo/meet.';
+    } else if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+      hint = 'Thiết lập camera không phù hợp. Đã thử fallback nhưng vẫn lỗi.';
+    } else if (name === 'SecurityError') {
+      hint = 'Chính sách bảo mật chặn camera (HTTPS/iframe).';
+    }
+    statusText.textContent = hint + ' (Lỗi: ' + name + ')';
+
+    // Hiện nút thử lại sau khi user đã cho phép thủ công
+    attachRetryButton();
+    return;
+  }
+
+  preview.srcObject = mediaStream;
+  try { await preview.play(); } catch { }
+
+  // Chọn mime
+  let mimeType = '';
+  if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) mimeType = 'video/webm;codecs=vp9,opus';
+  else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mimeType = 'video/webm;codecs=vp8,opus';
+  else if (MediaRecorder.isTypeSupported('video/webm')) mimeType = 'video/webm';
+
+  const mrOpts = mimeType ? { mimeType, videoBitsPerSecond: 900_000, audioBitsPerSecond: 64_000 } : {};
+  mediaRecorder = new MediaRecorder(mediaStream, mrOpts);
+  recordedChunks = [];
+
+  mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+  mediaRecorder.onstart = () => {
+    isRecording = true;
+    statusText.textContent = 'Đang ghi hình...';
+    statusDot && statusDot.classList.add('on');
+    stopTimer = setTimeout(() => stopRecording(), MAX_DURATION_MS);
+  };
+  mediaRecorder.onstop = async () => {
+    isRecording = false;
+    clearTimeout(stopTimer);
+    statusText.textContent = 'Đang tải video lên...';
+    await uploadRecording();
+    statusText.textContent = 'Đã lưu video.';
+    statusDot && statusDot.classList.remove('on');
+    if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  };
+
+  mediaRecorder.start(10_000);
 }
+
+
+
+
 
 async function stopRecording() {
   if (mediaRecorder && isRecording) {
@@ -245,6 +271,31 @@ async function uploadRecording() {
     recordedChunks = [];
   }
 }
+
+function attachRetryButton() {
+  if (document.getElementById('recRetryBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'recRetryBtn';
+  btn.textContent = '🔁 Thử bật camera lại';
+  btn.style.marginLeft = '8px';
+  btn.addEventListener('click', startRecording);
+  const recText = document.getElementById('recText');
+  recText?.parentNode?.insertBefore(btn, recText.nextSibling);
+}
+
+async function diag() {
+  const statusText = document.getElementById('recText');
+  const ua = navigator.userAgent;
+  const secure = window.isSecureContext ? 'HTTPS' : 'NOT-HTTPS';
+  let cams = 'unknown';
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    cams = devs.filter(d => d.kind === 'videoinput').length + ' camera(s)';
+  } catch { }
+  console.log('[REC] DIAG =>', { secure, ua, cams });
+  statusText && (statusText.title = `Diag: ${secure} | ${cams}`);
+}
+
 
 // stop khi rời trang
 window.addEventListener('beforeunload', () => { if (isRecording) stopRecording(); });
