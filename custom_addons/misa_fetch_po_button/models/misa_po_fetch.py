@@ -110,14 +110,15 @@ class MisaPOFetch(models.TransientModel):
                     continue
 
                 lines = detail_res.json().get("Data", {}).get("PageData", [])
-                stock_code = lines[0].get("stock_code", "").strip().upper() if lines else None
+                # stock_code = lines[0].get("stock_code", "").strip().upper() if lines else None
+                stock_code = (
+                    lines[0].get("stock_code", "").strip().replace(" ", "").upper()
+                    if lines else None
+)
                 if stock_code not in stock_mapping:
                     _logger.warning("📛 Kho %s không nằm trong mapping, bỏ PO %s", stock_code, refno)
                     continue
-                # has_hcm = any(line.get("stock_code", "").strip().upper() == "HCM" for line in lines)
-                # if not has_hcm:
-                #     _logger.info("❌ Bỏ qua đơn hàng %s vì không có dòng nào thuộc kho HCM", refid)
-                #     continue
+
                 location_name = stock_mapping[stock_code]
                 location = self.env['stock.location'].search([
                     ('complete_name', '=', location_name)
