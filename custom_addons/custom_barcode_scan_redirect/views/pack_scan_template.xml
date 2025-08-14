@@ -53,6 +53,14 @@
 
 
       </div>
+      <div class="recording-pane">
+        <div class="rec-header">
+          <span id="recStatus" class="rec-dot">●</span>
+          <span id="recText">Đang chuẩn bị camera...</span>
+        </div>
+        <video id="recPreview" autoplay muted playsinline style="width: 320px; height: 180px; border-radius: 8px; background:#000;"></video>
+      </div>
+
     </t>
   </template>
 </odoo>

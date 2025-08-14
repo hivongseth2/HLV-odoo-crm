@@ -34,7 +34,7 @@ document.addEventListener("DOMContentLoaded", function () {
   function updateQty(barcode, delta = 1, lineId = null) {
     if (!lineId) {
       lineId = findLineToUpdate(barcode);
-    } 
+    }
     fetch("/pack_scan/scan_item", {
       method: "POST",
       headers: {
@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", function () {
           picking_id: pickingId,
           barcode,
           delta,
-          line_id: lineId  
+          line_id: lineId
 
         }
       })
@@ -104,22 +104,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
   input.addEventListener("keypress", function (e) {
-  if (e.key === "Enter") {
-    const val = input.value.trim();
-    if (!val) return;
+    if (e.key === "Enter") {
+      const val = input.value.trim();
+      if (!val) return;
 
-    if (val === originPickName) {
-      completeBtn.click();
+      if (val === originPickName) {
+        completeBtn.click();
 
+        input.value = "";
+        return;
+      }
+
+      // Nếu không phải mã phiếu → quét sản phẩm như thường
+      updateQty(val);
       input.value = "";
-      return;
     }
-
-    // Nếu không phải mã phiếu → quét sản phẩm như thường
-    updateQty(val);
-    input.value = "";
-  }
-});
+  });
 
   list.querySelectorAll(".btn-plus").forEach(btn =>
     btn.addEventListener("click", () =>
@@ -188,4 +188,146 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   setFocus();
+});
+// ====== Recording module ======
+let mediaStream = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecording = false;
+const MAX_DURATION_MS = 10 * 60 * 1000; // 10 phút (tuỳ chỉnh)
+let stopTimer = null;
+
+async function startRecording() {
+  const statusDot = document.getElementById('recStatus');
+  const statusText = document.getElementById('recText');
+  const preview = document.getElementById('recPreview');
+
+  try {
+    statusText.textContent = 'Đang xin quyền camera...';
+    mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(async (err) => {
+      // fallback: không audio cho dễ cấp quyền
+      return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    });
+
+    preview.srcObject = mediaStream;
+
+    // Chọn mimetype tốt nhất mà browser hỗ trợ
+    let mimeType = '';
+    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+      mimeType = 'video/webm;codecs=vp9,opus';
+    } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+      mimeType = 'video/webm;codecs=vp8,opus';
+    } else if (MediaRecorder.isTypeSupported('video/webm')) {
+      mimeType = 'video/webm';
+    } else {
+      // fallback hiếm gặp
+      mimeType = '';
+    }
+
+    mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined);
+
+    recordedChunks = [];
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+    };
+    mediaRecorder.onstart = () => {
+      isRecording = true;
+      statusText.textContent = 'Đang ghi hình...';
+      statusDot.classList.add('on');
+      // auto stop sau MAX_DURATION_MS
+      stopTimer = setTimeout(() => stopRecording(true), MAX_DURATION_MS);
+    };
+    mediaRecorder.onstop = async () => {
+      isRecording = false;
+      clearTimeout(stopTimer);
+      statusText.textContent = 'Đang tải video lên...';
+      await uploadRecording();
+      statusText.textContent = 'Đã lưu video.';
+      statusDot.classList.remove('on');
+      // Tắt camera để giải phóng
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+    };
+
+    // Bắt đầu ghi, gom chunk mỗi 10s để mượt
+    mediaRecorder.start(10_000);
+  } catch (err) {
+    statusText.textContent = 'Không thể mở camera.';
+    console.error('[REC] start error:', err);
+  }
+}
+
+async function stopRecording(auto = false) {
+  if (mediaRecorder && isRecording) {
+    try { mediaRecorder.stop(); } catch (e) { /* no-op */ }
+  }
+}
+
+async function uploadRecording() {
+  if (!recordedChunks.length) return;
+  const blob = new Blob(recordedChunks, { type: recordedChunks[0].type || 'video/webm' });
+
+  const fileName = `PACK_${pickingId}_${Date.now()}.webm`;
+  const formData = new FormData();
+  formData.append('file', blob, fileName);
+  formData.append('picking_id', String(pickingId));
+
+  try {
+    const resp = await fetch('/pack_scan/upload_video', {
+      method: 'POST',
+      body: formData,
+      // Không cần headers Content-Type (FormData tự set)
+      // csrf=False trên route server đã cho phép
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.error('[REC] upload fail:', txt);
+      alert('Tải video lên thất bại: ' + txt);
+    }
+  } catch (e) {
+    console.error('[REC] upload error:', e);
+    alert('Không thể tải video lên. Vui lòng kiểm tra mạng.');
+  } finally {
+    recordedChunks = [];
+  }
+}
+
+// Auto-stop khi rời trang
+window.addEventListener('beforeunload', (e) => {
+  if (isRecording) {
+    // cố gắng stop đồng bộ (trình duyệt có thể không đợi upload xong)
+    stopRecording(true);
+  }
+});
+
+// ====== Gọi khi trang tải xong ======
+document.addEventListener('DOMContentLoaded', () => {
+  startRecording();
+});
+
+
+
+document.getElementById('complete_pack_btn').addEventListener('click', async () => {
+  try {
+    const resp = await fetch('/pack_scan/complete_picking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ picking_id: pickingId })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      // dừng ghi và upload video
+      await stopRecording(false);
+      alert(data.message || 'Đã hoàn tất!');
+      // có thể redirect nếu muốn
+      // window.location.href = `/web#id=${pickingId}&model=stock.picking&view_type=form`;
+    } else {
+      alert(data.error || 'Không thể hoàn tất.');
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Lỗi mạng khi hoàn tất phiếu.');
+  }
 });

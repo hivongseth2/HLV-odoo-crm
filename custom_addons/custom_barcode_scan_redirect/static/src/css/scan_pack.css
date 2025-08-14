@@ -83,7 +83,29 @@
   border-radius: 10px;
   cursor: pointer;
 }
+.rec-dot {
+  color: #aaa;
+  margin-right: 6px;
+}
 
+.rec-dot.on {
+  color: #e53935;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: .4
+  }
+
+  50% {
+    opacity: 1
+  }
+
+  100% {
+    opacity: .4
+  }
+}
 .product-item.completed {
   background-color: #d4edda !important;
 }

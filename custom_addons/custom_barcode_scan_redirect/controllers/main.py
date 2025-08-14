@@ -2,6 +2,9 @@
 from odoo import http
 from odoo.http import request
 import logging
+from base64 import b64encode
+from werkzeug.utils import secure_filename
+from datetime import datetime
 
 class CustomBarcodeScanController(http.Controller):
 
@@ -249,5 +252,49 @@ class CustomBarcodeScanController(http.Controller):
             return {"success": True, "message": f"✅ Phiếu {picking.name} đã được xác nhận!"}
         except Exception as e:
             return {"error": str(e)}
+        
+        
+    @http.route('/pack_scan/upload_video', type='http', auth='user', methods=['POST'], csrf=False)
+    def upload_pack_video(self, **kwargs):
+        _logger = logging.getLogger(__name__)
+        httpreq = request.httprequest
+        picking_id = httpreq.form.get('picking_id')
+        if not picking_id:
+            return request.make_response("Missing picking_id", [('Content-Type', 'text/plain')], 400)
+        picking = request.env['stock.picking'].sudo().browse(int(picking_id))
+        if not picking.exists():
+            return request.make_response("Picking not found", [('Content-Type', 'text/plain')], 404)
+        file = httpreq.files.get('file')
+        if not file:
+            return request.make_response("No file", [('Content-Type', 'text/plain')], 400)
+        filename = secure_filename(file.filename or '')
+        mimetype = file.mimetype or 'application/octet-stream'
+        # Chỉ cho 2 loại video phổ biến từ MediaRecorder
+        allowed = {'video/webm', 'video/mp4', 'video/ogg'}
+        if mimetype not in allowed:
+            return request.make_response("Unsupported mimetype", [('Content-Type', 'text/plain')], 415)
+        data = file.read()
+        if not data:
+            return request.make_response("Empty file", [('Content-Type', 'text/plain')], 400)
+        # Giới hạn dung lượng ~200MB để an toàn (tùy chỉnh)
+        if len(data) > 200 * 1024 * 1024:
+            return request.make_response("File too large", [('Content-Type', 'text/plain')], 413)
+        # Tạo tên file ngon nhìn cho dễ
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if not filename:
+            ext = '.webm' if mimetype == 'video/webm' else '.mp4'
+            filename = f"{picking.name}_PACK_{ts}{ext}"
+        # Lưu attachment
+        Attachment = request.env['ir.attachment'].sudo()
+        att = Attachment.create({
+            'name': filename,
+            'datas': b64encode(data),
+            'mimetype': mimetype,
+            'res_model': 'stock.picking',
+            'res_id': picking.id,
+            'type': 'binary',
+        })
+        _logger.info(f"[VIDEO] Saved attachment {att.id} for picking {picking.name}")
+        return request.make_response("OK", [('Content-Type', 'text/plain')], 200)
 
 
