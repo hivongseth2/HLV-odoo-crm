@@ -10,6 +10,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.wrappers import Response
 from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType, RequestEntityTooLarge
 from ..drive_uploader import get_drive_manager   # <— thêm import này
+import os                                  # <-- thêm dòng này
 
 class CustomBarcodeScanController(http.Controller):
 
