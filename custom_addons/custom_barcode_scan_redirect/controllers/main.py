@@ -257,14 +257,15 @@ class CustomBarcodeScanController(http.Controller):
             return {"success": True, "message": f"✅ Phiếu {picking.name} đã được xác nhận!"}
         except Exception as e:
             return {"error": str(e)}
-    
-    ALLOWED_MIME = {'video/webm', 'video/mp4', 'video/ogg'}
-    MAX_UPLOAD_MB = 200
+
 
     @http.route('/pack_scan/upload_video', type='http', auth='user', methods=['POST'], csrf=False)
     def upload_pack_video(self, **kwargs):
         _logger = logging.getLogger(__name__)
         httpreq = request.httprequest
+            
+        ALLOWED_MIME = {'video/webm', 'video/mp4', 'video/ogg'}
+        MAX_UPLOAD_MB = 200
 
         picking_id = httpreq.form.get('picking_id')
         if not picking_id: raise BadRequest("Missing picking_id")
