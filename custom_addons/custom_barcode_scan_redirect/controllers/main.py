@@ -63,7 +63,11 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             env = api.Environment(cr, SUPERUSER_ID, {})
             ICP = env['ir.config_parameter'].sudo()
 
-            # Lấy cấu hình OAuth đã cấp
+            # ==== LOG KHỞI ĐỘNG ====
+            _logger.info("BG upload start: db=%s pick=%s file=%s size=%sB",
+                         dbname, picking_id, filepath,
+                         (os.path.getsize(filepath) if os.path.exists(filepath) else -1))
+
             creds_json = ICP.get_param('gdrive.user_credentials_json') or ''
             if not creds_json:
                 _logger.error("BG upload: missing gdrive.user_credentials_json")
@@ -75,29 +79,25 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             scopes_line = ICP.get_param('gdrive.oauth_scopes') or 'https://www.googleapis.com/auth/drive.file'
             root_name = ICP.get_param('gdrive.root_folder') or 'KHO_HCM'
             anyone_link = (ICP.get_param('gdrive.anyone_link') or 'false').lower() == 'true'
+
             picking = env['stock.picking'].sudo().browse(picking_id)
             origin_pick = env['stock.picking'].sudo().search([
                 ('group_id', '=', picking.group_id.id),
                 ('picking_type_id.sequence_code', 'like', 'PICK'),
                 ('id', '!=', picking.id),
             ], limit=1)
-            origin_name = origin_pick.name or ''
-            
-            # ext = os.path.splitext(filepath)[1] or ('.webm' if mimetype == 'video/webm' else '')
-            if mimetype == 'video/webm':
-                ext = '.webm'
-            elif mimetype == 'video/mp4':
-                ext = '.mp4'
-            elif mimetype == 'video/ogg':
-                ext = '.ogg'
-            else:
-                ext = os.path.splitext(filepath)[1] or '.webm'
+            origin_name = (origin_pick.name or '').replace('/', '_').replace('\\', '_')
+
+            # Đuôi file theo mimetype
+            if mimetype == 'video/webm':   ext = '.webm'
+            elif mimetype == 'video/mp4':  ext = '.mp4'
+            elif mimetype == 'video/ogg':  ext = '.ogg'
+            else:                          ext = os.path.splitext(filepath)[1] or '.webm'
+
             ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-            # title = f"pack_{origin_name}_{picking.name}_{ext}"
             wanted_title = f"pack_{origin_name}_{picking.name}_{ts}{ext}"
             safe_title = wanted_title.replace('/', '_').replace('\\', '_').replace(' ', '_')
 
-            # safe_title = title.replace('/', '_').replace('\\', '_').replace(' ', '_')
             # Tạo settings.yaml tạm cho PyDrive2
             set_path = os.path.join(STREAM_DIR, f'settings_{uuid.uuid4().hex}.yaml')
             _write_settings_file(set_path, cid, csec, redir, scopes_line)
@@ -107,14 +107,17 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             gauth.credentials = OAuth2Credentials.from_json(creds_json)
             try:
                 if gauth.access_token_expired:
+                    _logger.info("BG upload: token expired -> refreshing")
                     gauth.Refresh()
-            except Exception as e:
-                _logger.exception("BG upload: refresh token failed")
+                # ✅ Ràng buộc HTTP client
+                gauth.Authorize()
+            except Exception:
+                _logger.exception("BG upload: refresh/authorize token failed")
                 return
 
             drive = GoogleDrive(gauth)
 
-            # Tạo cây thư mục: root / dd_mm_YYYY / clip
+            # ===== Thư mục =====
             def _list(q): return drive.ListFile({'q': q}).GetList()
             def _get_or_create_folder(name, parent_id=None):
                 q = "mimeType='application/vnd.google-apps.folder' and trashed=false and title='%s'" % name.replace("'", "\\'")
@@ -123,44 +126,45 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
                 if found: return found[0]['id']
                 meta = {'title': name, 'mimeType': 'application/vnd.google-apps.folder'}
                 if parent_id: meta['parents'] = [{'id': parent_id}]
-                f = drive.CreateFile(meta); f.Upload(); return f['id']
+                f = drive.CreateFile(meta)
+                f.Upload()
+                return f['id']
 
             root_id = _get_or_create_folder(root_name, None)
             day_id  = _get_or_create_folder(datetime.now().strftime("%d_%m_%Y"), root_id)
             clip_id = _get_or_create_folder("clip", day_id)
 
-            # Upload file
-            title = os.path.basename(filepath)
+            # ===== Upload =====
+            _logger.info("BG upload: uploading %s to folder_id=%s", safe_title, clip_id)
             gfile = drive.CreateFile({'title': safe_title, 'parents': [{'id': clip_id}]})
-            if mimetype: gfile['mimeType'] = mimetype
+            if mimetype:
+                gfile['mimeType'] = mimetype
             gfile.SetContentFile(filepath)
             gfile.Upload()
 
             file_id = gfile['id']
             web_link = gfile.get('alternateLink') or f"https://drive.google.com/file/d/{file_id}/view"
 
-            # Quyền anyone (tuỳ chọn)
             if anyone_link:
                 try:
                     gfile.InsertPermission({'type': 'anyone', 'value': 'me', 'role': 'reader'})
                 except Exception:
                     _logger.warning("BG upload: set public link failed", exc_info=True)
 
-            # Ghi log vào chatter
-            if picking_id:
-                picking = env['stock.picking'].sudo().browse(picking_id)
-                if picking.exists():
-                    picking.message_post(body=f"📹 Video đóng gói đã tải lên Drive: <a href='{web_link}' target='_blank'>mở</a>")
+            # Ghi vào chatter
+            if picking.exists():
+                picking.message_post(body=f"📹 Video đóng gói đã tải lên Drive: <a href='{web_link}' target='_blank'>{safe_title}</a>")
 
-            _logger.info("✅ BG Uploaded to My Drive: %s (%s)", title, file_id)
+            _logger.info("✅ BG Uploaded: %s (%s) -> %s", safe_title, file_id, web_link)
 
     except Exception:
         _logger.exception("BG upload failed")
     finally:
-        # Dọn file tạm
+        # Dọn file tạm & settings tạm
         try: os.remove(filepath)
         except Exception: pass
-
+        try: os.remove(set_path)
+        except Exception: pass
 class CustomBarcodeScanController(http.Controller):
 
     # ===================== UI & SCAN luồng sẵn có =====================
