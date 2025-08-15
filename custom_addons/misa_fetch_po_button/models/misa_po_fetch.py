@@ -73,6 +73,7 @@ class MisaPOFetch(models.TransientModel):
                 _logger.info("✅ Hết dữ liệu, dừng ở trang %s", page_index)
                 break
 
+# ===============================
             for po in page_data:
                 refid = po.get("refid")
                 supplier_name = po.get("account_object_name")
@@ -80,36 +81,51 @@ class MisaPOFetch(models.TransientModel):
                 memo = po.get("journal_memo", "")
                 partner = odoo_utils._get_or_create_partner(supplier_name)
 
-                detail_payload = {
-                    "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
-                    "filter": [
-                        {
-                            "property": 3993,
-                            "operator": 7,
-                            "operand": 1,
-                            "value": refid,
-                            "data_type": 10
-                        }
-                    ],
-                    "loadMode": 2,
-                    "pageIndex": 1,
-                    "pageSize": 20,
-                    "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
-                    "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
-                    "useSp": False,
-                    "view": 92
-                }
+                detail_page_index = 1
+                all_detail_lines = []
 
-                detail_res = misa_utils._fetch_with_retry(
-                    "https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
-                    headers, detail_payload
-                )
+                while True:
+                    detail_payload = {
+                        "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                        "filter": [
+                            {
+                                "property": 3993,
+                                "operator": 7,
+                                "operand": 1,
+                                "value": refid,
+                                "data_type": 10
+                            }
+                        ],
+                        "loadMode": 2,
+                        "pageIndex": detail_page_index,
+                        "pageSize": 20,
+                        "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
+                        "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
+                        "useSp": False,
+                        "view": 92
+                    }
 
-                if detail_res.status_code != 200:
-                    _logger.warning("Không lấy được chi tiết PO %s", refid)
-                    continue
+                    detail_res = misa_utils._fetch_with_retry(
+                        "https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/get_paging_detail",
+                        headers, detail_payload
+                    )
 
-                lines = detail_res.json().get("Data", {}).get("PageData", [])
+                    if detail_res.status_code != 200:
+                        _logger.warning("Không lấy được chi tiết PO %s ở trang %s", refid, detail_page_index)
+                        break
+
+                    page_lines = detail_res.json().get("Data", {}).get("PageData", [])
+                    if not page_lines:
+                        break
+
+                    all_detail_lines.extend(page_lines)
+                    detail_page_index += 1
+
+                # Sau khi loop hết các trang thì gán lại cho lines để xử lý như cũ
+                lines = all_detail_lines
+
+
+                # lines = detail_res.json().get("Data", {}).get("PageData", [])
                 # stock_code = lines[0].get("stock_code", "").strip().upper() if lines else None
                 stock_code = (
                     lines[0].get("stock_code", "").strip().replace(" ", "").upper()
