@@ -83,10 +83,21 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             ], limit=1)
             origin_name = origin_pick.name or ''
             
-            ext = os.path.splitext(filepath)[1] or ('.webm' if mimetype == 'video/webm' else '')
-            # ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-            title = f"pack_{origin_name}_{picking.name}_{ext}"
-            safe_title = title.replace('/', '_').replace('\\', '_').replace(' ', '_')
+            # ext = os.path.splitext(filepath)[1] or ('.webm' if mimetype == 'video/webm' else '')
+            if mimetype == 'video/webm':
+                ext = '.webm'
+            elif mimetype == 'video/mp4':
+                ext = '.mp4'
+            elif mimetype == 'video/ogg':
+                ext = '.ogg'
+            else:
+                ext = os.path.splitext(filepath)[1] or '.webm'
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            # title = f"pack_{origin_name}_{picking.name}_{ext}"
+            wanted_title = f"pack_{origin_name}_{picking.name}_{ts}{ext}"
+            safe_title = wanted_title.replace('/', '_').replace('\\', '_').replace(' ', '_')
+
+            # safe_title = title.replace('/', '_').replace('\\', '_').replace(' ', '_')
             # Tạo settings.yaml tạm cho PyDrive2
             set_path = os.path.join(STREAM_DIR, f'settings_{uuid.uuid4().hex}.yaml')
             _write_settings_file(set_path, cid, csec, redir, scopes_line)
