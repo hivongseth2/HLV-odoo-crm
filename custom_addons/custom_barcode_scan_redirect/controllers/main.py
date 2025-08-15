@@ -391,22 +391,29 @@ class CustomBarcodeScanController(http.Controller):
     def finish_upload(self, **kw):
         upload_id = kw.get('upload_id') or ''
         picking_id = int(kw.get('picking_id') or 0)
+
+        if not upload_id:
+            return {'ok': False, 'msg': 'missing upload_id'}
+
         meta_file = _meta_path(upload_id)
         if not os.path.exists(meta_file):
-            return {'ok': False, 'msg': 'no session'}
+            # ĐÃ đóng trước đó / hoặc tab gọi 2 lần -> coi như OK để client không báo lỗi
+            return {'ok': True, 'msg': 'already finished or no session'}
 
         meta = json.loads(open(meta_file,'r',encoding='utf-8').read())
         filepath = meta['path']
         mimetype = meta.get('mimetype') or 'video/webm'
 
-        # chạy upload ở background để trả nhanh cho client
+        # chạy upload ở background để trả nhanh
         t = threading.Thread(target=_bg_upload_to_drive, args=(request.db, picking_id, filepath, mimetype), daemon=True)
         t.start()
 
         # dọn meta (giữ file lại cho thread dùng)
         try: os.remove(meta_file)
         except Exception: pass
+
         return {'ok': True}
+
       
       
     @http.route('/gdrive/oauth2/disconnect', type='http', auth='user', website=True, csrf=False)
