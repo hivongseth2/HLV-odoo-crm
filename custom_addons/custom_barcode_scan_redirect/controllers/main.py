@@ -414,10 +414,26 @@ class CustomBarcodeScanController(http.Controller):
 
     @http.route('/pack_scan/finish_upload', type='json', auth='user', csrf=False)
     def finish_upload(self, **kw):
-        upload_id = kw.get('upload_id') or ''
-        picking_id = int(kw.get('picking_id') or 0)
+        # Hút param từ nhiều kiểu khác nhau để tránh miss
+        params = dict(kw or {})
+        if not params and request.httprequest.data:
+            try:
+                raw = json.loads(request.httprequest.data.decode('utf-8'))
+                if isinstance(raw, dict):
+                    params = raw.get('params') or raw
+            except Exception:
+                pass
+        if not params:
+            params = request.httprequest.form or {}
+
+        upload_id = params.get('upload_id') or params.get('uploadId') or ''
+        picking_id = int(params.get('picking_id') or 0)
+
+        # Log để lần sau dễ soi
+        _logger.info("FINISH_UPLOAD recv: upload_id=%s picking_id=%s", upload_id, picking_id)
 
         if not upload_id:
+            _logger.warning("FINISH_UPLOAD missing upload_id")
             return {'ok': False, 'msg': 'missing upload_id'}
 
         meta_file = _meta_path(upload_id)
@@ -425,25 +441,21 @@ class CustomBarcodeScanController(http.Controller):
             _logger.info("FINISH_UPLOAD already_finished id=%s", upload_id)
             return {'ok': True, 'msg': 'already finished or no session'}
 
-        meta = json.loads(open(meta_file,'r',encoding='utf-8').read())
+        meta = json.loads(open(meta_file, 'r', encoding='utf-8').read())
         filepath = meta['path']
         mimetype = meta.get('mimetype') or 'video/webm'
 
-        # >>> ADD LOG
         _logger.info("FINISH_UPLOAD id=%s pick=%s file=%s size=%s",
                     upload_id, picking_id, filepath,
                     (os.path.getsize(filepath) if os.path.exists(filepath) else -1))
 
-        t = threading.Thread(
-            target=_bg_upload_to_drive,
-            args=(request.db, picking_id, filepath, mimetype),
-            daemon=True
-        )
+        t = threading.Thread(target=_bg_upload_to_drive,
+                            args=(request.db, picking_id, filepath, mimetype),
+                            daemon=True)
         t.start()
 
         try: os.remove(meta_file)
         except: pass
-
         return {'ok': True}
 
       
