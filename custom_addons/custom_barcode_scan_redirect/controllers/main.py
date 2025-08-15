@@ -13,6 +13,7 @@ from tempfile import NamedTemporaryFile
 from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 from oauth2client.client import OAuth2Credentials   # dùng lại token đã cấp trong oauth flow
+from werkzeug.utils import redirect
 
 _logger = logging.getLogger(__name__)
 
@@ -74,7 +75,18 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             scopes_line = ICP.get_param('gdrive.oauth_scopes') or 'https://www.googleapis.com/auth/drive.file'
             root_name = ICP.get_param('gdrive.root_folder') or 'KHO_HCM'
             anyone_link = (ICP.get_param('gdrive.anyone_link') or 'false').lower() == 'true'
-
+            picking = env['stock.picking'].sudo().browse(picking_id)
+            origin_pick = env['stock.picking'].sudo().search([
+                ('group_id', '=', picking.group_id.id),
+                ('picking_type_id.sequence_code', 'like', 'PICK'),
+                ('id', '!=', picking.id),
+            ], limit=1)
+            origin_name = origin_pick.name or ''
+            
+            ext = os.path.splitext(filepath)[1] or ('.webm' if mimetype == 'video/webm' else '')
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            title = f"pack_{origin_name}_{picking.name}_{ts}{ext}"
+            safe_title = title.replace('/', '_').replace('\\', '_').replace(' ', '_')
             # Tạo settings.yaml tạm cho PyDrive2
             set_path = os.path.join(STREAM_DIR, f'settings_{uuid.uuid4().hex}.yaml')
             _write_settings_file(set_path, cid, csec, redir, scopes_line)
@@ -108,7 +120,7 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
 
             # Upload file
             title = os.path.basename(filepath)
-            gfile = drive.CreateFile({'title': title, 'parents': [{'id': clip_id}]})
+            gfile = drive.CreateFile({'title': safe_title, 'parents': [{'id': clip_id}]})
             if mimetype: gfile['mimeType'] = mimetype
             gfile.SetContentFile(filepath)
             gfile.Upload()
@@ -217,9 +229,10 @@ class CustomBarcodeScanController(http.Controller):
             ('picking_type_id.sequence_code', 'like', 'PICK'),
             ('id', '!=', picking.id)
         ], limit=1)
+        drive_connected = bool(request.env['ir.config_parameter'].sudo().get_param('gdrive.user_credentials_json'))
 
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
-            'picking': picking,'lines': lines,'origin_pick_name': origin_pick.name if origin_pick else '',
+            'picking': picking,'lines': lines,'origin_pick_name': origin_pick.name if origin_pick else '','drive_connected': drive_connected
         })
 
     @http.route('/pack_scan/scan_item', type='json', auth='user')
@@ -394,3 +407,10 @@ class CustomBarcodeScanController(http.Controller):
         try: os.remove(meta_file)
         except Exception: pass
         return {'ok': True}
+      
+      
+    @http.route('/gdrive/oauth2/disconnect', type='http', auth='user', website=True, csrf=False)
+    def disconnect(self, **kw):
+        # Xoá token hiện tại => lần sau sẽ bắt đăng nhập lại (chọn tài khoản khác)
+        request.env['ir.config_parameter'].sudo().set_param('gdrive.user_credentials_json', '')
+        return redirect('/gdrive/oauth2/start')

@@ -8,65 +8,77 @@
         <link rel="stylesheet" type="text/css" t-att-href="href"/>
       </t>
 
-      <div class="oe_structure">
-        <div class="scan-wrapper">
-          <h2>
-            🚚 Đóng Gói Phiếu: <span><t t-esc="picking.name"/></span>
-
-          </h2>
-          <h4>🧾 Từ Phiếu Pick: <span style="color: #1663f1ff;"><t t-esc="origin_pick_name"/></span> </h4>
-
-          <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus" />
-
-        <ul id="product_list">
-          <t t-foreach="lines" t-as="line">
-            <t t-set="ml" t-value="line.move_line_ids and line.move_line_ids[0]"/>
-            <li t-att-data-barcode="line.product_id.barcode" class="product-item" t-att-data-line-id="ml.id">
-              <div style="flex: 1; max-width: 70%;">
-                <strong><t t-esc="line.product_id.display_name"/></strong>
-              </div>
-              <div style="display: flex; align-items: center; gap: 5px;">
-                <button class="btn-minus" 
-                        t-att-data-barcode="line.product_id.barcode" 
-                        t-att-data-line-id="ml.id">−</button>
-                <span class="done"><t t-esc="sum(line.move_line_ids.mapped('qty_done'))"/></span> /
-                <span><t t-esc="line.product_uom_qty"/></span>
-                <button class="btn-plus" 
-                        t-att-data-barcode="line.product_id.barcode" 
-                        t-att-data-line-id="ml.id">＋</button>
-              </div>
-            </li>
-          </t>
-
-        </ul>
-
-
-          <div style="text-align: center;">
-            <button id="complete_pack_btn">✅ Hoàn tất</button>
+      <div class="oe_structure pack-screen">
+        <!-- Topbar -->
+        <div class="pack-topbar">
+          <div class="left">
+            <h2>🚚 Đóng gói: <span class="hl" t-esc="picking.name"/></h2>
+            <div class="sub">
+              <span>🧾 Từ phiếu Pick:</span>
+              <strong class="text-brand" t-esc="origin_pick_name"/>
+            </div>
+          </div>
+          <div class="right">
+            <span t-if="drive_connected" class="badge badge-ok">Drive đã kết nối</span>
+            <span t-if="not drive_connected" class="badge badge-warn">Chưa kết nối Drive</span>
+            <button id="btnDriveSwitch" class="btn-secondary">↻ Đổi tài khoản Drive</button>
           </div>
         </div>
-      <script>
-        const pickingId = <t t-esc="picking.id"/>;
-        const originPickName = "<t t-esc='origin_pick_name'/>";
-      </script>
-        <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
 
+        <!-- Main grid -->
+        <div class="pack-grid">
+          <!-- Left: list -->
+          <div class="scan-wrapper card">
+            <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus"/>
 
-      </div>
-      <div class="recording-pane">
-        <div class="rec-header">
-          <span id="recStatus" class="rec-dot">●</span>
-          <span id="recText">Đang chuẩn bị camera...</span>
+            <ul id="product_list" class="product-list">
+              <t t-foreach="lines" t-as="line">
+                <t t-set="ml" t-value="line.move_line_ids and line.move_line_ids[0]"/>
+                <li t-att-data-barcode="line.product_id.barcode"
+                    class="product-item"
+                    t-att-data-line-id="ml.id">
+                  <div class="prod-name">
+                    <strong><t t-esc="line.product_id.display_name"/></strong>
+                    <small class="prod-code">Barcode: <t t-esc="line.product_id.barcode or '-'"/></small>
+                  </div>
+                  <div class="qty-ctrl">
+                    <button class="btn-minus"
+                            t-att-data-barcode="line.product_id.barcode"
+                            t-att-data-line-id="ml.id">−</button>
+                    <span class="done"><t t-esc="sum(line.move_line_ids.mapped('qty_done'))"/></span>
+                    <span class="sep">/</span>
+                    <span class="req"><t t-esc="line.product_uom_qty"/></span>
+                    <button class="btn-plus"
+                            t-att-data-barcode="line.product_id.barcode"
+                            t-att-data-line-id="ml.id">＋</button>
+                  </div>
+                </li>
+              </t>
+            </ul>
+
+            <div class="actions">
+              <button id="complete_pack_btn" class="btn-primary">✅ Hoàn tất</button>
+            </div>
+          </div>
+
+          <!-- Right: recording -->
+          <div class="recording-pane card">
+            <div class="rec-header">
+              <span id="recStatus" class="rec-dot">●</span>
+              <span id="recText">Đang chuẩn bị camera...</span>
+            </div>
+            <video id="recPreview" autoplay="autoplay" muted="muted" playsinline="playsinline"></video>
+            <div class="rec-hint">Video sẽ tự upload ngầm ngay khi đang quay.</div>
+          </div>
         </div>
-            <video
-              id="recPreview"
-              t-att-autoplay="'autoplay'"
-              t-att-muted="'muted'"
-              t-att-playsinline="'playsinline'">
-            </video>
 
+        <script>
+          const pickingId = <t t-esc="picking.id"/>;
+          const originPickName = "<t t-esc='origin_pick_name'/>";
+          const driveConnected = <t t-esc="1 if drive_connected else 0"/>;
+        </script>
+        <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
       </div>
-
     </t>
   </template>
 </odoo>

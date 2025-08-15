@@ -117,6 +117,14 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => { window.location.href = "/custom_barcode_scan/ui"; }, 600);
   });
 
+  const btnSwitch = document.getElementById('btnDriveSwitch');
+  if (btnSwitch) {
+    btnSwitch.addEventListener('click', () => {
+      // mở tab mới để disconnect + start OAuth
+      window.open('/gdrive/oauth2/disconnect', '_blank', 'noopener');
+    });
+  }
+
   setFocus();
   diag();
   setTimeout(startRecording, 400);
