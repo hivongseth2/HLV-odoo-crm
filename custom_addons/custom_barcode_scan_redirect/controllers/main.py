@@ -84,8 +84,8 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             origin_name = origin_pick.name or ''
             
             ext = os.path.splitext(filepath)[1] or ('.webm' if mimetype == 'video/webm' else '')
-            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-            title = f"pack_{origin_name}_{picking.name}_{ts}{ext}"
+            # ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            title = f"pack_{origin_name}_{picking.name}_{ext}"
             safe_title = title.replace('/', '_').replace('\\', '_').replace(' ', '_')
             # Tạo settings.yaml tạm cho PyDrive2
             set_path = os.path.join(STREAM_DIR, f'settings_{uuid.uuid4().hex}.yaml')
@@ -324,8 +324,8 @@ class CustomBarcodeScanController(http.Controller):
         if size_mb > MAX_UPLOAD_MB:
             raise RequestEntityTooLarge(f"File too large: {size_mb:.1f}MB > {MAX_UPLOAD_MB}MB")
 
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        safe_name = secure_filename(file.filename or f"{picking.name}_PACK_{ts}.webm").replace('__', '_')
+        # ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_name = secure_filename(file.filename or f"{picking.name}_PACK.webm").replace('__', '_')
         ext = os.path.splitext(safe_name)[1] or ('.webm' if mimetype == 'video/webm' else '')
         with NamedTemporaryFile(prefix='pack_', suffix=ext, delete=False) as tmp:
             tmp.write(data)
