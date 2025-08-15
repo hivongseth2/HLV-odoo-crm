@@ -134,7 +134,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
 let uploadId = null;
 let chunkIndex = 0;
-let chunkBusy = Promise.resolve();   // đảm bảo gửi tuần tự
+let chunkBusy = Promise.resolve();
+let finishing = false;
 
 async function startServerUploadSession() {
   const resp = await fetch('/pack_scan/start_upload', {
@@ -142,9 +143,11 @@ async function startServerUploadSession() {
     headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     body: JSON.stringify({ picking_id: pickingId, ext: 'webm', mimetype: 'video/webm' })
   }).then(r => r.json());
-  const r = resp.result || resp; // type='json' của Odoo bọc trong result
+  const r = resp.result || resp;
   if (!r || !r.upload_id) throw new Error('Không khởi tạo phiên upload được');
   uploadId = r.upload_id;
+  chunkIndex = 0;
+  finishing = false;
 }
 
 async function sendChunk(blob) {
@@ -154,20 +157,29 @@ async function sendChunk(blob) {
   fd.append('upload_id', uploadId);
   fd.append('index', String(idx));
   fd.append('chunk', blob, `part_${idx}.webm`);
-  // CHÚ Ý: gửi tuần tự để server có thể append thẳng
   await fetch('/pack_scan/upload_chunk', { method: 'POST', body: fd, credentials: 'same-origin' });
 }
 
 async function finishServerUploadSession() {
-  if (!uploadId) return;
+  if (finishing) return;
+  finishing = true;
+
+  try { await chunkBusy; } catch { }
+  if (!uploadId) return;  // chưa start thì bỏ qua
+
   try {
     await fetch('/pack_scan/finish_upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      // keepalive để vẫn gửi khi tab đóng
+      keepalive: true,
       body: JSON.stringify({ upload_id: uploadId, picking_id: pickingId })
     });
-  } catch (e) { /* ignore */ }
+  } finally {
+    uploadId = null;
+  }
 }
+
 // ====== Recording module ======
 let mediaStream = null;
 let mediaRecorder = null;
@@ -208,7 +220,6 @@ async function startRecording() {
   recordedChunks = [];
   mediaRecorder.ondataavailable = (e) => {
     if (!e.data || !e.data.size) return;
-    // đẩy tuần tự: lồng vào promise chain
     chunkBusy = chunkBusy.then(() => sendChunk(e.data)).catch(() => { });
   };
   mediaRecorder.onstart = () => {
@@ -301,5 +312,7 @@ async function diag() {
 
 // stop khi rời trang
 // window.addEventListener('beforeunload', () => { if (isRecording) stopRecording(); });
-window.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopRecording(); });
-window.addEventListener('beforeunload', () => { stopRecording(); });
+window.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { try { mediaRecorder && mediaRecorder.stop(); } catch { } }
+});
+window.addEventListener('beforeunload', () => { try { mediaRecorder && mediaRecorder.stop(); } catch { } });
