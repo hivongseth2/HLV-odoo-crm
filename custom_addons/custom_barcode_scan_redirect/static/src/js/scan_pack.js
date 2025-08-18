@@ -27,32 +27,29 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function findLineToUpdate(rawBarcode) {
     const code = normalizeCode(rawBarcode);
-
-    // Lấy tất cả item trong list rồi so sánh bằng JS
     const items = document.querySelectorAll('#product_list li.product-item');
-
-    console.log('items', items);
-
 
     for (const el of items) {
       const domCode = normalizeCode(el.getAttribute('data-barcode'));
-      console.log(domCode, 'domeCode');
+      console.log(domCode, code, domCode == code);
 
       if (domCode !== code) continue;
 
-      const doneEl = el.querySelector('.done');
-      const requiredEl = el.querySelectorAll('span')[1];
+      const done = parseFloat((el.querySelector('.done')?.innerText || '0').replace(',', '.')) || 0;
+      const required = parseFloat((el.querySelectorAll('span')[1]?.innerText || '0').replace(',', '.')) || 0;
 
-      const done = parseFloat((doneEl?.innerText || '0').replace(',', '.')) || 0;
-      const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
+      console.log('done', done);
+      console.log('required', required);
+
+
 
       if (done < required) {
-        // nếu lần đầu chưa có line-id thì để null; server sẽ tự chọn/tạo
-        return el.dataset.lineId || null;
+        return el.dataset.lineId || null; // nếu chưa có line-id thì để null, server tự chọn
       }
     }
-    return null; // không còn dòng nào thiếu
+    return null;
   }
+
 
   function updateQty(barcode, delta = 1, lineId = null) {
     if (!lineId) {
