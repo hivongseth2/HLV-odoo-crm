@@ -33,7 +33,7 @@
 
             <ul id="product_list" class="product-list">
               <t t-foreach="lines" t-as="line">
-                <t t-set="ml" t-value="line.move_line_ids and line.move_line_ids[0]"/>
+                <t t-set="ml" t-value="line.move_line_ids and line.move_line_ids[0]" />
                 <li t-att-data-barcode="line.product_id.barcode"
                     class="product-item"
                     t-att-data-line-id="ml.id">

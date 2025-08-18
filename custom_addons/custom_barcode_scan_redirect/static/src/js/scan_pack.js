@@ -32,35 +32,65 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function updateQty(barcode, delta = 1, lineId = null) {
-    if (!lineId) lineId = findLineToUpdate(barcode);
+    if (!lineId) {
+      lineId = findLineToUpdate(barcode);
+    }
     fetch("/pack_scan/scan_item", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest"
+      },
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "call",
-        params: { picking_id: pickingId, barcode, delta, line_id: lineId }
+        params: {
+          picking_id: pickingId,
+          barcode,
+          delta,
+          line_id: lineId
+
+        }
       })
     })
       .then(res => res.json())
       .then(response => {
         const result = response.result;
         if (result?.error) {
-          alert(result.error); playError(); setFocus(); return;
+          alert(result.error);
+          playError();
+          setFocus();
+          return;
         }
-        if (!result?.scanned?.length) { playError(); setFocus(); return; }
+
+        if (!result?.scanned?.length) {
+          playError();
+          setFocus();
+          return;
+        }
+
         result.scanned.forEach(item => {
           const el = document.querySelector(`[data-line-id="${item.line_id}"]`);
           if (!el) return;
+
           const doneEl = el.querySelector(".done");
-          const requiredEl = el.querySelectorAll("span")[1];
+          const requiredEl = el.querySelectorAll("span")[1]; // span sau dấu "/"
           const required = parseFloat(requiredEl?.innerText || 0);
+
           doneEl.innerText = item.done_qty;
-          if (item.done_qty >= required) el.classList.add("completed"); else el.classList.remove("completed");
+
+          if (item.done_qty >= required) {
+            el.classList.add("completed");
+          } else {
+            el.classList.remove("completed");
+          }
         });
-        playSuccess(); setFocus();
+
+        playSuccess();
+        setFocus();
       });
   }
+
 
   input?.addEventListener("keypress", function (e) {
     if (e.key === "Enter") {
