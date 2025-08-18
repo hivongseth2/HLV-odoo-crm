@@ -16,11 +16,14 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function normalizeCode(s) {
-    return String(s || '')
-      .trim()
-      .replace(/[\r\n\t\u0000]/g, '') // bỏ ký tự ẩn
-      .replace(/\s+/g, '');           // bỏ mọi khoảng trắng
+    // Bỏ kí tự điều khiển ASCII, khoảng trắng, NBSP, BOM, zero-width, v.v.
+    return String(s ?? '')
+      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')   // control chars
+      .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')    // zero-width & BOM
+      .replace(/\s+/g, '')                             // mọi whitespace (kể cả NBSP)
+      .trim();
   }
+
 
   function findLineToUpdate(rawBarcode) {
     const code = normalizeCode(rawBarcode);
