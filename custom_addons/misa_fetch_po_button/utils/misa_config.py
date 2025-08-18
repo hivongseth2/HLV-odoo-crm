@@ -141,7 +141,7 @@ class MisaConfig(models.AbstractModel):
             "Sorts": [],
             "Start": 0,
             "Page": 1,
-            "PageSize": 20,
+            "PageSize": 100,
             "Filters": [],
             "DefaultTotal": True,
             "IsMappingData": False,
