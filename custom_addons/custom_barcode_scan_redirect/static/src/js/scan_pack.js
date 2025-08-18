@@ -24,33 +24,21 @@ document.addEventListener("DOMContentLoaded", function () {
       .trim();
   }
 
+  function findLineToUpdate(barcode) {
+    const elements = [...document.querySelectorAll(`[data-barcode="${barcode}"]`)];
+    for (const el of elements) {
+      const doneEl = el.querySelector(".done");
+      const requiredEl = el.querySelectorAll("span")[1];
 
-  function findLineToUpdate(rawBarcode) {
-    const code = normalizeCode(rawBarcode);
-    const items = document.querySelectorAll('#product_list li.product-item');
-
-    for (const el of items) {
-      const domCode = normalizeCode(el.getAttribute('data-barcode'));
-      console.log(domCode, code, domCode == code);
-
-      if (domCode !== code) continue;
-
-      const done = parseFloat((el.querySelector('.done')?.innerText || '0').replace(',', '.')) || 0;
-      const required = parseFloat((el.querySelectorAll('span')[1]?.innerText || '0').replace(',', '.')) || 0;
-
-      console.log('done', done);
-      console.log('required', required);
-
-
+      const done = parseFloat(doneEl?.innerText || 0);
+      const required = parseFloat(requiredEl?.innerText || 0);
 
       if (done < required) {
-        return el.dataset.lineId || null; // nếu chưa có line-id thì để null, server tự chọn
+        return el.dataset.lineId;
       }
     }
-    return null;
+    return null; // tất cả đã đủ
   }
-
-
   function updateQty(barcode, delta = 1, lineId = null) {
     if (!lineId) {
       lineId = findLineToUpdate(barcode);
