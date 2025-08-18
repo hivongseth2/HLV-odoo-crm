@@ -20,11 +20,15 @@ document.addEventListener("DOMContentLoaded", function () {
     for (const el of elements) {
       const doneEl = el.querySelector(".done");
       const requiredEl = el.querySelectorAll("span")[1];
+
       const done = parseFloat(doneEl?.innerText || 0);
       const required = parseFloat(requiredEl?.innerText || 0);
-      if (done < required) return el.dataset.lineId;
+
+      if (done < required) {
+        return el.dataset.lineId;
+      }
     }
-    return null;
+    return null; // tất cả đã đủ
   }
 
   function updateQty(barcode, delta = 1, lineId = null) {

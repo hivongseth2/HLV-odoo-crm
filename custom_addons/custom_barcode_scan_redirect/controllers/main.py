@@ -253,42 +253,68 @@ class CustomBarcodeScanController(http.Controller):
 
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         moves = picking.move_ids_without_package.filtered(lambda m: m.product_id.barcode == barcode)
-        if not moves: return {"error": "❌ Mã sản phẩm không khớp trong phiếu!"}
+
+        if not moves:
+            return {"error": "❌ Mã sản phẩm không khớp trong phiếu!"}
 
         total_required = sum(m.product_uom_qty for m in moves)
         total_done = sum(sum(ml.qty_done for ml in m.move_line_ids) for m in moves)
+
         if delta > 0 and total_done >= total_required:
             return {"error": "⚠️ Sản phẩm này đã được quét đủ!"}
 
         updated_lines = []
+        
+
         for move in moves:
             if line_id:
                 target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
                 if target_ml:
-                    ml = target_ml[0].sudo().browse(target_ml[0].id)
+                    ml = target_ml[0]
+                    # current_qty = ml.qty_done
+                    ml = ml.sudo().browse(ml.id)  # Ép load lại bản mới
                     current_qty = ml.qty_done
                     total_done = sum(l.qty_done for l in move.move_line_ids)
                     remain_qty = max(0, move.product_uom_qty - total_done)
+                    
+                    _logger.info(f"[SCAN] 📦 Product: {move.product_id.display_name}")
+                    _logger.info(f"[SCAN] 🆔 line_id: {ml.id}, total_done: {total_done}, required: {move.product_uom_qty}")
+                    _logger.info(f"[SCAN] ➕ delta: {delta}, remain_qty: {remain_qty}")
+                    _logger.info(f"[SCAN] ➕ curren_quantity: {current_qty}")
 
                     if delta > 0 and remain_qty > 0:
                         add_qty = min(delta, remain_qty)
                         new_qty = current_qty + add_qty
                         ml.write({'qty_done': new_qty})
                         new_total_done = total_done - current_qty + new_qty
-                        updated_lines.append({"line_id": ml.id,"product": move.product_id.display_name,
-                                              "done_qty": new_total_done,"required_qty": move.product_uom_qty})
+                        _logger.info(f"[SCAN] ✅ Added {add_qty}, new_qty: {new_qty}, new_total_done: {new_total_done}")
+                        updated_lines.append({
+                            "line_id": ml.id,
+                            "product": move.product_id.display_name,
+                            "done_qty": new_total_done,
+                            "required_qty": move.product_uom_qty
+                        })
                         break
                     elif delta < 0 and total_done > 0:
                         reduce_qty = min(abs(delta), current_qty)
+                        # new_qty = current_qty - reduce_qty
+                        # new_qty = total_done  -1
                         new_qty = current_qty - reduce_qty
                         ml.write({'qty_done': new_qty})
                         new_total_done = total_done - current_qty + new_qty
-                        updated_lines.append({"line_id": ml.id,"product": move.product_id.display_name,
-                                              "done_qty": new_total_done,"required_qty": move.product_uom_qty})
+                        _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_qty: {new_qty} , new_qty_done:{new_total_done}")
+                        updated_lines.append({
+                            "line_id": ml.id,
+                            "product": move.product_id.display_name,
+                            "done_qty": new_total_done ,
+                            "required_qty": move.product_uom_qty
+                        })
                         break
+
 
         if not updated_lines:
             return {"error": "⚠️ Không có dòng nào để cập nhật!"}
+
         return {"scanned": updated_lines}
 
     @http.route('/pack_scan/complete_picking', type='json', auth='user')
