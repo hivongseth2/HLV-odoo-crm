@@ -112,7 +112,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // dừng ghi (sẽ tự upload trong onstop)
     await stopRecording();
-    alert(response.message || "✅ Phiếu đã hoàn tất!");
+    // alert(response.message || "✅ Phiếu đã hoàn tất!");
     // chờ 0.5s cho upload bắt đầu rồi hẵng rời trang
     setTimeout(() => { window.location.href = "/custom_barcode_scan/ui"; }, 600);
   });
@@ -185,7 +185,7 @@ let mediaStream = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
-const MAX_DURATION_MS = 10 * 60 * 1000;
+const MAX_DURATION_MS = 1 * 60 * 1000;
 let stopTimer = null;
 
 async function startRecording() {
@@ -312,7 +312,7 @@ async function diag() {
 
 // stop khi rời trang
 // window.addEventListener('beforeunload', () => { if (isRecording) stopRecording(); });
-window.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') { try { mediaRecorder && mediaRecorder.stop(); } catch { } }
-});
+// window.addEventListener('visibilitychange', () => {
+//   if (document.visibilityState === 'hidden') { try { mediaRecorder && mediaRecorder.stop(); } catch { } }
+// });
 window.addEventListener('beforeunload', () => { try { mediaRecorder && mediaRecorder.stop(); } catch { } });
