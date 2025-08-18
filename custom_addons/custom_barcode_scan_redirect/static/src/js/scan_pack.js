@@ -17,6 +17,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function findLineToUpdate(barcode) {
     const elements = [...document.querySelectorAll(`[data-barcode="${barcode}"]`)];
+
+    console.log(barcode, 'barcode');
+    console.log(elements, 'elements')
+
     for (const el of elements) {
       const doneEl = el.querySelector(".done");
       const requiredEl = el.querySelectorAll("span")[1];
