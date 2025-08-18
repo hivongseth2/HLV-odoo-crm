@@ -71,6 +71,9 @@ document.addEventListener("DOMContentLoaded", function () {
         input.value = "";
         return;
       }
+
+      console.log(val);
+
       updateQty(val);
       input.value = "";
     }
