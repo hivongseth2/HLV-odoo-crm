@@ -28,8 +28,13 @@ document.addEventListener("DOMContentLoaded", function () {
     // Lấy tất cả item trong list rồi so sánh bằng JS
     const items = document.querySelectorAll('#product_list li.product-item');
 
+    console.log('items', items);
+
+
     for (const el of items) {
       const domCode = normalizeCode(el.getAttribute('data-barcode'));
+      console.log(domCode, 'domeCode');
+
       if (domCode !== code) continue;
 
       const doneEl = el.querySelector('.done');
