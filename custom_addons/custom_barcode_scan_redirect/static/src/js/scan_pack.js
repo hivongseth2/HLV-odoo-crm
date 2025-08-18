@@ -15,24 +15,35 @@ document.addEventListener("DOMContentLoaded", function () {
     new Audio("/custom_barcode_scan_redirect/static/src/sound/error.mp3").play();
   }
 
-  function findLineToUpdate(barcode) {
-    const elements = [...document.querySelectorAll(`[data-barcode="${barcode}"]`)];
+  function normalizeCode(s) {
+    return String(s || '')
+      .trim()
+      .replace(/[\r\n\t\u0000]/g, '') // bỏ ký tự ẩn
+      .replace(/\s+/g, '');           // bỏ mọi khoảng trắng
+  }
 
-    console.log(barcode, 'barcode');
-    console.log(elements, 'elements')
+  function findLineToUpdate(rawBarcode) {
+    const code = normalizeCode(rawBarcode);
 
-    for (const el of elements) {
-      const doneEl = el.querySelector(".done");
-      const requiredEl = el.querySelectorAll("span")[1];
+    // Lấy tất cả item trong list rồi so sánh bằng JS
+    const items = document.querySelectorAll('#product_list li.product-item');
 
-      const done = parseFloat(doneEl?.innerText || 0);
-      const required = parseFloat(requiredEl?.innerText || 0);
+    for (const el of items) {
+      const domCode = normalizeCode(el.getAttribute('data-barcode'));
+      if (domCode !== code) continue;
+
+      const doneEl = el.querySelector('.done');
+      const requiredEl = el.querySelectorAll('span')[1];
+
+      const done = parseFloat((doneEl?.innerText || '0').replace(',', '.')) || 0;
+      const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
 
       if (done < required) {
-        return el.dataset.lineId;
+        // nếu lần đầu chưa có line-id thì để null; server sẽ tự chọn/tạo
+        return el.dataset.lineId || null;
       }
     }
-    return null; // tất cả đã đủ
+    return null; // không còn dòng nào thiếu
   }
 
   function updateQty(barcode, delta = 1, lineId = null) {
@@ -60,39 +71,33 @@ document.addEventListener("DOMContentLoaded", function () {
       .then(res => res.json())
       .then(response => {
         const result = response.result;
-        if (result?.error) {
-          alert(result.error);
-          playError();
-          setFocus();
-          return;
-        }
-
-        if (!result?.scanned?.length) {
-          playError();
-          setFocus();
-          return;
-        }
+        if (result?.error) { alert(result.error); playError(); setFocus(); return; }
+        if (!result?.scanned?.length) { playError(); setFocus(); return; }
 
         result.scanned.forEach(item => {
-          const el = document.querySelector(`[data-line-id="${item.line_id}"]`);
-          if (!el) return;
 
-          const doneEl = el.querySelector(".done");
-          const requiredEl = el.querySelectorAll("span")[1]; // span sau dấu "/"
-          const required = parseFloat(requiredEl?.innerText || 0);
+          // cố gắng tìm theo line_id, nếu không có thì rớt về tìm theo barcode
+          let el = document.querySelector(`[data-line-id="${item.line_id}"]`);
+          if (!el && item.barcode) {
+            const code = normalizeCode(item.barcode);
+            el = [...document.querySelectorAll('#product_list li.product-item')]
+              .find(e => normalizeCode(e.dataset.barcode) === code) || null;
+            if (el && item.line_id) el.dataset.lineId = String(item.line_id); // gắn lại cho những lần sau
+          }
+          if (!el) { console.warn('No DOM line for', item); return; }
+
+          const doneEl = el.querySelector('.done');
+          const requiredEl = el.querySelectorAll('span')[1];
+          const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
 
           doneEl.innerText = item.done_qty;
-
-          if (item.done_qty >= required) {
-            el.classList.add("completed");
-          } else {
-            el.classList.remove("completed");
-          }
+          if (item.done_qty >= required) el.classList.add("completed");
+          else el.classList.remove("completed");
         });
 
-        playSuccess();
-        setFocus();
+        playSuccess(); setFocus();
       });
+
   }
 
 

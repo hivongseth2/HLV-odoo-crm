@@ -304,6 +304,7 @@ class CustomBarcodeScanController(http.Controller):
                         new_total_done = total_done - current_qty + new_qty
                         _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_qty: {new_qty} , new_qty_done:{new_total_done}")
                         updated_lines.append({
+                            "barcode": move.product_id.barcode,
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
                             "done_qty": new_total_done ,
