@@ -255,7 +255,10 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
 const MAX_DURATION_MS = 5 * 60 * 1000;
-let stopTimer = null;
+
+let stopTimer = null, countdownTimer = null;
+let overlayCanvas = null, overlayCtx = null;
+
 async function startRecording() {
   const statusDot = document.getElementById('recStatus');
   const statusText = document.getElementById('recText');
