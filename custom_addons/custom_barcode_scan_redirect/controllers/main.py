@@ -79,13 +79,28 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             root_name = ICP.get_param('gdrive.root_folder') or 'KHO_HCM'
             anyone_link = (ICP.get_param('gdrive.anyone_link') or 'false').lower() == 'true'
 
+
+            
             picking = env['stock.picking'].sudo().browse(picking_id)
+            # order
+            order_name = ''
+            try:
+                order_name = picking.sale_id.name or ''
+            except Exception:
+                pass
+            if not order_name:
+                order_name = (picking.origin or picking.group_id.name or '')
+            # pick
             origin_pick = env['stock.picking'].sudo().search([
                 ('group_id', '=', picking.group_id.id),
                 ('picking_type_id.sequence_code', 'like', 'PICK'),
                 ('id', '!=', picking.id),
             ], limit=1)
             origin_name = (origin_pick.name or '').replace('/', '_').replace('\\', '_')
+                
+            
+            def _san(s): return (s or '').replace('/', '_').replace('\\', '_').replace(' ', '_')
+
 
             # ext theo mimetype
             if mimetype == 'video/webm':   ext = '.webm'
@@ -94,7 +109,9 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             else:                          ext = os.path.splitext(filepath)[1] or '.webm'
 
             ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-            safe_title = f"pack_{origin_name}_{picking.name}_{ts}{ext}".replace(' ', '_').replace('/', '_').replace('\\', '_')
+            # safe_title = f"pack_{origin_name}_{picking.name}_{ts}{ext}".replace(' ', '_').replace('/', '_').replace('\\', '_')
+            safe_title = f"{_san(order_name)}_{_san(origin_name)}_{_san(picking.name)}_{ts}{ext}"
+
 
             # settings tạm
             set_path = os.path.join(STREAM_DIR, f'settings_{uuid.uuid4().hex}.yaml')
@@ -143,9 +160,16 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
                     gfile.InsertPermission({'type': 'anyone', 'value': 'me', 'role': 'reader'})
                 except Exception:
                     _logger.warning("BG_UPLOAD set public link failed", exc_info=True)
+                    
+            
+            fid = gfile['id']
+            link = gfile.get('alternateLink') or f"https://drive.google.com/file/d/{fid}/view"
 
             if picking.exists():
-                picking.message_post(body=f"📹 Video đóng gói đã tải lên Drive: <a href='{link}' target='_blank'>{safe_title}</a>")
+                # picking.message_post(body=f"📹 Video đóng gói đã tải lên Drive: <a href='{link}' target='_blank'>{safe_title}</a>")
+                picking.message_post(
+                body=f"📹 Video đóng gói: <a href='{link}' target='_blank'>{safe_title}</a>"
+                    )
 
             _logger.info("✅ BG_UPLOAD ok: %s (%s) %s", safe_title, fid, link)
 
@@ -247,7 +271,7 @@ class CustomBarcodeScanController(http.Controller):
     def scan_pack_item(self, **kwargs):
         picking_id = kwargs.get("picking_id")
         barcode = kwargs.get("barcode")
-        delta = int(kwargs.get("delta", 1))
+        delta = float(kwargs.get("delta", 1))
         line_id = kwargs.get("line_id")
         _logger = logging.getLogger(__name__)
 
@@ -276,18 +300,15 @@ class CustomBarcodeScanController(http.Controller):
                     current_qty = ml.qty_done
                     total_done = sum(l.qty_done for l in move.move_line_ids)
                     remain_qty = max(0, move.product_uom_qty - total_done)
-                    
-                    _logger.info(f"[SCAN] 📦 Product: {move.product_id.display_name}")
-                    _logger.info(f"[SCAN] 🆔 line_id: {ml.id}, total_done: {total_done}, required: {move.product_uom_qty}")
-                    _logger.info(f"[SCAN] ➕ delta: {delta}, remain_qty: {remain_qty}")
-                    _logger.info(f"[SCAN] ➕ curren_quantity: {current_qty}")
 
                     if delta > 0 and remain_qty > 0:
-                        add_qty = min(delta, remain_qty)
+                        # add_qty = min(delta, remain_qty)
+                        add_qty = min(delta, remain_qty) if delta > 0 else 0.0
+
                         new_qty = current_qty + add_qty
                         ml.write({'qty_done': new_qty})
                         new_total_done = total_done - current_qty + new_qty
-                        _logger.info(f"[SCAN] ✅ Added {add_qty}, new_qty: {new_qty}, new_total_done: {new_total_done}")
+                    
                         updated_lines.append({
                             "line_id": ml.id,
                             "product": move.product_id.display_name,
@@ -297,12 +318,11 @@ class CustomBarcodeScanController(http.Controller):
                         break
                     elif delta < 0 and total_done > 0:
                         reduce_qty = min(abs(delta), current_qty)
-                        # new_qty = current_qty - reduce_qty
-                        # new_qty = total_done  -1
+   
                         new_qty = current_qty - reduce_qty
                         ml.write({'qty_done': new_qty})
                         new_total_done = total_done - current_qty + new_qty
-                        _logger.info(f"[SCAN] ✅ Reduced {reduce_qty}, new_qty: {new_qty} , new_qty_done:{new_total_done}")
+                        
                         updated_lines.append({
                             "barcode": move.product_id.barcode,
                             "line_id": ml.id,

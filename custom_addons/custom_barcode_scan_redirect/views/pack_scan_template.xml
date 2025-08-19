@@ -17,6 +17,9 @@
               <span>🧾 Từ phiếu Pick:</span>
               <strong class="text-brand" t-esc="origin_pick_name"/>
             </div>
+            <div class="rec-timer">
+              ⏳ Còn lại: <span id="recCountdown">05:00</span>
+            </div>
           </div>
           <div class="right">
             <span t-if="drive_connected" class="badge badge-ok">Drive đã kết nối</span>

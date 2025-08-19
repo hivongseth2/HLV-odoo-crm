@@ -4,6 +4,12 @@ document.addEventListener("DOMContentLoaded", function () {
   const completeBtn = document.getElementById("complete_pack_btn");
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
+  const BARCODE_MAP_POINT_ONE = {
+    // "KEY_SCAN": "BARCODE_SPHAM"
+    "452424752161": "45242475216",//4361
+    "452424752301": "45242475230", //4364
+  };
+
   function setFocus() {
     setTimeout(() => input?.focus(), 100);
   }
@@ -94,21 +100,45 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
 
+  // input?.addEventListener("keypress", function (e) {
+  //   if (e.key === "Enter") {
+  //     const val = input.value.trim();
+  //     if (!val) return;
+  //     if (typeof originPickName !== 'undefined' && val === originPickName) {
+  //       completeBtn?.click();
+  //       input.value = "";
+  //       return;
+  //     }
+
+  //     console.log(val);
+
+  //     updateQty(val);
+  //     input.value = "";
+  //   }
+  // });
+
+
   input?.addEventListener("keypress", function (e) {
-    if (e.key === "Enter") {
-      const val = input.value.trim();
-      if (!val) return;
-      if (typeof originPickName !== 'undefined' && val === originPickName) {
-        completeBtn?.click();
-        input.value = "";
-        return;
-      }
+    if (e.key !== "Enter") return;
+    const raw = input.value.trim();
+    if (!raw) return;
 
-      console.log(val);
-
-      updateQty(val);
+    // nếu trùng tên pick để auto hoàn tất
+    if (typeof originPickName !== 'undefined' && raw === originPickName) {
+      completeBtn?.click();
       input.value = "";
+      return;
     }
+
+    // mapping: nếu quét “key” thì cộng 0.1 vào barcode mục tiêu
+    const targetBarcode = BARCODE_MAP_POINT_ONE[raw];
+    if (targetBarcode) {
+      updateQty(targetBarcode, 0.1);
+    } else {
+      updateQty(raw, 1);
+    }
+
+    input.value = "";
   });
 
   list?.querySelectorAll(".btn-plus").forEach(btn =>
@@ -224,39 +254,82 @@ let mediaStream = null;
 let mediaRecorder = null;
 let recordedChunks = [];
 let isRecording = false;
-const MAX_DURATION_MS = 1 * 60 * 1000;
+const MAX_DURATION_MS = 5 * 60 * 1000;
 let stopTimer = null;
-
 async function startRecording() {
   const statusDot = document.getElementById('recStatus');
   const statusText = document.getElementById('recText');
   const preview = document.getElementById('recPreview');
   if (!statusText || !preview) return;
 
-  // 1) xin quyền camera
   const constraints = {
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 640, max: 1280 }, height: { ideal: 360, max: 720 }, frameRate: { ideal: 20, max: 24 } },
+    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 24 } },
     audio: { echoCancellation: true, noiseSuppression: true }
   };
+
   try {
     try { mediaStream = await navigator.mediaDevices.getUserMedia(constraints); }
     catch { mediaStream = await navigator.mediaDevices.getUserMedia({ video: constraints.video, audio: false }); }
-  } catch (e) { statusText.textContent = 'Không thể mở camera.'; return; }
-  preview.srcObject = mediaStream; try { await preview.play(); } catch { }
+  } catch (e) {
+    statusText.textContent = 'Không thể mở camera.'; return;
+  }
 
-  // 2) khởi tạo phiên upload trên server
+  // 1) Canvas overlay
+  const videoTrack = mediaStream.getVideoTracks()[0];
+  const settings = videoTrack.getSettings();
+  const W = settings.width || 1280;
+  const H = settings.height || 720;
+
+  overlayCanvas = document.createElement('canvas');
+  overlayCanvas.width = W; overlayCanvas.height = H;
+  overlayCtx = overlayCanvas.getContext('2d');
+
+  const tempVideo = document.createElement('video');
+  tempVideo.srcObject = new MediaStream([videoTrack]);
+  tempVideo.muted = true;
+  await tempVideo.play().catch(() => { });
+
+  function drawOverlay() {
+    if (!overlayCtx) return;
+    overlayCtx.drawImage(tempVideo, 0, 0, W, H);
+
+    // timestamp + countdown
+    const nowStr = new Date().toLocaleString();
+    const remainMs = Math.max(0, endAt - Date.now());
+    const mm = String(Math.floor(remainMs / 60000)).padStart(2, '0');
+    const ss = String(Math.floor((remainMs % 60000) / 1000)).padStart(2, '0');
+
+    overlayCtx.fillStyle = 'rgba(0,0,0,0.5)';
+    overlayCtx.fillRect(0, H - 50, W, 50);
+    overlayCtx.fillStyle = '#fff';
+    overlayCtx.font = 'bold 24px Segoe UI, Arial';
+    overlayCtx.fillText(`Time: ${nowStr}   |   Auto stop in: ${mm}:${ss}`, 16, H - 16);
+
+    requestAnimationFrame(drawOverlay);
+  }
+
+  // 2) Stream để preview & record (canvas + audio)
+  const canvasStream = overlayCanvas.captureStream(24);
+  const outTracks = [...canvasStream.getVideoTracks()];
+  const audio = mediaStream.getAudioTracks()[0];
+  if (audio) outTracks.push(audio);
+  const mixedStream = new MediaStream(outTracks);
+
+  // 3) Preview dùng canvas stream (thấy luôn watermark)
+  preview.srcObject = mixedStream;
+  try { await preview.play(); } catch { }
+
+  // 4) Khởi phiên upload server
   await startServerUploadSession();
 
-  // 3) chọn mime hợp lệ cho MediaRecorder
+  // 5) MediaRecorder
   let mimeType = '';
   if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) mimeType = 'video/webm;codecs=vp9,opus';
   else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mimeType = 'video/webm;codecs=vp8,opus';
   else if (MediaRecorder.isTypeSupported('video/webm')) mimeType = 'video/webm';
-  const mrOpts = mimeType ? { mimeType, videoBitsPerSecond: 900_000, audioBitsPerSecond: 64_000 } : {};
+  const mrOpts = mimeType ? { mimeType, videoBitsPerSecond: 1_200_000, audioBitsPerSecond: 64_000 } : {};
 
-  // 4) bắt đầu ghi + đẩy CHUNK MỖI 5–10 GIÂY
-  mediaRecorder = new MediaRecorder(mediaStream, mrOpts);
-  recordedChunks = [];
+  mediaRecorder = new MediaRecorder(mixedStream, mrOpts);
   mediaRecorder.ondataavailable = (e) => {
     if (!e.data || !e.data.size) return;
     chunkBusy = chunkBusy.then(() => sendChunk(e.data)).catch(() => { });
@@ -265,28 +338,37 @@ async function startRecording() {
     isRecording = true;
     statusText.textContent = 'Đang ghi hình...';
     statusDot && statusDot.classList.add('on');
-    stopTimer = setTimeout(() => stopRecording(true), MAX_DURATION_MS);
+
+    // countdown
+    endAt = Date.now() + MAX_DURATION_MS;
+    updateCountdownLabel();                 // vẽ ngay
+    countdownTimer = setInterval(updateCountdownLabel, 500);
+
+    stopTimer = setTimeout(() => stopRecording(), MAX_DURATION_MS);
+    requestAnimationFrame(drawOverlay);
   };
   mediaRecorder.onstop = async () => {
     isRecording = false;
     clearTimeout(stopTimer);
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+
     statusText.textContent = 'Đang hoàn tất upload...';
-    // đợi các chunk cuối gửi xong, rồi báo server kết thúc phiên
     try { await chunkBusy; } catch { }
     await finishServerUploadSession();
     statusText.textContent = 'Đã gửi video lên server để xử lý.';
     statusDot && statusDot.classList.remove('on');
+
     if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+    overlayCtx = null; overlayCanvas = null;
   };
 
-  // timeslice = 5000ms (5s) → chunk nhỏ, giảm rủi ro mất dữ liệu
   mediaRecorder.start(5000);
 }
 
-async function stopRecording() {
+function stopRecording() {
   if (mediaRecorder && isRecording) { try { mediaRecorder.stop(); } catch { } }
 }
-
 
 async function uploadRecording() {
   if (!recordedChunks.length) return;
@@ -346,6 +428,15 @@ async function diag() {
   } catch { }
   console.log('[REC] DIAG =>', { secure, ua, cams });
   statusText && (statusText.title = `Diag: ${secure} | ${cams}`);
+}
+let endAt = 0;
+function updateCountdownLabel() {
+  const el = document.getElementById('recCountdown');
+  if (!el || !endAt) return;
+  const left = Math.max(0, endAt - Date.now());
+  const mm = String(Math.floor(left / 60000)).padStart(2, '0');
+  const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
+  el.textContent = `${mm}:${ss}`;
 }
 
 

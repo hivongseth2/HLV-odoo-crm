@@ -91,3 +91,5 @@
 .badge { padding:6px 10px; border-radius:999px; font-size:12px; border:1px solid transparent; }
 .badge-ok { background:#ecfdf5; color:#065f46; border-color:#a7f3d0; }
 .badge-warn { background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
+.rec-timer{ margin-top:8px; font-weight:600 }
+.rec-timer #recCountdown{ font-variant-numeric: tabular-nums }
