@@ -76,6 +76,8 @@
           const originPickName = "<t t-esc='origin_pick_name'/>";
           const driveConnected = <t t-esc="1 if drive_connected else 0"/>;
         </script>
+        <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
+
         <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
       </div>
     </t>

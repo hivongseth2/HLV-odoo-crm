@@ -1,11 +1,43 @@
 document.addEventListener("DOMContentLoaded", function () {
+
+  // Toast helper (tự tạo host nếu thiếu)
+  const toast = (() => {
+    let host = document.getElementById('toastHost');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'toastHost';
+      host.className = 'toast-host';
+      document.body.appendChild(host);
+    }
+    const push = (type, message, { title = '', ms = 2500 } = {}) => {
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.innerHTML = `
+      ${title ? `<div class="title">${title}</div>` : ''}
+      <div class="msg">${message}</div>
+      <div class="close" title="Đóng">×</div>
+    `;
+      host.appendChild(el);
+      requestAnimationFrame(() => el.classList.add('show'));
+      const close = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 200); };
+      el.querySelector('.close').addEventListener('click', close);
+      if (ms > 0) setTimeout(close, ms);
+    };
+    return {
+      success: (m, o) => push('success', m, o),
+      error: (m, o) => push('error', m, o),
+      info: (m, o) => push('info', m, o),
+      warn: (m, o) => push('warn', m, o),
+      show: push,
+    };
+  })();
+
   const input = document.getElementById("pack_barcode_input");
   const list = document.getElementById("product_list");
   const completeBtn = document.getElementById("complete_pack_btn");
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
   const BARCODE_MAP_POINT_ONE = {
-    // "KEY_SCAN": "BARCODE_SPHAM"
     "452424752161": "45242475216",//4361
     "452424752301": "45242475230", //4364
   };
@@ -70,8 +102,10 @@ document.addEventListener("DOMContentLoaded", function () {
       .then(res => res.json())
       .then(response => {
         const result = response.result;
-        if (result?.error) { alert(result.error); playError(); setFocus(); return; }
-        if (!result?.scanned?.length) { playError(); setFocus(); return; }
+
+        if (result?.error) { toast.error(result.error); playError(); setFocus(); return; }
+        if (!result?.scanned?.length) { toast.warn('Không có dòng nào được cập nhật'); playError(); setFocus(); return; }
+
 
         result.scanned.forEach(item => {
 
@@ -98,24 +132,6 @@ document.addEventListener("DOMContentLoaded", function () {
       });
 
   }
-
-
-  // input?.addEventListener("keypress", function (e) {
-  //   if (e.key === "Enter") {
-  //     const val = input.value.trim();
-  //     if (!val) return;
-  //     if (typeof originPickName !== 'undefined' && val === originPickName) {
-  //       completeBtn?.click();
-  //       input.value = "";
-  //       return;
-  //     }
-
-  //     console.log(val);
-
-  //     updateQty(val);
-  //     input.value = "";
-  //   }
-  // });
 
 
   input?.addEventListener("keypress", function (e) {
@@ -163,10 +179,12 @@ document.addEventListener("DOMContentLoaded", function () {
       const required = parseFloat(spanEls[1]?.innerText || 0);
       if (done < required) { isValid = false; missingProducts.push(`${name} (${done}/${required})`); }
     });
+
     if (!isValid) {
-      alert("❌ Chưa quét đủ các sản phẩm sau:\n\n- " + missingProducts.join("\n- "));
+      toast.warn("❌ Chưa quét đủ:\n- " + missingProducts.join("\n- "), { ms: 3500 });
       return;
     }
+
 
     const res = await fetch("/pack_scan/complete_picking", {
       method: "POST",
@@ -176,13 +194,15 @@ document.addEventListener("DOMContentLoaded", function () {
     const response = await res.json();
     if (response.error || response.result?.error) {
       const msg = response.error?.message || response.result?.error || "❌ Có lỗi xảy ra!";
-      alert(msg); return;
+      toast.error(msg, { ms: 1800 })
+
+      return;
     }
 
     // dừng ghi (sẽ tự upload trong onstop)
     await stopRecording();
-    // alert(response.message || "✅ Phiếu đã hoàn tất!");
-    // chờ 0.5s cho upload bắt đầu rồi hẵng rời trang
+
+    toast.success("✅ Phiếu đã hoàn tất! Đang chuyển trang...", { ms: 1200 });
     setTimeout(() => { window.location.href = "/custom_barcode_scan/ui"; }, 600);
   });
 
@@ -416,15 +436,17 @@ async function uploadRecording() {
     });
     const txt = await resp.text().catch(() => '');
     if (!resp.ok) {
-      console.error('[REC] upload fail:', resp.status, txt);
-      if (resp.status === 413) alert('Video quá lớn (413). Hãy quay ngắn hơn/hạ chất lượng.');
-      else alert(`Tải video lên thất bại (${resp.status}). ${txt || ''}`);
+      if (resp.status === 413) toast.error('Video quá lớn (413). Hãy quay ngắn hơn/hạ chất lượng.', { ms: 4000 });
+      else toast.error(`Tải video lên thất bại (${resp.status}). ${txt || ''}`, { ms: 4000 });
     } else {
-      console.info('[REC] upload ok');
+      toast.success('Đã tải video lên.', { ms: 1800 });
     }
+
   } catch (e) {
     console.error('[REC] upload error:', e);
-    alert('Không thể tải video lên. Kiểm tra mạng.');
+    // alert('Không thể tải video lên. Kiểm tra mạng.');
+    toast.error('Không thể tải video lên. Kiểm tra mạng.', { ms: 3500 });
+
   } finally {
     recordedChunks = [];
   }
