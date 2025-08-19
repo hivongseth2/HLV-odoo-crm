@@ -325,7 +325,7 @@ async function startRecording() {
 
     overlayCtx.fillStyle = '#fff';
     overlayCtx.font = 'bold 24px Segoe UI, Arial';
-    overlayCtx.fillText(`Time: ${new Date().toLocaleString()}   |   Auto stop in: ${mm}:${ss}`, 16, H - 16);
+    overlayCtx.fillText(`Time: ${new Date().toLocaleString()} `, 16, H - 16);
 
     drawRAF = requestAnimationFrame(drawOverlay);
   }
