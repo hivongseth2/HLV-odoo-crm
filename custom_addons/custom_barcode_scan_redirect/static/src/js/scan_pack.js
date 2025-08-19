@@ -257,14 +257,8 @@ let isRecording = false;
 let chunkBusy = Promise.resolve();
 
 const MAX_DURATION_MS = 5 * 60 * 1000; // 5 phút
-let stopTimer = null;
-let countdownTimer = null;
-let endAt = 0;
-
-// overlay
-let overlayCanvas = null;
-let overlayCtx = null;
-let drawRAF = 0;
+let stopTimer = null, countdownTimer = null, endAt = 0;
+let overlayCanvas = null, overlayCtx = null, drawRAF = 0;
 
 function updateCountdownLabel() {
   const el = document.getElementById('recCountdown');
@@ -281,7 +275,7 @@ async function startRecording() {
   const preview = document.getElementById('recPreview');
   if (!statusText || !preview) return;
 
-  // 1) xin quyền camera
+  // 1) getUserMedia (ưu tiên có audio, fail thì tắt audio)
   const constraints = {
     video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 24 } },
     audio: { echoCancellation: true, noiseSuppression: true }
@@ -291,10 +285,11 @@ async function startRecording() {
     catch { mediaStream = await navigator.mediaDevices.getUserMedia({ video: constraints.video, audio: false }); }
   } catch (e) {
     statusText.textContent = 'Không thể mở camera.';
+    console.error('[REC] getUserMedia failed:', e);
     return;
   }
 
-  // 2) canvas overlay để chèn timestamp + đếm ngược
+  // 2) Chuẩn bị canvas overlay & vẽ NGAY (tránh màn hình đen)
   const vTrack = mediaStream.getVideoTracks()[0];
   const s = vTrack.getSettings ? vTrack.getSettings() : {};
   const W = s.width || 1280, H = s.height || 720;
@@ -303,48 +298,53 @@ async function startRecording() {
   overlayCanvas.width = W; overlayCanvas.height = H;
   overlayCtx = overlayCanvas.getContext('2d');
 
-  // video trung gian để vẽ lên canvas
   const rawVideo = document.createElement('video');
   rawVideo.srcObject = new MediaStream([vTrack]);
   rawVideo.muted = true;
-  await rawVideo.play().catch(() => { });
+  rawVideo.playsInline = true;
+  rawVideo.autoplay = true;
+  try { await rawVideo.play(); } catch { }
+
+  // set end time & bắt đầu đếm ngược ngay
+  endAt = Date.now() + MAX_DURATION_MS;
+  updateCountdownLabel();
+  clearInterval(countdownTimer);
+  countdownTimer = setInterval(updateCountdownLabel, 500);
 
   function drawOverlay() {
     if (!overlayCtx) return;
     overlayCtx.drawImage(rawVideo, 0, 0, W, H);
 
-    // thanh nền
+    // dải nền + text
     overlayCtx.fillStyle = 'rgba(0,0,0,0.5)';
     overlayCtx.fillRect(0, H - 52, W, 52);
 
-    // text: timestamp + đếm ngược
-    const nowStr = new Date().toLocaleString();
     const left = Math.max(0, endAt - Date.now());
     const mm = String(Math.floor(left / 60000)).padStart(2, '0');
     const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
 
     overlayCtx.fillStyle = '#fff';
     overlayCtx.font = 'bold 24px Segoe UI, Arial';
-    overlayCtx.fillText(`Time: ${nowStr}   |   Auto stop in: ${mm}:${ss}`, 16, H - 16);
+    overlayCtx.fillText(`Time: ${new Date().toLocaleString()}   |   Auto stop in: ${mm}:${ss}`, 16, H - 16);
 
     drawRAF = requestAnimationFrame(drawOverlay);
   }
+  drawOverlay(); // ← vẽ ngay để preview có khung hình
 
-  // 3) stream để preview & record (canvas video + audio thật)
+  // 3) stream từ canvas + audio để preview & ghi
   const canvasStream = overlayCanvas.captureStream(24);
-  const outTracks = [...canvasStream.getVideoTracks()];
-  const audio = mediaStream.getAudioTracks()[0];
-  if (audio) outTracks.push(audio);
-  const mixedStream = new MediaStream(outTracks);
+  const tracks = [canvasStream.getVideoTracks()[0]];
+  const a = mediaStream.getAudioTracks()[0];
+  if (a) tracks.push(a);
+  const mixedStream = new MediaStream(tracks);
 
-  // 4) preview thấy luôn watermark
   preview.srcObject = mixedStream;
   try { await preview.play(); } catch { }
 
-  // 5) khởi tạo phiên upload
+  // 4) khởi tạo phiên upload
   await startServerUploadSession();
 
-  // 6) MediaRecorder
+  // 5) MediaRecorder
   let mimeType = '';
   if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) mimeType = 'video/webm;codecs=vp9,opus';
   else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mimeType = 'video/webm;codecs=vp8,opus';
@@ -358,21 +358,9 @@ async function startRecording() {
   };
   mediaRecorder.onstart = () => {
     isRecording = true;
-    const statusText = document.getElementById('recText');
     statusText.textContent = 'Đang ghi hình...';
-    const statusDot = document.getElementById('recStatus');
     statusDot && statusDot.classList.add('on');
-
-    // countdown
-    endAt = Date.now() + MAX_DURATION_MS;
-    updateCountdownLabel();                              // vẽ ngay 1 nhịp
-    countdownTimer = setInterval(updateCountdownLabel, 500);
-
-    // auto stop sau 5 phút
     stopTimer = setTimeout(() => stopRecording(), MAX_DURATION_MS);
-
-    // bắt đầu vòng vẽ overlay
-    drawOverlay();
   };
   mediaRecorder.onstop = async () => {
     isRecording = false;
@@ -380,14 +368,11 @@ async function startRecording() {
     try { clearInterval(countdownTimer); } catch { }
     countdownTimer = null;
 
-    const statusText = document.getElementById('recText');
     statusText.textContent = 'Đang hoàn tất upload...';
-
     try { await chunkBusy; } catch { }
     await finishServerUploadSession();
 
     statusText.textContent = 'Đã gửi video lên server để xử lý.';
-    const statusDot = document.getElementById('recStatus');
     statusDot && statusDot.classList.remove('on');
 
     if (drawRAF) cancelAnimationFrame(drawRAF);
@@ -396,15 +381,18 @@ async function startRecording() {
     if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
   };
 
-  // chia chunk 5s
-  mediaRecorder.start(5000);
+  try {
+    mediaRecorder.start(5000); // chia chunk 5s
+  } catch (err) {
+    console.error('[REC] mediaRecorder.start failed:', err);
+    statusText.textContent = 'Không thể bắt đầu ghi hình.';
+  }
 }
 
 function stopRecording() {
-  if (mediaRecorder && isRecording) {
-    try { mediaRecorder.stop(); } catch { }
-  }
+  if (mediaRecorder && isRecording) { try { mediaRecorder.stop(); } catch { } }
 }
+
 
 async function uploadRecording() {
   if (!recordedChunks.length) return;
@@ -466,19 +454,4 @@ async function diag() {
   statusText && (statusText.title = `Diag: ${secure} | ${cams}`);
 }
 
-// let endAt = 0;
-// function updateCountdownLabel() {
-//   const el = document.getElementById('recCountdown');
-//   if (!el || !endAt) return;
-//   const left = Math.max(0, endAt - Date.now());
-//   const mm = String(Math.floor(left / 60000)).padStart(2, '0');
-//   const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, '0');
-//   el.textContent = `${mm}:${ss}`;
-// }
-
-// stop khi rời trang
-// window.addEventListener('beforeunload', () => { if (isRecording) stopRecording(); });
-// window.addEventListener('visibilitychange', () => {
-//   if (document.visibilityState === 'hidden') { try { mediaRecorder && mediaRecorder.stop(); } catch { } }
-// });
 window.addEventListener('beforeunload', () => { try { mediaRecorder && mediaRecorder.stop(); } catch { } });

@@ -93,3 +93,9 @@
 .badge-warn { background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
 .rec-timer{ margin-top:8px; font-weight:600 }
 .rec-timer #recCountdown{ font-variant-numeric: tabular-nums }
+.rec-countdown{
+  margin-left:auto;
+  font-variant-numeric: tabular-nums;
+  background:#111;color:#fff;
+  padding:2px 8px;border-radius:6px;opacity:.85
+}

@@ -17,9 +17,7 @@
               <span>🧾 Từ phiếu Pick:</span>
               <strong class="text-brand" t-esc="origin_pick_name"/>
             </div>
-            <div class="rec-timer">
-              ⏳ Còn lại: <span id="recCountdown">05:00</span>
-            </div>
+    
           </div>
           <div class="right">
             <span t-if="drive_connected" class="badge badge-ok">Drive đã kết nối</span>
@@ -62,10 +60,12 @@
 
           <!-- Right: recording -->
           <div class="recording-pane card">
-            <div class="rec-header">
+                <div class="rec-header">
               <span id="recStatus" class="rec-dot">●</span>
               <span id="recText">Đang chuẩn bị camera...</span>
+              <span id="recCountdown" class="rec-countdown" title="Tự dừng sau 5 phút">05:00</span>
             </div>
+
             <video id="recPreview" autoplay="autoplay" muted="muted" playsinline="playsinline"></video>
             <div class="rec-hint">Video sẽ tự upload ngầm ngay khi đang quay.</div>
           </div>
