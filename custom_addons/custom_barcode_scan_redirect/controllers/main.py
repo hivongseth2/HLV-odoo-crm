@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 from werkzeug.wrappers import Response
 from werkzeug.exceptions import BadRequest, NotFound, UnsupportedMediaType, RequestEntityTooLarge
 from tempfile import NamedTemporaryFile
+from markupsafe import Markup, escape
 
 # PyDrive2 để upload My Drive
 from pydrive2.auth import GoogleAuth
@@ -165,11 +166,26 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             fid = gfile['id']
             link = gfile.get('alternateLink') or f"https://drive.google.com/file/d/{fid}/view"
 
+            # if picking.exists():
+           
+            #     picking.message_post(
+            #     body=f"📹 Video đóng gói: <a href='{link}' target='_blank'>{safe_title}</a>"
+            #         )
+
+
+            # ... sau khi đã có: fid, link, safe_title
             if picking.exists():
-                # picking.message_post(body=f"📹 Video đóng gói đã tải lên Drive: <a href='{link}' target='_blank'>{safe_title}</a>")
+                # Tạo body HTML an toàn: escape title & url, rồi wrap bằng Markup
+                body = Markup(
+                    '📹 Video đóng gói: '
+                    '<a href="{url}" target="_blank" rel="noopener noreferrer">{title}</a>'
+                ).format(url=escape(link or ''), title=escape(safe_title or 'Video'))
+
                 picking.message_post(
-                body=f"📹 Video đóng gói: <a href='{link}' target='_blank'>{safe_title}</a>"
-                    )
+                    body=body,
+                    message_type='comment',
+                    subtype_xmlid='mail.mt_note',
+                )
 
             _logger.info("✅ BG_UPLOAD ok: %s (%s) %s", safe_title, fid, link)
 
