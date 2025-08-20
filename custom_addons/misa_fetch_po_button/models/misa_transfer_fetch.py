@@ -176,6 +176,11 @@ class MisaTransferFetch(models.TransientModel):
                         _logger.warning("Không tìm thấy picking type 'internal' cho from_location: %s",
                                         from_location.display_name)
                         continue
+                    
+                    name_val = (ref_info.get('refno_finance', '') or '').strip()
+                        if not name_val:
+                            _logger.warning("⚠️ Bỏ qua vì thiếu refno_finance cho refid=%s", refid)
+                            continue
 
                     # Kiểm tra tồn tại (name + picking_type + from/to)
                     picking = self.env['stock.picking'].search([
