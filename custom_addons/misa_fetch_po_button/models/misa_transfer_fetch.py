@@ -178,9 +178,9 @@ class MisaTransferFetch(models.TransientModel):
                         continue
                     
                     name_val = (ref_info.get('refno_finance', '') or '').strip()
-                        if not name_val:
-                            _logger.warning("⚠️ Bỏ qua vì thiếu refno_finance cho refid=%s", refid)
-                            continue
+                    if not name_val:
+                        _logger.warning("⚠️ Bỏ qua vì thiếu refno_finance cho refid=%s", refid)
+                        continue
 
                     # Kiểm tra tồn tại (name + picking_type + from/to)
                     picking = self.env['stock.picking'].search([
