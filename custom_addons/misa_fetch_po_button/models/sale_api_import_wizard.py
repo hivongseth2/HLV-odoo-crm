@@ -142,7 +142,8 @@ class SaleApiImportWizard(models.TransientModel):
                 sale_order = self.env['sale.order'].create({
                     'name': order_ref,
                     'partner_id': partner.id,
-                    'date_order': order_date,
+                    # 'date_order': order_date,
+                    'date_order': order_date.strftime("%Y-%m-%d %H:%M:%S"),
                     'amount_total': amount,
                     'warehouse_id': warehouse.id,  # ⬅️ Gán kho tại đây
 
