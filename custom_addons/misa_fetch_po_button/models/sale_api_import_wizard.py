@@ -138,7 +138,7 @@ class SaleApiImportWizard(models.TransientModel):
                 if existing_order:
                     _logger.info("🔁 Bỏ qua đơn hàng đã tồn tại: %s", order_ref)
                     continue
-
+                _logger.warning("📦 Order time  %s",  order_date )
                 sale_order = self.env['sale.order'].create({
                     'name': order_ref,
                     'partner_id': partner.id,
