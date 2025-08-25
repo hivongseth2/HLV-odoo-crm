@@ -55,7 +55,8 @@ class MisaTransferFetch(models.TransientModel):
         # Map code MISA -> complete_name của stock.location trong Odoo
         stock_mapping = {
             "HCM":        "TSN/Stock",
-            "SHOWROOM161":"TSN/showroom",
+            # "SHOWROOM161":"TSN/showroom",
+             "HCM_SHOWROOM":"TSNSR/Stock",
             "BENCAM":     "KBC/Tồn kho",
             "HIENDUC":    "KHD/Tồn kho",
         }

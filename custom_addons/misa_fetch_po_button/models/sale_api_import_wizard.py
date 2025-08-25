@@ -33,7 +33,8 @@ class SaleApiImportWizard(models.TransientModel):
         stock_mapping = {
             "HCM": "TSN/Stock",
             "BENCAM": "KBC/Tồn kho",
-            "HIENDUC": "KHD/Tồn kho"
+            "HIENDUC": "KHD/Tồn kho",
+             "HCM_SHOWROOM":"TSNSR/Stock"
         }
 
 
