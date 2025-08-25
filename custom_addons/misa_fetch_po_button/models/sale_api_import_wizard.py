@@ -91,7 +91,7 @@ class SaleApiImportWizard(models.TransientModel):
 
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url,sale_headers,payload)
                 
-                _logger.warning("📦 Order product_lines %s",  product_lines)
+                # _logger.warning("📦 Order product_lines %s",  product_lines)
                 
                 stock_id = product_lines[0].get("StockIDText") if product_lines else None
 
@@ -127,7 +127,14 @@ class SaleApiImportWizard(models.TransientModel):
                 order_ref = order.get("SaleOrderNo")
 
                 amount = float(order.get("SaleOrderAmount", 0.0))
-                order_date = parse(order.get("SaleOrderDate")).replace(tzinfo=None)
+                # order_date = parse(order.get("SaleOrderDate")).replace(tzinfo=None)
+                
+                order_date = parse(order.get("SaleOrderDate"))
+                _logger.warning("📦 Raw OrderDate string: %s", order.get("SaleOrderDate"))
+                _logger.warning("📦 Parsed OrderDate obj: %s", order_date)
+                
+                order_date_utc = order_date.astimezone(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S")
+
                 if not order_ref or not customer_name:
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
                     continue
@@ -139,11 +146,13 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.info("🔁 Bỏ qua đơn hàng đã tồn tại: %s", order_ref)
                     continue
                 _logger.warning("📦 Order time  %s",  order_date )
+                _logger.warning("📦 Order order_date_utc  %s",  order_date_utc )
+
                 sale_order = self.env['sale.order'].create({
                     'name': order_ref,
                     'partner_id': partner.id,
                     # 'date_order': order_date,
-                    'date_order': order_date.strftime("%Y-%m-%d %H:%M:%S"),
+                    'date_order': order_date_utc,
                     'amount_total': amount,
                     'warehouse_id': warehouse.id,  # ⬅️ Gán kho tại đây
 
