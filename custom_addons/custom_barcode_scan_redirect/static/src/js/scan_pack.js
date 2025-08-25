@@ -38,8 +38,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
   const BARCODE_MAP_POINT_ONE = {
-    "452424752161": "45242475216",//4361
-    "452424752301": "45242475230", //4364
+    "452424752161": "045242475216",//4361
+    "452424752301": "045242475230", //4364
   };
 
   function setFocus() {
