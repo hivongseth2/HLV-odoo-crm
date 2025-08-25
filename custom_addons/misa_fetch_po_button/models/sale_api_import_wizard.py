@@ -52,6 +52,7 @@ class SaleApiImportWizard(models.TransientModel):
                     'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY'
                     'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK',
                     'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK',
+                    'TOOL DEWALT'
                     
                     
                     }   
