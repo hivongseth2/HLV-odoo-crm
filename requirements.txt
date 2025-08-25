@@ -6,3 +6,7 @@ ffmpeg-python
 google-api-python-client 
 google-auth 
 google-auth-oauthlib
+pydrive2
+oauth2client
+
+
