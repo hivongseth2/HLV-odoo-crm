@@ -48,11 +48,12 @@ class SaleApiImportWizard(models.TransientModel):
                     "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
                     "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK",
                     "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
-                    'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN',
-                    'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY'
-                    'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK',
-                    'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK',
-                    'TOOL DEWALT'
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+                    "TOOL DEWALT",
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY"
                     
                     
                     }   
