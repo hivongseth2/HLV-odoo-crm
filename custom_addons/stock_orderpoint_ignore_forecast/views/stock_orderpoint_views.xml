@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-  <!-- FORM: thêm hiển thị số Min và nút Order (Min) -->
+  <!-- FORM: hiển thị số Min và nút Order (Min) -->
   <record id="view_orderpoint_form_min_only" model="ir.ui.view">
     <field name="name">stock.warehouse.orderpoint.form.min.only</field>
     <field name="model">stock.warehouse.orderpoint</field>
     <field name="inherit_id" ref="stock.view_warehouse_orderpoint_form"/>
     <field name="arch" type="xml">
-      <!-- chèn sau qty_multiple cho chắc -->
+      <!-- chèn sau qty_multiple để tránh đụng cấu trúc -->
       <xpath expr="//field[@name='qty_multiple']" position="after">
         <label for="qty_to_order_min_only"/>
         <div class="o_row">
@@ -20,7 +20,7 @@
     </field>
   </record>
 
-  <!-- LIST: thêm cột 'Cần đặt (Min)' và nút Order (Min) -->
+  <!-- LIST: thêm cột Min và nút Order (Min). Lưu ý list dùng <list>, không phải <tree> -->
   <record id="view_orderpoint_list_min_only" model="ir.ui.view">
     <field name="name">stock.warehouse.orderpoint.list.min.only</field>
     <field name="model">stock.warehouse.orderpoint</field>

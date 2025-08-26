@@ -6,13 +6,13 @@ from odoo.tools.float_utils import float_round
 class StockWarehouseOrderpoint(models.Model):
     _inherit = "stock.warehouse.orderpoint"
 
-    # CỘT MỚI: chỉ bù tới Min theo tồn thực tế, bỏ Forecast
+    # CỘT MỚI: chỉ bù tới Min dựa trên tồn thực tế (bỏ Forecast)
     qty_to_order_min_only = fields.Float(
         string="Cần đặt (Min)",
         compute="_compute_qty_to_order_min_only",
         digits="Product Unit of Measure",
-        help="= max(0, Tồn tối thiểu − Tồn hiện có), có áp dụng qty_multiple và làm tròn theo UoM. "
-             "Không dùng Forecast.",
+        help="= max(0, Tồn tối thiểu − Hiện có), áp dụng bội số (qty_multiple) và làm tròn theo UoM. "
+             "Không sử dụng Dự báo (Forecast).",
         store=False,
     )
 
@@ -28,7 +28,10 @@ class StockWarehouseOrderpoint(models.Model):
             op.qty_to_order_min_only = float_round(need, precision_rounding=rounding)
 
     def action_replenish_min_only(self):
-        """Đặt hàng theo số 'Cần đặt (Min)' bằng cơ chế qty_to_order_manual, rồi gọi replenish."""
+        """
+        Đặt hàng theo số 'Cần đặt (Min)' bằng qty_to_order_manual, rồi gọi replenish như thường.
+        Không sửa logic mặc định của Odoo cho cột 'Cần đặt hàng' (vẫn theo Forecast).
+        """
         for op in self:
             if op.qty_to_order_min_only and op.qty_to_order_min_only > 0:
                 op.qty_to_order_manual = op.qty_to_order_min_only
