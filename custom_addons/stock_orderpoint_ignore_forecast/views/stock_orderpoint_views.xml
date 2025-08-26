@@ -1,13 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
+  <!-- FORM: chèn checkbox sau product_max_qty -->
   <record id="view_orderpoint_form_ignore_forecast" model="ir.ui.view">
     <field name="name">stock.warehouse.orderpoint.form.ignore.forecast</field>
     <field name="model">stock.warehouse.orderpoint</field>
-    <!-- XML ID form của bạn -->
     <field name="inherit_id" ref="stock.view_warehouse_orderpoint_form"/>
     <field name="arch" type="xml">
       <xpath expr="//field[@name='product_max_qty']" position="after">
         <field name="ignore_forecast"/>
+      </xpath>
+    </field>
+  </record>
+
+  <!-- LIST: chèn cột sau product_max_qty (view ID: stock.view_warehouse_orderpoint_tree_editable) -->
+  <record id="view_orderpoint_list_ignore_forecast" model="ir.ui.view">
+    <field name="name">stock.warehouse.orderpoint.list.ignore.forecast</field>
+    <field name="model">stock.warehouse.orderpoint</field>
+    <field name="inherit_id" ref="stock.view_warehouse_orderpoint_tree_editable"/>
+    <field name="arch" type="xml">
+      <!-- Lưu ý: view của bạn dùng <list>, nên XPath nhắm vào <list/...>. 
+           Dùng selector chung //field[@name='product_max_qty'] để an toàn. -->
+      <xpath expr="//field[@name='product_max_qty']" position="after">
+        <field name="ignore_forecast" optional="show"/>
       </xpath>
     </field>
   </record>
