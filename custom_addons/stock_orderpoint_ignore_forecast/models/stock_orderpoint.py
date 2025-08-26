@@ -6,51 +6,30 @@ from odoo.tools.float_utils import float_round
 class StockWarehouseOrderpoint(models.Model):
     _inherit = "stock.warehouse.orderpoint"
 
-    ignore_forecast = fields.Boolean(
-        string="Ignore Forecast",
-        help="Nếu bật, chỉ bù đến tồn tối thiểu theo tồn thực tế (bỏ Forecast).",
-        default=True,
+    # CỘT MỚI: chỉ bù tới Min theo tồn thực tế, bỏ Forecast
+    qty_to_order_min_only = fields.Float(
+        string="Cần đặt (Min)",
+        compute="_compute_qty_to_order_min_only",
+        digits="Product Unit of Measure",
+        help="= max(0, Tồn tối thiểu − Tồn hiện có), có áp dụng qty_multiple và làm tròn theo UoM. "
+             "Không dùng Forecast.",
+        store=False,
     )
 
-    @api.depends(
-        'ignore_forecast', 'trigger',
-        'product_min_qty', 'product_max_qty',
-        'qty_on_hand', 'qty_forecast',
-        'qty_multiple', 'product_id.uom_id'
-    )
-    def _compute_qty_to_order(self):
+    @api.depends('product_min_qty', 'qty_on_hand', 'qty_multiple', 'product_id.uom_id')
+    def _compute_qty_to_order_min_only(self):
         for op in self:
-            # Nếu manual thì để người dùng nhập tay, không đụng vào
-            if op.trigger != 'auto':
-                continue
-
-            # Công thức theo yêu cầu khi tick Ignore Forecast
-            if op.ignore_forecast:
-                base = op.product_min_qty - (op.qty_on_hand or 0.0)
-            else:
-                # Công thức gần tương đương mặc định Odoo (đạt Max theo Forecast)
-                base = op.product_max_qty - (op.qty_forecast or 0.0)
-
-            need = max(0.0, base)
-
-            # Áp dụng bội số đặt hàng (nếu có)
+            on_hand = op.qty_on_hand or 0.0
+            min_qty = op.product_min_qty or 0.0
+            need = max(0.0, min_qty - on_hand)
             if op.qty_multiple:
-                need = ceil(need / op.qty_multiple) * op.qty_multiple
-
-            # Làm tròn theo UoM của sản phẩm
+                need = ceil(need / (op.qty_multiple or 1.0)) * op.qty_multiple
             rounding = (op.product_id.uom_id and op.product_id.uom_id.rounding) or 1.0
-            op.qty_to_order = float_round(need, precision_rounding=rounding)
+            op.qty_to_order_min_only = float_round(need, precision_rounding=rounding)
 
-    # Scheduler / replenish vẫn hoạt động đúng với Ignore Forecast
-    def _quantity_to_order(self, product, qty_available, qty_forecast, **kwargs):
-        self.ensure_one()
-        if self.ignore_forecast and self.trigger == 'auto':
-            on_hand = product.qty_available
-            base = self.product_min_qty - (on_hand or 0.0)
-            need = max(0.0, base)
-            if self.qty_multiple:
-                need = ceil(need / self.qty_multiple) * self.qty_multiple
-            rounding = (product.uom_id and product.uom_id.rounding) or 1.0
-            return float_round(need, precision_rounding=rounding)
-        # Ngược lại giữ hành vi gốc
-        return super()._quantity_to_order(product, qty_available, qty_forecast, **kwargs)
+    def action_replenish_min_only(self):
+        """Đặt hàng theo số 'Cần đặt (Min)' bằng cơ chế qty_to_order_manual, rồi gọi replenish."""
+        for op in self:
+            if op.qty_to_order_min_only and op.qty_to_order_min_only > 0:
+                op.qty_to_order_manual = op.qty_to_order_min_only
+        return self.action_replenish()

@@ -1,38 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
-  <!-- FORM -->
+  <!-- FORM: thêm hiển thị số Min và nút Order (Min) -->
   <record id="view_orderpoint_form_min_only" model="ir.ui.view">
     <field name="name">stock.warehouse.orderpoint.form.min.only</field>
     <field name="model">stock.warehouse.orderpoint</field>
     <field name="inherit_id" ref="stock.view_warehouse_orderpoint_form"/>
     <field name="arch" type="xml">
+      <!-- chèn sau qty_multiple cho chắc -->
       <xpath expr="//field[@name='qty_multiple']" position="after">
         <label for="qty_to_order_min_only"/>
         <div class="o_row">
           <field name="qty_to_order_min_only" readonly="1"/>
           <field name="product_uom_name"/>
           <button name="action_replenish_min_only" string="Order (Min)" type="object"
-                  class="o_replenish_buttons"
-                  icon="fa-truck"
+                  class="o_replenish_buttons" icon="fa-truck"
                   attrs="{'invisible': ['|', ('qty_to_order_min_only','&amp;lt;=', 0.0), ('trigger','!=','auto')]}"/>
         </div>
       </xpath>
     </field>
   </record>
 
-  <!-- LIST -->
+  <!-- LIST: thêm cột 'Cần đặt (Min)' và nút Order (Min) -->
   <record id="view_orderpoint_list_min_only" model="ir.ui.view">
     <field name="name">stock.warehouse.orderpoint.list.min.only</field>
     <field name="model">stock.warehouse.orderpoint</field>
     <field name="inherit_id" ref="stock.view_warehouse_orderpoint_tree_editable"/>
     <field name="arch" type="xml">
+      <!-- cột mới ngay sau qty_to_order -->
       <xpath expr="//field[@name='qty_to_order']" position="after">
         <field name="qty_to_order_min_only" string="Cần đặt (Min)" optional="show"/>
       </xpath>
+      <!-- nút Order (Min) ngay cạnh nút Order -->
       <xpath expr="//button[@name='action_replenish']" position="after">
         <button name="action_replenish_min_only" string="Order (Min)" type="object"
-                class="o_replenish_buttons"
-                icon="fa-truck"
+                class="o_replenish_buttons" icon="fa-truck"
                 attrs="{'invisible': ['|', ('qty_to_order_min_only','&amp;lt;=', 0.0), ('trigger','!=','auto')]}"/>
       </xpath>
     </field>
