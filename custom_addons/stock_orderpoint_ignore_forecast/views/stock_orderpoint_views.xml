@@ -5,10 +5,9 @@
     <field name="model">stock.warehouse.orderpoint</field>
     <field name="inherit_id" ref="stock.view_orderpoint_form"/>
     <field name="arch" type="xml">
-      <xpath expr="//group[hasclass('oe_title')]/following-sibling::group[1]" position="inside">
-        <group string="Behavior">
-          <field name="ignore_forecast"/>
-        </group>
+      <!-- Chèn field ngay sau product_max_qty để ổn định trên Odoo 16 -->
+      <xpath expr="//field[@name='product_max_qty']" position="after">
+        <field name="ignore_forecast"/>
       </xpath>
     </field>
   </record>
