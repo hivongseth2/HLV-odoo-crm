@@ -2,7 +2,7 @@
 {
     "name": "Reordering Rule: Ignore Forecast",
     "summary": "Thêm tùy chọn bỏ qua Dự báo khi tính số lượng cần đặt hàng",
-    "version": "16.0.1.0.0",
+    "version": "16.0.1",
     "category": "Inventory/Inventory",
     "license": "LGPL-3",
     "author": "Your Company",
