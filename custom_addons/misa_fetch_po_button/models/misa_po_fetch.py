@@ -12,7 +12,15 @@ class MisaPOFetch(models.TransientModel):
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
 
+
     def action_fetch_po(self):
+        def _to_naive_utc(dt_str: str):
+            """'2025-08-26T00:00:00.000+07:00' -> 2025-08-25 17:00:00 (naive UTC)"""
+            if not dt_str:
+                return False
+            aware = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            return aware.astimezone(timezone.utc).replace(tzinfo=None)
+        
         misa_utils = self.env['misa.api.utils']
         odoo_utils = self.env['odoo.utils']
         misa_config = self.env['misa.config']
@@ -83,14 +91,8 @@ class MisaPOFetch(models.TransientModel):
                 memo = po.get("journal_memo", "")
                 
                 receive_date_str = po.get("receive_date") or po.get("refdate")
-                planned_dt_utc = None
-                if receive_date_str:
-                    try:
-                        # "2025-08-26T00:00:00.000+07:00" -> aware -> UTC
-                        planned_local = datetime.fromisoformat(receive_date_str)
-                        planned_dt_utc = planned_local.astimezone(timezone.utc)  # ⬅️ NEW
-                    except Exception as e:
-                        _logger.warning("⚠️ Không parse được receive_date/refdate: %s (%s)", receive_date_str, e)
+                planned_naive_utc = _to_naive_utc(receive_date_str)
+                
 
 
                 partner = odoo_utils._get_or_create_partner(supplier_name)
@@ -180,8 +182,8 @@ class MisaPOFetch(models.TransientModel):
                     "name": refno,
                 }
                 
-                if planned_dt_utc:
-                    po_vals["date_planned"] = planned_dt_utc  # ⬅️ NEW (Receipt Date trên đầu đơn)
+                if planned_naive_utc:
+                    po_vals["date_planned"] = planned_naive_utc 
 
                 po_rec = self.env["purchase.order"].create(po_vals)
 
@@ -211,8 +213,8 @@ class MisaPOFetch(models.TransientModel):
                         "price_unit": price,
                     }
                     
-                    if planned_dt_utc:
-                        pol_vals["date_planned"] = planned_dt_utc
+                    if planned_naive_utc:
+                        pol_vals["date_planned"] = planned_naive_utc  
 
                     # self.env["purchase.order.line"].create({
                     #     "order_id": po_rec.id,
