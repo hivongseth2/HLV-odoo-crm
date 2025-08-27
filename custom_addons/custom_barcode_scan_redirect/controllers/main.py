@@ -20,7 +20,7 @@ _logger = logging.getLogger(__name__)
 
 # ====== Cấu hình upload trực tiếp (fallback) ======
 ALLOWED_MIME = {'video/webm', 'video/mp4', 'video/ogg'}
-MAX_UPLOAD_MB = 200
+MAX_UPLOAD_MB = 400
 
 # ====== Khu lưu stream tạm theo CHUNK ======
 STREAM_DIR = os.path.join(tempfile.gettempdir(), 'pack_streams')
