@@ -184,14 +184,14 @@ class MisaTransferFetch(models.TransientModel):
                         _logger.warning("⚠️ Bỏ qua vì thiếu refno_finance cho refid=%s", refid)
                         continue
                     
-                    company_id = self.env.user.company_id.id
+                    # company_id = self.env.user.company_id.id
                     exists_any = self.env['stock.picking'].search_count([
-                        ('name', '=', name_val),
-                        ('company_id', '=', company_id),
+                        ('name', '=', name_val)
+                        # ('company_id', '=', company_id),
                     ])
                     
                     if exists_any:
-                        _logger.info("⏭️ Bỏ qua ref %s vì đã có picking name=%s trong company_id=%s", refid, name_val, company_id)
+                        _logger.info("⏭️ Bỏ qua ref %s vì đã có picking name=%s trong company_id=%s", refid, name_val)
                         continue
 
 
