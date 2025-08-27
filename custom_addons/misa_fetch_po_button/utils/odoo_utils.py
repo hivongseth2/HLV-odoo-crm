@@ -229,3 +229,6 @@ class OdooUtils(models.AbstractModel):
             return token
         except Exception as e:
             raise Exception(f"Lỗi lấy token từ MISA: {e}")
+        
+        
+    

@@ -11,6 +11,63 @@ class MisaPOFetch(models.TransientModel):
     _description = "MISA PO Fetch"
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
+    
+    def _get_or_create_vn_vat(self, rate, use='purchase'):
+        Tax = self.env['account.tax'].with_company(self.env.company)
+        rate = float(rate)
+        tax = Tax.search([
+            ('type_tax_use', '=', use),
+            ('amount_type', '=', 'percent'),
+            ('amount', '=', rate),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+        if tax:
+            return tax
+        country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
+        rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
+        return Tax.create({
+            'name': f'VAT VN {rate_str}%',
+            'type_tax_use': use,
+            'amount_type': 'percent',
+            'amount': rate,
+            'company_id': self.env.company.id,
+            'price_include': False,
+            'country_id': country_vn.id or False,
+            'active': True,
+        })
+
+    def _tax_ids_from_misa_line(self, line):
+        """
+        Trả về list tax_id cho dòng PO.
+        - KCT (không chịu thuế): []  (để trống VAT)
+        - 0%: [tax_0_id]
+        - x%: [tax_x_id]
+        """
+        # MISA có thể trả các dạng đánh dấu KCT khác nhau – gom về 1 chỗ để dễ mở rộng
+        kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', -1, -2}
+        raw_rate = line.get('vat_rate', None)
+        # Một số API gửi thêm cờ bool (nếu có cột), ta tôn trọng luôn:
+        is_not_vat = str(line.get('is_not_vat', '')).lower() in ('1', 'true', 'yes')
+        # 1) Nếu có cờ KCT hoặc raw_rate thuộc các marker → không chịu thuế
+        if is_not_vat or raw_rate in kct_markers:
+            return []
+        # 2) Nếu không có vat_rate → coi như KCT
+        if raw_rate in (None, '', 'null'):
+            return []
+        # 3) Còn lại cố gắng parse số %
+        try:
+            rate = float(raw_rate)
+        except Exception:
+            # parse không được → coi như KCT
+            return []
+        # 4) 0% khác KCT → tạo/gắn VAT 0%
+        if abs(rate) < 1e-9:
+            tax = self._get_or_create_vn_vat(0.0, use='purchase')
+            return [tax.id] if tax else []
+        # 5) Các mức khác
+        tax = self._get_or_create_vn_vat(rate, use='purchase')
+        return [tax.id] if tax else []
+
 
 
     def action_fetch_po(self):
@@ -21,69 +78,6 @@ class MisaPOFetch(models.TransientModel):
             aware = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
             return aware.astimezone(timezone.utc).replace(tzinfo=None)
         
-        def _get_or_create_vn_vat(self, rate, use='purchase'):
-            Tax = self.env['account.tax'].with_company(self.env.company)
-            rate = float(rate)
-            tax = Tax.search([
-                ('type_tax_use', '=', use),
-                ('amount_type', '=', 'percent'),
-                ('amount', '=', rate),
-                ('company_id', '=', self.env.company.id),
-            ], limit=1)
-            if tax:
-                return tax
-
-            country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
-            rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
-            return Tax.create({
-                'name': f'VAT VN {rate_str}%',
-                'type_tax_use': use,
-                'amount_type': 'percent',
-                'amount': rate,
-                'company_id': self.env.company.id,
-                'price_include': False,
-                'country_id': country_vn.id or False,
-                'active': True,
-            })
-
-        def _tax_ids_from_misa_line(self, line):
-            """
-            Trả về list tax_id cho dòng PO.
-            - KCT (không chịu thuế): []  (để trống VAT)
-            - 0%: [tax_0_id]
-            - x%: [tax_x_id]
-            """
-            # MISA có thể trả các dạng đánh dấu KCT khác nhau – gom về 1 chỗ để dễ mở rộng
-            kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', -1, -2}
-            raw_rate = line.get('vat_rate', None)
-
-            # Một số API gửi thêm cờ bool (nếu có cột), ta tôn trọng luôn:
-            is_not_vat = str(line.get('is_not_vat', '')).lower() in ('1', 'true', 'yes')
-
-            # 1) Nếu có cờ KCT hoặc raw_rate thuộc các marker → không chịu thuế
-            if is_not_vat or raw_rate in kct_markers:
-                return []
-
-            # 2) Nếu không có vat_rate → coi như KCT
-            if raw_rate in (None, '', 'null'):
-                return []
-
-            # 3) Còn lại cố gắng parse số %
-            try:
-                rate = float(raw_rate)
-            except Exception:
-                # parse không được → coi như KCT
-                return []
-
-            # 4) 0% khác KCT → tạo/gắn VAT 0%
-            if abs(rate) < 1e-9:
-                tax = self._get_or_create_vn_vat(0.0, use='purchase')
-                return [tax.id] if tax else []
-
-            # 5) Các mức khác
-            tax = self._get_or_create_vn_vat(rate, use='purchase')
-            return [tax.id] if tax else []
-
 
         
         misa_utils = self.env['misa.api.utils']
