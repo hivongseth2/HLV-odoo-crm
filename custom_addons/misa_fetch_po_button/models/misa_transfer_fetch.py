@@ -104,8 +104,8 @@ class MisaTransferFetch(models.TransientModel):
 
             ref_map = {
                 item['refid']: {
-                    'refno_finance': item.get('refno_finance', '')
-                    # 'contact_name': item.get('contact_name', '').strip(),
+                    'refno_finance': item.get('refno_finance', ''),
+                    'contact_name': item.get('contact_name', '').strip(),
                 }
                 for item in page_data
             }
@@ -179,9 +179,21 @@ class MisaTransferFetch(models.TransientModel):
                         continue
                     
                     name_val = (ref_info.get('refno_finance', '') or '').strip()
+
                     if not name_val:
                         _logger.warning("⚠️ Bỏ qua vì thiếu refno_finance cho refid=%s", refid)
                         continue
+                    
+                    company_id = self.env.user.company_id.id
+                    exists_any = self.env['stock.picking'].search_count([
+                        ('name', '=', name_val),
+                        ('company_id', '=', company_id),
+                    ])
+                    
+                    if exists_any:
+                        _logger.info("⏭️ Bỏ qua ref %s vì đã có picking name=%s trong company_id=%s", refid, name_val, company_id)
+                        continue
+
 
                     # Kiểm tra tồn tại (name + picking_type + from/to)
                     picking = self.env['stock.picking'].search([
