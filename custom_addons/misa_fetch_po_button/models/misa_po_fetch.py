@@ -139,10 +139,6 @@ class MisaPOFetch(models.TransientModel):
 
                 # Sau khi loop hết các trang thì gán lại cho lines để xử lý như cũ
                 lines = all_detail_lines
-
-
-                # lines = detail_res.json().get("Data", {}).get("PageData", [])
-                # stock_code = lines[0].get("stock_code", "").strip().upper() if lines else None
                 stock_code = (
                     lines[0].get("stock_code", "").strip().replace(" ", "").upper()
                     if lines else None
@@ -216,14 +212,7 @@ class MisaPOFetch(models.TransientModel):
                     if planned_naive_utc:
                         pol_vals["date_planned"] = planned_naive_utc  
 
-                    # self.env["purchase.order.line"].create({
-                    #     "order_id": po_rec.id,
-                    #     "name": name,
-                    #     "product_id": product.id,
-                    #     "product_qty": qty,
-                    #     "product_uom": product.uom_id.id,
-                    #     "price_unit": price
-                    # })
+
                     
                     self.env["purchase.order.line"].create(pol_vals)
             page_index += 1
