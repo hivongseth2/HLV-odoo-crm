@@ -1,7 +1,8 @@
 from odoo import models, fields, _
 import logging
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone  # ⬅️ NEW
+
 
 _logger = logging.getLogger(__name__)
 
@@ -10,8 +11,95 @@ class MisaPOFetch(models.TransientModel):
     _description = "MISA PO Fetch"
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
+    
+    def _get_or_create_vn_vat(self, rate, use='purchase'):
+        Tax = self.env['account.tax'].with_company(self.env.company)
+        TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
+
+        rate = float(rate)
+
+        # 1) Lấy/ tạo Tax Group "VAT"
+        country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
+        vat_group = TaxGroup.search([
+            ('name', 'in', ['VAT', 'Thuế GTGT', 'GTGT']),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+        if not vat_group:
+            vat_group = TaxGroup.create({
+                'name': 'VAT',
+                'company_id': self.env.company.id,
+                'country_id': country_vn.id or False,
+                'sequence': 10,
+            })
+
+        # 2) Tìm thuế cùng % trong công ty
+        tax = Tax.search([
+            ('type_tax_use', '=', use),
+            ('amount_type', '=', 'percent'),
+            ('amount', '=', rate),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+        if tax:
+            return tax
+
+        # 3) Tạo thuế mới và GÁN tax_group_id
+        rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
+        return Tax.create({
+            'name': f'VAT VN {rate_str}%',
+            'type_tax_use': use,          # 'purchase' cho mua hàng
+            'amount_type': 'percent',
+            'amount': rate,
+            'company_id': self.env.company.id,
+            'price_include': False,
+            'country_id': country_vn.id or False,
+            'tax_group_id': vat_group.id,  # <-- BẮT BUỘC
+            'active': True,
+        })
+
+    def _tax_ids_from_misa_line(self, line):
+        """
+        Trả về list tax_id cho dòng PO.
+        - KCT (không chịu thuế): []  (để trống VAT)
+        - 0%: [tax_0_id]
+        - x%: [tax_x_id]
+        """
+        # MISA có thể trả các dạng đánh dấu KCT khác nhau – gom về 1 chỗ để dễ mở rộng
+        kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', -1, -2}
+        raw_rate = line.get('vat_rate', None)
+        # Một số API gửi thêm cờ bool (nếu có cột), ta tôn trọng luôn:
+        is_not_vat = str(line.get('is_not_vat', '')).lower() in ('1', 'true', 'yes')
+        # 1) Nếu có cờ KCT hoặc raw_rate thuộc các marker → không chịu thuế
+        if is_not_vat or raw_rate in kct_markers:
+            return []
+        # 2) Nếu không có vat_rate → coi như KCT
+        if raw_rate in (None, '', 'null'):
+            return []
+        # 3) Còn lại cố gắng parse số %
+        try:
+            rate = float(raw_rate)
+        except Exception:
+            # parse không được → coi như KCT
+            return []
+        # 4) 0% khác KCT → tạo/gắn VAT 0%
+        if abs(rate) < 1e-9:
+            tax = self._get_or_create_vn_vat(0.0, use='purchase')
+            return [tax.id] if tax else []
+        # 5) Các mức khác
+        tax = self._get_or_create_vn_vat(rate, use='purchase')
+        return [tax.id] if tax else []
+
+
 
     def action_fetch_po(self):
+        def _to_naive_utc(dt_str: str):
+            """'2025-08-26T00:00:00.000+07:00' -> 2025-08-25 17:00:00 (naive UTC)"""
+            if not dt_str:
+                return False
+            aware = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            return aware.astimezone(timezone.utc).replace(tzinfo=None)
+        
+
+        
         misa_utils = self.env['misa.api.utils']
         odoo_utils = self.env['odoo.utils']
         misa_config = self.env['misa.config']
@@ -80,6 +168,12 @@ class MisaPOFetch(models.TransientModel):
                 supplier_name = po.get("account_object_name")
                 refno = po.get("refno", "PO-MISA")
                 memo = po.get("journal_memo", "")
+                
+                receive_date_str = po.get("receive_date") or po.get("refdate")
+                planned_naive_utc = _to_naive_utc(receive_date_str)
+                
+
+
                 partner = odoo_utils._get_or_create_partner(supplier_name)
 
                 detail_page_index = 1
@@ -124,10 +218,6 @@ class MisaPOFetch(models.TransientModel):
 
                 # Sau khi loop hết các trang thì gán lại cho lines để xử lý như cũ
                 lines = all_detail_lines
-
-
-                # lines = detail_res.json().get("Data", {}).get("PageData", [])
-                # stock_code = lines[0].get("stock_code", "").strip().upper() if lines else None
                 stock_code = (
                     lines[0].get("stock_code", "").strip().replace(" ", "").upper()
                     if lines else None
@@ -159,15 +249,19 @@ class MisaPOFetch(models.TransientModel):
                     _logger.warning("❌ Không tìm thấy warehouse cho kho %s", stock_code)
                     continue
                 picking_type = warehouse.in_type_id
-
-                po_rec = self.env["purchase.order"].create({
+                
+                po_vals = {
                     "partner_id": partner.id,
                     "origin": memo,
-                    "picking_type_id": picking_type.id,  # ⬅️ Gán đúng kiểu nhập kho
-                    
-                    "name": refno, 
+                    "picking_type_id": picking_type.id,
+                    "name": refno,
+                }
+                
+                if planned_naive_utc:
+                    po_vals["date_planned"] = planned_naive_utc 
 
-                })
+                po_rec = self.env["purchase.order"].create(po_vals)
+
 
                 for line in lines:
                     code = line.get("inventory_item_code", "unknown_code").strip()
@@ -176,6 +270,8 @@ class MisaPOFetch(models.TransientModel):
                     price = float(line.get("unit_price", 0))
                     unit_name = line.get("unit_name", "Cái").strip()
                     vat_rate = float(line.get("vat_rate", 0))
+                    
+                    tax_ids = self._tax_ids_from_misa_line(line)
 
                     product = odoo_utils._get_or_create_product(
                         code=code,
@@ -185,13 +281,20 @@ class MisaPOFetch(models.TransientModel):
                         purchase_ok=True,
                         sale_ok=False
                     )
-
-                    self.env["purchase.order.line"].create({
+                    pol_vals = {
                         "order_id": po_rec.id,
                         "name": name,
                         "product_id": product.id,
                         "product_qty": qty,
                         "product_uom": product.uom_id.id,
-                        "price_unit": price
-                    })
+                        "price_unit": price,
+                        "taxes_id": [(6, 0, tax_ids)]
+                    }
+                    
+                    if planned_naive_utc:
+                        pol_vals["date_planned"] = planned_naive_utc  
+
+
+                    
+                    self.env["purchase.order.line"].create(pol_vals)
             page_index += 1
