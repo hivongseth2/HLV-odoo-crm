@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from dateutil import parser  # để xử lý ISO datetime
 import logging
 from dateutil.parser import parse
-import pytz
+
 _logger = logging.getLogger(__name__)
 
 class SaleApiImportWizard(models.TransientModel):
@@ -33,7 +33,8 @@ class SaleApiImportWizard(models.TransientModel):
         stock_mapping = {
             "HCM": "TSN/Stock",
             "BENCAM": "KBC/Tồn kho",
-            "HIENDUC": "KHD/Tồn kho"
+            "HIENDUC": "KHD/Tồn kho",
+             "HCM_SHOWROOM":"TSNSR/Stock"
         }
 
 
@@ -47,7 +48,12 @@ class SaleApiImportWizard(models.TransientModel):
                     "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
                     "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK",
                     "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
-                    'KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN',
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+                    "TOOL DEWALT",
+                    "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY"
                     
                     
                     }   
@@ -68,13 +74,11 @@ class SaleApiImportWizard(models.TransientModel):
             # có order thì đi gọi lấy danh sách sản phẩm trong product đó 
             
             
-
+            #AccountIDText: TIKTOK HOÀNG LONG VŨ , SHOPEE TRANG MILWAUKEE, SHOPEE TRANG TBCN HLV,SHOPEE TRANG DEWALT STANLEY
+                # delivery_order_number = order.get('DeliveryOrderNumber')
                 customer_name = order.get("AccountIDText") or order.get("SaleOrderName")
-                status = order.get("RevenueStatusIDText")
-                
-                if customer_name not in e_accounts and status == "Bản nháp":
-                    _logger.info("⏭️ Đơn hàng %s là 'Bản nháp' và không thuộc e_accounts => bỏ qua", order.get("SaleOrderNo"))
-                    continue
+                # if customer_name in e_accounts and not delivery_order_number:
+                #     continue
                 
                 if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
                     continue
@@ -91,7 +95,7 @@ class SaleApiImportWizard(models.TransientModel):
 
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url,sale_headers,payload)
                 
-                # _logger.warning("📦 Order product_lines %s",  product_lines)
+                _logger.warning("📦 Order product_lines %s",  product_lines)
                 
                 stock_id = product_lines[0].get("StockIDText") if product_lines else None
 
@@ -100,6 +104,8 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.warning("📛 Kho %s không nằm trong mapping, bỏ qua đơn hàng %s", stock_id, order.get("SaleOrderNo"))
                     continue
 
+                # filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
+                # filtered_lines = [l for l in product_lines if l.get("StockIDText") in stock_mapping]
                 filtered_lines = [l for l in product_lines if l.get("StockIDText") == stock_id]
 
 
@@ -127,14 +133,7 @@ class SaleApiImportWizard(models.TransientModel):
                 order_ref = order.get("SaleOrderNo")
 
                 amount = float(order.get("SaleOrderAmount", 0.0))
-                # order_date = parse(order.get("SaleOrderDate")).replace(tzinfo=None)
-                
-                order_date = parse(order.get("SaleOrderDate"))
-                _logger.warning("📦 Raw OrderDate string: %s", order.get("SaleOrderDate"))
-                _logger.warning("📦 Parsed OrderDate obj: %s", order_date)
-                
-                order_date_utc = order_date.astimezone(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S")
-
+                order_date = parse(order.get("SaleOrderDate")).replace(tzinfo=None)
                 if not order_ref or not customer_name:
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
                     continue
@@ -145,14 +144,11 @@ class SaleApiImportWizard(models.TransientModel):
                 if existing_order:
                     _logger.info("🔁 Bỏ qua đơn hàng đã tồn tại: %s", order_ref)
                     continue
-                _logger.warning("📦 Order time  %s",  order_date )
-                _logger.warning("📦 Order order_date_utc  %s",  order_date_utc )
 
                 sale_order = self.env['sale.order'].create({
                     'name': order_ref,
                     'partner_id': partner.id,
-                    # 'date_order': order_date,
-                    'date_order': order_date_utc,
+                    'date_order': order_date,
                     'amount_total': amount,
                     'warehouse_id': warehouse.id,  # ⬅️ Gán kho tại đây
 
@@ -164,68 +160,27 @@ class SaleApiImportWizard(models.TransientModel):
                     description = line.get("Description") or product_code
                     qty = float(line.get("Amount", 1))
                     price_unit = float(line.get("Price", 0))
-                    # discount_percent = float(line.get("DiscountPercent", 0))
-                    discount_percent = float(line.get("DiscountPercent") or 0)
-
+                    discount_percent = float(line.get("DiscountPercent", 0))
                     uom_name = (line.get("UnitIDText") or "Cái").strip()
 
-                    if "+" in product_code:
-                        combo_codes = product_code.split("+")
-                        combo_products = []
-                        all_exist = True
-
-                        for code in combo_codes:
-                            code = code.strip()
-                            product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
-
-                            if not product:
-                                _logger.warning("🔍 Không thấy %s trong hệ thống, thử gọi MISA để tạo mới...", code)
-                                try:
-                                    tmpl = odoo_utils.get_misa_product(crm_token, code)
-                                    product = tmpl.product_variant_id
-                                    _logger.info("✅ Đã tạo mới sản phẩm con %s từ MISA", code)
-                                except Exception as e:
-                                    _logger.error("🚫 Không tạo được sản phẩm %s từ MISA: %s", code, str(e))
-                                    all_exist = False
-                                    break
-
-                            if product:
-                                combo_products.append(product)
-                            else:
-                                all_exist = False
-                                break
-
-                        if all_exist:
-                            for product in combo_products:
-                                self.env['sale.order.line'].create({
-                                    'order_id': sale_order.id,
-                                    'product_id': product.id,
-                                    'name': f"{description} - [{product.default_code}]",
-                                    'product_uom_qty': qty,
-                                    'price_unit': price_unit / len(combo_products),
-                                    'discount': discount_percent
-                                })
-                        else:
-                            _logger.error("🚫 Bỏ qua combo vì thiếu sản phẩm con: %s", product_code)
-
-                    else:
-                        product = odoo_utils._get_or_create_product(
-                            code=product_code,
-                            name=description,
-                            unit_name=uom_name,
-                            cost=price_unit,
-                            product_type="consu",
-                            purchase_ok=False,
-                            sale_ok=False
-                        )
-                        self.env['sale.order.line'].create({
-                            'order_id': sale_order.id,
-                            'product_id': product.id,
-                            'name': description,
-                            'product_uom_qty': qty,
-                            'price_unit': price_unit,
-                            'discount': discount_percent
-                        })
+                    
+                    product = odoo_utils._get_or_create_product(
+                        code=product_code,
+                        name=description,
+                        unit_name=uom_name,
+                        cost=price_unit,
+                        product_type="consu",
+                        purchase_ok=False,
+                        sale_ok=False
+                    )
+                    self.env['sale.order.line'].create({
+                        'order_id': sale_order.id,
+                        'product_id': product.id,
+                        'name': description,
+                        'product_uom_qty': qty,
+                        'price_unit': price_unit,
+                        'discount': discount_percent
+                    })
 
 
                 # Lấy DeliveryOrderNumber từ API MISA
