@@ -14,7 +14,25 @@ class MisaPOFetch(models.TransientModel):
     
     def _get_or_create_vn_vat(self, rate, use='purchase'):
         Tax = self.env['account.tax'].with_company(self.env.company)
+        TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
+
         rate = float(rate)
+
+        # 1) Lấy/ tạo Tax Group "VAT"
+        country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
+        vat_group = TaxGroup.search([
+            ('name', 'in', ['VAT', 'Thuế GTGT', 'GTGT']),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+        if not vat_group:
+            vat_group = TaxGroup.create({
+                'name': 'VAT',
+                'company_id': self.env.company.id,
+                'country_id': country_vn.id or False,
+                'sequence': 10,
+            })
+
+        # 2) Tìm thuế cùng % trong công ty
         tax = Tax.search([
             ('type_tax_use', '=', use),
             ('amount_type', '=', 'percent'),
@@ -23,16 +41,18 @@ class MisaPOFetch(models.TransientModel):
         ], limit=1)
         if tax:
             return tax
-        country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
+
+        # 3) Tạo thuế mới và GÁN tax_group_id
         rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
         return Tax.create({
             'name': f'VAT VN {rate_str}%',
-            'type_tax_use': use,
+            'type_tax_use': use,          # 'purchase' cho mua hàng
             'amount_type': 'percent',
             'amount': rate,
             'company_id': self.env.company.id,
             'price_include': False,
             'country_id': country_vn.id or False,
+            'tax_group_id': vat_group.id,  # <-- BẮT BUỘC
             'active': True,
         })
 
