@@ -104,8 +104,8 @@ class MisaTransferFetch(models.TransientModel):
 
             ref_map = {
                 item['refid']: {
-                    'refno_finance': item.get('refno_finance', ''),
-                    'contact_name': item.get('contact_name', '').strip(),
+                    'refno_finance': item.get('refno_finance', '')
+                    # 'contact_name': item.get('contact_name', '').strip(),
                 }
                 for item in page_data
             }
