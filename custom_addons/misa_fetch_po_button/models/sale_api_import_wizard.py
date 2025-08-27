@@ -79,6 +79,11 @@ class SaleApiImportWizard(models.TransientModel):
                 customer_name = order.get("AccountIDText") or order.get("SaleOrderName")
                 # if customer_name in e_accounts and not delivery_order_number:
                 #     continue
+                status = order.get("RevenueStatusIDText")
+                
+                if customer_name not in e_accounts and status == "Bản nháp": 
+                    _logger.info("⏭️ Đơn hàng %s là 'Bản nháp' và không thuộc e_accounts => bỏ qua", order.get("SaleOrderNo")) 
+                    continue
                 
                 if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
                     continue
@@ -104,8 +109,6 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.warning("📛 Kho %s không nằm trong mapping, bỏ qua đơn hàng %s", stock_id, order.get("SaleOrderNo"))
                     continue
 
-                # filtered_lines = [l for l in product_lines if l.get("StockIDText") == "HCM"]
-                # filtered_lines = [l for l in product_lines if l.get("StockIDText") in stock_mapping]
                 filtered_lines = [l for l in product_lines if l.get("StockIDText") == stock_id]
 
 
