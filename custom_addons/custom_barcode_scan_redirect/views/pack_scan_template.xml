@@ -80,6 +80,44 @@
 
         <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
       </div>
+      <!-- PANEL danh sách PACK khác (góc phải) -->
+<div class="pack-side-panel" style="
+  position: fixed; right: 18px; bottom: 18px; width: 320px;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08); overflow: hidden; z-index: 9999;">
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#f8fafc; border-bottom:1px solid #eef2f7;">
+    <div style="font-weight:600;">📦 PACK cùng đơn</div>
+    <button type="button" onclick="this.closest('.pack-side-panel').classList.toggle('collapsed')"
+            style="border:none;background:#eef2ff;padding:6px 10px;border-radius:8px;cursor:pointer;">Ẩn/Hiện</button>
+  </div>
+  <div class="panel-body" style="max-height: 46vh; overflow:auto;">
+    <t t-if="sibling_packs">
+      <ul style="list-style:none; margin:0; padding:0;">
+        <t t-foreach="sibling_packs" t-as="sp">
+          <li style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-bottom:1px solid #f1f5f9;">
+            <div style="display:flex; flex-direction:column;">
+              <a t-att-href="'/custom_barcode_scan/pack_view/%s' % sp['id']"
+                 style="text-decoration:none; font-weight:600;">
+                <t t-esc="sp['name']"/>
+              </a>
+              <small style="color:#667085;">
+                Trạng thái: <t t-esc="sp['state_label']"/>
+              </small>
+            </div>
+            <span t-attf-class="badge #{'badge-ok' if sp['state'] in ['assigned','in_progress'] else ('badge-warn' if sp['state'] in ['waiting','confirmed'] else 'badge-muted')}"
+                  style="min-width:88px; text-align:center;">
+              <t t-esc="sp['state_label']"/>
+            </span>
+          </li>
+        </t>
+      </ul>
+    </t>
+    <t t-if="not sibling_packs">
+      <div style="padding:12px;">Không còn PACK nào khác để xử lý.</div>
+    </t>
+  </div>
+</div>
+
     </t>
   </template>
 </odoo>

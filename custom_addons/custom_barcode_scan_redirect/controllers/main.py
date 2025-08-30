@@ -220,21 +220,49 @@ class CustomBarcodeScanController(http.Controller):
 
         if picking.state == 'done' and picking.group_id:
             _logger.info(picking.picking_type_id.read()[0])
-            next_picking = Picking.search([
+
+            # Lấy tất cả PACK còn xử lý được
+            packs = Picking.search([
                 ('group_id', '=', picking.group_id.id),
                 ('id', '!=', picking.id),
-                ('state', 'in', ['confirmed', 'assigned', 'waiting'])
-            ], limit=1)
+                ('picking_type_id.sequence_code', 'like', 'PACK'),
+                ('state', 'in', ['confirmed', 'assigned', 'waiting', 'in_progress']),
+            ])
+
+            # Ưu tiên 'assigned' trước
+            def _priority(p):
+                # assigned → 0 (cao nhất), in_progress → 1, confirmed/waiting → 2
+                s = (p.state or '')
+                if s == 'assigned': return (0, p.id)
+                if s == 'in_progress': return (1, p.id)
+                return (2, p.id)
+
+            packs_sorted = sorted(packs, key=_priority)
+            next_picking = packs_sorted and packs_sorted[0] or False
 
             if next_picking:
+                # nếu gặp loại "outgoing" thì chỉ báo (giữ nguyên ý cũ)
                 if next_picking.picking_type_id.code == 'outgoing':
-                    return {'type': 'ir.actions.client','tag': 'display_notification','params': {
-                        'message': f"✅ Phiếu {picking.name} đã hoàn tất! Đang chờ xuất kho...",'type': 'info','sticky': False}}
+                    return {
+                        'type': 'ir.actions.client','tag': 'display_notification','params': {
+                            'message': f"✅ Phiếu {picking.name} đã hoàn tất! Đang chờ xuất kho...",
+                            'type': 'info','sticky': False
+                        }
+                    }
                 else:
-                    return {'type': 'ir.actions.act_url','url': f"/custom_barcode_scan/pack_view/{next_picking.id}",'target': 'self'}
+                    return {
+                        'type': 'ir.actions.act_url',
+                        'url': f"/custom_barcode_scan/pack_view/{next_picking.id}",
+                        'target': 'self'
+                    }
 
-            return {'type': 'ir.actions.client','tag': 'display_notification','params': {
-                'message': "Không tìm thấy phiếu liên kết tiếp theo!",'type': 'warning','sticky': False}}
+            return {
+                'type': 'ir.actions.client','tag': 'display_notification','params': {
+                    'message': "Không tìm thấy phiếu PACK phù hợp để xử lý!",
+                    'type': 'warning','sticky': False
+                }
+            }
+
 
         return self._get_barcode_action(picking.id)
 
@@ -272,16 +300,57 @@ class CustomBarcodeScanController(http.Controller):
             return request.not_found()
 
         lines = picking.move_ids_without_package.filtered(lambda m: m.product_id)
+
+        # Tìm PICK gốc để hiển thị
         origin_pick = request.env['stock.picking'].sudo().search([
             ('group_id', '=', picking.group_id.id),
             ('picking_type_id.sequence_code', 'like', 'PICK'),
             ('id', '!=', picking.id)
         ], limit=1)
+
         drive_connected = bool(request.env['ir.config_parameter'].sudo().get_param('gdrive.user_credentials_json'))
 
+        # ✨ NEW: Lấy tất cả PACK còn xử lý được để show panel chọn nhanh
+        siblings = request.env['stock.picking'].sudo().search([
+            ('group_id', '=', picking.group_id.id),
+            ('picking_type_id.sequence_code', 'like', 'PACK'),
+            ('id', '!=', picking.id),
+            ('state', 'in', ['confirmed', 'assigned', 'waiting', 'in_progress']),
+        ])
+
+        def _priority(p):
+            s = (p.state or '')
+            if s == 'assigned': return (0, p.id)
+            if s == 'in_progress': return (1, p.id)
+            return (2, p.id)
+
+        siblings_sorted = sorted(siblings, key=_priority)
+
+        state_label = {
+            'draft': 'Nháp',
+            'waiting': 'Chờ',
+            'confirmed': 'Xác nhận',
+            'assigned': 'Sẵn sàng',
+            'in_progress': 'Đang làm',
+            'done': 'Hoàn tất',
+            'cancel': 'Hủy',
+        }
+
+        sibling_packs = [{
+            'id': s.id,
+            'name': s.name,
+            'state': s.state,
+            'state_label': state_label.get(s.state, s.state),
+        } for s in siblings_sorted]
+
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
-            'picking': picking,'lines': lines,'origin_pick_name': origin_pick.name if origin_pick else '','drive_connected': drive_connected
+            'picking': picking,
+            'lines': lines,
+            'origin_pick_name': origin_pick.name if origin_pick else '',
+            'drive_connected': drive_connected,
+            'sibling_packs': sibling_packs,   # <<<<<<<<<<<<<< thêm vào context
         })
+
 
     @http.route('/pack_scan/scan_item', type='json', auth='user')
     def scan_pack_item(self, **kwargs):
