@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avoid Stock Negative</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<body>
+    <!-- Header with logos and flags -->
+    <div class="row" >
+        <div class="bitsys-section" style="width: 100%; background-color: #FFFFFF; padding: 15px 0; display: flex; justify-content: space-between; align-items: center;">
+            <!-- Contenedor de logos -->
+            <div class="col-8" style="display: flex; align-items: center;">
+                <img src="logo.png" alt="logo" style="border-right: 2px #FFFFFF solid; padding-right: 10px; height: 50px;"/>
+                <img src="odoo_logo.svg" alt="Logo de Odoo" style="border-right: 2px #FFFFFF solid; padding-right: 10px; height: 60px;"/>
+            </div>
+        
+            <!-- Contenedor de banderas -->
+            <div class="col-4" style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
+                <img style="width: auto; height: 30px;" src="gt.png" alt="Guatemala">
+                <img style="width: auto; height: 30px;" src="sv.png" alt="El Salvador">
+                <img style="width: auto; height: 30px;" src="hn.png" alt="Honduras">
+            </div>
+        </div>
+    </div>
+    
+    
+    <div class="partner">
+        <div>
+            <center>
+                <div style="max-width: 800px; width: 100%; padding: 20px;">
+                    <h5>Bitsys - Partner Oficial de Odoo en Guatemala</h5>
+                    <p class="text-justify" style="text-align: justify !important;">Somos una empresa 100% chapina especializada en implementaciones y desarrollo a la medida con Odoo. Contamos con un equipo de expertos con años de experiencia en la automatización de procesos empresariales, brindando soluciones innovadoras y de calidad a nuestros clientes.</p>
+                </div>
+                <a href="https://bitsys.odoo.com/" id="visit_us" 
+                   class="text-center mt-4 btn btn-danger px-4 py-2 rounded-3" 
+                   role="button" style="background-color: #a3195b; color: white; padding: 10px 30px 10px 30px; border-radius: 20px; font-size: 16px;">
+                    Visítanos: bitsys.odoo.com 
+                </a>
+            </center>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById("visit_us").addEventListener("click", function() {
+            window.open("https://bitsys.odoo.com", "_blank");
+        });
+    </script>
+
+    <!-- Tab Navigation -->
+    <div class="tabs-container mt-4">
+        <ul class="nav nav-tabs" id="languageTabs" role="tablist">
+            <li style="width: 33.33%; text-align: center;">
+                <a class="nav-link active" id="tab-spanish" data-bs-toggle="tab" href="#spanish" role="tab" aria-controls="spanish" aria-selected="true">
+                    <div style="font-size: 14px; font-weight: bold; color: #010101; font-family: 'Lato', sans-serif;">Resumen</div>
+                    <div style="font-size: 12px; color: #1d1d1b; font-family: 'Lato', sans-serif;">Summary</div>
+                </a>
+            </li>
+            <li style="width: 33.33%; text-align: center;">
+                <a class="nav-link" id="tab-features" data-bs-toggle="tab" href="#features" role="tab" aria-controls="features" aria-selected="false">
+                    <div style="font-size: 14px; font-weight: bold; color: #010101; font-family: 'Lato', sans-serif;">Características</div>
+                    <div style="font-size: 12px; color: #1d1d1b; font-family: 'Lato', sans-serif;">Features</div>
+                </a>
+            </li>
+            <li style="width: 33.33%; text-align: center;">
+                <a class="nav-link" id="tab-functionality" data-bs-toggle="tab" href="#functionality" role="tab" aria-controls="functionality" aria-selected="false">
+                    <div style="font-size: 14px; font-weight: bold; color: #010101; font-family: 'Lato', sans-serif;">Funcionamiento</div>
+                    <div style="font-size: 12px; color: #1d1d1b; font-family: 'Lato', sans-serif;">How it works</div>
+                </a>
+            </li>
+        </ul>
+
+        <div class="tab-content mt-4">
+            <!-- Spanish Tab -->
+            <div class="tab-pane fade show active" id="spanish" role="tabpanel" aria-labelledby="tab-spanish" style="text-align: center;">
+                <center>
+                    <div style="max-width: 800px; width: 100%; padding: 20px;">
+                        <h5 style="color: #a3195b;"><strong>Evita el Stock Negativo y Mantén el Control de Tu Inventario</strong></h5>
+                        <p class="text-justify" style="text-align: justify !important;">Previene automáticamente que los productos lleguen a niveles de stock negativo, asegurando un control efectivo de inventarios y evitando errores en tus movimientos de stock.</p>
+                    </div>
+                </center>
+                <center>
+                    <div style="max-width: 800px; width: 100%; padding: 20px;">
+                        <h5 style="color: #a3195b;"><strong>Prevent Negative Stock and Maintain Control of Your Inventory</strong></h5>
+                        <p class="text-justify" style="text-align: justify !important;">Automatically prevents products from reaching negative stock levels, ensuring effective inventory control and avoiding errors in your stock movements.</p>
+                    </div>
+                </center>
+            </div>
+
+            <!-- Features Tab -->
+            <div class="tab-pane fade text-justify" id="features" role="tabpanel" aria-labelledby="tab-features">
+                <h5 class="text-center" style="color: #a3195b;"><strong>Características</strong></h5>
+                <div class="d-flex flex-wrap gap-3 justify-content-center">
+                    <div class="card p-3" style="width: 18rem;">
+                        <div class="card-body">
+                            <i class="fa fa-check-circle" style="color: #a3195b;" style="color: #a3195b;"></i>
+                            <strong style="text-align: left;">Prevención Automática</strong>
+                            <p class="mb-0">Bloquea los movimientos que podrían generar stock negativo.</p>
+                            <p></p>
+                            <i class="fa fa-check-circle" style="color: #a3195b;" style="color: #a3195b;"></i>
+                            <strong style="text-align: left;">Automatic Prevention</strong>
+                            <p class="mb-0">Blocks movements that could generate negative stock levels.</p>
+                        </div>
+                    </div>
+                    <div class="card p-3" style="width: 18rem;">
+                        <div class="card-body">
+                            <i class="fa fa-check-circle" style="color: #a3195b;" style="color: #a3195b;"></i>
+                            <strong style="text-align: left;">Control Total de Inventario</strong>
+                            <p class="mb-0">Mantén un registro preciso de tus existencias en tiempo real.</p>
+                            <p></p>
+                            <i class="fa fa-check-circle" style="color: #a3195b;" style="color: #a3195b;"></i>
+                            <strong style="text-align: left;">Total Inventory Control</strong>
+                            <p class="mb-0">Keep a precise record of your stock in real-time.</p>
+                        </div>
+                    </div>
+                    <div class="card p-3" style="width: 18rem;">
+                        <div class="card-body">
+                            <i class="fa fa-check-circle" style="color: #a3195b;" style="color: #a3195b;"></i>
+                            <strong style="text-align: left;">Integración Simple</strong>
+                            <p class="mb-0">Fácil integración con los procesos existentes en tu sistema Odoo.</p>
+                            <p></p>
+                            <i class="fa fa-check-circle" style="color: #a3195b;" style="color: #a3195b;"></i>
+                            <strong style="text-align: left;">Simple Integration</strong>
+                            <p class="mb-0">Easy integration with the existing processes in your Odoo system.</p>
+                        </div>
+                    </div>
+                    <div class="card p-3" style="width: 18rem;">
+                        <div class="card-body">
+                            <i class="fa fa-check-circle" style="color: #a3195b;" style="color: #a3195b;"></i>
+                            <strong style="text-align: left;">Alertas de Restricción</strong>
+                            <p class="mb-0">Recibe mensaje cuando intentas descargar productos que pueden volverse negativos.</p>
+                            <p></p>
+                            <i class="fa fa-check-circle" style="color: #a3195b;" style="color: #a3195b;"></i>
+                            <strong style="text-align: left;">Restriction Alerts</strong>
+                            <p class="mb-0">Receive a message when you attempt to download products that may become negative.</p>                                 
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Functionality Tab -->
+            <div class="tab-pane fade" id="functionality" role="tabpanel" aria-labelledby="tab-functionality" style="text-align: center;">
+                <center>
+                    <div style="max-width: 800px; width: 100%; padding: 20px;">
+                        <h5 style="color: #a3195b;"><strong>Funcionamiento</strong></h5>
+                        <p class="text-justify" style="text-align: justify !important;">El sistema monitoriza los movimientos de inventario y bloquea aquellos que pudieran generar niveles de stock negativos. Esto asegura que siempre tengas un control total de tus existencias sin preocupaciones.</p>
+                    </div>
+                </center>
+                <center>
+                    <div style="max-width: 800px; width: 100%; padding: 20px;">
+                        <h5 style="color: #a3195b;"><strong>How It Works</strong></h5>
+                        <p class="text-justify" style="text-align: justify !important;">The system monitors inventory movements and blocks those that could generate negative stock levels. This ensures that you always have full control of your stock without worries.</p>
+                    </div>
+                </center>                   
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS (including Popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

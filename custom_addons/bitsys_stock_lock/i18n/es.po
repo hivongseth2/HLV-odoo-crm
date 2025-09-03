@@ -1,0 +1,51 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* bitsys_stock_lock
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0+e-20250311\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-03-16 03:46+0000\n"
+"PO-Revision-Date: 2025-03-16 03:46+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: bitsys_stock_lock
+#: model:ir.model.fields,field_description:bitsys_stock_lock.field_product_product__is_negative_allowed
+#: model:ir.model.fields,field_description:bitsys_stock_lock.field_product_template__is_negative_allowed
+msgid "Allow Negative?"
+msgstr "¿Permitir stock negativo?"
+
+#. module: bitsys_stock_lock
+#: model:ir.model.fields,help:bitsys_stock_lock.field_product_product__is_negative_allowed
+#: model:ir.model.fields,help:bitsys_stock_lock.field_product_template__is_negative_allowed
+msgid ""
+"Enable this option to allow negative stock levels for this product. If not "
+"enabled, stock moves that would result in negative stock are blocked, unless"
+" allowed by the product."
+msgstr ""
+"Habilite esta opción para permitir niveles negativos de stock para este producto. Si no está habilitada, "
+"los movimientos de stock que resulten en stock negativo se bloquearán, a menos que se permita por el producto."
+
+#. module: bitsys_stock_lock
+#: model:ir.model,name:bitsys_stock_lock.model_product_template
+msgid "Product"
+msgstr "Producto"
+
+#. module: bitsys_stock_lock
+#: model:ir.model,name:bitsys_stock_lock.model_stock_picking
+msgid "Transfer"
+msgstr "Transferir"
+
+#. module: bitsys_stock_lock
+#. odoo-python
+#: code:addons/bitsys_stock_lock/models/stock_picking.py:0
+msgid ""
+"Cannot complete delivery for '%s' due to insufficient stock. Negative stock is not allowed."
+msgstr ""
+"No puedes validar la entrega para el producto '%s' porque el nivel de stock se volvería negativo y el stock negativo no está permitido para este producto."
