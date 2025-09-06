@@ -137,7 +137,7 @@ class MisaPOFetch(models.TransientModel):
         }
         stock_mapping = {
                 "HCM": "TSN/Stock",
-                "BENCAM": "KBC/Tồn kho",
+                "BENCAM": "KBC/Tồn kho/chờ",
                 "HIENDUC": "KHD/Tồn kho",
                 "HCM_SHOWROOM":"TSNSR/Stock"
             }
