@@ -14,6 +14,73 @@ class SaleApiImportWizard(models.TransientModel):
 
     from_date = fields.Date(string="Từ ngày", required=True)
     to_date = fields.Date(string="Đến ngày", required=True)
+    
+    
+    
+    # ===== Helpers cho địa chỉ giao hàng =====
+    def _vn_country(self):
+        return self.env['res.country'].search([('code', '=', 'VN')], limit=1)
+
+    def _vn_state_by_name(self, name):
+        """Tìm res.country.state theo tên (ví dụ: 'Đồng Nai', 'Thành phố Hồ Chí Minh')."""
+        if not name:
+            return False
+        country = self._vn_country()
+        State = self.env['res.country.state']
+        # Thử khớp chính xác
+        st = State.search([('name', '=', name), ('country_id', '=', country.id)], limit=1)
+        if st:
+            return st
+        # Thử khớp tương đối (hơi rộng tay cho dữ liệu lệch)
+        st = State.search([('name', 'ilike', name), ('country_id', '=', country.id)], limit=1)
+        return st or False
+
+    def _get_or_create_delivery_contact(self, parent_partner, addr_str, phone=None, province_text=None):
+        """
+        Tạo/nhặt contact con kiểu 'delivery' dưới parent_partner.
+        Ưu tiên set:
+          - street = addr_str (full chuỗi)
+          - city = province_text nếu có
+          - state_id/country_id nếu map được
+        Tránh nhân bản: tìm theo (parent_id, type='delivery', street == addr_str) trước.
+        """
+        Partner = self.env['res.partner']
+        country = self._vn_country()
+        state = self._vn_state_by_name(province_text) if province_text else False
+
+        # Tìm lại nếu có
+        existing = Partner.search([
+            ('parent_id', '=', parent_partner.id),
+            ('type', '=', 'delivery'),
+            ('street', '=', addr_str or ''),
+        ], limit=1)
+        if existing:
+            # cập nhật nhẹ nếu thiếu
+            vals_upd = {}
+            if country and not existing.country_id:
+                vals_upd['country_id'] = country.id
+            if state and not existing.state_id:
+                vals_upd['state_id'] = state.id
+            if province_text and not existing.city:
+                vals_upd['city'] = province_text
+            if phone and not existing.phone:
+                vals_upd['phone'] = phone
+            if vals_upd:
+                existing.write(vals_upd)
+            return existing
+
+        vals = {
+            'name': parent_partner.name,          # hoặc đặt nhãn riêng nếu bạn muốn
+            'type': 'delivery',
+            'parent_id': parent_partner.id,
+            'street': addr_str or '',
+            'city': province_text or False,
+            'phone': phone or False,
+            'country_id': country.id if country else False,
+            'state_id': state.id if state else False,
+            # có thể bổ sung email, mobile... nếu cần
+        }
+        return Partner.create(vals)
 
     def action_import_from_api(self):
         odoo_utils = self.env['odoo.utils']
@@ -94,6 +161,22 @@ class SaleApiImportWizard(models.TransientModel):
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)
                 _logger.warning("📦 Order product_lines %s", product_lines)
+                
+                
+                shipping_address_str = misa_utils.get_shipping_address(
+                    sale_order_id=order_id,
+                    order_ref=order.get("SaleOrderNo"),
+                    token=crm_token
+                )
+                # tỉnh/thành để map state/city
+                province_text = (
+                    order.get("ShippingProvinceIDCustomText")
+                    or order.get("ShippingProvinceIDText")
+                    or order.get("BillingProvinceIDCustomText")
+                    or order.get("BillingProvinceIDText")
+                )
+                phone_text = order.get("Phone")
+
 
                 # --- Gom dòng theo kho ---
                 lines_by_stock = defaultdict(list)
@@ -113,6 +196,15 @@ class SaleApiImportWizard(models.TransientModel):
                     continue
 
                 partner = odoo_utils._get_or_create_partner(customer_name)
+                
+                    # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
+
+                delivery_contact = self._get_or_create_delivery_contact(
+                    parent_partner=partner,
+                    addr_str=shipping_address_str or order.get("ShippingAddress") or order.get("BillingAddress") or order_ref_base,
+                    phone=phone_text,
+                    province_text=province_text
+                )
 
                 distinct_stocks = [s for s in lines_by_stock.keys() if s in stock_mapping]
                 if not distinct_stocks:
@@ -153,8 +245,12 @@ class SaleApiImportWizard(models.TransientModel):
                         'partner_id': partner.id,
                         'date_order': order_date,
                         'amount_total': group_total,
+                        'partner_shipping_id': delivery_contact.id, 
                         'warehouse_id': warehouse.id,
                     })
+                    
+                    
+                    get_shipping_address = misa_utils.get_shipping_address(sale_order_id=id,order_ref=order_ref,token = token)
 
                     # Thêm line
                     for line in grouped_lines:
@@ -233,6 +329,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'name': order_ref,
                             'partner_id': partner.id,
                             'date_order': order_date,
+                            'partner_shipping_id': delivery_contact.id, 
                             'amount_total': group_total,
                             'warehouse_id': warehouse.id,
                         })

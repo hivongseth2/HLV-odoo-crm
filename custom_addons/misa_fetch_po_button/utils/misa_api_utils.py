@@ -172,7 +172,7 @@ class MisaApiUtils(models.AbstractModel):
     
 
 
-    def get_delivery_number(self, sale_order_id, order_ref=None, token=None):
+    def get_shipping_address(self, sale_order_id, order_ref=None, token=None):
         # Lấy session từ login
         session = requests.Session()
         # Gửi request GET để lấy delivery number
@@ -201,19 +201,54 @@ class MisaApiUtils(models.AbstractModel):
         # Parse JSON response để lấy delivery number (giả định nằm trong trường DeliveryOrderNumber)
         try:
             response_data = api_response.json()
-            delivery_number = response_data.get("Data", {}).get("CurrentData", {}).get("DeliveryOrderNumber")
-            
-            if not delivery_number:
-                delivery_number = order_ref
+        except Exception:
+            _logger.exception("Không parse được JSON; trả về sale_order_id làm fallback.")
+            return str(sale_order_id)
+
+        try:
+            cd = (response_data or {}).get("Data", {}).get("CurrentData", {}) or {}
+
+            # 1) Ưu tiên trường đã gộp sẵn
+            shipping_address = (cd.get("ShippingAddress") or "").strip()
+            billing_address = (cd.get("BillingAddress") or "").strip()
+            if shipping_address:
+                return shipping_address
+            if billing_address:
+                return billing_address
+
+            # 2) Tự build từ các phần tử (ưu tiên Shipping*, thiếu thì mượn Billing*)
+            #    Dùng các nhãn *Text và *CustomText nếu có
+            ship_street = cd.get("ShippingStreet") or cd.get("BillingStreet")
+            ship_ward = cd.get("ShippingWardIDText") or cd.get("BillingWardIDText")
+            ship_district = cd.get("ShippingDistrictIDText") or cd.get("BillingDistrictIDText")
+            ship_province = (
+                cd.get("ShippingProvinceIDCustomText")
+                or cd.get("ShippingProvinceIDText")
+                or cd.get("BillingProvinceIDCustomText")
+                or cd.get("BillingProvinceIDText")
+            )
+            ship_country = cd.get("ShippingCountryIDText") or cd.get("BillingCountryIDText")
+
+            # Chuẩn hóa vài giá trị hành chính thường gặp
+            ship_ward = _normalize_admin(ship_ward)
+            ship_district = _normalize_admin(ship_district)
+            ship_province = _normalize_admin(ship_province)
+
+            built = _join_address_parts(ship_street, ship_ward, ship_district, ship_province, ship_country)
+            if built:
+                return built
+
+            # 3) Thua nữa thì lấy Account/Contact text làm fallback mềm, rồi tới sale_order_id
+            # (đề phòng dữ liệu quá thiếu)
+            acc = (cd.get("AccountIDText") or "").strip()
+            contact = (cd.get("ContactIDText") or "").strip()
+            soft = _join_address_parts(contact, acc)
+            return soft or str(sale_order_id)
 
         except Exception as e:
-            print(f"❌ Lỗi khi xử lý response: {e}. Dùng tạm sale_order_id.")
-            delivery_number = sale_order_id
-
-        return delivery_number
-    
-    
-    
+            _logger.exception("❌ Lỗi khi xử lý response: %s. Dùng tạm sale_order_id.", e)
+            return str(sale_order_id)
+        
 
     # def get_list_product_by_order_crm(self,api_url,header, payload):
     #     session = requests.Session()
