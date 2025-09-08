@@ -95,6 +95,7 @@ class SaleApiImportWizard(models.TransientModel):
 
         sale_headers = misa_config.get_crm_header(crm_token)
 
+
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
@@ -250,7 +251,6 @@ class SaleApiImportWizard(models.TransientModel):
                     })
                     
                     
-                    get_shipping_address = misa_utils.get_shipping_address(sale_order_id=id,order_ref=order_ref,token = token)
 
                     # Thêm line
                     for line in grouped_lines:
