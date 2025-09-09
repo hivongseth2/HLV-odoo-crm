@@ -267,8 +267,8 @@ class SaleApiImportWizard(models.TransientModel):
                             unit_name=uom_name,
                             cost=price_unit,
                             product_type="consu",
-                            purchase_ok=False,
-                            sale_ok=False
+                            purchase_ok=True,
+                            sale_ok=True
                         )
                         self.env['sale.order.line'].create({
                             'order_id': sale_order.id,
