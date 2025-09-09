@@ -279,7 +279,7 @@ class MisaPOFetch(models.TransientModel):
                         unit_name=unit_name,
                         cost=price,
                         purchase_ok=True,
-                        sale_ok=False
+                        sale_ok=True
                     )
                     pol_vals = {
                         "order_id": po_rec.id,
@@ -297,4 +297,21 @@ class MisaPOFetch(models.TransientModel):
 
                     
                     self.env["purchase.order.line"].create(pol_vals)
+                    
+                    
+                po_rec.write({'partner_ref': refno})      # tham chiếu NCC, dễ tra cứu
+                po_rec.button_confirm()                   # xác nhận đơn mua
+
+                # Cập nhật ngày dự kiến + đảm bảo receipt đúng kho/location
+                for picking in po_rec.picking_ids:
+                    if planned_naive_utc:
+                        picking.scheduled_date = planned_naive_utc
+                    # dùng đúng picking type của warehouse đã map
+                    if picking.picking_type_id.id != picking_type.id:
+                        picking.picking_type_id = picking_type.id
+                    # (tuỳ chọn) ép đích nhập về đúng location kho đã map
+                    if location:
+                        picking.location_dest_id = location.id
+                        for move in picking.move_ids_without_package:
+                            move.location_dest_id = location.id
             page_index += 1
