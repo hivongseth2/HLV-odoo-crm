@@ -218,8 +218,8 @@ class MisaTransferFetch(models.TransientModel):
                                 unit_name=uom_name,
                                 cost=cost,
                                 product_type="consu",
-                                purchase_ok=False,
-                                sale_ok=False
+                                purchase_ok=True,
+                                sale_ok=True
                             )
 
                             self.env['stock.move'].create({
