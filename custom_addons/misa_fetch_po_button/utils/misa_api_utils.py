@@ -172,118 +172,118 @@ class MisaApiUtils(models.AbstractModel):
     
 
 
-def get_shipping_address(self, sale_order_id, order_ref=None, token=None):
-    """
-    Lấy địa chỉ giao hàng từ MISA CRM.
-    Ưu tiên:
-      1) Data.CurrentData.ShippingAddress
-      2) Data.CurrentData.BillingAddress
-      3) Tự build từ các trường Shipping* (fallback sang Billing* nếu thiếu)
-    """
-    # Helper: nối các phần địa chỉ, bỏ None/"" và làm sạch dấu phẩy thừa
-    def _join_address_parts(*parts):
-        items = [str(p).strip() for p in parts if p and str(p).strip()]
-        addr = ", ".join(items)
-        # làm sạch: nhiều dấu phẩy/space -> 1, bỏ dấu phẩy ở đầu/cuối
-        addr = re.sub(r"\s*,\s*", ", ", addr)
-        addr = re.sub(r"(,\s*){2,}", ", ", addr).strip(", ").strip()
-        return addr or None
+    def get_shipping_address(self, sale_order_id, order_ref=None, token=None):
+        """
+        Lấy địa chỉ giao hàng từ MISA CRM.
+        Ưu tiên:
+        1) Data.CurrentData.ShippingAddress
+        2) Data.CurrentData.BillingAddress
+        3) Tự build từ các trường Shipping* (fallback sang Billing* nếu thiếu)
+        """
+        # Helper: nối các phần địa chỉ, bỏ None/"" và làm sạch dấu phẩy thừa
+        def _join_address_parts(*parts):
+            items = [str(p).strip() for p in parts if p and str(p).strip()]
+            addr = ", ".join(items)
+            # làm sạch: nhiều dấu phẩy/space -> 1, bỏ dấu phẩy ở đầu/cuối
+            addr = re.sub(r"\s*,\s*", ", ", addr)
+            addr = re.sub(r"(,\s*){2,}", ", ", addr).strip(", ").strip()
+            return addr or None
 
-    # Helper: chuẩn hóa vài tên hành chính phổ biến (có thể mở rộng theo nhu cầu)
-    def _normalize_admin(s: str | None) -> str | None:
-        if not s:
-            return s
-        mapping = {
-            "tphcm": "Thành phố Hồ Chí Minh",
-            "TPHCM": "Thành phố Hồ Chí Minh",
-            "BR-VT": "Bà Rịa - Vũng Tàu",
-            "đồng nai": "Tỉnh Đồng Nai",
-            "Đồng Nai": "Tỉnh Đồng Nai",
-            "q8": "Quận 8",
+        # Helper: chuẩn hóa vài tên hành chính phổ biến (có thể mở rộng theo nhu cầu)
+        def _normalize_admin(s: str | None) -> str | None:
+            if not s:
+                return s
+            mapping = {
+                "tphcm": "Thành phố Hồ Chí Minh",
+                "TPHCM": "Thành phố Hồ Chí Minh",
+                "BR-VT": "Bà Rịa - Vũng Tàu",
+                "đồng nai": "Tỉnh Đồng Nai",
+                "Đồng Nai": "Tỉnh Đồng Nai",
+                "q8": "Quận 8",
+            }
+            raw = s.strip()
+            return mapping.get(raw, raw)
+
+        session = requests.Session()
+        api_url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
+        api_headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}" if token else "",
+            "User-Agent": "PostmanRuntime/7.44.1",
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            "companycode": "3R2PY2F4",
         }
-        raw = s.strip()
-        return mapping.get(raw, raw)
+        api_payload = {"ID": str(sale_order_id), "MISAEntityState": "2"}
 
-    session = requests.Session()
-    api_url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
-    api_headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}" if token else "",
-        "User-Agent": "PostmanRuntime/7.44.1",
-        "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "companycode": "3R2PY2F4",
-    }
-    api_payload = {"ID": str(sale_order_id), "MISAEntityState": "2"}
+        api_response = session.post(api_url, headers=api_headers, json=api_payload)
+        _logger.warning("API response headers: %s", dict(api_response.headers))
+        _logger.warning("API response text: %s", api_response.text)
 
-    api_response = session.post(api_url, headers=api_headers, json=api_payload)
-    _logger.warning("API response headers: %s", dict(api_response.headers))
-    _logger.warning("API response text: %s", api_response.text)
+        # Nếu không 200 thì vẫn ráng parse JSON để fallback; nếu parse fail thì trả sale_order_id
+        try:
+            response_data = api_response.json()
+        except Exception:
+            _logger.exception("Không parse được JSON; trả về sale_order_id làm fallback.")
+            return str(sale_order_id)
 
-    # Nếu không 200 thì vẫn ráng parse JSON để fallback; nếu parse fail thì trả sale_order_id
-    try:
-        response_data = api_response.json()
-    except Exception:
-        _logger.exception("Không parse được JSON; trả về sale_order_id làm fallback.")
-        return str(sale_order_id)
+        try:
+            cd = (response_data or {}).get("Data", {}).get("CurrentData", {}) or {}
 
-    try:
-        cd = (response_data or {}).get("Data", {}).get("CurrentData", {}) or {}
+            # 1) Ưu tiên trường đã gộp sẵn
+            shipping_address = (cd.get("ShippingAddress") or "").strip()
+            billing_address = (cd.get("BillingAddress") or "").strip()
+            if shipping_address:
+                return shipping_address
+            if billing_address:
+                return billing_address
 
-        # 1) Ưu tiên trường đã gộp sẵn
-        shipping_address = (cd.get("ShippingAddress") or "").strip()
-        billing_address = (cd.get("BillingAddress") or "").strip()
-        if shipping_address:
-            return shipping_address
-        if billing_address:
-            return billing_address
+            # 2) Tự build từ các phần tử (ưu tiên Shipping*, thiếu thì mượn Billing*)
+            #    Dùng các nhãn *Text và *CustomText nếu có
+            ship_street = cd.get("ShippingStreet") or cd.get("BillingStreet")
+            ship_ward = cd.get("ShippingWardIDText") or cd.get("BillingWardIDText")
+            ship_district = cd.get("ShippingDistrictIDText") or cd.get("BillingDistrictIDText")
+            ship_province = (
+                cd.get("ShippingProvinceIDCustomText")
+                or cd.get("ShippingProvinceIDText")
+                or cd.get("BillingProvinceIDCustomText")
+                or cd.get("BillingProvinceIDText")
+            )
+            ship_country = cd.get("ShippingCountryIDText") or cd.get("BillingCountryIDText")
 
-        # 2) Tự build từ các phần tử (ưu tiên Shipping*, thiếu thì mượn Billing*)
-        #    Dùng các nhãn *Text và *CustomText nếu có
-        ship_street = cd.get("ShippingStreet") or cd.get("BillingStreet")
-        ship_ward = cd.get("ShippingWardIDText") or cd.get("BillingWardIDText")
-        ship_district = cd.get("ShippingDistrictIDText") or cd.get("BillingDistrictIDText")
-        ship_province = (
-            cd.get("ShippingProvinceIDCustomText")
-            or cd.get("ShippingProvinceIDText")
-            or cd.get("BillingProvinceIDCustomText")
-            or cd.get("BillingProvinceIDText")
-        )
-        ship_country = cd.get("ShippingCountryIDText") or cd.get("BillingCountryIDText")
+            # Chuẩn hóa vài giá trị hành chính thường gặp
+            ship_ward = _normalize_admin(ship_ward)
+            ship_district = _normalize_admin(ship_district)
+            ship_province = _normalize_admin(ship_province)
 
-        # Chuẩn hóa vài giá trị hành chính thường gặp
-        ship_ward = _normalize_admin(ship_ward)
-        ship_district = _normalize_admin(ship_district)
-        ship_province = _normalize_admin(ship_province)
+            built = _join_address_parts(ship_street, ship_ward, ship_district, ship_province, ship_country)
+            if built:
+                return built
 
-        built = _join_address_parts(ship_street, ship_ward, ship_district, ship_province, ship_country)
-        if built:
-            return built
+            # 3) Thua nữa thì lấy Account/Contact text làm fallback mềm, rồi tới sale_order_id
+            # (đề phòng dữ liệu quá thiếu)
+            acc = (cd.get("AccountIDText") or "").strip()
+            contact = (cd.get("ContactIDText") or "").strip()
+            soft = _join_address_parts(contact, acc)
+            return soft or str(sale_order_id)
 
-        # 3) Thua nữa thì lấy Account/Contact text làm fallback mềm, rồi tới sale_order_id
-        # (đề phòng dữ liệu quá thiếu)
-        acc = (cd.get("AccountIDText") or "").strip()
-        contact = (cd.get("ContactIDText") or "").strip()
-        soft = _join_address_parts(contact, acc)
-        return soft or str(sale_order_id)
+        except Exception as e:
+            _logger.exception("❌ Lỗi khi xử lý response: %s. Dùng tạm sale_order_id.", e)
+            return str(sale_order_id)
 
-    except Exception as e:
-        _logger.exception("❌ Lỗi khi xử lý response: %s. Dùng tạm sale_order_id.", e)
-        return str(sale_order_id)
+        # def get_list_product_by_order_crm(self,api_url,header, payload):
+        #     session = requests.Session()
 
-    # def get_list_product_by_order_crm(self,api_url,header, payload):
-    #     session = requests.Session()
+        #     response = session.post(api_url, headers=header, json=payload)
+        #     _logger.warning("📦response %s", response)
+        #     if response.status_code != 200:
+        #         raise Exception(f"API call failed: {response.status_code} - {response.text}")
 
-    #     response = session.post(api_url, headers=header, json=payload)
-    #     _logger.warning("📦response %s", response)
-    #     if response.status_code != 200:
-    #         raise Exception(f"API call failed: {response.status_code} - {response.text}")
-
-    #     try:
-    #         return response.json().get("Data", [])
-    #     except Exception as e:
-    #         raise Exception(f"Lỗi khi xử lý response JSON: {e}")
+        #     try:
+        #         return response.json().get("Data", [])
+        #     except Exception as e:
+        #         raise Exception(f"Lỗi khi xử lý response JSON: {e}")
 
 
     def get_list_product_by_order_crm(self, api_url, header, payload):
