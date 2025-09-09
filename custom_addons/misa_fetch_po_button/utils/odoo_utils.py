@@ -29,9 +29,9 @@ class OdooUtils(models.AbstractModel):
         if uom:
             return uom
 
-        cat = UoMCat.search([('name', 'ilike', 'đơn vị')], limit=1)
+        cat = UoMCat.search([('name', 'ilike', 'Unit')], limit=1)
         if not cat:
-            cat = UoMCat.create({'name': 'Đơn vị'})
+            cat = UoMCat.create({'name': 'Unit'})
 
         ref_uom = UoM.search([
             ('category_id', '=', cat.id),
