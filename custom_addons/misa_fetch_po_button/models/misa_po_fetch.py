@@ -129,7 +129,7 @@ class MisaPOFetch(models.TransientModel):
             ],
             "loadMode": 2,
             "pageIndex": 1,
-            "pageSize": 20,
+            "pageSize": 20, 
             "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
             "summaryColumns": [5039, 5104, 247],
             "useSp": False,
