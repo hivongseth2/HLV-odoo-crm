@@ -107,9 +107,9 @@ class SaleApiImportWizard(models.TransientModel):
                     uom_name = (line.get("unit") or "Cái").strip()
 
 
-                    category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
+                    category = self.env['uom.category'].search([('name', 'ilike', 'Unit')], limit=1)
                     if not category:
-                        category =  self.env['uom.category'].create({'name': 'Đơn vị'})
+                        category =  self.env['uom.category'].create({'name': 'Unit'})
 
                     uom = self.env['uom.uom'].search([
                         ('name', '=', uom_name),
