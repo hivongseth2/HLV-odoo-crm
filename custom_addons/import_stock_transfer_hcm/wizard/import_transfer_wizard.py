@@ -93,9 +93,9 @@ class ImportTransferWizard(models.TransientModel):
                     _logger.warning("Bỏ qua dòng không hợp lệ: %s", row.to_dict())
                     continue
 
-                category = self.env['uom.category'].search([('name', 'ilike', 'đơn vị')], limit=1)
+                category = self.env['uom.category'].search([('name', 'ilike', 'Unit')], limit=1)
                 if not category:
-                    category = self.env['uom.category'].create({'name': 'Đơn vị'})
+                    category = self.env['uom.category'].create({'name': 'Unit'})
 
                 uom = self.env['uom.uom'].search([
                     ('name', 'ilike', uom_name),
