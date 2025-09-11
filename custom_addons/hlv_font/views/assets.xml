@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- Thêm CSS vào bundle report -->
+  <!-- Kế thừa bundle CSS của report -->
   <template id="hlv_tnr_assets_common"
             inherit_id="web.report_assets_common"
             name="HLV | Times New Roman for Reports">
@@ -9,7 +9,7 @@
     </xpath>
   </template>
 
-  <!-- (Tùy môi trường) Nếu instance bạn có bundle này thì kế thừa thêm -->
+  <!-- (Nếu môi trường có bundle này) thêm luôn vào bundle PDF -->
   <template id="hlv_tnr_assets_pdf"
             inherit_id="web.report_assets_pdf"
             name="HLV | Times New Roman for PDF"
