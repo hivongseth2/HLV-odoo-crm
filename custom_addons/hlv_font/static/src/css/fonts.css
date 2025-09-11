@@ -1,4 +1,3 @@
-/* Khai báo font */
 @font-face {
     font-family: "HLV-TNR";
     src: url("/hlv_font/static/src/fonts/times-new-roman.ttf") format("truetype");
@@ -27,7 +26,7 @@
     font-style: italic;
 }
 
-/* Áp font cho toàn bộ nội dung report (HTML & PDF) */
+/* Áp cho toàn bộ layout báo cáo */
 .o_report_layout,
 .o_report_layout * {
     font-family: "HLV-TNR", "DejaVu Sans", serif !important;
