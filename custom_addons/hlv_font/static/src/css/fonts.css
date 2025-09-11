@@ -1,0 +1,15 @@
+@font-face {
+    font-family: "TimesNewRoman";
+    src: url("/hlv_font/static/src/fonts/times-new-roman.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+}
+
+body,
+table,
+td,
+span,
+div,
+p {
+    font-family: "TimesNewRoman", "DejaVu Sans", serif !important;
+}
