@@ -9,8 +9,7 @@
     "category": "Reporting",
     "depends": ["web"],
     "data": [
-
-         "views/assets.xml",
+        "views/report_font.xml",
     ],
     "assets": {},
     "installable": True,
