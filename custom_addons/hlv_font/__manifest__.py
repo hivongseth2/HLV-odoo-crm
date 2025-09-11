@@ -9,7 +9,7 @@
     "category": "Reporting",
     "depends": ["web"],
     "data": [
-        "views/report_font.xml",
+
          "views/assets.xml",
     ],
     "assets": {},
