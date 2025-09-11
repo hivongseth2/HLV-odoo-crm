@@ -20,7 +20,7 @@ class OdooUtils(models.AbstractModel):
         return partner
 
     def _get_or_create_uom(self, name):
-        """Tìm hoặc tạo mới đơn vị tính (UoM) dựa trên tên."""
+        """Tìm hoặc tạo mới dvt tính (UoM) dựa trên tên."""
         name = name.strip().title()
         UoM = self.env['uom.uom']
         UoMCat = self.env['uom.category']
@@ -50,7 +50,7 @@ class OdooUtils(models.AbstractModel):
         })
 
     def _get_or_create_product(self, code, name, unit_name, cost=0.0, product_type="consu", purchase_ok=True, sale_ok=False):
-        """Tìm hoặc tạo mới sản phẩm dựa trên mã, tên, đơn vị tính và giá vốn."""
+        """Tìm hoặc tạo mới sản phẩm dựa trên mã, tên, đv tính và giá vốn."""
         code = code.strip()
         name = name.strip()
         product = self.env["product.product"].search([("default_code", "=", code)], limit=1)

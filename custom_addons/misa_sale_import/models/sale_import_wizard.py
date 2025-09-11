@@ -148,7 +148,7 @@ class SaleImportWizard(models.TransientModel):
                     'list_price': unit_price,
                 })
 
-            # Đơn vị tính
+            # đvt
             uom = self.env['uom.uom'].search([('name', '=', uom_name)], limit=1)
             if not uom:
                 uom = self.env['uom.uom'].search([('name', '=', 'Cái')], limit=1)
