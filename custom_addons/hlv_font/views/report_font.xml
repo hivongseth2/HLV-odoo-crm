@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <template id="tnr_font_global" inherit_id="web.report_layout" name="HLV | Global PDF Font">
+    <xpath expr="//t[@t-call-assets='web.report_assets_common']" position="after">
+      <t t-set="base_url"
+         t-value="(env['ir.config_parameter'].sudo().get_param('report.url')
+                   or env['ir.config_parameter'].sudo().get_param('web.base.url')
+                   or '').rstrip('/')"/>
+
+      <style type="text/css">
+        @font-face {
+          font-family: 'HLV-TNR';
+          src: url('<t t-esc="base_url"/>/hlv_font/static/src/fonts/times-new-roman.ttf') format('truetype');
+          font-weight: 400;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'HLV-TNR';
+          src: url('<t t-esc="base_url"/>/hlv_font/static/src/fonts/times-new-roman-bold.ttf') format('truetype');
+          font-weight: 700;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'HLV-TNR';
+          src: url('<t t-esc="base_url"/>/hlv_font/static/src/fonts/times-new-roman-italic.ttf') format('truetype');
+          font-weight: 400;
+          font-style: italic;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'HLV-TNR';
+          src: url('<t t-esc="base_url"/>/hlv_font/static/src/fonts/times-new-roman-bolditalic.ttf') format('truetype');
+          font-weight: 700;
+          font-style: italic;
+          font-display: swap;
+        }
+
+        .o_report_layout, .o_report_layout * {
+          font-family: 'HLV-TNR', 'DejaVu Sans', sans-serif !important;
+        }
+      </style>
+    </xpath>
+  </template>
+</odoo>
