@@ -5,7 +5,7 @@
   left: 0;
   right: 0;
   background: #fdfcfb;                  /* nền hơi ivory, khác hẳn trắng tree view */
-  border-top: 3px solid #6366f1;        /* viền tím Indigo nổi bật */
+  border-top: 3px solid #63a1f1;        /* viền tím Indigo nổi bật */
   max-height: 50%;
   overflow-y: auto;
   z-index: 1200;
@@ -28,7 +28,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 14px 18px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6); /* tím chuyển sắc */
+  background: linear-gradient(90deg, #63a5f1, #5c92f6); /* tím chuyển sắc */
   color: #fff;
   font-weight: 600;
   font-size: 15px;
@@ -76,7 +76,7 @@
   background: #eef2ff;      /* xanh nhạt khác với tree view */
   font-weight: 600;
   font-size: 13px;
-  color: #3730a3;           /* Indigo đậm */
+  color: #2c7cf5;           /* Indigo đậm */
   padding: 10px;
   text-align: left;
 }
