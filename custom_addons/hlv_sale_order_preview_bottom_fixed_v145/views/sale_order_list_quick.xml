@@ -1,22 +1,46 @@
 <odoo>
-  <record id="sale_order_list_convert_all_action_btns" model="ir.ui.view">
-    <field name="name">sale.order.list.convert.all.action.btns</field>
+  <!-- A. Convert mọi button type="action" trong LIST + HEADER (quotation list) -->
+  <record id="so_list_convert_action_btns_quotation" model="ir.ui.view">
+    <field name="name">so.list.convert.action.btns.quotation</field>
     <field name="model">sale.order</field>
     <field name="inherit_id" ref="sale.view_quotation_tree_with_onboarding"/>
-    <field name="priority" eval="98"/>
+    <field name="priority" eval="200"/>
     <field name="arch" type="xml">
       <xpath expr="//list//button[@type='action']" position="attributes">
+        <attribute name="type">object</attribute>
+        <attribute name="name">action_open_order_in_panel</attribute>
+      </xpath>
+      <xpath expr="//header//button[@type='action']" position="attributes">
         <attribute name="type">object</attribute>
         <attribute name="name">action_open_order_in_panel</attribute>
       </xpath>
     </field>
   </record>
 
-  <record id="view_sale_order_list_quick_preview_bottom" model="ir.ui.view">
-    <field name="name">sale.order.list.quick.preview.bottom</field>
+  <!-- B. Convert cho view list 'order' cổ điển (nếu hệ thống dùng view này) -->
+  <record id="so_list_convert_action_btns_order" model="ir.ui.view">
+    <field name="name">so.list.convert.action.btns.order</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_tree"/>
+    <field name="priority" eval="200"/>
+    <field name="arch" type="xml">
+      <xpath expr="//list//button[@type='action']" position="attributes">
+        <attribute name="type">object</attribute>
+        <attribute name="name">action_open_order_in_panel</attribute>
+      </xpath>
+      <xpath expr="//header//button[@type='action']" position="attributes">
+        <attribute name="type">object</attribute>
+        <attribute name="name">action_open_order_in_panel</attribute>
+      </xpath>
+    </field>
+  </record>
+
+  <!-- C. Thêm nút của bạn sau cột cuối để user bấm -->
+  <record id="so_list_quick_preview_bottom" model="ir.ui.view">
+    <field name="name">so.list.quick.preview.bottom</field>
     <field name="model">sale.order</field>
     <field name="inherit_id" ref="sale.view_quotation_tree_with_onboarding"/>
-    <field name="priority" eval="99"/>
+    <field name="priority" eval="210"/>
     <field name="arch" type="xml">
       <xpath expr="//list/field[last()]" position="after">
         <button name="action_open_order_in_panel"
