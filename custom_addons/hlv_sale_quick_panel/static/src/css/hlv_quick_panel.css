@@ -1,0 +1,19 @@
+.hlv-bottom-panel{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -6px 16px rgba(0,0,0,.08);
+  z-index: 1050;
+  max-height: 45vh;
+  overflow: auto;
+}
+.hlv-panel-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.hlv-title{ font-weight: 600; }
+.hlv-panel-body{ padding: 8px 12px; }
