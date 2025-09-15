@@ -1,0 +1,28 @@
+/* Basic bottom panel styling */
+.hlv-bottom-panel{
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 40vh;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+}
+.hlv-panel-header{
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+.hlv-panel-header .hlv-title{
+  font-weight: 600;
+}
+.hlv-panel-body{
+  padding: 8px 12px;
+  overflow: auto;
+}
