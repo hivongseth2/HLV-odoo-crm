@@ -1,25 +1,26 @@
 <odoo>
   <data noupdate="0">
-    <!-- Contextual action in list/form 'Action' menu -->
     <record id="server_action_hlv_quick_preview" model="ir.actions.server">
       <field name="name">Xem nhanh (HLV)</field>
       <field name="model_id" ref="sale.model_sale_order"/>
       <field name="binding_model_id" ref="sale.model_sale_order"/>
       <field name="binding_type">action</field>
+      <field name="binding_view_types">list,form</field>
       <field name="state">code</field>
       <field name="code"><![CDATA[
 active_ids = env.context.get("active_ids") or []
 res_id = active_ids[0] if active_ids else env.context.get("active_id")
 if not res_id:
-    action = {"type": "ir.actions.act_window_close"}
+    action = {{"type": "ir.actions.act_window_close"}}
 else:
-    action = {
+    action = {{
         "type": "ir.actions.client",
         "tag": "hlv_show_panel_noqweb",
-        "params": {"res_id": res_id},
+        "params": {{"res_id": res_id}},
         "context": dict(env.context, active_id=res_id),
         "target": "current",
-    }
+    }}
+action
       ]]></field>
     </record>
   </data>

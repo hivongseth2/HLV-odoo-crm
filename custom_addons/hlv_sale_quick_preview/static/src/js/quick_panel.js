@@ -10,7 +10,6 @@ function fmtCurrency(env, value) {
   }
 }
 
-// Hook log 1 lần
 if (!window.__HLV_LOG_HOOK__) {
   window.__HLV_LOG_HOOK__ = true;
   window.addEventListener("error", (e) => {
@@ -32,7 +31,6 @@ registry.category("actions").add("hlv_show_panel_noqweb", async (env, action) =>
   const orm = env.services.orm;
   const notify = env.services.notification;
 
-  // Lấy resId
   const ctx = action?.context || {};
   const resId =
     action?.params?.res_id ??
@@ -43,17 +41,16 @@ registry.category("actions").add("hlv_show_panel_noqweb", async (env, action) =>
 
   if (!resId) {
     notify.add("Không xác định được Sale Order để xem nhanh.", { type: "warning" });
+    await env.services.action.doAction({ type: "ir.actions.act_window_close" });
     return { destroy() {} };
   }
 
-  // Clear panel cũ
   try {
     document.querySelectorAll(".hlv-side-panel, .hlv-bottom-panel").forEach((n) => n.remove());
   } catch (e) {
     warn("cleanup failed", e);
   }
 
-  // Tạo container
   const target = document.createElement("div");
   target.className = "hlv-bottom-panel";
   target.innerHTML = `
@@ -91,7 +88,6 @@ registry.category("actions").add("hlv_show_panel_noqweb", async (env, action) =>
     );
     log("searchRead OK", { ms: Math.round(performance.now() - t2), count: lines?.length, sample: lines?.[0] });
 
-    // Render
     target.querySelector(".hlv-title").textContent = order?.name || "Đơn bán";
     const body = target.querySelector(".hlv-panel-body");
 
@@ -121,8 +117,6 @@ registry.category("actions").add("hlv_show_panel_noqweb", async (env, action) =>
     `;
 
     log("rendered", { totalMs: Math.round(performance.now() - t0) });
-
-    // Fix cốt lõi: trả về một action hợp lệ để doActionButton không bị undefined
     await env.services.action.doAction({ type: "ir.actions.act_window_close" });
     return { destroy };
 
