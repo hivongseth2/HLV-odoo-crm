@@ -1,0 +1,30 @@
+
+/* Bottom panel */
+.hlv-bottom-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40%;
+  max-height: 55%;
+  background: #fff;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #e5e5e5;
+  box-shadow: 0 -6px 16px rgba(0,0,0,0.08);
+}
+.hlv-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #eee;
+  background: #f8f8f8;
+  font-weight: 600;
+}
+.hlv-panel-body {
+  overflow: auto;
+  padding: 10px 14px;
+  flex: 1;
+}
