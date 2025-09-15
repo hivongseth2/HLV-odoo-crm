@@ -14,7 +14,6 @@ function fmtCurrency(env, value) {
 if (!window.__HLV_LOG_HOOK__) {
   window.__HLV_LOG_HOOK__ = true;
   window.addEventListener("error", (e) => {
-    // Lỗi đồng bộ không bắt được trong try/catch
     console.error("[HLV][GLOBAL error]", e?.message, e?.error);
   });
   window.addEventListener("unhandledrejection", (e) => {
@@ -128,12 +127,19 @@ registry.category("actions").add("hlv_show_panel_noqweb", async (env, action) =>
     `;
 
     log("rendered", { totalMs: Math.round(performance.now() - t0) });
+
+    // ---- QUAN TRỌNG: trả về "no-op action" để chuỗi doActionButton không bị undefined ----
+    await env.services.action.doAction({ type: "ir.actions.act_window_close" });
+    // Và vẫn trả về controller để bạn có thể đóng panel thủ công
+    return { destroy };
+
   } catch (e) {
     err("exception", e);
     notify.add("Không thể tải dữ liệu đơn hàng.", { type: "danger" });
-    // Dù lỗi vẫn trả về controller hợp lệ để ActionManager không báo undefined
-  }
+    try { target?.remove(); } catch { }
 
-  // Luôn trả về 1 controller
-  return { destroy };
+    // Trả về no-op action để nuốt chuỗi doActionButton, tránh 'type undefined'
+    await env.services.action.doAction({ type: "ir.actions.act_window_close" });
+    return { destroy };
+  }
 });

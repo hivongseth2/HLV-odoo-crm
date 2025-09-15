@@ -13,13 +13,13 @@
   <field name="priority" eval="99"/>
   <field name="arch" type="xml">
     <xpath expr="//list/field[last()]" position="after">
-    <button
-        name="action_open_order_in_panel"
-        type="object"
+      <button
+        type="action"
         string="Xem nhanh (HLV)"
         class="btn-link hlv-quick-btn"
+        name="%(action_hlv_show_panel_noqweb)d"
+        context="{'active_id': id}"
       />
-
     </xpath>
   </field>
 </record>
