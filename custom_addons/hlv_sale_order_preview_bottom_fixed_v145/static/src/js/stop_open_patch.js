@@ -3,36 +3,39 @@ import { patch } from "@web/core/utils/patch";
 import { ListRenderer } from "@web/views/list/list_renderer";
 
 /**
- * Ngăn list mở form khi bấm nút "Xem nhanh (HLV)" trong hàng.
- * Bắt sự kiện click ở capture phase để chặn sớm trước khi List xử lý.
+ * Chặn hành vi mở form khi bấm nút "Xem nhanh (HLV)" trong hàng list.
+ * Bắt ở capture phase để ngăn List xử lý click vào row.
  */
-patch(ListRenderer.prototype, "hlv/stop-open-on-quick-button", {
+patch(ListRenderer.prototype, {
     setup() {
-        // gọi setup gốc (nếu có)
-        if (super.setup) {
-            super.setup();
+        // gọi setup gốc nếu có
+        if (this._super) {
+            this._super(...arguments);
         }
         this._hlvOnClickCapture = (ev) => {
-            // Nếu click lên chính nút "Xem nhanh (HLV)" hoặc con của nó -> chặn
-            const btn = ev.target.closest(".hlv-quick-btn");
+            const btn = ev.target && ev.target.closest && ev.target.closest(".hlv-quick-btn");
             if (btn) {
                 ev.stopPropagation();
-                // Đề phòng: một số browser cần preventDefault để không trigger focus/row handlers
                 ev.preventDefault();
             }
         };
     },
+
     mounted() {
-        if (super.mounted) {
-            super.mounted();
+        if (this._super) {
+            this._super(...arguments);
         }
-        // Bắt ở capture phase để chặn sớm
+        // Bắt sớm ở capture phase
         this.el.addEventListener("click", this._hlvOnClickCapture, { capture: true });
     },
+
     willUnmount() {
-        this.el.removeEventListener("click", this._hlvOnClickCapture, { capture: true });
-        if (super.willUnmount) {
-            super.willUnmount();
+        // Gỡ listener trước khi unmount
+        if (this.el && this._hlvOnClickCapture) {
+            this.el.removeEventListener("click", this._hlvOnClickCapture, { capture: true });
+        }
+        if (this._super) {
+            this._super(...arguments);
         }
     },
 });
