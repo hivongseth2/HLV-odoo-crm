@@ -12,7 +12,9 @@
     "assets": {
         "web.assets_backend": [
             "hlv_sale_order_preview_bottom_fixed_v145/static/src/js/panel_noqweb.js",
-            "hlv_sale_order_preview_bottom_fixed_v145/static/src/scss/panel.scss"
+            "hlv_sale_order_preview_bottom_fixed_v145/static/src/scss/panel.scss",
+            "hlv_sale_order_preview_bottom_fixed/static/src/js/stop_open_patch.js"  # <-- thêm dòng này
+
         ]
     },
     "installable": True,
