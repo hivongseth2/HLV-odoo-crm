@@ -1,0 +1,26 @@
+.hlv-bottom-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-top: 1px solid #ddd;
+  max-height: 40%;
+  overflow: auto;
+  z-index: 1050;
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.1);
+}
+
+.hlv-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  font-weight: bold;
+}
+
+.hlv-panel-body {
+  padding: 10px;
+}
