@@ -10,7 +10,7 @@
       <xpath expr="//list/field[last()]" position="after">
         <button name="action_open_order_in_panel"
                 type="object"
-                string="Xem nhanh (HLV)"
+                string="Xem"
                 class="btn-link hlv-quick-btn"/>
       </xpath>
     </field>

@@ -4,23 +4,77 @@
   left: 0;
   right: 0;
   background: #fff;
-  border-top: 1px solid #ddd;
-  max-height: 40%;
-  overflow: auto;
+  border-top: 1px solid #e5e7eb;      /* xám nhạt hơn */
+  max-height: 45%;
+  overflow-y: auto;
   z-index: 1050;
-  box-shadow: 0 -2px 6px rgba(0,0,0,0.1);
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  animation: slideUp 0.25s ease-out;
+  font-size: 14px;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
 }
 
 .hlv-panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
-  background: #f5f5f5;
-  border-bottom: 1px solid #ddd;
-  font-weight: bold;
+  padding: 12px 16px;
+  background: linear-gradient(to right, #f9fafb, #f3f4f6);
+  border-bottom: 1px solid #e5e7eb;
+  font-weight: 600;
+  font-size: 15px;
+  color: #374151;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.hlv-panel-header .hlv-title {
+  flex: 1;
+}
+
+.hlv-panel-header .hlv-close {
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  transition: all 0.2s ease;
+}
+
+.hlv-panel-header .hlv-close:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
 }
 
 .hlv-panel-body {
-  padding: 10px;
+  padding: 16px;
+  background: #fff;
+}
+
+.hlv-panel-body table {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.hlv-panel-body th {
+  background: #f9fafb;
+  font-weight: 600;
+  font-size: 13px;
+  color: #374151;
+  padding: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.hlv-panel-body td {
+  padding: 8px;
+  vertical-align: middle;
+  font-size: 13px;
+  color: #111827;
 }
