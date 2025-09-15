@@ -6,14 +6,21 @@ import { ListRenderer } from "@web/views/list/list_renderer";
  * Chặn hành vi mở form khi bấm nút "Xem nhanh (HLV)" trong hàng list.
  * Bắt ở capture phase để ngăn List xử lý click vào row.
  */
+
+// Lưu reference tới method gốc
+const _setup = ListRenderer.prototype.setup;
+const _mounted = ListRenderer.prototype.mounted;
+const _willUnmount = ListRenderer.prototype.willUnmount;
+
 patch(ListRenderer.prototype, {
     setup() {
-        // gọi setup gốc nếu có
-        if (this._super) {
-            this._super(...arguments);
+        // GỌI LẠI HÀM GỐC
+        if (_setup) {
+            _setup.call(this, ...arguments);
         }
+        // Handler chặn click
         this._hlvOnClickCapture = (ev) => {
-            const btn = ev.target && ev.target.closest && ev.target.closest(".hlv-quick-btn");
+            const btn = ev.target?.closest?.(".hlv-quick-btn");
             if (btn) {
                 ev.stopPropagation();
                 ev.preventDefault();
@@ -22,20 +29,22 @@ patch(ListRenderer.prototype, {
     },
 
     mounted() {
-        if (this._super) {
-            this._super(...arguments);
+        // GỌI LẠI HÀM GỐC
+        if (_mounted) {
+            _mounted.call(this, ...arguments);
         }
-        // Bắt sớm ở capture phase
+        // Bắt sớm ở capture phase để chặn row-click
         this.el.addEventListener("click", this._hlvOnClickCapture, { capture: true });
     },
 
     willUnmount() {
-        // Gỡ listener trước khi unmount
-        if (this.el && this._hlvOnClickCapture) {
-            this.el.removeEventListener("click", this._hlvOnClickCapture, { capture: true });
-        }
-        if (this._super) {
-            this._super(...arguments);
+        // GỠ LISTENER + GỌI LẠI HÀM GỐC
+        try {
+            this.el?.removeEventListener("click", this._hlvOnClickCapture, { capture: true });
+        } finally {
+            if (_willUnmount) {
+                _willUnmount.call(this, ...arguments);
+            }
         }
     },
 });
