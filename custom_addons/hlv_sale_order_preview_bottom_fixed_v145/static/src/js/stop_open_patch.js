@@ -1,24 +1,22 @@
 /** @odoo-module **/
 import { patch } from "@web/core/utils/patch";
 import { ListRenderer } from "@web/views/list/list_renderer";
+import { ListController } from "@web/views/list/list_controller";
 
 /**
- * Chặn hành vi mở form khi bấm nút "Xem nhanh (HLV)" trong hàng list.
- * Bắt ở capture phase để ngăn List xử lý click vào row.
+ * Mục tiêu:
+ * - Khi bấm nút .hlv-quick-btn trong hàng list, KHÔNG được mở form detail.
+ * - Chặn ở cả Renderer (capture phase) và Controller (openRecord/onRowClicked).
  */
 
-// Lưu reference tới method gốc
-const _setup = ListRenderer.prototype.setup;
-const _mounted = ListRenderer.prototype.mounted;
-const _willUnmount = ListRenderer.prototype.willUnmount;
+/* --- 1) Patch ListRenderer: chặn click sớm ở capture phase --- */
+const _lr_setup = ListRenderer.prototype.setup;
+const _lr_mounted = ListRenderer.prototype.mounted;
+const _lr_willUnmount = ListRenderer.prototype.willUnmount;
 
 patch(ListRenderer.prototype, {
     setup() {
-        // GỌI LẠI HÀM GỐC
-        if (_setup) {
-            _setup.call(this, ...arguments);
-        }
-        // Handler chặn click
+        if (_lr_setup) _lr_setup.call(this, ...arguments);
         this._hlvOnClickCapture = (ev) => {
             const btn = ev.target?.closest?.(".hlv-quick-btn");
             if (btn) {
@@ -27,24 +25,41 @@ patch(ListRenderer.prototype, {
             }
         };
     },
-
     mounted() {
-        // GỌI LẠI HÀM GỐC
-        if (_mounted) {
-            _mounted.call(this, ...arguments);
-        }
-        // Bắt sớm ở capture phase để chặn row-click
+        if (_lr_mounted) _lr_mounted.call(this, ...arguments);
         this.el.addEventListener("click", this._hlvOnClickCapture, { capture: true });
     },
-
     willUnmount() {
-        // GỠ LISTENER + GỌI LẠI HÀM GỐC
         try {
             this.el?.removeEventListener("click", this._hlvOnClickCapture, { capture: true });
         } finally {
-            if (_willUnmount) {
-                _willUnmount.call(this, ...arguments);
-            }
+            if (_lr_willUnmount) _lr_willUnmount.call(this, ...arguments);
         }
+    },
+});
+
+/* --- 2) Patch ListController: chặn mở record nếu click từ .hlv-quick-btn --- */
+const _lc_openRecord = ListController.prototype.openRecord;
+const _lc_onRowClicked = ListController.prototype.onRowClicked;
+
+patch(ListController.prototype, {
+    async openRecord(record, options = {}) {
+        const ev = options?.event;
+        if (ev && ev.target && ev.target.closest && ev.target.closest(".hlv-quick-btn")) {
+            // người dùng click nút xem nhanh -> tuyệt đối không mở form
+            ev.stopPropagation?.();
+            ev.preventDefault?.();
+            return; // dứt điểm ở đây
+        }
+        return _lc_openRecord.call(this, record, options);
+    },
+
+    async onRowClicked(ev) {
+        if (ev && ev.target && ev.target.closest && ev.target.closest(".hlv-quick-btn")) {
+            ev.stopPropagation?.();
+            ev.preventDefault?.();
+            return;
+        }
+        return _lc_onRowClicked.call(this, ev);
     },
 });
