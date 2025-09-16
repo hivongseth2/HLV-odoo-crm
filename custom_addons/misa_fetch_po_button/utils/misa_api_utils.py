@@ -15,8 +15,8 @@ class MisaApiUtils(models.AbstractModel):
             # Step 1: Đăng nhập lấy cookie
             login_url = "https://amisapp.misa.vn/APIS/AuthenAPI/api/Account/login"
             login_payload = {
-                "UserName": "Hoanglongvuco@gmail.com",
-                "Password": "Hoanglongvu@2025"
+                "UserName": "thanhluan.hlv@gmail.com",
+                "Password": "ThanhLuan1303@"
             }
             headers_login = {
                 "Content-Type": "application/json",
