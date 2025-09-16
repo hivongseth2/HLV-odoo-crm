@@ -142,7 +142,8 @@ class SaleApiImportWizard(models.TransientModel):
 
             for order in orders:
                 # --- Filter theo account & trạng thái ---
-                customer_name = order.get("AccountIDText") or order.get("SaleOrderName")
+                customer_name = order.get("AccountIDText") 
+                origin = order.get("SaleOrderName")
                 status = order.get("RevenueStatusIDText")
 
                 if customer_name not in e_accounts and status == "Bản nháp":
@@ -247,6 +248,7 @@ class SaleApiImportWizard(models.TransientModel):
                         'date_order': order_date,
                         'amount_total': group_total,
                         'partner_shipping_id': delivery_contact.id, 
+                        'origin':origin,
                         'warehouse_id': warehouse.id,
                     })
                     
@@ -332,6 +334,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'partner_shipping_id': delivery_contact.id, 
                             'amount_total': group_total,
                             'warehouse_id': warehouse.id,
+                            'origin':origin
                         })
 
                         # Thêm line
