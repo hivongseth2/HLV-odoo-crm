@@ -1,3 +1,9 @@
+from odoo import models, fields, _
+import logging
+import json
+from datetime import datetime, timedelta
+
+_logger = logging.getLogger(__name__)
 # ... các import như cũ ...
 
 class MisaTransferFetch(models.TransientModel):
