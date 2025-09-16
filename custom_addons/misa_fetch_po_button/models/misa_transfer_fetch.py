@@ -128,6 +128,17 @@ class MisaTransferFetch(models.TransientModel):
             }
 
             for refid, ref_info in ref_map.items():
+                
+                refno = (ref_info.get('refno_finance') or '').strip()
+                if not refno:
+                    _logger.warning("❌ Bỏ qua refid %s vì thiếu refno_finance", refid)
+                    continue
+
+                # Nếu đã có bất kỳ stock.picking nào trùng name => skip toàn bộ refid này
+                already = self.env['stock.picking'].sudo().search_count([('name', '=', refno)])
+                if already:
+                    _logger.info("🔁 Bỏ qua chứng từ %s vì đã tồn tại picking name='%s' (%s bản ghi)", refid, refno, already)
+                    continue
                 # lấy chi tiết
                 detail_payload = {
                     "columns": [2157,1355,1867,5030,1195,1065,5687,5690,5274,3870,5283,289,2818,2358],
