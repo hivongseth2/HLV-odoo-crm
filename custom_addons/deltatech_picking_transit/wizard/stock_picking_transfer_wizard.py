@@ -6,12 +6,14 @@ class StockPickingTransferWizard(models.TransientModel):
     _description = "Stock Picking Transfer Wizard"
 
     # final_dest_location_id = fields.Many2one("stock.location", string="Final Destination Location", required=True)
+# wizard
     operation_id = fields.Many2one(
         "stock.picking.type",
-        string="Operation Type",
+        string="Loại hoạt động (kho nhận)",
         required=True,
-        domain="[('two_step_transfer_use', '=', 'reception')]",
+        domain="[('code', '=', 'internal')]",
     )
+
 
     def confirm_transfer(self):
         self.ensure_one()
