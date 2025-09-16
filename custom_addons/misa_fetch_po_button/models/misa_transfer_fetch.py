@@ -202,7 +202,7 @@ class MisaTransferFetch(models.TransientModel):
                             'picking_type_id': picking_type.id,
                             'location_id': from_id,
                             'location_dest_id': transit_loc.id,
-                            'origin': ref_info.get('refno_finance', ''),
+                            # 'origin': ref_info.get('refno_finance', ''),
                             'partner_id': partner_id,  # để auto second transfer biết kho đích
                         })
 
