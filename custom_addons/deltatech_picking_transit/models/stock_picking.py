@@ -44,6 +44,7 @@ class StockPicking(models.Model):
                 new_picking = self.env["stock.picking"].create(new_picking_vals)
                 self.copy_move_lines(picking, new_picking)
                 new_picking.action_confirm()
+                new_picking.second_transfer_created = True 
                 self.second_transfer_created = True
 
                 origin_link = Markup(
@@ -119,7 +120,10 @@ class StockPicking(models.Model):
     def button_validate(self):
         for picking in self:
             # ✅ Luồng auto cho TẤT CẢ internal transfers (không phụ thuộc auto_second_transfer, không chặn origin)
-            if picking.picking_type_id.code == "internal" and not picking.second_transfer_created:
+            if (picking.picking_type_id.code == "internal"
+                and not picking.second_transfer_created
+                and not picking.source_transfer_id
+                ):
                 # Cần có đối tác để xác định kho đích
                 if not picking.partner_id:
                     raise UserError(
