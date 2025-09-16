@@ -1,9 +1,4 @@
-from odoo import models, fields, _
-import logging
-import json
-from datetime import datetime, timedelta
-
-_logger = logging.getLogger(__name__)
+# ... các import như cũ ...
 
 class MisaTransferFetch(models.TransientModel):
     _name = "misa.transfer.fetch"
@@ -12,32 +7,52 @@ class MisaTransferFetch(models.TransientModel):
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to   = fields.Date(string="Đến ngày", required=True)
 
-    # ===== Helper: lấy đúng picking type internal theo from_location =====
+    # ===== Helper: kho chứa location nguồn -> picking type internal =====
     def _get_internal_picking_type_for_location(self, from_location):
-        """Trả về warehouse.int_type_id của warehouse chứa from_location."""
         if not from_location:
             return False
-
-        # Tìm warehouse có view_location_id là cha (trực tiếp/gián tiếp) của from_location
-        warehouse = self.env['stock.warehouse'].search([
+        wh = self.env['stock.warehouse'].search([
             ('view_location_id', 'parent_of', from_location.id)
         ], limit=1)
-
-        if warehouse and warehouse.int_type_id:
-            return warehouse.int_type_id
-
-        # Fallback (nếu DB không đúng cây location): suy ra theo prefix của complete_name: "TSN/Stock" -> "TSN"
-        try:
-            wh_code = (from_location.complete_name or "").split('/')[0].strip()
-        except Exception:
-            wh_code = False
-
+        if wh and wh.int_type_id:
+            return wh.int_type_id
+        # fallback theo prefix code (TSN/Stock -> TSN)
+        wh_code = (from_location.complete_name or "").split('/')[0].strip() if from_location.complete_name else False
         if wh_code:
             wh2 = self.env['stock.warehouse'].search([('code', '=', wh_code)], limit=1)
             if wh2 and wh2.int_type_id:
                 return wh2.int_type_id
-
         return False
+
+    # ===== Helper: lấy Transit Location chuẩn =====
+    def _get_transit_location(self):
+        # Ưu tiên location usage='transit'
+        transit = self.env['stock.location'].search([('usage', '=', 'transit'), ('active', '=', True)], limit=1)
+        if transit:
+            return transit
+        # Fallback: tìm theo tên thông dụng
+        transit = self.env['stock.location'].search([
+            ('name', 'ilike', 'inter-warehouse transit')
+        ], limit=1)
+        if not transit:
+            raise UserError(_("Không tìm thấy Transit Location (usage = 'transit'). Vui lòng tạo 'Inter-warehouse transit'."))
+        return transit
+
+    # ===== Helper: kho đích theo mã MISA (để lấy partner của kho đích) =====
+    def _get_dest_warehouse_by_code(self, to_code):
+        """Ví dụ: to_code = 'TSN' -> trả về record stock.warehouse của TSN"""
+        # Tùy theo mapping của bạn, ở dưới mình map code MISA -> warehouse.code
+        code_map = {
+            'HCM': 'KHSG',
+            'BENCAM': 'KBC',
+            'HIENDUC': 'KHD',
+            'TSN': 'TSN',
+            'HCM_SHOWROOM': 'TSNSR',
+        }
+        wh_code = code_map.get(to_code.upper())
+        if not wh_code:
+            return False
+        return self.env['stock.warehouse'].search([('code', '=', wh_code)], limit=1)
 
     def action_fetch_transfers(self):
         misa_utils  = self.env['misa.api.utils']
@@ -46,20 +61,21 @@ class MisaTransferFetch(models.TransientModel):
 
         access_token = misa_utils._get_misa_token()
 
-        # MISA (UTC) -> VN (+7)
         date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
         date_to_utc   = datetime.combine(self.date_to,   datetime.max.time()) - timedelta(hours=7)
-
         headers = misa_config.get_default_headers(access_token)
 
-        # Map code MISA -> complete_name của stock.location trong Odoo
-        stock_mapping = {
-            "HCM":        "TSN/Stock",
-            "SHOWROOM161":"TSN/showroom",
+        # map mã MISA -> complete_name location NGUỒN (chỉ dùng cho from)
+        source_location_map = {
+            "HCM":        "KHSG/Stock",
             "BENCAM":     "KBC/Tồn kho",
             "HIENDUC":    "KHD/Tồn kho",
+            "TSN":        "TSN/Stock",
+            "HCM_SHOWROOM":"TSNSR/Stock",
         }
         default_location_path = "Partners/Vendors"
+
+        transit_loc = self._get_transit_location()  # dùng 1 lần cho toàn batch
 
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},"
@@ -70,167 +86,124 @@ class MisaTransferFetch(models.TransientModel):
                 {"property": 3654, "value": date_from_utc.isoformat() + "Z", "operator": 10, "data_type": 3, "operand": 1},
                 {"property": 3654, "value": date_to_utc.isoformat()   + "Z", "operator": 12, "data_type": 3, "operand": 1},
             ],
-            "pageIndex": 1,
-            "pageSize": 100,
-            "useSp": False,
-            "view": 62,
-            "summaryColumns": [5042],
-            "loadMode": 2,
+            "pageIndex": 1, "pageSize": 100, "useSp": False, "view": 62,
+            "summaryColumns": [5042], "loadMode": 2,
         }
 
         page_index = 1
         while True:
             payload["pageIndex"] = page_index
-            _logger.info("📄 Đang fetch trang %s...", page_index)
-
             response = misa_utils._fetch_with_retry(
                 "https://actapp.misa.vn/g1/api/in/v1/in_inward_outward_list/paging_filter_v2",
                 headers, payload
             )
-
-            _logger.warning("warning: %s", getattr(response, "text", ""))
-            _logger.info("status %s", getattr(response, "status_code", "NA"))
-
             if response.status_code != 200:
-                _logger.info("response: %s", response.text)
-                _logger.warning("❌ Gọi API thất bại ở trang %s", page_index)
                 break
 
             page_data = response.json().get("Data", {}).get("PageData", [])
             if not page_data:
-                _logger.info("✅ Hết dữ liệu, dừng ở trang %s", page_index)
                 break
 
             ref_map = {
                 item['refid']: {
                     'refno_finance': item.get('refno_finance', ''),
                     'contact_name': item.get('contact_name', '').strip(),
-                }
-                for item in page_data
+                } for item in page_data
             }
 
             for refid, ref_info in ref_map.items():
-                # Lấy chi tiết chứng từ
+                # lấy chi tiết
                 detail_payload = {
-                    "columns": [2157, 1355, 1867, 5030, 1195, 1065, 5687, 5690, 5274, 3870, 5283, 289, 2818, 2358],
+                    "columns": [2157,1355,1867,5030,1195,1065,5687,5690,5274,3870,5283,289,2818,2358],
                     "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": refid, "data_type": 10}],
                     "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
-                    "pageIndex": 1,
-                    "pageSize": 100,
-                    "useSp": False,
-                    "view": 63,
-                    "summaryColumns": [3488, 3870, 289],
-                    "loadMode": 2,
+                    "pageIndex": 1, "pageSize": 100, "useSp": False, "view": 63,
+                    "summaryColumns": [3488,3870,289], "loadMode": 2,
                 }
-
                 detail_res = misa_utils._fetch_with_retry(
                     "https://actapp.misa.vn/g1/api/in/v1/in_transfer/get_paging_detail",
                     headers, detail_payload
                 )
                 if detail_res.status_code != 200:
-                    _logger.warning("Không lấy được chi tiết chứng từ %s", refid)
                     continue
 
                 lines = detail_res.json().get("Data", {}).get("PageData", [])
                 if not lines:
-                    _logger.info("Không có chi tiết cho chứng từ %s", refid)
                     continue
 
-                # Gom theo (from_location_id, to_location_id)
-                grouped = {}  # key: (from_id, to_id) -> list(lines)
-                for line in lines:
-                    from_code = str(line.get("from_stock_code", "")).strip().upper()
-                    to_code   = str(line.get("to_stock_code", "")).strip().upper()
+                # gom theo (from_location_id, dest_warehouse) — ĐÍCH lúc tạo phiếu 1 luôn là TRANSIT
+                grouped = {}  # key: (from_location_id, to_wh_id or None) -> [lines]
+                for ln in lines:
+                    from_code = str(ln.get("from_stock_code", "")).strip().upper()
+                    to_code   = str(ln.get("to_stock_code", "")).strip().upper()
 
-                    from_path = stock_mapping.get(from_code, default_location_path)
-                    to_path   = stock_mapping.get(to_code,   default_location_path)
-
-                    from_location = self.env['stock.location'].search([('complete_name', '=', from_path)], limit=1)
-                    to_location   = self.env['stock.location'].search([('complete_name', '=', to_path)],   limit=1)
-
-                    if not from_location or not to_location:
-                        _logger.warning("❌ Không tìm thấy location cho from:%s (%s) hoặc to:%s (%s)",
-                                        from_code, from_path, to_code, to_path)
+                    from_path = source_location_map.get(from_code, default_location_path)
+                    from_loc  = self.env['stock.location'].search([('complete_name', '=', from_path)], limit=1)
+                    if not from_loc:
                         continue
 
-                    key = (from_location.id, to_location.id)
-                    grouped.setdefault(key, []).append(line)
+                    # kho đích để lấy partner (phục vụ auto second transfer của module)
+                    to_wh = self._get_dest_warehouse_by_code(to_code)
+                    key = (from_loc.id, to_wh.id if to_wh else 0)
+                    grouped.setdefault(key, []).append(ln)
 
                 if not grouped:
-                    _logger.info("Bỏ qua chứng từ %s vì không có dòng hợp lệ theo mapping", refid)
                     continue
 
-                # Đối tác (nếu có)
-                partner = False
-                if ref_info.get('contact_name'):
-                    partner = odoo_utils._get_or_create_partner(ref_info['contact_name'])
+                for (from_id, to_wh_id), related_lines in grouped.items():
+                    from_loc = self.env['stock.location'].browse(from_id)
+                    dest_wh  = self.env['stock.warehouse'].browse(to_wh_id) if to_wh_id else False
 
-                # Tạo/Update picking cho từng cặp kho nguồn/đích
-                for (from_id, to_id), related_lines in grouped.items():
-                    from_location = self.env['stock.location'].browse(from_id)
-                    to_location   = self.env['stock.location'].browse(to_id)
-
-                    # >>> lấy đúng "Internal Transfers" của warehouse chứa from_location
-                    picking_type = self._get_internal_picking_type_for_location(from_location)
+                    picking_type = self._get_internal_picking_type_for_location(from_loc)
                     if not picking_type:
-                        _logger.warning("Không tìm thấy picking type 'internal' cho from_location: %s",
-                                        from_location.display_name)
                         continue
 
-                    # Kiểm tra tồn tại (name + picking_type + from/to)
+                    # partner: lấy partner của KHO ĐÍCH (để module auto tạo phiếu 2)
+                    partner_id = dest_wh.partner_id.id if dest_wh and dest_wh.partner_id else False
+
+                    # PHIẾU 1: từ kho nguồn -> TRANSIT (KHÔNG đổ thẳng kho đích)
                     picking = self.env['stock.picking'].search([
                         ('name', '=', ref_info.get('refno_finance', '')),
                         ('picking_type_id', '=', picking_type.id),
                         ('location_id', '=', from_id),
-                        ('location_dest_id', '=', to_id),
+                        ('location_dest_id', '=', transit_loc.id),
                     ], limit=1)
 
-                    if picking:
-                        _logger.info("🔁 Phiếu đã tồn tại: %s (from:%s -> to:%s)", picking.name,
-                                     from_location.display_name, to_location.display_name)
-                        odoo_utils._update_picking_lines(picking, related_lines)
-                    else:
+                    if not picking:
                         picking = self.env['stock.picking'].create({
                             'name': ref_info.get('refno_finance', ''),
-                            'picking_type_id': picking_type.id,   # đúng lệnh Internal Transfers của kho
+                            'picking_type_id': picking_type.id,
                             'location_id': from_id,
-                            'location_dest_id': to_id,
+                            'location_dest_id': transit_loc.id,
                             'origin': ref_info.get('refno_finance', ''),
-                            'partner_id': partner.id if partner else False,
+                            'partner_id': partner_id,  # để auto second transfer biết kho đích
                         })
-                        _logger.info("🆕 Tạo phiếu mới: %s (from:%s -> to:%s)", picking.name,
-                                     from_location.display_name, to_location.display_name)
 
-                        for line in related_lines:
-                            product_code = str(line.get("inventory_item_code", "")).strip()
-                            product_name = str(line.get("description", "")).strip()
-                            uom_name     = str(line.get("unit_name", "Cái")).strip()
-                            qty          = float(line.get("quantity", 0))
-                            cost         = float(line.get("unit_price_finance", 0) or 0)
+                    # dòng chuyển
+                    for ln in related_lines:
+                        product_code = (ln.get("inventory_item_code") or "").strip()
+                        product_name = (ln.get("description") or "").strip()
+                        uom_name     = (ln.get("unit_name") or "Cái").strip()
+                        qty          = float(ln.get("quantity") or 0)
+                        cost         = float(ln.get("unit_price_finance") or 0)
+                        if not product_code or not product_name or qty <= 0:
+                            continue
 
-                            if not product_code or not product_name or qty <= 0:
-                                _logger.warning("Bỏ qua dòng không hợp lệ: %s", line)
-                                continue
+                        product = odoo_utils._get_or_create_product(
+                            code=product_code, name=product_name,
+                            unit_name=uom_name, cost=cost,
+                            product_type="consu", purchase_ok=True, sale_ok=True
+                        )
 
-                            product = odoo_utils._get_or_create_product(
-                                code=product_code,
-                                name=product_name,
-                                unit_name=uom_name,
-                                cost=cost,
-                                product_type="consu",
-                                purchase_ok=True,
-                                sale_ok=True
-                            )
-
-                            self.env['stock.move'].create({
-                                'name': product_name,
-                                'product_id': product.id,
-                                'product_uom_qty': qty,
-                                'product_uom': product.uom_id.id,
-                                'picking_id': picking.id,
-                                'location_id': from_id,
-                                'location_dest_id': to_id,
-                            })
-                            _logger.info("  + Tạo dòng chuyển: %s x%s", product_code, qty)
+                        # tạo move nếu chưa có
+                        self.env['stock.move'].create({
+                            'name': product_name,
+                            'product_id': product.id,
+                            'product_uom_qty': qty,
+                            'product_uom': product.uom_id.id,
+                            'picking_id': picking.id,
+                            'location_id': from_id,
+                            'location_dest_id': transit_loc.id,
+                        })
 
             page_index += 1
