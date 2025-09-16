@@ -59,16 +59,15 @@ class MisaTransferFetch(models.TransientModel):
         """Ví dụ: to_code = 'TSN' -> trả về record stock.warehouse của TSN"""
         # Tùy theo mapping của bạn, ở dưới mình map code MISA -> warehouse.code
         code_map = {
-            # 'HCM': 'KHSG',
-            # 'BENCAM': 'KBC',
-            # 'HIENDUC': 'KHD',
-            # 'TSN': 'TSN',
-            # 'HCM_SHOWROOM': 'TSNSR',
-            "HCM":        "TSN",
-            # "SHOWROOM161":"TSN/showroom",
-            "HCM_SHOWROOM":"TSNSR",
-            "BENCAM":     "KBC",
-            "HIENDUC":    "KHD",
+            'HCM': 'KHSG',
+            'BENCAM': 'KBC',
+            'HIENDUC': 'KHD',
+            'TSN': 'TSN',
+            'HCM_SHOWROOM': 'TSNSR'
+            # "HCM":        "TSN",
+            # "HCM_SHOWROOM":"TSNSR",
+            # "BENCAM":     "KBC",
+            # "HIENDUC":    "KHD",
         }
         wh_code = code_map.get(to_code.upper())
         if not wh_code:
