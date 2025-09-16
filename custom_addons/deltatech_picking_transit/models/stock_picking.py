@@ -3,6 +3,7 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
+from markupsafe import Markup
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -45,16 +46,17 @@ class StockPicking(models.Model):
                 # new_picking.do_unreserve()
                 self.second_transfer_created = True
 
-                origin_link = '<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>' % (
+                origin_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
                     picking.id, picking.name
                 )
-                new_link = '<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>' % (
+                new_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
                     new_picking.id, new_picking.name
                 )
 
+
                 # Ghi chú ở phiếu mới: “Phiếu này được tạo từ …(link)”
                 new_picking.message_post(
-                    body=_("Phiếu này được tạo từ %s.") % origin_link,
+                    body=Markup("Phiếu này được tạo từ %s.") % origin_link,
                     message_type="comment",
                     subtype_xmlid="mail.mt_note",
                 )
@@ -62,10 +64,11 @@ class StockPicking(models.Model):
 
                 # Ghi chú ở phiếu nguồn: “Đã tạo phiếu …(link)”
                 picking.message_post(
-                    body=_("Đã tạo phiếu %s.") % new_link,
+                    body=Markup("Đã tạo phiếu %s.") % new_link,
                     message_type="comment",
                     subtype_xmlid="mail.mt_note",
                 )
+
 
                 # Đồng bộ Liên hệ giữa 2 phiếu theo kho
                 picking.write({"partner_id": picking_type_id.warehouse_id.partner_id.id})
