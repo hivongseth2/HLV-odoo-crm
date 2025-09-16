@@ -3,6 +3,7 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
+from markupsafe import Markup
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -12,16 +13,16 @@ class StockPicking(models.Model):
     second_transfer_created = fields.Boolean(default=False)
     source_transfer_id = fields.Many2one("stock.picking")
     create_second_transfer_automatically = fields.Boolean(
-        string="Create Second Transfer Automatically",
+        string="Tự động tạo phiếu nhận (bước 2)",
         related="picking_type_id.auto_second_transfer",
         store=True,
     )
 
     def open_transfer_wizard(self):
         if self.second_transfer_created:
-            raise UserError(_("Second transfer already created."))
+            raise UserError(_("Đã tạo phiếu bước 2 rồi."))
         return {
-            "name": "Create Transfer",
+            "name": "Tạo phiếu bước 2",
             "type": "ir.actions.act_window",
             "res_model": "stock.picking.transfer.wizard",
             "view_mode": "form",
@@ -45,12 +46,31 @@ class StockPicking(models.Model):
                 # new_picking.do_unreserve()
                 self.second_transfer_created = True
 
-                message = _("This transfer was generated from %s.") % picking.name
-                new_picking.message_post(body=message)
-                new_picking.source_transfer_id = picking.id
-                message = _("Transfer %s was generated.") % new_picking.name
+                origin_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
+                    picking.id, picking.name
+                )
+                new_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
+                    new_picking.id, new_picking.name
+                )
 
-                picking.message_post(body=message)
+
+                # Ghi chú ở phiếu mới: “Phiếu này được tạo từ …(link)”
+                new_picking.message_post(
+                    body=Markup("Phiếu này được tạo từ %s.") % origin_link,
+                    message_type="comment",
+                    subtype_xmlid="mail.mt_note",
+                )
+                new_picking.source_transfer_id = picking.id
+
+                # Ghi chú ở phiếu nguồn: “Đã tạo phiếu …(link)”
+                picking.message_post(
+                    body=Markup("Đã tạo phiếu %s.") % new_link,
+                    message_type="comment",
+                    subtype_xmlid="mail.mt_note",
+                )
+
+
+                # Đồng bộ Liên hệ giữa 2 phiếu theo kho
                 picking.write({"partner_id": picking_type_id.warehouse_id.partner_id.id})
                 new_picking.write({"partner_id": picking.picking_type_id.warehouse_id.partner_id.id})
                 return new_picking
@@ -124,7 +144,9 @@ class StockPicking(models.Model):
                 ):  # we use the partner to find the warehouse where the products need to arrive to
                     raise UserError(
                         _(
-                            "You must set a partner before validating the picking when you are using 2 step picking with auto create on the second transfer."
+                            "Bạn phải chọn Liên hệ trước khi xác nhận phiếu khi sử dụng 2 bước và bật tự động tạo phiếu nhận."
+
+                        
                         )
                     )
                 warehouse = self.env["stock.warehouse"].search([("partner_id", "=", picking.partner_id.id)], limit=1)
@@ -140,9 +162,9 @@ class StockPicking(models.Model):
                     if next_operation:
                         picking.create_second_transfer_wizard(next_operation.default_location_dest_id, next_operation)
                     else:
-                        raise UserError(_("No 2 step reception found for warehouse %s") % warehouse.name)
+                        raise UserError(_("Không tìm thấy loại hoạt động 2 bước (Reception) cho kho %s") % warehouse.name)
                 else:
-                    raise UserError(_("No warehouse found for partner %s") % picking.partner_id.name)
+                    raise UserError(_("Không tìm thấy kho tương ứng với Liên hệ %s") % picking.partner_id.name)
             if picking.source_transfer_id:
                 for move in picking.move_ids_without_package:
                     other_moves = picking.source_transfer_id.move_ids_without_package.filtered(
@@ -150,7 +172,7 @@ class StockPicking(models.Model):
                     )
                     if not other_moves:
                         raise UserError(
-                            _("You cannot validate the picking because the product %s is not from the source picking")
+                            _("Không thể xác nhận phiếu vì sản phẩm %s không có trong phiếu nguồn.")
                             % move.product_id.display_name
                         )
         return super().button_validate()
