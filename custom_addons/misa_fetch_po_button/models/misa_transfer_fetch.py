@@ -32,17 +32,27 @@ class MisaTransferFetch(models.TransientModel):
 
     # ===== Helper: lấy Transit Location chuẩn =====
     def _get_transit_location(self):
-        # Ưu tiên location usage='transit'
-        transit = self.env['stock.location'].search([('usage', '=', 'transit'), ('active', '=', True)], limit=1)
+        Location = self.env['stock.location']
+        # Ưu tiên đúng đường dẫn bạn muốn
+        transit = Location.search([
+            ('complete_name', '=', 'Physical Locations/Inter-warehouse transit'),
+            ('active', '=', True)
+        ], limit=1)
         if transit:
             return transit
-        # Fallback: tìm theo tên thông dụng
-        transit = self.env['stock.location'].search([
-            ('name', 'ilike', 'inter-warehouse transit')
+
+        # Fallback: usage = transit nhưng loại trừ cross-dock
+        transit = Location.search([
+            ('usage', '=', 'transit'),
+            ('active', '=', True),
+            ('name', 'not ilike', 'cross'),
         ], limit=1)
-        if not transit:
-            raise UserError(_("Không tìm thấy Transit Location (usage = 'transit'). Vui lòng tạo 'Inter-warehouse transit'."))
-        return transit
+        if transit:
+            return transit
+
+        raise UserError(_("Không tìm thấy 'Physical Locations/Inter-warehouse transit'. \
+                    Vào Kho hàng > Cấu hình > Vị trí, tạo đúng tên & dùng 'Transit'."))
+
 
     # ===== Helper: kho đích theo mã MISA (để lấy partner của kho đích) =====
     def _get_dest_warehouse_by_code(self, to_code):
