@@ -1,0 +1,18 @@
+<odoo>
+
+
+  <record id="view_sale_order_list_quick_preview_bottom" model="ir.ui.view">
+    <field name="name">sale.order.list.quick.preview.bottom</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_quotation_tree_with_onboarding"/>
+    <field name="priority" eval="99"/>
+    <field name="arch" type="xml">
+      <xpath expr="//list/field[last()]" position="after">
+        <button name="action_open_order_in_panel"
+                type="object"
+                string="Xem"
+                class="btn-link hlv-quick-btn"/>
+      </xpath>
+    </field>
+  </record>
+</odoo>

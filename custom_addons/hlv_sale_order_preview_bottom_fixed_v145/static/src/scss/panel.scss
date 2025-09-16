@@ -1,0 +1,106 @@
+/* Panel tổng thể */
+.hlv-bottom-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fdfcfb;
+  /* nền hơi ivory, khác hẳn trắng tree view */
+  border-top: 3px solid #0759c4ff;
+  /* viền tím Indigo nổi bật */
+  max-height: 50%;
+  overflow-y: auto;
+  z-index: 1200;
+  box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.15);
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  animation: slideUp 0.3s ease-out;
+  font-size: 14px;
+}
+
+/* Hiệu ứng mở */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Header */
+.hlv-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background: linear-gradient(90deg, #63a5f1, #2558b8);
+  /* tím chuyển sắc */
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.hlv-panel-header .hlv-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.hlv-panel-header .hlv-close {
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  transition: all 0.2s ease;
+}
+
+.hlv-panel-header .hlv-close:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Body */
+.hlv-panel-body {
+  padding: 18px;
+}
+
+/* Bảng */
+.hlv-panel-body table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: #fff;
+}
+
+.hlv-panel-body th {
+  background: #eef2ff;
+  /* xanh nhạt khác với tree view */
+  font-weight: 600;
+  font-size: 13px;
+  color: #2c7cf5;
+  /* Indigo đậm */
+  padding: 10px;
+  text-align: left;
+}
+
+.hlv-panel-body td {
+  padding: 10px;
+  font-size: 13px;
+  color: #111827;
+  border-top: 1px solid #f3f4f6;
+}
+
+.hlv-panel-body tr:nth-child(even) td {
+  background: #fafafa;
+  /* sọc nhẹ để đọc dễ hơn */
+}
