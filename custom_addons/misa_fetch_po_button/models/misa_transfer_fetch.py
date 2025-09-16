@@ -57,15 +57,9 @@ class MisaTransferFetch(models.TransientModel):
     # ===== Helper: kho đích theo mã MISA (để lấy partner của kho đích) =====
     def _get_dest_warehouse_by_code(self, to_code):
         """Ví dụ: to_code = 'TSN' -> trả về record stock.warehouse của TSN"""
-        # Tùy theo mapping của bạn, ở dưới mình map code MISA -> warehouse.code
         code_map = {
-            # 'HCM': 'KHSG',
-            # 'BENCAM': 'KBC',
-            # 'HIENDUC': 'KHD',
-            # 'TSN': 'TSN',
-            # 'HCM_SHOWROOM': 'TSNSR',
+    
             "HCM":        "TSN",
-            # "SHOWROOM161":"TSN/showroom",
             "HCM_SHOWROOM":"TSNSR",
             "BENCAM":     "KBC",
             "HIENDUC":    "KHD",
