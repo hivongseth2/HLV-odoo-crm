@@ -17,10 +17,10 @@
 
             <!-- Thông tin tham chiếu -->
             <div style="font-size:12px; color:#444; margin-bottom:2px;">
-              <span style="opacity:.8;">Picking:&nbsp;</span><span t-esc="o.name"/>
+              <span style="opacity:.8;">Picking:</span><span t-esc="o.name"/>
             </div>
             <div t-if="o.origin" style="font-size:12px; color:#444; margin-bottom:6px;">
-              <span style="opacity:.8;">Source:&nbsp;</span><span t-esc="o.origin"/>
+              <span style="opacity:.8;">Source:</span><span t-esc="o.origin"/>
             </div>
 
             <!-- Barcode theo tên kiện (stock.quant.package.name) -->
