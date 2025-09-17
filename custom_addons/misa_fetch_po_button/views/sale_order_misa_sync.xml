@@ -1,0 +1,19 @@
+<!-- views/sale_order_misa_sync.xml -->
+<odoo>
+  <data>
+    <record id="view_order_form_misa_sync_inherit" model="ir.ui.view">
+      <field name="name">sale.order.form.misa.sync.button</field>
+      <field name="model">sale.order</field>
+      <field name="inherit_id" ref="sale.view_order_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//header" position="inside">
+          <button name="action_sync_from_misa"
+                  type="object"
+                  string="Đồng bộ MISA"
+                  class="oe_highlight"
+                  attrs="{'invisible': [('misa_id','=',False)]}"/>
+        </xpath>
+      </field>
+    </record>
+  </data>
+</odoo>
