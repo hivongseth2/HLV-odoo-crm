@@ -10,6 +10,7 @@
         'views/misa_transfer_button_view.xml',
         'views/misa_po_button_view.xml',
         'views/misa_combined_button_view.xml',
+        'views/sale_order_misa_sync.xml',
     ],
     'python': [
         'models/sale_api_import_wizard.py',  # Thêm file này
