@@ -207,11 +207,12 @@ class SaleOrder(models.Model):
 
 
     def action_resync_from_misa_hard(self):
-        """Xoá SO (nếu safe) & tạo lại từ MISA: chỉ khi tất cả pickings != done và không có invoice posted."""
+        """Hủy & xóa SO rồi tạo lại từ MISA.
+        Chỉ cho phép khi KHÔNG có picking 'done' và KHÔNG có invoice 'posted'."""
         self.ensure_one()
         odoo_utils = self.env['odoo.utils']
 
-        # 1) Prefetch dữ liệu MISA trước khi xoá
+        # 1) Prefetch dữ liệu MISA trước khi đụng dữ liệu hiện hữu
         data = self._misa_fetch_order()
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
@@ -223,24 +224,31 @@ class SaleOrder(models.Model):
         if posted_invoices:
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
-        # 3) Hủy & xoá picking chưa done
+        # Lưu vài thông tin trước khi xóa
+        old_name = self.name
+        old_wh = self.warehouse_id
+
+        # 3) HỦY SO trước (bắt buộc) -> sẽ hủy pickings/moves liên quan
+        #    Nếu có move_line nào đang có qty_done>0 nhưng chưa validate, action_cancel vẫn xử lý,
+        #    nhưng nếu module tùy biến cản trở, có thể reset qty_done trước (ít gặp).
+        self.action_cancel()
+
+        # 4) XÓA pickings (đã bị chuyển về 'cancel' sau action_cancel)
         for p in self.picking_ids:
             if p.state not in ('cancel', 'done'):
-                # reset qty_done để hủy được
-                for ml in p.move_line_ids:
-                    if getattr(ml, 'qty_done', 0):
-                        ml.qty_done = 0
+                # dự phòng: nếu vì lý do nào đó vẫn chưa cancel, thì cancel rồi unlink
                 try:
                     if hasattr(p, 'action_cancel'):
                         p.action_cancel()
                 except Exception as e:
                     _logger.warning("Huỷ picking %s lỗi: %s", p.name, e)
             try:
-                p.unlink()
+                if p.state != 'done':
+                    p.unlink()
             except Exception as e:
                 _logger.warning("Xoá picking %s lỗi: %s", p.name, e)
 
-        # 4) Hủy & xoá hoá đơn nháp/đã cancel (nếu có)
+        # 5) XÓA invoices ở draft/cancel (nếu có)
         for inv in self.invoice_ids:
             if inv.state == 'draft':
                 try:
@@ -254,21 +262,17 @@ class SaleOrder(models.Model):
             elif inv.state == 'cancel':
                 inv.unlink()
 
-        # Lưu 1 số thông tin có ích trước khi xoá
-        old_name = self.name
-        old_wh = self.warehouse_id
-        # 5) Cancel rồi xoá SO
-        self.action_cancel()
+        # 6) XÓA SO (đã ở trạng thái 'cancel')
         self.unlink()
 
-        # 6) Dựng lại SO từ dữ liệu MISA đã hút
+        # 7) TẠO LẠI SO từ dữ liệu MISA đã hút
         partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         partner = odoo_utils._get_or_create_partner(partner_name)
         order_no    = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or old_name
         delivery_no = data.get("DeliveryOrderNumber") or order_no
         book_date   = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
-
         shipping_addr = data.get("BillingAddress") or ''
+
         # tạo/gán địa chỉ giao (tái dùng helper bên wizard)
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
@@ -283,7 +287,7 @@ class SaleOrder(models.Model):
             shipping_id = False
 
         vals_create = {
-            'name': order_no,                     # giữ nguyên mã SO theo MISA nếu có
+            'name': order_no,                     # giữ mã SO theo MISA nếu có
             'partner_id': partner.id,
             'origin': order_no,
             'warehouse_id': old_wh.id or False,
@@ -298,7 +302,6 @@ class SaleOrder(models.Model):
 
         new_so = self.env['sale.order'].create(vals_create)
 
-        # Thêm line từ MISA (giống logic hiện tại)
         def _flt(x, dv=0.0):
             try:
                 return float(x or 0.0)
@@ -331,7 +334,7 @@ class SaleOrder(models.Model):
                 'discount': discount_pct,
             })
 
-        # Confirm & đặt tên picking theo MISA
+        # 8) Confirm & đặt tên picking theo MISA
         if new_so.state in ('draft', 'sent'):
             new_so.action_confirm()
         if new_so.picking_ids:
