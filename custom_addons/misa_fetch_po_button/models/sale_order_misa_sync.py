@@ -3,6 +3,7 @@ import requests
 import logging
 from odoo import models, fields, api, _
 from dateutil.parser import parse as dtparse
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
