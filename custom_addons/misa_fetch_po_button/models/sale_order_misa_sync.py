@@ -204,68 +204,70 @@ class SaleOrder(models.Model):
             if keep.name != new_name:
                 keep.name = new_name
 
-
-
     def action_resync_from_misa_hard(self):
         """Hủy & xóa SO rồi tạo lại từ MISA.
         Chỉ cho phép khi KHÔNG có picking 'done' và KHÔNG có invoice 'posted'."""
         self.ensure_one()
         odoo_utils = self.env['odoo.utils']
 
-        # 1) Prefetch dữ liệu MISA trước khi đụng dữ liệu hiện hữu
+        # 1) Lấy dữ liệu MISA trước khi đụng dữ liệu cũ
         data = self._misa_fetch_order()
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
 
-        # 2) Kiểm tra điều kiện an toàn
+        # 2) Guard an toàn
         if any(p.state == 'done' for p in self.picking_ids):
             raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
-        posted_invoices = self.invoice_ids.filtered(lambda m: m.state == 'posted')
-        if posted_invoices:
+        if self.invoice_ids.filtered(lambda m: m.state == 'posted'):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
-        # Lưu vài thông tin trước khi xóa
         old_name = self.name
         old_wh = self.warehouse_id
+        old_group = self.procurement_group_id  # để dọn sau khi xoá picking
 
-        # 3) HỦY SO trước (bắt buộc) -> sẽ hủy pickings/moves liên quan
-        #    Nếu có move_line nào đang có qty_done>0 nhưng chưa validate, action_cancel vẫn xử lý,
-        #    nhưng nếu module tùy biến cản trở, có thể reset qty_done trước (ít gặp).
+        # 3) BẮT BUỘC: Hủy SO trước
         self.action_cancel()
+        self.flush(); self.invalidate_recordset()
+        if self.state != 'cancel':
+            # Nếu module tùy biến chặn cancel, dừng lại để tránh lỗi unlink
+            raise UserError(_("Không thể hủy đơn bán hàng—không thể tiếp tục xóa."))
 
-        # 4) XÓA pickings (đã bị chuyển về 'cancel' sau action_cancel)
+        # 4) XÓA pickings (sau khi đã cancel)
         for p in self.picking_ids:
-            if p.state not in ('cancel', 'done'):
-                # dự phòng: nếu vì lý do nào đó vẫn chưa cancel, thì cancel rồi unlink
-                try:
-                    if hasattr(p, 'action_cancel'):
-                        p.action_cancel()
-                except Exception as e:
-                    _logger.warning("Huỷ picking %s lỗi: %s", p.name, e)
             try:
-                if p.state != 'done':
-                    p.unlink()
+                if p.state not in ('cancel', 'done') and hasattr(p, 'action_cancel'):
+                    p.action_cancel()
             except Exception as e:
-                _logger.warning("Xoá picking %s lỗi: %s", p.name, e)
+                _logger.warning("Huỷ picking %s lỗi: %s", p.name, e)
+            if p.state != 'done':
+                try:
+                    p.sudo().unlink()
+                except Exception as e:
+                    _logger.warning("Xoá picking %s lỗi: %s", p.name, e)
 
         # 5) XÓA invoices ở draft/cancel (nếu có)
         for inv in self.invoice_ids:
             if inv.state == 'draft':
                 try:
-                    if hasattr(inv, 'button_cancel'):
-                        inv.button_cancel()
-                    elif hasattr(inv, 'action_cancel'):
-                        inv.action_cancel()
+                    (hasattr(inv, 'button_cancel') and inv.button_cancel()) or \
+                    (hasattr(inv, 'action_cancel') and inv.action_cancel())
                 except Exception:
                     pass
-                inv.unlink()
+                inv.sudo().unlink()
             elif inv.state == 'cancel':
-                inv.unlink()
+                inv.sudo().unlink()
+
+        # Dọn luôn procurement group để khỏi sót rác (sau khi pickings đã xoá)
+        if old_group and not self.env['stock.picking'].search([('group_id', '=', old_group.id)], limit=1):
+            try:
+                old_group.sudo().unlink()
+            except Exception as e:
+                _logger.info("Không xoá được procurement.group %s: %s", old_group.display_name, e)
 
         # 6) XÓA SO (đã ở trạng thái 'cancel')
-        self.unlink()
+        self.sudo().unlink()
 
-        # 7) TẠO LẠI SO từ dữ liệu MISA đã hút
+        # 7) TẠO LẠI SO từ dữ liệu MISA
         partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         partner = odoo_utils._get_or_create_partner(partner_name)
         order_no    = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or old_name
@@ -273,7 +275,7 @@ class SaleOrder(models.Model):
         book_date   = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress") or ''
 
-        # tạo/gán địa chỉ giao (tái dùng helper bên wizard)
+        # địa chỉ giao
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
@@ -287,7 +289,7 @@ class SaleOrder(models.Model):
             shipping_id = False
 
         vals_create = {
-            'name': order_no,                     # giữ mã SO theo MISA nếu có
+            'name': order_no,
             'partner_id': partner.id,
             'origin': order_no,
             'warehouse_id': old_wh.id or False,
@@ -303,10 +305,8 @@ class SaleOrder(models.Model):
         new_so = self.env['sale.order'].create(vals_create)
 
         def _flt(x, dv=0.0):
-            try:
-                return float(x or 0.0)
-            except Exception:
-                return dv
+            try: return float(x or 0.0)
+            except Exception: return dv
 
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
@@ -334,7 +334,7 @@ class SaleOrder(models.Model):
                 'discount': discount_pct,
             })
 
-        # 8) Confirm & đặt tên picking theo MISA
+        # 8) Confirm & đặt tên picking
         if new_so.state in ('draft', 'sent'):
             new_so.action_confirm()
         if new_so.picking_ids:
@@ -346,5 +346,5 @@ class SaleOrder(models.Model):
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
-            'params': {'title': _("Đồng bộ (xoá & tạo lại) thành công"), 'message': order_no, 'type': 'success'}
+            'params': {'title': _("Đồng bộ (hủy & tạo lại) thành công"), 'message': order_no, 'type': 'success'}
         }
