@@ -281,7 +281,7 @@ class SaleOrder(models.Model):
                 except Exception as e2:
                     raise UserError(_("Không thể hủy đơn bán hàng: %s") % e2)
 
-        self.invalidate_cache()
+        self.env.invalidate_all()
 
         # Fallback an toàn: chỉ ép cancel nếu không còn picking mở & không có invoice posted
         still_open_picks = self.picking_ids.filtered(lambda p: p.state not in ('cancel', 'done'))
