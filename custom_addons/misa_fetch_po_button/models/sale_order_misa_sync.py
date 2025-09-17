@@ -227,7 +227,7 @@ class SaleOrder(models.Model):
 
         # 3) BẮT BUỘC: Hủy SO trước
         self.action_cancel()
-        # self.flush(); 
+       
         self.invalidate_recordset()
         if self.state != 'cancel':
             # Nếu module tùy biến chặn cancel, dừng lại để tránh lỗi unlink
