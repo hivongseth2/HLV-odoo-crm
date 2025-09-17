@@ -223,15 +223,15 @@ class SaleOrder(models.Model):
 
         old_name = self.name
         old_wh = self.warehouse_id
-        old_group = self.procurement_group_id  # để dọn sau khi xoá picking
+        old_group = self.procurement_group_id
 
         # 3) BẮT BUỘC: Hủy SO trước
         self.action_cancel()
-       
+
+        # ⬇️ FIX: Odoo 17/18 không có self.flush(). Dùng invalidate + read lại state.
         self.invalidate_recordset()
         state = self.read(['state'])[0]['state']
-        if state  != 'cancel':
-            # Nếu module tùy biến chặn cancel, dừng lại để tránh lỗi unlink
+        if state != 'cancel':
             raise UserError(_("Không thể hủy đơn bán hàng—không thể tiếp tục xóa."))
 
         # 4) XÓA pickings (sau khi đã cancel)
@@ -259,7 +259,7 @@ class SaleOrder(models.Model):
             elif inv.state == 'cancel':
                 inv.sudo().unlink()
 
-        # Dọn luôn procurement group để khỏi sót rác (sau khi pickings đã xoá)
+        # Dọn procurement group nếu không còn picking nào tham chiếu
         if old_group and not self.env['stock.picking'].search([('group_id', '=', old_group.id)], limit=1):
             try:
                 old_group.sudo().unlink()
@@ -277,7 +277,6 @@ class SaleOrder(models.Model):
         book_date   = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress") or ''
 
-        # địa chỉ giao
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
@@ -336,7 +335,6 @@ class SaleOrder(models.Model):
                 'discount': discount_pct,
             })
 
-        # 8) Confirm & đặt tên picking
         if new_so.state in ('draft', 'sent'):
             new_so.action_confirm()
         if new_so.picking_ids:
