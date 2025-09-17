@@ -160,6 +160,7 @@ class SaleApiImportWizard(models.TransientModel):
 
                 # --- Lấy chi tiết dòng hàng ---
                 order_id = order.get("ID")
+                misa_id_str = str(order_id) if order_id else False  # ### NEW
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)
                 _logger.warning("📦 Order product_lines %s", product_lines)
@@ -238,6 +239,8 @@ class SaleApiImportWizard(models.TransientModel):
                     # Tránh trùng
                     existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
                     if existing_order:
+                        if misa_id_str and not existing_order.misa_id:
+                            existing_order.misa_id = misa_id_str
                         _logger.info("🔁 Bỏ qua SO đã tồn tại: %s", order_ref)
                         continue
 
@@ -250,6 +253,7 @@ class SaleApiImportWizard(models.TransientModel):
                         'partner_shipping_id': delivery_contact.id, 
                         'origin':origin,
                         'warehouse_id': warehouse.id,
+                        'misa_id': misa_id_str,      
                     })
                     
                     
@@ -334,7 +338,8 @@ class SaleApiImportWizard(models.TransientModel):
                             'partner_shipping_id': delivery_contact.id, 
                             'amount_total': group_total,
                             'warehouse_id': warehouse.id,
-                            'origin':origin
+                            'origin':origin,
+                            'misa_id': misa_id_str,      
                         })
 
                         # Thêm line
