@@ -12,13 +12,25 @@ class StockPicking(models.Model):
     second_transfer_created = fields.Boolean(default=False)
     source_transfer_id = fields.Many2one("stock.picking")
 
-    # vẫn giữ để không vỡ view cũ, nhưng logic không còn phụ thuộc vào field này
+    # giữ để không vỡ view cũ (không còn phụ thuộc)
     create_second_transfer_automatically = fields.Boolean(
         string="Tự động tạo phiếu nhận (bước 2)",
         related="picking_type_id.auto_second_transfer",
         store=True,
     )
 
+    # ---------------- Helper ----------------
+    def _is_inter_warehouse_transit(self, location):
+        """Chỉ nhận 'Physical Locations/Inter-warehouse transit'.
+        Ưu tiên check theo complete_name; fallback usage='transit'.
+        """
+        if not location:
+            return False
+        name_ok = (location.complete_name or "").strip().lower().endswith("physical locations/inter-warehouse transit".lower()) \
+                  or (location.complete_name or "").strip().lower() == "physical locations/inter-warehouse transit".lower()
+        return name_ok or (location.usage == "transit" and "inter-warehouse transit" in (location.complete_name or "").lower())
+
+    # -------------- Wizard mở tay --------------
     def open_transfer_wizard(self):
         if self.second_transfer_created:
             raise UserError(_("Đã tạo phiếu bước 2 rồi."))
@@ -31,28 +43,30 @@ class StockPicking(models.Model):
             "context": {"default_picking_id": self.id},
         }
 
+    # -------------- Tạo phiếu 2 --------------
     def create_second_transfer_wizard(self, final_dest_location_id, picking_type_id):
         """Tạo phiếu nhận (bước 2) và ghi chú 2 chiều có kèm liên kết."""
         for picking in self:
             if picking.picking_type_id.code == "internal":
                 new_picking_vals = {
                     "picking_type_id": picking_type_id.id,
-                    "location_id": picking.location_dest_id.id,
-                    "location_dest_id": final_dest_location_id.id,
+                    "location_id": picking.location_dest_id.id,       # nguồn = transit (đích phiếu 1)
+                    "location_dest_id": final_dest_location_id.id,     # đích cuối (kho nhận)
                     "move_ids_without_package": [],
                 }
                 new_picking = self.env["stock.picking"].create(new_picking_vals)
                 self.copy_move_lines(picking, new_picking)
                 new_picking.action_confirm()
-                new_picking.second_transfer_created = True 
+                # đánh dấu để tránh tự đẻ thêm
+                new_picking.second_transfer_created = True
                 self.second_transfer_created = True
 
-                origin_link = Markup(
-                    '<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>'
-                ) % (picking.id, picking.name)
-                new_link = Markup(
-                    '<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>'
-                ) % (new_picking.id, new_picking.name)
+                origin_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
+                    picking.id, picking.name
+                )
+                new_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
+                    new_picking.id, new_picking.name
+                )
 
                 new_picking.message_post(
                     body=Markup("Phiếu này được tạo từ %s.") % origin_link,
@@ -107,24 +121,28 @@ class StockPicking(models.Model):
             if quants:
                 move_line.location_id = quants[0].location_id
 
-    @api.onchange("picking_type_id")
+    @api.onchange("picking_type_id", "location_dest_id")
     def _compute_is_transit_transfer(self):
-        # Cho mọi internal transfer đều là quy trình qua transit (nếu chưa tạo bước 2)
+        """Chỉ bật cờ khi là internal và ĐÍCH là Inter-warehouse transit (phiếu 1)."""
         for record in self:
             record.is_transit_transfer = (
-                record.picking_type_id.code == "internal" and not record.second_transfer_created
+                record.picking_type_id.code == "internal"
+                and not record.second_transfer_created
+                and self._is_inter_warehouse_transit(record.location_dest_id)
             )
             if record.is_transit_transfer:
                 record.action_toggle_is_locked()
 
     def button_validate(self):
         for picking in self:
-            # ✅ Luồng auto cho TẤT CẢ internal transfers (không phụ thuộc auto_second_transfer, không chặn origin)
-            if (picking.picking_type_id.code == "internal"
+            # Auto chỉ khi: Internal + chưa tạo lần nào + không phải phiếu con + ĐÍCH là transit
+            if (
+                picking.picking_type_id.code == "internal"
                 and not picking.second_transfer_created
                 and not picking.source_transfer_id
-                ):
-                # Cần có đối tác để xác định kho đích
+                and self._is_inter_warehouse_transit(picking.location_dest_id)
+            ):
+                # Bắt buộc có Liên hệ để xác định kho nhận
                 if not picking.partner_id:
                     raise UserError(
                         _("Bạn phải chọn Liên hệ (kho nhận) trước khi xác nhận phiếu chuyển nội bộ 2 bước.")
@@ -135,30 +153,24 @@ class StockPicking(models.Model):
                     [("partner_id", "=", picking.partner_id.id)], limit=1
                 )
                 if not warehouse:
-                    raise UserError(
-                        _("Không tìm thấy kho tương ứng với Liên hệ %s") % picking.partner_id.name
-                    )
+                    raise UserError(_("Không tìm thấy kho tương ứng với Liên hệ %s") % picking.partner_id.name)
 
-                # Tìm loại hoạt động nội bộ của kho đích (ưu tiên loại 'reception', nếu không có thì lấy bất kỳ 'internal')
+                # Tìm loại hoạt động nội bộ của kho đích (ưu tiên 'reception'; nếu không có thì lấy bất kỳ 'internal')
                 ops = self.env["stock.picking.type"].search(
                     [("warehouse_id", "=", warehouse.id), ("code", "=", "internal")]
                 )
                 next_operation = ops.filtered(lambda r: r.two_step_transfer_use == "reception")[:1] or ops[:1]
                 if not next_operation:
-                    raise UserError(
-                        _("Không tìm thấy loại hoạt động nội bộ cho kho %s") % warehouse.name
-                    )
+                    raise UserError(_("Không tìm thấy loại hoạt động nội bộ cho kho %s") % warehouse.name)
 
                 if not next_operation.default_location_dest_id:
-                    raise UserError(
-                        _("Loại hoạt động '%s' chưa có Vị trí đích mặc định.") % next_operation.display_name
-                    )
+                    raise UserError(_("Loại hoạt động '%s' chưa có Vị trí đích mặc định.") % next_operation.display_name)
 
                 picking.create_second_transfer_wizard(
                     next_operation.default_location_dest_id, next_operation
                 )
 
-            # Ràng buộc phiếu 2 chỉ chứa sản phẩm có trong phiếu nguồn
+            # Ràng buộc: phiếu 2 chỉ chứa SP có trong phiếu nguồn
             if picking.source_transfer_id:
                 for move in picking.move_ids_without_package:
                     other_moves = picking.source_transfer_id.move_ids_without_package.filtered(
