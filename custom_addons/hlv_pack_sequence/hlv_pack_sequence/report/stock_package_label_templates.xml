@@ -4,12 +4,20 @@
   <template id="report_package_label_document">
     <!-- dùng container trống để in nhãn, không dùng external_layout để label gọn -->
     <t t-call="web.html_container">
-      <style type="text/css">
-        .hlv-label{
-          font-family:"DejaVu Sans","Noto Sans","Liberation Sans","Arial",sans-serif !important;
+     <style type="text/css">
+        @font-face{
+          font-family:"TNRVN";
+          src:url('/hlv_pack_sequence/static/fonts/times-new-roman.ttf') format('truetype');
+          font-weight:400; font-style:normal;
         }
-        .hlv-label b, .hlv-label strong{ font-weight:700; }
-      </style>
+        @font-face{
+          font-family:"TNRVN";
+          src:url('/hlv_pack_sequence/static/fonts/times-new-roman-bold.ttf') format('truetype');
+          font-weight:700; font-style:normal;
+        }
+        .hlv-label{ font-family:"TNRVN", sans-serif !important; }
+        </style>
+
       <!-- docs = stock.picking records -->
       <t t-foreach="docs" t-as="o">
         <!-- Lặp tất cả kiện thuộc picking, sắp theo id để ổn định thứ tự -->
