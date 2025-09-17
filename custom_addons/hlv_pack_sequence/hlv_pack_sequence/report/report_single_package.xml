@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <!-- Action report: in một pack -->
+  <record id="action_report_single_package_label" model="ir.actions.report">
+    <field name="name">Print This Package Label</field>
+    <field name="model">stock.quant.package</field>
+    <field name="report_type">qweb-pdf</field>
+    <field name="report_name">hlv_pack_sequence.report_single_package_label</field>
+    <field name="print_report_name">'Pack - %s' % (object.name)</field>
+    <field name="binding_model_id" ref="stock.model_stock_quant_package"/>
+    <field name="binding_type">report</field>
+  </record>
+
+  <!-- Template in 1 pack -->
+  <template id="report_single_package_label">
+    <t t-call="web.html_container">
+      <t t-foreach="docs" t-as="pack">
+        <div class="page hlv-label">
+          <!-- X/Y: dùng field compute đã làm -->
+          <div style="font-size:26px; font-weight:800; margin-bottom:6px;">
+            <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or 0))"/>
+          </div>
+
+          <!-- Lấy Picking để hiển thị tên + origin (tùy có/không) -->
+          <t t-set="ml" t-value="pack.env['stock.move.line'].search([('result_package_id','=',pack.id)], limit=1)"/>
+          <div style="font-size:12px; color:#444; margin-bottom:2px;">
+            <span style="opacity:.8;">Picking:&nbsp;</span><span t-esc="ml.picking_id.name if ml else ''"/>
+          </div>
+          <div t-if="ml and ml.picking_id.origin" style="font-size:12px; color:#444; margin-bottom:6px;">
+            <span style="opacity:.8;">Source:&nbsp;</span><span t-esc="ml.picking_id.origin"/>
+          </div>
+
+          <!-- Barcode theo tên kiện -->
+          <div style="margin:6px 0 4px 0;">
+            <span t-field="pack.name"
+                  t-options='{"widget": "barcode", "type": "Code128", "displayValue": True, "quiet": 1}'/>
+          </div>
+
+          <!-- Người nhận (nếu có) -->
+          <div t-if="ml and ml.picking_id and ml.picking_id.partner_id" style="margin-top:8px; font-size:12px;">
+            <div style="font-weight:600;" t-esc="ml.picking_id.partner_id.display_name"/>
+            <div t-esc="ml.picking_id.partner_id.contact_address"/>
+          </div>
+
+          <!-- Qty done (tuỳ chọn) -->
+          <div t-if="ml and ml.picking_id" style="margin-top:6px; font-size:11px; color:#444;">
+            <t t-set="q" t-value="sum([l.qty_done for l in ml.picking_id.move_line_ids if l.result_package_id and l.result_package_id.id == pack.id])"/>
+            <span t-esc="'Qty done: %s' % q"/>
+          </div>
+        </div>
+      </t>
+    </t>
+  </template>
+</odoo>

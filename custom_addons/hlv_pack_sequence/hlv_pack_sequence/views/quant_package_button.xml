@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="view_quant_package_form_hlv_button" model="ir.ui.view">
+    <field name="name">stock.quant.package.form.hlv.button</field>
+    <field name="model">stock.quant.package</field>
+    <field name="inherit_id" ref="stock.view_quant_package_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//header" position="inside">
+        <button name="%(hlv_pack_sequence.action_report_single_package_label)d"
+                type="action"
+                class="oe_highlight"
+                string="In nhãn"/>
+      </xpath>
+    </field>
+  </record>
+</odoo>

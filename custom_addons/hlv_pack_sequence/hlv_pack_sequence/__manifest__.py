@@ -8,9 +8,13 @@
     "license": "LGPL-3",
     "depends": ["stock"],
     "data": [
+        "report/assets.xml",
         "report/report_actions.xml",
-        "report/stock_package_label_templates.xml"
+        "report/stock_package_label_templates.xml",
+        "report/report_single_package.xml",
+        "views/quant_package_button.xml"
     ],
+
     "assets": {},
     "installable": True,
     "application": False

@@ -8,7 +8,7 @@
       <t t-foreach="docs" t-as="o">
         <!-- Lặp tất cả kiện thuộc picking, sắp theo id để ổn định thứ tự -->
         <t t-foreach="o.package_ids.sorted('id')" t-as="pack">
-          <div class="page">
+          <div class="page hlv-label">
             <!-- Header X/Y -->
             <div style="font-size:26px; font-weight:800; margin-bottom:6px;">
               <t t-set="total" t-value="len(o.package_ids)"/>
