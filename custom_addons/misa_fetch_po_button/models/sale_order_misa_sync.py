@@ -204,49 +204,81 @@ class SaleOrder(models.Model):
             if keep.name != new_name:
                 keep.name = new_name
 
-
     def action_resync_from_misa_hard(self):
-        """Hủy & xóa SO rồi tạo lại từ MISA.
-        Chỉ cho phép khi KHÔNG có picking 'done' và KHÔNG có invoice 'posted'."""
         self.ensure_one()
         odoo_utils = self.env['odoo.utils']
 
-        # 1) Prefetch dữ liệu MISA trước khi đụng dữ liệu hiện hữu
+        # Prefetch MISA
         data = self._misa_fetch_order()
-        misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
+        misa_order_id = data.get("ID") 
         lines = self._misa_fetch_lines(misa_order_id)
 
-        # 2) Kiểm tra điều kiện an toàn
+        # Safety
         if any(p.state == 'done' for p in self.picking_ids):
             raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
         if self.invoice_ids.filtered(lambda m: m.state == 'posted'):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
-        # Lưu thông tin cần thiết
         old_wh = self.warehouse_id
         order_no_fallback = self.name
 
-        # 3) HỦY SO trước (bắt buộc)
-        if self.state != 'cancel':
-            self.action_cancel()
+        # ===== 1) HỦY PICKINGS CHƯA DONE TRƯỚC (giống hành vi UI) =====
+        for p in self.picking_ids:
+            if p.state not in ('cancel', 'done'):
+                # đảm bảo không có qty_done dở dang
+                for ml in p.move_line_ids:
+                    if getattr(ml, 'qty_done', 0):
+                        ml.qty_done = 0
+                # một số bản 17/18 dùng button_cancel
+                try:
+                    if hasattr(p, 'button_cancel'):
+                        p.sudo().button_cancel()
+                    else:
+                        p.sudo().action_cancel()
+                except Exception as e:
+                    # Try unreserve trên move rồi cancel lại
+                    try:
+                        for mv in p.move_ids_without_package:
+                            if hasattr(mv, '_do_unreserve'):
+                                mv._do_unreserve()
+                        if hasattr(p, 'button_cancel'):
+                            p.sudo().button_cancel()
+                        else:
+                            p.sudo().action_cancel()
+                    except Exception as e2:
+                        raise UserError(_("Không thể hủy phiếu giao %s: %s") % (p.name, e2))
 
-        # 4) XÓA pickings (đã cancel sau action_cancel). An toàn: chỉ xóa cái không 'done'
+        # ===== 2) HỦY SO =====
+        if self.state != 'cancel':
+            try:
+                self.action_cancel()
+            except Exception as e:
+                # biện pháp cuối: hủy procurement ở dòng rồi set cancel
+                try:
+                    if hasattr(self.order_line, '_action_cancel'):
+                        self.order_line._action_cancel()
+                    self.write({'state': 'cancel'})
+                except Exception as e2:
+                    raise UserError(_("Không thể hủy đơn bán hàng: %s") % e2)
+
+        # đảm bảo đang là cancel trước khi xóa
+        if self.state != 'cancel':
+            raise UserError(_("Đơn bán chưa về trạng thái 'cancel', không thể xóa."))
+
+        # ===== 3) XÓA PICKINGS (đều đã cancel) =====
         for p in self.picking_ids:
             if p.state != 'done':
-                # đảm bảo đã cancel trước khi unlink
-                if p.state != 'cancel':
-                    try:
-                        if hasattr(p, 'action_cancel'):
-                            p.action_cancel()
-                    except Exception as e:
-                        _logger.warning("Huỷ picking %s lỗi: %s", p.name, e)
-                # giờ mới unlink
                 try:
-                    p.unlink()
+                    if p.state != 'cancel':
+                        if hasattr(p, 'button_cancel'):
+                            p.sudo().button_cancel()
+                        else:
+                            p.sudo().action_cancel()
+                    p.sudo().unlink()
                 except Exception as e:
-                    _logger.warning("Xoá picking %s lỗi: %s", p.name, e)
+                    raise UserError(_("Không thể xóa picking %s: %s") % (p.name, e))
 
-        # 5) XÓA invoices ở draft/cancel (nếu có)
+        # ===== 4) XÓA INVOICE draft/cancel =====
         for inv in self.invoice_ids:
             if inv.state == 'draft':
                 try:
@@ -260,11 +292,10 @@ class SaleOrder(models.Model):
             elif inv.state == 'cancel':
                 inv.unlink()
 
-        # 6) XÓA SO (đã ở trạng thái 'cancel')
-        #    (Odoo mặc định: "Bạn không thể xóa báo giá đã gửi hoặc đơn đã xác nhận" → ta đã hủy)
+        # ===== 5) XÓA SO =====
         self.unlink()
 
-        # 7) TẠO LẠI SO từ dữ liệu MISA đã hút
+        # ===== 6) TẠO LẠI TỪ MISA (giữ nguyên phần của bạn) =====
         partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         partner = odoo_utils._get_or_create_partner(partner_name)
         order_no    = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
@@ -272,7 +303,6 @@ class SaleOrder(models.Model):
         book_date   = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress") or ''
 
-        # tạo/gán địa chỉ giao (tái dùng helper bên wizard)
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
@@ -333,7 +363,6 @@ class SaleOrder(models.Model):
                 'discount': discount_pct,
             })
 
-        # 8) Confirm & đặt tên picking theo MISA
         if new_so.state in ('draft', 'sent'):
             new_so.action_confirm()
         if new_so.picking_ids:
