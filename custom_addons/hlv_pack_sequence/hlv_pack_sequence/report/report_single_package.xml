@@ -24,10 +24,10 @@
           <!-- Lấy Picking để hiển thị tên + origin (tùy có/không) -->
           <t t-set="ml" t-value="pack.env['stock.move.line'].search([('result_package_id','=',pack.id)], limit=1)"/>
           <div style="font-size:12px; color:#444; margin-bottom:2px;">
-            <span style="opacity:.8;">Picking:&nbsp;</span><span t-esc="ml.picking_id.name if ml else ''"/>
+            <span style="opacity:.8;">Picking:</span><span t-esc="ml.picking_id.name if ml else ''"/>
           </div>
           <div t-if="ml and ml.picking_id.origin" style="font-size:12px; color:#444; margin-bottom:6px;">
-            <span style="opacity:.8;">Source:&nbsp;</span><span t-esc="ml.picking_id.origin"/>
+            <span style="opacity:.8;">Source:</span><span t-esc="ml.picking_id.origin"/>
           </div>
 
           <!-- Barcode theo tên kiện -->
