@@ -1,32 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+  <!-- Report template: in one picking -> one label per package -->
   <template id="report_package_label_document">
+    <!-- dùng container trống để in nhãn, không dùng external_layout để label gọn -->
     <t t-call="web.html_container">
+      <!-- docs = stock.picking records -->
       <t t-foreach="docs" t-as="o">
-        <t t-set="levels" t-value="o.package_level_ids.sorted('id')" />
-        <t t-set="total" t-value="len(levels)" />
-        <t t-foreach="levels" t-as="pl">
+        <!-- Lặp tất cả kiện thuộc picking, sắp theo id để ổn định thứ tự -->
+        <t t-foreach="o.package_ids.sorted('id')" t-as="pack">
           <div class="page">
-            <div style="font-size:24px; font-weight:700;">
-              <t t-esc="('%s/%s' % (pl.pack_sequence or 0, pl.pack_total or total))"/>
+            <!-- Header X/Y -->
+            <div style="font-size:26px; font-weight:800; margin-bottom:6px;">
+              <t t-set="total" t-value="len(o.package_ids)"/>
+              <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
             </div>
-            <div style="margin: 8px 0 2px 0;">
-              <span style="font-size: 12px; color:#555;">Picking:</span>
-              <span t-esc="o.name"/>
+
+            <!-- Thông tin tham chiếu -->
+            <div style="font-size:12px; color:#444; margin-bottom:2px;">
+              <span style="opacity:.8;">Picking:&nbsp;</span><span t-esc="o.name"/>
             </div>
-            <div style="margin: 0 0 8px 0;">
-              <span style="font-size: 12px; color:#555;">Package:</span>
-              <span t-esc="pl.package_id.name"/>
+            <div t-if="o.origin" style="font-size:12px; color:#444; margin-bottom:6px;">
+              <span style="opacity:.8;">Source:&nbsp;</span><span t-esc="o.origin"/>
             </div>
-            <!-- Barcode for the package name (Code128) -->
-            <div>
-              <span t-field="pl.package_id.name" t-options='{"widget": "barcode", "type": "Code128", "displayValue": True, "quiet": 1}'/>
+
+            <!-- Barcode theo tên kiện (stock.quant.package.name) -->
+            <div style="margin:6px 0 4px 0;">
+              <span t-field="pack.name"
+                    t-options='{"widget": "barcode", "type": "Code128", "displayValue": True, "quiet": 1}'/>
             </div>
-            <div style="margin-top:10px; font-size:12px;">
-              <t t-if="o.partner_id">
-                <div t-esc="o.partner_id.display_name"/>
-                <div t-esc="o.partner_id.contact_address"/>
-              </t>
+
+            <!-- Người nhận (nếu có) -->
+            <div t-if="o.partner_id" style="margin-top:8px; font-size:12px;">
+              <div style="font-weight:600;" t-esc="o.partner_id.display_name"/>
+              <div t-esc="o.partner_id.contact_address"/>
+            </div>
+
+            <!-- Ghi chú ngắn gọn: tổng trọng lượng/ kiện (tuỳ chọn nếu có onhand on move lines) -->
+            <div t-if="o.move_line_ids" style="margin-top:6px; font-size:11px; color:#444;">
+              <t t-set="kg" t-value="sum(o.move_line_ids.mapped('qty_done'))"/>
+              <span t-esc="'Qty done: %s' % kg"/>
             </div>
           </div>
         </t>
