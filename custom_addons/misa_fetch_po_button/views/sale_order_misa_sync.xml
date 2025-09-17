@@ -1,4 +1,3 @@
-<!-- views/sale_order_misa_sync.xml -->
 <odoo>
   <data>
     <record id="view_order_form_misa_sync_inherit" model="ir.ui.view">
@@ -11,7 +10,7 @@
                   type="object"
                   string="Đồng bộ MISA"
                   class="oe_highlight"
-                  attrs="{'invisible': [('misa_id','=',False)]}"/>
+                  invisible="misa_id == False"/>   <!-- thay attrs=... bằng invisible=... -->
         </xpath>
       </field>
     </record>
