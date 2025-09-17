@@ -204,46 +204,45 @@ class SaleOrder(models.Model):
             if keep.name != new_name:
                 keep.name = new_name
 
+
     def action_resync_from_misa_hard(self):
         """Hủy & xóa SO rồi tạo lại từ MISA.
         Chỉ cho phép khi KHÔNG có picking 'done' và KHÔNG có invoice 'posted'."""
         self.ensure_one()
         odoo_utils = self.env['odoo.utils']
 
-        # 1) Lấy dữ liệu MISA trước khi đụng dữ liệu cũ
+        # 1) Prefetch dữ liệu MISA trước khi đụng dữ liệu hiện hữu
         data = self._misa_fetch_order()
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
 
-        # 2) Guard an toàn
+        # 2) Kiểm tra điều kiện an toàn
         if any(p.state == 'done' for p in self.picking_ids):
             raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
         if self.invoice_ids.filtered(lambda m: m.state == 'posted'):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
-        old_name = self.name
+        # Lưu thông tin cần thiết
         old_wh = self.warehouse_id
-        old_group = self.procurement_group_id
+        order_no_fallback = self.name
 
-        # 3) BẮT BUỘC: Hủy SO trước
-        self.action_cancel()
+        # 3) HỦY SO trước (bắt buộc)
+        if self.state != 'cancel':
+            self.action_cancel()
 
-        # ⬇️ FIX: Odoo 17/18 không có self.flush(). Dùng invalidate + read lại state.
-        self.invalidate_recordset()
-        state = self.read(['state'])[0]['state']
-        if state != 'cancel':
-            raise UserError(_("Không thể hủy đơn bán hàng—không thể tiếp tục xóa."))
-
-        # 4) XÓA pickings (sau khi đã cancel)
+        # 4) XÓA pickings (đã cancel sau action_cancel). An toàn: chỉ xóa cái không 'done'
         for p in self.picking_ids:
-            try:
-                if p.state not in ('cancel', 'done') and hasattr(p, 'action_cancel'):
-                    p.action_cancel()
-            except Exception as e:
-                _logger.warning("Huỷ picking %s lỗi: %s", p.name, e)
             if p.state != 'done':
+                # đảm bảo đã cancel trước khi unlink
+                if p.state != 'cancel':
+                    try:
+                        if hasattr(p, 'action_cancel'):
+                            p.action_cancel()
+                    except Exception as e:
+                        _logger.warning("Huỷ picking %s lỗi: %s", p.name, e)
+                # giờ mới unlink
                 try:
-                    p.sudo().unlink()
+                    p.unlink()
                 except Exception as e:
                     _logger.warning("Xoá picking %s lỗi: %s", p.name, e)
 
@@ -251,32 +250,29 @@ class SaleOrder(models.Model):
         for inv in self.invoice_ids:
             if inv.state == 'draft':
                 try:
-                    (hasattr(inv, 'button_cancel') and inv.button_cancel()) or \
-                    (hasattr(inv, 'action_cancel') and inv.action_cancel())
+                    if hasattr(inv, 'button_cancel'):
+                        inv.button_cancel()
+                    elif hasattr(inv, 'action_cancel'):
+                        inv.action_cancel()
                 except Exception:
                     pass
-                inv.sudo().unlink()
+                inv.unlink()
             elif inv.state == 'cancel':
-                inv.sudo().unlink()
-
-        # Dọn procurement group nếu không còn picking nào tham chiếu
-        if old_group and not self.env['stock.picking'].search([('group_id', '=', old_group.id)], limit=1):
-            try:
-                old_group.sudo().unlink()
-            except Exception as e:
-                _logger.info("Không xoá được procurement.group %s: %s", old_group.display_name, e)
+                inv.unlink()
 
         # 6) XÓA SO (đã ở trạng thái 'cancel')
-        self.sudo().unlink()
+        #    (Odoo mặc định: "Bạn không thể xóa báo giá đã gửi hoặc đơn đã xác nhận" → ta đã hủy)
+        self.unlink()
 
-        # 7) TẠO LẠI SO từ dữ liệu MISA
+        # 7) TẠO LẠI SO từ dữ liệu MISA đã hút
         partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         partner = odoo_utils._get_or_create_partner(partner_name)
-        order_no    = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or old_name
+        order_no    = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         delivery_no = data.get("DeliveryOrderNumber") or order_no
         book_date   = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress") or ''
 
+        # tạo/gán địa chỉ giao (tái dùng helper bên wizard)
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
@@ -306,8 +302,10 @@ class SaleOrder(models.Model):
         new_so = self.env['sale.order'].create(vals_create)
 
         def _flt(x, dv=0.0):
-            try: return float(x or 0.0)
-            except Exception: return dv
+            try:
+                return float(x or 0.0)
+            except Exception:
+                return dv
 
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
@@ -335,6 +333,7 @@ class SaleOrder(models.Model):
                 'discount': discount_pct,
             })
 
+        # 8) Confirm & đặt tên picking theo MISA
         if new_so.state in ('draft', 'sent'):
             new_so.action_confirm()
         if new_so.picking_ids:
@@ -346,5 +345,5 @@ class SaleOrder(models.Model):
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
-            'params': {'title': _("Đồng bộ (hủy & tạo lại) thành công"), 'message': order_no, 'type': 'success'}
+            'params': {'title': _("Đồng bộ (xoá & tạo lại) thành công"), 'message': order_no, 'type': 'success'}
         }
