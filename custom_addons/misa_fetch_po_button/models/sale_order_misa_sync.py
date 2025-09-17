@@ -392,6 +392,7 @@ class SaleOrder(models.Model):
             })
 
         # 9) Confirm & đặt tên picking theo MISA
+   # 9) Confirm & đặt tên picking theo MISA
         if new_so.state in ('draft', 'sent'):
             new_so.action_confirm()
         if new_so.picking_ids:
@@ -400,8 +401,17 @@ class SaleOrder(models.Model):
             exists = env['stock.picking'].search([('name', '=', desired), ('id', '!=', picking.id)], limit=1)
             picking.name = f"{desired}-{picking.id}" if exists else desired
 
+        # (tuỳ chọn) toast thành công
+        self.env.user.notify_success(message=_("Đồng bộ (xoá & tạo lại) thành công: %s") % (delivery_no or order_no))
+
+        # Redirect sang SO mới
+        form_view_id = self.env.ref('sale.view_order_form').id
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {'title': _("Đồng bộ (xoá & tạo lại) thành công"), 'message': order_no, 'type': 'success'}
+            'type': 'ir.actions.act_window',
+            'res_model': 'sale.order',
+            'view_mode': 'form',
+            'views': [(form_view_id, 'form')],
+            'res_id': new_so.id,
+            'target': 'current',
         }
+
