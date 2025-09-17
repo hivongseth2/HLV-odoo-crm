@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- Ép các report của module dùng font có tiếng Việt -->
-  <template id="assets_report" inherit_id="web.report_assets_common" name="HLV Pack Labels Assets">
+  <template id="hlv_pack_labels_assets"
+            inherit_id="web.report_assets_common"
+            name="HLV Pack Labels Assets">
     <xpath expr="." position="inside">
       <style type="text/css">
-        /* Dùng DejaVu Sans (có sẵn trên hầu hết image Odoo); nếu không có sẽ rơi về Noto/Arial */
-        .hlv-label { font-family: "DejaVu Sans","Noto Sans","Liberation Sans","Arial",sans-serif !important; }
-        .hlv-label b, .hlv-label strong { font-weight: 700; }
+        .hlv-label{
+          font-family: "DejaVu Sans","Noto Sans","Liberation Sans","Arial",sans-serif !important;
+        }
+        .hlv-label b, .hlv-label strong{ font-weight:700; }
       </style>
     </xpath>
   </template>
