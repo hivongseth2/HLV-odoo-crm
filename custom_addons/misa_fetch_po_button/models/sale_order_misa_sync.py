@@ -229,7 +229,8 @@ class SaleOrder(models.Model):
         self.action_cancel()
        
         self.invalidate_recordset()
-        if self.state != 'cancel':
+        state = self.read(['state'])[0]['state']
+        if state  != 'cancel':
             # Nếu module tùy biến chặn cancel, dừng lại để tránh lỗi unlink
             raise UserError(_("Không thể hủy đơn bán hàng—không thể tiếp tục xóa."))
 
