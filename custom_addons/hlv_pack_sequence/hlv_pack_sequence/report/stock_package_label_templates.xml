@@ -4,19 +4,22 @@
   <template id="report_package_label_document">
     <!-- dùng container trống để in nhãn, không dùng external_layout để label gọn -->
     <t t-call="web.html_container">
-     <style type="text/css">
+     <t t-set="BASE" t-value="(env['ir.config_parameter'].sudo().get_param('report.url')
+                            or env['ir.config_parameter'].sudo().get_param('web.base.url') or '')"/>
+
+      <style type="text/css">
         @font-face{
           font-family:"TNRVN";
-          src:url('/hlv_pack_sequence/static/fonts/times-new-roman.ttf') format('truetype');
+          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/times-new-roman.ttf") format("truetype");
           font-weight:400; font-style:normal;
         }
         @font-face{
           font-family:"TNRVN";
-          src:url('/hlv_pack_sequence/static/fonts/times-new-roman-bold.ttf') format('truetype');
+          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/times-new-roman-bold.ttf") format("truetype");
           font-weight:700; font-style:normal;
         }
         .hlv-label{ font-family:"TNRVN", sans-serif !important; }
-        </style>
+      </style>
 
       <!-- docs = stock.picking records -->
       <t t-foreach="docs" t-as="o">
@@ -56,6 +59,7 @@
             </div>
           </div>
         </t>
+      </t>
       </t>
     </t>
   </template>
