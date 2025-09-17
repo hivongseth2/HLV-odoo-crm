@@ -203,3 +203,145 @@ class SaleOrder(models.Model):
             new_name = f"{desired_name}-{keep.id}" if exists else desired_name
             if keep.name != new_name:
                 keep.name = new_name
+
+
+
+    def action_resync_from_misa_hard(self):
+        """Xoá SO (nếu safe) & tạo lại từ MISA: chỉ khi tất cả pickings != done và không có invoice posted."""
+        self.ensure_one()
+        odoo_utils = self.env['odoo.utils']
+
+        # 1) Prefetch dữ liệu MISA trước khi xoá
+        data = self._misa_fetch_order()
+        misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
+        lines = self._misa_fetch_lines(misa_order_id)
+
+        # 2) Kiểm tra điều kiện an toàn
+        if any(p.state == 'done' for p in self.picking_ids):
+            raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
+        posted_invoices = self.invoice_ids.filtered(lambda m: m.state == 'posted')
+        if posted_invoices:
+            raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
+
+        # 3) Hủy & xoá picking chưa done
+        for p in self.picking_ids:
+            if p.state not in ('cancel', 'done'):
+                # reset qty_done để hủy được
+                for ml in p.move_line_ids:
+                    if getattr(ml, 'qty_done', 0):
+                        ml.qty_done = 0
+                try:
+                    if hasattr(p, 'action_cancel'):
+                        p.action_cancel()
+                except Exception as e:
+                    _logger.warning("Huỷ picking %s lỗi: %s", p.name, e)
+            try:
+                p.unlink()
+            except Exception as e:
+                _logger.warning("Xoá picking %s lỗi: %s", p.name, e)
+
+        # 4) Hủy & xoá hoá đơn nháp/đã cancel (nếu có)
+        for inv in self.invoice_ids:
+            if inv.state == 'draft':
+                try:
+                    if hasattr(inv, 'button_cancel'):
+                        inv.button_cancel()
+                    elif hasattr(inv, 'action_cancel'):
+                        inv.action_cancel()
+                except Exception:
+                    pass
+                inv.unlink()
+            elif inv.state == 'cancel':
+                inv.unlink()
+
+        # Lưu 1 số thông tin có ích trước khi xoá
+        old_name = self.name
+        old_wh = self.warehouse_id
+        # 5) Cancel rồi xoá SO
+        self.action_cancel()
+        self.unlink()
+
+        # 6) Dựng lại SO từ dữ liệu MISA đã hút
+        partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        partner = odoo_utils._get_or_create_partner(partner_name)
+        order_no    = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or old_name
+        delivery_no = data.get("DeliveryOrderNumber") or order_no
+        book_date   = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
+
+        shipping_addr = data.get("BillingAddress") or ''
+        # tạo/gán địa chỉ giao (tái dùng helper bên wizard)
+        try:
+            delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
+                parent_partner=partner,
+                addr_str=shipping_addr,
+                phone=data.get("Phone"),
+                province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
+            )
+            shipping_id = delivery_contact.id
+        except Exception as e:
+            _logger.warning("Không set delivery contact: %s", e)
+            shipping_id = False
+
+        vals_create = {
+            'name': order_no,                     # giữ nguyên mã SO theo MISA nếu có
+            'partner_id': partner.id,
+            'origin': order_no,
+            'warehouse_id': old_wh.id or False,
+            'misa_id': str(misa_order_id) if misa_order_id else False,
+            'partner_shipping_id': shipping_id,
+        }
+        if book_date:
+            try:
+                vals_create['date_order'] = dtparse(book_date).replace(tzinfo=None)
+            except Exception:
+                pass
+
+        new_so = self.env['sale.order'].create(vals_create)
+
+        # Thêm line từ MISA (giống logic hiện tại)
+        def _flt(x, dv=0.0):
+            try:
+                return float(x or 0.0)
+            except Exception:
+                return dv
+
+        for ln in (lines or []):
+            product_code = ln.get("ProductIDText")
+            description  = ln.get("Description") or product_code
+            qty          = _flt(ln.get("Amount"), 0.0)
+            price_unit   = _flt(ln.get("Price"), 0.0)
+            discount_pct = _flt(ln.get("DiscountPercent"), 0.0)
+            uom_name     = (ln.get("UnitIDText") or "Cái").strip()
+
+            product = odoo_utils._get_or_create_product(
+                code=product_code,
+                name=description,
+                unit_name=uom_name,
+                cost=price_unit,
+                product_type="consu",
+                purchase_ok=False,
+                sale_ok=False,
+            )
+            self.env['sale.order.line'].create({
+                'order_id': new_so.id,
+                'product_id': product.id,
+                'name': description,
+                'product_uom_qty': qty,
+                'price_unit': price_unit,
+                'discount': discount_pct,
+            })
+
+        # Confirm & đặt tên picking theo MISA
+        if new_so.state in ('draft', 'sent'):
+            new_so.action_confirm()
+        if new_so.picking_ids:
+            picking = new_so.picking_ids[0]
+            desired = delivery_no or order_no
+            exists = self.env['stock.picking'].search([('name', '=', desired), ('id', '!=', picking.id)], limit=1)
+            picking.name = f"{desired}-{picking.id}" if exists else desired
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {'title': _("Đồng bộ (xoá & tạo lại) thành công"), 'message': order_no, 'type': 'success'}
+        }
