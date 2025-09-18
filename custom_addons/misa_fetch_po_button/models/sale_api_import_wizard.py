@@ -78,6 +78,8 @@ class SaleApiImportWizard(models.TransientModel):
 
         conversions = self._misa_fetch_conversion_units(product_id, headers)
         # Tìm conversion theo tên đơn vị MISA của dòng
+        
+        _logger.warning("⚠️  mapping UoM  '%s' -> giữ nguyên số liệu gốc", conversions)
         conv = None
         for c in conversions:
             if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower():
