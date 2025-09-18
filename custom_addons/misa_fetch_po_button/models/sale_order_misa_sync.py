@@ -53,6 +53,94 @@ class SaleOrder(models.Model):
         payload_detail = misa_config.get_crm_sale_order_detail_payload(misa_order_id)
         product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, headers, payload_detail)
         return product_lines or []
+        # ===== Helpers lấy/convert UoM từ MISA =====
+
+    
+    def _misa_fetch_conversion_units(self, product_id, headers):
+        """
+        Gọi Product/DataSubPaging để lấy quy đổi UoM cho 1 sản phẩm (payload theo yêu cầu của bạn).
+        """
+        if not product_id:
+            return []
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+        payload = {
+            "Columns": "SUQsQ29udmVyc2lvblVuaXRJRCxDb252ZXJzaW9uVW5pdElEVGV4dCxDb252ZXJzaW9uUmF0ZSxEZXNjcmlwdGlvbixDb252ZXJzaW9uT3BlcmF0b3JJRCxDb252ZXJzaW9uT3BlcmF0b3JJRFRleHQsQ29udmVyc2lvblVuaXRQcmljZTIsQ29udmVyc2lvblVuaXRQcmljZSxDb252ZXJzaW9uVW5pdFByaWNlMSxDb252ZXJzaW9uVW5pdFByaWNlRml4ZWQ=",
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 20,
+            "Filters": [],
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {
+                "MasterID": str(product_id),
+                "TableName": "product_conversion_unit",
+                "MasterKey": "ProductID",
+                "SumColumn": ""
+            },
+            "IsApproved": False,
+            "CustomPagingData": {
+                "SubFormConfig": {
+                    "ColumnFieldSubForm": "",
+                    "ColumnAggregateSubForm": "",
+                    "TableName": "product_conversion_unit",
+                    "ParentIDKey": "ProductID",
+                    "IsBringSerialType": False,
+                    "AggregateField": []
+                }
+            },
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": "864e2811-5edd-5ccc-6b85-178b59007e93",
+            "AISearchKeyword": ""
+        }
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("Data", []) or []
+        except Exception as e:
+            _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
+            return []
+
+    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_id, headers):
+        """
+        Nếu UoM của dòng (misa_uom_text) khác default Odoo (product.uom_id.name) thì tìm mapping để quy đổi.
+        Trả về (qty_base, price_base, uom_is_default)
+        """
+        default_uom_name = (product.uom_id and product.uom_id.name) or ""
+        if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
+            return qty, price, True
+
+        conversions = self._misa_fetch_conversion_units(misa_product_id, headers)
+        conv = None
+        for c in conversions:
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower():
+                conv = c
+                break
+        if not conv:
+            _logger.warning("⚠️ Không tìm thấy mapping UoM cho '%s' -> giữ nguyên số liệu gốc", misa_uom_text)
+            return qty, price, False
+
+        rate = float(conv.get("ConversionRate") or 0) or 0.0
+        op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân (theo MISA)
+        if rate <= 0:
+            _logger.warning("⚠️ ConversionRate không hợp lệ (<=0) cho '%s'", misa_uom_text)
+            return qty, price, False
+
+        if op_id == 1:  # Nhân (ví dụ: 1 Hộp = 60 Cuộn; dòng đang là Hộp; default là Cuộn)
+            qty_base = qty * rate
+            price_base = price / rate if rate else price
+        else:           # Chia (dự phòng)
+            qty_base = qty / rate
+            price_base = price * rate
+
+        return qty_base, price_base, False
 
     # ---------------- core sync ----------------
 
@@ -205,10 +293,12 @@ class SaleOrder(models.Model):
                 keep.name = new_name
 
     def action_resync_from_misa_hard(self):
-        
         self.ensure_one()
         env = self.env
         odoo_utils = env['odoo.utils']
+
+        # Lấy headers cho các call phụ (convert UoM)
+        headers, _ = self._misa_headers()
 
         # 1) Lấy dữ liệu MISA trước khi đụng dữ liệu hiện hữu
         data = self._misa_fetch_order()
@@ -323,11 +413,11 @@ class SaleOrder(models.Model):
         self.sudo().unlink()
 
         # ===== 8) TẠO LẠI TỪ MISA =====
-        partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
-        partner = odoo_utils._get_or_create_partner(partner_name)
-        order_no    = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
-        delivery_no = data.get("DeliveryOrderNumber") or order_no
-        book_date   = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
+        partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        partner       = odoo_utils._get_or_create_partner(partner_name)
+        order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
+        delivery_no   = data.get("DeliveryOrderNumber") or order_no
+        book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress") or ''
 
         # địa chỉ giao hàng
@@ -352,6 +442,7 @@ class SaleOrder(models.Model):
             'partner_shipping_id': shipping_id,
         }
         if book_date:
+            from dateutil.parser import parse as dtparse
             try:
                 vals_create['date_order'] = dtparse(book_date).replace(tzinfo=None)
             except Exception:
@@ -365,6 +456,7 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
+        # ===== 8.1) THÊM LINES (có quy đổi UoM nếu khác mặc định) =====
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
             description  = ln.get("Description") or product_code
@@ -373,6 +465,7 @@ class SaleOrder(models.Model):
             discount_pct = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name     = (ln.get("UnitIDText") or "Cái").strip()
 
+            # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             product = odoo_utils._get_or_create_product(
                 code=product_code,
                 name=description,
@@ -382,17 +475,35 @@ class SaleOrder(models.Model):
                 purchase_ok=False,
                 sale_ok=False,
             )
-            env['sale.order.line'].create({
+
+            # id sản phẩm bên MISA (để truy bảng quy đổi)
+            misa_product_id = ln.get("ProductID") or ln.get("ProductId") or None
+
+            # convert về UoM mặc định nếu dòng đang ở UoM khác
+            qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
+                product=product,
+                misa_uom_text=uom_name,
+                qty=qty,
+                price=price_unit,
+                misa_product_id=misa_product_id,
+                headers=headers,
+            )
+
+            vals_line = {
                 'order_id': new_so.id,
                 'product_id': product.id,
                 'name': description,
-                'product_uom_qty': qty,
-                'price_unit': price_unit,
+                'product_uom_qty': qty_for_odoo,
+                'price_unit': price_for_odoo,
                 'discount': discount_pct,
-            })
+            }
+            # Nếu có convert, ép UoM line về UoM mặc định của product
+            if not use_default_uom and product.uom_id:
+                vals_line['product_uom'] = product.uom_id.id
 
-        # 9) Confirm & đặt tên picking theo MISA
-   # 9) Confirm & đặt tên picking theo MISA
+            env['sale.order.line'].create(vals_line)
+
+        # ===== 9) Confirm & đặt tên picking theo MISA =====
         if new_so.state in ('draft', 'sent'):
             new_so.action_confirm()
         if new_so.picking_ids:
@@ -401,10 +512,8 @@ class SaleOrder(models.Model):
             exists = env['stock.picking'].search([('name', '=', desired), ('id', '!=', picking.id)], limit=1)
             picking.name = f"{desired}-{picking.id}" if exists else desired
 
-        # (tuỳ chọn) toast thành công
-        # self.env.user.notify_success(message=_("Đồng bộ (xoá & tạo lại) thành công: %s") % (delivery_no or order_no))
+        # Toast + log
         new_so.message_post(body=_("Đồng bộ (xoá & tạo lại) thành công: %s") % (delivery_no or order_no))
-
 
         # Redirect sang SO mới
         form_view_id = self.env.ref('sale.view_order_form').id
@@ -416,4 +525,3 @@ class SaleOrder(models.Model):
             'res_id': new_so.id,
             'target': 'current',
         }
-
