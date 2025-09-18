@@ -4,14 +4,14 @@
   <template id="report_package_label_document">
     <t t-call="web.html_container">
 
-      <!-- Lấy URL tuyệt đối để wkhtmltopdf tải font -->
+      <!-- URL tuyệt đối để wkhtmltopdf tải font -->
       <t t-set="BASE"
          t-value="(env['ir.config_parameter'].sudo().get_param('report.url')
                    or env['ir.config_parameter'].sudo().get_param('web.base.url')
                    or '')"/>
 
-      <!-- Ép font có hỗ trợ tiếng Việt (Times New Roman bạn đã bỏ vào static/fonts) -->
-         <style type="text/css">
+      <!-- Ép font có tiếng Việt -->
+      <style type="text/css">
         @font-face{
           font-family:"VNFont";
           src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
@@ -25,7 +25,7 @@
         .hlv-label, .hlv-label * { font-family:"VNFont", sans-serif !important; }
       </style>
 
-      <!-- docs = recordset stock.picking -->
+      <!-- docs = stock.picking -->
       <t t-foreach="docs" t-as="o">
         <t t-set="packs" t-value="o.package_ids.sorted('id')"/>
         <t t-set="total" t-value="len(packs)"/>
@@ -39,13 +39,15 @@
 
             <!-- Tham chiếu -->
             <div style="font-size:12px; color:#444; margin-bottom:2px;">
-              <span style="opacity:.8;">Picking:</span><span t-esc="o.name"/>
+              <span style="opacity:.8;">Picking:</span>
+              <span t-esc="o.name"/>
             </div>
             <div t-if="o.origin" style="font-size:12px; color:#444; margin-bottom:6px;">
-              <span style="opacity:.8;">Source:</span><span t-esc="o.origin"/>
+              <span style="opacity:.8;">Source:</span>
+              <span t-esc="o.origin"/>
             </div>
 
-            <!-- Barcode theo tên kiện -->
+            <!-- Barcode tên kiện -->
             <div style="margin:6px 0 4px 0;">
               <span t-field="pack.name"
                     t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
@@ -65,6 +67,7 @@
           </div>
         </t>
       </t>
+
     </t>
   </template>
 </odoo>
