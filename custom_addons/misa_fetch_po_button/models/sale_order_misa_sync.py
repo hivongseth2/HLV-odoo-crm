@@ -159,6 +159,15 @@ class SaleOrder(models.Model):
             if rate <= 0:
                 return qty, price, False
 
+            # Ở nhánh này ConversionUnitIDText == default_uom_name
+            # Ví dụ: "1 Mét = 1/50 Cuộn" (op_id=2 Chia, rate=50)
+            # => 1 base(Cuộn) = 50 default(Mét)
+            # Dòng đang ở base(Cuộn) -> về default(Mét): qty * 50, price / 50
+            if op_id == 2:  # Chia: 1 default = (1/rate) * base  =>  1 base = rate * default
+                return qty * rate, (price / rate if rate else price), False
+            else:           # Nhân: 1 default = rate * base      =>  1 base = (1/rate) * default
+                return (qty / rate), (price * rate), False
+
     # ---------------- core sync ----------------
 
     def action_sync_from_misa(self):
