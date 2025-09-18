@@ -5,6 +5,7 @@ from dateutil import parser  # để xử lý ISO datetime
 import logging
 from dateutil.parser import parse
 from collections import defaultdict
+import uuid
 
 _logger = logging.getLogger(__name__)
 
@@ -16,6 +17,104 @@ class SaleApiImportWizard(models.TransientModel):
     to_date = fields.Date(string="Đến ngày", required=True)
     
     
+    
+    
+    # ================== HELPERS QUY ĐỔI UOM ==================
+
+    def _misa_fetch_conversion_units(self, product_id, headers):
+        """
+        Gọi Product/DataSubPaging để lấy quy đổi UoM theo đúng payload bạn yêu cầu.
+        """
+        if not product_id:
+            return []
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+
+        payload = {
+            "Columns": "SUQsQ29udmVyc2lvblVuaXRJRCxDb252ZXJzaW9uVW5pdElEVGV4dCxDb252ZXJzaW9uUmF0ZSxEZXNjcmlwdGlvbixDb252ZXJzaW9uT3BlcmF0b3JJRCxDb252ZXJzaW9uT3BlcmF0b3JJRFRleHQsQ29udmVyc2lvblVuaXRQcmljZTIsQ29udmVyc2lvblVuaXRQcmljZSxDb252ZXJzaW9uVW5pdFByaWNlMSxDb252ZXJzaW9uVW5pdFByaWNlRml4ZWQ=",
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 20,
+            "Filters": [],
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {
+                "MasterID": str(product_id),
+                "TableName": "product_conversion_unit",
+                "MasterKey": "ProductID",
+                "SumColumn": ""
+            },
+            "IsApproved": False,
+            "CustomPagingData": {
+                "SubFormConfig": {
+                    "ColumnFieldSubForm": "",
+                    "ColumnAggregateSubForm": "",
+                    "TableName": "product_conversion_unit",
+                    "ParentIDKey": "ProductID",
+                    "IsBringSerialType": False,
+                    "AggregateField": []
+                }
+            },
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": str(uuid.uuid4()),
+            "AISearchKeyword": ""
+        }
+
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("Data", []) or []
+        except Exception as e:
+            _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
+            return []
+
+    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, product_id, headers):
+        """
+        Nếu misa_uom_text khác product.uom_id.name, cố gắng tìm mapping để quy đổi.
+        Trả về (qty_base, price_base, uom_is_default)
+        """
+        default_uom_name = (product.uom_id and product.uom_id.name) or ""
+        if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
+            # Không cần đổi
+            return qty, price, True
+
+        conversions = self._misa_fetch_conversion_units(product_id, headers)
+        # Tìm conversion theo tên đơn vị MISA của dòng
+        
+        _logger.warning("⚠️  mapping UoM  '%s' -> giữ nguyên số liệu gốc", conversions)
+        conv = None
+        for c in conversions:
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower():
+                conv = c
+                break
+        if not conv:
+            _logger.warning("⚠️ Không tìm thấy mapping UoM cho '%s' -> giữ nguyên số liệu gốc", misa_uom_text)
+            return qty, price, False
+
+        rate = float(conv.get("ConversionRate") or 0) or 0.0
+        op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân, khác=Chia (thực tế MISA dùng 1 Nhân)
+        if rate <= 0:
+            _logger.warning("⚠️ ConversionRate không hợp lệ (<=0) cho '%s'", misa_uom_text)
+            return qty, price, False
+
+        # Diễn giải: Description kiểu "1 Hộp = 60 Cuộn"
+        # => Nếu dòng dùng 'Hộp' còn default là 'Cuộn':
+        #    qty_base = qty * 60; price_base = price / 60 (Operator Nhân)
+        if op_id == 1:  # Nhân
+            qty_base = qty * rate
+            price_base = price / rate if rate else price
+        else:           # Chia
+            qty_base = qty / rate
+            price_base = price * rate
+
+        return qty_base, price_base, False
     
     # ===== Helpers cho địa chỉ giao hàng =====
     def _vn_country(self):
@@ -99,6 +198,7 @@ class SaleApiImportWizard(models.TransientModel):
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
+
         stock_mapping = {
             "HCM": "TSN/Stock",
             "BENCAM": "KBC/Tồn kho",
@@ -124,6 +224,9 @@ class SaleApiImportWizard(models.TransientModel):
             "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY"
         }
 
+        
+        
+      
         def line_subtotal(l):
             qty = float(l.get("Amount", 1) or 0.0)
             price = float(l.get("Price", 0) or 0.0)
@@ -142,7 +245,6 @@ class SaleApiImportWizard(models.TransientModel):
 
             for order in orders:
                 # --- Filter theo account & trạng thái ---
-                
                 customer_name = order.get("AccountIDText") 
                 origin = order.get("SaleOrderName")
                 status = order.get("RevenueStatusIDText")
@@ -161,6 +263,7 @@ class SaleApiImportWizard(models.TransientModel):
 
                 # --- Lấy chi tiết dòng hàng ---
                 order_id = order.get("ID")
+                misa_id_str = str(order_id) if order_id else False  # ### NEW
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)
                 _logger.warning("📦 Order product_lines %s", product_lines)
@@ -239,6 +342,8 @@ class SaleApiImportWizard(models.TransientModel):
                     # Tránh trùng
                     existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
                     if existing_order:
+                        if misa_id_str and not existing_order.misa_id:
+                            existing_order.misa_id = misa_id_str
                         _logger.info("🔁 Bỏ qua SO đã tồn tại: %s", order_ref)
                         continue
 
@@ -249,8 +354,9 @@ class SaleApiImportWizard(models.TransientModel):
                         'date_order': order_date,
                         'amount_total': group_total,
                         'partner_shipping_id': delivery_contact.id, 
+                        'origin':origin,
                         'warehouse_id': warehouse.id,
-                        'origin':origin
+                        'misa_id': misa_id_str,      
                     })
                     
                     
@@ -270,17 +376,45 @@ class SaleApiImportWizard(models.TransientModel):
                             unit_name=uom_name,
                             cost=price_unit,
                             product_type="consu",
-                            purchase_ok=True,
-                            sale_ok=True
+                            purchase_ok=False,
+                            sale_ok=False
                         )
-                        self.env['sale.order.line'].create({
+                        
+                        misa_product_id = line.get("ProductID") or line.get("ProductId") or None
+                        qty_for_odoo = qty
+                        price_for_odoo = price_unit
+                        use_default_uom = True
+                        
+                        
+                        qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
+                            product=product,
+                            misa_uom_text=uom_name,
+                            qty=qty,
+                            price=price_unit,
+                            product_id=misa_product_id,
+                            headers=sale_headers
+                        )
+                        vals_line = {
                             'order_id': sale_order.id,
                             'product_id': product.id,
                             'name': description,
-                            'product_uom_qty': qty,
-                            'price_unit': price_unit,
-                            'discount': discount_percent
-                        })
+                            'product_uom_qty': qty_for_odoo,
+                            'price_unit': price_for_odoo,
+                            'discount': discount_percent,
+                        }
+                        if not use_default_uom:
+                            vals_line['product_uom'] = product.uom_id.id
+
+                        self.env['sale.order.line'].create(vals_line)       
+
+                        # self.env['sale.order.line'].create({
+                        #     'order_id': sale_order.id,
+                        #     'product_id': product.id,
+                        #     'name': description,
+                        #     'product_uom_qty': qty,
+                        #     'price_unit': price_unit,
+                        #     'discount': discount_percent
+                        # })
 
                     # Confirm để tạo picking
                     sale_order.action_confirm()
@@ -335,7 +469,8 @@ class SaleApiImportWizard(models.TransientModel):
                             'partner_shipping_id': delivery_contact.id, 
                             'amount_total': group_total,
                             'warehouse_id': warehouse.id,
-                            'origin':origin
+                            'origin':origin,
+                            'misa_id': misa_id_str,      
                         })
 
                         # Thêm line
