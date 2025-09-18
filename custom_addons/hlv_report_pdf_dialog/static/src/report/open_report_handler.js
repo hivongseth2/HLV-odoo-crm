@@ -24,12 +24,10 @@ registry.category("ir.actions.report handlers").add(
     async (action, options, env) => {
         if (action.type !== "ir.actions.report" || action.report_type !== "qweb-pdf") return false;
 
-        // 1) show loading overlay
         const { ui, notification } = env.services;
-        ui.block(); // spinner overlay
+        ui.block(); // show spinner
 
         try {
-            // 2) wkhtmltopdf state
             if (!wkhtmltopdfStateProm) wkhtmltopdfStateProm = rpc("/report/check_wkhtmltopdf");
             const state = await wkhtmltopdfStateProm;
             if (!["ok", "upgrade"].includes(state)) {
@@ -37,37 +35,73 @@ registry.category("ir.actions.report handlers").add(
                 return false;
             }
 
-            // 3) create hidden iframe & print when loaded
             const url = buildReportUrl(action);
+
+            // --- create hidden iframe ---
             const iframe = document.createElement("iframe");
             Object.assign(iframe.style, {
                 position: "fixed", right: "0", bottom: "0",
                 width: "0", height: "0", border: "0"
             });
 
+            // cleanup chỉ lo gỡ iframe + listeners (KHÔNG tắt loading)
             let cleanupTimer;
-            const cleanup = () => {
+            let cleaned = false;
+            const MAX_WAIT_MS = 120000; // 2 phút - rộng rãi
+            const listeners = [];
+
+            const cleanupFrameOnly = () => {
+                if (cleaned) return;
+                cleaned = true;
                 clearTimeout(cleanupTimer);
+                listeners.forEach(({ target, type, fn }) => target.removeEventListener(type, fn));
                 iframe.remove();
-                ui.unblock(); // hide spinner
             };
 
             iframe.onload = () => {
                 try {
                     const w = iframe.contentWindow;
-                    const after = () => { w.removeEventListener("afterprint", after); cleanup(); };
-                    w.addEventListener("afterprint", after);
+                    if (!w) throw new Error("no iframe contentWindow");
+
+                    // Sau khi gọi print, bỏ overlay để user thao tác, NHƯNG giữ iframe tới afterprint/timeout
+                    const doAfterPrint = () => cleanupFrameOnly();
+
+                    const winAfterPrint = () => cleanupFrameOnly();
+                    const iframeAfterPrint = () => cleanupFrameOnly();
+
+                    window.addEventListener("afterprint", winAfterPrint);
+                    listeners.push({ target: window, type: "afterprint", fn: winAfterPrint });
+
+                    w.addEventListener("afterprint", iframeAfterPrint);
+                    listeners.push({ target: w, type: "afterprint", fn: iframeAfterPrint });
+
+                    // Fallback: khi tab lấy lại focus/visibility sau khi in xong
+                    const visHandler = () => {
+                        if (!document.hidden && document.hasFocus()) {
+                            cleanupFrameOnly();
+                            window.removeEventListener("visibilitychange", visHandler);
+                        }
+                    };
+                    window.addEventListener("visibilitychange", visHandler);
+                    listeners.push({ target: window, type: "visibilitychange", fn: visHandler });
+
+                    // Gọi print
                     w.focus();
                     w.print();
-                    // fallback if afterprint không bắn
-                    // cleanupTimer = setTimeout(cleanup, 15000);
+
+                    // BỎ overlay NGAY SAU KHI GỌI print để user kịp bấm
+                    ui.unblock();
+
+                    // Fallback cuối: dù không bắt được afterprint, sau MAX_WAIT cũng dọn iframe
+                    cleanupTimer = setTimeout(() => cleanupFrameOnly(), MAX_WAIT_MS);
                 } catch (e) {
-                    cleanup();
+                    ui.unblock();
+                    cleanupFrameOnly();
                     notification.add("Không thể tự động in: " + (e.message || e), { type: "warning" });
                 }
             };
 
-            iframe.src = url;        // ⚡ tải trực tiếp PDF (không fetch + blob)
+            iframe.src = url; // tải trực tiếp PDF (không fetch + blob)
             document.body.appendChild(iframe);
             return true;
         } catch (e) {
