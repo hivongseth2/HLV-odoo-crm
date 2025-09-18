@@ -20,43 +20,52 @@ class SaleApiImportWizard(models.TransientModel):
     
     
     # ================== HELPERS QUY ĐỔI UOM ==================
+
     def _misa_fetch_conversion_units(self, product_id, headers):
         """
-        Gọi API Product/DataSubPaging để lấy danh sách quy đổi đơn vị cho 1 sản phẩm.
-        Trả về list các dict có các key: ConversionUnitIDText, ConversionRate, ConversionOperatorID, ...
+        Gọi Product/DataSubPaging để lấy quy đổi UoM theo đúng payload bạn yêu cầu.
         """
         if not product_id:
             return []
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
-        # Columns: base64 của "ID,ConversionUnitID,ConversionUnitIDText,ConversionRate,Description,ConversionOperatorID,ConversionOperatorIDText,ConversionUnitPrice2,ConversionUnitPrice,ConversionUnitPrice1,ConversionUnitPriceFixed"
-        columns_b64 = "SUQsQ29udmVyc2lvblVuaXRJRCxDb252ZXJzaW9uVW5pdElEVGV4dCxDb252ZXJzaW9uUmF0ZSxEZXNjcmlwdGlvbixDb252ZXJzaW9uT3BlcmF0b3JJRCxDb252ZXJzaW9uT3BlcmF0b3JJRFRleHQsQ29udmVyc2lvblVuaXRQcmljZTIsQ29udmVyc2lvblVuaXRQcmljZSxDb252ZXJzaW9uVW5pdFByaWNlMSxDb252ZXJzaW9uVW5pdFByaWNlRml4ZWQ="
+
         payload = {
-            "AISearchKeyword": "",
-            "Columns": columns_b64,
-            "CustomPagingData": {},
-            "DefaultTotal": False,
+            "Columns": "SUQsQ29udmVyc2lvblVuaXRJRCxDb252ZXJzaW9uVW5pdElEVGV4dCxDb252ZXJzaW9uUmF0ZSxEZXNjcmlwdGlvbixDb252ZXJzaW9uT3BlcmF0b3JJRCxDb252ZXJzaW9uT3BlcmF0b3JJRFRleHQsQ29udmVyc2lvblVuaXRQcmljZTIsQ29udmVyc2lvblVuaXRQcmljZSxDb252ZXJzaW9uVW5pdFByaWNlMSxDb252ZXJzaW9uVW5pdFByaWNlRml4ZWQ=",
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 20,
             "Filters": [],
-            "IsApproved": False,
-            "IsCheckInactive": False,
-            "IsConverted": False,
-            "IsGetCache": True,
-            "IsListPaging": True,
+            "DefaultTotal": False,
             "IsMappingData": False,
-            "IsUsedELTS": True,
-            "ListFacebookPage": {},
-            "ListGmailPage": [],
             "MappingValueObject": {
                 "MasterID": str(product_id),
                 "TableName": "product_conversion_unit",
                 "MasterKey": "ProductID",
                 "SumColumn": ""
             },
-            "Page": 1,
-            "PageSize": 100,
-            "SessionID": "864e2811-5edd-5ccc-6b85-178b59007e93",
-            "Sorts": [],
-            "Start": 0,
+            "IsApproved": False,
+            "CustomPagingData": {
+                "SubFormConfig": {
+                    "ColumnFieldSubForm": "",
+                    "ColumnAggregateSubForm": "",
+                    "TableName": "product_conversion_unit",
+                    "ParentIDKey": "ProductID",
+                    "IsBringSerialType": False,
+                    "AggregateField": []
+                }
+            },
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": str(uuid.uuid4()),
+            "AISearchKeyword": ""
         }
+
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=30)
             resp.raise_for_status()
