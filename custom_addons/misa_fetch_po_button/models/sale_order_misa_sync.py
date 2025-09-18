@@ -513,7 +513,11 @@ class SaleOrder(models.Model):
             picking.name = f"{desired}-{picking.id}" if exists else desired
 
         # Toast + log
-        new_so.message_post(body=_("Đồng bộ (xoá & tạo lại) thành công: %s") % (delivery_no or order_no))
+        # new_so.message_post(body=_("Đồng bộ (xoá & tạo lại) thành công: %s") % (delivery_no or order_no))
+        new_so.message_post(body=f"Đồng bộ (xoá & tạo lại) thành công: {delivery_no or order_no}")
+
+        
+
 
         # Redirect sang SO mới
         form_view_id = self.env.ref('sale.view_order_form').id
