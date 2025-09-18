@@ -17,6 +17,93 @@ class SaleApiImportWizard(models.TransientModel):
     
     
     
+    
+    # ================== HELPERS QUY ĐỔI UOM ==================
+    def _misa_fetch_conversion_units(self, product_id, headers):
+        """
+        Gọi API Product/DataSubPaging để lấy danh sách quy đổi đơn vị cho 1 sản phẩm.
+        Trả về list các dict có các key: ConversionUnitIDText, ConversionRate, ConversionOperatorID, ...
+        """
+        if not product_id:
+            return []
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+        # Columns: base64 của "ID,ConversionUnitID,ConversionUnitIDText,ConversionRate,Description,ConversionOperatorID,ConversionOperatorIDText,ConversionUnitPrice2,ConversionUnitPrice,ConversionUnitPrice1,ConversionUnitPriceFixed"
+        columns_b64 = "SUQsQ29udmVyc2lvblVuaXRJRCxDb252ZXJzaW9uVW5pdElEVGV4dCxDb252ZXJzaW9uUmF0ZSxEZXNjcmlwdGlvbixDb252ZXJzaW9uT3BlcmF0b3JJRCxDb252ZXJzaW9uT3BlcmF0b3JJRFRleHQsQ29udmVyc2lvblVuaXRQcmljZTIsQ29udmVyc2lvblVuaXRQcmljZSxDb252ZXJzaW9uVW5pdFByaWNlMSxDb252ZXJzaW9uVW5pdFByaWNlRml4ZWQ="
+        payload = {
+            "AISearchKeyword": "",
+            "Columns": columns_b64,
+            "CustomPagingData": {},
+            "DefaultTotal": False,
+            "Filters": [],
+            "IsApproved": False,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "IsGetCache": True,
+            "IsListPaging": True,
+            "IsMappingData": False,
+            "IsUsedELTS": True,
+            "ListFacebookPage": {},
+            "ListGmailPage": [],
+            "MappingValueObject": {
+                "MasterID": str(product_id),
+                "TableName": "product_conversion_unit",
+                "MasterKey": "ProductID",
+                "SumColumn": ""
+            },
+            "Page": 1,
+            "PageSize": 100,
+            "SessionID": str(uuid.uuid4()),
+            "Sorts": [],
+            "Start": 0,
+        }
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("Data", []) or []
+        except Exception as e:
+            _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
+            return []
+
+    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, product_id, headers):
+        """
+        Nếu misa_uom_text khác product.uom_id.name, cố gắng tìm mapping để quy đổi.
+        Trả về (qty_base, price_base, uom_is_default)
+        """
+        default_uom_name = (product.uom_id and product.uom_id.name) or ""
+        if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
+            # Không cần đổi
+            return qty, price, True
+
+        conversions = self._misa_fetch_conversion_units(product_id, headers)
+        # Tìm conversion theo tên đơn vị MISA của dòng
+        conv = None
+        for c in conversions:
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower():
+                conv = c
+                break
+        if not conv:
+            _logger.warning("⚠️ Không tìm thấy mapping UoM cho '%s' -> giữ nguyên số liệu gốc", misa_uom_text)
+            return qty, price, False
+
+        rate = float(conv.get("ConversionRate") or 0) or 0.0
+        op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân, khác=Chia (thực tế MISA dùng 1 Nhân)
+        if rate <= 0:
+            _logger.warning("⚠️ ConversionRate không hợp lệ (<=0) cho '%s'", misa_uom_text)
+            return qty, price, False
+
+        # Diễn giải: Description kiểu "1 Hộp = 60 Cuộn"
+        # => Nếu dòng dùng 'Hộp' còn default là 'Cuộn':
+        #    qty_base = qty * 60; price_base = price / 60 (Operator Nhân)
+        if op_id == 1:  # Nhân
+            qty_base = qty * rate
+            price_base = price / rate if rate else price
+        else:           # Chia
+            qty_base = qty / rate
+            price_base = price * rate
+
+        return qty_base, price_base, False
+    
     # ===== Helpers cho địa chỉ giao hàng =====
     def _vn_country(self):
         return self.env['res.country'].search([('code', '=', 'VN')], limit=1)
@@ -276,14 +363,42 @@ class SaleApiImportWizard(models.TransientModel):
                             purchase_ok=False,
                             sale_ok=False
                         )
-                        self.env['sale.order.line'].create({
+                        
+                        misa_product_id = line.get("ProductID") or line.get("ProductId") or None
+                        qty_for_odoo = qty
+                        price_for_odoo = price_unit
+                        use_default_uom = True
+                        
+                        
+                        qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
+                            product=product,
+                            misa_uom_text=uom_name,
+                            qty=qty,
+                            price=price_unit,
+                            product_id=misa_product_id,
+                            headers=sale_headers
+                        )
+                        vals_line = {
                             'order_id': sale_order.id,
                             'product_id': product.id,
                             'name': description,
-                            'product_uom_qty': qty,
-                            'price_unit': price_unit,
-                            'discount': discount_percent
-                        })
+                            'product_uom_qty': qty_for_odoo,
+                            'price_unit': price_for_odoo,
+                            'discount': discount_percent,
+                        }
+                        if not use_default_uom:
+                            vals_line['product_uom'] = product.uom_id.id
+
+                        self.env['sale.order.line'].create(vals_line)       
+
+                        # self.env['sale.order.line'].create({
+                        #     'order_id': sale_order.id,
+                        #     'product_id': product.id,
+                        #     'name': description,
+                        #     'product_uom_qty': qty,
+                        #     'price_unit': price_unit,
+                        #     'discount': discount_percent
+                        # })
 
                     # Confirm để tạo picking
                     sale_order.action_confirm()
