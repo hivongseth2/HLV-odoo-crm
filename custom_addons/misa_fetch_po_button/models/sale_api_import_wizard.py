@@ -75,46 +75,66 @@ class SaleApiImportWizard(models.TransientModel):
             _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
             return []
 
-    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, product_id, headers):
+    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_id, headers):
         """
-        Nếu misa_uom_text khác product.uom_id.name, cố gắng tìm mapping để quy đổi.
         Trả về (qty_base, price_base, uom_is_default)
+        - Nếu misa_uom_text == default_uom -> không đổi
+        - Nếu khác: thử tìm mapping
+            a) Tìm conversion trùng misa_uom_text (đơn vị của dòng)
+            b) Nếu không có, tìm conversion trùng default_uom (đơn vị mặc định của product)
         """
         default_uom_name = (product.uom_id and product.uom_id.name) or ""
         if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
-            # Không cần đổi
             return qty, price, True
 
-        conversions = self._misa_fetch_conversion_units(product_id, headers)
-        # Tìm conversion theo tên đơn vị MISA của dòng
-        
-        _logger.warning("⚠️  mapping UoM  '%s' -> giữ nguyên số liệu gốc", conversions)
+        conversions = self._misa_fetch_conversion_units(misa_product_id, headers) or []
+
+        # a) TRƯỚC: tìm mapping theo UoM của dòng (ví dụ: dòng là "Hộp", ConversionUnitIDText = "Hộp")
         conv = None
+        lower = str(misa_uom_text).strip().lower()
         for c in conversions:
-            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower():
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == lower:
                 conv = c
                 break
-        if not conv:
-            _logger.warning("⚠️ Không tìm thấy mapping UoM cho '%s' -> giữ nguyên số liệu gốc", misa_uom_text)
+
+        if conv:
+            rate = float(conv.get("ConversionRate") or 0.0)
+            op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân, 2=Chia
+            if rate <= 0:
+                return qty, price, False
+            if op_id == 1:   # Nhân: 1 misa_uom = rate * base_uom
+                # Dòng đang ở misa_uom, muốn về base -> nhân số lượng, chia đơn giá
+                return qty * rate, (price / rate if rate else price), False
+            else:            # Chia: 1 misa_uom = (1/rate) * base_uom
+                # Dòng đang ở misa_uom, muốn về base -> chia số lượng, nhân đơn giá
+                return (qty / rate), (price * rate), False
+
+        # b) SAU: không tìm thấy theo UoM dòng -> thử khớp theo default_uom (ví dụ JSON trả "Mét")
+        def_uom_lower = default_uom_name.strip().lower()
+        conv2 = None
+        for c in conversions:
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == def_uom_lower:
+                conv2 = c
+                break
+
+        if not conv2:
+            # Không có mapping nào dùng được
             return qty, price, False
 
-        rate = float(conv.get("ConversionRate") or 0) or 0.0
-        op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân, khác=Chia (thực tế MISA dùng 1 Nhân)
+        rate = float(conv2.get("ConversionRate") or 0.0)
+        op_id = int(conv2.get("ConversionOperatorID") or 1)
         if rate <= 0:
-            _logger.warning("⚠️ ConversionRate không hợp lệ (<=0) cho '%s'", misa_uom_text)
             return qty, price, False
 
-        # Diễn giải: Description kiểu "1 Hộp = 60 Cuộn"
-        # => Nếu dòng dùng 'Hộp' còn default là 'Cuộn':
-        #    qty_base = qty * 60; price_base = price / 60 (Operator Nhân)
-        if op_id == 1:  # Nhân
-            qty_base = qty * rate
-            price_base = price / rate if rate else price
-        else:           # Chia
-            qty_base = qty / rate
-            price_base = price * rate
+        # Ở nhánh này ConversionUnitIDText == default_uom_name
+        # Ví dụ: "1 Mét = 1/50 Cuộn" (op_id=2 Chia, rate=50)
+        # => 1 base(Cuộn) = 50 default(Mét)
+        # Dòng đang ở base(Cuộn) -> về default(Mét): qty * 50, price / 50
+        if op_id == 2:  # Chia: 1 default = (1/rate) * base  =>  1 base = rate * default
+            return qty * rate, (price / rate if rate else price), False
+        else:           # Nhân: 1 default = rate * base      =>  1 base = (1/rate) * default
+            return (qty / rate), (price * rate), False
 
-        return qty_base, price_base, False
     
     # ===== Helpers cho địa chỉ giao hàng =====
     def _vn_country(self):
