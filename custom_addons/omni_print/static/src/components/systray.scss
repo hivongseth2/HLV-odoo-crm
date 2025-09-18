@@ -1,0 +1,27 @@
+.printer-status {
+    &-unknown {
+        background-color: var(--gray-600);
+        color: var(--warning) !important;
+    }
+    &-online {
+        background-color: var(--success);
+        color: var(--white) !important;
+    }
+
+    &-offline {
+        background-color: var(--gray-600);
+        color: var(--warning) !important;
+    }
+
+    .focus {
+        background-color: color-mix(in srgb, var(--success) 90%, black) !important;
+        color: var(--white) !important;
+    }
+
+    .dropdown-item {
+        &:hover, &:focus {
+            background-color: var(--gray-200);
+            color: var(--gray-900) !important;
+        }
+    }
+}
