@@ -1,0 +1,19 @@
+<odoo>
+  <data>
+    <record id="view_order_form_misa_hard_sync_inherit" model="ir.ui.view">
+      <field name="name">sale.order.form.misa.hard.sync.button</field>
+      <field name="model">sale.order</field>
+      <field name="inherit_id" ref="sale.view_order_form"/>
+      <field name="arch" type="xml">
+        <xpath expr="//header" position="inside">
+          <button name="action_resync_from_misa_hard"
+                  type="object"
+                  string="Đồng bộ MISA"
+                  class="btn-danger"
+                  help="Chỉ chạy khi không có phiếu giao done và không có hoá đơn posted."
+                  invisible="misa_id == False"/>
+        </xpath>
+      </field>
+    </record>
+  </data>
+</odoo>
