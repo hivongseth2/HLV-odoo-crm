@@ -60,7 +60,7 @@ registry.category("ir.actions.report handlers").add(
                     w.focus();
                     w.print();
                     // fallback if afterprint không bắn
-                    cleanupTimer = setTimeout(cleanup, 7000);
+                    cleanupTimer = setTimeout(cleanup, 10000);
                 } catch (e) {
                     cleanup();
                     notification.add("Không thể tự động in: " + (e.message || e), { type: "warning" });
