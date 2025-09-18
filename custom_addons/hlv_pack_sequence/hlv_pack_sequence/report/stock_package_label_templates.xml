@@ -11,20 +11,18 @@
                    or '')"/>
 
       <!-- Ép font có hỗ trợ tiếng Việt (Times New Roman bạn đã bỏ vào static/fonts) -->
-      <style type="text/css">
+         <style type="text/css">
         @font-face{
-          font-family: "TNRVN";
-          src: url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/times-new-roman.ttf") format("truetype");
-          font-weight: 400;
-          font-style: normal;
+          font-family:"VNFont";
+          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
+          font-weight:400; font-style:normal;
         }
         @font-face{
-          font-family: "TNRVN";
-          src: url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/times-new-roman-bold.ttf") format("truetype");
-          font-weight: 700;
-          font-style: normal;
+          font-family:"VNFont";
+          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
+          font-weight:700; font-style:normal;
         }
-        .hlv-label { font-family: "TNRVN", sans-serif !important; }
+        .hlv-label, .hlv-label * { font-family:"VNFont", sans-serif !important; }
       </style>
 
       <!-- docs = recordset stock.picking -->
