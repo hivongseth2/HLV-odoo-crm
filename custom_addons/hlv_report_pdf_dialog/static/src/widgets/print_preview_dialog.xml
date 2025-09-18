@@ -1,0 +1,24 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+  <t t-name="hlv_report_pdf_dialog.PrintPreviewDialog" owl="1">
+    <Dialog t-props="{ title: props.title || 'Print Preview', size: 'extra-large', close: props.close }">
+      <div class="o_hlv_print_preview_dialog">
+        <iframe t-ref="pdfFrame" t-att-src="props.url" style="width:100%; height:70vh; border:0;"></iframe>
+      </div>
+      <t t-set-slot="footer">
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-primary" t-on-click="onPrint">
+            <i class="fa fa-print me-1"/> In
+          </button>
+          <a class="btn btn-secondary" t-att-href="props.url" t-att-download="props.filename || 'report.pdf'">
+            <i class="fa fa-download me-1"/> Tải PDF
+          </a>
+          <button type="button" class="btn btn-outline-secondary" t-on-click="props.close">
+            Đóng
+          </button>
+        </div>
+      </t>
+    </Dialog>
+  </t>
+</templates>
