@@ -17,6 +17,6 @@
             "hlv_report_pdf_dialog/static/src/widgets/print_preview_dialog.scss",
         ],
     },
-    "installable": true,
-    "application": false
+    "installable": True,
+    "application": False
 }
