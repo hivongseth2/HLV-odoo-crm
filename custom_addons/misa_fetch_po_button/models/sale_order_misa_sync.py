@@ -110,37 +110,53 @@ class SaleOrder(models.Model):
 
     def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_id, headers):
         """
-        Nếu UoM của dòng (misa_uom_text) khác default Odoo (product.uom_id.name) thì tìm mapping để quy đổi.
-        Trả về (qty_base, price_base, uom_is_default)
+        Chuyển qty/price từ đơn vị lấy từ MISA (misa_uom_text) về đơn vị mặc định của product (product.uom_id).
+        Trả về: (qty_base, price_base, uom_is_default)
+        - uom_is_default = True nếu misa_uom_text trùng default (không cần convert)
         """
         default_uom_name = (product.uom_id and product.uom_id.name) or ""
         if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
-            return qty, price, True
+            return qty, price, True  # không cần đổi
 
-        conversions = self._misa_fetch_conversion_units(misa_product_id, headers)
-        conv = None
-        for c in conversions:
-            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower():
-                conv = c
-                break
+        # Lấy bảng quy đổi theo ProductID
+        conversions = self._misa_fetch_conversion_units(misa_product_id, headers) if misa_product_id else []
+        # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
+        conv = next((
+            c for c in (conversions or [])
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower()
+        ), None)
+
         if not conv:
             _logger.warning("⚠️ Không tìm thấy mapping UoM cho '%s' -> giữ nguyên số liệu gốc", misa_uom_text)
             return qty, price, False
 
-        rate = float(conv.get("ConversionRate") or 0) or 0.0
-        op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân (theo MISA)
+        try:
+            rate = float(conv.get("ConversionRate") or 0) or 0.0
+        except Exception:
+            rate = 0.0
+        try:
+            op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân, 2=Chia
+        except Exception:
+            op_id = 1
+
         if rate <= 0:
             _logger.warning("⚠️ ConversionRate không hợp lệ (<=0) cho '%s'", misa_uom_text)
             return qty, price, False
 
-        if op_id == 1:  # Nhân (ví dụ: 1 Hộp = 60 Cuộn; dòng đang là Hộp; default là Cuộn)
+        # Diễn giải:
+        # - op_id == 1 (Nhân): "1 Hộp = 60 Cuộn"
+        #   Dòng ở Hộp, default là Cuộn -> qty_base = qty * 60; price_base = price / 60
+        # - op_id == 2 (Chia): "1 Mét = 1/50 Cuộn"
+        #   Dòng ở Mét,  default là Cuộn -> qty_base = qty / 50; price_base = price * 50
+        if op_id == 1:
             qty_base = qty * rate
             price_base = price / rate if rate else price
-        else:           # Chia (dự phòng)
+        else:  # op_id == 2 (Chia) hoặc bất kỳ khác coi như "Chia"
             qty_base = qty / rate
             price_base = price * rate
 
         return qty_base, price_base, False
+
 
     # ---------------- core sync ----------------
 
