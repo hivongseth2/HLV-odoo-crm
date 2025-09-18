@@ -53,7 +53,7 @@ class SaleApiImportWizard(models.TransientModel):
             },
             "Page": 1,
             "PageSize": 100,
-            "SessionID": str(uuid.uuid4()),
+            "SessionID": "864e2811-5edd-5ccc-6b85-178b59007e93",
             "Sorts": [],
             "Start": 0,
         }
