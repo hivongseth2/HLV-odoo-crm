@@ -1,4 +1,5 @@
 /** @odoo-module **/
+
 import { registry } from "@web/core/registry";
 import { rpc } from "@web/core/network/rpc";
 
@@ -19,37 +20,61 @@ function buildReportUrl(action) {
 }
 
 registry.category("ir.actions.report handlers").add(
-    "hlv_direct_print_iframe_fast",
+    "hlv_direct_print_iframe_fast_with_loading",
     async (action, options, env) => {
         if (action.type !== "ir.actions.report" || action.report_type !== "qweb-pdf") return false;
 
-        if (!wkhtmltopdfStateProm) wkhtmltopdfStateProm = rpc("/report/check_wkhtmltopdf");
-        const state = await wkhtmltopdfStateProm;
-        if (!["ok", "upgrade"].includes(state)) return false;
+        // 1) show loading overlay
+        const { ui, notification } = env.services;
+        ui.block(); // spinner overlay
 
-        const url = buildReportUrl(action);
+        try {
+            // 2) wkhtmltopdf state
+            if (!wkhtmltopdfStateProm) wkhtmltopdfStateProm = rpc("/report/check_wkhtmltopdf");
+            const state = await wkhtmltopdfStateProm;
+            if (!["ok", "upgrade"].includes(state)) {
+                ui.unblock();
+                return false;
+            }
 
-        const iframe = document.createElement("iframe");
-        Object.assign(iframe.style, {
-            position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0",
-        });
+            // 3) create hidden iframe & print when loaded
+            const url = buildReportUrl(action);
+            const iframe = document.createElement("iframe");
+            Object.assign(iframe.style, {
+                position: "fixed", right: "0", bottom: "0",
+                width: "0", height: "0", border: "0"
+            });
 
-        const cleanup = () => iframe.remove();
+            let cleanupTimer;
+            const cleanup = () => {
+                clearTimeout(cleanupTimer);
+                iframe.remove();
+                ui.unblock(); // hide spinner
+            };
 
-        iframe.onload = () => {
-            try {
-                const w = iframe.contentWindow;
-                const after = () => { w.removeEventListener("afterprint", after); cleanup(); };
-                w.addEventListener("afterprint", after);
-                w.focus();
-                w.print();
-                setTimeout(cleanup, 5000); // fallback dọn rác
-            } catch { cleanup(); }
-        };
+            iframe.onload = () => {
+                try {
+                    const w = iframe.contentWindow;
+                    const after = () => { w.removeEventListener("afterprint", after); cleanup(); };
+                    w.addEventListener("afterprint", after);
+                    w.focus();
+                    w.print();
+                    // fallback if afterprint không bắn
+                    cleanupTimer = setTimeout(cleanup, 7000);
+                } catch (e) {
+                    cleanup();
+                    notification.add("Không thể tự động in: " + (e.message || e), { type: "warning" });
+                }
+            };
 
-        iframe.src = url;              // ⚡ tải thẳng PDF (không fetch + blob)
-        document.body.appendChild(iframe);
-        return true;
+            iframe.src = url;        // ⚡ tải trực tiếp PDF (không fetch + blob)
+            document.body.appendChild(iframe);
+            return true;
+        } catch (e) {
+            ui.unblock();
+            env.services.notification.add("Lỗi khi in PDF: " + (e.message || e), { type: "danger" });
+            return true;
+        }
     },
     { sequence: 4 }
 );
