@@ -5,6 +5,7 @@ from dateutil import parser  # để xử lý ISO datetime
 import logging
 from dateutil.parser import parse
 from collections import defaultdict
+import uuid
 
 _logger = logging.getLogger(__name__)
 
