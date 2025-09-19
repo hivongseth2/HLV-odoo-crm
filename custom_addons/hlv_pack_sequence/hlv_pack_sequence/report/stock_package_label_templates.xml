@@ -5,29 +5,47 @@
     <t t-call="web.report_layout">
 
       <style type="text/css">
-        .hlv, .hlv * { font-family: "Arial", sans-serif !important; }
+          @font-face{
+          font-family:"VNFont";
+          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
+          font-weight:400; font-style:normal;
+        }
+        @font-face{
+          font-family:"VNFont";
+          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
+          font-weight:700; font-style:normal;
+        }
+        .hlv, .hlv *{ font-family:"VNFont", Arial, sans-serif !important; }
 
         .sheet{ padding:16px 12px 22px 12px; page-break-after: always; }
         .label{ border:1px solid #111; border-radius:6px; padding:12px 14px; }
 
         .seq { font-size:26px; font-weight:700; margin-bottom:8px; }
 
-        .row-2col{
-          display:grid;
-          grid-template-columns: 2fr 1fr;
-          gap:16px;
-          align-items:center;
-        }
+      
 
         .barcode-pack, .qr { text-align:center; }
         .caption { margin-top:4px; font-size:12px; font-weight:700; text-align:center; word-break:break-word; }
         /* 2 cột: trái = barcode (2 phần), phải = QR (1 phần) */
-        .hlv-two{ display:flex; align-items:flex-start; gap:16px; }
 
         /* tỉ lệ 2:1 rõ ràng, không co rớt hàng */
-        .hlv-two .col-left  { flex:0 0 66.666%; max-width:66.666%; }
-        .hlv-two .col-right { flex:0 0 33.333%; max-width:33.333%;
-                              display:flex; flex-direction:column; align-items:center; }
+      .codes-table{
+            width:100%; border-collapse:collapse; table-layout:fixed;
+          }
+          .codes-table td{
+            vertical-align:top; text-align:center;
+          }
+
+          /* barcode bên trái chiếm 70% */
+          .col-barcode{ width:70%; padding:4px; }
+          /* qr bên phải chiếm 30% */
+          .col-qr{ width:30%; padding:4px; }
+
+          .barcode-pack svg, .barcode-pack img{
+            width:100%; height:80px;
+          }
+          .col-qr img{ width:100px; height:100px; }
+          .caption{ margin-top:4px; font-size:12px; font-weight:700; }
 
         /* barcode (widget tạo SVG) chiếm full chiều ngang cột trái */
         .barcode-pack{ width:100%; display:flex; justify-content:center; }
@@ -81,22 +99,24 @@
               </div>
 
               <!-- HÀNG TRÊN: barcode pack + qr source -->
-              <div class="hlv-two">
-  <!-- Trái: barcode pack + caption tên pack -->
-                <div class="col-left">
-                  <div class="barcode-pack">
-                    <span t-field="pack.name"
-                          t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
-                  </div>
-                  <div class="caption"><t t-esc="pack.name"/></div>
-                </div>
+             <table class="codes-table">
+                <tr>
+                  <!-- Cột trái: barcode pack -->
+                  <td class="col-barcode">
+                    <div class="barcode-pack">
+                      <span t-field="pack.name"
+                            t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
+                    </div>
+                    <div class="caption"><t t-esc="pack.name"/></div>
+                  </td>
 
-                <!-- Phải: QR của source + caption source -->
-                <div class="col-right">
-                  <img t-att-src="o._qr_data_uri(src, 4, 2)"/>
-                  <div class="caption"><t t-esc="src"/></div>
-                </div>
-              </div>
+                  <!-- Cột phải: QR source -->
+                  <td class="col-qr">
+                    <img t-att-src="o._qr_data_uri(src, 4, 2)"/>
+                    <div class="caption"><t t-esc="src"/></div>
+                  </td>
+                </tr>
+              </table>
 
               <!-- Người gửi / Người nhận -->
               <div class="info">
