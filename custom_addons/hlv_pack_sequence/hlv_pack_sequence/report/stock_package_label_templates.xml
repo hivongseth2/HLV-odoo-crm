@@ -1,72 +1,105 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- In nhãn cho 1 Delivery Order: mỗi kiện (stock.quant.package) = 1 trang -->
+  <!-- Delivery Order labels: 2 packages per page -->
   <template id="report_package_label_document">
-    <t t-call="web.html_container">
+    <!-- dùng layout chuẩn (đã có meta utf-8, margins) -->
+    <t t-call="web.report_layout">
 
-      <!-- Lấy URL tuyệt đối để wkhtmltopdf tải font -->
+      <!-- URL tuyệt đối để wkhtmltopdf tải font -->
       <t t-set="BASE"
-         t-value="(env['ir.config_parameter'].sudo().get_param('report.url')
-                   or env['ir.config_parameter'].sudo().get_param('web.base.url')
-                   or '')"/>
+         t-value="(web_base_url or env['ir.config_parameter'].sudo().get_param('report.url')
+                   or env['ir.config_parameter'].sudo().get_param('web.base.url') or '')"/>
 
-      <!-- Ép font có hỗ trợ tiếng Việt (Times New Roman bạn đã bỏ vào static/fonts) -->
       <style type="text/css">
+        /* FONT: sửa path đúng /hlv_pack_sequence/static/... */
         @font-face{
-          font-family: "TNRVN";
-          src: url("<t t-esc='BASE'/>/hlv_pack_sequence/hlv_pack_sequence/static/fonts/times-new-roman.ttf") format("truetype");
-          font-weight: 400;
-          font-style: normal;
+          font-family:"VNFont";
+          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
+          font-weight:400; font-style:normal;
         }
         @font-face{
-          font-family: "TNRVN";
-          src: url("<t t-esc='BASE'/>/hlv_pack_sequence/hlv_pack_sequence/static/fonts/times-new-roman-bold.ttf") format("truetype");
-          font-weight: 700;
-          font-style: normal;
+          font-family:"VNFont";
+          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
+          font-weight:700; font-style:normal;
         }
-        .hlv-label { font-family: "TNRVN", sans-serif !important; }
+        .hlv, .hlv *{ font-family:"VNFont", sans-serif !important; }
+        .hlv b, .hlv strong{ font-weight:700; }
+
+        /* Trang: 2 nhãn / trang */
+        .sheet{ display:flex; gap:20px; padding:16px 12px 24px 12px; page-break-after: always; }
+        .label{ flex:1 0 0; border:0; padding:4px 8px; }
+        .hdr{ display:flex; justify-content:space-between; align-items:flex-start; }
+        .seq{ font-size:30px; font-weight:700; }
+        .bc{ margin:4px 0 6px 0; }
+        .line{ font-size:12px; color:#222; margin:2px 0; }
+        .addr{ margin-top:6px; }
+        .foot{ margin-top:10px; font-size:12px; }
       </style>
 
-      <!-- docs = recordset stock.picking -->
+      <!-- docs = stock.picking -->
       <t t-foreach="docs" t-as="o">
         <t t-set="packs" t-value="o.package_ids.sorted('id')"/>
         <t t-set="total" t-value="len(packs)"/>
 
-        <t t-foreach="packs" t-as="pack">
-          <div class="page hlv-label">
-            <!-- X/Y -->
-            <div style="font-size:26px; font-weight:800; margin-bottom:6px;">
-              <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
+        <!-- duyệt theo cặp: i = 0,2,4,... -->
+        <t t-foreach="range(0, total, 2)" t-as="i">
+          <div class="sheet hlv">
+            <!-- Nhãn bên trái -->
+            <t t-set="p1" t-value="packs[i]"/>
+            <div class="label">
+              <div class="hdr">
+                <div class="seq"><t t-esc="('%s/%s' % (p1.pack_sequence or 0, p1.pack_total or total))"/></div>
+                <div class="bc">
+                  <!-- barcode: số đơn hàng -->
+                  <span t-field="o.name"
+                        t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
+                </div>
+              </div>
+              <div class="line"><b>Người gửi:</b> <span t-esc="o.company_id.name or ''"/></div>
+              <div class="line" t-if="o.company_id.phone"><b>Điện thoại:</b> <span t-esc="o.company_id.phone"/></div>
+
+              <div class="addr">
+                <div class="line"><b>Người nhận:</b> <span style="font-weight:700;" t-esc="o.partner_id.name or ''"/></div>
+                <div class="line" t-if="o.partner_id.phone"><b>Điện thoại:</b> <span t-esc="o.partner_id.phone"/></div>
+                <div class="line" t-if="o.partner_id.contact_address"><span t-esc="o.partner_id.contact_address"/></div>
+              </div>
+
+              <div class="foot">
+                <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
+                <div><b>Trọng lượng (kg):</b> <t t-esc="('%.3f' % (o.weight or 0.0))"/></div>
+              </div>
             </div>
 
-            <!-- Tham chiếu -->
-            <div style="font-size:12px; color:#444; margin-bottom:2px;">
-              <span style="opacity:.8;">Picking:</span><span t-esc="o.name"/>
-            </div>
-            <div t-if="o.origin" style="font-size:12px; color:#444; margin-bottom:6px;">
-              <span style="opacity:.8;">Source:</span><span t-esc="o.origin"/>
-            </div>
+            <!-- Nhãn bên phải (nếu còn) -->
+            <t t-if="i + 1 &lt; total">
+              <t t-set="p2" t-value="packs[i+1]"/>
+              <div class="label">
+                <div class="hdr">
+                  <div class="seq"><t t-esc="('%s/%s' % (p2.pack_sequence or 0, p2.pack_total or total))"/></div>
+                  <div class="bc">
+                    <span t-field="o.name"
+                          t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
+                  </div>
+                </div>
+                <div class="line"><b>Người gửi:</b> <span t-esc="o.company_id.name or ''"/></div>
+                <div class="line" t-if="o.company_id.phone"><b>Điện thoại:</b> <span t-esc="o.company_id.phone"/></div>
 
-            <!-- Barcode theo tên kiện -->
-            <div style="margin:6px 0 4px 0;">
-              <span t-field="pack.name"
-                    t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
-            </div>
+                <div class="addr">
+                  <div class="line"><b>Người nhận:</b> <span style="font-weight:700;" t-esc="o.partner_id.name or ''"/></div>
+                  <div class="line" t-if="o.partner_id.phone"><b>Điện thoại:</b> <span t-esc="o.partner_id.phone"/></div>
+                  <div class="line" t-if="o.partner_id.contact_address"><span t-esc="o.partner_id.contact_address"/></div>
+                </div>
 
-            <!-- Người nhận -->
-            <div t-if="o.partner_id" style="margin-top:8px; font-size:12px;">
-              <div style="font-weight:600;" t-esc="o.partner_id.display_name"/>
-              <div t-esc="o.partner_id.contact_address"/>
-            </div>
-
-            <!-- Tổng Qty Done (tuỳ chọn) -->
-            <div t-if="o.move_line_ids" style="margin-top:6px; font-size:11px; color:#444;">
-              <t t-set="kg" t-value="sum(o.move_line_ids.mapped('qty_done'))"/>
-              <span t-esc="'Qty done: %s' % kg"/>
-            </div>
+                <div class="foot">
+                  <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
+                  <div><b>Trọng lượng (kg):</b> <t t-esc="('%.3f' % (o.weight or 0.0))"/></div>
+                </div>
+              </div>
+            </t>
           </div>
         </t>
       </t>
+
     </t>
   </template>
 </odoo>
