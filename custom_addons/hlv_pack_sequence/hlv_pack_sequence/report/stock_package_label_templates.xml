@@ -54,29 +54,15 @@
             </div>
 
             <!-- Người nhận -->
-           
+            <div t-if="o.partner_id" style="margin-top:8px; font-size:12px;">
+              <div style="font-weight:600;" t-esc="o.partner_id.display_name"/>
+              <div t-esc="o.partner_id.contact_address"/>
+            </div>
 
             <!-- Tổng Qty Done (tuỳ chọn) -->
             <div t-if="o.move_line_ids" style="margin-top:6px; font-size:11px; color:#444;">
               <t t-set="kg" t-value="sum(o.move_line_ids.mapped('qty_done'))"/>
               <span t-esc="'Qty done: %s' % kg"/>
-            </div>
-       <!-- Người gửi -->
-            <div class="line"><b>Người gửi:</b> <span class="fw-700" t-esc="o.company_id.name or ''"/></div>
-            <div class="line" t-if="o.company_id.phone"><b>Điện thoại:</b> <span t-esc="o.company_id.phone"/></div>
-
-            <!-- Người nhận -->
-            <div class="addr">
-              <div class="line"><b>Người nhận:</b> <span class="fw-700" t-esc="o.partner_id.name or ''"/></div>
-              <div class="line" t-if="o.partner_id.phone"><b>Điện thoại:</b> <span t-esc="o.partner_id.phone"/></div>
-              <div class="line" t-if="o.partner_id.contact_address"><span t-esc="o.partner_id.contact_address"/></div>
-            </div>
-             <div class="footer">
-              <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
-              <div>
-                <b>Trọng lượng (kg):</b>
-                <t t-esc="('%.3f' % (o.weight or 0.0))"/>
-              </div>
             </div>
           </div>
         </t>
