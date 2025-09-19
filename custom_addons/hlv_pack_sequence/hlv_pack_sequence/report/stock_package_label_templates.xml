@@ -59,13 +59,19 @@
         /* sequence ở trên cùng, cách hàng 2 cột một chút */
         .seq { font-size:26px; font-weight:700; margin-bottom:8px; }
 
-        .info{
-          margin-top:10px;
-          display:grid; grid-template-columns: 1fr 1fr;
-          gap:10px 18px;
-          border:1px solid #ddd; border-radius:4px;
-          padding:8px; background:#fafafa; font-size:12px;
-        }
+
+
+
+        .info-table{
+            width:100%; border:1px solid #ddd; border-collapse:collapse;
+            margin-top:8px; font-size:12px;
+          }
+          .info-table td{
+            width:50%; vertical-align:top; padding:6px 8px;
+          }
+          .title{
+            font-weight:700; margin-bottom:3px;
+          }
         .title{ font-weight:700; margin-bottom:3px; }
 
         table.items{ width:100%; border-collapse:collapse; margin-top:10px; font-size:12px; }
@@ -119,20 +125,29 @@
               </table>
 
               <!-- Người gửi / Người nhận -->
-              <div class="info">
-                <div>
-                  <div class="title">Người gửi</div>
-                  <div><t t-esc="o.company_id.name or ''"/></div>
-                  <div t-if="o.company_id.phone">ĐT: <t t-esc="o.company_id.phone"/></div>
-                  <div t-if="o.company_id.partner_id"><t t-esc="o.company_id.partner_id.contact_address or ''"/></div>
-                </div>
-                <div>
-                  <div class="title">Người nhận</div>
-                  <div><t t-esc="o.partner_id.name or ''"/></div>
-                  <div t-if="o.partner_id.phone">ĐT: <t t-esc="o.partner_id.phone"/></div>
-                  <div t-if="o.partner_id.contact_address"><t t-esc="o.partner_id.contact_address"/></div>
-                </div>
-              </div>
+             <table class="info-table">
+                <tr>
+                  <!-- Cột trái: Người gửi -->
+                  <td>
+                    <div class="title">Người gửi</div>
+                    <div><t t-esc="o.company_id.name or ''"/></div>
+                    <div t-if="o.company_id.phone">ĐT: <t t-esc="o.company_id.phone"/></div>
+                    <div t-if="o.company_id.partner_id">
+                      <t t-esc="o.company_id.partner_id.contact_address or ''"/>
+                    </div>
+                  </td>
+
+                  <!-- Cột phải: Người nhận -->
+                  <td>
+                    <div class="title">Người nhận</div>
+                    <div><t t-esc="o.partner_id.name or ''"/></div>
+                    <div t-if="o.partner_id.phone">ĐT: <t t-esc="o.partner_id.phone"/></div>
+                    <div t-if="o.partner_id.contact_address">
+                      <t t-esc="o.partner_id.contact_address"/>
+                    </div>
+                  </td>
+                </tr>
+              </table>
 
               <!-- Bảng sản phẩm -->
               <table class="items" t-if="lines">
