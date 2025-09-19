@@ -103,9 +103,17 @@
                 </div>
 
                 <!-- Phải: QR của Source (absolute URL => không còn ô trắng) -->
-                <div class="qrcode">
-                  <img t-att-src="BASE_IMG + '/report/barcode/?type=QR&amp;value=' + qrval + '&amp;width=96&amp;height=96'"/>
-                </div>
+              <div class="qrcode">
+                <t t-if="o.origin">
+                  <span t-field="o.origin"
+                        t-options='{"widget":"barcode","type":"QR","width":90,"height":90,"displayValue":False}'/>
+                </t>
+                <t t-else="">
+                  <span t-field="o.name"
+                        t-options='{"widget":"barcode","type":"QR","width":90,"height":90,"displayValue":False}'/>
+                </t>
+              </div>
+
               </div>
 
               <!-- Người gửi / Người nhận -->
