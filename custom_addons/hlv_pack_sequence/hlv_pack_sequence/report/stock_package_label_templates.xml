@@ -28,18 +28,19 @@
         /* Header: trái = seq+source, giữa = barcode pack, phải = QR source */
         .top{
           display:grid;
-          grid-template-columns: auto 1fr auto; /* barcode nằm cột giữa */
+          grid-template-columns: auto 1fr auto; /* trái = seq+source, giữa = barcode pack, phải = QR */
           column-gap:16px;
           align-items:center;
         }
         .seq{ font-size:28px; font-weight:700; line-height:1; }
         .muted{ color:#666; font-size:12px; }
-
         .barcode-center{
-          justify-self:center; /* đẩy barcode vào giữa thật sự */
-          display:flex; flex-direction:column; align-items:center; gap:4px;
-          max-width:100%;
-        }
+            justify-self:center;
+            display:flex; flex-direction:column; align-items:center; gap:4px;
+            max-width:100%;
+            min-width:0;           /* QUAN TRỌNG: cho phép co, không đẩy QR rớt hàng */
+            overflow:hidden;       /* tránh tràn nội dung */
+          }
 
 
         .codes-row{
@@ -48,14 +49,17 @@
             justify-content:center; 
             gap:20px;
           }
-          .barcode-center{
+
+        .barcode-center{
             display:flex; 
             flex-direction:column; 
             align-items:center;
           }
-          .qrcode{ margin-left:auto; }  /* đẩy QR sang phải */
 
 
+        .barcode-center .caption{ font-size:12px; font-weight:700; word-break:break-all; }
+
+        .qrcode{ justify-self:end; }  /* ép QR dính mép phải */
         /* Info box */
         .info{
           display:grid; grid-template-columns: 1fr 1fr; gap:8px 18px; margin-top:10px;
@@ -91,28 +95,30 @@
               <!-- HEADER -->
               <div class="top">
                 <!-- Trái: số thứ tự và Source -->
-                <div>
-                  <div class="seq"><t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/></div>
-                  <div class="muted">Source: <t t-esc="(o.origin or o.name)"/></div>
+               <div>
+                <div class="seq">
+                  <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
                 </div>
+                <div class="muted">Source: <t t-esc="(o.origin or o.name)"/></div>
+              </div>
 
                 <!-- Giữa: BARCODE mã kiện + caption tên kiện -->
-               <div class="codes-row">
-                  <div class="barcode-center">
-                    <span t-field="pack.name"
-                          t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
-                    <div class="caption" t-esc="pack.name"/>
-                  </div>
-                  <div class="qrcode">
-                    <t t-if="o.origin">
-                      <span t-field="o.origin"
-                            t-options='{"widget":"barcode","type":"QR","displayValue":False,"width":90,"height":90,"quiet":1}'/>
-                    </t>
-                    <t t-else="">
-                      <span t-field="o.name"
-                            t-options='{"widget":"barcode","type":"QR","displayValue":False,"width":90,"height":90,"quiet":1}'/>
-                    </t>
-                  </div>
+                <div class="barcode-center">
+                  <span t-field="pack.name"
+                        t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
+                  <div class="caption" t-esc="pack.name"/>
+                </div>
+
+                <!-- Cột phải: QR của SOURCE (o.origin ưu tiên, rỗng thì o.name) -->
+                <div class="qrcode">
+                  <t t-if="o.origin">
+                    <span t-field="o.origin"
+                          t-options='{"widget":"barcode","type":"QR","displayValue":False,"width":96,"height":96,"quiet":1}'/>
+                  </t>
+                  <t t-else="">
+                    <span t-field="o.name"
+                          t-options='{"widget":"barcode","type":"QR","displayValue":False,"width":96,"height":96,"quiet":1}'/>
+                  </t>
                 </div>
 
 
