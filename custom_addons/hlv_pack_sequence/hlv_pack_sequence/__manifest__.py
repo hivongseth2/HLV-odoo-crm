@@ -6,7 +6,7 @@
     "author": "ChatGPT",
     "website": "https://example.com",
     "license": "LGPL-3",
-    "depends": ["stock"],
+    "depends": ["stock","barcodes"],
     "data": [
         "report/report_actions.xml",
         "report/stock_package_label_templates.xml",
