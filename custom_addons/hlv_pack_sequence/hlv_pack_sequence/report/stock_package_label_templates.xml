@@ -4,11 +4,13 @@
     <t t-call="web.html_container">
     <t t-call="web.report_layout">
 
+      <!-- Base URL cho font / QR image route -->
       <t t-set="BASE"
          t-value="(web_base_url or env['ir.config_parameter'].sudo().get_param('report.url')
                    or env['ir.config_parameter'].sudo().get_param('web.base.url') or '')"/>
 
       <style type="text/css">
+        /* Font tiếng Việt an toàn */
         @font-face{
           font-family:"VNFont";
           src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
@@ -25,35 +27,25 @@
         .sheet{ padding:16px 12px 22px 12px; page-break-after: always; }
         .label{ border:1px solid #111; border-radius:6px; padding:12px 14px; box-shadow:0 0 0 1px #111 inset; }
 
-        /* Header: trái = seq+source, giữa = barcode pack, phải = QR source */
-        .top{
-          display:grid;
-          grid-template-columns: auto 1fr auto;
-          column-gap:16px;
-          align-items:center;
-          grid-auto-rows:minmax(0,auto);
-        }
-        .seq{ font-size:28px; font-weight:700; line-height:1; }
-        .muted{ color:#666; font-size:12px; }
-
-        /* Giữa: barcode pack luôn ở giữa và KHÔNG đẩy rớt cột phải */
-        .barcode-center{
-          justify-self:center;
+        /* HEADER dùng FLEX: trái = seq+source, giữa = barcode pack (center), phải = QR (fixed) */
+        .top{ display:flex; align-items:center; gap:16px; }
+        .left{ flex:0 0 auto; }
+        .mid{
+          flex:1 1 0;
           display:flex; flex-direction:column; align-items:center; gap:4px;
-          max-width:100%;
-          min-width:0;               /* QUAN TRỌNG: cho phép co */
+          min-width:0;               /* cho phép co, không đẩy QR rớt hàng */
           overflow:hidden;
         }
-        /* khống chế kích thước barcode pack */
-        .barcode-center img, .barcode-center svg{
+        .mid img, .mid svg{
           max-width:520px; width:100%;
-          height:80px; object-fit:contain;
+          height:80px; object-fit:contain; display:block;
         }
-        .barcode-center .caption{ font-size:12px; font-weight:700; word-break:break-all; text-align:center; }
-
-        /* QR cố định bên phải */
-        .qrcode{ justify-self:end; }
+        .caption{ font-size:12px; font-weight:700; word-break:break-all; text-align:center; }
+        .qrcode{ flex:0 0 auto; margin-left:auto; }
         .qrcode img{ width:96px; height:96px; display:block; }
+
+        .seq{ font-size:28px; font-weight:700; line-height:1; }
+        .muted{ color:#666; font-size:12px; }
 
         /* Info box */
         .info{
@@ -80,34 +72,39 @@
 
         <!-- Mỗi pack = 1 trang -->
         <t t-foreach="packs" t-as="pack">
+
+          <!-- Dữ liệu: line trong kiện, tổng SL, trọng lượng -->
           <t t-set="lines" t-value="[ml for ml in o.move_line_ids if ml.result_package_id and ml.result_package_id.id == pack.id]"/>
           <t t-set="qty"   t-value="sum([l.qty_done for l in lines])"/>
           <t t-set="w"     t-value="(pack.shipping_weight or pack.weight or 0.0)"/>
-          <!-- Source text + encode cho QR route -->
+
+          <!-- Source + absolute QR URL (wkhtmltopdf cần URL tuyệt đối) -->
           <t t-set="src" t-value="(o.origin or o.name)"/>
-          <t t-set="qr"  t-value="(src or '').replace('&amp;','%26').replace(' ','%20').replace('#','%23').replace('/','%2F').replace('+','%2B').replace('?','%3F')"/>
+          <t t-set="qrval"
+             t-value="(src or '').replace('&amp;','%26').replace(' ','%20').replace('#','%23').replace('/','%2F').replace('+','%2B').replace('?','%3F')"/>
+          <t t-set="BASE_IMG" t-value="(env['ir.config_parameter'].sudo().get_param('report.url') or web_base_url or '')"/>
 
           <div class="sheet hlv">
             <div class="label">
 
               <!-- HEADER -->
               <div class="top">
-                <!-- Trái: số thứ tự + source (text) -->
-                <div>
+                <!-- Trái: số thứ tự + Source (text) -->
+                <div class="left">
                   <div class="seq"><t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/></div>
                   <div class="muted">Source: <t t-esc="src"/></div>
                 </div>
 
                 <!-- Giữa: BARCODE mã kiện + caption tên pack -->
-                <div class="barcode-center">
+                <div class="mid">
                   <span t-field="pack.name"
                         t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
                   <div class="caption" t-esc="pack.name"/>
                 </div>
 
-                <!-- Phải: QR mã đơn nguồn (DÙNG ROUTE IMG ⇒ chắc chắn là QR) -->
+                <!-- Phải: QR của Source (absolute URL => không còn ô trắng) -->
                 <div class="qrcode">
-                  <img t-att-src="'/report/barcode/?type=QR&amp;value='+qr+'&amp;width=96&amp;height=96'"/>
+                  <img t-att-src="BASE_IMG + '/report/barcode/?type=QR&amp;value=' + qrval + '&amp;width=96&amp;height=96'"/>
                 </div>
               </div>
 
@@ -127,7 +124,7 @@
                 </div>
               </div>
 
-              <!-- Bảng sản phẩm của kiện -->
+              <!-- Bảng sản phẩm trong kiện -->
               <table class="items" t-if="lines">
                 <thead><tr><th>Sản phẩm</th><th class="qty">Số lượng</th></tr></thead>
                 <tbody>
@@ -141,6 +138,7 @@
                 <tfoot><tr><td>Tổng</td><td class="qty"><t t-esc="qty"/></td></tr></tfoot>
               </table>
 
+              <!-- Footer -->
               <div class="foot">
                 <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
                 <div><b>Trọng lượng kiện (kg):</b> <t t-esc="('%.3f' % w)"/></div>
