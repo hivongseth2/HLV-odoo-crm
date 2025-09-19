@@ -108,7 +108,10 @@
                   <div class="title">Người gửi</div>
                   <div><t t-esc="o.company_id.name or ''"/></div>
                   <div class="muted" t-if="o.company_id.phone">ĐT: <t t-esc="o.company_id.phone"/></div>
-                  <div class="muted" t-if="o.company_id.contact_address"><t t-esc="o.company_id.contact_address"/></div>
+                  <!-- <div class="muted" t-if="o.company_id.contact_address"><t t-esc="o.company_id.contact_address"/></div> -->
+                  <div class="muted" t-if="o.company_id.partner_id">
+                    <t t-esc="o.company_id.partner_id.contact_address or ''"/>
+                  </div>
                 </div>
                 <div>
                   <div class="title">Người nhận</div>
@@ -184,7 +187,9 @@
                     <div class="title">Người gửi</div>
                     <div><t t-esc="o.company_id.name or ''"/></div>
                     <div class="muted" t-if="o.company_id.phone">ĐT: <t t-esc="o.company_id.phone"/></div>
-                    <div class="muted" t-if="o.company_id.contact_address"><t t-esc="o.company_id.contact_address"/></div>
+                    <div class="muted" t-if="o.company_id.partner_id">
+                      <t t-esc="o.company_id.partner_id.contact_address or ''"/>
+                    </div>
                   </div>
                   <div>
                     <div class="title">Người nhận</div>
