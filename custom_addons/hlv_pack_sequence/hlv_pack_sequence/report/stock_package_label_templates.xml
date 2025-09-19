@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- Delivery Order labels: 2 packages per page, pro layout -->
+  <!-- Delivery Order labels: 2 packages per page, pro layout
+       - Barcode = mã kiện (pack.name), có caption tên kiện phía dưới
+       - QR = mã đơn nguồn (o.origin, fallback o.name) nằm bên phải
+       - Bảng sản phẩm + tổng SL, trọng lượng của từng kiện
+       - Dùng cả web.html_container và web.report_layout như bạn yêu cầu -->
   <template id="report_package_label_document">
-    < t-call="web.html_container">
+    <t t-call="web.html_container">
+    <t t-call="web.report_layout">
 
-      <!-- Base URL cho font (nếu cần). Có thể bỏ nếu bạn đã nhúng base64 -->
+      <!-- Base URL cho font (nếu dùng file ttf) -->
       <t t-set="BASE"
          t-value="(web_base_url or env['ir.config_parameter'].sudo().get_param('report.url')
                    or env['ir.config_parameter'].sudo().get_param('web.base.url') or '')"/>
@@ -35,9 +40,10 @@
           display:grid; grid-template-columns: 1fr auto auto; column-gap:14px; align-items:center;
         }
         .seq{ font-size:28px; font-weight:700; line-height:1; }
-        .codes{ display:flex; align-items:center; gap:10px; }
+        .muted{ color:#666; }
         .code128, .qrcode{ display:block; }
-        .qrcode span{ display:inline-block; } /* fix inline spacing */
+        .code128{ margin:0; } /* sát caption tên kiện */
+        .pack-caption{ font-size:12px; font-weight:700; text-align:center; }
 
         /* Box thông tin gửi/nhận */
         .info{
@@ -46,7 +52,6 @@
           background:#fafafa;
         }
         .title{ font-weight:700; margin-bottom:3px; }
-        .muted{ color:#666; }
 
         /* Bảng sản phẩm */
         table.items{ width:100%; border-collapse:collapse; margin-top:8px; font-size:12px; }
@@ -77,28 +82,31 @@
             <t t-set="qty1"   t-value="sum([l.qty_done for l in lines1])"/>
             <t t-set="w1"     t-value="(p1.shipping_weight or p1.weight or 0.0)"/>
             <t t-set="src1"   t-value="(o.origin or o.name)"/>
+            <!-- encode URL cho QR (escape các ký tự nhạy cảm) -->
+            <t t-set="qr1"    t-value="(src1 or '').replace(' ', '%20').replace('&', '%26').replace('#','%23').replace('/','%2F').replace('+','%2B').replace('?','%3F')"/>
 
             <div class="label">
               <!-- Header -->
               <div class="top">
+                <!-- cụm số thứ tự + source -->
                 <div class="seq">
                   <div><t t-esc="('%s/%s' % (p1.pack_sequence or 0, p1.pack_total or total))"/></div>
                   <div class="muted" style="font-size:12px;">Source: <t t-esc="src1"/></div>
                 </div>
-                <!-- Barcode kiện (pack.name) -->
-                <div class="code128">
-                  <span t-field="p1.name"
-                        t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
+
+                <!-- barcode kiện + caption tên kiện -->
+                <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                  <span class="code128">
+                    <span t-field="p1.name"
+                          t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
+                  </span>
+                  <div class="pack-caption" t-esc="p1.name"/>
                 </div>
+
                 <!-- QR của source -->
-               <div class="qrcode">
-                  <img
-                    t-att-src="'/report/barcode/?type=QR&amp;value='
-                              + (src1 or '').replace(' ', '%20')
-                              + '&amp;width=90&amp;height=90'"/>
+                <div class="qrcode">
+                  <img t-att-src="'/report/barcode/?type=QR&amp;value=' + qr1 + '&amp;width=90&amp;height=90'"/>
                 </div>
-
-
               </div>
 
               <!-- Thông tin người gửi / người nhận -->
@@ -107,7 +115,6 @@
                   <div class="title">Người gửi</div>
                   <div><t t-esc="o.company_id.name or ''"/></div>
                   <div class="muted" t-if="o.company_id.phone">ĐT: <t t-esc="o.company_id.phone"/></div>
-                  <!-- <div class="muted" t-if="o.company_id.contact_address"><t t-esc="o.company_id.contact_address"/></div> -->
                   <div class="muted" t-if="o.company_id.partner_id">
                     <t t-esc="o.company_id.partner_id.contact_address or ''"/>
                   </div>
@@ -123,26 +130,18 @@
               <!-- Bảng sản phẩm trong kiện -->
               <table class="items" t-if="lines1">
                 <thead>
-                  <tr>
-                    <th>Sản phẩm</th>
-                    <th class="qty">Số lượng</th>
-                  </tr>
+                  <tr><th>Sản phẩm</th><th class="qty">Số lượng</th></tr>
                 </thead>
                 <tbody>
                   <t t-foreach="lines1" t-as="ml">
                     <tr>
                       <td><t t-esc="ml.product_id.display_name"/></td>
-                      <td class="qty">
-                        <t t-esc="ml.qty_done"/> <t t-esc="ml.product_uom_id.name"/>
-                      </td>
+                      <td class="qty"><t t-esc="ml.qty_done"/> <t t-esc="ml.product_uom_id.name"/></td>
                     </tr>
                   </t>
                 </tbody>
                 <tfoot>
-                  <tr>
-                    <td>Tổng</td>
-                    <td class="qty"><t t-esc="qty1"/></td>
-                  </tr>
+                  <tr><td>Tổng</td><td class="qty"><t t-esc="qty1"/></td></tr>
                 </tfoot>
               </table>
 
@@ -160,6 +159,7 @@
               <t t-set="qty2"   t-value="sum([l.qty_done for l in lines2])"/>
               <t t-set="w2"     t-value="(p2.shipping_weight or p2.weight or 0.0)"/>
               <t t-set="src2"   t-value="(o.origin or o.name)"/>
+              <t t-set="qr2"    t-value="(src2 or '').replace(' ', '%20').replace('&', '%26').replace('#','%23').replace('/','%2F').replace('+','%2B').replace('?','%3F')"/>
 
               <div class="label">
                 <div class="top">
@@ -167,18 +167,18 @@
                     <div><t t-esc="('%s/%s' % (p2.pack_sequence or 0, p2.pack_total or total))"/></div>
                     <div class="muted" style="font-size:12px;">Source: <t t-esc="src2"/></div>
                   </div>
-                  <div class="code128">
-                    <span t-field="p2.name"
-                          t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
+
+                  <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+                    <span class="code128">
+                      <span t-field="p2.name"
+                            t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
+                    </span>
+                    <div class="pack-caption" t-esc="p2.name"/>
                   </div>
-                <div class="qrcode">
-                  <img
-                    t-att-src="'/report/barcode/?type=QR&amp;value='
-                              + (src2 or '').replace(' ', '%20')
-                              + '&amp;width=90&amp;height=90'"/>
-                </div>
 
-
+                  <div class="qrcode">
+                    <img t-att-src="'/report/barcode/?type=QR&amp;value=' + qr2 + '&amp;width=90&amp;height=90'"/>
+                  </div>
                 </div>
 
                 <div class="info">
@@ -206,9 +206,7 @@
                     <t t-foreach="lines2" t-as="ml">
                       <tr>
                         <td><t t-esc="ml.product_id.display_name"/></td>
-                        <td class="qty">
-                          <t t-esc="ml.qty_done"/> <t t-esc="ml.product_uom_id.name"/>
-                        </td>
+                        <td class="qty"><t t-esc="ml.qty_done"/> <t t-esc="ml.product_uom_id.name"/></td>
                       </tr>
                     </t>
                   </tbody>
@@ -228,7 +226,7 @@
         </t>
       </t>
 
-    
+    </t>
     </t>
   </template>
 </odoo>
