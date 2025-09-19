@@ -1,72 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- In nhãn cho 1 Delivery Order: mỗi kiện (stock.quant.package) = 1 trang -->
   <template id="report_package_label_document">
     <t t-call="web.html_container">
 
-      <!-- Lấy URL tuyệt đối để wkhtmltopdf tải font -->
-      <t t-set="BASE"
-         t-value="(env['ir.config_parameter'].sudo().get_param('report.url')
-                   or env['ir.config_parameter'].sudo().get_param('web.base.url')
-                   or '')"/>
-
-      <!-- Ép font có hỗ trợ tiếng Việt (Times New Roman bạn đã bỏ vào static/fonts) -->
       <style type="text/css">
-        @font-face{
-          font-family: "TNRVN";
-          src: url("<t t-esc='BASE'/>/hlv_pack_sequence/hlv_pack_sequence/static/fonts/times-new-roman.ttf") format("truetype");
-          font-weight: 400;
-          font-style: normal;
-        }
-        @font-face{
-          font-family: "TNRVN";
-          src: url("<t t-esc='BASE'/>/hlv_pack_sequence/hlv_pack_sequence/static/fonts/times-new-roman-bold.ttf") format("truetype");
-          font-weight: 700;
-          font-style: normal;
-        }
-        .hlv-label { font-family: "TNRVN", sans-serif !important; }
+        .hlv-label { font-family:"DejaVu Sans",sans-serif !important; }
+        .hlv-label .header { display:flex; justify-content:space-between; align-items:flex-start; }
+        .hlv-label .big-seq { font-size:32px; font-weight:700; }
+        .hlv-label .barcode { margin:6px 0; }
+        .hlv-label .addr { margin-top:10px; font-size:14px; font-weight:600; }
+        .hlv-label .addr div { margin-bottom:2px; }
+        .hlv-label .footer { margin-top:12px; font-size:12px; }
       </style>
 
-      <!-- docs = recordset stock.picking -->
       <t t-foreach="docs" t-as="o">
         <t t-set="packs" t-value="o.package_ids.sorted('id')"/>
         <t t-set="total" t-value="len(packs)"/>
 
         <t t-foreach="packs" t-as="pack">
           <div class="page hlv-label">
-            <!-- X/Y -->
-            <div style="font-size:26px; font-weight:800; margin-bottom:6px;">
-              <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
+            
+            <!-- Header: số kiện & barcode đơn hàng -->
+            <div class="header">
+              <div class="big-seq">
+                <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
+              </div>
+              <div class="barcode">
+                <span t-field="o.name"
+                      t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
+              </div>
             </div>
 
-            <!-- Tham chiếu -->
-            <div style="font-size:12px; color:#444; margin-bottom:2px;">
-              <span style="opacity:.8;">Picking:</span><span t-esc="o.name"/>
-            </div>
-            <div t-if="o.origin" style="font-size:12px; color:#444; margin-bottom:6px;">
-              <span style="opacity:.8;">Source:</span><span t-esc="o.origin"/>
-            </div>
-
-            <!-- Barcode theo tên kiện -->
-            <div style="margin:6px 0 4px 0;">
-              <span t-field="pack.name"
-                    t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
+            <!-- Người gửi -->
+            <div style="font-size:12px; margin-top:6px;">
+              <div><b>Người gửi:</b> <t t-esc="o.company_id.name or ''"/></div>
+              <div t-if="o.company_id.phone"><b>Điện thoại:</b> <t t-esc="o.company_id.phone"/></div>
             </div>
 
             <!-- Người nhận -->
-            <div t-if="o.partner_id" style="margin-top:8px; font-size:12px;">
-              <div style="font-weight:600;" t-esc="o.partner_id.display_name"/>
-              <div t-esc="o.partner_id.contact_address"/>
+            <div class="addr">
+              <div><b>Người nhận:</b> <t t-esc="o.partner_id.name or ''"/></div>
+              <div t-if="o.partner_id.phone"><b>Điện thoại:</b> <t t-esc="o.partner_id.phone"/></div>
+              <div t-if="o.partner_id.street"><t t-esc="o.partner_id.contact_address"/></div>
             </div>
 
-            <!-- Tổng Qty Done (tuỳ chọn) -->
-            <div t-if="o.move_line_ids" style="margin-top:6px; font-size:11px; color:#444;">
-              <t t-set="kg" t-value="sum(o.move_line_ids.mapped('qty_done'))"/>
-              <span t-esc="'Qty done: %s' % kg"/>
+            <!-- Footer: dịch vụ + trọng lượng -->
+            <div class="footer">
+              <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
+              <div><b>Trọng lượng (kg):</b> 
+                <t t-esc="('%.3f' % (o.weight or 0.0))"/>
+              </div>
             </div>
+
           </div>
         </t>
       </t>
+
     </t>
   </template>
 </odoo>
