@@ -40,9 +40,21 @@
           display:flex; flex-direction:column; align-items:center; gap:4px;
           max-width:100%;
         }
-        .barcode-center .caption{ font-size:12px; font-weight:700; word-break:break-all; }
 
-        .qrcode{ justify-self:end; }
+
+        .codes-row{
+            display:flex; 
+            align-items:center; 
+            justify-content:center; 
+            gap:20px;
+          }
+          .barcode-center{
+            display:flex; 
+            flex-direction:column; 
+            align-items:center;
+          }
+          .qrcode{ margin-left:auto; }  /* đẩy QR sang phải */
+
 
         /* Info box */
         .info{
@@ -85,23 +97,25 @@
                 </div>
 
                 <!-- Giữa: BARCODE mã kiện + caption tên kiện -->
-                <div class="barcode-center">
-                  <span t-field="pack.name"
-                        t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
-                  <div class="caption" t-esc="pack.name"/>
+               <div class="codes-row">
+                  <div class="barcode-center">
+                    <span t-field="pack.name"
+                          t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
+                    <div class="caption" t-esc="pack.name"/>
+                  </div>
+                  <div class="qrcode">
+                    <t t-if="o.origin">
+                      <span t-field="o.origin"
+                            t-options='{"widget":"barcode","type":"QR","displayValue":False,"width":90,"height":90,"quiet":1}'/>
+                    </t>
+                    <t t-else="">
+                      <span t-field="o.name"
+                            t-options='{"widget":"barcode","type":"QR","displayValue":False,"width":90,"height":90,"quiet":1}'/>
+                    </t>
+                  </div>
                 </div>
 
-                <!-- Phải: QR mã đơn nguồn (ưu tiên origin, rỗng thì name) -->
-                <div class="qrcode">
-                  <t t-if="o.origin">
-                    <span t-field="o.origin"
-                          t-options='{"widget":"barcode","type":"QR","displayValue":False, "width":96, "height":96, "quiet":1}'/>
-                  </t>
-                  <t t-else="">
-                    <span t-field="o.name"
-                          t-options='{"widget":"barcode","type":"QR","displayValue":False, "width":96, "height":96, "quiet":1}'/>
-                  </t>
-                </div>
+
               </div>
 
               <!-- Người gửi / Người nhận -->
