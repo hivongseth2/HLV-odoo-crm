@@ -28,38 +28,33 @@
         /* Header: trái = seq+source, giữa = barcode pack, phải = QR source */
         .top{
           display:grid;
-          grid-template-columns: auto 1fr auto; /* trái = seq+source, giữa = barcode pack, phải = QR */
+          grid-template-columns: auto 1fr auto;
           column-gap:16px;
           align-items:center;
+          grid-auto-rows:minmax(0,auto);
         }
         .seq{ font-size:28px; font-weight:700; line-height:1; }
         .muted{ color:#666; font-size:12px; }
+
+        /* Giữa: barcode pack luôn ở giữa và KHÔNG đẩy rớt cột phải */
         .barcode-center{
-            justify-self:center;
-            display:flex; flex-direction:column; align-items:center; gap:4px;
-            max-width:100%;
-            min-width:0;           /* QUAN TRỌNG: cho phép co, không đẩy QR rớt hàng */
-            overflow:hidden;       /* tránh tràn nội dung */
-          }
+          justify-self:center;
+          display:flex; flex-direction:column; align-items:center; gap:4px;
+          max-width:100%;
+          min-width:0;               /* QUAN TRỌNG: cho phép co */
+          overflow:hidden;
+        }
+        /* khống chế kích thước barcode pack */
+        .barcode-center img, .barcode-center svg{
+          max-width:520px; width:100%;
+          height:80px; object-fit:contain;
+        }
+        .barcode-center .caption{ font-size:12px; font-weight:700; word-break:break-all; text-align:center; }
 
+        /* QR cố định bên phải */
+        .qrcode{ justify-self:end; }
+        .qrcode img{ width:96px; height:96px; display:block; }
 
-        .codes-row{
-            display:flex; 
-            align-items:center; 
-            justify-content:center; 
-            gap:20px;
-          }
-
-        .barcode-center{
-            display:flex; 
-            flex-direction:column; 
-            align-items:center;
-          }
-
-
-        .barcode-center .caption{ font-size:12px; font-weight:700; word-break:break-all; }
-
-        .qrcode{ justify-self:end; }  /* ép QR dính mép phải */
         /* Info box */
         .info{
           display:grid; grid-template-columns: 1fr 1fr; gap:8px 18px; margin-top:10px;
@@ -88,40 +83,32 @@
           <t t-set="lines" t-value="[ml for ml in o.move_line_ids if ml.result_package_id and ml.result_package_id.id == pack.id]"/>
           <t t-set="qty"   t-value="sum([l.qty_done for l in lines])"/>
           <t t-set="w"     t-value="(pack.shipping_weight or pack.weight or 0.0)"/>
+          <!-- Source text + encode cho QR route -->
+          <t t-set="src" t-value="(o.origin or o.name)"/>
+          <t t-set="qr"  t-value="(src or '').replace('&amp;','%26').replace(' ','%20').replace('#','%23').replace('/','%2F').replace('+','%2B').replace('?','%3F')"/>
 
           <div class="sheet hlv">
             <div class="label">
 
               <!-- HEADER -->
               <div class="top">
-                <!-- Trái: số thứ tự và Source -->
-               <div>
-                <div class="seq">
-                  <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
+                <!-- Trái: số thứ tự + source (text) -->
+                <div>
+                  <div class="seq"><t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/></div>
+                  <div class="muted">Source: <t t-esc="src"/></div>
                 </div>
-                <div class="muted">Source: <t t-esc="(o.origin or o.name)"/></div>
-              </div>
 
-                <!-- Giữa: BARCODE mã kiện + caption tên kiện -->
+                <!-- Giữa: BARCODE mã kiện + caption tên pack -->
                 <div class="barcode-center">
                   <span t-field="pack.name"
                         t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
                   <div class="caption" t-esc="pack.name"/>
                 </div>
 
-                <!-- Cột phải: QR của SOURCE (o.origin ưu tiên, rỗng thì o.name) -->
+                <!-- Phải: QR mã đơn nguồn (DÙNG ROUTE IMG ⇒ chắc chắn là QR) -->
                 <div class="qrcode">
-                  <t t-if="o.origin">
-                    <span t-field="o.origin"
-                          t-options='{"widget":"barcode","type":"QR","displayValue":False,"width":96,"height":96,"quiet":1}'/>
-                  </t>
-                  <t t-else="">
-                    <span t-field="o.name"
-                          t-options='{"widget":"barcode","type":"QR","displayValue":False,"width":96,"height":96,"quiet":1}'/>
-                  </t>
+                  <img t-att-src="'/report/barcode/?type=QR&amp;value='+qr+'&amp;width=96&amp;height=96'"/>
                 </div>
-
-
               </div>
 
               <!-- Người gửi / Người nhận -->
@@ -154,7 +141,6 @@
                 <tfoot><tr><td>Tổng</td><td class="qty"><t t-esc="qty"/></td></tr></tfoot>
               </table>
 
-              <!-- Footer -->
               <div class="foot">
                 <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
                 <div><b>Trọng lượng kiện (kg):</b> <t t-esc="('%.3f' % w)"/></div>
