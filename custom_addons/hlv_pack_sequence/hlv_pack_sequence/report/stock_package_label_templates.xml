@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- Delivery Order labels: 2 packages per page -->
+  <!-- Delivery Order labels: 2 packages per page, pro layout -->
   <template id="report_package_label_document">
     <t t-call="web.html_container">
     <t t-call="web.report_layout">
 
-      <!-- Base URL cho wkhtmltopdf tải font -->
+      <!-- Base URL cho font (nếu cần). Có thể bỏ nếu bạn đã nhúng base64 -->
       <t t-set="BASE"
          t-value="(web_base_url or env['ir.config_parameter'].sudo().get_param('report.url')
                    or env['ir.config_parameter'].sudo().get_param('web.base.url') or '')"/>
 
       <style type="text/css">
+        /* Font tiếng Việt an toàn */
         @font-face{
           font-family:"VNFont";
           src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
@@ -21,18 +22,45 @@
           src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
           font-weight:700; font-style:normal;
         }
-        .hlv, .hlv *{ font-family:"VNFont", sans-serif !important; }
-        .sheet{ display:flex; gap:20px; padding:16px 12px 24px 12px; page-break-after: always; }
-        .label{ flex:1 0 0; padding:6px 8px; }
-        .hdr{ display:flex; justify-content:space-between; align-items:flex-start; }
-        .seq{ font-size:30px; font-weight:700; }
-        .bc{ margin:4px 0 6px 0; }
-        .line{ font-size:12px; color:#222; margin:2px 0; }
-        .addr{ margin-top:6px; }
-        .foot{ margin-top:10px; font-size:12px; }
-        .items{ margin-top:6px; font-size:12px; }
-        .items .row{ display:flex; justify-content:space-between; }
+        .hlv, .hlv *{ font-family:"VNFont", Arial, sans-serif !important; }
+
+        /* Trang chứa 2 nhãn */
+        .sheet{ display:flex; gap:18px; padding:14px 10px 22px 10px; page-break-after: always; }
+        .label{
+          flex:1 0 0; border:1px solid #111; border-radius:6px; padding:10px 12px;
+          box-shadow: 0 0 0 1px #111 inset;
+        }
+
+        /* Header nhãn */
+        .top{
+          display:grid; grid-template-columns: 1fr auto auto; column-gap:14px; align-items:center;
+        }
+        .seq{ font-size:28px; font-weight:700; line-height:1; }
+        .codes{ display:flex; align-items:center; gap:10px; }
+        .code128, .qrcode{ display:block; }
+        .qrcode span{ display:inline-block; } /* fix inline spacing */
+
+        /* Box thông tin gửi/nhận */
+        .info{
+          display:grid; grid-template-columns: 1fr 1fr; gap:8px 18px; margin-top:8px;
+          border:1px solid #ddd; border-radius:4px; padding:8px;
+          background:#fafafa;
+        }
+        .title{ font-weight:700; margin-bottom:3px; }
         .muted{ color:#666; }
+
+        /* Bảng sản phẩm */
+        table.items{ width:100%; border-collapse:collapse; margin-top:8px; font-size:12px; }
+        .items th, .items td{ border:1px solid #111; padding:4px 6px; vertical-align:top; }
+        .items th{ background:#f0f0f0; font-weight:700; text-align:left; }
+        .items td.qty, .items th.qty{ width:22%; text-align:right; white-space:nowrap; }
+        .items tfoot td{ font-weight:700; }
+
+        /* Footer nhãn */
+        .foot{
+          display:flex; justify-content:space-between; gap:10px; margin-top:8px; font-size:12px;
+          border-top:1px dashed #aaa; padding-top:6px;
+        }
       </style>
 
       <!-- docs = stock.picking -->
@@ -40,98 +68,142 @@
         <t t-set="packs" t-value="o.package_ids.sorted('id')"/>
         <t t-set="total" t-value="len(packs)"/>
 
-        <!-- i = 0,2,4,... mỗi vòng = 1 trang chứa 2 kiện -->
+        <!-- i = 0,2,4,... mỗi vòng = 1 trang chứa 2 nhãn -->
         <t t-foreach="range(0, total, 2)" t-as="i">
           <div class="sheet hlv">
-            <!-- ===== Nhãn bên trái ===== -->
+
+            <!-- ===== Nhãn trái ===== -->
             <t t-set="p1" t-value="packs[i]"/>
-            <!-- move lines thuộc kiện p1 -->
             <t t-set="lines1" t-value="[ml for ml in o.move_line_ids if ml.result_package_id and ml.result_package_id.id == p1.id]"/>
             <t t-set="qty1"   t-value="sum([l.qty_done for l in lines1])"/>
             <t t-set="w1"     t-value="(p1.shipping_weight or p1.weight or 0.0)"/>
+            <t t-set="src1"   t-value="(o.origin or o.name)"/>
 
             <div class="label">
-              <div class="hdr">
-                <div>
-                  <div class="seq"><t t-esc="('%s/%s' % (p1.pack_sequence or 0, p1.pack_total or total))"/></div>
-                  <div class="muted" t-if="o.origin">Source: <t t-esc="o.origin"/></div>
+              <!-- Header -->
+              <div class="top">
+                <div class="seq">
+                  <div><t t-esc="('%s/%s' % (p1.pack_sequence or 0, p1.pack_total or total))"/></div>
+                  <div class="muted" style="font-size:12px;">Source: <t t-esc="src1"/></div>
                 </div>
-                <div class="bc">
-                  <!-- barcode số đơn (picking) -->
-                  <span t-field="o.name"
+                <!-- Barcode kiện (pack.name) -->
+                <div class="code128">
+                  <span t-field="p1.name"
                         t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
                 </div>
-              </div>
-
-              <div class="line"><b>Người gửi:</b> <span t-esc="o.company_id.name or ''"/></div>
-              <div class="line" t-if="o.company_id.phone"><b>Điện thoại:</b> <span t-esc="o.company_id.phone"/></div>
-
-              <div class="addr">
-                <div class="line"><b>Người nhận:</b> <span style="font-weight:700;" t-esc="o.partner_id.name or ''"/></div>
-                <div class="line" t-if="o.partner_id.phone"><b>Điện thoại:</b> <span t-esc="o.partner_id.phone"/></div>
-                <div class="line" t-if="o.partner_id.contact_address"><span t-esc="o.partner_id.contact_address"/></div>
-              </div>
-
-              <!-- Danh sách SP trong kiện + tổng SL -->
-              <div class="items" t-if="lines1">
-                <div class="row muted"><span>Sản phẩm</span><span>SL</span></div>
-                <t t-foreach="lines1" t-as="ml">
-                  <div class="row">
-                    <span t-esc="ml.product_id.display_name"/>
-                    <span><t t-esc="ml.qty_done"/> <t t-esc="ml.product_uom_id.name"/></span>
-                  </div>
-                </t>
-                <div class="row" style="font-weight:700; border-top:1px solid #ddd; margin-top:4px; padding-top:2px;">
-                  <span>Tổng</span><span><t t-esc="qty1"/></span>
+                <!-- QR của source -->
+                <div class="qrcode">
+                  <span t-field="src1"
+                        t-options='{"widget":"barcode","type":"QR","displayValue":False,"quiet":1}'/>
                 </div>
               </div>
 
+              <!-- Thông tin người gửi / người nhận -->
+              <div class="info">
+                <div>
+                  <div class="title">Người gửi</div>
+                  <div><t t-esc="o.company_id.name or ''"/></div>
+                  <div class="muted" t-if="o.company_id.phone">ĐT: <t t-esc="o.company_id.phone"/></div>
+                  <div class="muted" t-if="o.company_id.contact_address"><t t-esc="o.company_id.contact_address"/></div>
+                </div>
+                <div>
+                  <div class="title">Người nhận</div>
+                  <div><t t-esc="o.partner_id.name or ''"/></div>
+                  <div class="muted" t-if="o.partner_id.phone">ĐT: <t t-esc="o.partner_id.phone"/></div>
+                  <div class="muted" t-if="o.partner_id.contact_address"><t t-esc="o.partner_id.contact_address"/></div>
+                </div>
+              </div>
+
+              <!-- Bảng sản phẩm trong kiện -->
+              <table class="items" t-if="lines1">
+                <thead>
+                  <tr>
+                    <th>Sản phẩm</th>
+                    <th class="qty">Số lượng</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <t t-foreach="lines1" t-as="ml">
+                    <tr>
+                      <td><t t-esc="ml.product_id.display_name"/></td>
+                      <td class="qty">
+                        <t t-esc="ml.qty_done"/> <t t-esc="ml.product_uom_id.name"/>
+                      </td>
+                    </tr>
+                  </t>
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td>Tổng</td>
+                    <td class="qty"><t t-esc="qty1"/></td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              <!-- Footer -->
               <div class="foot">
                 <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
                 <div><b>Trọng lượng kiện (kg):</b> <t t-esc="('%.3f' % w1)"/></div>
               </div>
             </div>
 
-            <!-- ===== Nhãn bên phải (nếu còn kiện) ===== -->
+            <!-- ===== Nhãn phải (nếu còn) ===== -->
             <t t-if="i + 1 &lt; total">
               <t t-set="p2" t-value="packs[i+1]"/>
               <t t-set="lines2" t-value="[ml for ml in o.move_line_ids if ml.result_package_id and ml.result_package_id.id == p2.id]"/>
               <t t-set="qty2"   t-value="sum([l.qty_done for l in lines2])"/>
               <t t-set="w2"     t-value="(p2.shipping_weight or p2.weight or 0.0)"/>
+              <t t-set="src2"   t-value="(o.origin or o.name)"/>
 
               <div class="label">
-                <div class="hdr">
-                  <div>
-                    <div class="seq"><t t-esc="('%s/%s' % (p2.pack_sequence or 0, p2.pack_total or total))"/></div>
-                    <div class="muted" t-if="o.origin">Source: <t t-esc="o.origin"/></div>
+                <div class="top">
+                  <div class="seq">
+                    <div><t t-esc="('%s/%s' % (p2.pack_sequence or 0, p2.pack_total or total))"/></div>
+                    <div class="muted" style="font-size:12px;">Source: <t t-esc="src2"/></div>
                   </div>
-                  <div class="bc">
-                    <span t-field="o.name"
+                  <div class="code128">
+                    <span t-field="p2.name"
                           t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
                   </div>
-                </div>
-
-                <div class="line"><b>Người gửi:</b> <span t-esc="o.company_id.name or ''"/></div>
-                <div class="line" t-if="o.company_id.phone"><b>Điện thoại:</b> <span t-esc="o.company_id.phone"/></div>
-
-                <div class="addr">
-                  <div class="line"><b>Người nhận:</b> <span style="font-weight:700;" t-esc="o.partner_id.name or ''"/></div>
-                  <div class="line" t-if="o.partner_id.phone"><b>Điện thoại:</b> <span t-esc="o.partner_id.phone"/></div>
-                  <div class="line" t-if="o.partner_id.contact_address"><span t-esc="o.partner_id.contact_address"/></div>
-                </div>
-
-                <div class="items" t-if="lines2">
-                  <div class="row muted"><span>Sản phẩm</span><span>SL</span></div>
-                  <t t-foreach="lines2" t-as="ml">
-                    <div class="row">
-                      <span t-esc="ml.product_id.display_name"/>
-                      <span><t t-esc="ml.qty_done"/> <t t-esc="ml.product_uom_id.name"/></span>
-                    </div>
-                  </t>
-                  <div class="row" style="font-weight:700; border-top:1px solid #ddd; margin-top:4px; padding-top:2px;">
-                    <span>Tổng</span><span><t t-esc="qty2"/></span>
+                  <div class="qrcode">
+                    <span t-field="src2"
+                          t-options='{"widget":"barcode","type":"QR","displayValue":False,"quiet":1}'/>
                   </div>
                 </div>
+
+                <div class="info">
+                  <div>
+                    <div class="title">Người gửi</div>
+                    <div><t t-esc="o.company_id.name or ''"/></div>
+                    <div class="muted" t-if="o.company_id.phone">ĐT: <t t-esc="o.company_id.phone"/></div>
+                    <div class="muted" t-if="o.company_id.contact_address"><t t-esc="o.company_id.contact_address"/></div>
+                  </div>
+                  <div>
+                    <div class="title">Người nhận</div>
+                    <div><t t-esc="o.partner_id.name or ''"/></div>
+                    <div class="muted" t-if="o.partner_id.phone">ĐT: <t t-esc="o.partner_id.phone"/></div>
+                    <div class="muted" t-if="o.partner_id.contact_address"><t t-esc="o.partner_id.contact_address"/></div>
+                  </div>
+                </div>
+
+                <table class="items" t-if="lines2">
+                  <thead>
+                    <tr><th>Sản phẩm</th><th class="qty">Số lượng</th></tr>
+                  </thead>
+                  <tbody>
+                    <t t-foreach="lines2" t-as="ml">
+                      <tr>
+                        <td><t t-esc="ml.product_id.display_name"/></td>
+                        <td class="qty">
+                          <t t-esc="ml.qty_done"/> <t t-esc="ml.product_uom_id.name"/>
+                        </td>
+                      </tr>
+                    </t>
+                  </tbody>
+                  <tfoot>
+                    <tr><td>Tổng</td><td class="qty"><t t-esc="qty2"/></td></tr>
+                  </tfoot>
+                </table>
 
                 <div class="foot">
                   <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
@@ -139,10 +211,12 @@
                 </div>
               </div>
             </t>
+
           </div>
         </t>
       </t>
-   </t>
+
+    </t>
     </t>
   </template>
 </odoo>
