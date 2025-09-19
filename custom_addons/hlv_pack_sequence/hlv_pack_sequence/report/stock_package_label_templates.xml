@@ -93,8 +93,12 @@
                 </div>
                 <!-- QR của source -->
                <div class="qrcode">
-                  <img t-att-src="'/report/barcode/?type=QR&value='+(src1 or '')+'&width=90&height=90;'"/>
+                  <img
+                    t-att-src="'/report/barcode/?type=QR&amp;value='
+                              + (src1 or '').replace(' ', '%20')
+                              + '&amp;width=90&amp;height=90'"/>
                 </div>
+
 
               </div>
 
@@ -165,9 +169,13 @@
                     <span t-field="p2.name"
                           t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
                   </div>
-                 <div class="qrcode">
-                    <img t-att-src="'/report/barcode/?type=QR&value='+(src2 or '')+'&width=90&height=90;'"/>
-                  </div>
+                <div class="qrcode">
+                  <img
+                    t-att-src="'/report/barcode/?type=QR&amp;value='
+                              + (src2 or '').replace(' ', '%20')
+                              + '&amp;width=90&amp;height=90'"/>
+                </div>
+
 
                 </div>
 
