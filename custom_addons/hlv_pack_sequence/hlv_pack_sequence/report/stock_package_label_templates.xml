@@ -4,63 +4,64 @@
   <template id="report_package_label_document">
     <t t-call="web.html_container">
 
-      <!-- URL tuyệt đối để wkhtmltopdf tải font (nếu bạn dùng URL thay vì base64) -->
+      <!-- Lấy URL tuyệt đối để wkhtmltopdf tải font -->
       <t t-set="BASE"
          t-value="(env['ir.config_parameter'].sudo().get_param('report.url')
                    or env['ir.config_parameter'].sudo().get_param('web.base.url')
                    or '')"/>
 
+      <!-- Ép font có hỗ trợ tiếng Việt (Times New Roman bạn đã bỏ vào static/fonts) -->
       <style type="text/css">
-        /* Nếu bạn dùng NotoSans/DejaVu qua URL, giữ 2 @font-face này; nếu đã dùng base64 thì bỏ đi */
         @font-face{
-          font-family:"VNFont";
-          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
-          font-weight:400; font-style:normal;
+          font-family: "TNRVN";
+          src: url("<t t-esc='BASE'/>/hlv_pack_sequence/hlv_pack_sequence/static/fonts/times-new-roman.ttf") format("truetype");
+          font-weight: 400;
+          font-style: normal;
         }
         @font-face{
-          font-family:"VNFont";
-          src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
-          font-weight:700; font-style:normal;
+          font-family: "TNRVN";
+          src: url("<t t-esc='BASE'/>/hlv_pack_sequence/hlv_pack_sequence/static/fonts/times-new-roman-bold.ttf") format("truetype");
+          font-weight: 700;
+          font-style: normal;
         }
-
-        /* Ép font + fix weight 600 → 700/400 để tránh fallback */
-        .hlv-label, .hlv-label * { font-family:"VNFont", sans-serif !important; }
-        .hlv-label b, .hlv-label strong { font-weight:700; }
-        .hlv-label .fw-700 { font-weight:700; }
-        .hlv-label .fw-400 { font-weight:400; }
-
-        /* Mỗi pack = 1 page */
-        .page { page-break-after: always; }
-
-        /* Layout gần giống mẫu */
-        .header { display:flex; justify-content:space-between; align-items:flex-start; }
-        .big-seq { font-size:32px; font-weight:700; }
-        .barcode { margin:6px 0 8px 0; }
-        .line { font-size:12px; color:#222; margin:2px 0; }
-        .addr { margin-top:8px; }
-        .footer { position: absolute; bottom: 26px; left: 26px; font-size:12px; }
+        .hlv-label { font-family: "TNRVN", sans-serif !important; }
       </style>
 
-      <!-- docs = stock.picking -->
+      <!-- docs = recordset stock.picking -->
       <t t-foreach="docs" t-as="o">
         <t t-set="packs" t-value="o.package_ids.sorted('id')"/>
         <t t-set="total" t-value="len(packs)"/>
 
         <t t-foreach="packs" t-as="pack">
-          <div class="page hlv-label" style="position:relative; padding:26px 26px 80px 26px;">
-
-            <!-- Góc trên trái: X/Y + Barcode số đơn -->
-            <div class="header">
-              <div class="big-seq">
-                <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
-              </div>
-              <div class="barcode">
-                <span t-field="o.name"
-                      t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
-              </div>
+          <div class="page hlv-label">
+            <!-- X/Y -->
+            <div style="font-size:26px; font-weight:800; margin-bottom:6px;">
+              <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
             </div>
 
-            <!-- Người gửi -->
+            <!-- Tham chiếu -->
+            <div style="font-size:12px; color:#444; margin-bottom:2px;">
+              <span style="opacity:.8;">Picking:</span><span t-esc="o.name"/>
+            </div>
+            <div t-if="o.origin" style="font-size:12px; color:#444; margin-bottom:6px;">
+              <span style="opacity:.8;">Source:</span><span t-esc="o.origin"/>
+            </div>
+
+            <!-- Barcode theo tên kiện -->
+            <div style="margin:6px 0 4px 0;">
+              <span t-field="pack.name"
+                    t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
+            </div>
+
+            <!-- Người nhận -->
+           
+
+            <!-- Tổng Qty Done (tuỳ chọn) -->
+            <div t-if="o.move_line_ids" style="margin-top:6px; font-size:11px; color:#444;">
+              <t t-set="kg" t-value="sum(o.move_line_ids.mapped('qty_done'))"/>
+              <span t-esc="'Qty done: %s' % kg"/>
+            </div>
+       <!-- Người gửi -->
             <div class="line"><b>Người gửi:</b> <span class="fw-700" t-esc="o.company_id.name or ''"/></div>
             <div class="line" t-if="o.company_id.phone"><b>Điện thoại:</b> <span t-esc="o.company_id.phone"/></div>
 
@@ -70,20 +71,16 @@
               <div class="line" t-if="o.partner_id.phone"><b>Điện thoại:</b> <span t-esc="o.partner_id.phone"/></div>
               <div class="line" t-if="o.partner_id.contact_address"><span t-esc="o.partner_id.contact_address"/></div>
             </div>
-
-            <!-- Footer: dịch vụ + trọng lượng -->
-            <div class="footer">
+             <div class="footer">
               <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
               <div>
                 <b>Trọng lượng (kg):</b>
                 <t t-esc="('%.3f' % (o.weight or 0.0))"/>
               </div>
             </div>
-
           </div>
         </t>
       </t>
-
     </t>
   </template>
 </odoo>
