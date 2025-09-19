@@ -92,10 +92,10 @@
                         t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
                 </div>
                 <!-- QR của source -->
-                <div class="qrcode">
-                  <span t-field="src1"
-                        t-options='{"widget":"barcode","type":"QR","displayValue":False,"quiet":1}'/>
+               <div class="qrcode">
+                  <img t-att-src="'/report/barcode/?type=QR&value='+(src1 or '')+'&width=90&height=90'"/>
                 </div>
+
               </div>
 
               <!-- Thông tin người gửi / người nhận -->
@@ -165,10 +165,10 @@
                     <span t-field="p2.name"
                           t-options='{"widget":"barcode","type":"Code128","displayValue":True,"quiet":1}'/>
                   </div>
-                  <div class="qrcode">
-                    <span t-field="src2"
-                          t-options='{"widget":"barcode","type":"QR","displayValue":False,"quiet":1}'/>
+                 <div class="qrcode">
+                    <img t-att-src="'/report/barcode/?type=QR&value='+(src2 or '')+'&width=90&height=90'"/>
                   </div>
+
                 </div>
 
                 <div class="info">
