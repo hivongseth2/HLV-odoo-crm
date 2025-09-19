@@ -2,8 +2,7 @@
 <odoo>
   <!-- Delivery Order labels: 2 packages per page, pro layout -->
   <template id="report_package_label_document">
-    <t t-call="web.html_container">
-    <t t-call="web.report_layout">
+    < t-call="web.html_container">
 
       <!-- Base URL cho font (nếu cần). Có thể bỏ nếu bạn đã nhúng base64 -->
       <t t-set="BASE"
@@ -229,7 +228,7 @@
         </t>
       </t>
 
-    </t>
+    
     </t>
   </template>
 </odoo>
