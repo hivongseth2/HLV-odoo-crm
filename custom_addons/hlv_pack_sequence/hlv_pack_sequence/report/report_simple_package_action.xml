@@ -71,7 +71,7 @@
             height: 46mm;
             border: 0.3mm solid #111; 
             border-radius: 1.5mm; 
-            padding: 1.5mm;
+            padding: 0.5mm;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -143,10 +143,10 @@
             font-size: 2.4mm;
             font-weight: 600;
             border-top: 0.2mm dashed #aaa; 
-            padding-top: 1mm;
+            padding-top: 0.5mm;
             height: 6mm;
             align-items: center;
-            margin-top: 1mm;
+            margin-top: 0.5mm;
           }
 
           /* Đảm bảo mỗi page là 1 trang, loại bỏ trang trống */
