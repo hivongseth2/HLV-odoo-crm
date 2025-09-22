@@ -51,7 +51,7 @@
 
           /* Mỗi page = 1 trang riêng, kích thước chính xác 100x50mm */
           .page { 
-            padding: 1mm !important; 
+            padding: 0 !important; 
             margin: 0 !important;
             width: 100mm !important;
             height: 50mm !important;
@@ -67,8 +67,8 @@
 
           /* Container label chiếm hết không gian */
           .label{ 
-            width: 96mm;
-            height: 46mm;
+            width: 98mm;
+            height: 48mm;
             border: 0.3mm solid #111; 
             border-radius: 1.5mm; 
             padding: 0.5mm;
@@ -99,8 +99,8 @@
             text-align: center;
             padding: 0;
           }
-          .col-barcode{ width: 65%; padding-right: 1.5mm; }
-          .col-qr{ width: 35%; padding-left: 1.5mm; }
+          .col-barcode{ width: 65%; padding-right: 1mm; }
+          .col-qr{ width: 35%; padding-left: 1mm; }
 
           /* Barcode - tăng kích thước */
           .barcode-pack{ 
