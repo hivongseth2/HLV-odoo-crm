@@ -1,99 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- 1) Paperformat: Nhãn 100x50 mm -->
+
+  <!-- 1) Paperformat: 100 (ngang) x 50 (dọc) mm -->
   <record id="paperformat_simple_package_label" model="report.paperformat">
     <field name="name">Label 100x50</field>
-    <field name="format">custom</field>           <!-- dùng khổ tùy chỉnh -->
-    <field name="page_width">100</field>           <!-- mm -->
-    <field name="page_height">50</field>         <!-- mm -->
-    <field name="orientation">Landscape</field>
-    <field name="margin_top">2</field>
-    <field name="margin_bottom">2</field>
-    <field name="margin_left">2</field>
-    <field name="margin_right">2</field>
-    <field name="disable_shrinking">True</field>  <!-- hạn chế co HTML -->
+    <field name="format">custom</field>
+    <field name="page_width">100</field>    <!-- mm: ngang -->
+    <field name="page_height">50</field>    <!-- mm: dọc -->
+    <field name="orientation">Portrait</field> <!-- Portrait: dọc; Landscape: ngang -->
+    <field name="margin_top">1</field>
+    <field name="margin_bottom">1</field>
+    <field name="margin_left">1</field>
+    <field name="margin_right">1</field>
+    <field name="disable_shrinking">True</field>
   </record>
 
-  <!-- 2) Report Action: gán paperformat_id -->
+  <!-- 2) Report Action: trỏ tới template và gán paperformat -->
   <record id="action_report_simple_package_labels" model="ir.actions.report">
     <field name="name">Simple Package Labels</field>
     <field name="model">stock.picking</field>
     <field name="report_type">qweb-pdf</field>
-    <!-- Phải trùng external-id của template QWeb -->
     <field name="report_name">hlv_pack_sequence.report_simple_package_label_document</field>
-    <field name="print_report_name">'Simple Package Labels - %s' % (object.name)</field>
+    <field name="print_report_name">'Simple Package Labels - %s' % (object.name or "Picking")</field>
 
     <field name="binding_model_id" ref="stock.model_stock_picking"/>
     <field name="binding_type">report</field>
 
-    <!-- Gán khổ giấy tuỳ chỉnh -->
     <field name="paperformat_id" ref="hlv_pack_sequence.paperformat_simple_package_label"/>
   </record>
 
-  <!-- Template QWeb -->
+  <!-- 3) Template QWeb -->
   <template id="report_simple_package_label_document">
     <t t-call="web.html_container">
       <t t-call="web.report_layout">
 
         <style type="text/css">
+          /* Font: dùng đường dẫn tĩnh module (không dùng BASE) */
           @font-face{
             font-family:"VNFont";
-            src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
+            src:url("/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
             font-weight:400; font-style:normal;
           }
           @font-face{
             font-family:"VNFont";
-            src:url("<t t-esc='BASE'/>/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
+            src:url("/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
             font-weight:700; font-style:normal;
           }
           .hlv, .hlv *{ font-family:"VNFont", Arial, sans-serif !important; }
 
-          .sheet{ padding:16px 12px 22px 12px; page-break-after:always; }
-          .label{ border:1px solid #111; border-radius:6px; padding:12px 14px; }
-          .seq{ font-size:26px; font-weight:700; margin-bottom:8px; }
+          /* Odoo coi mỗi .page là 1 trang (không dùng page-break tùy biến) */
+          .page { padding: 4mm 4mm 4mm 4mm; }
+
+          .label{ border:0.3mm solid #111; border-radius:2mm; padding:3mm; }
+          .seq{ font-size:8mm; font-weight:700; margin-bottom:2mm; line-height:1; }
 
           .codes-table{ width:100%; border-collapse:collapse; table-layout:fixed; }
           .codes-table td{ vertical-align:top; text-align:center; }
-          .col-barcode{ width:70%; padding:4px; }
-          .col-qr{ width:30%; padding:4px; }
+          .col-barcode{ width:70%; padding-right:2mm; }
+          .col-qr{ width:30%; padding-left:2mm; }
 
           .barcode-pack{ width:100%; display:flex; justify-content:center; }
-          .barcode-pack svg, .barcode-pack img{ width:100%; max-width:560px; height:84px; display:block; }
+          /* Chiều cao barcode để vừa 50mm tổng thể */
+          .barcode-pack svg, .barcode-pack img{ width:100%; height:18mm; display:block; }
 
-          .qr img{ width:110px; height:110px; display:block; }
+          .qr img{ width:22mm; height:22mm; display:block; margin:0 auto; }
 
-          .caption{ margin-top:4px; font-size:12px; font-weight:700; text-align:center; word-break:break-word; }
+          .caption{ margin-top:1mm; font-size:3.2mm; font-weight:700; text-align:center; word-break:break-word; }
 
           .foot{
-            display:flex; justify-content:space-between; margin-top:10px; font-size:12px;
-            border-top:1px dashed #aaa; padding-top:6px;
+            display:flex; justify-content:space-between; margin-top:2mm; font-size:3.2mm;
+            border-top:0.2mm dashed #aaa; padding-top:1.2mm;
           }
         </style>
 
-        <!-- docs = recordset stock.picking -->
+        <!-- docs = stock.picking recordset -->
         <t t-foreach="docs" t-as="o">
           <t t-set="packs" t-value="o.package_ids.sorted('id')"/>
           <t t-set="total" t-value="len(packs)"/>
 
-          <!-- Mỗi pack = 1 trang -->
+          <!-- Mỗi package = 1 TRANG -->
           <t t-foreach="packs" t-as="pack">
             <t t-set="lines" t-value="[ml for ml in o.move_line_ids if ml.result_package_id and ml.result_package_id.id == pack.id]"/>
             <t t-set="qty"   t-value="sum([l.qty_done for l in lines])"/>
             <t t-set="w"     t-value="(pack.shipping_weight or pack.weight or 0.0)"/>
             <t t-set="src"   t-value="(o.origin or o.name)"/>
 
-            <div class="sheet hlv">
+            <div class="page hlv">
               <div class="label">
 
-                <!-- Sequence -->
+                <!-- Sequence  (VD: 1/2) -->
                 <div class="seq">
                   <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
                 </div>
 
-                <!-- Hàng trên: barcode + QR -->
+                <!-- Hàng trên: barcode (trái) + QR (phải) -->
                 <table class="codes-table">
                   <tr>
-                    <!-- Cột trái: barcode pack -->
                     <td class="col-barcode">
                       <div class="barcode-pack">
                         <span t-field="pack.name"
@@ -102,8 +104,8 @@
                       <div class="caption"><t t-esc="pack.name"/></div>
                     </td>
 
-                    <!-- Cột phải: QR source -->
                     <td class="col-qr">
+                      <!-- QR từ endpoint mặc định; width/height theo pixel, đã cân chỉnh bằng CSS -->
                       <img t-att-src="o._qr_data_uri(src, 4, 2)"/>
                       <div class="caption"><t t-esc="src"/></div>
                     </td>
@@ -116,12 +118,14 @@
                   <div><b>Trọng lượng kiện (kg):</b> <t t-esc="('%.3f' % w)"/></div>
                 </div>
 
-              </div> <!-- /.label -->
-            </div> <!-- /.sheet -->
-          </t> <!-- end foreach pack -->
-        </t> <!-- end foreach docs -->
+              </div>
+            </div>
 
-      </t> <!-- end report_layout -->
-    </t>   <!-- end html_container -->
+          </t>
+        </t>
+
+      </t>
+    </t>
   </template>
+
 </odoo>
