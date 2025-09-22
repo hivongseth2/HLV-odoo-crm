@@ -6,7 +6,7 @@
         <field name="format">custom</field>
         <field name="page_width">100</field>
         <field name="page_height">50</field>
-        <field name="orientation">landscape</field>
+        <field name="orientation">portrait</field>
         <field name="margin_top">0</field>
         <field name="margin_bottom">0</field>
         <field name="margin_left">0</field>
