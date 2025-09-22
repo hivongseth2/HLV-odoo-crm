@@ -62,13 +62,6 @@
                 display: block;
                 }
 
-
-                flex-direction: column;
-                justify-content: space-between;
-                page-break-inside: avoid !important;
-                box-sizing: border-box; /* tính cả border + padding trong width/height */
-                }
-
                 .seq{ font-size: 9mm; font-weight: 900;}
 
 
@@ -92,7 +85,9 @@
                 
                 .foot{
                 display:flex; justify-content:space-between; align-items:center;
-                font-size: 2.4mm; font-weight:600;               
+                font-size: 2.4mm; font-weight:600;
+                padding-top: 3mm;
+                padding-left: 2mm;          
                 }
             </style>
             <!-- docs = stock.picking recordset -->
@@ -106,7 +101,7 @@
                     <t t-set="src" t-value="(o.origin or o.name)"/>
                     <div class="page hlv">
                             <!-- Header: 1/2, 2/2 ... -->
-                            <div class="seq">
+                            <div style="font-size: 4mm; font-weight: 900; padding-left: 2mm;">
                                 <b><t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/></b>
                             </div>
                             <!-- Vùng Barcode + QR -->
