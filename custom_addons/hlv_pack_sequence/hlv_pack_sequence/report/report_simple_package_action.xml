@@ -1,161 +1,153 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!-- Paperformat: 100 (ngang) x 50 (dọc) mm, không co giãn, không viền -->
+    <record id="paperformat_simple_package_label" model="report.paperformat">
+        <field name="name">Label 100x50</field>
+        <field name="format">custom</field>
+        <!-- Khai báo 50 x 100 + Landscape => ra 100 (ngang) x 50 (dọc) thật -->
+        <field name="page_width">50</field>
+        <field name="page_height">100</field>
+        <field name="orientation">Landscape</field>
 
-  <!-- Paperformat: 100 (ngang) x 50 (dọc) mm, không co giãn, không viền -->
-  <record id="paperformat_simple_package_label" model="report.paperformat">
-    <field name="name">Label 100x50</field>
-    <field name="format">custom</field>
-    <field name="page_width">100</field>
-    <field name="page_height">50</field>
-    <field name="orientation">Portrait</field>
-    <field name="margin_top">0</field>
-    <field name="margin_bottom">0</field>
-    <field name="margin_left">0</field>
-    <field name="margin_right">0</field>
-    <field name="disable_shrinking">True</field>
-  </record>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">0</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="disable_shrinking">True</field>
+    </record>
 
-  <!-- Report Action -->
-  <record id="action_report_simple_package_labels" model="ir.actions.report">
-    <field name="name">Simple Package Labels</field>
-    <field name="model">stock.picking</field>
-    <field name="report_type">qweb-pdf</field>
-    <field name="report_name">hlv_pack_sequence.report_simple_package_label_document</field>
-    <field name="print_report_name">'Simple Package Labels - %s' % (object.name or "Picking")</field>
-    <field name="binding_model_id" ref="stock.model_stock_picking"/>
-    <field name="binding_type">report</field>
-    <field name="paperformat_id" ref="hlv_pack_sequence.paperformat_simple_package_label"/>
-  </record>
 
-  <!-- QWeb template -->
-  <template id="report_simple_package_label_document">
-    <!-- Dùng basic_layout để không có header/footer/margins -->
-    <t t-call="web.basic_layout">
+    <!-- Report Action -->
+    <record id="action_report_simple_package_labels" model="ir.actions.report">
+        <field name="name">Simple Package Labels</field>
+        <field name="model">stock.picking</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hlv_pack_sequence.report_simple_package_label_document</field>
+        <field name="print_report_name">'Simple Package Labels - %s' % (object.name or "Picking")</field>
+        <field name="binding_model_id" ref="stock.model_stock_picking" />
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="hlv_pack_sequence.paperformat_simple_package_label" />
+    </record>
 
-      <style type="text/css">
-        @font-face{
-          font-family:"VNFont";
-          src:url("/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
-          font-weight:400; font-style:normal;
-        }
-        @font-face{
-          font-family:"VNFont";
-          src:url("/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
-          font-weight:700; font-style:normal;
-        }
+    <!-- QWeb template -->
+    <template id="report_simple_package_label_document">
+        <!-- Dùng basic_layout để không có header/footer/margins -->
+        <t t-call="web.basic_layout">
+            <style>
+                @font-face{ font-family:"VNFont";
+                src:url("/hlv_pack_sequence/static/fonts/NotoSans-Regular.ttf") format("truetype");
+                font-weight:400; font-style:normal; }
+                @font-face{ font-family:"VNFont";
+                src:url("/hlv_pack_sequence/static/fonts/NotoSans-Bold.ttf") format("truetype");
+                font-weight:700; font-style:normal; }
 
-        /* RÀNG BUỘC KHỔ TRANG CHÍNH XÁC */
-        @page { size: 100mm 50mm; margin: 0; }
+                /* Xóa mọi padding/margin mặc định của layout */
+                html, body, .o_report_layout, .o_report_layout .article{
+                margin:0 !important; padding:0 !important;
+                }
 
-        html, body, .o_report_layout, .o_report_layout .article {
-          margin: 0 !important; padding: 0 !important;
-        }
+                .hlv, .hlv *{ font-family:"VNFont", Arial, sans-serif !important;
+                box-sizing:border-box; margin:0; padding:0; }
 
-        .hlv, .hlv *{
-          font-family:"VNFont", Arial, sans-serif !important;
-          box-sizing: border-box;
-        }
+                /* Mỗi package = 1 TRANG đúng 100×50mm theo paperformat */
+                .page{
+                width:100mm !important; /* chỉ để nhìn cho rõ, engine lấy theo paperformat */
+                height:50mm !important;
+                page-break-inside:avoid !important;
+                page-break-after:always !important;
+                overflow:hidden !important;
+                display:block;
+                }
+                .page:last-child{ page-break-after:avoid !important; }
 
-        /* Mỗi package = 1 trang */
-        .page{
-          width: 100mm !important;
-          height: 50mm !important;
-          overflow: hidden !important;
-          page-break-inside: avoid !important;
-          page-break-after: always !important;
-          display: block;
-        }
-        .page:last-child{ page-break-after: avoid !important; }
+                /* Khung nhãn chiếm trọn, không để dôi */
+                .label{
+                /* dùng border-box nên kích thước đã gồm padding + border */
+                width:100mm; height:50mm;
+                border:0.3mm solid #111; border-radius:1.5mm;
+                padding:1mm;
+                display:flex; flex-direction:column; justify-content:space-between;
+                }
 
-        /* Khung nhãn nằm gọn trong trang (chừa 1mm viền trong) */
-        .label{
-          width: 98mm; height: 48mm;
-          margin: 1mm;
-          border: 0.3mm solid #111; border-radius: 1.5mm;
-          padding: 0.5mm;
-          display: flex; flex-direction: column;
-          justify-content: space-between;
-          page-break-inside: avoid !important;
-        }
+                .seq{ font-size:5mm; font-weight:700; line-height:1; }
 
-        .seq{ font-size: 5mm; font-weight: 700; line-height: 1; height: 6mm; }
+                .codes-table{ width:100%; table-layout:fixed; border-collapse:collapse; height:28mm;
+                }
+                .codes-table td{ vertical-align:top; text-align:center; padding:0; }
+                .col-barcode{ width:65%; padding-right:1mm; }
+                .col-qr{ width:35%; padding-left:1mm; }
 
-        .codes-table{ width:100%; table-layout: fixed; border-collapse: collapse; height: 26mm; }
-        .codes-table td{ vertical-align: top; text-align: center; padding: 0; }
-        .col-barcode{ width: 65%; padding-right: 1mm; }
-        .col-qr{ width: 35%; padding-left: 1mm; }
+                .barcode-pack{ width:100%; display:flex; justify-content:center; margin-bottom:1mm;
+                }
+                .barcode-pack svg, .barcode-pack img{ width:100% !important; height:18mm !important;
+                display:block; }
 
-        /* Barcode */
-        .barcode-pack{ width:100%; display:flex; justify-content:center; margin-bottom: 1mm; }
-        .barcode-pack svg, .barcode-pack img{
-          width: 100% !important; height: 16mm !important; max-height: 16mm !important; display:block;
-        }
+                .qr{ margin-bottom:1mm; }
+                .qr img{ width:18mm; height:18mm; display:block; margin:0 auto; }
 
-        /* QR */
-        .qr{ margin-bottom: 1mm; }
-        .qr img{ width: 18mm; height: 18mm; display:block; margin:0 auto; }
+                .caption{ font-size:2.2mm; font-weight:600; line-height:1.1; max-height:5mm;
+                overflow:hidden; }
 
-        .caption{ font-size: 2.2mm; font-weight: 600; text-align:center; line-height:1.1;
-                  max-height: 5mm; overflow: hidden; }
+                .foot{ display:flex; justify-content:space-between; align-items:center;
+                font-size:2.4mm; font-weight:600; border-top:0.2mm dashed #aaa; padding-top:0.5mm; }
+            </style>
+            <!-- docs = stock.picking recordset -->
+            <t t-foreach="docs" t-as="o">
+                <t t-set="packs" t-value="o.package_ids.sorted('id')" />
+                <t t-set="total" t-value="len(packs)" />
 
-        .foot{
-          display:flex; justify-content:space-between; align-items:center;
-          font-size: 2.4mm; font-weight:600;
-          border-top: 0.2mm dashed #aaa; padding-top: 0.5mm; height: 6mm;
-        }
-      </style>
+                <!-- Mỗi package đúng 1 trang -->
+                <t t-foreach="packs" t-as="pack">
+                    <t t-set="lines"
+                        t-value="[ml for ml in o.move_line_ids if ml.result_package_id and ml.result_package_id.id == pack.id]" />
+                    <t t-set="w" t-value="(pack.shipping_weight or pack.weight or 0.0)" />
+                    <t t-set="src" t-value="(o.origin or o.name)" />
 
-      <!-- docs = stock.picking recordset -->
-      <t t-foreach="docs" t-as="o">
-        <t t-set="packs" t-value="o.package_ids.sorted('id')"/>
-        <t t-set="total" t-value="len(packs)"/>
+                    <div class="page hlv">
+                        <div class="label">
 
-        <!-- Mỗi package đúng 1 trang -->
-        <t t-foreach="packs" t-as="pack">
-          <t t-set="lines" t-value="[ml for ml in o.move_line_ids if ml.result_package_id and ml.result_package_id.id == pack.id]"/>
-          <t t-set="w"     t-value="(pack.shipping_weight or pack.weight or 0.0)"/>
-          <t t-set="src"   t-value="(o.origin or o.name)"/>
+                            <!-- Header: 1/2, 2/2 ... -->
+                            <div class="seq">
+                                <t
+                                    t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))" />
+                            </div>
 
-          <div class="page hlv">
-            <div class="label">
+                            <!-- Vùng Barcode + QR -->
+                            <table class="codes-table">
+                                <tr>
+                                    <td class="col-barcode">
+                                        <div class="barcode-pack">
+                                            <span t-field="pack.name"
+                                                t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}' />
+                                        </div>
+                                        <div class="caption">
+                                            <t t-esc="pack.name" />
+                                        </div>
+                                    </td>
+                                    <td class="col-qr">
+                                        <div class="qr">
+                                            <img t-att-src="o._qr_data_uri(src, 4, 2)" />
+                                        </div>
+                                        <div class="caption">
+                                            <t t-esc="src" />
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
 
-              <!-- Header: 1/2, 2/2 ... -->
-              <div class="seq">
-                <t t-esc="('%s/%s' % (pack.pack_sequence or 0, pack.pack_total or total))"/>
-              </div>
+                            <!-- Footer -->
+                            <div class="foot">
+                                <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
+                                <div><b>KL:</b> <t t-esc="('%.1f' % w)" />kg</div>
+                            </div>
 
-              <!-- Vùng Barcode + QR -->
-              <table class="codes-table">
-                <tr>
-                  <td class="col-barcode">
-                    <div class="barcode-pack">
-                      <span t-field="pack.name"
-                            t-options='{"widget":"barcode","type":"Code128","displayValue":False,"quiet":1}'/>
+                        </div>
                     </div>
-                    <div class="caption"><t t-esc="pack.name"/></div>
-                  </td>
-                  <td class="col-qr">
-                    <div class="qr">
-                      <img t-att-src="o._qr_data_uri(src, 4, 2)"/>
-                    </div>
-                    <div class="caption"><t t-esc="src"/></div>
-                  </td>
-                </tr>
-              </table>
 
-              <!-- Footer -->
-              <div class="foot">
-                <div><b>Dịch vụ:</b> Chuyển phát đường bộ</div>
-                <div><b>KL:</b> <t t-esc="('%.1f' % w)"/>kg</div>
-              </div>
-
-            </div>
-          </div>
+                </t>
+            </t>
 
         </t>
-      </t>
-
-    </t>
-  </template>
+    </template>
 
 </odoo>
