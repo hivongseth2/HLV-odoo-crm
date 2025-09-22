@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- 1) Paperformat: Nhãn 50x100 mm -->
+  <!-- 1) Paperformat: Nhãn 100x50 mm -->
   <record id="paperformat_simple_package_label" model="report.paperformat">
-    <field name="name">Label 50x100</field>
+    <field name="name">Label 100x50</field>
     <field name="format">custom</field>           <!-- dùng khổ tùy chỉnh -->
     <field name="page_width">100</field>           <!-- mm -->
     <field name="page_height">50</field>         <!-- mm -->
-    <field name="orientation">Portrait</field>
+    <field name="orientation">Landscape</field>
     <field name="margin_top">2</field>
     <field name="margin_bottom">2</field>
     <field name="margin_left">2</field>
