@@ -1,18 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
   <!-- Action report -->
-  <record id="action_report_simple_package_labels" model="ir.actions.report">
-    <field name="name">Simple Package Labels</field>
-    <field name="model">stock.picking</field>
-    <field name="report_type">qweb-pdf</field>
-    <field name="report_name">hlv_pack_sequence.report_simple_package_label_document</field>
-    <field name="print_report_name">'Simple Package Labels - %s' % (object.name)</field>
-    <field name="binding_model_id" ref="stock.model_stock_picking"/>
-    <field name="binding_type">report</field>
+    <record id="action_report_simple_package_labels" model="report.paperformat"> 
+    <field name="name">Simple Package Labels</field> 
+    <field name="model">stock.picking</field> 
+    <field name="report_type">qweb-pdf</field> 
+    <field name="report_name">hlv_pack_sequence.report_simple_package_label_document</field> 
+    <field name="print_report_name">'Simple Package Labels - %s' % (object.name)</field> 
+    <field name="binding_model_id" ref="stock.model_stock_picking"/> 
+    <field name="binding_type">report</field> 
     <field name="page_height">100</field>
     <field name="page_width">50</field>
-  </record>
-
+    </record>
   <!-- Template QWeb -->
   <template id="report_simple_package_label_document">
     <t t-call="web.html_container">
