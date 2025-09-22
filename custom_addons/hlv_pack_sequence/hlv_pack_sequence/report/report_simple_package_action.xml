@@ -51,7 +51,7 @@
 
           /* Mỗi page = 1 trang riêng, kích thước chính xác 100x50mm */
           .page { 
-            padding: 2mm !important; 
+            padding: 1mm !important; 
             margin: 0 !important;
             width: 100mm !important;
             height: 50mm !important;
@@ -71,7 +71,7 @@
             height: 46mm;
             border: 0.3mm solid #111; 
             border-radius: 1.5mm; 
-            padding: 2.5mm;
+            padding: 1.5mm;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -79,11 +79,11 @@
 
           /* Header: Sequence - tăng kích thước */
           .seq{ 
-            font-size: 7mm; 
+            font-size: 5mm; 
             font-weight: 700; 
             line-height: 1;
-            text-align: center;
-            height: 8mm;
+            text-align: left;
+            height: 6mm;
             margin-bottom: 1mm;
           }
 
@@ -132,7 +132,7 @@
             text-align: center; 
             word-break: break-word;
             line-height: 1.1;
-            max-height: 7mm;
+            max-height: 5mm;
             overflow: hidden;
           }
 
