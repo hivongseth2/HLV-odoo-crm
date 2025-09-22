@@ -51,102 +51,112 @@
 
           /* Mỗi page = 1 trang riêng, kích thước chính xác 100x50mm */
           .page { 
-            padding: 1.5mm !important; 
+            padding: 2mm !important; 
             margin: 0 !important;
             width: 100mm !important;
             height: 50mm !important;
             overflow: hidden;
-            page-break-after: always;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
           }
 
-          /* Container label vừa khít với trang */
+          /* Loại bỏ trang trống cuối */
+          .page:last-child {
+            page-break-after: avoid !important;
+          }
+
+          /* Container label chiếm hết không gian */
           .label{ 
-            width: 97mm;
-            height: 47mm;
-            border: 0.2mm solid #111; 
-            border-radius: 1mm; 
-            padding: 1mm;
+            width: 96mm;
+            height: 46mm;
+            border: 0.3mm solid #111; 
+            border-radius: 1.5mm; 
+            padding: 2.5mm;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
           }
 
-          /* Header: Sequence - nhỏ hơn */
+          /* Header: Sequence - tăng kích thước */
           .seq{ 
-            font-size: 4mm; 
+            font-size: 7mm; 
             font-weight: 700; 
             line-height: 1;
             text-align: center;
-            height: 5mm;
-            margin-bottom: 0.5mm;
+            height: 8mm;
+            margin-bottom: 1mm;
           }
 
-          /* Middle: Codes table - compact hơn */
+          /* Middle: Codes table - tăng kích thước */
           .codes-table{ 
             width: 100%; 
             border-collapse: collapse; 
             table-layout: fixed;
-            height: 32mm;
+            height: 26mm;
           }
           .codes-table td{ 
             vertical-align: top; 
             text-align: center;
             padding: 0;
           }
-          .col-barcode{ width: 68%; padding-right: 0.5mm; }
-          .col-qr{ width: 32%; padding-left: 0.5mm; }
+          .col-barcode{ width: 65%; padding-right: 1.5mm; }
+          .col-qr{ width: 35%; padding-left: 1.5mm; }
 
-          /* Barcode - nhỏ hơn */
+          /* Barcode - tăng kích thước */
           .barcode-pack{ 
             width: 100%; 
             display: flex; 
             justify-content: center;
-            margin-bottom: 0.3mm;
+            margin-bottom: 1mm;
           }
           .barcode-pack svg, .barcode-pack img{ 
             width: 100%; 
-            height: 14mm !important;
-            max-height: 14mm;
+            height: 16mm !important;
+            max-height: 16mm;
             display: block; 
           }
 
-          /* QR code - nhỏ hơn */
-          .qr { margin-bottom: 0.3mm; }
+          /* QR code - tăng kích thước */
+          .qr { margin-bottom: 1mm; }
           .qr img{ 
-            width: 16mm; 
-            height: 16mm; 
+            width: 18mm; 
+            height: 18mm; 
             display: block; 
             margin: 0 auto; 
           }
 
-          /* Caption - nhỏ hơn */
+          /* Caption - tăng kích thước */
           .caption{ 
-            font-size: 1.6mm; 
+            font-size: 2.2mm; 
             font-weight: 600; 
             text-align: center; 
             word-break: break-word;
-            line-height: 1;
-            max-height: 6mm;
+            line-height: 1.1;
+            max-height: 7mm;
             overflow: hidden;
           }
 
-          /* Footer - compact */
+          /* Footer - tăng kích thước */
           .foot{
             display: flex; 
             justify-content: space-between; 
-            font-size: 1.6mm;
+            font-size: 2.4mm;
             font-weight: 600;
-            border-top: 0.1mm dashed #aaa; 
-            padding-top: 0.5mm;
-            height: 4mm;
+            border-top: 0.2mm dashed #aaa; 
+            padding-top: 1mm;
+            height: 6mm;
             align-items: center;
-            margin-top: 0.5mm;
+            margin-top: 1mm;
           }
 
-          /* Đảm bảo mỗi page là 1 trang */
+          /* Đảm bảo mỗi page là 1 trang, loại bỏ trang trống */
           .page:last-child {
-            page-break-after: avoid;
+            page-break-after: avoid !important;
           }
+          
+          /* Loại bỏ page break không mong muốn */
+          body { page-break-after: avoid !important; }
+          .o_report_layout_standard { page-break-after: avoid !important; }
         </style>
 
         <!-- docs = stock.picking recordset -->
