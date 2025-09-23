@@ -604,7 +604,7 @@ class SaleOrder(models.Model):
             misa_product_id = ln.get("ProductID") or ln.get("ProductId") or None
 
             # convert qty về UoM mặc định của product
-            qty_base, _, _ = self._convert_qty_price_to_default_uom(
+            qty_base, _price_dummy, _is_default = self._convert_qty_price_to_default_uom(
                 product=product,
                 misa_uom_text=uom_name,
                 qty=qty,
@@ -680,7 +680,7 @@ class SaleOrder(models.Model):
             remain = remaining_by_product.get(prod, 0.0)
             if remain <= 0.0:
                 for mv in mv_list:
-                    # SỬA: reset move line done kéo về 0
+                    # reset move line done kéo về 0
                     if mv.move_line_ids:
                         mv.move_line_ids.write({'qty_done': 0})
                     # unreserve trước khi cancel/update
