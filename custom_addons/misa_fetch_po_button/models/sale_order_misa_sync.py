@@ -547,12 +547,130 @@ class SaleOrder(models.Model):
             'res_id': new_so.id,
             'target': 'current',
         }
+
+    def _sync_so_lines_from_misa_no_picking(self, lines, headers):
+        """
+        Đưa các dòng SO về đúng như MISA (qty/price/uom) theo UoM mặc định của product.
+        KHÔNG đụng pickings. Nếu có hoá đơn 'posted' thì KHÔNG nên gọi hàm này.
+        """
+        self.ensure_one()
+        env = self.env
+        odoo_utils = env['odoo.utils']
+        SaleLine = env['sale.order.line']
+
+        def _flt(x, dv=0.0):
+            try:
+                return float(x or 0.0)
+            except Exception:
+                return dv
+
+        # Map các dòng SO hiện tại theo default_code để cập nhật/gộp về 1 dòng/mã
+        so_lines_by_code = {}
+        for line in self.order_line:
+            code = (line.product_id and line.product_id.default_code) or ''
+            if code:
+                so_lines_by_code[code] = line
+
+        seen_codes = set()
+
+        for ln in (lines or []):
+            code = (ln.get("ProductIDText") or "").strip()
+            if not code:
+                continue
+
+            desc       = ln.get("Description") or code
+            qty        = _flt(ln.get("Amount"), 0.0)
+            price      = _flt(ln.get("Price"), 0.0)
+            discount   = _flt(ln.get("DiscountPercent"), 0.0)
+            uom_name   = (ln.get("UnitIDText") or "Cái").strip()
+            misa_pid   = ln.get("ProductID") or ln.get("ProductId")
+
+            # Lấy / tạo product đúng theo mã
+            product = odoo_utils._get_or_create_product(
+                code=code,
+                name=desc,
+                unit_name=uom_name,
+                cost=price,
+                product_type="consu",
+                purchase_ok=False,
+                sale_ok=False,
+            )
+
+            # Convert về UoM mặc định của product
+            qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(
+                product=product,
+                misa_uom_text=uom_name,
+                qty=qty,
+                price=price,
+                misa_product_id=misa_pid,
+                headers=headers,
+            )
+
+            vals_line = {
+                'name': desc,
+                'product_id': product.id,
+                'product_uom_qty': qty_base,
+                'price_unit': price_base,
+                'discount': discount,
+            }
+            if not is_default and product.uom_id:
+                vals_line['product_uom'] = product.uom_id.id
+
+            if code in so_lines_by_code:
+                so_lines_by_code[code].write(vals_line)
+            else:
+                SaleLine.create(dict(vals_line, order_id=self.id))
+
+            seen_codes.add(code)
+
+        # (tuỳ chọn) Xoá dòng không còn trong MISA
+        for code, line in so_lines_by_code.items():
+            if code not in seen_codes:
+                line.unlink()
+
+
+    def _safe_unreserve_move(self, move):
+        """Helper: Unreserve move một cách an toàn (reset qty_done, huỷ reserve)."""
+        try:
+            if move.move_line_ids:
+                # reset mọi qty_done trên line (nếu có)
+                move.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
+            if hasattr(move, '_do_unreserve'):
+                move._do_unreserve()
+            elif hasattr(move, 'do_unreserve'):
+                move.do_unreserve()
+        except Exception as exc:
+            _logger.debug("Unreserve move %s failed: %s", move.id, exc)
+
+
+    def _safe_cancel_move(self, move):
+        """Helper: Cancel move an toàn; fallback về set qty=0 nếu không cancel được."""
+        try:
+            self._safe_unreserve_move(move)
+            if move.state not in ('cancel', 'done'):
+                if hasattr(move, '_action_cancel'):
+                    move._action_cancel()
+                else:
+                    # một số bản dùng action_cancel()
+                    move.action_cancel()
+            _logger.debug("Cancelled move %s", move.id)
+        except Exception as exc:
+            _logger.warning("Cancel move %s failed: %s; fallback set qty=0", move.id, exc)
+            try:
+                move.write({'product_uom_qty': 0.0})
+            except Exception as exc2:
+                _logger.error("Fallback set qty=0 failed for move %s: %s", move.id, exc2)
+
+
     def _partial_resync_open_pickings_when_done_present(self, data, lines, headers):
         """
-        FIXED VERSION: Đồng bộ đúng nghiệp vụ
-        - Không thay đổi pickings đã done
-        - Cập nhật picking mở để tổng (done + open) = MISA yêu cầu
-        - Xử lý thêm/bớt/sửa sản phẩm theo MISA
+        Đồng bộ khi đã có ít nhất 1 picking 'done' (KHÔNG xoá/chạm picking done):
+        - (Bước 0) Đưa SO lines về đúng MISA (nếu không có invoice 'posted')
+        - (Bước 1) Tính đã giao (delivered) theo picking done
+        - (Bước 2) Tính tổng theo MISA (misa_total) theo UoM mặc định
+        - (Bước 3) Tính 'needed_in_open' = misa_total - delivered (min=0)
+        - (Bước 4..7) Cập nhật/tạo/cancel các move ở picking mở theo needed_in_open
+        Kết quả: tổng giao (done) + tổng ở picking mở = tổng theo MISA
         """
         self.ensure_one()
         env = self.env
@@ -560,110 +678,115 @@ class SaleOrder(models.Model):
 
         _logger.info("=== Bắt đầu partial resync cho SO %s ===", self.name)
 
-        # 1) Gom delivered (đã giao) theo sản phẩm từ các picking DONE
+        # --------- Bước 0: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
+        if self.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
+            _logger.warning("Bỏ qua cập nhật SO lines vì có hoá đơn 'posted'. Sẽ chỉ vá picking mở.")
+        else:
+            try:
+                self._sync_so_lines_from_misa_no_picking(lines, headers)
+            except Exception as exc:
+                _logger.warning("Không thể đồng bộ SO lines: %s (tiếp tục vá picking)", exc)
+
+        # --------- Bước 1: tổng đã giao theo picking DONE ----------
         delivered_by_product = {}
         done_picks = self.picking_ids.filtered(lambda p: p.state == 'done')
         _logger.info("Có %s picking đã DONE", len(done_picks))
-        
-        for p in done_picks:
-            _logger.debug("  DONE picking: %s", p.name)
-            for ml in p.move_line_ids:
+
+        for picking in done_picks:
+            _logger.debug("  DONE picking: %s", picking.name)
+            for ml in picking.move_line_ids:
                 prod = ml.product_id
                 if not prod:
                     continue
                 qty_delivered = float(getattr(ml, 'qty_done', 0.0) or 0.0)
                 delivered_by_product[prod] = delivered_by_product.get(prod, 0.0) + qty_delivered
-                _logger.debug("Delivered %s: +%s (tổng=%s)", prod.display_name, qty_delivered, delivered_by_product[prod])
+                _logger.debug("    Delivered %s: +%s (tổng=%s)",
+                            prod.display_name, qty_delivered, delivered_by_product[prod])
 
-        # 2) Tính MISA_TOTAL (tổng cần có trong toàn bộ moves) theo MISA
+        # --------- Bước 2: tổng theo MISA (quy về UoM mặc định) ----------
         def _flt(x, dv=0.0):
             try:
                 return float(x or 0.0)
             except Exception:
                 return dv
-        
-        misa_total_by_product = {}  # THAY ĐỔI TÊN: không phải "desired" mà là "misa_total"
+
+        misa_total_by_product = {}
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
-            description  = ln.get("Description") or product_code
-            qty          = _flt(ln.get("Amount"), 0.0)
-            uom_name     = (ln.get("UnitIDText") or "Cái").strip()
-
             if not product_code:
                 continue
 
+            desc     = ln.get("Description") or product_code
+            qty      = _flt(ln.get("Amount"), 0.0)
+            price    = _flt(ln.get("Price"), 0.0)
+            uom_name = (ln.get("UnitIDText") or "Cái").strip()
+            misa_pid = ln.get("ProductID") or ln.get("ProductId")
+
             product = odoo_utils._get_or_create_product(
                 code=product_code,
-                name=description,
+                name=desc,
                 unit_name=uom_name,
-                cost=_flt(ln.get("Price"), 0.0),
+                cost=price,
                 product_type="consu",
                 purchase_ok=False,
                 sale_ok=False,
             )
 
-            misa_product_id = ln.get("ProductID") or ln.get("ProductId") or None
-
-            # convert qty về UoM mặc định của product
-            qty_base, _price_dummy, _is_default = self._convert_qty_price_to_default_uom(
+            qty_base, price_dummy, is_default = self._convert_qty_price_to_default_uom(
                 product=product,
                 misa_uom_text=uom_name,
                 qty=qty,
-                price=_flt(0.0),
-                misa_product_id=misa_product_id,
+                price=price,
+                misa_product_id=misa_pid,
                 headers=headers,
             )
             misa_total_by_product[product] = misa_total_by_product.get(product, 0.0) + (qty_base or 0.0)
             _logger.debug("MISA Total %s: %s", product.display_name, misa_total_by_product[product])
 
-        # 3) LOGIC MỚI: Tính số lượng cần có trong các picking MỞ
-        # needed_in_open = misa_total - delivered
+        # --------- Bước 3: tính 'needed_in_open' = misa_total - delivered (min=0) ----------
         needed_in_open_by_product = {}
         all_products = set(list(misa_total_by_product.keys()) + list(delivered_by_product.keys()))
-        
         for prod in all_products:
             misa_total = misa_total_by_product.get(prod, 0.0)
             delivered = delivered_by_product.get(prod, 0.0)
-            needed_in_open = misa_total - delivered
-            
-            # QUAN TRỌNG: Có thể âm nếu đã giao quá nhiều so với MISA
-            # Trong trường hợp này, đặt về 0 (không thể "gỡ lại" hàng đã giao)
-            if needed_in_open < 0:
-                needed_in_open = 0.0
-                _logger.warning("Sản phẩm %s đã giao quá nhiều: MISA=%s, Delivered=%s", 
-                            prod.display_name, misa_total, delivered)
-            
-            needed_in_open_by_product[prod] = needed_in_open
-            _logger.info("Cần trong picking mở %s: MISA_total=%s, delivered=%s, needed_in_open=%s", 
-                        prod.display_name, misa_total, delivered, needed_in_open)
-        
-        # 4) Xử lý picking mở
+            needed = misa_total - delivered
+            if needed < 0:
+                _logger.warning("Đã giao vượt nhu cầu MISA với %s: MISA=%s, Delivered=%s; set needed=0",
+                                prod.display_name, misa_total, delivered)
+                needed = 0.0
+            needed_in_open_by_product[prod] = needed
+            _logger.info("Cần trong picking mở %s: MISA_total=%s, delivered=%s, needed_in_open=%s",
+                        prod.display_name, misa_total, delivered, needed)
+
+        # --------- Bước 4: lấy/chuẩn bị picking mở ----------
         open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
         target_pick = open_picks[:1] and open_picks[0] or False
-        _logger.info("Có %s picking đang mở, target_pick=%s", len(open_picks), target_pick and target_pick.name)
+        _logger.info("Có %s picking đang mở; target_pick=%s",
+                    len(open_picks), target_pick and target_pick.name)
 
-        # Kiểm tra có cần làm gì không
         nothing_to_ship = all(qty <= 0.0 for qty in needed_in_open_by_product.values())
+
         if not target_pick and nothing_to_ship:
             _logger.info("Không còn gì cần trong picking mở và không có picking mở")
-            self.message_post(body="Đồng bộ hoàn tất: Không cần picking mở thêm.")
+            self.message_post(body=_("Đồng bộ hoàn tất: Không cần picking mở thêm."))
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
-                'params': {'title': "Đồng bộ thành công", 'message': "Không cần picking mở thêm", 'type': 'success'},
+                'params': {'title': _("Đồng bộ thành công"), 'message': _("Không cần picking mở thêm"), 'type': 'success'},
             }
-        
-        # Tạo picking mở nếu cần
+
         if not target_pick and not nothing_to_ship:
-            _logger.info("Cần tạo picking mở mới")
+            _logger.info("Chưa có picking mở nhưng vẫn còn hàng cần giao → tạo mới")
             if self.state in ('draft', 'sent'):
                 self.action_confirm()
-            target_pick = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))[:1]
-            
+            # refresh lại open_picks sau confirm
+            open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
+            target_pick = open_picks[:1] and open_picks[0] or False
             if not target_pick:
                 picking_type = self.warehouse_id and self.warehouse_id.out_type_id
                 if not picking_type:
-                    raise UserError("Không xác định được loại phiếu giao của kho %s" % (self.warehouse_id.name or ''))
+                    raise UserError(_("Không xác định được loại phiếu giao (picking type) của kho %s")
+                                    % (self.warehouse_id.name or ''))
                 target_pick = env['stock.picking'].create({
                     'partner_id': self.partner_id.id,
                     'picking_type_id': picking_type.id,
@@ -673,64 +796,67 @@ class SaleOrder(models.Model):
                     'sale_id': self.id,
                 })
                 _logger.info("Đã tạo picking mới: %s", target_pick.name)
+            # đồng bộ biến open_picks cho các bước sau
+            open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
 
-        # 5) Gom tất cả moves mở hiện tại theo sản phẩm
-        current_open_moves_by_product = {}
-        for p in (open_picks or [target_pick]):
-            if not p:
+        # --------- Bước 5: lập chỉ mục move mở (theo product_id và fallback theo default_code) ----------
+        open_moves_by_product = {}
+        open_moves_by_code = {}
+
+        for picking in (open_picks or [target_pick]):
+            if not picking:
                 continue
-            for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
-                current_open_moves_by_product.setdefault(mv.product_id, []).append(mv)
-                _logger.debug("Current open move %s: %s qty=%s", p.name, mv.product_id.display_name, mv.product_uom_qty)
+            for mv in picking.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                # theo product (record)
+                open_moves_by_product.setdefault(mv.product_id, []).append(mv)
+                # fallback theo mã
+                code = (mv.product_id.default_code or '').strip()
+                if code:
+                    open_moves_by_code.setdefault(code, []).append(mv)
+                _logger.debug("Open move %s: %s qty=%s state=%s",
+                            picking.name, mv.product_id.display_name, mv.product_uom_qty, mv.state)
 
-        # 6) XỬ LÝ MOVES: So sánh current vs needed_in_open
+        # --------- Bước 6: cập nhật/cắt/tạo move theo needed_in_open ----------
         StockMove = env['stock.move']
 
-        # 6.1) Các sản phẩm KHÔNG CÒN trong MISA hoặc needed_in_open = 0
-        products_to_remove = []
-        for prod, mv_list in current_open_moves_by_product.items():
-            needed = needed_in_open_by_product.get(prod, 0.0)
-            if needed <= 0.0:
-                products_to_remove.append(prod)
-                _logger.info("Cancel tất cả moves của %s (needed_in_open=%s)", prod.display_name, needed)
-                
+        # 6.1: với các sản phẩm needed=0 → cancel/qty=0 tất cả move mở
+        for prod, mv_list in open_moves_by_product.items():
+            if needed_in_open_by_product.get(prod, 0.0) <= 0.0:
+                _logger.info("Huỷ/cắt các move của %s (needed=0)", prod.display_name)
                 for mv in mv_list:
                     self._safe_cancel_move(mv)
 
-        # 6.2) Các sản phẩm VẪN CÒN trong MISA: cập nhật quantity
+        # 6.2: các sản phẩm needed > 0 → cập nhật hoặc tạo move
         for prod, needed_qty in needed_in_open_by_product.items():
             if needed_qty <= 0.0:
-                continue  # Đã xử lý ở bước 6.1
+                continue
 
-            existing_moves = current_open_moves_by_product.get(prod, [])
-            # Lọc những moves chưa bị cancel
+            # Lấy các move mở hiện có theo product; nếu không thấy, fallback theo mã
+            existing_moves = open_moves_by_product.get(prod, [])
+            if not existing_moves:
+                code = (prod.default_code or '').strip()
+                if code:
+                    existing_moves = open_moves_by_code.get(code, []) or []
+
+            # Lọc chỉ move thật sự còn mở
             existing_moves = [mv for mv in existing_moves if mv.state not in ('done', 'cancel')]
-            
-            current_total_in_open = sum(mv.product_uom_qty for mv in existing_moves)
-            _logger.info("Sản phẩm %s: hiện tại trong open=%s, cần=%s", 
-                        prod.display_name, current_total_in_open, needed_qty)
 
             if existing_moves:
-                # Có moves hiện tại → gom về 1 move với quantity mới
                 main_mv = existing_moves[0]
-                
-                # Unreserve và reset move lines
                 self._safe_unreserve_move(main_mv)
-                
-                # Cập nhật quantity chính
+                # cập nhật số lượng & UoM (về UoM mặc định của product)
                 main_mv.write({
                     'product_uom_qty': needed_qty,
-                    'product_uom': prod.uom_id.id if prod.uom_id else main_mv.product_uom.id
+                    'product_uom': prod.uom_id.id if prod.uom_id else main_mv.product_uom.id,
                 })
-                _logger.info("  Cập nhật move chính %s: %s → %s", main_mv.name, current_total_in_open, needed_qty)
-                
-                # Cancel các moves thừa
+                _logger.info("Cập nhật move %s → qty=%s", main_mv.display_name, needed_qty)
+
+                # cancel các move dư
                 for extra_mv in existing_moves[1:]:
-                    _logger.info("  Cancel move thừa %s", extra_mv.name)
+                    _logger.info("Cancel move thừa %s", extra_mv.display_name)
                     self._safe_cancel_move(extra_mv)
-                    
             else:
-                # Không có moves hiện tại → tạo mới
+                # Tạo move mới
                 _logger.info("Tạo move mới cho %s với số lượng %s", prod.display_name, needed_qty)
                 move_vals = {
                     'name': prod.display_name,
@@ -741,16 +867,18 @@ class SaleOrder(models.Model):
                     'location_id': target_pick.location_id.id,
                     'location_dest_id': target_pick.location_dest_id.id,
                     'state': 'draft',
-                    'sale_line_id': False,
+                    'sale_line_id': False,  # có thể map theo SOL nếu cần
                 }
                 new_mv = StockMove.create(move_vals)
                 try:
-                    new_mv._action_confirm()
-                except Exception:
-                    if hasattr(new_mv, 'action_confirm'):
+                    if hasattr(new_mv, '_action_confirm'):
+                        new_mv._action_confirm()
+                    else:
                         new_mv.action_confirm()
+                except Exception as exc:
+                    _logger.warning("Xác nhận move mới lỗi: %s", exc)
 
-        # 7) Re-assign picking
+        # --------- Bước 7: re-assign (giữ chỗ) ----------
         if target_pick and any(qty > 0 for qty in needed_in_open_by_product.values()):
             try:
                 if target_pick.state == 'draft' and hasattr(target_pick, 'action_confirm'):
@@ -758,52 +886,26 @@ class SaleOrder(models.Model):
                 if hasattr(target_pick, 'action_assign'):
                     target_pick.action_assign()
                 _logger.info("Đã re-assign picking %s", target_pick.name)
-            except Exception as e:
-                _logger.warning("Không thể reserve lại picking %s: %s", target_pick.name, e)
+            except Exception as exc:
+                _logger.warning("Không thể reserve lại picking %s: %s", target_pick.name, exc)
 
-        # 8) Thông báo kết quả
+        # --------- Bước 8: thông báo kết quả ----------
         summary_parts = []
         for prod, needed in needed_in_open_by_product.items():
             if needed > 0:
                 summary_parts.append(f"{prod.display_name}: {needed:g}")
-        
-        summary = "Picking mở cần: " + (", ".join(summary_parts) if summary_parts else "không có gì")
+
+        summary = _("Picking mở cần: %s") % (", ".join(summary_parts) if summary_parts else _("không có gì"))
         _logger.info("Kết quả đồng bộ SO %s: %s", self.name, summary)
-        self.message_post(body=f"Đồng bộ MISA thành công. {summary}")
+        self.message_post(body=_("Đồng bộ MISA thành công. %s") % summary)
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': "Đồng bộ thành công", 
+                'title': _("Đồng bộ thành công"),
                 'message': summary,
                 'type': 'success'
             }
         }
-
-    def _safe_unreserve_move(self, move):
-        """Helper: Unreserve move một cách an toàn"""
-        try:
-            if move.move_line_ids:
-                move.move_line_ids.write({'qty_done': 0})
-            if hasattr(move, '_do_unreserve'):
-                move._do_unreserve()
-            elif hasattr(move, 'do_unreserve'):
-                move.do_unreserve()
-        except Exception as e:
-            _logger.debug("Unreserve move %s failed: %s", move.id, e)
-
-    def _safe_cancel_move(self, move):
-        """Helper: Cancel move một cách an toàn"""
-        try:
-            self._safe_unreserve_move(move)
-            if move.state not in ('cancel', 'done'):
-                move._action_cancel()
-            _logger.debug("Cancelled move %s", move.id)
-        except Exception as e:
-            _logger.warning("Cancel move %s failed: %s", move.id, e)
-            try:
-                move.write({'product_uom_qty': 0.0})
-            except Exception as e2:
-                _logger.error("Fallback set qty=0 failed for move %s: %s", move.id, e2)
 
