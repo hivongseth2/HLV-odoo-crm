@@ -395,7 +395,7 @@ class SaleApiImportWizard(models.TransientModel):
                             misa_uom_text=uom_name,
                             qty=qty,
                             price=price_unit,
-                            product_id=misa_product_id,
+                            misa_product_id=misa_product_id,
                             headers=sale_headers
                         )
                         vals_line = {

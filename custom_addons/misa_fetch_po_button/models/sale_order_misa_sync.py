@@ -482,6 +482,7 @@ class SaleOrder(models.Model):
             uom_name     = (ln.get("UnitIDText") or "Cái").strip()
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
+            # sửa purchase_ok và sale_ok True
             product = odoo_utils._get_or_create_product(
                 code=product_code,
                 name=description,
