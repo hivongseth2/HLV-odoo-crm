@@ -323,7 +323,8 @@ class SaleOrder(models.Model):
 
         # 2) Chặn các trường hợp không an toàn
         if any(p.state == 'done' for p in self.picking_ids):
-            raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
+            # raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
+            return self._partial_resync_open_pickings_when_done_present(data, lines, headers)
         if self.invoice_ids.filtered(lambda m: m.state == 'posted'):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
@@ -545,4 +546,247 @@ class SaleOrder(models.Model):
             'views': [(form_view_id, 'form')],
             'res_id': new_so.id,
             'target': 'current',
+        }
+    def _partial_resync_open_pickings_when_done_present(self, data, lines, headers):
+        """
+        Dùng khi SO đã có ít nhất một picking 'done'.
+        Mục tiêu: không xoá đơn, chỉ đồng bộ PHẦN CHƯA HOÀN THÀNH:
+        - Tính lượng còn phải giao theo MISA (sau khi trừ phần đã done).
+        - Cập nhật/đưa về 0 các move mở lệch chuẩn; bổ sung move thiếu.
+        """
+        self.ensure_one()
+        env = self.env
+        odoo_utils = env['odoo.utils']
+
+        _logger.info("=== Bắt đầu partial resync cho SO %s ===", self.name)
+
+        # 1) Gom delivered (đã giao) theo sản phẩm từ các picking DONE
+        delivered_by_product = {}
+        done_picks = self.picking_ids.filtered(lambda p: p.state == 'done')
+        for p in done_picks:
+            for ml in p.move_line_ids:
+                prod = ml.product_id
+                if not prod:
+                    continue
+                # qty_done ở UoM gốc của move line (thường là UoM của product)
+                delivered_by_product[prod] = delivered_by_product.get(prod, 0.0) + float(getattr(ml, 'qty_done', 0.0) or 0.0)
+                _logger.debug("Delivered %s: +%s (tổng=%s)", prod.display_name, getattr(ml, 'qty_done', 0.0), delivered_by_product[prod])
+
+        # 2) Tính desired theo MISA (quy về UoM mặc định của product)
+        def _flt(x, dv=0.0):
+            try:
+                return float(x or 0.0)
+            except Exception:
+                return dv
+        
+        desired_by_product = {}
+        for ln in (lines or []):
+            product_code = ln.get("ProductIDText")
+            description  = ln.get("Description") or product_code
+            qty          = _flt(ln.get("Amount"), 0.0)
+            uom_name     = (ln.get("UnitIDText") or "Cái").strip()
+
+            if not product_code:
+                # bỏ dòng không có mã sản phẩm
+                continue
+
+            # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
+            product = odoo_utils._get_or_create_product(
+                code=product_code,
+                name=description,
+                unit_name=uom_name,
+                cost=_flt(ln.get("Price"), 0.0),
+                product_type="consu",
+                purchase_ok=False,
+                sale_ok=False,
+            )
+
+            misa_product_id = ln.get("ProductID") or ln.get("ProductId") or None
+
+            # convert qty về UoM mặc định của product
+            qty_base, _, _ = self._convert_qty_price_to_default_uom(
+                product=product,
+                misa_uom_text=uom_name,
+                qty=qty,
+                price=_flt(0.0),
+                misa_product_id=misa_product_id,
+                headers=headers,
+            )
+            desired_by_product[product] = desired_by_product.get(product, 0.0) + (qty_base or 0.0)
+            _logger.debug("Desired %s: %s", product.display_name, desired_by_product[product])
+
+        # 3) Tính còn phải giao (desired - delivered); bỏ nếu <=0
+        remaining_by_product = {}
+        all_products = set(list(desired_by_product.keys()) + list(delivered_by_product.keys()))
+        for prod in all_products:
+            desired = desired_by_product.get(prod, 0.0)
+            delivered = delivered_by_product.get(prod, 0.0)
+            remain = desired - delivered
+            if remain < 0:
+                # đã giao nhiều hơn MISA yêu cầu -> giữ 0
+                remain = 0.0
+            remaining_by_product[prod] = remain
+            _logger.info("Remain %s: %s", prod.display_name, remain)
+        
+        # 4) Cập nhật các picking còn mở (không tính đã done/cancel)
+        open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
+        target_pick = open_picks[:1] and open_picks[0] or False
+
+        # nếu không còn gì để làm:
+        nothing_to_ship = all(qty <= 0.0 for qty in remaining_by_product.values())
+        if not target_pick and nothing_to_ship:
+            # không còn gì để giao + không có picking mở -> xong
+            self.message_post(body=_("Không còn gì để giao."))
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {'title': _("Đồng bộ phần còn lại thành công"), 'message': self.name, 'type': 'success'},
+            }
+        
+        # nếu không có picking mở mà vẫn còn phải giao -> tạo mới
+        if not target_pick and not nothing_to_ship:
+            # Thường confirm SO sẽ tự sinh picking; nếu SO đã confirm rồi mà không có,
+            # ta có thể tạo thủ công picking với picking_type_id của warehouse
+            if self.state in ('draft', 'sent'):
+                self.action_confirm()
+            target_pick = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))[:1]
+            if not target_pick:
+                # tạo picking trống
+                picking_type = self.warehouse_id and self.warehouse_id.out_type_id
+                if not picking_type:
+                    raise UserError(_("Không xác định được loại phiếu giao (picking type) của kho %s") % (self.warehouse_id.name or ''))
+                target_pick = env['stock.picking'].create({
+                    'partner_id': self.partner_id.id,
+                    'picking_type_id': picking_type.id,
+                    'origin': self.name,
+                    'location_id': picking_type.default_location_src_id.id,
+                    'location_dest_id': picking_type.default_location_dest_id.id,
+                    'sale_id': self.id,
+                })
+
+        # 5) Lập chỉ mục các move đang mở theo product
+        open_moves_by_product = {}
+        for p in open_picks or [target_pick]:
+            if not p:
+                continue
+            for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                open_moves_by_product.setdefault(mv.product_id, []).append(mv)
+
+        # 6) Cập nhật/cắt về 0/bổ sung move
+        StockMove = env['stock.move']
+
+        # 6.1) Đưa về 0 / huỷ các move mở mà sản phẩm KHÔNG còn trong MISA (desired=0, delivered>=0 -> remaining=0)
+        for prod, mv_list in open_moves_by_product.items():
+            remain = remaining_by_product.get(prod, 0.0)
+            if remain <= 0.0:
+                for mv in mv_list:
+                    # SỬA: reset move line done kéo về 0
+                    if mv.move_line_ids:
+                        mv.move_line_ids.write({'qty_done': 0})
+                    # unreserve trước khi cancel/update
+                    try:
+                        if hasattr(mv, '_do_unreserve'):
+                            mv._do_unreserve()
+                        elif hasattr(mv, 'do_unreserve'):
+                            mv.do_unreserve()
+                    except Exception:
+                        pass
+                    # hủy hoặc kéo product_uom_qty về 0
+                    try:
+                        if mv.state not in ('cancel', 'done'):
+                            mv._action_cancel()
+                    except Exception:
+                        # fallback: kéo về 0 nếu _action_cancel không khả dụng
+                        mv.write({'product_uom_qty': 0.0})
+
+        # 6.2) Với các sản phẩm còn phải giao (remain > 0):
+        for prod, remain in remaining_by_product.items():
+            if remain <= 0.0:
+                continue
+
+            existing_moves = open_moves_by_product.get(prod, [])
+
+            if existing_moves:
+                # gom về 1 move chính, cancel các move thừa
+                main_mv = existing_moves[0]
+                
+                # unreserve trước khi update quantity
+                try:
+                    if hasattr(main_mv, '_do_unreserve'):
+                        main_mv._do_unreserve()
+                    elif hasattr(main_mv, 'do_unreserve'):
+                        main_mv.do_unreserve()
+                except Exception:
+                    pass
+                    
+                # reset move lines về 0 trước khi update
+                if main_mv.move_line_ids:
+                    main_mv.move_line_ids.write({'qty_done': 0})
+                    
+                # cập nhật số lượng còn phải giao
+                main_mv.write({
+                    'product_uom_qty': remain,
+                    'product_uom': prod.uom_id.id if prod.uom_id else main_mv.product_uom.id
+                })
+                
+                # cancel các move thừa
+                for extra_mv in existing_moves[1:]:
+                    if extra_mv.state not in ('done', 'cancel'):
+                        try:
+                            # unreserve trước
+                            if hasattr(extra_mv, '_do_unreserve'):
+                                extra_mv._do_unreserve()
+                            # reset move lines
+                            if extra_mv.move_line_ids:
+                                extra_mv.move_line_ids.write({'qty_done': 0})
+                            # cancel
+                            extra_mv._action_cancel()
+                        except Exception:
+                            extra_mv.write({'product_uom_qty': 0.0})
+            else:
+                # chưa có -> tạo move mới vào target_pick
+                move_vals = {
+                    'name': prod.display_name,
+                    'product_id': prod.id,
+                    'product_uom_qty': remain,
+                    'product_uom': prod.uom_id.id if prod.uom_id else env.ref('uom.product_uom_unit').id,
+                    'picking_id': target_pick.id,
+                    'location_id': target_pick.location_id.id,
+                    'location_dest_id': target_pick.location_dest_id.id,
+                    'state': 'draft',
+                    'sale_line_id': False,  # SỬA: có thể link với sale line nếu cần
+                }
+                new_mv = StockMove.create(move_vals)
+                try:
+                    new_mv._action_confirm()
+                except Exception:
+                    # nếu move là version khác, dùng action confirm
+                    if hasattr(new_mv, 'action_confirm'):
+                        new_mv.action_confirm()
+
+        # 7) Re-assign/Reserve lại - chỉ assign khi có move cần thiết
+        if target_pick and any(remain > 0 for remain in remaining_by_product.values()):
+            try:
+                if target_pick.state == 'draft' and hasattr(target_pick, 'action_confirm'):
+                    target_pick.action_confirm()
+                if hasattr(target_pick, 'action_assign'):
+                    target_pick.action_assign()
+            except Exception as e:
+                _logger.warning("Không thể reserve lại picking %s: %s", target_pick.name, e)
+
+        # 8) ghi chú, thông báo
+        changed = ", ".join(
+            f"{p.display_name}: cần giao {remaining_by_product[p]:g}"
+            for p in remaining_by_product if remaining_by_product[p] > 0
+        ) or _("không còn phải giao")
+        self.message_post(body=_("Đồng bộ phần còn lại thành công. Cần giao: %s") % changed)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Đồng bộ phần còn lại thành công"),
+                'message': _("Đã cập nhật các phiếu đang mở theo dữ liệu MISA (không động vào phiếu đã hoàn tất)."),
+                'type': 'success'
+            }
         }
