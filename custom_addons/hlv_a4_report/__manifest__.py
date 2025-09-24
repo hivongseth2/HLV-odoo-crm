@@ -20,6 +20,7 @@
 
     # always loaded
     'data': [
+        'static/fonts/*',
         'report/paperformat.xml',
         'report/bbgn_a4_khongngay.xml',
     ],
