@@ -15,8 +15,6 @@
         <t t-call="web.external_layout">
             <t t-foreach="docs" t-as="o">
                 <div class="page">
-                    <t t-call="web.internal_container">
-
                         <style type="text/css">
                             .bbgn * { font-family: 'HLV-TNR', Times, 'Times New Roman', serif
                             !important; font-size: 14px; }
@@ -195,8 +193,6 @@
                                 </tr>
                             </table>
                         </div>
-
-                    </t>
                 </div>
             </t>
         </t>
