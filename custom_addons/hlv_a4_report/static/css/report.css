@@ -27,10 +27,6 @@
           font-display: swap;
         }
 
-        html, body, #wrapwrap, #wrapwrap * {
+        .o_report_layout, .o_report_layout *{
           font-family: 'HLV-TNR', 'DejaVu Sans', sans-serif !important;
-        }
-
-        .hlv-title {
-          font-weight: 700;
         }

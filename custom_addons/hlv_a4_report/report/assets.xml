@@ -1,0 +1,7 @@
+<odoo>
+  <template id="assets_hlv_a4_report" inherit_id="web.report_assets_common" name="HLV A4 Fonts">
+    <xpath expr="." position="inside">
+      <link rel="stylesheet" type="text/css" href="/hlv_a4_report/static/css/report.css"/>
+    </xpath>
+  </template>
+</odoo>
