@@ -3,11 +3,10 @@
     'name': "hlv_a4_report",
 
     'summary': """
-        Short (1 phrase/line) summary of the module's purpose, used as
-        subtitle on modules listing or apps.openerp.com""",
+        Mẫu in Biên bản A4""",
 
     'description': """
-        Long description of module's purpose
+        Module này cung cấp mẫu in Biên bản A4
     """,
 
     "author": "Your Company",
@@ -21,7 +20,7 @@
 
     # always loaded
     'data': [
-        'report/paperformat.xml'
-        'report/bbgn_a4_khongngay.xml'
+        'report/paperformat.xml',
+        'report/bbgn_a4_khongngay.xml',
     ],
 }
