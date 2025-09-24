@@ -15,10 +15,50 @@
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait" />
     </record>
 
-    <!-- Template report -->
     <template id="bbgn_a4_khongngay_doc">
         <t t-call="web.html_container">
             <t t-call="web.report_layout">
+                <style type="text/css">
+                    @font-face {
+                    font-family: 'HLV-TNR';
+                    src: url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+                    font-weight: 400;
+                    font-style: normal;
+                    font-display: swap;
+                    }
+                    @font-face {
+                    font-family: 'HLV-TNR';
+                    src: url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf')
+                    format('truetype');
+                    font-weight: 700;
+                    font-style: normal;
+                    font-display: swap;
+                    }
+                    @font-face {
+                    font-family: 'HLV-TNR';
+                    src: url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf')
+                    format('truetype');
+                    font-weight: 400;
+                    font-style: italic;
+                    font-display: swap;
+                    }
+                    @font-face {
+                    font-family: 'HLV-TNR';
+                    src: url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf')
+                    format('truetype');
+                    font-weight: 700;
+                    font-style: italic;
+                    font-display: swap;
+                    }
+
+                    html, body, .o_report_layout, .o_report_layout * {
+                    font-family: 'HLV-TNR', 'DejaVu Sans', sans-serif !important;
+                    }
+
+                    .hlv-title {
+                    font-weight: 700;
+                    }
+                </style>
 
                 <div class="page">
                     <t t-foreach="docs" t-as="o">
@@ -63,7 +103,8 @@
                             <div style="text-align:center; margin-top:-5px">
                                 <div style="font-size:20px; font-weight:800;">BIÊN BẢN BÀN GIAO</div>
 
-                                <!-- Năm tự động -->
+                                <!-- Năm tự động: ưu tiên date_done -> scheduled_date -> create_date
+                                -> năm hiện tại -->
                                 <t t-set="dt_src"
                                     t-value="o.date_done or o.scheduled_date or o.create_date" />
                                 <t t-set="year_str"
@@ -129,58 +170,94 @@
                                 style="width:100%; border-collapse:collapse; margin-top:6px; font-size:13px;">
                                 <thead>
                                     <tr>
-                                        <th style="border:1px solid #000; padding:6px; width:40px; text-align:center;">STT</th>
+                                        <th
+                                            style="border:1px solid #000; padding:6px; width:40px; text-align:center;">
+                                            STT</th>
                                         <th style="border:1px solid #000; padding:6px;">Tên hàng</th>
-                                        <th style="border:1px solid #000; padding:6px; width:120px; text-align:center;">Đơn vị tính</th>
-                                        <th style="border:1px solid #000; padding:6px; width:120px; text-align:center;">Số lượng</th>
-                                        <th style="border:1px solid #000; padding:6px; width:160px; text-align:center;">Ghi chú</th>
+                                        <th
+                                            style="border:1px solid #000; padding:6px; width:120px; text-align:center;">Đơn
+                                            vị tính</th>
+                                        <th
+                                            style="border:1px solid #000; padding:6px; width:120px; text-align:center;">Số
+                                            lượng</th>
+                                        <th
+                                            style="border:1px solid #000; padding:6px; width:160px; text-align:center;">Ghi
+                                            chú</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <t t-set="idx" t-value="0" />
                                     <t t-foreach="lines" t-as="l">
+
+                                        <!-- Tính qty_show theo yêu cầu (giữ nguyên logic bạn đang
+                                        dùng) -->
                                         <t t-set="qty_show" t-value="0.0" />
                                         <t t-if="l._name == 'stock.move'">
                                             <t t-set="qty_show" t-value="l.quantity or 0.0" />
                                         </t>
                                         <t t-elif="l._name == 'stock.move.line'">
-                                            <t t-set="qty_show" t-value="(l.move_id and l.move_id.quantity) or 0.0" />
-                                            <t t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
-                                                <t t-set="qty_show" t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)" />
+                                            <t t-set="qty_show"
+                                                t-value="(l.move_id and l.move_id.quantity) or 0.0" />
+                                            <t
+                                                t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
+                                                <t t-set="qty_show"
+                                                    t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)" />
                                             </t>
                                         </t>
 
+                                        <!-- Chỉ render khi qty_show > 0 -->
                                         <t t-if="qty_show &gt; 0">
                                             <tr>
-                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+                                                <!-- STT -->
+                                                <td
+                                                    style="border:1px solid #000; padding:6px; text-align:center;">
                                                     <t t-esc="idx + 1" />
                                                 </td>
+
+                                                <!-- Tên hàng -->
                                                 <td style="border:1px solid #000; padding:6px;">
-                                                    <span t-esc="l.product_id and l.product_id.display_name or ''" />
-                                                    <t t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
-                                                        <div style="font-size:12px; color:#444;" t-esc="l.description_picking" />
+                                                    <span
+                                                        t-esc="l.product_id and l.product_id.display_name or ''" />
+                                                    <t
+                                                        t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
+                                                        <div style="font-size:12px; color:#444;"
+                                                            t-esc="l.description_picking" />
                                                     </t>
                                                 </td>
-                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+
+                                                <!-- Đơn vị tính -->
+                                                <td
+                                                    style="border:1px solid #000; padding:6px; text-align:center;">
                                                     <t t-if="l._name == 'stock.move.line'">
-                                                        <span t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
+                                                        <span
+                                                            t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
                                                     </t>
                                                     <t t-else="">
-                                                        <span t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
+                                                        <span
+                                                            t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
                                                     </t>
                                                 </td>
-                                                <td style="border:1px solid #000; padding:6px; text-align:center;">
+
+                                                <!-- Số lượng -->
+                                                <td
+                                                    style="border:1px solid #000; padding:6px; text-align:center;">
                                                     <span t-esc="'%0.2f' % qty_show" />
                                                 </td>
+
+                                                <!-- Ghi chú -->
                                                 <td style="border:1px solid #000; padding:6px;" />
                                             </tr>
+
+                                            <!-- tăng STT sau khi in dòng -->
                                             <t t-set="idx" t-value="idx + 1" />
                                         </t>
                                     </t>
 
+                                    <!-- Không có dòng nào đủ điều kiện -->
                                     <t t-if="idx == 0">
                                         <tr>
-                                            <td colspan="5" style="border:1px solid #000; padding:8px; text-align:center; font-style:italic;">
+                                            <td colspan="5"
+                                                style="border:1px solid #000; padding:8px; text-align:center; font-style:italic;">
                                                 Không có dòng hàng.
                                             </td>
                                         </tr>
@@ -191,8 +268,10 @@
                             <!-- Chữ ký -->
                             <table style="width:100%; margin-top:24px; text-align:center;">
                                 <tr>
-                                    <td style="width:50%; font-weight:700;">ĐẠI DIỆN BÊN NHẬN<br />(Ký, họ tên)</td>
-                                    <td style="width:50%; font-weight:700;">ĐẠI DIỆN BÊN GIAO<br />(Ký, họ tên)</td>
+                                    <td style="width:50%; font-weight:700;">ĐẠI DIỆN BÊN NHẬN<br />(Ký,
+                                        họ tên)</td>
+                                    <td style="width:50%; font-weight:700;">ĐẠI DIỆN BÊN GIAO<br />(Ký,
+                                        họ tên)</td>
                                 </tr>
                                 <tr>
                                     <td style="height:100px;" />

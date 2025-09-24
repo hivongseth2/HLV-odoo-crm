@@ -20,7 +20,6 @@
 
     # always loaded
     'data': [
-        'report/assets.xml',
         'report/paperformat.xml',
         'report/bbgn_a4_khongngay.xml',
     ],
