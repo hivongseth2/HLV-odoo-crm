@@ -13,8 +13,9 @@
 
     <template id="bbgn_a4_khongngay_doc">
         <t t-call="web.external_layout">
-            <t t-foreach="docs" t-as="o">
-                <div class="page">
+            <main>
+                <t t-foreach="docs" t-as="o">
+                    <div class="page">
                         <style type="text/css">
                             .bbgn * { font-family: 'HLV-TNR', Times, 'Times New Roman', serif
                             !important; font-size: 14px; }
@@ -193,8 +194,9 @@
                                 </tr>
                             </table>
                         </div>
-                </div>
-            </t>
+                    </div>
+                </t>
+            </main>
         </t>
     </template>
 </odoo>
