@@ -10,8 +10,8 @@
     "data": [
         "report/report_actions.xml",
         "report/stock_package_label_templates.xml",
-    "report/report_single_package.xml",
-    "report/report_simple_package_action.xml",
+        "report/report_single_package.xml",
+        "report/report_simple_package_action.xml",
         "views/quant_package_button.xml"
     ],
 
