@@ -51,7 +51,7 @@
                     font-display: swap;
                     }
 
-                    html, body, #wrapwrap, #wrapwrap * {
+                    html, body, .o_report_layout, .o_report_layout * {
                     font-family: 'HLV-TNR', 'DejaVu Sans', sans-serif !important;
                     }
 
