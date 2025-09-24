@@ -23,4 +23,9 @@
         'report/paperformat.xml',
         'report/bbgn_a4_khongngay.xml',
     ],
+    "assets": {
+        "web.report_assets_common": [
+            "hlv_a4_report/static/css/report.css",
+        ],
+    },
 }

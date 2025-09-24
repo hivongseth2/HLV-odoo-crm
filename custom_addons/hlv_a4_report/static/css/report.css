@@ -1,0 +1,36 @@
+@font-face {
+          font-family: 'HLV-TNR';
+          src: url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+          font-weight: 400;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'HLV-TNR';
+          src: url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf') format('truetype');
+          font-weight: 700;
+          font-style: normal;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'HLV-TNR';
+          src: url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf') format('truetype');
+          font-weight: 400;
+          font-style: italic;
+          font-display: swap;
+        }
+        @font-face {
+          font-family: 'HLV-TNR';
+          src: url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf') format('truetype');
+          font-weight: 700;
+          font-style: italic;
+          font-display: swap;
+        }
+
+        html, body, #wrapwrap, #wrapwrap * {
+          font-family: 'HLV-TNR', 'DejaVu Sans', sans-serif !important;
+        }
+
+        .hlv-title {
+          font-weight: 700;
+        }
