@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <!-- Action PDF -->
+  <record id="action_pxk_ban_hang" model="ir.actions.report">
+    <field name="name">Phiếu xuất kho kiêm bán hàng</field>
+    <field name="model">stock.picking</field>
+    <field name="report_type">qweb-pdf</field>
+    <field name="report_name">hlv_a4_report.pxk_ban_hang_doc</field>
+    <field name="print_report_name">
+      "'PXK_BAN_HANG_%s' % (object.name or 'PICK')"
+    </field>
+    <field name="binding_model_id" ref="stock.model_stock_picking"/>
+    <field name="binding_type">report</field>
+    <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait"/>
+  </record>
+
+  <!-- (Tuỳ chọn) HTML preview để dev -->
+  <record id="action_pxk_ban_hang_html" model="ir.actions.report">
+    <field name="name">PXK Bán hàng (HTML Preview)</field>
+    <field name="model">stock.picking</field>
+    <field name="report_type">qweb-html</field>
+    <field name="report_name">hlv_a4_report.pxk_ban_hang_doc</field>
+    <field name="binding_model_id" ref="stock.model_stock_picking"/>
+    <field name="binding_type">report</field>
+  </record>
+
+  <template id="pxk_ban_hang_doc">
+    <t t-call="web.html_container">
+      <t t-call="web.report_layout">
+
+        <!-- Giữ nguyên block CSS font bạn yêu cầu -->
+        <style type="text/css">
+          @font-face {
+            font-family: 'HLV-TNR';
+            src: url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+          }
+          @font-face {
+            font-family: 'HLV-TNR';
+            src: url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf') format('truetype');
+            font-weight: 700;
+            font-style: normal;
+            font-display: swap;
+          }
+          @font-face {
+            font-family: 'HLV-TNR';
+            src: url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf') format('truetype');
+            font-weight: 400;
+            font-style: italic;
+            font-display: swap;
+          }
+          @font-face {
+            font-family: 'HLV-TNR';
+            src: url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf') format('truetype');
+            font-weight: 700;
+            font-style: italic;
+            font-display: swap;
+          }
+
+          html, body, .o_report_layout, .o_report_layout * {
+            font-family: 'HLV-TNR', 'DejaVu Sans', sans-serif !important;
+            font-size: 12px;
+          }
+          .pxk .title { font-size: 18px; font-weight: 700; text-transform: uppercase; }
+          .pxk .sub { font-style: italic; }
+          .pxk .tbl { width:100%; border-collapse: collapse; }
+          .pxk .tbl th, .pxk .tbl td { border: 1px solid #000; padding: 6px; vertical-align: top; }
+          .pxk .tbl th { text-align: center; }
+          .pxk .right { text-align: right; }
+          .pxk .center { text-align: center; }
+          .pxk .no-border td { border: none; padding: 2px 0; }
+          .pxk .mt-6 { margin-top: 6px; }
+          .pxk .mt-10 { margin-top: 10px; }
+          .pxk .mt-12 { margin-top: 12px; }
+          .pxk .note { font-size: 11px; font-style: italic; }
+          .pxk .sum td { font-weight: 700; }
+        </style>
+
+        <div class="page">
+          <t t-foreach="docs" t-as="o">
+            <div class="page pxk">
+
+              <!-- Header -->
+              <table class="no-border" style="width:100%;">
+                <tr>
+                  <td style="width: 38%; vertical-align: top;">
+                    <t t-if="o.company_id.logo">
+                      <img t-att-src="image_data_uri(o.company_id.logo)" style="max-width:220px; max-height:70px;"/>
+                    </t>
+                    <t t-else="">
+                      <strong t-esc="o.company_id.name"/>
+                    </t>
+                  </td>
+                  <td style="vertical-align: top;">
+                    <div style="font-weight:700;" t-esc="o.company_id.name"/>
+                    <div>
+                      Địa chỉ:
+                      <t t-set="addr" t-value="o.company_id.partner_id._display_address(without_company=True) or ''"/>
+                      <t t-esc="addr"/>
+                    </div>
+                    <div>
+                      Điện thoại:
+                      <t t-esc="o.company_id.phone or ''"/>
+                      &#160;&#160;Fax: <t t-esc="o.company_id.fax or ''"/>
+                    </div>
+                    <div>Email: <t t-esc="o.company_id.email or ''"/> &#160;&#160;Website: <t t-esc="o.company_id.website or ''"/></div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Tiêu đề + số phiếu / ngày -->
+              <div class="center mt-10">
+                <div class="title">PHIẾU XUẤT KHO KIÊM BÁN HÀNG</div>
+                <t t-set="dt" t-value="o.scheduled_date or o.date_done or o.create_date"/>
+                <div class="sub">
+                  (<span>Số phiếu xuất:</span> <span t-esc="o.name"/>; ngày:
+                  <t t-esc="dt and dt.strftime('%d/%m/%Y') or ''"/>)
+                </div>
+              </div>
+
+              <!-- Khối thông tin -->
+              <table class="no-border mt-12" style="width:100%;">
+                <tr>
+                  <td style="width:90px;">Khách hàng</td>
+                  <td>: <strong t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''"/></td>
+                  <td style="width:90px;">Kho xuất</td>
+                  <td>: <t t-esc="o.location_id and o.location_id.display_name or ''"/></td>
+                </tr>
+                <tr>
+                  <td>Địa chỉ</td>
+                  <td>: <t t-esc="(o.partner_id and (o.partner_id.contact_address or '')) or ''"/></td>
+                  <td>SĐT</td>
+                  <td>: <t t-esc="o.partner_id and (o.partner_id.phone or o.partner_id.mobile) or ''"/></td>
+                </tr>
+                <tr>
+                  <td>Người nhận</td>
+                  <td>: <t t-esc="o.partner_id and o.partner_id.name or ''"/></td>
+                  <td>Mã phiếu</td>
+                  <td>: <t t-esc="o.name"/></td>
+                </tr>
+              </table>
+
+              <div class="mt-10">Cảm ơn quý khách đã quan tâm sản phẩm của <t t-esc="o.company_id.name"/>.</div>
+
+              <!-- Bảng hàng -->
+              <t t-set="lines" t-value="o.move_ids_without_package or o.move_ids"/>
+              <t t-set="stt" t-value="0"/>
+              <t t-set="subtotal" t-value="0.0"/>
+              <t t-set="vat_total" t-value="0.0"/>
+
+              <table class="tbl mt-6">
+                <thead>
+                  <tr>
+                    <th style="width:35px;">STT</th>
+                    <th>Hàng hóa</th>
+                    <th style="width:60px;">ĐVT</th>
+                    <th style="width:60px;">SL</th>
+                    <th style="width:100px;">Đơn giá</th>
+                    <th style="width:110px;">Thành tiền</th>
+                    <th style="width:110px;">Kho xuất</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <t t-foreach="lines" t-as="m">
+                    <t t-set="qty" t-value="m.product_uom_qty or m.quantity_done or 0.0"/>
+                    <t t-set="uom" t-value="(m.product_uom and m.product_uom.name) or (m.product_id.uom_id and m.product_id.uom_id.name) or ''"/>
+                    <!-- Đơn giá từ SO line nếu có -->
+                    <t t-set="price_unit" t-value="(m.sale_line_id and m.sale_line_id.price_unit) or 0.0"/>
+                    <t t-set="line_amount" t-value="qty * price_unit"/>
+
+                    <!-- Tính % thuế từ sale_line_id.tax_id (chỉ loại percent) -->
+                    <t t-set="tax_rate" t-value="0.0"/>
+                    <t t-if="m.sale_line_id">
+                      <t t-foreach="m.sale_line_id.tax_id" t-as="tx">
+                        <t t-if="tx.amount_type == 'percent'">
+                          <t t-set="tax_rate" t-value="tax_rate + (tx.amount or 0.0)"/>
+                        </t>
+                      </t>
+                    </t>
+                    <t t-set="tax_amount" t-value="line_amount * tax_rate / 100.0"/>
+
+                    <!-- Cộng dồn -->
+                    <t t-set="subtotal" t-value="subtotal + line_amount"/>
+                    <t t-set="vat_total" t-value="vat_total + tax_amount"/>
+
+                    <tr>
+                      <td class="center"><t t-esc="stt + 1"/></td>
+                      <td>
+                        <strong t-esc="m.product_id.display_name or ''"/>
+                        <t t-if="m.description_picking">
+                          <div t-esc="m.description_picking"/>
+                        </t>
+                      </td>
+                      <td class="center"><t t-esc="uom"/></td>
+                      <td class="center"><t t-esc="'%0.2f' % qty"/></td>
+                      <td class="right"><t t-esc="formatLang(price_unit, monetary=True, currency_obj=o.company_id.currency_id)"/></td>
+                      <td class="right"><t t-esc="formatLang(line_amount, monetary=True, currency_obj=o.company_id.currency_id)"/></td>
+                      <td class="center"><t t-esc="m.location_id and m.location_id.display_name or (o.location_id and o.location_id.display_name) or ''"/></td>
+                    </tr>
+
+                    <t t-set="stt" t-value="stt + 1"/>
+                  </t>
+
+                  <t t-if="stt == 0">
+                    <tr><td colspan="7" class="center" style="font-style:italic;">Không có dòng hàng.</td></tr>
+                  </t>
+                </tbody>
+              </table>
+
+              <!-- Tổng cộng -->
+              <t t-set="grand_total" t-value="subtotal + vat_total"/>
+
+              <table class="tbl mt-6">
+                <tbody>
+                  <tr class="sum">
+                    <td style="border:none;" colspan="5"></td>
+                    <td style="width:200px;">Tổng tiền hàng (VND)</td>
+                    <td class="right" style="width:140px;"><t t-esc="formatLang(subtotal, monetary=True, currency_obj=o.company_id.currency_id)"/></td>
+                  </tr>
+                  <tr>
+                    <td style="border:none;" colspan="5"></td>
+                    <td>Tổng thuế VAT (VND)</td>
+                    <td class="right"><t t-esc="formatLang(vat_total, monetary=True, currency_obj=o.company_id.currency_id)"/></td>
+                  </tr>
+                  <tr class="sum">
+                    <td style="border:none;" colspan="5"></td>
+                    <td>Tổng tiền thanh toán (VND)</td>
+                    <td class="right"><t t-esc="formatLang(grand_total, monetary=True, currency_obj=o.company_id.currency_id)"/></td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <!-- Bằng chữ -->
+              <div class="mt-10">
+                <strong>Thành tiền thanh toán (Bằng chữ):</strong>
+                <span t-esc="(o.company_id.currency_id and o.company_id.currency_id.amount_to_text(grand_total)) or ''"/>
+              </div>
+
+              <!-- Ghi chú -->
+              <div class="note mt-6">
+                Lưu ý: Khách hàng vui lòng kiểm tra tình trạng và số lượng hàng hóa trước khi ký nhận.
+              </div>
+
+              <!-- Chữ ký -->
+              <table class="no-border mt-12" style="width:100%; text-align:center;">
+                <tr>
+                  <td>Người nhận hàng</td>
+                  <td>Khách hàng</td>
+                </tr>
+                <tr><td style="height:90px;"></td><td></td></tr>
+              </table>
+
+              <!-- Footer -->
+              <div class="center mt-10" style="font-size:11px;">
+                PHÂN PHỐI CHÍNH HÃNG: SKF – NSK – KOYO – NTN – ASAHI – IKO – MITSUBOSHI – LS – HANYOUNG – BOSCH – MAKITA – MILWAUKEE – DEWALT
+              </div>
+
+            </div>
+          </t>
+        </div>
+
+      </t>
+    </t>
+  </template>
+
+</odoo>
