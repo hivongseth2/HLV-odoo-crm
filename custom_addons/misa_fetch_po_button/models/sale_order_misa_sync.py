@@ -234,8 +234,8 @@ class SaleOrder(models.Model):
                 unit_name=uom_name,
                 cost=price_unit,
                 product_type="consu",
-                purchase_ok=False,
-                sale_ok=False,
+                purchase_ok=True,
+                sale_ok=True,
             )
 
             seen_codes.add(product_code)
@@ -490,8 +490,8 @@ class SaleOrder(models.Model):
                 unit_name=uom_name,
                 cost=price_unit,
                 product_type="consu",
-                purchase_ok=False,
-                sale_ok=False,
+                purchase_ok=True,
+                sale_ok=True,
             )
 
             # id sản phẩm bên MISA (để truy bảng quy đổi)
@@ -592,8 +592,8 @@ class SaleOrder(models.Model):
                 unit_name=uom_name,
                 cost=price,
                 product_type="consu",
-                purchase_ok=False,
-                sale_ok=False,
+                purchase_ok=True,
+                sale_ok=True,
             )
 
             # Convert về UoM mặc định của product
@@ -728,8 +728,8 @@ class SaleOrder(models.Model):
                 unit_name=uom_name,
                 cost=price,
                 product_type="consu",
-                purchase_ok=False,
-                sale_ok=False,
+                purchase_ok=True,
+                sale_ok=True,
             )
 
             qty_base, price_dummy, is_default = self._convert_qty_price_to_default_uom(
@@ -743,21 +743,51 @@ class SaleOrder(models.Model):
             misa_total_by_product[product] = misa_total_by_product.get(product, 0.0) + (qty_base or 0.0)
             _logger.debug("MISA Total %s: %s", product.display_name, misa_total_by_product[product])
 
-        # --------- Bước 3: tính 'needed_in_open' = misa_total - delivered (min=0) ----------
+        # --------- Bước 3 (VIẾT LẠI): Kiểm tra over-delivery & tính 'needed_in_open' ----------
+        # Mục tiêu: Nếu đã giao (delivered) > tổng theo MISA (misa_total) cho bất kỳ sản phẩm nào
+        # => CHẶN ĐỒNG BỘ NGAY (raise UserError). Không tiếp tục các bước sau.
         needed_in_open_by_product = {}
-        all_products = set(list(misa_total_by_product.keys()) + list(delivered_by_product.keys()))
-        for prod in all_products:
-            misa_total = misa_total_by_product.get(prod, 0.0)
-            delivered = delivered_by_product.get(prod, 0.0)
-            needed = misa_total - delivered
-            if needed < 0:
-                _logger.warning("Đã giao vượt nhu cầu MISA với %s: MISA=%s, Delivered=%s; set needed=0",
-                                prod.display_name, misa_total, delivered)
-                needed = 0.0
-            needed_in_open_by_product[prod] = needed
-            _logger.info("Cần trong picking mở %s: MISA_total=%s, delivered=%s, needed_in_open=%s",
-                        prod.display_name, misa_total, delivered, needed)
+        over_deliveries = []
+        EPS = 1e-9  # chống sai số float nhỏ
 
+        # Hợp tất cả sản phẩm xuất hiện ở MISA hoặc đã giao
+        all_products = set(list(misa_total_by_product.keys()) + list(delivered_by_product.keys()))
+
+        for prod in all_products:
+            misa_total = float(misa_total_by_product.get(prod, 0.0) or 0.0)
+            delivered  = float(delivered_by_product.get(prod, 0.0) or 0.0)
+
+            if delivered > misa_total + EPS:
+                # Ghi nhận vi phạm over-delivery (đã giao vượt số MISA)
+                over_deliveries.append((prod, misa_total, delivered))
+                _logger.error(
+                    "Over-delivery: %s | MISA_total=%s, delivered=%s",
+                    prod.display_name, misa_total, delivered
+                )
+            else:
+                # Không vi phạm: tính phần còn thiếu để đẩy vào picking mở
+                needed = misa_total - delivered
+                # needed luôn >= 0 do đã loại trường hợp delivered > misa_total
+                needed_in_open_by_product[prod] = needed
+                _logger.info(
+                    "Need in open %s: MISA_total=%s, delivered=%s, needed_in_open=%s",
+                    prod.display_name, misa_total, delivered, needed
+                )
+
+        # Nếu có bất kỳ sản phẩm nào over-delivery => chặn đồng bộ
+        if over_deliveries:
+            details = "\n".join(
+                f"- {p.display_name}: MISA={m:g}, Đã giao={d:g}"
+                for (p, m, d) in over_deliveries
+            )
+            _logger.error("CHẶN ĐỒNG BỘ do over-delivery:\n%s", details)
+            raise UserError(_(
+                "Phát hiện đã giao vượt số lượng theo MISA, đồng bộ bị chặn.\n"
+                "%s\n\n"
+                "Vui lòng xử lý nghiệp vụ trước khi đồng bộ lại:\n"
+                "• Tạo phiếu trả hàng / điều chỉnh kho để đưa 'đã giao' ≤ số trên MISA.\n"
+                "• Hoặc cập nhật lại số lượng trên MISA nếu MISA mới là số chuẩn."
+            ) % details)
         # --------- Bước 4: lấy/chuẩn bị picking mở ----------
         open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
         target_pick = open_picks[:1] and open_picks[0] or False
