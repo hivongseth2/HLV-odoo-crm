@@ -22,6 +22,6 @@
     'data': [
         'report/paperformat.xml',
         'report/bbgn_a4_khongngay.xml',
-        'report/bbgn_a4_po.xml',
+        'report/bbgn_a4_khong_gia.xml',
     ],
 }
