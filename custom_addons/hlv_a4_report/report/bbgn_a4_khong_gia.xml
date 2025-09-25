@@ -45,25 +45,26 @@
                     font-weight:700; font-style:italic; font-display:swap;
                     }
 
+                    /* Base 13px toàn form */
                     html, body, .o_report_layout, .o_report_layout *{
                     font-family:'HLV-TNR','DejaVu Serif','Liberation Serif',serif !important;
                     font-size:12px !important;
-                    font-synthesis:none; /* tránh “giả nghiêng/đậm” */
+                    font-synthesis:none;
                     }
                     em, i { font-style:italic !important; font-weight:400 !important; }
                     strong em, strong i, b em, b i { font-style:italic !important; font-weight:700
                     !important; }
 
-                    .h6-fs{ font-size:13px; }
+                    /* Tiêu đề 16px: tên biên bản, tên công ty, BÊN A/B */
+                    .fs-16 { font-size:14px !important; }
                 </style>
-
 
                 <div class="page">
                     <t t-foreach="docs" t-as="o">
                         <div class="page">
 
                             <!-- Header công ty -->
-                            <table style="width:100%;margin-top:30px">
+                            <table style="width:100%; margin-top:30px">
                                 <tr>
                                     <!-- Logo -->
                                     <td
@@ -82,17 +83,16 @@
                                     <td style="vertical-align:top; padding-left:10px;">
                                         <!-- Tên công ty -->
                                         <div style="font-weight:700; font-size:16px;">
-                                            <t t-esc="o.company_id.name" />
+                                            <t>CÔNG TY TNHH VI NA HOÀNG LONG VŨ</t>
                                         </div>
 
                                         <!-- Địa chỉ -->
-                                        <div> Địa chỉ: <t
-                                                t-esc="o.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''" />
-                                        </div>
+                                        <div>Địa chỉ: <t
+                                                t-esc="o.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''" /></div>
 
                                         <!-- Điện thoại | Di động -->
                                         <table
-                                            style="width:100%; font-size:12px; margin-top:2px; border-collapse:collapse;">
+                                            style="width:100%; margin-top:2px; border-collapse:collapse;">
                                             <tr>
                                                 <td style="padding:0 8px 0 0; white-space:nowrap;">Điện
                                                     thoại:</td>
@@ -122,19 +122,16 @@
                                             </tr>
                                         </table>
                                     </td>
-
                                 </tr>
                             </table>
 
                             <!-- Tiêu đề -->
                             <div style="text-align:center; margin-top:-5px">
-                                <div style="font-size:16px; font-weight:800;">BIÊN BẢN GIAO NHẬN
-                                    HÀNG
+                                <div class="fs-16" style="font-weight:800;">BIÊN BẢN GIAO NHẬN HÀNG
                                     HÓA</div>
 
                                 <!-- Năm tự động: ưu tiên date_done -> scheduled_date -> create_date
-                                ->
-                            năm hiện tại -->
+                                -> năm hiện tại -->
                                 <t t-set="dt_src"
                                     t-value="o.date_done or o.scheduled_date or o.create_date" />
                                 <t t-set="year_str"
@@ -142,36 +139,35 @@
 
                                 <div>(No.: <span t-esc="o.name" /> ; Date ..../..../<t
                                         t-esc="year_str" /> )</div>
-                                <!-- Dòng bổ sung: căn cứ đơn đặt hàng ngày PO số... của tên công ty
-                            partner -->
-                                <div
-                                    style="font-style:italic; font-size:14px; margin-top:8px; text-align:left;">
+
+                                <!-- Dòng bổ sung -->
+                                <div style="font-style:italic; margin-top:8px; text-align:left;">
                                     Căn cứ đơn đặt hàng ngày <span t-esc="o.origin or ''" /> PO số:
                                     của <span
                                         t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''" />
                                 </div>
-                                <!-- Dòng bổ sung: hôm nay, ngày..., tại tên công ty partner,... -->
-                                <div style="font-size:14px; margin-top:2px; text-align:left;"> Hôm
-                                    nay, ngày <span
+                                <div style="margin-top:2px; text-align:left;"> Hôm nay, ngày <span
                                         t-esc="datetime.datetime.now().strftime('%d/%m/%Y')" /> tại <span
                                         t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''" />,
                                     Chúng tôi gồm: </div>
                             </div>
 
-                            <table style="width:100%; font-size:13px; margin-top:10px;">
+                            <table style="width:100%; margin-top:10px;">
                                 <tr>
-                                    <td style="font-weight:600;" colspan="2"> BÊN A (Bên nhận hàng): <span
-                                            style="font-weight:700;">
+                                    <td colspan="2">
+                                        <span class="fs-16" style="font-weight:700;">BÊN A (Bên nhận
+                                            hàng):</span>
+                                        <span style="font-weight:700;">
                                             <t
                                                 t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''" />
                                         </span>
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td colspan="2" style="padding-left:20px;"> Địa chỉ: <span
-                                            class="h6-fs">
-                                            <t t-set="p"
-                                                t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id" />
+                                    <td colspan="2" style="padding-left:20px;"> Địa chỉ: <t
+                                            t-set="p"
+                                            t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id" />
+                                    <span>
                                             <t
                                                 t-esc="(p._display_address(without_company=True).replace('\n',' ') or '')" />
                                         </span>
@@ -194,17 +190,19 @@
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td style="font-weight:600; padding-top:6px;" colspan="2"> BÊN B
-                                        (Bên giao hàng): <span style="font-weight:700;">
+                                    <td colspan="2" style="padding-top:6px;">
+                                        <span class="fs-16" style="font-weight:700;">BÊN B (Bên giao
+                                            hàng):</span>
+                                        <span style="font-weight:700;">
                                             <t t-esc="o.company_id.name" />
                                         </span>
                                     </td>
                                 </tr>
                                 <tr>
-                                    <td colspan="2" style="padding-left:20px;"> Địa chỉ: <span
-                                            class="h6-fs">
-                                            <t t-set="addr_b"
-                                                t-value="o.company_id.partner_id._display_address(without_company=True) or ''" />
+                                    <td colspan="2" style="padding-left:20px;"> Địa chỉ: <t
+                                            t-set="addr_b"
+                                            t-value="o.company_id.partner_id._display_address(without_company=True) or ''" />
+                                    <span>
                                             <t t-foreach="addr_b.split('-')" t-as="line">
                                                 <t t-esc="line" />
                                                 <br />
@@ -231,17 +229,16 @@
                                 </tr>
                             </table>
 
-                            <div style="font-style:italic; font-size:13px;">
+                            <div style="font-style:italic;">
                                 Hai bên cùng thống nhất số lượng giao hàng như sau:
                             </div>
-
 
                             <!-- Chọn nguồn dữ liệu -->
                             <t t-set="is_done" t-value="o.state == 'done'" />
                             <t t-set="lines" t-value="is_done and o.move_line_ids or o.move_ids" />
 
                             <!-- Bảng hàng hóa -->
-                            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                            <table style="width:100%; border-collapse:collapse;">
                                 <thead>
                                     <tr>
                                         <th
@@ -308,7 +305,7 @@
                                                         t-esc="l.product_id and l.product_id.display_name or ''" />
                                                     <t
                                                         t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
-                                                        <div style="font-size:12px; color:#444;"
+                                                        <div style="color:#444;"
                                                             t-esc="l.description_picking" />
                                                     </t>
                                                 </td>
@@ -394,15 +391,14 @@
                                 </tbody>
                             </table>
 
-
                             <!-- Đoạn xác nhận bên dưới -->
-                            <div style="margin-top:10px; font-size:13px; text-align:justify;"> Bên A
-                                xác nhận Bên B đã giao cho Bên A đúng chủng loại và đủ số lượng hàng
-                                như trên. <br /> Hai bên đồng ý, thống nhất ký tên. Biên bản được
-                                lập thành 05 bản, bên mua giữ 04 bản, bên bán giữ 01 bản và có giá
-                                trị pháp lý như nhau. </div>
+                            <div style="margin-top:10px; text-align:justify;"> Bên A xác nhận Bên B
+                                đã giao cho Bên A đúng chủng loại và đủ số lượng hàng như trên. <br />
+                                Hai bên đồng ý, thống nhất ký tên. Biên bản được lập thành 05 bản,
+                                bên mua giữ 04 bản, bên bán giữ 01 bản và có giá trị pháp lý như
+                                nhau. </div>
 
-                            <div style="margin-top:12px; font-size:13px;">
+                            <div style="margin-top:12px;">
                                 <span style="font-style:italic; font-weight:600;">***Giao hàng tại
                                     kho:</span>
                                 <span style="margin-left:40px;">Người nhận hàng:</span>
@@ -421,9 +417,10 @@
                                     <td style="height:100px;" />
                                 </tr>
                             </table>
+
                             <!-- Footer phân phối chính hãng -->
                             <div
-                                style="position: fixed; bottom: 20px; left: 0; width: 100%; text-align: center; font-size: 10px; margin-top: 10px; ">
+                                style="position: fixed; bottom: 20px; left: 0; width: 100%; text-align: center; font-size: 11px; margin-top: 10px;">
                                 PHÂN PHỐI CHÍNH HÃNG:
                                 SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MILWAUKEE-MAKITA
                             </div>
@@ -432,8 +429,6 @@
                     </t>
                 </div>
             </t>
-
         </t>
     </template>
-
 </odoo>
