@@ -23,5 +23,6 @@
         'report/paperformat.xml',
         'report/bbgn_a4_khongngay.xml',
         'report/bbgn_a4_khong_gia.xml',
+        'report/pxbh_khachle_khonghd.xml',
     ],
 }
