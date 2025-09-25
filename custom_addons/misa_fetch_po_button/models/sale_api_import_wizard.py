@@ -389,6 +389,7 @@ class SaleApiImportWizard(models.TransientModel):
                         price_unit = float(line.get("Price", 0) or 0.0)
                         discount_percent = float(line.get("DiscountPercent", 0) or 0.0)
                         uom_name = (line.get("UnitIDText") or "Cái").strip()
+                        note = line.get("DescriptionProduct") or ""
 
                         product = odoo_utils._get_or_create_product(
                             code=product_code,
@@ -396,8 +397,8 @@ class SaleApiImportWizard(models.TransientModel):
                             unit_name=uom_name,
                             cost=price_unit,
                             product_type="consu",
-                            purchase_ok=False,
-                            sale_ok=False
+                            purchase_ok=True,
+                            sale_ok=True
                         )
                         
                         misa_product_id = line.get("ProductID") or line.get("ProductId") or None
@@ -421,6 +422,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'product_uom_qty': qty_for_odoo,
                             'price_unit': price_for_odoo,
                             'discount': discount_percent,
+                            'note': note,
                         }
                         if not use_default_uom:
                             vals_line['product_uom'] = product.uom_id.id
@@ -501,6 +503,7 @@ class SaleApiImportWizard(models.TransientModel):
                             price_unit = float(line.get("Price", 0) or 0.0)
                             discount_percent = float(line.get("DiscountPercent", 0) or 0.0)
                             uom_name = (line.get("UnitIDText") or "Cái").strip()
+                            note = line.get("DescriptionProduct") or ""
 
                             product = odoo_utils._get_or_create_product(
                                 code=product_code,
@@ -508,8 +511,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 unit_name=uom_name,
                                 cost=price_unit,
                                 product_type="consu",
-                                purchase_ok=False,
-                                sale_ok=False
+                                purchase_ok=True,
+                                sale_ok=True
                             )
                             self.env['sale.order.line'].create({
                                 'order_id': sale_order.id,
@@ -517,7 +520,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 'name': description,
                                 'product_uom_qty': qty,
                                 'price_unit': price_unit,
-                                'discount': discount_percent
+                                'discount': discount_percent,
+                                'note': note,
                             })
 
                         # Confirm -> tạo picking theo từng SO/warehouse
