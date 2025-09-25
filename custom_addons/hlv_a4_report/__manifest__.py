@@ -16,7 +16,7 @@
     "license": "LGPL-3",
 
     # any module necessary for this one to work correctly
-    'depends': ['base', 'web', 'stock'],
+    'depends': ['base', 'web', 'stock', 'sale'],
 
     # always loaded
     'data': [
@@ -24,5 +24,6 @@
         'report/bbgn_a4_khongngay.xml',
         'report/bbgn_a4_khong_gia.xml',
         'report/pxbh_khachle_khonghd.xml',
+        'report/bbbg_a4_co_po.xml',
     ],
 }
