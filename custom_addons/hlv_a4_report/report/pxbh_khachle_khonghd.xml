@@ -95,29 +95,29 @@
                                         </div>
                                         <!-- Địa chỉ -->
                                         <div class="fs-company-info"> 
-                                            Địa chỉ: <t t-esc="o.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''" />
+                                            Địa chỉ: <t t-esc="o.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''"/>
                                         </div>
                                         <!-- Điện thoại | Di động -->
                                         <table style="width:100%; margin-top:2px; border-collapse:collapse;">
                                             <tr>
-                                                <td class="fs-company-info" style="padding:0 8px 0 0; white-space:nowrap;">Điện thoại:</td>
-                                                <td class="fs-company-info" style="padding:0 12px 0 0;">
-                                                    <t t-esc="o.company_id.phone or ''" />
+                                                <td class="fs-company-info" style="padding:0 !important; width:60px;">Điện thoại:</td>
+                                                <td class="fs-company-info" style="padding-right:10px !important; width:80px;">
+                                                    <t t-esc="o.company_id.phone or ''"/>
                                                 </td>
-                                                <td class="fs-company-info" style="padding:0 0px; white-space:nowrap;">Di động:</td>
+                                                <td class="fs-company-info" style="padding:0 !important; width:40px;">Di động:</td>
                                                 <td class="fs-company-info">
-                                                    <t t-esc="o.company_id.mobile or o.company_id.partner_id.mobile or ''" />
+                                                    <t t-esc="o.company_id.mobile or o.company_id.partner_id.mobile or ''"/>
                                                 </td>
                                             </tr>
                                             <!-- Email | Website -->
                                             <tr>
-                                                <td class="fs-company-info" style="padding:2px 8px 0 0; white-space:nowrap;">Email:</td>
-                                                <td class="fs-company-info" style="padding:2px 12px 0 0;">
-                                                    <t t-esc="o.company_id.email or ''" />
+                                                <td class="fs-company-info" style="padding:0 !important; width:30px;">Email:</td>
+                                                <td class="fs-company-info" style="padding-right:10px !important; width:80px;">
+                                                    <t t-esc="o.company_id.email or ''"/>
                                                 </td>
-                                                <td class="fs-company-info" style="padding:2px 8px 0 0; white-space:nowrap;">Website:</td>
+                                                <td class="fs-company-info" style="padding:0 !important; width:50px;">Website:</td>
                                                 <td class="fs-company-info" style="padding-top:2px;">
-                                                    <t t-esc="o.company_id.website or ''" />
+                                                    <t t-esc="o.company_id.website or ''"/>
                                                 </td>
                                             </tr>
                                         </table>
