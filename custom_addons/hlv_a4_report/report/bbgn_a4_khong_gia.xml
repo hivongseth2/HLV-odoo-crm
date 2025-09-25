@@ -128,7 +128,9 @@
 
                             <!-- Tiêu đề -->
                             <div style="text-align:center; margin-top:-5px">
-                                <div style="font-size:16px; font-weight:800;">BIÊN BẢN GIAO NHẬN HÀNG HÓA</div>
+                                <div style="font-size:16px; font-weight:800;">BIÊN BẢN GIAO NHẬN
+                                    HÀNG
+                                    HÓA</div>
 
                                 <!-- Năm tự động: ưu tiên date_done -> scheduled_date -> create_date
                                 ->
@@ -419,13 +421,18 @@
                                     <td style="height:100px;" />
                                 </tr>
                             </table>
-
+                            <!-- Footer phân phối chính hãng -->
+                            <div
+                                style="position: fixed; bottom: 20px; left: 0; width: 100%; text-align: center; font-size: 10px; margin-top: 10px; ">
+                                PHÂN PHỐI CHÍNH HÃNG:
+                                SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MILWAUKEE-MAKITA
+                            </div>
 
                         </div>
                     </t>
                 </div>
-
             </t>
+
         </t>
     </template>
 
