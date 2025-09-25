@@ -83,8 +83,9 @@
 
                                     <!-- Thông tin công ty -->
                                     <td style="vertical-align:top; padding-left:10px;">
-                                        <div style="font-weight:700; font-size:16px;"
-                                            t-esc="o.company_id.name" />
+                                        <div style="font-weight:700; font-size:16px;">
+                                            <t>CÔNG TY TNHH VI NA HOÀNG LONG VŨ</t>
+                                            </div>
                                         <div>
                                             <t t-set="addr"
                                                 t-value="o.company_id.partner_id._display_address(without_company=True) or ''" />
@@ -134,12 +135,11 @@
                                             t-esc="(p.street or '') + (p.street2 and (', ' + p.street2) or '')" />
                                     </td>
                                 </tr>
-
                                 <tr>
-                                    <td style="padding-top:6px; font-weight:600;">Đại diện bên giao
-                                        (B)</td>
-                                    <td style="padding-top:6px; font-weight:700;"
-                                        t-esc="o.company_id.name" />
+                                    <td style="padding-top:6px; font-weight:600;">Đại diện bên giao (B)</td>
+                                    <td style="padding-top:6px; font-weight:700;">
+                                        CÔNG TY TNHH VI NA HOÀNG LONG VŨ
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td>Ông (Bà)</td>
