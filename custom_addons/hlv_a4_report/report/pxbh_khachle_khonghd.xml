@@ -334,9 +334,8 @@
                                             Thành tiền thanh toán (Bằng chữ):
                                         </td>
                                         <td colspan="4"
-                                            style="border:1px solid #000; background:#eee;">
-                                            <span
-                                                t-esc="env['hlv.amount'].amount_to_text_vn(total_untaxed)" />
+                                            style="border:1px solid #000; background:#eee; text-align:center; font-weight:600;">
+                                            <span t-esc="env['hlv.amount'].amount_to_text_vn(total_untaxed)" />
                                         </td>
                                     </tr>
 
