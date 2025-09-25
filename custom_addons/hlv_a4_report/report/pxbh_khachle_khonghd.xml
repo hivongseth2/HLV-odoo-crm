@@ -7,8 +7,7 @@
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">hlv_a4_report.report_pxbh_khachle_khonghd_doc</field>
         <field name="print_report_name">
-            'Phiếu Xuất Kho Kiêm Bán Hàng - Khách Lẻ Không Hóa Đơn - %s' % (object.name or
-            'Picking')
+            'Phiếu Xuất Kho Kiêm Bán Hàng - Khách Lẻ Không Hóa Đơn - %s' % (object.name or 'Picking')
         </field>
         <field name="binding_model_id" ref="stock.model_stock_picking" />
         <field name="binding_type">report</field>
@@ -21,40 +20,57 @@
             <t t-call="web.report_layout">
                 <style type="text/css">
                     @font-face{
-                    font-family:'HLV-TNR';
-                    src:url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
-                    font-weight:400; font-style:normal; font-display:swap;
+                        font-family:'HLV-TNR';
+                        src:url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+                        font-weight:400; font-style:normal; font-display:swap;
                     }
                     @font-face{
-                    font-family:'HLV-TNR';
-                    src:url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf')
-                    format('truetype');
-                    font-weight:700; font-style:normal; font-display:swap;
+                        font-family:'HLV-TNR';
+                        src:url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf') format('truetype');
+                        font-weight:700; font-style:normal; font-display:swap;
                     }
                     @font-face{
-                    font-family:'HLV-TNR';
-                    src:url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf')
-                    format('truetype');
-                    font-weight:400; font-style:italic; font-display:swap;
+                        font-family:'HLV-TNR';
+                        src:url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf') format('truetype');
+                        font-weight:400; font-style:italic; font-display:swap;
                     }
                     @font-face{
-                    font-family:'HLV-TNR';
-                    src:url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf')
-                    format('truetype');
-                    font-weight:700; font-style:italic; font-display:swap;
+                        font-family:'HLV-TNR';
+                        src:url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf') format('truetype');
+                        font-weight:700; font-style:italic; font-display:swap;
                     }
 
-                    html, body, .o_report_layout, .o_report_layout *{
-                    font-family:'HLV-TNR','DejaVu Serif','Liberation Serif',serif !important;
-                    font-size:12px !important;
-                    font-synthesis:none; /* tránh “giả nghiêng/đậm” */
+                    /* Font size chuẩn cho toàn form */
+                    html, body, .o_report_layout, .o_report_layout * {
+                        font-family:'HLV-TNR','DejaVu Serif','Liberation Serif',serif !important;
+                        font-size:12px !important;
+                        font-synthesis:none;
                     }
-                    em, i { font-style:italic !important; font-weight:400 !important; }
-                    strong em, strong i, b em, b i { font-style:italic !important; font-weight:700
-                    !important; }
+                    
+                    em, i { 
+                        font-style:italic !important; 
+                        font-weight:400 !important; 
+                    }
+                    
+                    strong em, strong i, b em, b i { 
+                        font-style:italic !important; 
+                        font-weight:700 !important; 
+                    }
 
-                    .h6-fs{ font-size:13px; }
+                    /* Kích thước font theo mẫu */
+                    .fs-company-name { font-size:14px !important; font-weight:700; }      /* Tên công ty */
+                    .fs-company-info { font-size:11px !important; }                      /* Thông tin công ty */
+                    .fs-title { font-size:14px !important; font-weight:700; }            /* Tiêu đề chính */
+                    .fs-subtitle { font-size:11px !important; }                          /* Phụ đề, số phiếu */
+                    .fs-customer-info { font-size:11px !important; }                     /* Thông tin khách hàng */
+                    .fs-table-header { font-size:11px !important; font-weight:600; }     /* Header bảng */
+                    .fs-table-content { font-size:11px !important; }                     /* Nội dung bảng */
+                    .fs-table-total { font-size:11px !important; font-weight:600; }      /* Dòng tổng */
+                    .fs-note { font-size:11px !important; font-style:italic; }          /* Ghi chú */
+                    .fs-signature { font-size:11px !important; }                         /* Chữ ký */
+                    .fs-footer { font-size:9px !important; }                             /* Footer */
                 </style>
+                
                 <div class="page">
                     <t t-foreach="docs" t-as="o">
                         <div class="page">
@@ -62,53 +78,45 @@
                             <table style="width:100%;margin-top:30px">
                                 <tr>
                                     <!-- Logo -->
-                                    <td
-                                        style="width:220px; text-align:center; vertical-align:middle; padding-right:5px">
+                                    <td style="width:220px; text-align:center; vertical-align:middle; padding-right:5px">
                                         <t t-if="o.company_id.logo">
                                             <img t-att-src="image_data_uri(o.company_id.logo)"
                                                 style="max-height:150px; position:relative; top:-20px; height:130px; width:180px; object-fit:contain; text-align:center; vertical-align:middle;" />
                                         </t>
                                         <t t-else="">
-                                            <img
-                                                t-att-src="'/web/image/res.company/%s/logo' % o.company_id.id"
+                                            <img t-att-src="'/web/image/res.company/%s/logo' % o.company_id.id"
                                                 style="max-height:150px; height:150px; width:120px;" />
                                         </t>
                                     </td>
                                     <td style="vertical-align:top; padding-left:10px;">
                                         <!-- Tên công ty -->
-                                        <div style="font-weight:700; font-size:16px;">
+                                        <div class="fs-company-name">
                                             <t>CÔNG TY TNHH VI NA HOÀNG LONG VŨ</t>
                                         </div>
                                         <!-- Địa chỉ -->
-                                        <div> Địa chỉ: <t
-                                                t-esc="o.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''" />
+                                        <div class="fs-company-info"> 
+                                            Địa chỉ: <t t-esc="o.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''" />
                                         </div>
                                         <!-- Điện thoại | Di động -->
-                                        <table
-                                            style="width:100%; font-size:12px; margin-top:2px; border-collapse:collapse;">
+                                        <table style="width:100%; margin-top:2px; border-collapse:collapse;">
                                             <tr>
-                                                <td style="padding:0 8px 0 0; white-space:nowrap;">Điện
-                                                    thoại:</td>
-                                                <td style="padding:0 12px 0 0;">
+                                                <td class="fs-company-info" style="padding:0 8px 0 0; white-space:nowrap;">Điện thoại:</td>
+                                                <td class="fs-company-info" style="padding:0 12px 0 0;">
                                                     <t t-esc="o.company_id.phone or ''" />
                                                 </td>
-                                                <td style="padding:0 0px; white-space:nowrap;">Di
-                                                    động:</td>
-                                                <td>
-                                                    <t
-                                                        t-esc="o.company_id.mobile or o.company_id.partner_id.mobile or ''" />
+                                                <td class="fs-company-info" style="padding:0 0px; white-space:nowrap;">Fax:</td>
+                                                <td class="fs-company-info">
+                                                    <t t-esc="o.company_id.mobile or o.company_id.partner_id.mobile or ''" />
                                                 </td>
                                             </tr>
                                             <!-- Email | Website -->
                                             <tr>
-                                                <td style="padding:2px 8px 0 0; white-space:nowrap;">
-                                                    Email:</td>
-                                                <td style="padding:2px 12px 0 0;">
+                                                <td class="fs-company-info" style="padding:2px 8px 0 0; white-space:nowrap;">Email:</td>
+                                                <td class="fs-company-info" style="padding:2px 12px 0 0;">
                                                     <t t-esc="o.company_id.email or ''" />
                                                 </td>
-                                                <td style="padding:2px 8px 0 0; white-space:nowrap;">
-                                                    Website:</td>
-                                                <td style="padding-top:2px;">
+                                                <td class="fs-company-info" style="padding:2px 8px 0 0; white-space:nowrap;">Website:</td>
+                                                <td class="fs-company-info" style="padding-top:2px;">
                                                     <t t-esc="o.company_id.website or ''" />
                                                 </td>
                                             </tr>
@@ -116,86 +124,76 @@
                                     </td>
                                 </tr>
                             </table>
+                            
                             <!-- Tiêu đề -->
                             <div style="text-align:center; margin-top:-5px">
-                                <div style="font-size:16px; font-weight:800;">PHIẾU XUẤT KHO KIÊM
-                                    BÁN
-                                    HÀNG</div>
-                                <!-- Năm tự động: ưu tiên date_done -> scheduled_date -> create_date
-                                ->
-                            năm hiện tại -->
-                                <t t-set="dt_src"
-                                    t-value="o.date_done or o.scheduled_date or o.create_date or datetime.datetime.now()" />
-                                <div> (No.: <span t-esc="o.name" />; Ngày <t
-                                        t-esc="dt_src.strftime('%d/%m/%Y')" />) </div>
+                                <div class="fs-title">PHIẾU XUẤT KHO KIÊM BÁN HÀNG</div>
+                                <!-- Năm tự động -->
+                                <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.create_date or datetime.datetime.now()" />
+                                <div class="fs-subtitle"> 
+                                    (Số phiếu xuất: <span t-esc="o.name" />; ngày: <t t-esc="dt_src.strftime('%d/%m/%Y')" />) 
+                                </div>
                             </div>
+                            
                             <table style="width:100%; margin-top:10px; border-collapse:collapse;">
                                 <!-- Lấy tên kho -->
-                                <t t-set="warehouse_name"
-                                    t-value="(o.picking_type_id and o.picking_type_id.warehouse_id and o.picking_type_id.warehouse_id.name) or ''" />
-                                <t t-set="khachle_label"
-                                    t-value="'KHÁCH LẺ CỬA HÀNG %s' % warehouse_name" />
+                                <t t-set="warehouse_name" t-value="(o.picking_type_id and o.picking_type_id.warehouse_id and o.picking_type_id.warehouse_id.name) or ''" />
+                                <t t-set="khachle_label" t-value="'KHÁCH LẺ CỬA HÀNG %s' % warehouse_name" />
                                 <!-- 1) Khách hàng -->
                                 <tr>
-                                    <td style=" width:130px; white-space:nowrap;">Khách hàng :</td>
-                                    <td>
+                                    <td class="fs-customer-info" style="width:130px; white-space:nowrap;">Khách hàng:</td>
+                                    <td class="fs-customer-info">
                                         <span t-esc="khachle_label" />
                                     </td>
                                 </tr>
                                 <!-- 2) Địa chỉ -->
                                 <tr>
-                                    <td style="width:130px; white-space:nowrap;">Địa chỉ :</td>
+                                    <td class="fs-customer-info" style="width:130px; white-space:nowrap;">Địa chỉ:</td>
+                                    <td class="fs-customer-info"></td>
                                 </tr>
                                 <!-- 3) SĐT người nhận -->
                                 <tr>
-                                    <td style="width:130px; white-space:nowrap;">SĐT người nhận :</td>
-                                    <td>
+                                    <td class="fs-customer-info" style="width:130px; white-space:nowrap;">SĐT người nhận:</td>
+                                    <td class="fs-customer-info">
                                         <span t-esc="khachle_label" />
                                     </td>
                                 </tr>
                             </table>
-                            <div style="font-style:italic; font-size:13px; font-weight:600;">
-                                Cảm ơn quý khách đã quan tâm sản phẩm Hoàng Long Vũ, chúng tôi rất
-                                hân
-                                hạnh được phục vụ quý khách
+                            
+                            <div class="fs-note" style="font-weight:400; margin-top:5px;">
+                                Cảm ơn quý khách hàng đã quan tâm sản phẩm Hoàng Long Vũ, chúng tôi rất hân hạnh được phục vụ quý khách
                             </div>
+                            
                             <!-- Chọn nguồn dữ liệu -->
                             <t t-set="is_done" t-value="o.state == 'done'" />
                             <t t-set="lines" t-value="is_done and o.move_line_ids or o.move_ids" />
-                            <t t-set="warehouse_name"
-                                t-value="(o.picking_type_id and o.picking_type_id.warehouse_id and o.picking_type_id.warehouse_id.name) or ''" />
+                            <t t-set="warehouse_name" t-value="(o.picking_type_id and o.picking_type_id.warehouse_id and o.picking_type_id.warehouse_id.name) or ''" />
                             <!-- Tổng cộng -->
                             <t t-set="total_untaxed" t-value="0.0" />
-                            <!-- Bảng hàng hóa (đã bỏ 2 cột VAT) -->
-                            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                            
+                            <!-- Bảng hàng hóa -->
+                            <table style="width:100%; border-collapse:collapse; margin-top:10px;">
                                 <thead>
                                     <tr>
-                                        <th
-                                            style="font-weight:600;border:1px solid #000; width:38px; text-align:center; background:#eee;">
+                                        <th class="fs-table-header" style="border:1px solid #000; width:38px; text-align:center; background:#eee;">
                                             STT
                                         </th>
-                                        <th
-                                            style="font-weight:600;border:1px solid #000; width:300px; text-align:center; background:#eee;">
+                                        <th class="fs-table-header" style="border:1px solid #000; width:300px; text-align:center; background:#eee;">
                                             Tên hàng
                                         </th>
-                                        <th
-                                            style="font-weight:600;border:1px solid #000; width:55px; text-align:center; background:#eee;">
+                                        <th class="fs-table-header" style="border:1px solid #000; width:55px; text-align:center; background:#eee;">
                                             DVT
                                         </th>
-                                        <th
-                                            style="font-weight:600;border:1px solid #000; width:65px; text-align:center; background:#eee;">
+                                        <th class="fs-table-header" style="border:1px solid #000; width:65px; text-align:center; background:#eee;">
                                             SL
                                         </th>
-                                        <th
-                                            style="font-weight:600;border:1px solid #000; width:180px; text-align:center; background:#eee;">
+                                        <th class="fs-table-header" style="border:1px solid #000; width:100px; text-align:center; background:#eee;">
                                             Đơn giá
                                         </th>
-                                        <th
-                                            style="font-weight:600;border:1px solid #000; width:120px; text-align:center; background:#eee;">
-                                            Thành Tiền
+                                        <th class="fs-table-header" style="border:1px solid #000; width:100px; text-align:center; background:#eee;">
+                                            Thành tiền
                                         </th>
-                                        <th
-                                            style="font-weight:600;border:1px solid #000; width:120px; text-align:center; background:#eee;">
+                                        <th class="fs-table-header" style="border:1px solid #000; width:100px; text-align:center; background:#eee;">
                                             Kho xuất
                                         </th>
                                     </tr>
@@ -209,74 +207,54 @@
                                             <t t-set="qty_show" t-value="l.quantity or 0.0" />
                                         </t>
                                         <t t-elif="l._name == 'stock.move.line'">
-                                            <t t-set="qty_show"
-                                                t-value="(l.move_id and l.move_id.quantity) or 0.0" />
-                                            <t
-                                                t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
-                                                <t t-set="qty_show"
-                                                    t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)" />
+                                            <t t-set="qty_show" t-value="(l.move_id and l.move_id.quantity) or 0.0" />
+                                            <t t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
+                                                <t t-set="qty_show" t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)" />
                                             </t>
                                         </t>
                                         <!-- Unit price & line total -->
                                         <t t-set="unit_price" t-value="0.0" />
                                         <t t-if="l._name == 'stock.move'">
-                                            <t t-set="unit_price"
-                                                t-value="(l.sale_line_id and l.sale_line_id.price_unit) or 0.0" />
-                                            <t t-set="line_tax_percent"
-                                                t-value="(l.sale_line_id and l.sale_line_id.tax_id and l.sale_line_id.tax_id.amount) or 0.0" />
+                                            <t t-set="unit_price" t-value="(l.sale_line_id and l.sale_line_id.price_unit) or 0.0" />
+                                            <t t-set="line_tax_percent" t-value="(l.sale_line_id and l.sale_line_id.tax_id and l.sale_line_id.tax_id.amount) or 0.0" />
                                         </t>
                                         <t t-elif="l._name == 'stock.move.line'">
-                                            <t t-set="unit_price"
-                                                t-value="(l.move_id and l.move_id.sale_line_id and l.move_id.sale_line_id.price_unit) or 0.0" />
-                                            <t t-set="line_tax_percent"
-                                                t-value="(l.move_id and l.move_id.sale_line_id and l.move_id.sale_line_id.tax_id and l.move_id.sale_line_id.tax_id.amount) or 0.0" />
+                                            <t t-set="unit_price" t-value="(l.move_id and l.move_id.sale_line_id and l.move_id.sale_line_id.price_unit) or 0.0" />
+                                            <t t-set="line_tax_percent" t-value="(l.move_id and l.move_id.sale_line_id and l.move_id.sale_line_id.tax_id and l.move_id.sale_line_id.tax_id.amount) or 0.0" />
                                         </t>
-                                        <t t-set="line_total"
-                                            t-value="(qty_show or 0.0) * (unit_price or 0.0)" />
+                                        <t t-set="line_total" t-value="(qty_show or 0.0) * (unit_price or 0.0)" />
                                         <t t-if="qty_show &gt; 0">
                                             <!-- cộng dồn -->
-                                            <t t-set="total_untaxed"
-                                                t-value="total_untaxed + line_total" />
+                                            <t t-set="total_untaxed" t-value="total_untaxed + line_total" />
                                             <tr>
-                                                <td
-                                                    style="border:1px solid #000; text-align:center;">
+                                                <td class="fs-table-content" style="border:1px solid #000; text-align:center;">
                                                     <t t-esc="idx + 1" />
                                                 </td>
-                                                <td style="border:1px solid #000;">
-                                                    <span
-                                                        t-esc="l.product_id and l.product_id.display_name or ''" />
-                                                    <t
-                                                        t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
-                                                        <div style="color:#444;"
-                                                            t-esc="l.description_picking" />
+                                                <td class="fs-table-content" style="border:1px solid #000;">
+                                                    <span t-esc="l.product_id and l.product_id.display_name or ''" />
+                                                    <t t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
+                                                        <div style="color:#444;" t-esc="l.description_picking" />
                                                     </t>
                                                 </td>
-                                                <td
-                                                    style="border:1px solid #000; text-align:center;">
+                                                <td class="fs-table-content" style="border:1px solid #000; text-align:center;">
                                                     <t t-if="l._name == 'stock.move.line'">
-                                                        <span
-                                                            t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
+                                                        <span t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
                                                     </t>
                                                     <t t-else="">
-                                                        <span
-                                                            t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
+                                                        <span t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
                                                     </t>
                                                 </td>
-                                                <td
-                                                    style="border:1px solid #000; text-align:center;">
+                                                <td class="fs-table-content" style="border:1px solid #000; text-align:center;">
                                                     <span t-esc="'%0.2f' % qty_show" />
                                                 </td>
-                                                <td style="border:1px solid #000; text-align:right;">
-                                                    <span
-                                                        t-esc="'{:,.0f}'.format(unit_price or 0.0).replace(',', '.')" />
+                                                <td class="fs-table-content" style="border:1px solid #000; text-align:right;">
+                                                    <span t-esc="'{:,.0f}'.format(unit_price or 0.0).replace(',', '.')" />
                                                 </td>
-                                                <!-- Thành tiền: KHÔNG để trống -->
-                                                <td style="border:1px solid #000; text-align:right;">
-                                                    <span
-                                                        t-esc="'{:,.0f}'.format(line_total or 0.0).replace(',', '.')" />
+                                                <!-- Thành tiền -->
+                                                <td class="fs-table-content" style="border:1px solid #000; text-align:right;">
+                                                    <span t-esc="'{:,.0f}'.format(line_total or 0.0).replace(',', '.')" />
                                                 </td>
-                                                <td
-                                                    style="border:1px solid #000; text-align:center;">
+                                                <td class="fs-table-content" style="border:1px solid #000; text-align:center;">
                                                     <span t-esc="warehouse_name" />
                                                 </td>
                                             </tr>
@@ -286,83 +264,70 @@
                                     <!-- Không có dòng nào -->
                                     <t t-if="idx == 0">
                                         <tr>
-                                            <td colspan="7"
-                                                style="border:1px solid #000; text-align:center; font-style:italic;">
+                                            <td class="fs-table-content" colspan="7" style="border:1px solid #000; text-align:center; font-style:italic;">
                                                 Không có dòng hàng.
                                             </td>
                                         </tr>
                                     </t>
-                                    <!-- 3 hàng tổng (gộp từ SL -> Đơn giá = 2 cột) -->
+                                    <!-- 3 hàng tổng -->
                                     <tr>
                                         <!-- Gộp trái: STT -> DVT (3 cột) -->
-                                        <td colspan="3" rowspan="3"
-                                            style="border:1px solid #000; background:#eee;" />
+                                        <td colspan="3" rowspan="3" style="border:1px solid #000; background:#eee;" />
                                         <!-- Nhãn tổng: gộp SL + Đơn giá -->
-                                        <td colspan="2"
-                                            style="border:1px solid #000; text-align:left; font-weight:600;">
+                                        <td class="fs-table-content" colspan="2" style="border:1px solid #000; text-align:left; font-weight:600;">
                                             Tổng tiền hàng (VNĐ)
                                         </td>
                                         <!-- Thành tiền -->
-                                        <td style="border:1px solid #000; text-align:right;">
-                                            <span
-                                                t-esc="'{:,.0f}'.format(total_untaxed or 0.0).replace(',', '.')" />
+                                        <td class="fs-table-content" style="border:1px solid #000; text-align:right;">
+                                            <span t-esc="'{:,.0f}'.format(total_untaxed or 0.0).replace(',', '.')" />
                                         </td>
-                                        <!-- Kho xuất (không áp dụng ở tổng) -->
-                                        <td rowspan="3"
-                                            style="border:1px solid #000; background:#eee;" />
+                                        <!-- Kho xuất -->
+                                        <td rowspan="3" style="border:1px solid #000; background:#eee;" />
                                     </tr>
                                     <tr>
-                                        <td colspan="2"
-                                            style="border:1px solid #000; text-align:left; font-weight:600;">
+                                        <td class="fs-table-content" colspan="2" style="border:1px solid #000; text-align:left; font-weight:600;">
                                             Tổng thuế VAT (VNĐ)
                                         </td>
-                                        <td style="border:1px solid #000; text-align:right;" />
+                                        <td class="fs-table-content" style="border:1px solid #000; text-align:right;" />
                                     </tr>
                                     <tr>
-                                        <td colspan="2"
-                                            style="border:1px solid #000; text-align:left; font-weight:600;">
+                                        <td class="fs-table-content" colspan="2" style="border:1px solid #000; text-align:left; font-weight:600;">
                                             Tổng tiền thanh toán (VNĐ)
                                         </td>
-                                        <td style="border:1px solid #000; text-align:right;">
-                                            <span
-                                                t-esc="'{:,.0f}'.format(total_untaxed or 0.0).replace(',', '.')" />
+                                        <td class="fs-table-content" style="border:1px solid #000; text-align:right;">
+                                            <span t-esc="'{:,.0f}'.format(total_untaxed or 0.0).replace(',', '.')" />
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td colspan="4"
-                                            style="border:1px solid #000; font-weight:600; background:#eee;">
+                                        <td class="fs-table-content" colspan="4" style="border:1px solid #000; font-weight:600; background:#eee;">
                                             Thành tiền thanh toán (Bằng chữ):
                                         </td>
-                                        <td colspan="4"
-                                            style="border:1px solid #000; background:#eee; text-align:center; font-weight:600;">
+                                        <td class="fs-table-content" colspan="3" style="border:1px solid #000; background:#eee; text-align:center; font-weight:600;">
                                             <span t-esc="env['hlv.amount'].amount_to_text_vn(total_untaxed)" />
                                         </td>
                                     </tr>
-
                                 </tbody>
                             </table>
+                            
                             <!-- Đoạn xác nhận bên dưới -->
-                            <div
-                                style="margin-top:10px; text-align:justify; font-style:italic; font-weight:600;">Lưu
-                                ý: Khách hàng vui lòng kiểm tra kỹ tình trạng và số lượng hàng hóa
-                                trước khi
-                                ký nhận</div>
+                            <div class="fs-note" style="margin-top:10px; text-align:justify; font-style:italic; font-weight:600;">
+                                Lưu ý: Khách hàng vui lòng kiểm tra kỹ tình trạng và số lượng hàng hóa trước khi ký nhận
+                            </div>
+                            
                             <!-- Chữ ký -->
-                            <t t-set="khachle_label"
-                                t-value="'KHÁCH LẺ CỬA HÀNG %s' % warehouse_name" />
+                            <t t-set="khachle_label" t-value="'KHÁCH LẺ CỬA HÀNG %s' % warehouse_name" />
                             <table style="width:100%; margin-top:24px;">
                                 <tr>
-                                    <td style="width:50%; padding-left:40px;">Người nhận hàng</td>
-                                    <td style="width:50%; padding-right:90px; text-align:left;">
+                                    <td class="fs-signature" style="width:50%; padding-left:40px;">Người nhận hàng</td>
+                                    <td class="fs-signature" style="width:50%; padding-right:90px; text-align:left;">
                                         <span t-esc="khachle_label" />
                                     </td>
                                 </tr>
                             </table>
+                            
                             <!-- Footer phân phối chính hãng -->
-                            <div
-                                style="position: fixed; bottom: 20px; left: 0; width: 100%; text-align: center; font-size: 10px; margin-top: 10px; ">
-                                PHÂN PHỐI CHÍNH HÃNG:
-                                SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MILWAUKEE-MAKITA
+                            <div class="fs-footer" style="position: fixed; bottom: 20px; left: 0; width: 100%; text-align: center; margin-top: 10px;">
+                                PHÂN PHỐI CHÍNH HÃNG: SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MILWAUKEE-MAKITA
                             </div>
                         </div>
                     </t>

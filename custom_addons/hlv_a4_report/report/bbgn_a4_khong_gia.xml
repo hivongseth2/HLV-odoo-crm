@@ -55,8 +55,8 @@
                     strong em, strong i, b em, b i { font-style:italic !important; font-weight:700
                     !important; }
 
-                    /* Tiêu đề 16px: tên biên bản, tên công ty, BÊN A/B */
-                    .fs-16 { font-size:14px !important; }
+                    /* Tiêu đề 14px: tên biên bản, tên công ty, BÊN A/B */
+                    .fs-14 { font-size:14px !important; }
                 </style>
 
                 <div class="page">
@@ -81,8 +81,9 @@
                                     </td>
 
                                     <td style="vertical-align:top; padding-left:10px;">
+
                                         <!-- Tên công ty -->
-                                        <div style="font-weight:700; font-size:16px;">
+                                        <div class="fs-14" style="font-weight:700">
                                             <t>CÔNG TY TNHH VI NA HOÀNG LONG VŨ</t>
                                         </div>
 
@@ -127,7 +128,7 @@
 
                             <!-- Tiêu đề -->
                             <div style="text-align:center; margin-top:-5px">
-                                <div class="fs-16" style="font-weight:800;">BIÊN BẢN GIAO NHẬN HÀNG
+                                <div class="fs-14" style="font-weight:800;">BIÊN BẢN GIAO NHẬN HÀNG
                                     HÓA</div>
 
                                 <!-- Năm tự động: ưu tiên date_done -> scheduled_date -> create_date
@@ -191,10 +192,10 @@
                                 </tr>
                                 <tr>
                                     <td colspan="2" style="padding-top:6px;">
-                                        <span class="fs-16" style="font-weight:700;">BÊN B (Bên giao
+                                        <span class="fs-14" style="font-weight:700;">BÊN B (Bên giao
                                             hàng):</span>
                                         <span style="font-weight:700;">
-                                            <t t-esc="o.company_id.name" />
+                                            <t>CÔNG TY TNHH VI NA HOÀNG LONG VŨ</t>
                                         </span>
                                     </td>
                                 </tr>
@@ -422,7 +423,7 @@
                             <div
                                 style="position: fixed; bottom: 20px; left: 0; width: 100%; text-align: center; font-size: 11px; margin-top: 10px;">
                                 PHÂN PHỐI CHÍNH HÃNG:
-                                SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MILWAUKEE-MAKITA
+                                SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MAKITA-MILWAUKEE-DEWALT
                             </div>
 
                         </div>
