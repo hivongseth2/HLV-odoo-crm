@@ -120,8 +120,8 @@
                     <td class="label">Địa chỉ</td>
                     <td>
                         <t t-set="addr_b" t-value="o.company_id.partner_id._display_address(without_company=True) or ''"/>
-                        <t t-foreach="addr_b.replace(' - ', '\n').replace('-', '\n').split('\n')" t-as="line">
-                            <t t-esc="line"/>
+                        <t t-foreach="addr_b.split(' - ')" t-as="line">
+                            <t t-esc="line" />
                             <br/>
                         </t>
                     </td>
