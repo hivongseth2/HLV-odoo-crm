@@ -104,7 +104,7 @@
                                                 <td class="fs-company-info" style="padding:0 12px 0 0;">
                                                     <t t-esc="o.company_id.phone or ''" />
                                                 </td>
-                                                <td class="fs-company-info" style="padding:0 0px; white-space:nowrap;">Fax:</td>
+                                                <td class="fs-company-info" style="padding:0 0px; white-space:nowrap;">Di động:</td>
                                                 <td class="fs-company-info">
                                                     <t t-esc="o.company_id.mobile or o.company_id.partner_id.mobile or ''" />
                                                 </td>

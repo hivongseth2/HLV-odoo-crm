@@ -135,12 +135,11 @@
                                             t-esc="(p.street or '') + (p.street2 and (', ' + p.street2) or '')" />
                                     </td>
                                 </tr>
-
                                 <tr>
-                                    <td style="padding-top:6px; font-weight:600;">Đại diện bên giao
-                                        (B)</td>
-                                    <td style="padding-top:6px; font-weight:700;"
-                                        t-esc="o.company_id.name" />
+                                    <td style="padding-top:6px; font-weight:600;">Đại diện bên giao (B)</td>
+                                    <td style="padding-top:6px; font-weight:700;">
+                                        CÔNG TY TNHH VI NA HOÀNG LONG VŨ
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td>Ông (Bà)</td>
