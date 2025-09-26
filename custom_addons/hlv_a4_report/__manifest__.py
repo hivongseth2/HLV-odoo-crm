@@ -26,6 +26,6 @@
         'report/bbgn_a4_khong_gia.xml',
         'report/pxbh_khachle_khonghd.xml',
         'report/bbbg_a4_co_po.xml',
-        'views/bbgn_date_wizard_view.xml',
+        'views/bbgn_date_wizard_views.xml',
     ],
 }
