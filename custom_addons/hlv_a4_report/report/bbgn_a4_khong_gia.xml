@@ -80,10 +80,10 @@
                         </t>
 
                         <!-- 2) Lấy origin từ sale.order (ĐÚNG NGUỒN) -->
-                        <t t-set="po_raw" t-value="(sale_order and sale_order.origin) or ''" />
+                        <t t-set="so" t-value="o.sale_id or (o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False"/>
 
                         <!-- 3) Chuẩn hoá & rút số PO -->
-                        <t t-set="po_upper" t-value="(po_raw or '').upper()" />
+                        <t t-set="po_upper" t-value="(so and so.origin) or ''" />
                         <t t-set="po_number"
                             t-value="('' if not po_upper else (po_upper.split('PO')[-1].strip().split()[0] if 'PO' in po_upper else ''.join([c for c in (po_raw or '') if c.isdigit()])))" />
 
