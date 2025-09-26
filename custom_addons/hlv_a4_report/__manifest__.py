@@ -27,5 +27,6 @@
         'report/pxbh_khachle_khonghd.xml',
         'report/bbbg_a4_co_po.xml',
         'views/bbgn_date_wizard_views.xml',
+        'report/print_proxy.xml',
     ],
 }

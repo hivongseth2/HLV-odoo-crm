@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-
-  <!-- Form view cho wizard -->
+  <!-- Form view -->
   <record id="view_bbgn_date_wizard_form" model="ir.ui.view">
     <field name="name">bbgn.date.wizard.form</field>
     <field name="model">bbgn.date.wizard</field>
@@ -19,7 +18,7 @@
     </field>
   </record>
 
-  <!-- Action mở wizard -->
+  <!-- act_window mở popup -->
   <record id="action_open_bbgn_date_wizard" model="ir.actions.act_window">
     <field name="name">Chọn ngày đơn đặt hàng</field>
     <field name="res_model">bbgn.date.wizard</field>
@@ -27,19 +26,4 @@
     <field name="target">new</field>
     <field name="context">{'default_picking_id': active_id}</field>
   </record>
-
-  <!-- Server Action xuất hiện trong menu Hành động của stock.picking -->
-  <record id="server_action_open_bbgn_date_wizard" model="ir.actions.server">
-    <field name="name">In BBGN A4 không giá (chọn ngày)</field>
-    <field name="model_id" ref="stock.model_stock_picking"/>
-    <field name="state">code</field>
-    <field name="code">
-action = env.ref('hlv_a4_report.action_open_bbgn_date_wizard').read()[0]
-action['context'] = dict(env.context, default_picking_id=record.id)
-action
-    </field>
-    <field name="binding_model_id" ref="stock.model_stock_picking"/>
-    <field name="binding_type">action</field>
-  </record>
-
 </odoo>
