@@ -61,19 +61,24 @@
 
                 <div class="page">
                     <t t-foreach="docs" t-as="o">
-                        <!-- Chuẩn bị biến dùng trong template -->
-                        <!-- Lấy sale.order từ move đầu tiên (nếu có) -->
+                        <!-- ƯU TIÊN: lấy sale.order từ picking -->
                         <t t-set="sale_order"
-                            t-value="(o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False" />
+                            t-value="(hasattr(o, 'sale_id') and o.sale_id) or ((o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False)" />
 
-                        <!-- Lấy raw PO từ sale_order.origin -->
+                        <!-- Lấy origin từ sale.order (không dùng o.origin) -->
                         <t t-set="po_raw" t-value="(sale_order and sale_order.origin) or ''" />
 
-                        <!-- Chỉ giữ chữ số trong PO (bỏ 'PO', khoảng trắng, chữ cái) -->
-                        <t t-set="po_number" t-value="''.join([c for c in po_raw if c.isdigit()])" />
+                        <!-- Rút số PO:
+                            - Nếu có 'PO' thì lấy từ sau 'PO' đến khoảng trắng tiếp theo
+                            - Nếu không có 'PO' thì gom toàn bộ chữ số -->
+                        <t t-set="po_upper" t-value="po_raw.upper()" />
+                        <t t-set="po_number"
+                            t-value="('' if not po_upper else (po_upper.split('PO')[-1].strip().split()[0] if 'PO' in po_upper else ''.join([c for c in po_raw if c.isdigit()])))" />
 
-                        <!-- Lấy ngày người dùng chọn từ context (dd/mm/YYYY) -->
-                        <t t-set="order_date_str" t-value="o._context.get('bbgn_order_date','')" />
+                        <!-- Lấy ngày chọn từ wizard: ưu tiên data, fallback _context -->
+                        <t t-set="order_date_str"
+                            t-value="(data and data.get('bbgn_order_date')) or o._context.get('bbgn_order_date') or ''" />
+
                         <div class="page">
                             <!-- Header công ty -->
                             <table style="width:100%; margin-top:30px">
@@ -249,75 +254,114 @@
 
                             <!-- Bảng hàng hóa -->
                             <table style="width:100%; border-collapse:collapse;">
-                            <thead>
-                                <tr>
-                                <th style="font-weight:600;border:1px solid #000; width:38px; text-align:center; background:#eee;">STT</th>
-                                <th style="font-weight:600;border:1px solid #000; width:70px; text-align:center; background:#eee;">Số PR</th>
-                                <th style="font-weight:600;border:1px solid #000; width:300px; text-align:center; background:#eee;">Tên hàng</th>
-                                <th style="font-weight:600;border:1px solid #000; width:55px; text-align:center; background:#eee;">DVT</th>
-                                <th style="font-weight:600;border:1px solid #000; width:65px; text-align:center; background:#eee;">SL</th>
-                                <th style="font-weight:600;border:1px solid #000; width:95px; text-align:center; background:#eee;">Đơn giá</th>
-                                <th style="font-weight:600;border:1px solid #000; width:65px; text-align:center; background:#eee;">Vat(%)</th>
-                                <th style="font-weight:600;border:1px solid #000; width:85px; text-align:center; background:#eee;">Vat</th>
-                                <th style="font-weight:600;border:1px solid #000; width:115px; text-align:center; background:#eee;">Thành Tiền</th>
-                                <th style="font-weight:600;border:1px solid #000; width:100px; text-align:center; background:#eee;">Ghi chú</th>
-                                </tr>
-                            </thead>
+                                <thead>
+                                    <tr>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:38px; text-align:center; background:#eee;">
+                                            STT</th>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:70px; text-align:center; background:#eee;">Số
+                                            PR</th>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:300px; text-align:center; background:#eee;">Tên
+                                            hàng</th>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:55px; text-align:center; background:#eee;">
+                                            DVT</th>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:65px; text-align:center; background:#eee;">
+                                            SL</th>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:95px; text-align:center; background:#eee;">Đơn
+                                            giá</th>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:65px; text-align:center; background:#eee;">
+                                            Vat(%)</th>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:85px; text-align:center; background:#eee;">
+                                            Vat</th>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:115px; text-align:center; background:#eee;">Thành
+                                            Tiền</th>
+                                        <th
+                                            style="font-weight:600;border:1px solid #000; width:100px; text-align:center; background:#eee;">Ghi
+                                            chú</th>
+                                    </tr>
+                                </thead>
 
                                 <tbody>
-                                    <t t-set="idx" t-value="0"/>
+                                    <t t-set="idx" t-value="0" />
                                     <t t-foreach="lines" t-as="l">
-                                    <!-- Tính qty_show (giữ y như của bạn) -->
-                                    <t t-set="qty_show" t-value="0.0"/>
-                                    <t t-if="l._name == 'stock.move'">
-                                        <t t-set="qty_show" t-value="l.quantity or 0.0"/>
-                                    </t>
-                                    <t t-elif="l._name == 'stock.move.line'">
-                                        <t t-set="qty_show" t-value="(l.move_id and l.move_id.quantity) or 0.0"/>
-                                        <t t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
-                                        <t t-set="qty_show" t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)"/>
+                                        <!-- Tính qty_show (giữ y như của bạn) -->
+                                        <t t-set="qty_show" t-value="0.0" />
+                                        <t t-if="l._name == 'stock.move'">
+                                            <t t-set="qty_show" t-value="l.quantity or 0.0" />
                                         </t>
-                                    </t>
-
-                                    <t t-if="qty_show &gt; 0">
-                                        <tr>
-                                        <td style="border:1px solid #000; text-align:center;"><t t-esc="idx + 1"/></td>
-
-                                        <!-- SỐ PR = sale.order.line.note -->
-                                        <td style="border:1px solid #000; text-align:center;">
-                                            <t t-if="l._name == 'stock.move'">
-                                            <span t-esc="(l.sale_line_id and l.sale_line_id.note) or ''"/>
+                                        <t t-elif="l._name == 'stock.move.line'">
+                                            <t t-set="qty_show"
+                                                t-value="(l.move_id and l.move_id.quantity) or 0.0" />
+                                            <t
+                                                t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
+                                                <t t-set="qty_show"
+                                                    t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)" />
                                             </t>
-                                            <t t-elif="l._name == 'stock.move.line'">
-                                            <span t-esc="(l.move_id and l.move_id.sale_line_id and l.move_id.sale_line_id.note) or ''"/>
-                                            </t>
-                                        </td>
+                                        </t>
 
-                                        <td style="border:1px solid #000;">
-                                            <span t-esc="l.product_id and l.product_id.display_name or ''"/>
-                                            <t t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
-                                            <div style="color:#444;" t-esc="l.description_picking"/>
-                                            </t>
-                                        </td>
+                                        <t t-if="qty_show &gt; 0">
+                                            <tr>
+                                                <td
+                                                    style="border:1px solid #000; text-align:center;">
+                                                    <t t-esc="idx + 1" />
+                                                </td>
 
-                                        <td style="border:1px solid #000; text-align:center;">
-                                            <t t-if="l._name == 'stock.move.line'">
-                                            <span t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
-                                            </t>
-                                            <t t-else="">
-                                            <span t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
-                                            </t>
-                                        </td>
+                                                <!-- SỐ PR = sale.order.line.note -->
+                                                <td
+                                                    style="border:1px solid #000; text-align:center;">
+                                                    <t t-if="l._name == 'stock.move'">
+                                                        <span
+                                                            t-esc="(l.sale_line_id and l.sale_line_id.note) or ''" />
+                                                    </t>
+                                                    <t t-elif="l._name == 'stock.move.line'">
+                                                        <span
+                                                            t-esc="(l.move_id and l.move_id.sale_line_id and l.move_id.sale_line_id.note) or ''" />
+                                                    </t>
+                                                </td>
 
-                                        <td style="border:1px solid #000; text-align:center;"><span t-esc="'%0.2f' % qty_show"/></td>
-                                        <td style="border:1px solid #000; text-align:right;"/>
-                                        <td style="border:1px solid #000; text-align:center;"/>
-                                        <td style="border:1px solid #000; text-align:right;"/>
-                                        <td style="border:1px solid #000; text-align:right;"/>
-                                        <td style="border:1px solid #000;"/>
-                                        </tr>
-                                        <t t-set="idx" t-value="idx + 1"/>
-                                    </t>
+                                                <td style="border:1px solid #000;">
+                                                    <span
+                                                        t-esc="l.product_id and l.product_id.display_name or ''" />
+                                                    <t
+                                                        t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
+                                                        <div style="color:#444;"
+                                                            t-esc="l.description_picking" />
+                                                    </t>
+                                                </td>
+
+                                                <td
+                                                    style="border:1px solid #000; text-align:center;">
+                                                    <t t-if="l._name == 'stock.move.line'">
+                                                        <span
+                                                            t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
+                                                    </t>
+                                                    <t t-else="">
+                                                        <span
+                                                            t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
+                                                    </t>
+                                                </td>
+
+                                                <td
+                                                    style="border:1px solid #000; text-align:center;">
+                                                    <span t-esc="'%0.2f' % qty_show" />
+                                                </td>
+                                                <td style="border:1px solid #000; text-align:right;" />
+                                                <td
+                                                    style="border:1px solid #000; text-align:center;" />
+                                                <td style="border:1px solid #000; text-align:right;" />
+                                                <td style="border:1px solid #000; text-align:right;" />
+                                                <td style="border:1px solid #000;" />
+                                            </tr>
+                                            <t t-set="idx" t-value="idx + 1" />
+                                        </t>
                                     </t>
                                     <!-- Không có dòng nào -->
                                     <t t-if="idx == 0">
