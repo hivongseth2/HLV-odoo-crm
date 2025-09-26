@@ -61,23 +61,23 @@
 
                 <div class="page">
                     <t t-foreach="docs" t-as="o">
-                        <!-- ƯU TIÊN: lấy sale.order từ picking -->
+                        <!-- 1) Tìm sale.order an toàn (không dùng hasattr) -->
                         <t t-set="sale_order"
-                            t-value="(hasattr(o, 'sale_id') and o.sale_id) or ((o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False)" />
+                            t-value="(o._fields.get('sale_id') and o.sale_id) or ((o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False)" />
 
-                        <!-- Lấy origin từ sale.order (không dùng o.origin) -->
+                        <!-- 2) Lấy origin từ sale.order (KHÔNG dùng o.origin của picking) -->
                         <t t-set="po_raw" t-value="(sale_order and sale_order.origin) or ''" />
 
-                        <!-- Rút số PO:
-                            - Nếu có 'PO' thì lấy từ sau 'PO' đến khoảng trắng tiếp theo
-                            - Nếu không có 'PO' thì gom toàn bộ chữ số -->
-                        <t t-set="po_upper" t-value="po_raw.upper()" />
+                        <!-- 3) Chuẩn hoá & rút số PO
+                        - Nếu có 'PO' trong chuỗi: lấy token ngay sau 'PO'
+                        - Nếu không: gom toàn bộ chữ số -->
+                        <t t-set="po_upper" t-value="(po_raw or '').upper()" />
                         <t t-set="po_number"
-                            t-value="('' if not po_upper else (po_upper.split('PO')[-1].strip().split()[0] if 'PO' in po_upper else ''.join([c for c in po_raw if c.isdigit()])))" />
+                            t-value="('' if not po_upper else (po_upper.split('PO')[-1].strip().split()[0] if 'PO' in po_upper else ''.join([c for c in (po_raw or '') if c.isdigit()])))" />
 
-                        <!-- Lấy ngày chọn từ wizard: ưu tiên data, fallback _context -->
+                        <!-- 4) Lấy ngày từ wizard: ưu tiên 'data', fallback '_context' -->
                         <t t-set="order_date_str"
-                            t-value="(data and data.get('bbgn_order_date')) or o._context.get('bbgn_order_date') or ''" />
+                            t-value="(data and data.get('bbgn_order_date')) or (o._context and o._context.get('bbgn_order_date')) or ''" />
 
                         <div class="page">
                             <!-- Header công ty -->
@@ -319,11 +319,11 @@
                                                     style="border:1px solid #000; text-align:center;">
                                                     <t t-if="l._name == 'stock.move'">
                                                         <span
-                                                            t-esc="(l.sale_line_id and getattr(l.sale_line_id, 'note', False)) or ''" />
+                                                            t-esc="(l.sale_line_id and getattr(l.sale_line_id, 'note', '') ) or ''" />
                                                     </t>
                                                     <t t-elif="l._name == 'stock.move.line'">
                                                         <span
-                                                            t-esc="(l.move_id and l.move_id.sale_line_id and getattr(l.move_id.sale_line_id, 'note', False)) or ''" />
+                                                            t-esc="(l.move_id and l.move_id.sale_line_id and getattr(l.move_id.sale_line_id, 'note', '') ) or ''" />
                                                     </t>
                                                 </td>
 
