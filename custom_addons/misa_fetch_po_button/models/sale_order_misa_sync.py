@@ -167,17 +167,18 @@ class SaleOrder(models.Model):
 
         # 1) Lấy header từ FormDataNew
         data = self._misa_fetch_order()
-        # Một số key phổ biến cần dùng (tùy chỉnh theo thực tế):
-        # DeliveryOrderNumber, SaleOrderNo, ListOrderNumber, AccountIDText, BookDate, DeliveryDate, BillingAddress, v.v.
         partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText")
         order_no     = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo")
         delivery_no  = data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
-        shipping_addr = data.get("BillingAddress")  # hoặc gọi API địa chỉ chi tiết của bạn
+        shipping_addr = data.get("BillingAddress")
 
         # 2) Lấy lines từ DataSubPaging
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
+
+        # Lấy headers cho convert UoM
+        headers, _ = self._misa_headers()
 
         # 3) Upsert header
         partner = odoo_utils._get_or_create_partner(partner_name or _("Khách hàng MISA"))
@@ -190,7 +191,8 @@ class SaleOrder(models.Model):
                 vals_upd['date_order'] = dtparse(book_date).replace(tzinfo=None)
             except Exception:
                 pass
-        # Gán lại địa chỉ giao nếu bạn có helper build contact giao hàng
+        
+        # Gán lại địa chỉ giao nếu có helper build contact giao hàng
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
@@ -227,6 +229,8 @@ class SaleOrder(models.Model):
             price_unit     = _flt(ln.get("Price"), 0.0)
             discount_pct   = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name       = (ln.get("UnitIDText") or "Cái").strip()
+            note_val       = self._misa_note(ln)  # Lấy note từ MISA
+            misa_product_id = ln.get("ProductID") or ln.get("ProductId") or None
 
             product = odoo_utils._get_or_create_product(
                 code=product_code,
@@ -238,26 +242,48 @@ class SaleOrder(models.Model):
                 sale_ok=True,
             )
 
+            # Convert qty/price về UoM mặc định của product
+            qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
+                product=product,
+                misa_uom_text=uom_name,
+                qty=qty,
+                price=price_unit,
+                misa_product_id=misa_product_id,
+                headers=headers
+            )
+
             seen_codes.add(product_code)
             if product_code in lines_by_code:
-                lines_by_code[product_code].write({
+                # Cập nhật line hiện có (bao gồm cả note)
+                update_vals = {
                     'name': description,
                     'product_id': product.id,
-                    'product_uom_qty': qty,
-                    'price_unit': price_unit,
+                    'product_uom_qty': qty_for_odoo,
+                    'price_unit': price_for_odoo,
                     'discount': discount_pct,
-                })
+                    'note': note_val,  # Đồng bộ note
+                }
+                if not use_default_uom:
+                    update_vals['product_uom'] = product.uom_id.id
+                    
+                lines_by_code[product_code].write(update_vals)
             else:
-                SaleLine.create({
+                # Tạo line mới (bao gồm cả note)
+                create_vals = {
                     'order_id': self.id,
                     'product_id': product.id,
                     'name': description,
-                    'product_uom_qty': qty,
-                    'price_unit': price_unit,
+                    'product_uom_qty': qty_for_odoo,
+                    'price_unit': price_for_odoo,
                     'discount': discount_pct,
-                })
+                    'note': note_val,  # Đồng bộ note
+                }
+                if not use_default_uom:
+                    create_vals['product_uom'] = product.uom_id.id
+                    
+                SaleLine.create(create_vals)
 
-        # (tuỳ) xoá line không còn trong MISA
+        # (tùy) xoá line không còn trong MISA
         for code, l in lines_by_code.items():
             if code not in seen_codes:
                 l.unlink()
@@ -481,6 +507,7 @@ class SaleOrder(models.Model):
             price_unit   = _flt(ln.get("Price"), 0.0)
             discount_pct = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name     = (ln.get("UnitIDText") or "Cái").strip()
+            note_val    = self._misa_note(ln)
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             # sửa purchase_ok và sale_ok True
@@ -514,6 +541,7 @@ class SaleOrder(models.Model):
                 'product_uom_qty': qty_for_odoo,
                 'price_unit': price_for_odoo,
                 'discount': discount_pct,
+                'note': note_val,
             }
             # Nếu có convert, ép UoM line về UoM mặc định của product
             if not use_default_uom and product.uom_id:
@@ -584,6 +612,7 @@ class SaleOrder(models.Model):
             discount   = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name   = (ln.get("UnitIDText") or "Cái").strip()
             misa_pid   = ln.get("ProductID") or ln.get("ProductId")
+            note_val   = self._misa_note(ln)
 
             # Lấy / tạo product đúng theo mã
             product = odoo_utils._get_or_create_product(
@@ -612,6 +641,7 @@ class SaleOrder(models.Model):
                 'product_uom_qty': qty_base,
                 'price_unit': price_base,
                 'discount': discount,
+                'note': note_val,
             }
             if not is_default and product.uom_id:
                 vals_line['product_uom'] = product.uom_id.id
@@ -938,4 +968,10 @@ class SaleOrder(models.Model):
                 'type': 'success'
             }
         }
+    def _misa_note(self, ln):
+        """Chuẩn hóa note từ payload MISA, cho phép trả về chuỗi rỗng để xóa note cũ."""
+        val = ln.get("DescriptionProduct")
+        if val is None:
+            return ""  # ép rỗng để xóa note cũ
+        return str(val).strip()
 
