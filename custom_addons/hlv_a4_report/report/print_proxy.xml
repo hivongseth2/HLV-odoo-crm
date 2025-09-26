@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <!-- ẨN report gốc KHỎI MENU In bằng cách gán vào group_no_one -->
+  <record id="bbgn_a4_khong_gia" model="ir.actions.report">
+    <!-- KHÔNG sửa binding_type / binding_model_id -->
+    <field name="groups_id" eval="[(6, 0, [ref('base.group_no_one')])]"/>
+  </record>
+
+  <!-- Proxy hiện trong menu In, mở popup chọn ngày -->
+  <record id="proxy_print_bbgn_a4_khong_gia" model="ir.actions.server">
+    <field name="name">BBGN A4 không giá</field>
+    <field name="model_id" ref="stock.model_stock_picking"/>
+    <field name="state">code</field>
+
+    <!-- Gắn vào menu In -->
+    <field name="binding_model_id" ref="stock.model_stock_picking"/>
+    <field name="binding_type">report</field>
+
+    <!-- Trả về act_window của wizard -->
+    <field name="code">
+action = env.ref('hlv_a4_report.action_open_bbgn_date_wizard').read()[0]
+action['context'] = dict(env.context, default_picking_id=record.id)
+action
+    </field>
+  </record>
+
+</odoo>

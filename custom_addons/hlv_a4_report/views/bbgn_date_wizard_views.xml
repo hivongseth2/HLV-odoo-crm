@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <!-- Form view -->
+  <record id="view_bbgn_date_wizard_form" model="ir.ui.view">
+    <field name="name">bbgn.date.wizard.form</field>
+    <field name="model">bbgn.date.wizard</field>
+    <field name="arch" type="xml">
+      <form string="Chọn ngày đơn đặt hàng" create="false" edit="false">
+        <group>
+          <field name="picking_id" readonly="1"/>
+          <field name="order_date" required="1"/>
+        </group>
+        <footer>
+          <button string="In biên bản" type="object" name="action_print" class="btn-primary"/>
+          <button string="Hủy" class="btn-secondary" special="cancel"/>
+        </footer>
+      </form>
+    </field>
+  </record>
+
+  <!-- act_window mở popup -->
+  <record id="action_open_bbgn_date_wizard" model="ir.actions.act_window">
+    <field name="name">Chọn ngày đơn đặt hàng</field>
+    <field name="res_model">bbgn.date.wizard</field>
+    <field name="view_mode">form</field>
+    <field name="target">new</field>
+    <field name="context">{'default_picking_id': active_id}</field>
+  </record>
+</odoo>
