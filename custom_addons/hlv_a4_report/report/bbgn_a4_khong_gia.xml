@@ -319,11 +319,11 @@
                                                     style="border:1px solid #000; text-align:center;">
                                                     <t t-if="l._name == 'stock.move'">
                                                         <span
-                                                            t-esc="(l.sale_line_id and getattr(l.sale_line_id, 'note', '') ) or ''" />
+                                                                t-esc="(l.sale_line_id and l.sale_line_id.note) or ''" />
                                                     </t>
                                                     <t t-elif="l._name == 'stock.move.line'">
                                                         <span
-                                                            t-esc="(l.move_id and l.move_id.sale_line_id and getattr(l.move_id.sale_line_id, 'note', '') ) or ''" />
+                                                                t-esc="(l.move_id and l.move_id.sale_line_id and l.move_id.sale_line_id.note) or ''" />
                                                     </t>
                                                 </td>
 
