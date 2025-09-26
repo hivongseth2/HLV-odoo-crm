@@ -441,6 +441,7 @@ class SaleOrder(models.Model):
         delivery_no   = data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress") or ''
+        origin        = data.get("SaleOrderName") or ''
 
         # địa chỉ giao hàng
         try:
@@ -458,7 +459,7 @@ class SaleOrder(models.Model):
         vals_create = {
             'name': order_no,
             'partner_id': partner.id,
-            'origin': order_no,
+            'origin': origin,
             'warehouse_id': old_wh.id or False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'partner_shipping_id': shipping_id,
