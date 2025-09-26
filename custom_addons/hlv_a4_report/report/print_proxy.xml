@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-  <!-- 4.1) Bỏ binding của report gốc để nó KHÔNG hiện trực tiếp trong menu In -->
+  <!-- ẨN report gốc KHỎI MENU In bằng cách gán vào group_no_one -->
   <record id="bbgn_a4_khong_gia" model="ir.actions.report">
-    <field name="binding_model_id" eval="False"/>
-    <field name="binding_type" eval="False"/>
+    <!-- KHÔNG sửa binding_type / binding_model_id -->
+    <field name="groups_id" eval="[(6, 0, [ref('base.group_no_one')])]"/>
   </record>
 
-  <!-- 4.2) Tạo server action *hiển thị trong menu In* để mở wizard -->
+  <!-- Proxy hiện trong menu In, mở popup chọn ngày -->
   <record id="proxy_print_bbgn_a4_khong_gia" model="ir.actions.server">
-    <field name="name">BBGN A4 không giá</field> <!-- Tên hiển thị trong menu In -->
+    <field name="name">BBGN A4 không giá</field>
     <field name="model_id" ref="stock.model_stock_picking"/>
     <field name="state">code</field>
 
@@ -17,7 +17,7 @@
     <field name="binding_model_id" ref="stock.model_stock_picking"/>
     <field name="binding_type">report</field>
 
-    <!-- Trả về act_window popup của wizard -->
+    <!-- Trả về act_window của wizard -->
     <field name="code">
 action = env.ref('hlv_a4_report.action_open_bbgn_date_wizard').read()[0]
 action['context'] = dict(env.context, default_picking_id=record.id)
