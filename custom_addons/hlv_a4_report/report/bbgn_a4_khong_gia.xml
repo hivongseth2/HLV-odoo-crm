@@ -61,33 +61,23 @@
 
                 <div class="page">
                     <t t-foreach="docs" t-as="o">
-                        <!-- 1) Tìm sale.order an toàn (không dùng hasattr) - CẢI TIẾN -->
-                        <t t-set="sale_order" t-value="False" />
-                        
-                        <!-- Kiểm tra xem stock.picking có trường sale_id không -->
-                        <t t-if="o._fields.get('sale_id') and o.sale_id">
-                            <t t-set="sale_order" t-value="o.sale_id" />
-                        </t>
-                        
-                        <!-- Nếu không có sale_id, tìm qua move_ids -->
-                        <t t-elif="o.move_ids">
-                            <t t-foreach="o.move_ids" t-as="move">
-                                <t t-if="move.sale_line_id and move.sale_line_id.order_id">
-                                    <t t-set="sale_order" t-value="move.sale_line_id.order_id" />
-                                    <t t-break="" />
-                                </t>
-                            </t>
-                        </t>
+                        <!-- bắt cầu sang sale.order -->
+                        <t t-set="so"
+                            t-value="o.sale_id or (o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False" />
 
-                        <!-- 2) Lấy origin từ sale.order (ĐÚNG NGUỒN) -->
-                        <t t-set="so" t-value="o.sale_id or (o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False"/>
+                        <!-- Origin CHỈ lấy từ sale.order (không dùng o.origin của picking) -->
+                        <t t-set="po_raw" t-value="(so and so.origin) or ''" />
 
-                        <!-- 3) Chuẩn hoá & rút số PO -->
-                        <t t-set="po_upper" t-value="(so and so.origin) or ''" />
+                        <!-- Rút số PO: nếu có 'PO' thì lấy token ngay sau, nếu không thì gom toàn
+                        bộ chữ số -->
+                        <t t-set="po_upper" t-value="(po_raw or '').upper()" />
                         <t t-set="po_number"
-                            t-value="('' if not po_upper else (po_upper.split('PO')[-1].strip().split()[0] if 'PO' in po_upper else ''.join([c for c in (po_raw or '') if c.isdigit()])))" />
+                            t-value="( '' if not po_upper
+              else ( po_upper.split('PO')[-1].strip().split()[0]
+                     if 'PO' in po_upper
+                     else ''.join([c for c in (po_raw or '') if c.isdigit()]) ) )" />
 
-                        <!-- 4) Lấy ngày từ wizard: ưu tiên 'data', fallback '_context' -->
+                        <!-- Ngày từ wizard (giữ nguyên như bạn đã làm) -->
                         <t t-set="order_date_str"
                             t-value="(data and data.get('bbgn_order_date')) or (o._context and o._context.get('bbgn_order_date')) or ''" />
 
@@ -326,23 +316,14 @@
                                                     <t t-esc="idx + 1" />
                                                 </td>
 
-                                                <!-- SỐ PR = sale.order.line.note - SỬA LẠI -->
                                                 <td
                                                     style="border:1px solid #000; text-align:center;">
-                                                    <t t-set="pr_number" t-value="''" />
-                                                    
-                                                    <!-- Với stock.move -->
-                                                    <t t-if="l._name == 'stock.move' and l.sale_line_id and l.sale_line_id.note">
-                                                        <t t-set="pr_number" t-value="l.sale_line_id.note" />
-                                                    </t>
-                                                    
-                                                    <!-- Với stock.move.line -->
-                                                    <t t-elif="l._name == 'stock.move.line' and l.move_id and l.move_id.sale_line_id and l.move_id.sale_line_id.note">
-                                                        <t t-set="pr_number" t-value="l.move_id.sale_line_id.note" />
-                                                    </t>
-                                                    
-                                                    <span t-esc="pr_number" />
+                                                    <!-- Lấy SOL từ move hoặc move line -->
+                                                    <t t-set="sol"
+                                                        t-value="(l._name == 'stock.move' and l.sale_line_id) or (l._name == 'stock.move.line' and l.move_id and l.move_id.sale_line_id) or False" />
+                                                    <span t-esc="(sol and sol.note) or ''" />
                                                 </td>
+
 
                                                 <td style="border:1px solid #000;">
                                                     <span
