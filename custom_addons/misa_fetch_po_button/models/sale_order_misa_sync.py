@@ -227,6 +227,9 @@ class SaleOrder(models.Model):
             price_unit     = _flt(ln.get("Price"), 0.0)
             discount_pct   = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name       = (ln.get("UnitIDText") or "Cái").strip()
+            note_text      = (ln.get("DescriptionProduct")
+                  or ln.get("Note")
+                  or "")
 
             product = odoo_utils._get_or_create_product(
                 code=product_code,
@@ -246,6 +249,7 @@ class SaleOrder(models.Model):
                     'product_uom_qty': qty,
                     'price_unit': price_unit,
                     'discount': discount_pct,
+                    'note': note_text,
                 })
             else:
                 SaleLine.create({
@@ -255,6 +259,7 @@ class SaleOrder(models.Model):
                     'product_uom_qty': qty,
                     'price_unit': price_unit,
                     'discount': discount_pct,
+                    'note': note_text,
                 })
 
         # (tuỳ) xoá line không còn trong MISA
@@ -481,6 +486,9 @@ class SaleOrder(models.Model):
             price_unit   = _flt(ln.get("Price"), 0.0)
             discount_pct = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name     = (ln.get("UnitIDText") or "Cái").strip()
+            note_text    = (ln.get("DescriptionProduct")
+                or ln.get("Note")
+                or "")
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             # sửa purchase_ok và sale_ok True
@@ -514,6 +522,7 @@ class SaleOrder(models.Model):
                 'product_uom_qty': qty_for_odoo,
                 'price_unit': price_for_odoo,
                 'discount': discount_pct,
+                'note': note_text,
             }
             # Nếu có convert, ép UoM line về UoM mặc định của product
             if not use_default_uom and product.uom_id:
@@ -584,6 +593,9 @@ class SaleOrder(models.Model):
             discount   = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name   = (ln.get("UnitIDText") or "Cái").strip()
             misa_pid   = ln.get("ProductID") or ln.get("ProductId")
+            note_text  = (ln.get("DescriptionProduct")
+              or ln.get("Note")
+              or "")
 
             # Lấy / tạo product đúng theo mã
             product = odoo_utils._get_or_create_product(
@@ -612,6 +624,7 @@ class SaleOrder(models.Model):
                 'product_uom_qty': qty_base,
                 'price_unit': price_base,
                 'discount': discount,
+                'note': note_text,
             }
             if not is_default and product.uom_id:
                 vals_line['product_uom'] = product.uom_id.id
