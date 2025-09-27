@@ -1,4 +1,3 @@
-
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
   <record id="view_website_public_inventory_settings" model="ir.ui.view">

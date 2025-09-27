@@ -1,4 +1,3 @@
-
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
   <template id="inventory_page" name="Public Inventory Page" inherit_id="website.layout">
