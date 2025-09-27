@@ -1,23 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+  <!-- QWeb template độc lập, KHÔNG inherit -->
   <template id="inventory_page" name="Public Inventory Page">
     <t t-call="website.layout">
       <main id="wrap" class="oe_structure">
         <section>
           <div class="container mt-4 mb-6">
-
             <h1>Tra cứu tồn kho</h1>
 
-            <!-- Form: action cố định về /search_stock -->
+            <!-- Form: trỏ thẳng /search_stock -->
             <form t-att-action="'/search_stock'" method="get" class="row g-2 my-3">
               <div class="col-md-5">
                 <input name="q" t-att-value="q" class="form-control" placeholder="Tìm theo tên, mã, barcode"/>
               </div>
               <div class="col-md-4">
                 <select name="warehouse_id" class="form-select">
-                  <option t-att-selected="not warehouse_id" t-att-value="">
-                    Tất cả kho (được phép)
-                  </option>
+                  <option t-att-selected="not warehouse_id" t-att-value="">Tất cả kho (được phép)</option>
                   <t t-foreach="warehouses" t-as="w">
                     <option t-att-value="w.id" t-att-selected="int(warehouse_id)==w.id if warehouse_id else False">
                       <t t-esc="w.name"/>
@@ -62,7 +60,7 @@
                 </table>
               </div>
 
-              <!-- Pagination: nhớ dùng &amp; -->
+              <!-- Pagination: nhớ &amp; trong URL -->
               <nav t-if="pages > 1" aria-label="Page navigation">
                 <ul class="pagination">
                   <li t-attf-class="page-item #{'disabled' if not (page > 1) else ''}">
