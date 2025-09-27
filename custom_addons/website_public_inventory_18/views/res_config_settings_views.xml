@@ -8,7 +8,7 @@
   <field name="arch" type="xml">
     <!-- SỬA XPATH: chèn vào bên trong khối website_settings -->
     <xpath expr="//div[@id='website_settings']" position="inside">
-      <div class="app_settings_block" string="Public Inventory" data-key="public_inventory">
+      <div class="app_settings_block" data-string="Public Inventory" data-key="public_inventory">
         <h2>Public Inventory</h2>
         <div class="row mt16 o_settings_container">
           <div class="col-12 col-lg-6 o_setting_box">
