@@ -7,8 +7,6 @@ PAGE_SIZE = 20
 
 
 def _get_allowed_warehouses():
-    """Warehouses được phép public theo ir.config_parameter.
-    Nếu chưa cấu hình thì trả toàn bộ kho."""
     env = request.env
     param_val = env["ir.config_parameter"].sudo().get_param(
         "website_public_inventory_18.allowed_warehouse_ids", default=""
@@ -19,20 +17,30 @@ def _get_allowed_warehouses():
 
 
 def _domain_for_locations(warehouse_id):
-    """Domain theo location: dùng view_location_id (gốc kho) để bao trùm toàn bộ cây nội bộ."""
     env = request.env
     Wh = env["stock.warehouse"].sudo()
     if warehouse_id:
         wh = Wh.browse(int(warehouse_id)).exists()
         if wh:
+            # Bao trùm toàn bộ cây location nội bộ của kho
             return [("location_id", "child_of", wh.view_location_id.id)]
-        return [("id", "=", -1)]  # kho không hợp lệ
-    # Không chọn kho -> gộp tất cả gốc kho được phép
+        return [("id", "=", -1)]
     allowed = _get_allowed_warehouses()
     if not allowed:
         return [("id", "=", -1)]
     root_ids = allowed.mapped("view_location_id").ids
     return [("location_id", "child_of", root_ids)]
+
+
+def _companies_for_context(warehouse_id):
+    """Lấy danh sách company cần cho allowed_company_ids"""
+    env = request.env
+    Wh = env["stock.warehouse"].sudo()
+    if warehouse_id:
+        wh = Wh.browse(int(warehouse_id)).exists()
+        return wh.company_id.ids if wh else []
+    allowed = _get_allowed_warehouses()
+    return allowed.mapped("company_id").ids
 
 
 def _as_int_or_none(v):
@@ -53,42 +61,45 @@ class PublicInventory(http.Controller):
 
         wid = _as_int_or_none(warehouse_id)
 
-        # Domain cơ bản: theo cây location của kho (hoặc các kho cho phép)
+        # Domain theo location của kho (hoặc các kho cho phép)
         domain = _domain_for_locations(wid)
-
-        # Prefilter: chỉ cần có tồn thực tế > 0 (giữ nhẹ, tránh quét rỗng)
+        # Prefilter có tồn thực tế > 0 để tránh rỗng
         domain += [("quantity", ">", 0)]
 
-        # Tìm theo từ khóa (name / default_code / barcode) - OR 3 điều kiện
+        # Tìm theo từ khóa (OR 3 điều kiện)
         if q:
             domain += [
-                "|",
-                "|",
+                "|", "|",
                 ("product_id.name", "ilike", q),
                 ("product_id.default_code", "ilike", q),
                 ("product_id.barcode", "ilike", q),
             ]
 
-        Quant = env["stock.quant"].sudo()
+        # >>>>>>>>>>>>>  FIX MULTI-COMPANY CONTEXT  <<<<<<<<<<<<<<
+        company_ids = _companies_for_context(wid)
+        if not company_ids:
+            company_ids = env.companies.ids  # fallback: công ty hiện có của user/website
 
-        # Gộp theo product: lấy tồn khả dụng & tồn thực tế
+        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
+
+        # Gộp theo product: sum(quantity) & sum(reserved_quantity)
         groups = Quant.read_group(
             domain,
-            ["product_id", "available_quantity:sum", "quantity:sum"],
+            ["product_id", "quantity:sum", "reserved_quantity:sum"],
             ["product_id"],
             limit=PAGE_SIZE,
             offset=(page - 1) * PAGE_SIZE,
             orderby="product_id",
         )
 
-        # Tổng nhóm để phân trang
+        # Đếm nhóm để phân trang
         count_groups = Quant.read_group(domain, ["product_id"], ["product_id"])
         total = len(count_groups)
         pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 1
 
         # Lấy thông tin sản phẩm
         prod_ids = [g["product_id"][0] for g in groups if g.get("product_id")]
-        Product = env["product.product"].sudo()
+        Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
         pmap = {p.id: p for p in Product.browse(prod_ids)}
 
         rows = []
@@ -100,21 +111,20 @@ class PublicInventory(http.Controller):
             if not p:
                 continue
 
-            avail = g.get("available_quantity_sum") or 0.0
-            total_qty = g.get("quantity_sum") or 0.0
+            qty = g.get("quantity_sum") or 0.0
+            res = g.get("reserved_quantity_sum") or 0.0
+            avail = qty - res  # tồn khả dụng
 
-            rows.append(
-                {
-                    "id": pid,
-                    "name": p.name,
-                    "default_code": (p.default_code or ""),
-                    "barcode": (p.barcode or ""),
-                    "uom": p.uom_id.name,
-                    "qty": avail,              # tồn khả dụng
-                    "qty_total": total_qty,    # tồn thực tế (tuỳ chọn hiển thị)
-                    "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
-                }
-            )
+            rows.append({
+                "id": pid,
+                "name": p.name,
+                "default_code": p.default_code or "",
+                "barcode": p.barcode or "",
+                "uom": p.uom_id.name,
+                "qty": avail,       # tồn khả dụng
+                "qty_total": qty,   # tồn thực tế
+                "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
+            })
 
         Warehouses = _get_allowed_warehouses()
 
@@ -133,6 +143,5 @@ class PublicInventory(http.Controller):
 
     @http.route(["/search_stock/json"], type="json", auth="public", methods=["POST"])
     def inventory_json(self, q="", warehouse_id=None, page=1):
-        # API JSON cho tìm kiếm tức thời nếu cần
         resp = self.inventory_page(q=q, warehouse_id=warehouse_id, page=page)
         return resp.qcontext.get("rows", [])
