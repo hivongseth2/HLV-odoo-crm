@@ -1,3 +1,29 @@
+
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- settings view here -->
+  <record id="view_website_public_inventory_settings" model="ir.ui.view">
+    <field name="name">website.public.inventory.settings</field>
+    <field name="model">res.config.settings</field>
+    <field name="inherit_id" ref="base.view_res_config_settings"/>
+    <field name="arch" type="xml">
+      <xpath expr="//div[@id='settings']" position="inside">
+        <div class="app_settings_block" data-string="Public Inventory" string="Public Inventory" data-key="public_inventory">
+          <h2>Public Inventory</h2>
+          <div class="row mt16 o_settings_container">
+            <div class="col-12 col-lg-6 o_setting_box">
+              <div class="o_setting_left_pane">
+                <field name="allowed_warehouse_ids" widget="many2many_tags"/>
+              </div>
+              <div class="o_setting_right_pane">
+                <label for="allowed_warehouse_ids" string="Public Warehouses"/>
+                <div class="text-muted">
+                  Chọn các kho cho phép hiển thị tồn trên trang công khai.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </xpath>
+    </field>
+  </record>
 </odoo>

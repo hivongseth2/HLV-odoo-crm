@@ -1,3 +1,85 @@
+
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- templates here -->
+  <template id="inventory_page" name="Public Inventory Page" inherit_id="website.layout">
+    <xpath expr="//main" position="inside">
+      <section class="oe_structure">
+        <div class="container mt-4 mb-6">
+          <h1>Tra cứu tồn kho</h1>
+          <form t-att-action="request.httprequest.path" method="get" class="row g-2 my-3">
+            <div class="col-md-5">
+              <input name="q" t-att-value="q" class="form-control" placeholder="Tìm theo tên, mã, barcode"/>
+            </div>
+            <div class="col-md-4">
+              <select name="warehouse_id" class="form-select">
+                <option t-att-selected="not warehouse_id" t-att-value="">Tất cả kho (được phép)</option>
+                <t t-foreach="warehouses" t-as="w">
+                  <option t-att-value="w.id" t-att-selected="int(warehouse_id)==w.id if warehouse_id else False">
+                    <t t-esc="w.name"/>
+                  </option>
+                </t>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <button class="btn btn-primary w-100" type="submit">Tìm kiếm</button>
+            </div>
+          </form>
+
+          <t t-if="rows">
+            <div class="table-responsive">
+              <table class="table table-striped align-middle">
+                <thead>
+                  <tr>
+                    <th>Mã</th>
+                    <th>Tên</th>
+                    <th>Barcode</th>
+                    <th>ĐVT</th>
+                    <th class="text-end">Tồn khả dụng</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <t t-foreach="rows" t-as="r">
+                    <tr>
+                      <td><t t-esc="r['default_code']"/></td>
+                      <td><t t-esc="r['name']"/></td>
+                      <td><t t-esc="r['barcode']"/></td>
+                      <td><t t-esc="r['uom']"/></td>
+                      <td class="text-end"><t t-esc="('%.2f' % r['qty'])"/></td>
+                      <td>
+                        <t t-if="r['website_url']">
+                          <a t-att-href="r['website_url']" class="btn btn-sm btn-outline-secondary">Xem</a>
+                        </t>
+                      </td>
+                    </tr>
+                  </t>
+                </tbody>
+              </table>
+            </div>
+
+            <nav t-if="pages &gt; 1" aria-label="Page navigation">
+              <ul class="pagination">
+                <li t-attf-class="page-item #{'disabled' if page &lt;= 1 else ''}">
+                  <a class="page-link" t-att-href="'?q=%s&warehouse_id=%s&page=%d' % (q, warehouse_id or '', page-1)">«</a>
+                </li>
+                <t t-foreach="range(1, pages+1)" t-as="p">
+                  <li t-attf-class="page-item #{'active' if p==page else ''}">
+                    <a class="page-link" t-att-href="'?q=%s&warehouse_id=%s&page=%d' % (q, warehouse_id or '', p)">
+                      <t t-esc="p"/>
+                    </a>
+                  </li>
+                </t>
+                <li t-attf-class="page-item #{'disabled' if page &gt;= pages else ''}">
+                  <a class="page-link" t-att-href="'?q=%s&warehouse_id=%s&page=%d' % (q, warehouse_id or '', page+1)">»</a>
+                </li>
+              </ul>
+            </nav>
+          </t>
+          <t t-else="">
+            <div class="alert alert-info">Không có dữ liệu phù hợp.</div>
+          </t>
+        </div>
+      </section>
+    </xpath>
+  </template>
 </odoo>
