@@ -58,8 +58,11 @@ class PublicInventory(http.Controller):
         # Text search (product fields)
         if q:
             # Build a grouped domain: (& base (| cond1 (| cond2 cond3)))
-            q_domain = ["|", ("product_id.name", "ilike", q), "|", ("product_id.default_code", "ilike", q), ("product_id.barcode", "ilike", q)]
-            domain = ["&"] + domain + q_domain
+             domain += ['|', '|',
+                    ('product_id.name', 'ilike', q),
+                    ('product_id.default_code', 'ilike', q),
+                    ('product_id.barcode', 'ilike', q),
+                ]
 
         Quant = env["stock.quant"].sudo()
 
@@ -94,16 +97,28 @@ class PublicInventory(http.Controller):
                 continue
             qty = g.get("quantity_sum") or 0.0
             res = g.get("reserved_quantity_sum") or 0.0
-            available = qty - res
-            if available <= 0:
-                continue
+            # available = qty - res
+            # if available <= 0:
+            #     continue
+            # rows.append({
+            #     "id": pid,
+            #     "name": p.name,
+            #     "default_code": p.default_code or "",
+            #     "barcode": p.barcode or "",
+            #     "uom": p.uom_id.name,
+            #     "qty": available,
+            #     "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
+            # })
+            
+            available = (g.get("quantity_sum") or 0.0) - (g.get("reserved_quantity_sum") or 0.0)
             rows.append({
                 "id": pid,
                 "name": p.name,
                 "default_code": p.default_code or "",
                 "barcode": p.barcode or "",
                 "uom": p.uom_id.name,
-                "qty": available,
+                # Tuỳ nhu cầu: hiển thị available hoặc tổng quantity
+                "qty": available,  # hoặc: g.get("quantity_sum") or 0.0
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
 
