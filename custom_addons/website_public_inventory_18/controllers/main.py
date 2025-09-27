@@ -28,11 +28,20 @@ def _domain_for_locations(warehouse_id):
         if wh:
             return [("location_id", "child_of", wh.lot_stock_id.id)]
         return [("id", "=", -1)]
+    # warehouse_id None/"" -> tất cả kho được phép
     allowed = _get_allowed_warehouses()
     if not allowed:
         return [("id", "=", -1)]
     loc_ids = allowed.mapped("lot_stock_id").ids
     return [("location_id", "child_of", loc_ids)]
+
+
+def _as_int_or_none(v):
+    try:
+        i = int(v)
+        return i
+    except (TypeError, ValueError):
+        return None
 
 class PublicInventory(http.Controller):
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
@@ -44,8 +53,8 @@ class PublicInventory(http.Controller):
             page = 1
 
         # Base domain: allowed stock locations only, only positive quantity prefilter
-        domain = _domain_for_locations(warehouse_id) + [("quantity", ">", 0)]
-
+        wid = _as_int_or_none(warehouse_id)
+        domain = _domain_for_locations(wid) + [("quantity", ">", 0)]
         # Text search (product fields)
         if q:
             # Build a grouped domain: (& base (| cond1 (| cond2 cond3)))
@@ -104,7 +113,7 @@ class PublicInventory(http.Controller):
             "website_public_inventory_18.inventory_page",
             {
                 "q": q or "",
-                "warehouse_id": int(warehouse_id) if warehouse_id else None,
+                "warehouse_id": wid,
                 "warehouses": Warehouses,
                 "rows": rows,
                 "page": page,
