@@ -35,7 +35,7 @@ def _domain_for_locations(warehouse_id):
     return [("location_id", "child_of", loc_ids)]
 
 class PublicInventory(http.Controller):
-    @http.route(["/inventory"], type="http", auth="public", website=True, sitemap=True)
+    @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
         env = request.env
         try:
