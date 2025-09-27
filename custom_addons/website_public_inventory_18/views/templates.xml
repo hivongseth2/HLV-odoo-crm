@@ -9,7 +9,8 @@
             <h1>Tra cứu tồn kho</h1>
 
             <!-- Form: trỏ thẳng /search_stock -->
-            <form t-att-action="'/search_stock'" method="get" class="row g-2 my-3">
+            <!-- <form t-att-action="'/search_stock'" method="get" class="row g-2 my-3"> -->
+            <form t-att-action="request.httprequest.path" method="get" class="row g-2 my-3">
               <div class="col-md-5">
                 <input name="q" t-att-value="q" class="form-control" placeholder="Tìm theo tên, mã, barcode"/>
               </div>
@@ -65,19 +66,19 @@
                 <ul class="pagination">
                   <li t-attf-class="page-item #{'disabled' if not (page > 1) else ''}">
                     <a class="page-link"
-                       t-att-href="'/search_stock?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page-1)">«</a>
+                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page-1))">«</a>
                   </li>
                   <t t-foreach="range(1, pages+1)" t-as="p">
                     <li t-attf-class="page-item #{'active' if p==page else ''}">
                       <a class="page-link"
-                         t-att-href="'/search_stock?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', p)">
+                       t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', p))">
                         <t t-esc="p"/>
                       </a>
                     </li>
                   </t>
                   <li t-attf-class="page-item #{'disabled' if (page + 1) > pages else ''}">
                     <a class="page-link"
-                       t-att-href="'/search_stock?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page+1)">»</a>
+                        t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page+1))">»</a>
                   </li>
                 </ul>
               </nav>
