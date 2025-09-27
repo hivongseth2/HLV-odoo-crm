@@ -3,22 +3,24 @@
   <record id="view_website_public_inventory_settings" model="ir.ui.view">
     <field name="name">website.public.inventory.settings</field>
     <field name="model">res.config.settings</field>
-    <field name="inherit_id" ref="base.view_res_config_settings"/>
+    <field name="inherit_id" ref="website.res_config_settings_view_form"/>
     <field name="arch" type="xml">
-      <!-- Chèn ngay SAU o_setting_box cuối cùng (rất dễ trúng ở mọi bản) -->
-      <xpath expr="(//div[contains(concat(' ', normalize-space(@class), ' '), ' o_setting_box ')])[last()]" position="after">
-        <div class="o_setting_box">
-          <div class="o_setting_left_pane">
-            <field name="allowed_warehouse_ids" widget="many2many_tags"/>
-          </div>
-          <div class="o_setting_right_pane">
-            <label for="allowed_warehouse_ids" string="Public Warehouses"/>
-            <div class="text-muted">
-              Chọn các kho cho phép hiển thị tồn trên trang công khai (/inventory).
+
+      <!-- Chèn thẳng vào app Website (theo snippet bạn cung cấp) -->
+      <xpath expr="//form/app[@name='website']" position="inside">
+        <block title="Public Inventory" id="website_public_inventory_settings">
+          <setting id="public_inventory_whitelist" string="Public Warehouses" help="Choose which warehouses are shown on the public /inventory page.">
+            <!-- Field Many2many đã khai báo trong res.config.settings (models/res_config_settings.py) -->
+            <field name="allowed_warehouse_ids" widget="many2many_tags" options="{'no_create': True, 'no_open': True}"/>
+            <div class="content-group mt8">
+              <small class="text-muted">
+                Trang công khai: <code>/inventory</code> — hiển thị tồn khả dụng (quantity - reserved) theo các kho được chọn.
+              </small>
             </div>
-          </div>
-        </div>
+          </setting>
+        </block>
       </xpath>
+
     </field>
   </record>
 </odoo>
