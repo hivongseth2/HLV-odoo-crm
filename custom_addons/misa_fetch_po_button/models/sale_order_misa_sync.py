@@ -109,64 +109,54 @@ class SaleOrder(models.Model):
             return []
 
     def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_id, headers):
-            """
-            Trả về (qty_base, price_base, uom_is_default)
-            - Nếu misa_uom_text == default_uom -> không đổi
-            - Nếu khác: thử tìm mapping
-                a) Tìm conversion trùng misa_uom_text (đơn vị của dòng)
-                b) Nếu không có, tìm conversion trùng default_uom (đơn vị mặc định của product)
-            """
-            default_uom_name = (product.uom_id and product.uom_id.name) or ""
-            if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
-                return qty, price, True
+        """
+        Chuyển qty/price từ đơn vị lấy từ MISA (misa_uom_text) về đơn vị mặc định của product (product.uom_id).
+        Trả về: (qty_base, price_base, uom_is_default)
+        - uom_is_default = True nếu misa_uom_text trùng default (không cần convert)
+        """
+        default_uom_name = (product.uom_id and product.uom_id.name) or ""
+        if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
+            return qty, price, True  # không cần đổi
 
-            conversions = self._misa_fetch_conversion_units(misa_product_id, headers) or []
+        # Lấy bảng quy đổi theo ProductID
+        conversions = self._misa_fetch_conversion_units(misa_product_id, headers) if misa_product_id else []
+        # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
+        conv = next((
+            c for c in (conversions or [])
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower()
+        ), None)
 
-            # a) TRƯỚC: tìm mapping theo UoM của dòng (ví dụ: dòng là "Hộp", ConversionUnitIDText = "Hộp")
-            conv = None
-            lower = str(misa_uom_text).strip().lower()
-            for c in conversions:
-                if (c.get("ConversionUnitIDText") or "").strip().lower() == lower:
-                    conv = c
-                    break
+        if not conv:
+            _logger.warning("⚠️ Không tìm thấy mapping UoM cho '%s' -> giữ nguyên số liệu gốc", misa_uom_text)
+            return qty, price, False
 
-            if conv:
-                rate = float(conv.get("ConversionRate") or 0.0)
-                op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân, 2=Chia
-                if rate <= 0:
-                    return qty, price, False
-                if op_id == 1:   # Nhân: 1 misa_uom = rate * base_uom
-                    # Dòng đang ở misa_uom, muốn về base -> nhân số lượng, chia đơn giá
-                    return qty * rate, (price / rate if rate else price), False
-                else:            # Chia: 1 misa_uom = (1/rate) * base_uom
-                    # Dòng đang ở misa_uom, muốn về base -> chia số lượng, nhân đơn giá
-                    return (qty / rate), (price * rate), False
+        try:
+            rate = float(conv.get("ConversionRate") or 0) or 0.0
+        except Exception:
+            rate = 0.0
+        try:
+            op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân, 2=Chia
+        except Exception:
+            op_id = 1
 
-            # b) SAU: không tìm thấy theo UoM dòng -> thử khớp theo default_uom (ví dụ JSON trả "Mét")
-            def_uom_lower = default_uom_name.strip().lower()
-            conv2 = None
-            for c in conversions:
-                if (c.get("ConversionUnitIDText") or "").strip().lower() == def_uom_lower:
-                    conv2 = c
-                    break
+        if rate <= 0:
+            _logger.warning("⚠️ ConversionRate không hợp lệ (<=0) cho '%s'", misa_uom_text)
+            return qty, price, False
 
-            if not conv2:
-                # Không có mapping nào dùng được
-                return qty, price, False
+        # Diễn giải:
+        # - op_id == 1 (Nhân): "1 Hộp = 60 Cuộn"
+        #   Dòng ở Hộp, default là Cuộn -> qty_base = qty * 60; price_base = price / 60
+        # - op_id == 2 (Chia): "1 Mét = 1/50 Cuộn"
+        #   Dòng ở Mét,  default là Cuộn -> qty_base = qty / 50; price_base = price * 50
+        if op_id == 1:
+            qty_base = qty * rate
+            price_base = price / rate if rate else price
+        else:  # op_id == 2 (Chia) hoặc bất kỳ khác coi như "Chia"
+            qty_base = qty / rate
+            price_base = price * rate
 
-            rate = float(conv2.get("ConversionRate") or 0.0)
-            op_id = int(conv2.get("ConversionOperatorID") or 1)
-            if rate <= 0:
-                return qty, price, False
+        return qty_base, price_base, False
 
-            # Ở nhánh này ConversionUnitIDText == default_uom_name
-            # Ví dụ: "1 Mét = 1/50 Cuộn" (op_id=2 Chia, rate=50)
-            # => 1 base(Cuộn) = 50 default(Mét)
-            # Dòng đang ở base(Cuộn) -> về default(Mét): qty * 50, price / 50
-            if op_id == 2:  # Chia: 1 default = (1/rate) * base  =>  1 base = rate * default
-                return qty * rate, (price / rate if rate else price), False
-            else:           # Nhân: 1 default = rate * base      =>  1 base = (1/rate) * default
-                return (qty / rate), (price * rate), False
 
     # ---------------- core sync ----------------
 
@@ -237,6 +227,9 @@ class SaleOrder(models.Model):
             price_unit     = _flt(ln.get("Price"), 0.0)
             discount_pct   = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name       = (ln.get("UnitIDText") or "Cái").strip()
+            note_text      = (ln.get("DescriptionProduct")
+                  or ln.get("Note")
+                  or "")
 
             product = odoo_utils._get_or_create_product(
                 code=product_code,
@@ -244,8 +237,8 @@ class SaleOrder(models.Model):
                 unit_name=uom_name,
                 cost=price_unit,
                 product_type="consu",
-                purchase_ok=False,
-                sale_ok=False,
+                purchase_ok=True,
+                sale_ok=True,
             )
 
             seen_codes.add(product_code)
@@ -256,6 +249,7 @@ class SaleOrder(models.Model):
                     'product_uom_qty': qty,
                     'price_unit': price_unit,
                     'discount': discount_pct,
+                    'note': note_text,
                 })
             else:
                 SaleLine.create({
@@ -265,6 +259,7 @@ class SaleOrder(models.Model):
                     'product_uom_qty': qty,
                     'price_unit': price_unit,
                     'discount': discount_pct,
+                    'note': note_text,
                 })
 
         # (tuỳ) xoá line không còn trong MISA
@@ -333,7 +328,8 @@ class SaleOrder(models.Model):
 
         # 2) Chặn các trường hợp không an toàn
         if any(p.state == 'done' for p in self.picking_ids):
-            raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
+            # raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
+            return self._partial_resync_open_pickings_when_done_present(data, lines, headers)
         if self.invoice_ids.filtered(lambda m: m.state == 'posted'):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
@@ -445,6 +441,7 @@ class SaleOrder(models.Model):
         delivery_no   = data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress") or ''
+        origin        = data.get("SaleOrderName") or ''
 
         # địa chỉ giao hàng
         try:
@@ -462,7 +459,7 @@ class SaleOrder(models.Model):
         vals_create = {
             'name': order_no,
             'partner_id': partner.id,
-            'origin': order_no,
+            'origin': origin,
             'warehouse_id': old_wh.id or False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'partner_shipping_id': shipping_id,
@@ -490,16 +487,20 @@ class SaleOrder(models.Model):
             price_unit   = _flt(ln.get("Price"), 0.0)
             discount_pct = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name     = (ln.get("UnitIDText") or "Cái").strip()
+            note_text    = (ln.get("DescriptionProduct")
+                or ln.get("Note")
+                or "")
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
+            # sửa purchase_ok và sale_ok True
             product = odoo_utils._get_or_create_product(
                 code=product_code,
                 name=description,
                 unit_name=uom_name,
                 cost=price_unit,
                 product_type="consu",
-                purchase_ok=False,
-                sale_ok=False,
+                purchase_ok=True,
+                sale_ok=True,
             )
 
             # id sản phẩm bên MISA (để truy bảng quy đổi)
@@ -522,6 +523,7 @@ class SaleOrder(models.Model):
                 'product_uom_qty': qty_for_odoo,
                 'price_unit': price_for_odoo,
                 'discount': discount_pct,
+                'note': note_text,
             }
             # Nếu có convert, ép UoM line về UoM mặc định của product
             if not use_default_uom and product.uom_id:
@@ -555,3 +557,399 @@ class SaleOrder(models.Model):
             'res_id': new_so.id,
             'target': 'current',
         }
+
+    def _sync_so_lines_from_misa_no_picking(self, lines, headers):
+        """
+        Đưa các dòng SO về đúng như MISA (qty/price/uom) theo UoM mặc định của product.
+        KHÔNG đụng pickings. Nếu có hoá đơn 'posted' thì KHÔNG nên gọi hàm này.
+        """
+        self.ensure_one()
+        env = self.env
+        odoo_utils = env['odoo.utils']
+        SaleLine = env['sale.order.line']
+
+        def _flt(x, dv=0.0):
+            try:
+                return float(x or 0.0)
+            except Exception:
+                return dv
+
+        # Map các dòng SO hiện tại theo default_code để cập nhật/gộp về 1 dòng/mã
+        so_lines_by_code = {}
+        for line in self.order_line:
+            code = (line.product_id and line.product_id.default_code) or ''
+            if code:
+                so_lines_by_code[code] = line
+
+        seen_codes = set()
+
+        for ln in (lines or []):
+            code = (ln.get("ProductIDText") or "").strip()
+            if not code:
+                continue
+
+            desc       = ln.get("Description") or code
+            qty        = _flt(ln.get("Amount"), 0.0)
+            price      = _flt(ln.get("Price"), 0.0)
+            discount   = _flt(ln.get("DiscountPercent"), 0.0)
+            uom_name   = (ln.get("UnitIDText") or "Cái").strip()
+            misa_pid   = ln.get("ProductID") or ln.get("ProductId")
+            note_text  = (ln.get("DescriptionProduct")
+              or ln.get("Note")
+              or "")
+
+            # Lấy / tạo product đúng theo mã
+            product = odoo_utils._get_or_create_product(
+                code=code,
+                name=desc,
+                unit_name=uom_name,
+                cost=price,
+                product_type="consu",
+                purchase_ok=True,
+                sale_ok=True,
+            )
+
+            # Convert về UoM mặc định của product
+            qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(
+                product=product,
+                misa_uom_text=uom_name,
+                qty=qty,
+                price=price,
+                misa_product_id=misa_pid,
+                headers=headers,
+            )
+
+            vals_line = {
+                'name': desc,
+                'product_id': product.id,
+                'product_uom_qty': qty_base,
+                'price_unit': price_base,
+                'discount': discount,
+                'note': note_text,
+            }
+            if not is_default and product.uom_id:
+                vals_line['product_uom'] = product.uom_id.id
+
+            if code in so_lines_by_code:
+                so_lines_by_code[code].write(vals_line)
+            else:
+                SaleLine.create(dict(vals_line, order_id=self.id))
+
+            seen_codes.add(code)
+
+        # (tuỳ chọn) Xoá dòng không còn trong MISA
+        for code, line in so_lines_by_code.items():
+            if code not in seen_codes:
+                line.unlink()
+
+
+    def _safe_unreserve_move(self, move):
+        """Helper: Unreserve move một cách an toàn (reset qty_done, huỷ reserve)."""
+        try:
+            if move.move_line_ids:
+                # reset mọi qty_done trên line (nếu có)
+                move.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
+            if hasattr(move, '_do_unreserve'):
+                move._do_unreserve()
+            elif hasattr(move, 'do_unreserve'):
+                move.do_unreserve()
+        except Exception as exc:
+            _logger.debug("Unreserve move %s failed: %s", move.id, exc)
+
+
+    def _safe_cancel_move(self, move):
+        """Helper: Cancel move an toàn; fallback về set qty=0 nếu không cancel được."""
+        try:
+            self._safe_unreserve_move(move)
+            if move.state not in ('cancel', 'done'):
+                if hasattr(move, '_action_cancel'):
+                    move._action_cancel()
+                else:
+                    # một số bản dùng action_cancel()
+                    move.action_cancel()
+            _logger.debug("Cancelled move %s", move.id)
+        except Exception as exc:
+            _logger.warning("Cancel move %s failed: %s; fallback set qty=0", move.id, exc)
+            try:
+                move.write({'product_uom_qty': 0.0})
+            except Exception as exc2:
+                _logger.error("Fallback set qty=0 failed for move %s: %s", move.id, exc2)
+
+
+    def _partial_resync_open_pickings_when_done_present(self, data, lines, headers):
+        """
+        Đồng bộ khi đã có ít nhất 1 picking 'done' (KHÔNG xoá/chạm picking done):
+        - (Bước 0) Đưa SO lines về đúng MISA (nếu không có invoice 'posted')
+        - (Bước 1) Tính đã giao (delivered) theo picking done
+        - (Bước 2) Tính tổng theo MISA (misa_total) theo UoM mặc định
+        - (Bước 3) Tính 'needed_in_open' = misa_total - delivered (min=0)
+        - (Bước 4..7) Cập nhật/tạo/cancel các move ở picking mở theo needed_in_open
+        Kết quả: tổng giao (done) + tổng ở picking mở = tổng theo MISA
+        """
+        self.ensure_one()
+        env = self.env
+        odoo_utils = env['odoo.utils']
+
+        _logger.info("=== Bắt đầu partial resync cho SO %s ===", self.name)
+
+        # --------- Bước 0: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
+        if self.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
+            _logger.warning("Bỏ qua cập nhật SO lines vì có hoá đơn 'posted'. Sẽ chỉ vá picking mở.")
+        else:
+            try:
+                self._sync_so_lines_from_misa_no_picking(lines, headers)
+            except Exception as exc:
+                _logger.warning("Không thể đồng bộ SO lines: %s (tiếp tục vá picking)", exc)
+
+        # --------- Bước 1: tổng đã giao theo picking DONE ----------
+        delivered_by_product = {}
+        done_picks = self.picking_ids.filtered(lambda p: p.state == 'done')
+        _logger.info("Có %s picking đã DONE", len(done_picks))
+
+        for picking in done_picks:
+            _logger.debug("  DONE picking: %s", picking.name)
+            for ml in picking.move_line_ids:
+                prod = ml.product_id
+                if not prod:
+                    continue
+                qty_delivered = float(getattr(ml, 'qty_done', 0.0) or 0.0)
+                delivered_by_product[prod] = delivered_by_product.get(prod, 0.0) + qty_delivered
+                _logger.debug("    Delivered %s: +%s (tổng=%s)",
+                            prod.display_name, qty_delivered, delivered_by_product[prod])
+
+        # --------- Bước 2: tổng theo MISA (quy về UoM mặc định) ----------
+        def _flt(x, dv=0.0):
+            try:
+                return float(x or 0.0)
+            except Exception:
+                return dv
+
+        misa_total_by_product = {}
+        for ln in (lines or []):
+            product_code = ln.get("ProductIDText")
+            if not product_code:
+                continue
+
+            desc     = ln.get("Description") or product_code
+            qty      = _flt(ln.get("Amount"), 0.0)
+            price    = _flt(ln.get("Price"), 0.0)
+            uom_name = (ln.get("UnitIDText") or "Cái").strip()
+            misa_pid = ln.get("ProductID") or ln.get("ProductId")
+
+            product = odoo_utils._get_or_create_product(
+                code=product_code,
+                name=desc,
+                unit_name=uom_name,
+                cost=price,
+                product_type="consu",
+                purchase_ok=True,
+                sale_ok=True,
+            )
+
+            qty_base, price_dummy, is_default = self._convert_qty_price_to_default_uom(
+                product=product,
+                misa_uom_text=uom_name,
+                qty=qty,
+                price=price,
+                misa_product_id=misa_pid,
+                headers=headers,
+            )
+            misa_total_by_product[product] = misa_total_by_product.get(product, 0.0) + (qty_base or 0.0)
+            _logger.debug("MISA Total %s: %s", product.display_name, misa_total_by_product[product])
+
+        # --------- Bước 3 (VIẾT LẠI): Kiểm tra over-delivery & tính 'needed_in_open' ----------
+        # Mục tiêu: Nếu đã giao (delivered) > tổng theo MISA (misa_total) cho bất kỳ sản phẩm nào
+        # => CHẶN ĐỒNG BỘ NGAY (raise UserError). Không tiếp tục các bước sau.
+        needed_in_open_by_product = {}
+        over_deliveries = []
+        EPS = 1e-9  # chống sai số float nhỏ
+
+        # Hợp tất cả sản phẩm xuất hiện ở MISA hoặc đã giao
+        all_products = set(list(misa_total_by_product.keys()) + list(delivered_by_product.keys()))
+
+        for prod in all_products:
+            misa_total = float(misa_total_by_product.get(prod, 0.0) or 0.0)
+            delivered  = float(delivered_by_product.get(prod, 0.0) or 0.0)
+
+            if delivered > misa_total + EPS:
+                # Ghi nhận vi phạm over-delivery (đã giao vượt số MISA)
+                over_deliveries.append((prod, misa_total, delivered))
+                _logger.error(
+                    "Over-delivery: %s | MISA_total=%s, delivered=%s",
+                    prod.display_name, misa_total, delivered
+                )
+            else:
+                # Không vi phạm: tính phần còn thiếu để đẩy vào picking mở
+                needed = misa_total - delivered
+                # needed luôn >= 0 do đã loại trường hợp delivered > misa_total
+                needed_in_open_by_product[prod] = needed
+                _logger.info(
+                    "Need in open %s: MISA_total=%s, delivered=%s, needed_in_open=%s",
+                    prod.display_name, misa_total, delivered, needed
+                )
+
+        # Nếu có bất kỳ sản phẩm nào over-delivery => chặn đồng bộ
+        if over_deliveries:
+            details = "\n".join(
+                f"- {p.display_name}: MISA={m:g}, Đã giao={d:g}"
+                for (p, m, d) in over_deliveries
+            )
+            _logger.error("CHẶN ĐỒNG BỘ do over-delivery:\n%s", details)
+            raise UserError(_(
+                "Phát hiện đã giao vượt số lượng theo MISA, đồng bộ bị chặn.\n"
+                "%s\n\n"
+                "Vui lòng xử lý nghiệp vụ trước khi đồng bộ lại:\n"
+                "• Tạo phiếu trả hàng / điều chỉnh kho để đưa 'đã giao' ≤ số trên MISA.\n"
+                "• Hoặc cập nhật lại số lượng trên MISA nếu MISA mới là số chuẩn."
+            ) % details)
+        # --------- Bước 4: lấy/chuẩn bị picking mở ----------
+        open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
+        target_pick = open_picks[:1] and open_picks[0] or False
+        _logger.info("Có %s picking đang mở; target_pick=%s",
+                    len(open_picks), target_pick and target_pick.name)
+
+        nothing_to_ship = all(qty <= 0.0 for qty in needed_in_open_by_product.values())
+
+        if not target_pick and nothing_to_ship:
+            _logger.info("Không còn gì cần trong picking mở và không có picking mở")
+            self.message_post(body=_("Đồng bộ hoàn tất: Không cần picking mở thêm."))
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {'title': _("Đồng bộ thành công"), 'message': _("Không cần picking mở thêm"), 'type': 'success'},
+            }
+
+        if not target_pick and not nothing_to_ship:
+            _logger.info("Chưa có picking mở nhưng vẫn còn hàng cần giao → tạo mới")
+            if self.state in ('draft', 'sent'):
+                self.action_confirm()
+            # refresh lại open_picks sau confirm
+            open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
+            target_pick = open_picks[:1] and open_picks[0] or False
+            if not target_pick:
+                picking_type = self.warehouse_id and self.warehouse_id.out_type_id
+                if not picking_type:
+                    raise UserError(_("Không xác định được loại phiếu giao (picking type) của kho %s")
+                                    % (self.warehouse_id.name or ''))
+                target_pick = env['stock.picking'].create({
+                    'partner_id': self.partner_id.id,
+                    'picking_type_id': picking_type.id,
+                    'origin': self.name,
+                    'location_id': picking_type.default_location_src_id.id,
+                    'location_dest_id': picking_type.default_location_dest_id.id,
+                    'sale_id': self.id,
+                })
+                _logger.info("Đã tạo picking mới: %s", target_pick.name)
+            # đồng bộ biến open_picks cho các bước sau
+            open_picks = self.picking_ids.filtered(lambda p: p.state not in ('done', 'cancel'))
+
+        # --------- Bước 5: lập chỉ mục move mở (theo product_id và fallback theo default_code) ----------
+        open_moves_by_product = {}
+        open_moves_by_code = {}
+
+        for picking in (open_picks or [target_pick]):
+            if not picking:
+                continue
+            for mv in picking.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                # theo product (record)
+                open_moves_by_product.setdefault(mv.product_id, []).append(mv)
+                # fallback theo mã
+                code = (mv.product_id.default_code or '').strip()
+                if code:
+                    open_moves_by_code.setdefault(code, []).append(mv)
+                _logger.debug("Open move %s: %s qty=%s state=%s",
+                            picking.name, mv.product_id.display_name, mv.product_uom_qty, mv.state)
+
+        # --------- Bước 6: cập nhật/cắt/tạo move theo needed_in_open ----------
+        StockMove = env['stock.move']
+
+        # 6.1: với các sản phẩm needed=0 → cancel/qty=0 tất cả move mở
+        for prod, mv_list in open_moves_by_product.items():
+            if needed_in_open_by_product.get(prod, 0.0) <= 0.0:
+                _logger.info("Huỷ/cắt các move của %s (needed=0)", prod.display_name)
+                for mv in mv_list:
+                    self._safe_cancel_move(mv)
+
+        # 6.2: các sản phẩm needed > 0 → cập nhật hoặc tạo move
+        for prod, needed_qty in needed_in_open_by_product.items():
+            if needed_qty <= 0.0:
+                continue
+
+            # Lấy các move mở hiện có theo product; nếu không thấy, fallback theo mã
+            existing_moves = open_moves_by_product.get(prod, [])
+            if not existing_moves:
+                code = (prod.default_code or '').strip()
+                if code:
+                    existing_moves = open_moves_by_code.get(code, []) or []
+
+            # Lọc chỉ move thật sự còn mở
+            existing_moves = [mv for mv in existing_moves if mv.state not in ('done', 'cancel')]
+
+            if existing_moves:
+                main_mv = existing_moves[0]
+                self._safe_unreserve_move(main_mv)
+                # cập nhật số lượng & UoM (về UoM mặc định của product)
+                main_mv.write({
+                    'product_uom_qty': needed_qty,
+                    'product_uom': prod.uom_id.id if prod.uom_id else main_mv.product_uom.id,
+                })
+                _logger.info("Cập nhật move %s → qty=%s", main_mv.display_name, needed_qty)
+
+                # cancel các move dư
+                for extra_mv in existing_moves[1:]:
+                    _logger.info("Cancel move thừa %s", extra_mv.display_name)
+                    self._safe_cancel_move(extra_mv)
+            else:
+                # Tạo move mới
+                _logger.info("Tạo move mới cho %s với số lượng %s", prod.display_name, needed_qty)
+                move_vals = {
+                    'name': prod.display_name,
+                    'product_id': prod.id,
+                    'product_uom_qty': needed_qty,
+                    'product_uom': prod.uom_id.id if prod.uom_id else env.ref('uom.product_uom_unit').id,
+                    'picking_id': target_pick.id,
+                    'location_id': target_pick.location_id.id,
+                    'location_dest_id': target_pick.location_dest_id.id,
+                    'state': 'draft',
+                    'sale_line_id': False,  # có thể map theo SOL nếu cần
+                }
+                new_mv = StockMove.create(move_vals)
+                try:
+                    if hasattr(new_mv, '_action_confirm'):
+                        new_mv._action_confirm()
+                    else:
+                        new_mv.action_confirm()
+                except Exception as exc:
+                    _logger.warning("Xác nhận move mới lỗi: %s", exc)
+
+        # --------- Bước 7: re-assign (giữ chỗ) ----------
+        if target_pick and any(qty > 0 for qty in needed_in_open_by_product.values()):
+            try:
+                if target_pick.state == 'draft' and hasattr(target_pick, 'action_confirm'):
+                    target_pick.action_confirm()
+                if hasattr(target_pick, 'action_assign'):
+                    target_pick.action_assign()
+                _logger.info("Đã re-assign picking %s", target_pick.name)
+            except Exception as exc:
+                _logger.warning("Không thể reserve lại picking %s: %s", target_pick.name, exc)
+
+        # --------- Bước 8: thông báo kết quả ----------
+        summary_parts = []
+        for prod, needed in needed_in_open_by_product.items():
+            if needed > 0:
+                summary_parts.append(f"{prod.display_name}: {needed:g}")
+
+        summary = _("Picking mở cần: %s") % (", ".join(summary_parts) if summary_parts else _("không có gì"))
+        _logger.info("Kết quả đồng bộ SO %s: %s", self.name, summary)
+        self.message_post(body=_("Đồng bộ MISA thành công. %s") % summary)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Đồng bộ thành công"),
+                'message': summary,
+                'type': 'success'
+            }
+        }
+
