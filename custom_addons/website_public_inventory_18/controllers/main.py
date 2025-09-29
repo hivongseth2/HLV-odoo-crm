@@ -3,13 +3,10 @@ import logging
 import math
 from odoo import http
 from odoo.http import request
-import math
-import logging
 
 PAGE_SIZE = 20
 _logger = logging.getLogger(__name__)
 
-_logger = logging.getLogger(__name__)
 
 def _get_allowed_warehouses():
     env = request.env
@@ -98,8 +95,7 @@ class PublicInventory(http.Controller):
         # >>>>>>>>>>>>>  FIX MULTI-COMPANY CONTEXT  <<<<<<<<<<<<<<
         company_ids = _companies_for_context(wid)
         if not company_ids:
-            # fallback nhẹ: tất cả company của môi trường (public user thường 1 company)
-            company_ids = env.companies.ids
+            company_ids = env.companies.ids  # fallback: công ty hiện có
 
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
 
@@ -135,8 +131,7 @@ class PublicInventory(http.Controller):
 
             qty = _rg_sum(g, "quantity")
             res = _rg_sum(g, "reserved_quantity")
-            avail = qty - res
-            # Nếu muốn chặn số âm (tuỳ chọn): avail = max(0.0, qty - res)
+            avail = qty - res  # hoặc max(0, qty-res) tuỳ nhu cầu hiển thị
 
             rows.append({
                 "id": pid,
@@ -153,8 +148,6 @@ class PublicInventory(http.Controller):
                 "Product %s (%s): qty_total=%.6f, reserved=%.6f, avail=%.6f | raw=%s",
                 pid, p.default_code or "-", qty, res, avail, g
             )
-
-            _logger.warning("search %s", g)
 
         Warehouses = _get_allowed_warehouses()
 
@@ -173,6 +166,68 @@ class PublicInventory(http.Controller):
 
     @http.route(["/search_stock/json"], type="json", auth="public", methods=["POST"])
     def inventory_json(self, q="", warehouse_id=None, page=1):
-        # Tận dụng qcontext của trang HTML để tránh lặp code
         resp = self.inventory_page(q=q, warehouse_id=warehouse_id, page=page)
         return resp.qcontext.get("rows", [])
+
+    # ========= NEW: Breakdown theo từng kho cho 1 product =========
+    @http.route(["/search_stock/product_breakdown"], type="json", auth="public", methods=["POST"])
+    def product_breakdown(self, product_id=None, warehouse_id=None):
+        """
+        Trả về danh sách tồn của product theo từng kho user được phép xem.
+        Nếu truyền warehouse_id: chỉ breakdown trong kho đó.
+        """
+        env = request.env
+        pid = _as_int_or_none(product_id)
+        if not pid:
+            return {"ok": False, "error": "invalid_product_id", "rows": []}
+
+        # Company context như trang chính
+        wid = _as_int_or_none(warehouse_id)
+        company_ids = _companies_for_context(wid)
+        if not company_ids:
+            company_ids = env.companies.ids
+        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
+
+        # Chọn danh sách kho
+        warehouses = []
+        if wid:
+            wh = env["stock.warehouse"].sudo().browse(wid).exists()
+            if wh:
+                warehouses = wh
+        if not warehouses:
+            warehouses = _get_allowed_warehouses()
+
+        rows = []
+        for wh in warehouses:
+            domain = [
+                ("product_id", "=", pid),
+                ("location_id", "child_of", wh.view_location_id.id),
+            ]
+            # nhóm toàn bộ theo product_id (chỉ 1)
+            grps = Quant.read_group(
+                domain,
+                ["product_id", "quantity:sum", "reserved_quantity:sum"],
+                ["product_id"],
+            )
+            if grps:
+                g = grps[0]
+                qty = _rg_sum(g, "quantity")
+                res = _rg_sum(g, "reserved_quantity")
+                avail = qty - res
+            else:
+                qty = res = 0.0
+                avail = 0.0
+
+            rows.append({
+                "warehouse_id": wh.id,
+                "warehouse_name": wh.name,
+                "qty_total": qty,
+                "qty_reserved": res,
+                "qty_available": avail,
+            })
+            _logger.debug(
+                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, avail=%.6f",
+                pid, wh.name, qty, res, avail
+            )
+
+        return {"ok": True, "rows": rows}
