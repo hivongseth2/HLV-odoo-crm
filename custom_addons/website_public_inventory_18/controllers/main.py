@@ -3,6 +3,7 @@ from venv import logger
 from odoo import http
 from odoo.http import request
 import math
+import logging
 
 PAGE_SIZE = 20
 
