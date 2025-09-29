@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from venv import logger
 from odoo import http
 from odoo.http import request
 import math
@@ -127,7 +128,7 @@ class PublicInventory(http.Controller):
                 "qty_total": qty,   # tồn thực tế
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
-            print("search ", g)
+            logger.warning("search ", g)
 
         Warehouses = _get_allowed_warehouses()
 
