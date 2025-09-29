@@ -5,7 +5,7 @@ import base64
 from odoo import http
 from odoo.http import request
 
-PAGE_SIZE = 20
+PAGE_SIZE = 25
 _logger = logging.getLogger(__name__)
 
 
@@ -254,24 +254,23 @@ class PublicInventory(http.Controller):
             if grps:
                 g = grps[0]
                 qty_total = _rg_sum(g, "quantity")
-                res = _rg_sum(g, "reserved_quantity")
+                qty_reserved = _rg_sum(g, "reserved_quantity")
             else:
-                qty_total = res = 0.0
+                qty_total = qty_reserved = 0.0
 
-            # Tính virtual_available cho kho này
-            p_wh = product.with_context(warehouse=wh.id)
-            qty_forecasted = p_wh.virtual_available
+            # Tồn khả dụng = Tồn thực tế - Đã giữ hàng
+            qty_available = qty_total - qty_reserved
 
             rows.append({
                 "warehouse_id": wh.id,
                 "warehouse_name": wh.name,
+                "qty_available": qty_available,   # Tồn khả dụng
                 "qty_total": qty_total,           # Tồn thực tế
-                "qty_reserved": res,              # Đã reserve
-                "qty_forecasted": qty_forecasted, # Được dự báo
+                "qty_reserved": qty_reserved,     # Đã giữ hàng
             })
             _logger.debug(
-                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, forecasted=%.6f",
-                pid, wh.name, qty_total, res, qty_forecasted
+                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, available=%.6f",
+                pid, wh.name, qty_total, qty_reserved, qty_available
             )
 
         return {"ok": True, "rows": rows}
