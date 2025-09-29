@@ -40,7 +40,7 @@
                       <th>ĐVT</th>
                       <th class="text-end">Tồn khả dụng</th>
                       <th class="text-end">Tồn thực tế</th>
-                      <th></th>
+                      <th>Giá</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -52,6 +52,7 @@
                         <td><t t-esc="r['uom']"/></td>
                         <td class="text-end"><t t-esc="('%.2f' % r['qty'])"/></td>
                         <td class="text-end"><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></td>
+                        <td class="text-end"><t t-esc="('%.2f' % r.get('price', 0.0))"/></td>
                         <td>
                           <t t-if="r['website_url']">
                             <a t-att-href="r['website_url']" class="btn btn-sm btn-outline-secondary">Xem</a>
