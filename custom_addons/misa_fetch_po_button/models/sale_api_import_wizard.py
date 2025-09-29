@@ -269,6 +269,12 @@ class SaleApiImportWizard(models.TransientModel):
                 origin = order.get("SaleOrderName")
                 status = order.get("RevenueStatusIDText")
 
+                # Bỏ qua đơn đã giao (DeliveryStatusID=2)
+                delivery_status = order.get("DeliveryStatusID", "0")
+                if delivery_status is not None and str(delivery_status).strip() == "2":
+                    _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
+                    continue
+
                 if customer_name not in e_accounts and status == "Bản nháp":
                     _logger.info("⏭️ SO %s là 'Bản nháp' và không thuộc e_accounts => bỏ qua", order.get("SaleOrderNo"))
                     continue
