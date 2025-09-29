@@ -51,7 +51,6 @@ class ProductImportWizard(models.TransientModel):
     def _get_unit_category(self):
         """Tìm category 'Unit' (tiếng Anh mặc định). Nếu tên đã dịch, vẫn ưu tiên chuỗi chứa 'Unit'."""
         Cat = self.env['uom.category'].sudo()
-        # Ưu tiên tên chứa 'Unit' (an toàn khi có dịch)
         cat = Cat.search([('name', 'ilike', 'Unit')], limit=1)
         if cat:
             return cat
