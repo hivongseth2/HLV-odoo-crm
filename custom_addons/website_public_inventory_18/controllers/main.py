@@ -102,6 +102,7 @@ class PublicInventory(http.Controller):
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
         pmap = {p.id: p for p in Product.browse(prod_ids)}
 
+        print("search ",groups)
         rows = []
         for g in groups:
             if not g.get("product_id"):
