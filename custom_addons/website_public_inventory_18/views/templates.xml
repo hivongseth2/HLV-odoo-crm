@@ -34,11 +34,12 @@
                   <thead>
                     <tr>
                       <th style="width:32px;"></th> <!-- Nút + -->
+                      <th style="width:80px;">Hình ảnh</th>
                       <th>Mã</th>
                       <th>Tên</th>
                       <th>Barcode</th>
                       <th>ĐVT</th>
-                      <th class="text-end">Tồn khả dụng</th>
+                      <th class="text-end">Được dự báo</th>
                       <th class="text-end">Tồn thực tế</th>
                       <th class="text-end">Giá bán</th>
                       <th></th>
@@ -54,12 +55,27 @@
                                   t-att-data-pid="r['id']"
                                   title="Xem chi tiết theo kho">+</button>
                         </td>
+                        <td>
+                          <t t-if="r.get('image_url')">
+                            <img t-att-src="r['image_url']" 
+                                 alt="Product Image" 
+                                 class="img-thumbnail"
+                                 style="width: 60px; height: 60px; object-fit: cover;"/>
+                          </t>
+                          <t t-else="">
+                            <div class="bg-light d-flex align-items-center justify-content-center" 
+                                 style="width: 60px; height: 60px; border: 1px solid #dee2e6;">
+                              <small class="text-muted">N/A</small>
+                            </div>
+                          </t>
+                        </td>
                         <td><t t-esc="r['default_code']"/></td>
                         <td><t t-esc="r['name']"/></td>
                         <td><t t-esc="r['barcode']"/></td>
                         <td><t t-esc="r['uom']"/></td>
-                        <!-- Hiển thị 2 chữ số thập phân -->
-                        <td class="text-end"><t t-esc="('%.2f' % r['qty'])"/></td>
+                        <!-- Được dự báo (virtual_available) -->
+                        <td class="text-end"><t t-esc="('%.2f' % r.get('qty_forecasted', 0.0))"/></td>
+                        <!-- Tồn thực tế (qty_on_hand) -->
                         <td class="text-end"><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></td>
                         <td class="text-end">
                           <t t-if="r.get('list_price')">
@@ -126,7 +142,7 @@
             html += '<table class="table table-sm table-bordered mb-0">';
             html += '<thead><tr>';
             html += '<th>Kho</th>';
-            html += '<th class="text-end">Tồn khả dụng</th>';
+            html += '<th class="text-end">Được dự báo</th>';
             html += '<th class="text-end">Tồn thực tế</th>';
             html += '<th class="text-end">Đã reserve</th>';
             html += '</tr></thead><tbody>';
@@ -134,7 +150,7 @@
               rows.forEach(function (r) {
                 html += '<tr>';
                 html += '<td>' + (r.warehouse_name || '') + '</td>';
-                html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
+                html += '<td class="text-end">' + fmt(r.qty_forecasted) + '</td>';
                 html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
                 html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
                 html += '</tr>';

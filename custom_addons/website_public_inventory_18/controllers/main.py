@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import math
+import base64
 from odoo import http
 from odoo.http import request
 
@@ -67,6 +68,27 @@ def _rg_sum(row, base):
         return 0.0
 
 
+def _get_product_image_url(product):
+    """Lấy URL hình ảnh sản phẩm"""
+    if not product:
+        return ""
+    
+    # Ưu tiên image_1920, nếu không có thì dùng image_128
+    if product.image_1920:
+        return f"/web/image/product.product/{product.id}/image_1920"
+    elif product.image_128:
+        return f"/web/image/product.product/{product.id}/image_128"
+    
+    # Fallback sang template image
+    tmpl = product.product_tmpl_id
+    if tmpl.image_1920:
+        return f"/web/image/product.template/{tmpl.id}/image_1920"
+    elif tmpl.image_128:
+        return f"/web/image/product.template/{tmpl.id}/image_128"
+    
+    return ""
+
+
 class PublicInventory(http.Controller):
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
@@ -118,7 +140,8 @@ class PublicInventory(http.Controller):
         # Lấy thông tin sản phẩm
         prod_ids = [g["product_id"][0] for g in groups if g.get("product_id")]
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
-        pmap = {p.id: p for p in Product.browse(prod_ids)}
+        products = Product.browse(prod_ids)
+        pmap = {p.id: p for p in products}
 
         rows = []
         for g in groups:
@@ -129,9 +152,20 @@ class PublicInventory(http.Controller):
             if not p:
                 continue
 
-            qty = _rg_sum(g, "quantity")
+            qty_total = _rg_sum(g, "quantity")  # Tồn thực tế (qty_on_hand)
             res = _rg_sum(g, "reserved_quantity")
-            avail = qty - res  # hoặc max(0, qty-res) tuỳ nhu cầu hiển thị
+            
+            # Tính "Được dự báo" = virtual_available
+            # virtual_available = qty_on_hand - outgoing + incoming
+            # Nhưng để đơn giản, ta dùng computed field từ product
+            # Cần with_context để tính theo kho cụ thể
+            if wid:
+                p_ctx = p.with_context(warehouse=wid)
+            else:
+                # Nếu không chọn kho, lấy tổng
+                p_ctx = p
+            
+            qty_forecasted = p_ctx.virtual_available  # Được dự báo
 
             rows.append({
                 "id": pid,
@@ -139,15 +173,16 @@ class PublicInventory(http.Controller):
                 "default_code": p.default_code or "",
                 "barcode": p.barcode or "",
                 "uom": p.uom_id.name,
-                "qty": avail,        # tồn khả dụng
-                "qty_total": qty,    # tồn thực tế
-                "list_price": p.list_price,  # Giá bán
+                "qty_forecasted": qty_forecasted,  # Được dự báo (virtual_available)
+                "qty_total": qty_total,            # Tồn thực tế (qty_on_hand)
+                "list_price": p.list_price,        # Giá bán
+                "image_url": _get_product_image_url(p),  # URL hình ảnh
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
 
             _logger.debug(
-                "Product %s (%s): qty_total=%.6f, reserved=%.6f, avail=%.6f | raw=%s",
-                pid, p.default_code or "-", qty, res, avail, g
+                "Product %s (%s): qty_total=%.6f, reserved=%.6f, forecasted=%.6f | raw=%s",
+                pid, p.default_code or "-", qty_total, res, qty_forecasted, g
             )
 
         Warehouses = _get_allowed_warehouses()
@@ -188,6 +223,12 @@ class PublicInventory(http.Controller):
         if not company_ids:
             company_ids = env.companies.ids
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
+        Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
+
+        # Lấy product để tính virtual_available
+        product = Product.browse(pid).exists()
+        if not product:
+            return {"ok": False, "error": "product_not_found", "rows": []}
 
         # Chọn danh sách kho
         warehouses = []
@@ -212,23 +253,25 @@ class PublicInventory(http.Controller):
             )
             if grps:
                 g = grps[0]
-                qty = _rg_sum(g, "quantity")
+                qty_total = _rg_sum(g, "quantity")
                 res = _rg_sum(g, "reserved_quantity")
-                avail = qty - res
             else:
-                qty = res = 0.0
-                avail = 0.0
+                qty_total = res = 0.0
+
+            # Tính virtual_available cho kho này
+            p_wh = product.with_context(warehouse=wh.id)
+            qty_forecasted = p_wh.virtual_available
 
             rows.append({
                 "warehouse_id": wh.id,
                 "warehouse_name": wh.name,
-                "qty_total": qty,
-                "qty_reserved": res,
-                "qty_available": avail,
+                "qty_total": qty_total,           # Tồn thực tế
+                "qty_reserved": res,              # Đã reserve
+                "qty_forecasted": qty_forecasted, # Được dự báo
             })
             _logger.debug(
-                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, avail=%.6f",
-                pid, wh.name, qty, res, avail
+                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, forecasted=%.6f",
+                pid, wh.name, qty_total, res, qty_forecasted
             )
 
         return {"ok": True, "rows": rows}
