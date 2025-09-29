@@ -127,7 +127,7 @@ class PublicInventory(http.Controller):
                 "qty_total": qty,   # tồn thực tế
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
-        print("search ", g)
+            print("search ", g)
 
         Warehouses = _get_allowed_warehouses()
 
