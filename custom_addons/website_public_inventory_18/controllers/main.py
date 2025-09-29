@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-from venv import logger
+import logging
+import math
 from odoo import http
 from odoo.http import request
-import math
 
 PAGE_SIZE = 20
+_logger = logging.getLogger(__name__)
 
 
 def _get_allowed_warehouses():
@@ -51,6 +52,21 @@ def _as_int_or_none(v):
         return None
 
 
+def _rg_sum(row, base):
+    """
+    Lấy tổng từ read_group:
+    - Ưu tiên key f"{base}_sum" (khi dùng 'field:sum' trong fields)
+    - Fallback sang key gốc 'base' nếu module/phiên bản trả khác
+    """
+    v = row.get(f"{base}_sum")
+    if v is None:
+        v = row.get(base)
+    try:
+        return float(v or 0.0)
+    except Exception:
+        return 0.0
+
+
 class PublicInventory(http.Controller):
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
@@ -79,7 +95,8 @@ class PublicInventory(http.Controller):
         # >>>>>>>>>>>>>  FIX MULTI-COMPANY CONTEXT  <<<<<<<<<<<<<<
         company_ids = _companies_for_context(wid)
         if not company_ids:
-            company_ids = env.companies.ids  # fallback: công ty hiện có của user/website
+            # fallback nhẹ: tất cả company của môi trường (public user thường 1 company)
+            company_ids = env.companies.ids
 
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
 
@@ -92,8 +109,8 @@ class PublicInventory(http.Controller):
             offset=(page - 1) * PAGE_SIZE,
             orderby="product_id",
         )
+        _logger.debug("read_group returned %d groups", len(groups))
 
-        print("search api", groups)
         # Đếm nhóm để phân trang
         count_groups = Quant.read_group(domain, ["product_id"], ["product_id"])
         total = len(count_groups)
@@ -104,7 +121,6 @@ class PublicInventory(http.Controller):
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
         pmap = {p.id: p for p in Product.browse(prod_ids)}
 
-        print("search ",groups)
         rows = []
         for g in groups:
             if not g.get("product_id"):
@@ -114,9 +130,10 @@ class PublicInventory(http.Controller):
             if not p:
                 continue
 
-            qty = g.get("quantity_sum") or 0.0
-            res = g.get("reserved_quantity_sum") or 0.0
-            avail = qty - res  # tồn khả dụng
+            qty = _rg_sum(g, "quantity")
+            res = _rg_sum(g, "reserved_quantity")
+            avail = qty - res
+            # Nếu muốn chặn số âm (tuỳ chọn): avail = max(0.0, qty - res)
 
             rows.append({
                 "id": pid,
@@ -124,11 +141,14 @@ class PublicInventory(http.Controller):
                 "default_code": p.default_code or "",
                 "barcode": p.barcode or "",
                 "uom": p.uom_id.name,
-                "qty": avail,       # tồn khả dụng
-                "qty_total": qty,   # tồn thực tế
+                "qty": avail,        # tồn khả dụng
+                "qty_total": qty,    # tồn thực tế
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
-            logger.warning("search ", g)
+            _logger.debug(
+                "Product %s (%s): qty_total=%.6f, reserved=%.6f, avail=%.6f | raw=%s",
+                pid, p.default_code or "-", qty, res, avail, g
+            )
 
         Warehouses = _get_allowed_warehouses()
 
@@ -147,5 +167,6 @@ class PublicInventory(http.Controller):
 
     @http.route(["/search_stock/json"], type="json", auth="public", methods=["POST"])
     def inventory_json(self, q="", warehouse_id=None, page=1):
+        # Tận dụng qcontext của trang HTML để tránh lặp code
         resp = self.inventory_page(q=q, warehouse_id=warehouse_id, page=page)
         return resp.qcontext.get("rows", [])
