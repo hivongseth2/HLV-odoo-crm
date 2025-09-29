@@ -161,9 +161,11 @@ class PublicInventory(http.Controller):
             # Cần with_context để tính theo kho cụ thể
             if wid:
                 p_ctx = p.with_context(warehouse=wid)
+                _logger.warning("Calculating virtual_available for product %s with warehouse context %s", p, wid)
             else:
                 # Nếu không chọn kho, lấy tổng
                 p_ctx = p
+                _logger.warning("Calculating virtual_available for product %s without specific warehouse context", p)
             
             qty_forecasted = p_ctx.virtual_available  # Được dự báo
 
@@ -305,5 +307,5 @@ class PublicInventory(http.Controller):
             )
 
         result = {"ok": True, "rows": rows}
-        _logger.info("Breakdown API result for product %s: %s", pid, result)
+        _logger.warning("Breakdown API result for product %s: %s", pid, result)
         return result
