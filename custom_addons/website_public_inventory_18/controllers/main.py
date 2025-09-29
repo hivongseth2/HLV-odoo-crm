@@ -6,6 +6,7 @@ import math
 
 PAGE_SIZE = 20
 
+_logger = logging.getLogger(__name__)
 
 def _get_allowed_warehouses():
     env = request.env
@@ -128,7 +129,7 @@ class PublicInventory(http.Controller):
                 "qty_total": qty,   # tồn thực tế
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
-            logger.warning("search ", g)
+            _logger.warning("search %s", g) 
 
         Warehouses = _get_allowed_warehouses()
 
