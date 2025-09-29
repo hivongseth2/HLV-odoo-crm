@@ -1,0 +1,19 @@
+# -*- coding: utf-8 -*-
+{
+    "name": "Website Public Inventory (Odoo 18)",
+    "summary": "Public inventory lookup page with search & pagination.",
+    "version": "18.0.1.0.0",
+    "author": "Your Company",
+    "website": "https://example.com",
+    "category": "Website/Inventory",
+    "license": "LGPL-3",
+    "depends": ["website", "stock"],
+    "data": [
+        "views/templates.xml",
+        "views/menu.xml",
+        "views/res_config_settings_views.xml",
+    ],
+    "assets": {},
+    "installable": True,
+    "application": False,
+}

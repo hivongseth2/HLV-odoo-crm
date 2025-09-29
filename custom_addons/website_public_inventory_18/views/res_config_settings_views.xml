@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="view_website_public_inventory_settings" model="ir.ui.view">
+    <field name="name">website.public.inventory.settings</field>
+    <field name="model">res.config.settings</field>
+    <field name="inherit_id" ref="website.res_config_settings_view_form"/>
+    <field name="arch" type="xml">
+
+      <!-- Chèn thẳng vào app Website (theo snippet bạn cung cấp) -->
+      <xpath expr="//form/app[@name='website']" position="inside">
+        <block title="Public Inventory" id="website_public_inventory_settings">
+          <setting id="public_inventory_whitelist" string="Public Warehouses" help="Choose which warehouses are shown on the public /inventory page.">
+            <!-- Field Many2many đã khai báo trong res.config.settings (models/res_config_settings.py) -->
+            <field name="allowed_warehouse_ids" widget="many2many_tags" options="{'no_create': True, 'no_open': True}"/>
+            <div class="content-group mt8">
+              <small class="text-muted">
+                Trang công khai: <code>/inventory</code> — hiển thị tồn khả dụng (quantity - reserved) theo các kho được chọn.
+              </small>
+            </div>
+          </setting>
+        </block>
+      </xpath>
+
+    </field>
+  </record>
+</odoo>

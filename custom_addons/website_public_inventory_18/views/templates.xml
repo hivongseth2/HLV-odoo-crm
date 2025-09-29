@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <!-- QWeb template độc lập, KHÔNG inherit -->
+  <template id="inventory_page" name="Public Inventory Page">
+    <t t-call="website.layout">
+      <main id="wrap" class="oe_structure">
+        <section>
+          <div class="container mt-4 mb-6">
+            <h1>Tra cứu tồn kho</h1>
+
+            <!-- Form GET giữ nguyên tham số -->
+            <form t-att-action="request.httprequest.path" method="get" class="row g-2 my-3">
+              <div class="col-md-5">
+                <input name="q" t-att-value="q" class="form-control" placeholder="Tìm theo tên, mã, barcode"/>
+              </div>
+              <div class="col-md-4">
+                <select name="warehouse_id" class="form-select">
+                  <option t-att-selected="not warehouse_id" value="">Tất cả kho (được phép)</option>
+                  <t t-foreach="warehouses" t-as="w">
+                    <option t-att-value="w.id" t-att-selected="int(warehouse_id)==w.id if warehouse_id else False">
+                      <t t-esc="w.name"/>
+                    </option>
+                  </t>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <button class="btn btn-primary w-100" type="submit">Tìm kiếm</button>
+              </div>
+            </form>
+
+            <t t-if="rows">
+              <div class="table-responsive">
+                <table class="table table-striped align-middle" id="inv-table">
+                  <thead>
+                    <tr>
+                      <th style="width:32px;"></th> <!-- Nút + -->
+                      <th style="width:80px;">Hình ảnh</th>
+                      <th>Mã</th>
+                      <th>Tên</th>
+                      <th>Barcode</th>
+                      <th>ĐVT</th>
+                      <th class="text-end">Được dự báo</th>
+                      <th class="text-end">Tồn thực tế</th>
+                      <th class="text-end">Giá bán</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <t t-foreach="rows" t-as="r">
+                      <!-- Hàng chính -->
+                      <tr t-att-id="'row-'+str(r['id'])">
+                        <td>
+                          <button type="button"
+                                  class="btn btn-sm btn-outline-primary btn-expand"
+                                  t-att-data-pid="r['id']"
+                                  title="Xem chi tiết theo kho">+</button>
+                        </td>
+                        <td>
+                          <t t-if="r.get('image_url')">
+                            <img t-att-src="r['image_url']" 
+                                 alt="Product Image" 
+                                 class="img-thumbnail"
+                                 style="width: 60px; height: 60px; object-fit: cover;"/>
+                          </t>
+                          <t t-else="">
+                            <div class="bg-light d-flex align-items-center justify-content-center" 
+                                 style="width: 60px; height: 60px; border: 1px solid #dee2e6;">
+                              <small class="text-muted">N/A</small>
+                            </div>
+                          </t>
+                        </td>
+                        <td><t t-esc="r['default_code']"/></td>
+                        <td><t t-esc="r['name']"/></td>
+                        <td><t t-esc="r['barcode']"/></td>
+                        <td><t t-esc="r['uom']"/></td>
+                        <!-- Được dự báo (virtual_available) -->
+                        <td class="text-end"><t t-esc="('%.2f' % r.get('qty_forecasted', 0.0))"/></td>
+                        <!-- Tồn thực tế (qty_on_hand) -->
+                        <td class="text-end"><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></td>
+                        <td class="text-end">
+                          <t t-if="r.get('list_price')">
+                            <t t-esc="'{:,.0f}'.format(r['list_price'])"/>
+                          </t>
+                          <t t-else="">-</t>
+                        </td>
+                        <td>
+                          <t t-if="r['website_url']">
+                            <a t-att-href="r['website_url']" class="btn btn-sm btn-outline-secondary">Xem</a>
+                          </t>
+                        </td>
+                      </tr>
+
+                      <!-- Hàng chi tiết sẽ chèn vào bằng JS khi bấm nút + -->
+                    </t>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Pagination -->
+              <nav t-if="pages > 1" aria-label="Page navigation">
+                <ul class="pagination">
+                  <li t-attf-class="page-item #{'disabled' if not (page > 1) else ''}">
+                    <a class="page-link"
+                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page-1))">«</a>
+                  </li>
+                  <t t-foreach="range(1, pages+1)" t-as="p">
+                    <li t-attf-class="page-item #{'active' if p==page else ''}">
+                      <a class="page-link"
+                        t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', p))">
+                        <t t-esc="p"/>
+                      </a>
+                    </li>
+                  </t>
+                  <li t-attf-class="page-item #{'disabled' if (page + 1) > pages else ''}">
+                    <a class="page-link"
+                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page+1))">»</a>
+                  </li>
+                </ul>
+              </nav>
+            </t>
+            <t t-else="">
+              <div class="alert alert-info">Không có dữ liệu phù hợp.</div>
+            </t>
+
+          </div>
+        </section>
+      </main>
+
+      <!-- Load jQuery if not already loaded -->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+      
+      <!-- JS: xử lý mở rộng chi tiết từng kho -->
+      <script type="text/javascript"><![CDATA[
+        (function () {
+          function fmt(n) {
+            try { return (parseFloat(n) || 0).toFixed(2); } catch(e) { return '0.00'; }
+          }
+
+          function buildDetailTable(rows) {
+            var html = '';
+            html += '<div class="p-2">';
+            html += '<table class="table table-sm table-bordered mb-0">';
+            html += '<thead><tr>';
+            html += '<th>Kho</th>';
+            html += '<th class="text-end">Được dự báo</th>';
+            html += '<th class="text-end">Tồn thực tế</th>';
+            html += '<th class="text-end">Đã reserve</th>';
+            html += '</tr></thead><tbody>';
+            if (rows && rows.length) {
+              rows.forEach(function (r) {
+                html += '<tr>';
+                html += '<td>' + (r.warehouse_name || '') + '</td>';
+                html += '<td class="text-end">' + fmt(r.qty_forecasted) + '</td>';
+                html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
+                html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
+                html += '</tr>';
+              });
+            } else {
+              html += '<tr><td colspan="4"><em>Không có dữ liệu chi tiết.</em></td></tr>';
+            }
+            html += '</tbody></table></div>';
+            return html;
+          }
+
+          function ensureDetailRow($tr, pid) {
+            var $next = $tr.next();
+            if ($next.length && $next.hasClass('detail-row')) {
+              return $next;
+            }
+            var colCount = $tr.children('td,th').length;
+            var $detail = $(
+              '<tr class="detail-row bg-light"><td colspan="' + colCount + '">'+
+              '<div class="d-flex align-items-center gap-2 p-2">'+
+              '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>'+
+              '<span>Đang tải chi tiết kho...</span>'+
+              '</div>'+
+              '</td></tr>'
+            );
+            $tr.after($detail);
+            return $detail;
+          }
+
+          function loadBreakdown(pid, warehouse_id, done) {
+            var payload = {
+              jsonrpc: "2.0",
+              method: "call",
+              params: { 
+                product_id: pid, 
+                warehouse_id: warehouse_id || null 
+              },
+              id: new Date().getTime()
+            };
+            
+            console.log('Sending request:', payload);
+            
+            $.ajax({
+              url: "/search_stock/product_breakdown",
+              type: "POST",
+              dataType: "json",
+              contentType: "application/json; charset=utf-8",
+              data: JSON.stringify(payload),
+              success: function (resp) {
+                console.log('Response received:', resp);
+                try {
+                  var result = (resp && resp.result) ? resp.result : resp;
+                  done(null, result);
+                } catch (e) {
+                  console.error('Error parsing response:', e);
+                  done(e);
+                }
+              },
+              error: function (xhr, status, error) { 
+                console.error('AJAX error:', status, error, xhr.responseText);
+                done(xhr || true); 
+              }
+            });
+          }
+
+          $(document).ready(function() {
+            console.log('Inventory page JS loaded');
+            
+            $(document).on('click', '.btn-expand', function () {
+              var $btn = $(this);
+              var pid = $btn.data('pid');
+              var $row = $btn.closest('tr');
+              var $next = $row.next();
+
+              console.log('Expand button clicked for product:', pid);
+
+              if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) {
+                $next.remove();
+                $btn.text('+');
+                return;
+              }
+
+              var $detail = ensureDetailRow($row, pid);
+              $btn.text('–');
+
+              var currentWid = $('select[name="warehouse_id"]').val() || '';
+              console.log('Current warehouse:', currentWid);
+              
+              loadBreakdown(pid, currentWid, function (err, data) {
+                if (err || !data || data.ok === false) {
+                  var msg = (data && data.error) ? data.error : 'load_failed';
+                  console.error('Load breakdown error:', err, data);
+                  $detail.find('td').html(
+                    '<div class="alert alert-danger mb-0">Không tải được chi tiết (' + msg + ').</div>'
+                  );
+                  return;
+                }
+                console.log('Breakdown data:', data);
+                var html = buildDetailTable(data.rows || []);
+                $detail.find('td').html(html);
+              });
+            });
+          });
+        })();
+      ]]></script>
+    </t>
+  </template>
+</odoo>

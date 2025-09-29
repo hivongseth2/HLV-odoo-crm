@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="menu_public_inventory" model="website.menu">
+    <field name="name">Tra cứu tồn kho</field>
+    <field name="url">/search_stock</field>
+    <field name="website_id" ref="website.default_website"/>
+    <field name="parent_id" ref="website.main_menu"/>
+    <field name="is_visible" eval="True"/>
+    <field name="sequence" eval="40"/>
+  </record>
+</odoo>
