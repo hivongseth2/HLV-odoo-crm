@@ -104,6 +104,10 @@
       </main>
 
       <!-- JS: xử lý mở rộng chi tiết từng kho -->
+<!-- Load jQuery if not already loaded -->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+      
+      <!-- JS: xử lý mở rộng chi tiết từng kho -->
       <script type="text/javascript"><![CDATA[
         (function () {
           function fmt(n) {
@@ -155,54 +159,77 @@
           }
 
           function loadBreakdown(pid, warehouse_id, done) {
+            var payload = {
+              jsonrpc: "2.0",
+              method: "call",
+              params: { 
+                product_id: pid, 
+                warehouse_id: warehouse_id || null 
+              },
+              id: new Date().getTime()
+            };
+            
+            console.log('Sending request:', payload);
+            
             $.ajax({
               url: "/search_stock/product_breakdown",
-              method: "POST",
-              contentType: "application/json",
-              data: JSON.stringify({
-                jsonrpc: "2.0",
-                method: "call",
-                params: { product_id: pid, warehouse_id: warehouse_id || null },
-                id: Date.now()
-              }),
+              type: "POST",
+              dataType: "json",
+              contentType: "application/json; charset=utf-8",
+              data: JSON.stringify(payload),
               success: function (resp) {
+                console.log('Response received:', resp);
                 try {
                   var result = (resp && resp.result) ? resp.result : resp;
                   done(null, result);
                 } catch (e) {
+                  console.error('Error parsing response:', e);
                   done(e);
                 }
               },
-              error: function (xhr) { done(xhr || true); }
+              error: function (xhr, status, error) { 
+                console.error('AJAX error:', status, error, xhr.responseText);
+                done(xhr || true); 
+              }
             });
           }
 
-          $(document).on('click', '.btn-expand', function () {
-            var $btn = $(this);
-            var pid = $btn.data('pid');
-            var $row = $btn.closest('tr');
-            var $next = $row.next();
+          $(document).ready(function() {
+            console.log('Inventory page JS loaded');
+            
+            $(document).on('click', '.btn-expand', function () {
+              var $btn = $(this);
+              var pid = $btn.data('pid');
+              var $row = $btn.closest('tr');
+              var $next = $row.next();
 
-            if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) {
-              $next.remove();
-              $btn.text('+');
-              return;
-            }
+              console.log('Expand button clicked for product:', pid);
 
-            var $detail = ensureDetailRow($row, pid);
-            $btn.text('–');
-
-            var currentWid = $('select[name="warehouse_id"]').val() || '';
-            loadBreakdown(pid, currentWid, function (err, data) {
-              if (err || !data || data.ok === false) {
-                var msg = (data && data.error) ? data.error : 'load_failed';
-                $detail.find('td').html(
-                  '<div class="alert alert-danger mb-0">Không tải được chi tiết (' + msg + ').</div>'
-                );
+              if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) {
+                $next.remove();
+                $btn.text('+');
                 return;
               }
-              var html = buildDetailTable(data.rows || []);
-              $detail.find('td').html(html);
+
+              var $detail = ensureDetailRow($row, pid);
+              $btn.text('–');
+
+              var currentWid = $('select[name="warehouse_id"]').val() || '';
+              console.log('Current warehouse:', currentWid);
+              
+              loadBreakdown(pid, currentWid, function (err, data) {
+                if (err || !data || data.ok === false) {
+                  var msg = (data && data.error) ? data.error : 'load_failed';
+                  console.error('Load breakdown error:', err, data);
+                  $detail.find('td').html(
+                    '<div class="alert alert-danger mb-0">Không tải được chi tiết (' + msg + ').</div>'
+                  );
+                  return;
+                }
+                console.log('Breakdown data:', data);
+                var html = buildDetailTable(data.rows || []);
+                $detail.find('td').html(html);
+              });
             });
           });
         })();
