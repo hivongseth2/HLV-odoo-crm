@@ -173,7 +173,7 @@ class MisaPOFetch(models.TransientModel):
                 planned_naive_utc = _to_naive_utc(receive_date_str)
 
                 delivery_status = po.get("DeliveryStatusID", "0")
-                if str(delivery_status).strip() == "2":
+                if delivery_status is not None and str(delivery_status).strip() == "2":
                     _logger.info("⏭️  Bỏ qua PO %s (refid=%s) vì Đơn hàng đã giao", refno, refid)
                     continue
 
