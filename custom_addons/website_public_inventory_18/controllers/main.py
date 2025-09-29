@@ -92,6 +92,7 @@ class PublicInventory(http.Controller):
             orderby="product_id",
         )
 
+        print("search api", groups)
         # Đếm nhóm để phân trang
         count_groups = Quant.read_group(domain, ["product_id"], ["product_id"])
         total = len(count_groups)
