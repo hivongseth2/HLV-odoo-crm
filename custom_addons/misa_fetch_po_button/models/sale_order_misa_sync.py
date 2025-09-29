@@ -228,8 +228,8 @@ class SaleOrder(models.Model):
             discount_pct   = _flt(ln.get("DiscountPercent"), 0.0)
             uom_name       = (ln.get("UnitIDText") or "Cái").strip()
             note_text      = (ln.get("DescriptionProduct")
-                  or ln.get("Note")
-                  or "")
+                                or ln.get("Note")
+                                or "")
 
             product = odoo_utils._get_or_create_product(
                 code=product_code,
@@ -557,6 +557,7 @@ class SaleOrder(models.Model):
             'res_id': new_so.id,
             'target': 'current',
         }
+
 
     def _sync_so_lines_from_misa_no_picking(self, lines, headers):
         """
@@ -952,4 +953,3 @@ class SaleOrder(models.Model):
                 'type': 'success'
             }
         }
-

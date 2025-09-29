@@ -5,3 +5,9 @@ class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
     misa_id = fields.Char(string="MISA ID", copy=False, index=True)
+
+
+class SaleOrderLine(models.Model):
+    _inherit = 'sale.order.line'
+
+    note = fields.Text(string="Note")
