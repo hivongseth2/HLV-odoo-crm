@@ -171,8 +171,11 @@ class MisaPOFetch(models.TransientModel):
                 
                 receive_date_str = po.get("receive_date") or po.get("refdate")
                 planned_naive_utc = _to_naive_utc(receive_date_str)
-                
 
+                delivery_status = po.get("DeliveryStatusID")
+                if str(delivery_status).strip() != "1":
+                    _logger.info("⏭️  Bỏ qua PO %s (refid=%s) vì DeliveryStatusID != 1", refno, refid)
+                    continue
 
                 partner = odoo_utils._get_or_create_partner(supplier_name)
 
