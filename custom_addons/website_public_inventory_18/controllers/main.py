@@ -161,18 +161,9 @@ class PublicInventory(http.Controller):
             # Cần with_context để tính theo kho cụ thể
             if wid:
                 p_ctx = p.with_context(warehouse=wid)
-                _logger.warning(
-                "Product %s (%s) full read: %s",
-                p.id, p.default_code or "-", p.with_context(warehouse=wid).read()[0]
-                )           
             else:
                 # Nếu không chọn kho, lấy tổng
                 p_ctx = p
-                _logger.warning(
-                "Product %s (%s) full read: %s",
-                p.id, p.default_code or "-", p.with_context(warehouse=wid).read()[0]
-                )
-
             
             qty_forecasted = p_ctx.virtual_available  # Được dự báo
 
@@ -263,56 +254,23 @@ class PublicInventory(http.Controller):
             if grps:
                 g = grps[0]
                 qty_total = _rg_sum(g, "quantity")
-                res = _rg_sum(g, "reserved_quantity")
+                qty_reserved = _rg_sum(g, "reserved_quantity")
             else:
-                qty_total = res = 0.0
+                qty_total = qty_reserved = 0.0
 
-            # Tính virtual_available cho kho cụ thể này
-            # virtual_available = qty_on_hand + incoming - outgoing
-            # Để tính chính xác, ta cần query stock.move
-            StockMove = env["stock.move"].sudo().with_context(allowed_company_ids=company_ids)
-            
-            # Incoming: moves vào kho này (state = assigned/waiting/confirmed)
-            incoming_domain = [
-                ("product_id", "=", pid),
-                ("location_dest_id", "child_of", wh.view_location_id.id),
-                ("state", "in", ["assigned", "waiting", "confirmed"]),
-            ]
-            incoming_moves = StockMove.read_group(
-                incoming_domain,
-                ["product_id", "product_uom_qty:sum"],
-                ["product_id"],
-            )
-            incoming_qty = _rg_sum(incoming_moves[0], "product_uom_qty") if incoming_moves else 0.0
-            
-            # Outgoing: moves ra khỏi kho này (state = assigned/waiting/confirmed)
-            outgoing_domain = [
-                ("product_id", "=", pid),
-                ("location_id", "child_of", wh.view_location_id.id),
-                ("state", "in", ["assigned", "waiting", "confirmed"]),
-            ]
-            outgoing_moves = StockMove.read_group(
-                outgoing_domain,
-                ["product_id", "product_uom_qty:sum"],
-                ["product_id"],
-            )
-            outgoing_qty = _rg_sum(outgoing_moves[0], "product_uom_qty") if outgoing_moves else 0.0
-            
-            # Virtual available = tồn thực tế + incoming - outgoing
-            qty_forecasted = qty_total + incoming_qty - outgoing_qty
+            # Tồn khả dụng = Tồn thực tế - Đã giữ hàng
+            qty_available = qty_total - qty_reserved
 
             rows.append({
                 "warehouse_id": wh.id,
                 "warehouse_name": wh.name,
+                "qty_available": qty_available,   # Tồn khả dụng
                 "qty_total": qty_total,           # Tồn thực tế
-                "qty_reserved": res,              # Đã reserve
-                "qty_forecasted": qty_forecasted, # Được dự báo (theo kho cụ thể)
+                "qty_reserved": qty_reserved,     # Đã giữ hàng
             })
             _logger.debug(
-                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, incoming=%.6f, outgoing=%.6f, forecasted=%.6f",
-                pid, wh.name, qty_total, res, incoming_qty, outgoing_qty, qty_forecasted
+                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, available=%.6f",
+                pid, wh.name, qty_total, qty_reserved, qty_available
             )
 
-        result = {"ok": True, "rows": rows}
-        _logger.warning("Breakdown API result for product %s: %s", pid, result)
-        return result
+        return {"ok": True, "rows": rows}

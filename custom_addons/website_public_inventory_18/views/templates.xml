@@ -98,49 +98,48 @@
 
               <!-- Pagination -->
               <nav t-if="pages &gt; 1" aria-label="Page navigation">
-              <!-- Hiển thị theo block 25 trang -->
-              <t t-set="BLOCK" t-value="25"/>
-              <t t-set="block_index" t-value="(page - 1) // BLOCK"/>
-              <t t-set="start_p" t-value="block_index * BLOCK + 1"/>
-              <t t-set="end_p"   t-value="min(pages, start_p + BLOCK - 1)"/>
+                <!-- Hiển thị theo block 25 trang -->
+                <t t-set="BLOCK" t-value="25"/>
+                <t t-set="block_index" t-value="(page - 1) // BLOCK"/>
+                <t t-set="start_p" t-value="block_index * BLOCK + 1"/>
+                <t t-set="end_p"   t-value="min(pages, start_p + BLOCK - 1)"/>
 
-              <ul class="pagination">
-                <!-- Trang trước -->
-                <li t-attf-class="page-item #{'disabled' if not (page &gt; 1) else ''}">
-                  <a class="page-link"
-                    t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page-1))">«</a>
-                </li>
-
-                <!-- Về block trước -->
-                <li t-if="start_p &gt; 1" class="page-item">
-                  <a class="page-link"
-                    t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', start_p-1))">…</a>
-                </li>
-
-                <!-- Các trang trong block hiện tại (tối đa 25) -->
-                <t t-foreach="range(int(start_p), int(end_p) + 1)" t-as="p">
-                  <li t-attf-class="page-item #{'active' if p==page else ''}">
+                <ul class="pagination">
+                  <!-- Trang trước -->
+                  <li t-attf-class="page-item #{'disabled' if not (page &gt; 1) else ''}">
                     <a class="page-link"
-                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', p))">
-                      <t t-esc="p"/>
-                    </a>
+                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page-1))">«</a>
                   </li>
-                </t>
 
-                <!-- Sang block sau -->
-                <li t-if="end_p &lt; pages" class="page-item">
-                  <a class="page-link"
-                    t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', end_p+1))">…</a>
-                </li>
+                  <!-- Về block trước -->
+                  <li t-if="start_p &gt; 1" class="page-item">
+                    <a class="page-link"
+                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', start_p-1))">…</a>
+                  </li>
 
-                <!-- Trang sau -->
-                <li t-attf-class="page-item #{'disabled' if (page + 1) &gt; pages else ''}">
-                  <a class="page-link"
-                    t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page+1))">»</a>
-                </li>
-              </ul>
-            </nav>
+                  <!-- Các trang trong block hiện tại (tối đa 25) -->
+                  <t t-foreach="range(int(start_p), int(end_p) + 1)" t-as="p">
+                    <li t-attf-class="page-item #{'active' if p==page else ''}">
+                      <a class="page-link"
+                        t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', p))">
+                        <t t-esc="p"/>
+                      </a>
+                    </li>
+                  </t>
 
+                  <!-- Sang block sau -->
+                  <li t-if="end_p &lt; pages" class="page-item">
+                    <a class="page-link"
+                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', end_p+1))">…</a>
+                  </li>
+
+                  <!-- Trang sau -->
+                  <li t-attf-class="page-item #{'disabled' if (page + 1) &gt; pages else ''}">
+                    <a class="page-link"
+                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;page=%d' % (q, warehouse_id or '', page+1))">»</a>
+                  </li>
+                </ul>
+              </nav>
             </t>
             <t t-else="">
               <div class="alert alert-info">Không có dữ liệu phù hợp.</div>
@@ -166,7 +165,7 @@
             html += '<table class="table table-sm table-bordered mb-0">';
             html += '<thead><tr>';
             html += '<th>Kho</th>';
-            html += '<th class="text-end">Được dự báo</th>';
+            html += '<th class="text-end">Tồn khả dụng</th>';
             html += '<th class="text-end">Tồn thực tế</th>';
             html += '<th class="text-end">Đã giữ hàng</th>';
             html += '</tr></thead><tbody>';
@@ -174,7 +173,7 @@
               rows.forEach(function (r) {
                 html += '<tr>';
                 html += '<td>' + (r.warehouse_name || '') + '</td>';
-                html += '<td class="text-end">' + fmt(r.qty_forecasted) + '</td>';
+                html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
                 html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
                 html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
                 html += '</tr>';
