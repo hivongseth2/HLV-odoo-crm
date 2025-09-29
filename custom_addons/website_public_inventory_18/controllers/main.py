@@ -5,7 +5,7 @@ import base64
 from odoo import http
 from odoo.http import request
 
-PAGE_SIZE = 20
+PAGE_SIZE = 25
 _logger = logging.getLogger(__name__)
 
 
@@ -258,20 +258,50 @@ class PublicInventory(http.Controller):
             else:
                 qty_total = res = 0.0
 
-            # Tính virtual_available cho kho này
-            p_wh = product.with_context(warehouse=wh.id)
-            qty_forecasted = p_wh.virtual_available
+            # Tính virtual_available cho kho cụ thể này
+            # virtual_available = qty_on_hand + incoming - outgoing
+            # Để tính chính xác, ta cần query stock.move
+            StockMove = env["stock.move"].sudo().with_context(allowed_company_ids=company_ids)
+            
+            # Incoming: moves vào kho này (state = assigned/waiting/confirmed)
+            incoming_domain = [
+                ("product_id", "=", pid),
+                ("location_dest_id", "child_of", wh.view_location_id.id),
+                ("state", "in", ["assigned", "waiting", "confirmed"]),
+            ]
+            incoming_moves = StockMove.read_group(
+                incoming_domain,
+                ["product_id", "product_uom_qty:sum"],
+                ["product_id"],
+            )
+            incoming_qty = _rg_sum(incoming_moves[0], "product_uom_qty") if incoming_moves else 0.0
+            
+            # Outgoing: moves ra khỏi kho này (state = assigned/waiting/confirmed)
+            outgoing_domain = [
+                ("product_id", "=", pid),
+                ("location_id", "child_of", wh.view_location_id.id),
+                ("state", "in", ["assigned", "waiting", "confirmed"]),
+            ]
+            outgoing_moves = StockMove.read_group(
+                outgoing_domain,
+                ["product_id", "product_uom_qty:sum"],
+                ["product_id"],
+            )
+            outgoing_qty = _rg_sum(outgoing_moves[0], "product_uom_qty") if outgoing_moves else 0.0
+            
+            # Virtual available = tồn thực tế + incoming - outgoing
+            qty_forecasted = qty_total + incoming_qty - outgoing_qty
 
             rows.append({
                 "warehouse_id": wh.id,
                 "warehouse_name": wh.name,
                 "qty_total": qty_total,           # Tồn thực tế
                 "qty_reserved": res,              # Đã reserve
-                "qty_forecasted": qty_forecasted, # Được dự báo
+                "qty_forecasted": qty_forecasted, # Được dự báo (theo kho cụ thể)
             })
             _logger.debug(
-                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, forecasted=%.6f",
-                pid, wh.name, qty_total, res, qty_forecasted
+                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, incoming=%.6f, outgoing=%.6f, forecasted=%.6f",
+                pid, wh.name, qty_total, res, incoming_qty, outgoing_qty, qty_forecasted
             )
 
         return {"ok": True, "rows": rows}
