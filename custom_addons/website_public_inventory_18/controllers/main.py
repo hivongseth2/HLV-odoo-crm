@@ -161,11 +161,18 @@ class PublicInventory(http.Controller):
             # Cần with_context để tính theo kho cụ thể
             if wid:
                 p_ctx = p.with_context(warehouse=wid)
-                _logger.warning("Calculating virtual_available for product %s with warehouse context %s", p, wid)
+                _logger.warning(
+                "Product %s (%s) full read: %s",
+                p.id, p.default_code or "-", p.with_context(warehouse=wid).read()[0]
+                )           
             else:
                 # Nếu không chọn kho, lấy tổng
                 p_ctx = p
-                _logger.warning("Calculating virtual_available for product %s without specific warehouse context", p)
+                _logger.warning(
+                "Product %s (%s) full read: %s",
+                p.id, p.default_code or "-", p.with_context(warehouse=wid).read()[0]
+                )
+
             
             qty_forecasted = p_ctx.virtual_available  # Được dự báo
 
