@@ -304,4 +304,6 @@ class PublicInventory(http.Controller):
                 pid, wh.name, qty_total, res, incoming_qty, outgoing_qty, qty_forecasted
             )
 
-        return {"ok": True, "rows": rows}
+        result = {"ok": True, "rows": rows}
+        _logger.info("Breakdown API result for product %s: %s", pid, result)
+        return result
