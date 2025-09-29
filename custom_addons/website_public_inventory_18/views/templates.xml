@@ -40,6 +40,7 @@
                       <th>ĐVT</th>
                       <th class="text-end">Tồn khả dụng</th>
                       <th class="text-end">Tồn thực tế</th>
+                      <th class="text-end">Giá bán</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -60,6 +61,12 @@
                         <!-- Hiển thị 2 chữ số thập phân -->
                         <td class="text-end"><t t-esc="('%.2f' % r['qty'])"/></td>
                         <td class="text-end"><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></td>
+                        <td class="text-end">
+                          <t t-if="r.get('list_price')">
+                            <t t-esc="'{:,.0f}'.format(r['list_price'])"/>
+                          </t>
+                          <t t-else="">-</t>
+                        </td>
                         <td>
                           <t t-if="r['website_url']">
                             <a t-att-href="r['website_url']" class="btn btn-sm btn-outline-secondary">Xem</a>
@@ -103,8 +110,7 @@
         </section>
       </main>
 
-      <!-- JS: xử lý mở rộng chi tiết từng kho -->
-<!-- Load jQuery if not already loaded -->
+      <!-- Load jQuery if not already loaded -->
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
       
       <!-- JS: xử lý mở rộng chi tiết từng kho -->

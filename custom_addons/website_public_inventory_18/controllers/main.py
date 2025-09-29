@@ -141,6 +141,7 @@ class PublicInventory(http.Controller):
                 "uom": p.uom_id.name,
                 "qty": avail,        # tồn khả dụng
                 "qty_total": qty,    # tồn thực tế
+                "list_price": p.list_price,  # Giá bán
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
 
