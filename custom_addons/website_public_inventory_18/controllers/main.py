@@ -3,10 +3,13 @@ import logging
 import math
 from odoo import http
 from odoo.http import request
+import math
+import logging
 
 PAGE_SIZE = 20
 _logger = logging.getLogger(__name__)
 
+_logger = logging.getLogger(__name__)
 
 def _get_allowed_warehouses():
     env = request.env
@@ -145,10 +148,13 @@ class PublicInventory(http.Controller):
                 "qty_total": qty,    # tồn thực tế
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
+
             _logger.debug(
                 "Product %s (%s): qty_total=%.6f, reserved=%.6f, avail=%.6f | raw=%s",
                 pid, p.default_code or "-", qty, res, avail, g
             )
+
+            _logger.warning("search %s", g)
 
         Warehouses = _get_allowed_warehouses()
 
