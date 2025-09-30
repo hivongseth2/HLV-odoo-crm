@@ -4,6 +4,30 @@
   <template id="inventory_page" name="Public Inventory Page">
     <t t-call="website.layout">
       <main id="wrap" class="oe_structure">
+        <!-- ======= GATE: yêu cầu mật khẩu ======= -->
+        <t t-if="not pw_ok">
+          <section>
+            <div class="container mt-5 mb-6" style="max-width:560px;">
+              <h1 class="mb-3">Tra cứu tồn kho</h1>
+
+              <t t-if="pw_err">
+                <div class="alert alert-danger">
+                  Mật khẩu không đúng. Vui lòng <strong>tải lại trang (F5)</strong> để nhập lại.
+                </div>
+              </t>
+              <t t-else="">
+                <form method="post" t-att-action="request.httprequest.path" class="card p-3 shadow-sm">
+                  <label class="form-label">Nhập mật khẩu để truy cập</label>
+                  <input type="password" name="inv_password" class="form-control mb-3" autocomplete="off" required="required"/>
+                  <button type="submit" class="btn btn-primary w-100">Xác nhận</button>
+                </form>
+              </t>
+            </div>
+          </section>
+        </t>
+        <!-- ======= END GATE ======= -->
+
+      <t t-if="pw_ok">
         <section>
           <div class="container mt-4 mb-6">
             <h1>Tra cứu tồn kho</h1>
@@ -166,7 +190,6 @@
 
           </div>
         </section>
-      </main>
 
       <!-- Load jQuery if not already loaded -->
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -298,6 +321,8 @@
           });
         })();
       ]]></script>
-    </t>
+      </t>
+    </main>
+      </t>
   </template>
 </odoo>
