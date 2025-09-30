@@ -165,9 +165,9 @@
             html += '<table class="table table-sm table-bordered mb-0">';
             html += '<thead><tr>';
             html += '<th>Kho</th>';
-            html += '<th class="text-end">Tồn khả dụng</th>';
             html += '<th class="text-end">Tồn thực tế</th>';
             html += '<th class="text-end">Đã giữ hàng</th>';
+            html += '<th class="text-end">Tồn khả dụng</th>';
             html += '</tr></thead><tbody>';
             if (rows && rows.length) {
               rows.forEach(function (r) {
