@@ -168,6 +168,20 @@ class MisaPOFetch(models.TransientModel):
                 supplier_name = po.get("account_object_name")
                 refno = po.get("refno", "PO-MISA")
                 memo = po.get("journal_memo", "")
+
+                # chỉ lấy đơn "chưa thực hiện" ---
+                def _as_bool(val):
+                    if isinstance(val, bool):
+                        return val
+                    return str(val).strip().lower() in ("1", "true", "yes", "y")
+
+                is_srv = _as_bool(po.get("is_created_pu_service", False))
+                is_mul = _as_bool(po.get("is_created_pu_multiple", False))
+
+                # nếu CẢ 2 đều false => coi là đã hoàn thành => BỎ QUA
+                if (not is_srv) and (not is_mul):
+                    _logger.info("⏭️  Bỏ qua PO %s (refid=%s) vì đã hoàn thành (is_created_pu_service=%s, is_created_pu_multiple=%s)", refno, refid, is_srv, is_mul)
+                    continue
                 
                 receive_date_str = po.get("receive_date") or po.get("refdate")
                 planned_naive_utc = _to_naive_utc(receive_date_str)
