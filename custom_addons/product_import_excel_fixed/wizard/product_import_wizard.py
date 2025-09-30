@@ -204,10 +204,10 @@ class ProductImportWizard(models.TransientModel):
                 "tracking": "none",
                 "standard_price": self._safe_float(cost_price),
                 "list_price": self._safe_float(price1),
+                "x_studio_gi_bn_thng_mi": self._safe_float(trade_price),
                 "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
                 "is_storable": True,
             }
-            values["x_studio_gi_bn_thng_mi"] = self._safe_float(trade_price)
             if uom:
                 # set cả uom_id & uom_po_id
                 values["uom_id"] = uom.id
@@ -216,7 +216,14 @@ class ProductImportWizard(models.TransientModel):
             if default_code:
                 values["default_code"] = default_code
             if barcode:
-                values["barcode"] = barcode
+                # Kiểm tra xem barcode có bị trùng không
+                existing_barcode = Product.search([('barcode', '=', barcode)], limit=1)
+                if not existing_barcode:
+                    barcode_to_use = barcode
+                    values["barcode"] = barcode
+                else:
+                    _logger.warning("⚠ Barcode %s đã tồn tại ở sản phẩm %s, bỏ qua barcode này", 
+                                    barcode, existing_barcode.display_name)
             if x_origin_name:
                 values["x_origin"] = self._get_or_create_m2o("product.origin", x_origin_name)
             if x_group_name:
@@ -231,35 +238,43 @@ class ProductImportWizard(models.TransientModel):
             if not product and barcode:
                 product = Product.search([('barcode', '=', barcode)], limit=1)
 
-            # --- XỬ LÝ TẠO/UPDATE ---
+            # --- XỬ LÝ TẠO MỚI ---
             if not product:
-                if barcode:
-                    dup = Product.search([('barcode', '=', barcode)], limit=1)
-                    if dup:
-                        _logger.warning("⚠ Bỏ qua tạo mới vì barcode %s đã tồn tại ở sản phẩm %s", barcode, dup.display_name)
-                        values.pop('barcode', None)
                 try:
-                    Product.create(values)
+                    product = Product.create(values)
+                    _logger.info("✅ Đã tạo mới sản phẩm: %s (ID: %s)", product.name, product.id)
                 except Exception as e:
-                    _logger.exception("❌ Lỗi tạo sản phẩm (default_code=%s, barcode=%s): %s", default_code, barcode, e)
-                continue
+                    _logger.exception("❌ Lỗi tạo sản phẩm (default_code=%s, barcode=%s): %s", 
+                                      default_code, barcode, e)
+                continue  # Sau khi tạo xong thì skip sang dòng tiếp theo
 
-            # Đã có product: build write_vals incremental
+            # --- XỬ LÝ CẬP NHẬT ---
+            # Nếu đã tồn tại product, build write_vals để update
             write_vals = {}
 
-            if barcode and barcode != (product.barcode or ''):
-                conflict = Product.search([('id', '!=', product.id), ('barcode', '=', barcode)], limit=1)
+            # Cập nhật barcode nếu có và khác với hiện tại
+            if barcode_to_use and barcode_to_use != (product.barcode or ''):
+                # Kiểm tra lại xem barcode có bị sản phẩm KHÁC dùng không
+                conflict = Product.search([
+                    ('id', '!=', product.id), 
+                    ('barcode', '=', barcode_to_use)
+                ], limit=1)
                 if conflict:
                     _logger.warning("⚠ Không thể cập nhật barcode %s cho %s vì đã thuộc %s",
-                                    barcode, product.display_name, conflict.display_name)
+                                    barcode_to_use, product.display_name, conflict.display_name)
                 else:
-                    write_vals['barcode'] = barcode
+                    write_vals['barcode'] = barcode_to_use
 
+            # Cập nhật tên nếu khác
             if name and name != product.name:
                 write_vals['name'] = name
 
+            # Cập nhật default_code nếu có và khác
             if default_code and default_code != (product.default_code or ''):
-                dc_conflict = Product.search([('id', '!=', product.id), ('default_code', '=', default_code)], limit=1)
+                dc_conflict = Product.search([
+                    ('id', '!=', product.id), 
+                    ('default_code', '=', default_code)
+                ], limit=1)
                 if dc_conflict:
                     _logger.warning("⚠ ID EXTERNAL %s đã thuộc %s, bỏ qua update default_code cho %s",
                                     default_code, dc_conflict.display_name, product.display_name)
@@ -287,9 +302,11 @@ class ProductImportWizard(models.TransientModel):
                 write_vals['uom_id'] = uom.id
                 write_vals['uom_po_id'] = uom.id
 
+            # Thực hiện update nếu có thay đổi
             if write_vals:
                 try:
                     product.write(write_vals)
+                    _logger.info("✅ Đã cập nhật sản phẩm: %s", product.display_name)
                 except Exception as e:
                     _logger.exception("❌ Lỗi cập nhật sản phẩm %s: %s", product.display_name, e)
 
