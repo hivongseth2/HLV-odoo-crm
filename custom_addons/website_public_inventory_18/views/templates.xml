@@ -42,6 +42,7 @@
                       <th class="text-end">Được dự báo</th>
                       <th class="text-end">Tồn thực tế</th>
                       <th class="text-end">Giá bán</th>
+                      <th class="text-end">Giá bán thương mại</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -77,9 +78,18 @@
                         <td class="text-end"><t t-esc="('%.2f' % r.get('qty_forecasted', 0.0))"/></td>
                         <!-- Tồn thực tế (qty_on_hand) -->
                         <td class="text-end"><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></td>
+                        <!-- Giá bán -->
                         <td class="text-end">
                           <t t-if="r.get('list_price')">
                             <t t-esc="'{:,.0f}'.format(r['list_price'])"/>
+                          </t>
+                          <t t-else="">-</t>
+                        </td>
+                        <!-- Giá bán thương mại -->
+                         <td class="text-end">
+                          <t t-set="v" t-value="r.get('commercial_price', 0.0)"/>
+                          <t t-if="v">
+                            <t t-esc="'{:,.0f}'.format(v)"/>
                           </t>
                           <t t-else="">-</t>
                         </td>
