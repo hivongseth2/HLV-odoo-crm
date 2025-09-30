@@ -17,6 +17,7 @@
               </t>
               <t t-else="">
                 <form method="post" t-att-action="request.httprequest.path" class="card p-3 shadow-sm">
+                  <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                   <label class="form-label">Nhập mật khẩu để truy cập</label>
                   <input type="password" name="inv_password" class="form-control mb-3" autocomplete="off" required="required"/>
                   <button type="submit" class="btn btn-primary w-100">Xác nhận</button>
