@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 from odoo import models, fields, api
 import base64
 import tempfile
@@ -46,6 +46,55 @@ class ProductImportWizard(models.TransientModel):
 
     file = fields.Binary(string="Excel File", required=True)
     filename = fields.Char(string="File Name")
+
+        # ===================== Helpers cho 3 loại giá =====================
+    def _first_non_empty(self, row, candidates, default=None):
+        """Trả về giá trị đầu tiên khác rỗng theo danh sách tên cột."""
+        for name in candidates:
+            if name in row:
+                val = row.get(name)
+                # dùng _clean_string để đồng nhất
+                s = self._clean_string(val)
+                if s != '':
+                    return val
+        return default
+
+    def _extract_prices(self, row):
+        """
+        Đọc 3 loại giá từ các cột:
+        - Chi phí            -> standard_price
+        - Giá bán           -> list_price
+        - Giá thương mại    -> x_studio_gi_bn_thng_mi
+
+        Fallback về tên cột cũ nếu có (để không phá dữ liệu cũ):
+        - 'Đơn giá mua gần nhất' cho chi phí
+        - 'Đơn giá bán 1' cho giá bán
+        """
+        # Chi phí
+        cost_raw = self._first_non_empty(
+            row,
+            ['Chi phí', 'Đơn giá mua gần nhất'],
+            default=0.0
+        )
+        # Giá bán
+        price_raw = self._first_non_empty(
+            row,
+            ['Giá bán', 'Đơn giá bán 1'],
+            default=0.0
+        )
+        # Giá thương mại
+        trade_raw = self._first_non_empty(
+            row,
+            ['Giá thương mại'],
+            default=0.0
+        )
+
+        return {
+            'standard_price': self._safe_float(cost_raw),
+            'list_price': self._safe_float(price_raw),
+            'x_studio_gi_bn_thng_mi': self._safe_float(trade_raw),
+        }
+
 
     # ===================== Helpers: UoM =====================
     def _get_unit_category(self):
@@ -136,6 +185,12 @@ class ProductImportWizard(models.TransientModel):
             price1 = row.get('Đơn giá bán 1', 0.0)
             vat_float = self._safe_float(vat)
 
+            # ===== Helpers lấy 3 loại giá từ Excel =====
+            price_dict = self._extract_prices(row)
+            cost_price = price_dict['standard_price']
+            price1 = price_dict['list_price']
+            trade_price = price_dict['x_studio_gi_bn_thng_mi']
+
             # ===== UOM từ cột DVT =====
             dvt_text = row.get('DVT')
             uom = self._find_uom_in_unit_category(dvt_text)  # đảm bảo thuộc Unit; fallback 'Cái'
@@ -152,6 +207,7 @@ class ProductImportWizard(models.TransientModel):
                 "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
                 "is_storable": True,
             }
+            values["x_studio_gi_bn_thng_mi"] = self._safe_float(trade_price)
             if uom:
                 # set cả uom_id & uom_po_id
                 values["uom_id"] = uom.id
@@ -214,6 +270,8 @@ class ProductImportWizard(models.TransientModel):
                 write_vals['standard_price'] = values['standard_price']
             if 'list_price' in values:
                 write_vals['list_price'] = values['list_price']
+            if 'x_studio_gi_bn_thng_mi' in values:
+                write_vals['x_studio_gi_bn_thng_mi'] = values['x_studio_gi_bn_thng_mi']
             if values.get('taxes_id'):
                 write_vals['taxes_id'] = values['taxes_id']
 
