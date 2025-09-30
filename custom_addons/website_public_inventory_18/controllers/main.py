@@ -184,7 +184,8 @@ class PublicInventory(http.Controller):
                 "qty_forecasted": qty_forecasted,  # Được dự báo (virtual_available)
                 "qty_total": qty_total,            # Tồn thực tế (qty_on_hand)
                 "list_price": p.list_price,        # Giá bán
-                "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
+                "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0, # Giá thương mại
+                "standard_price": p.standard_price,  # Giá gốc
                 "image_url": _get_product_image_url(p),  # URL hình ảnh
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
