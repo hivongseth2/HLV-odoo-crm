@@ -325,6 +325,18 @@ class MisaPOFetch(models.TransientModel):
                         headers, detail_payload
                     )
 
+                    if detail_res.status_code == 200:
+                        page_lines = detail_res.json().get("Data", {}).get("PageData", [])
+                        
+                        # ===== THÊM LOG ĐỂ XEM CẤU TRÚC =====
+                        if page_lines:
+                            _logger.info("=" * 80)
+                            _logger.info("📋 SAMPLE LINE từ MISA API:")
+                            _logger.info(json.dumps(page_lines[0], indent=2, ensure_ascii=False))
+                            _logger.info("=" * 80)
+                            _logger.info("🔑 Tất cả keys available:")
+                            _logger.info(list(page_lines[0].keys()))
+
                     if detail_res.status_code != 200:
                         _logger.warning("Không lấy được chi tiết PO %s ở trang %s", refid, detail_page_index)
                         break
