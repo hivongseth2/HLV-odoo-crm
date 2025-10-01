@@ -91,14 +91,14 @@ class MisaPOFetch(models.TransientModel):
         return None
 
 
-    def _misa_fetch_conversion_units(self, product_code, headers):
+    def _misa_fetch_conversion_units(self, product_code, crm_headers):
         """
         Gọi Product/DataSubPaging để lấy quy đổi UoM theo đúng payload bạn yêu cầu.
         """
         if not product_code:
             return []
 
-        product_id = self._misa_get_product_id_by_code(product_code, headers)
+        product_id = self._misa_get_product_id_by_code(product_code, crm_headers)
         if not product_id:
             return []
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
@@ -141,7 +141,7 @@ class MisaPOFetch(models.TransientModel):
         }
 
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp = requests.post(url, headers=crm_headers, json=payload, timeout=30)
             resp.raise_for_status()
             data = resp.json()
             return data.get("Data", []) or []
@@ -149,7 +149,7 @@ class MisaPOFetch(models.TransientModel):
             _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
             return []
 
-    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_code, headers):
+    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_code, crm_headers):
         """
         Chuyển qty/price từ đơn vị lấy từ MISA (misa_uom_text) về đơn vị mặc định của product (product.uom_id).
         Trả về: (qty_base, price_base, uom_is_default)
@@ -160,7 +160,7 @@ class MisaPOFetch(models.TransientModel):
             return qty, price, True  # không cần đổi
 
         # Lấy bảng quy đổi theo ProductID
-        conversions = self._misa_fetch_conversion_units(misa_product_code, headers) if misa_product_code else []
+        conversions = self._misa_fetch_conversion_units(misa_product_code, crm_headers) if misa_product_code else []
         # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
         conv = next((
             c for c in (conversions or [])
@@ -484,7 +484,7 @@ class MisaPOFetch(models.TransientModel):
                         sale_ok=True
                     )
 
-                    qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(product, unit_name, qty, price, code, headers)
+                    qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(product, unit_name, qty, price, code, crm_headers)
                     pol_vals = {
                         "order_id": po_rec.id,
                         "name": name,
