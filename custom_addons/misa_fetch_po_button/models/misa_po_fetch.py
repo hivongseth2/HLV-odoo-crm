@@ -15,90 +15,54 @@ class MisaPOFetch(models.TransientModel):
     date_to = fields.Date(string="Đến ngày", required=True)
     # ================== HELPERS QUY ĐỔI UOM ==================
 
-    def _misa_get_product_id_by_code(self, product_code, headers):
-        """
-        Gọi API DataPaging để lấy ProductID từ ProductCode.
-        Trả về ProductID (string) hoặc None nếu không tìm thấy.
-        """
-        if not product_code:
-            return None
-        
-        # Thử nhiều endpoint khác nhau
-        urls = [
-            "https://amisapp.misa.vn/crm/g2/api/business/Product/DataPaging",
-            "https://actapp.misa.vn/g1/api/in/v1/inventory_item/paging_filter_v2",
-        ]
-        
-        # Payload cho endpoint CRM (g2)
-        payload_crm = {
-            "Columns": "ProductID,ProductCode,ProductName",
-            "Filters": [
-                {
-                    "Field": "ProductCode",
-                    "Operator": "Equal",
-                    "Value": product_code
-                }
-            ],
+    def _misa_get_product_id_from_code(self, product_code, headers):
+        """Trả về ProductID từ ProductCode"""
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+        payload = {
+            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWU=",  # ID, ProductCode, ProductName
+            "Sorts": [],
             "Start": 0,
             "Page": 1,
             "PageSize": 1,
-            "Sorts": [],
-            "IsUsedELTS": True,
-            "IsGetCache": True
-        }
-        
-        # Payload cho endpoint ACT (g1) - giống với endpoint PO
-        payload_act = {
-            "filter": [
+            "Filters": [
                 {
-                    "property": 1355,  # inventory_item_code
-                    "operator": 7,      # Equal
-                    "operand": 1,
-                    "value": product_code,
-                    "data_type": 1
+                    "Addition": 1,
+                    "InputType": 1,
+                    "IsFromFormula": True,
+                    "Operator": 1,
+                    "Property": "ProductCode",
+                    "Text": product_code,
+                    "Value": product_code
                 }
             ],
-            "loadMode": 2,
-            "pageIndex": 1,
-            "pageSize": 1,
-            "sort": "",
-            "useSp": False,
-            "view": 2
+            "Formula": "( 1 )",
+            "LayoutCode": "Product",
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {},
+            "IsApproved": False,
+            "CustomPagingData": {},
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": str(uuid.uuid4()),
+            "AISearchKeyword": ""
         }
-        
-        # Thử endpoint CRM trước
         try:
-            resp = requests.post(urls[0], headers=headers, json=payload_crm, timeout=30)
-            if resp.status_code == 200:
-                data = resp.json()
-                products = data.get("Data", [])
-                if products and len(products) > 0:
-                    product_id = products[0].get("ProductID")
-                    if product_id:
-                        _logger.info("✅ [CRM] ProductCode '%s' → ProductID: %s", product_code, product_id)
-                        return str(product_id)
-        except Exception as e:
-            _logger.warning("⚠️ Endpoint CRM lỗi, thử endpoint ACT: %s", e)
-        
-        # Nếu CRM không được, thử endpoint ACT
-        try:
-            resp = requests.post(urls[1], headers=headers, json=payload_act, timeout=30)
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
             resp.raise_for_status()
             data = resp.json()
-            
-            page_data = data.get("Data", {}).get("PageData", [])
-            if page_data and len(page_data) > 0:
-                # Trong ACT API, ID là refid
-                product_id = page_data[0].get("refid")
-                if product_id:
-                    _logger.info("✅ [ACT] ProductCode '%s' → ProductID: %s", product_code, product_id)
-                    return str(product_id)
+            items = data.get("Data", [])
+            if items:
+                return items[0].get("ID")  # ProductID
+            return None
         except Exception as e:
-            _logger.exception("❗ Lỗi khi lấy ProductID từ ProductCode '%s': %s", product_code, e)
-        
-        _logger.warning("⚠️ Không tìm thấy ProductID cho ProductCode: %s", product_code)
-        return None
-
+            _logger.exception("❗ Lỗi lấy ProductID từ ProductCode %s: %s", product_code, e)
+            return None
 
     def _misa_fetch_conversion_units(self, product_code, headers):
         """
@@ -106,8 +70,8 @@ class MisaPOFetch(models.TransientModel):
         """
         if not product_code:
             return []
-        
-        product_id = self._misa_get_product_id_by_code(product_code, headers)
+
+        product_id = self._misa_get_product_id_from_code(product_code, headers)
         if not product_id:
             _logger.warning("⚠️ Không thể lấy conversion units vì không tìm thấy ProductID cho '%s'", product_code)
             return []
@@ -165,7 +129,7 @@ class MisaPOFetch(models.TransientModel):
             
             return conversion_data
         except Exception as e:
-            _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)  
+            _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
             return []
 
     def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_code, headers):
