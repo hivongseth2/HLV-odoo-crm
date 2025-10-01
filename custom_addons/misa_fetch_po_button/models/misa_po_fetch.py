@@ -67,7 +67,7 @@ class MisaPOFetch(models.TransientModel):
             "IsGetCache": True,
             "IsCheckInactive": False,
             "IsConverted": False,
-            "SessionID": "3d4c78be-b09b-7937-2752-11d1d338bf52",
+            "SessionID": str(uuid.uuid4()),
             "LayoutCodeCheckPermission": "Product",
             "AISearchKeyword": ""
         }
