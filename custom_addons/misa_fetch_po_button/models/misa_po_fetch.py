@@ -15,7 +15,7 @@ class MisaPOFetch(models.TransientModel):
     date_to = fields.Date(string="Đến ngày", required=True)
     # ================== HELPERS QUY ĐỔI UOM ==================
 
-    def _misa_get_product_id_by_code(self, product_code, headers):
+    def _misa_get_product_id_by_code(self, product_code, crm_headers):
         """
         Gọi API DataPaging để lấy ProductID từ ProductCode.
         Trả về ProductID (string) hoặc None nếu không tìm thấy.
@@ -63,7 +63,7 @@ class MisaPOFetch(models.TransientModel):
         }
         
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp = requests.post(url, headers=crm_headers, json=payload, timeout=30)
             resp.raise_for_status()
             data = resp.json()
             _logger.warning("✅ Lấy được dữ liệu cho ProductCode '%s': %s", product_code, data)
@@ -286,6 +286,8 @@ class MisaPOFetch(models.TransientModel):
         date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
 
         headers = misa_config.get_default_headers(access_token)
+        crm_token = misa_utils._fetch_login_crm_token()
+        crm_headers = misa_config.get_crm_header(crm_token)
 
         payload = {
             "filter": [
