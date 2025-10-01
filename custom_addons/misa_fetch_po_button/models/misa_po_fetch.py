@@ -15,11 +15,79 @@ class MisaPOFetch(models.TransientModel):
     date_to = fields.Date(string="Đến ngày", required=True)
     # ================== HELPERS QUY ĐỔI UOM ==================
 
+    def _misa_get_product_id_by_code(self, product_code, headers):
+        """
+        Gọi API DataPaging để lấy ProductID từ ProductCode.
+        Trả về ProductID (string) hoặc None nếu không tìm thấy.
+        """
+        if not product_code:
+            return None
+        
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataPaging"
+        
+        payload = {
+            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWU=",  # Base64: ID,ProductCode,ProductName
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 1,
+            "Filters": [
+                {
+                    "Group": None,
+                    "Addition": 1,
+                    "InputType": 1,
+                    "IsFromFormula": True,
+                    "Operator": 1,
+                    "Property": "ProductCode",
+                    "Text": product_code,
+                    "Value": product_code
+                }
+            ],
+            "Formula": "( 1 )",
+            "LayoutCode": "Product",
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {},
+            "IsApproved": False,
+            "CustomPagingData": {},
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": str(uuid.uuid4()),
+            "LayoutCodeCheckPermission": "Product",
+            "AISearchKeyword": ""
+        }
+        
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            
+            products = data.get("Data", [])
+            if products and len(products) > 0:
+                product_id = products[0].get("ID")
+                if product_id:
+                    return str(product_id)
+                    
+        except Exception as e:
+            _logger.exception("Lỗi khi lấy ProductID từ ProductCode '%s': %s", product_code, e)
+        
+        return None
+
+
     def _misa_fetch_conversion_units(self, product_code, headers):
         """
         Gọi Product/DataSubPaging để lấy quy đổi UoM theo đúng payload bạn yêu cầu.
         """
         if not product_code:
+            return []
+
+        product_id = self._misa_get_product_id_by_code(product_code, headers)
+        if not product_id:
             return []
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
 
@@ -33,9 +101,9 @@ class MisaPOFetch(models.TransientModel):
             "DefaultTotal": False,
             "IsMappingData": False,
             "MappingValueObject": {
-                "MasterID": str(product_code),
+                "MasterID": str(product_id),
                 "TableName": "product_conversion_unit",
-                "MasterKey": "ProductCode",
+                "MasterKey": "ProductID",
                 "SumColumn": ""
             },
             "IsApproved": False,
@@ -44,7 +112,7 @@ class MisaPOFetch(models.TransientModel):
                     "ColumnFieldSubForm": "",
                     "ColumnAggregateSubForm": "",
                     "TableName": "product_conversion_unit",
-                    "ParentIDKey": "ProductCode",
+                    "ParentIDKey": "ProductID",
                     "IsBringSerialType": False,
                     "AggregateField": []
                 }
@@ -66,7 +134,7 @@ class MisaPOFetch(models.TransientModel):
             data = resp.json()
             return data.get("Data", []) or []
         except Exception as e:
-            _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s",   )
+            _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
             return []
 
     def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_code, headers):
