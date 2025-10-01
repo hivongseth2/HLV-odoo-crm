@@ -98,7 +98,7 @@ class MisaPOFetch(models.TransientModel):
         if not product_code:
             return []
 
-        product_id = self._misa_get_product_id_by_code(product_code, crm_headers)
+        product_id = self._misa_get_product_id_by_code(product_code, None, crm_headers)
         if not product_id:
             return []
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
