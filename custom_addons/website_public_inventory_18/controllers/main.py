@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import hmac
 import math
 import base64
 from odoo import http
@@ -9,6 +10,24 @@ from odoo.osv import expression
 PAGE_SIZE = 25
 _logger = logging.getLogger(__name__)
 
+PW_PARAM_KEY = "website_public_inventory_18.search_password"
+SESSION_KEY_OK = "inv_pw_ok"
+SESSION_KEY_ERR = "inv_pw_err"
+
+def _get_search_password():
+    return request.env["ir.config_parameter"].sudo().get_param(PW_PARAM_KEY, default="") or ""
+
+def _consteq(a, b):
+    # so sánh thời gian hằng để tránh lộ timing
+    return hmac.compare_digest(str(a or ""), str(b or ""))
+
+def _pw_allowed():
+    """Cho phép truy cập nếu:
+       - không cấu hình mật khẩu, hoặc
+       - đã xác thực ở session hiện tại.
+    """
+    conf = _get_search_password()
+    return not conf or bool(request.session.get(SESSION_KEY_OK))
 
 def _get_allowed_warehouses():
     env = request.env
@@ -93,6 +112,32 @@ def _get_product_image_url(product):
 class PublicInventory(http.Controller):
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
+                # ---- GATE: mật khẩu theo session ----
+        conf_pw = _get_search_password()
+        if conf_pw:  # chỉ gate nếu đã cấu hình mật khẩu
+            # nếu chưa pass và vừa POST: kiểm tra
+            if not request.session.get(SESSION_KEY_OK):
+                if request.httprequest.method == "POST":
+                    inp = (request.params.get("inv_password") or "").strip()
+                    if _consteq(inp, conf_pw):
+                        request.session[SESSION_KEY_OK] = True
+                        request.session.pop(SESSION_KEY_ERR, None)
+                        # Về lại trang (tránh resubmit), có thể giữ query nếu muốn
+                        return request.redirect(request.httprequest.path)
+                    else:
+                        # Sai mật khẩu: đánh dấu lỗi, KHÔNG hiển thị form nữa => yêu cầu reload
+                        request.session[SESSION_KEY_ERR] = True
+                        return request.render(
+                            "website_public_inventory_18.inventory_page",
+                            {"pw_ok": False, "pw_err": True}
+                        )
+                else:
+                    # GET lần đầu: hiện form nhập mật khẩu
+                    request.session.pop(SESSION_KEY_ERR, None)
+                    return request.render(
+                        "website_public_inventory_18.inventory_page",
+                        {"pw_ok": False, "pw_err": False}
+                    )
         env = request.env
         try:
             page = int(page or 1)
@@ -207,17 +252,22 @@ class PublicInventory(http.Controller):
                 "page": page,
                 "pages": pages,
                 "total": total,
+                "pw_ok": True,
             },
         )
 
     @http.route(["/search_stock/json"], type="json", auth="public", methods=["POST"])
     def inventory_json(self, q="", warehouse_id=None, page=1):
+        if not _pw_allowed():
+            return {"ok": False, "error": "access_denied", "rows": []}        
         resp = self.inventory_page(q=q, warehouse_id=warehouse_id, page=page)
         return resp.qcontext.get("rows", [])
 
     # ========= NEW: Breakdown theo từng kho cho 1 product =========
     @http.route(["/search_stock/product_breakdown"], type="json", auth="public", methods=["POST"])
     def product_breakdown(self, product_id=None, warehouse_id=None):
+        if not _pw_allowed():
+            return {"ok": False, "error": "access_denied", "rows": []}
         """
         Trả về danh sách tồn của product theo từng kho user được phép xem.
         Nếu truyền warehouse_id: chỉ breakdown trong kho đó.
