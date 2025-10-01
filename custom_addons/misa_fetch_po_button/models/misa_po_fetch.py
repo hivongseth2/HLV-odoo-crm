@@ -15,7 +15,7 @@ class MisaPOFetch(models.TransientModel):
     date_to = fields.Date(string="Đến ngày", required=True)
     # ================== HELPERS QUY ĐỔI UOM ==================
 
-    def _misa_get_product_id_by_code(self, product_code, crm_headers):
+    def _misa_get_product_id_by_code(self, product_code, product_name, crm_headers):
         """
         Gọi API DataPaging để lấy ProductID từ ProductCode.
         Trả về ProductID (string) hoặc None nếu không tìm thấy.
@@ -30,7 +30,7 @@ class MisaPOFetch(models.TransientModel):
             "Sorts": [],
             "Start": 0,
             "Page": 1,
-            "PageSize": 1,
+            "PageSize": 100,
             "Filters": [
                 {
                     "Group": None,
@@ -41,9 +41,19 @@ class MisaPOFetch(models.TransientModel):
                     "Property": "ProductCode",
                     "Text": product_code,
                     "Value": product_code
+                },
+                {
+                    "Group": None,
+                    "Addition": 1,
+                    "InputType": 1,
+                    "IsFromFormula": True,
+                    "Operator": 1,
+                    "Property": "ProductName",
+                    "Text": product_name,
+                    "Value": product_name
                 }
             ],
-            "Formula": "( 1 )",
+            "Formula": "( 1 OR 2 )",
             "LayoutCode": "Product",
             "DefaultTotal": False,
             "IsMappingData": False,
