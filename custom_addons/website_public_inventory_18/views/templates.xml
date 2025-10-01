@@ -4,6 +4,31 @@
   <template id="inventory_page" name="Public Inventory Page">
     <t t-call="website.layout">
       <main id="wrap" class="oe_structure">
+        <!-- ======= GATE: yêu cầu mật khẩu ======= -->
+        <t t-if="not pw_ok">
+          <section>
+            <div class="container mt-5 mb-6" style="max-width:560px;">
+              <h1 class="mb-3">Tra cứu tồn kho</h1>
+
+              <t t-if="pw_err">
+                <div class="alert alert-danger">
+                  Mật khẩu không đúng. Vui lòng <strong>tải lại trang (F5)</strong> để nhập lại.
+                </div>
+              </t>
+              <t t-else="">
+                <form method="post" t-att-action="request.httprequest.path" class="card p-3 shadow-sm">
+                  <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                  <label class="form-label">Nhập mật khẩu để truy cập</label>
+                  <input type="password" name="inv_password" class="form-control mb-3" autocomplete="off" required="required"/>
+                  <button type="submit" class="btn btn-primary w-100">Xác nhận</button>
+                </form>
+              </t>
+            </div>
+          </section>
+        </t>
+        <!-- ======= END GATE ======= -->
+
+      <t t-if="pw_ok">
         <section>
           <div class="container mt-4 mb-6">
             <h1>Tra cứu tồn kho</h1>
@@ -42,6 +67,8 @@
                       <th class="text-end">Được dự báo</th>
                       <th class="text-end">Tồn thực tế</th>
                       <th class="text-end">Giá bán</th>
+                      <th class="text-end">Giá bán thương mại</th>
+                      <th class="text-end">Giá gốc</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -77,9 +104,26 @@
                         <td class="text-end"><t t-esc="('%.2f' % r.get('qty_forecasted', 0.0))"/></td>
                         <!-- Tồn thực tế (qty_on_hand) -->
                         <td class="text-end"><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></td>
+                        <!-- Giá bán -->
                         <td class="text-end">
                           <t t-if="r.get('list_price')">
                             <t t-esc="'{:,.0f}'.format(r['list_price'])"/>
+                          </t>
+                          <t t-else="">-</t>
+                        </td>
+                        <!-- Giá bán thương mại -->
+                        <td class="text-end">
+                          <t t-set="v" t-value="r.get('commercial_price', 0.0)"/>
+                          <t t-if="v">
+                            <t t-esc="'{:,.0f}'.format(v)"/>
+                          </t>
+                          <t t-else="">-</t>
+                        </td>
+                        <!-- Giá gốc -->
+                        <td class="text-end">
+                          <t t-set="v" t-value="r.get('standard_price', 0.0)"/>
+                          <t t-if="v">
+                            <t t-esc="'{:,.0f}'.format(v)"/>
                           </t>
                           <t t-else="">-</t>
                         </td>
@@ -147,7 +191,6 @@
 
           </div>
         </section>
-      </main>
 
       <!-- Load jQuery if not already loaded -->
       <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
@@ -165,17 +208,18 @@
             html += '<table class="table table-sm table-bordered mb-0">';
             html += '<thead><tr>';
             html += '<th>Kho</th>';
-            html += '<th class="text-end">Tồn khả dụng</th>';
+            // Thứ tự mới: Tồn thực tế -> Đã giữ hàng -> Tồn khả dụng
             html += '<th class="text-end">Tồn thực tế</th>';
             html += '<th class="text-end">Đã giữ hàng</th>';
+            html += '<th class="text-end">Tồn khả dụng</th>';
             html += '</tr></thead><tbody>';
             if (rows && rows.length) {
               rows.forEach(function (r) {
                 html += '<tr>';
                 html += '<td>' + (r.warehouse_name || '') + '</td>';
-                html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
                 html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
                 html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
+                html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
                 html += '</tr>';
               });
             } else {
@@ -184,7 +228,6 @@
             html += '</tbody></table></div>';
             return html;
           }
-
           function ensureDetailRow($tr, pid) {
             var $next = $tr.next();
             if ($next.length && $next.hasClass('detail-row')) {
@@ -279,6 +322,8 @@
           });
         })();
       ]]></script>
-    </t>
+      </t>
+    </main>
+      </t>
   </template>
 </odoo>
