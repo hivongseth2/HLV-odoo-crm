@@ -2,6 +2,8 @@ from odoo import models, fields, _
 import logging
 import json
 from datetime import datetime, timedelta, timezone  # ⬅️ NEW
+import uuid
+import requests
 
 
 _logger = logging.getLogger(__name__)
@@ -11,7 +13,192 @@ class MisaPOFetch(models.TransientModel):
     _description = "MISA PO Fetch"
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
+    # ================== HELPERS QUY ĐỔI UOM ==================
+
+    def _misa_get_product_id_by_code(self, product_code, product_name, crm_headers):
+        """
+        Gọi API DataPaging để lấy ProductID từ ProductCode.
+        Trả về ProductID (string) hoặc None nếu không tìm thấy.
+        """
+        if not product_code:
+            return None
+        
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/Grid"
+        
+        payload = {
+            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",  # Base64: ID,ProductCode,ProductName
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 100,
+            "Filters": [
+                {
+                    "Group": None,
+                    "Addition": 1,
+                    "InputType": 1,
+                    "IsFromFormula": True,
+                    "Operator": 1,
+                    "Property": "ProductCode",
+                    "Text": product_code,
+                    "Value": product_code
+                },
+                {
+                    "Group": None,
+                    "Addition": 1,
+                    "InputType": 1,
+                    "IsFromFormula": True,
+                    "Operator": 1,
+                    "Property": "ProductName",
+                    "Text": product_name,
+                    "Value": product_name
+                }
+            ],
+            "Formula": "( 1 OR 2 )",
+            "LayoutCode": "Product",
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {},
+            "IsApproved": False,
+            "CustomPagingData": {},
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": str(uuid.uuid4()),
+            "LayoutCodeCheckPermission": "Product",
+            "AISearchKeyword": ""
+        }
+        
+        try:
+            resp = requests.post(url, headers=crm_headers, json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            _logger.warning("✅ Lấy được dữ liệu cho ProductCode '%s': %s", product_code, data)
+            
+            products = data.get("Data", [])
+            if products and len(products) > 0:
+                product_id = products[0].get("ID")
+                if product_id:
+                    return str(product_id)
+                
+                    
+        except Exception as e:
+            _logger.exception("Lỗi khi lấy ProductID từ ProductCode '%s': %s", product_code, e)
+        
+        return None
+
+
+    def _misa_fetch_conversion_units(self, product_code, crm_headers):
+        """
+        Gọi Product/DataSubPaging để lấy quy đổi UoM theo đúng payload bạn yêu cầu.
+        """
+        if not product_code:
+            return []
+
+        product_id = self._misa_get_product_id_by_code(product_code, None, crm_headers)
+        if not product_id:
+            return []
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+
+        payload = {
+            "Columns": "SUQsQ29udmVyc2lvblVuaXRJRCxDb252ZXJzaW9uVW5pdElEVGV4dCxDb252ZXJzaW9uUmF0ZSxEZXNjcmlwdGlvbixDb252ZXJzaW9uT3BlcmF0b3JJRCxDb252ZXJzaW9uT3BlcmF0b3JJRFRleHQsQ29udmVyc2lvblVuaXRQcmljZTIsQ29udmVyc2lvblVuaXRQcmljZSxDb252ZXJzaW9uVW5pdFByaWNlMSxDb252ZXJzaW9uVW5pdFByaWNlRml4ZWQ=",
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 20,
+            "Filters": [],
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {
+                "MasterID": str(product_id),
+                "TableName": "product_conversion_unit",
+                "MasterKey": "ProductID",
+                "SumColumn": ""
+            },
+            "IsApproved": False,
+            "CustomPagingData": {
+                "SubFormConfig": {
+                    "ColumnFieldSubForm": "",
+                    "ColumnAggregateSubForm": "",
+                    "TableName": "product_conversion_unit",
+                    "ParentIDKey": "ProductID",
+                    "IsBringSerialType": False,
+                    "AggregateField": []
+                }
+            },
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": str(uuid.uuid4()),
+            "AISearchKeyword": ""
+        }
+
+        try:
+            resp = requests.post(url, headers=crm_headers, json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("Data", []) or []
+        except Exception as e:
+            _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
+            return []
+
+    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_code, crm_headers):
+        """
+        Chuyển qty/price từ đơn vị lấy từ MISA (misa_uom_text) về đơn vị mặc định của product (product.uom_id).
+        Trả về: (qty_base, price_base, uom_is_default)
+        - uom_is_default = True nếu misa_uom_text trùng default (không cần convert)
+        """
+        default_uom_name = (product.uom_id and product.uom_id.name) or ""
+        if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
+            return qty, price, True  # không cần đổi
+
+        # Lấy bảng quy đổi theo ProductID
+        conversions = self._misa_fetch_conversion_units(misa_product_code, crm_headers) if misa_product_code else []
+        # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
+        conv = next((
+            c for c in (conversions or [])
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower()
+        ), None)
+
+        if not conv:
+            _logger.warning("⚠️ Không tìm thấy mapping UoM cho '%s' -> giữ nguyên số liệu gốc", misa_uom_text)
+            return qty, price, False
+
+        try:
+            rate = float(conv.get("ConversionRate") or 0) or 0.0
+        except Exception:
+            rate = 0.0
+        try:
+            op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân, 2=Chia
+        except Exception:
+            op_id = 1
+
+        if rate <= 0:
+            _logger.warning("⚠️ ConversionRate không hợp lệ (<=0) cho '%s'", misa_uom_text)
+            return qty, price, False
+
+        # Diễn giải:
+        # - op_id == 1 (Nhân): "1 Hộp = 60 Cuộn"
+        #   Dòng ở Hộp, default là Cuộn -> qty_base = qty * 60; price_base = price / 60
+        # - op_id == 2 (Chia): "1 Mét = 1/50 Cuộn"
+        #   Dòng ở Mét,  default là Cuộn -> qty_base = qty / 50; price_base = price * 50
+        if op_id == 1:
+            qty_base = qty * rate
+            price_base = price / rate if rate else price
+        else:  # op_id == 2 (Chia) hoặc bất kỳ khác coi như "Chia"
+            qty_base = qty / rate
+            price_base = price * rate
+
+        return qty_base, price_base, False
     
+
     def _get_or_create_vn_vat(self, rate, use='purchase'):
         Tax = self.env['account.tax'].with_company(self.env.company)
         TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
@@ -109,6 +296,8 @@ class MisaPOFetch(models.TransientModel):
         date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
 
         headers = misa_config.get_default_headers(access_token)
+        crm_token = misa_utils._fetch_login_crm_token()
+        crm_headers = misa_config.get_crm_header(crm_token)
 
         payload = {
             "filter": [
@@ -129,7 +318,7 @@ class MisaPOFetch(models.TransientModel):
             ],
             "loadMode": 2,
             "pageIndex": 1,
-            "pageSize": 20,
+            "pageSize": 20, 
             "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
             "summaryColumns": [5039, 5104, 247],
             "useSp": False,
@@ -185,7 +374,6 @@ class MisaPOFetch(models.TransientModel):
                 
                 receive_date_str = po.get("receive_date") or po.get("refdate")
                 planned_naive_utc = _to_naive_utc(receive_date_str)
-                
 
 
                 partner = odoo_utils._get_or_create_partner(supplier_name)
@@ -295,13 +483,15 @@ class MisaPOFetch(models.TransientModel):
                         purchase_ok=True,
                         sale_ok=True
                     )
+
+                    qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(product, unit_name, qty, price, code, crm_headers)
                     pol_vals = {
                         "order_id": po_rec.id,
                         "name": name,
                         "product_id": product.id,
-                        "product_qty": qty,
+                        "product_qty": qty_base,
                         "product_uom": product.uom_id.id,
-                        "price_unit": price,
+                        "price_unit": price_base,
                         "taxes_id": [(6, 0, tax_ids)]
                     }
                     
