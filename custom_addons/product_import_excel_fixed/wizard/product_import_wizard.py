@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 from odoo import models, fields, api
 import base64
 import tempfile
@@ -95,6 +95,7 @@ class ProductImportWizard(models.TransientModel):
             'x_studio_gi_bn_thng_mi': self._safe_float(trade_raw),
         }
 
+
     # ===================== Helpers: UoM =====================
     def _get_unit_category(self):
         """Tìm category 'Unit' (tiếng Anh mặc định). Nếu tên đã dịch, vẫn ưu tiên chuỗi chứa 'Unit'."""
@@ -183,6 +184,7 @@ class ProductImportWizard(models.TransientModel):
             cost_price = row.get('Đơn giá mua gần nhất', 0.0)
             price1 = row.get('Đơn giá bán 1', 0.0)
             vat_float = self._safe_float(vat)
+            
 
             # ===== Helpers lấy 3 loại giá từ Excel =====
             price_dict = self._extract_prices(row)
@@ -207,7 +209,6 @@ class ProductImportWizard(models.TransientModel):
                 "is_storable": True,
             }
             values["x_studio_gi_bn_thng_mi"] = self._safe_float(trade_price)
-
             if uom:
                 # set cả uom_id & uom_po_id
                 values["uom_id"] = uom.id
@@ -270,10 +271,11 @@ class ProductImportWizard(models.TransientModel):
                 write_vals['standard_price'] = values['standard_price']
             if 'list_price' in values:
                 write_vals['list_price'] = values['list_price']
-            if values.get('taxes_id'):
-                write_vals['taxes_id'] = values['taxes_id']
             if 'x_studio_gi_bn_thng_mi' in values:
                 write_vals['x_studio_gi_bn_thng_mi'] = values['x_studio_gi_bn_thng_mi']
+            if values.get('taxes_id'):
+                write_vals['taxes_id'] = values['taxes_id']
+
             if values.get('x_origin'):
                 write_vals['x_origin'] = values['x_origin']
             if values.get('x_group'):
