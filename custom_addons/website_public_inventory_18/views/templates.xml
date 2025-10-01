@@ -42,6 +42,8 @@
                       <th class="text-end">Được dự báo</th>
                       <th class="text-end">Tồn thực tế</th>
                       <th class="text-end">Giá bán</th>
+                      <th class="text-end">Giá bán thương mại</th>
+                      <th class="text-end">Giá gốc</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -77,12 +79,21 @@
                         <td class="text-end"><t t-esc="('%.2f' % r.get('qty_forecasted', 0.0))"/></td>
                         <!-- Tồn thực tế (qty_on_hand) -->
                         <td class="text-end"><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></td>
+                        <!-- Giá bán -->
                         <td class="text-end">
                           <t t-if="r.get('list_price')">
                             <t t-esc="'{:,.0f}'.format(r['list_price'])"/>
                           </t>
                           <t t-else="">-</t>
                         </td>
+                        <!-- Giá bán thương mại -->
+                         <td class="text-end">
+                          <t t-set="v" t-value="r.get('commercial_price', 0.0)"/>
+                          <t t-if="v">
+                            <t t-esc="'{:,.0f}'.format(v)"/>
+                          </t>
+                          <t t-else="">-</t>
+                        </td> 
                         <td>
                           <t t-if="r['website_url']">
                             <a t-att-href="r['website_url']" class="btn btn-sm btn-outline-secondary">Xem</a>
@@ -165,17 +176,17 @@
             html += '<table class="table table-sm table-bordered mb-0">';
             html += '<thead><tr>';
             html += '<th>Kho</th>';
-            html += '<th class="text-end">Tồn khả dụng</th>';
             html += '<th class="text-end">Tồn thực tế</th>';
             html += '<th class="text-end">Đã giữ hàng</th>';
+            html += '<th class="text-end">Tồn khả dụng</th>';
             html += '</tr></thead><tbody>';
             if (rows && rows.length) {
               rows.forEach(function (r) {
                 html += '<tr>';
                 html += '<td>' + (r.warehouse_name || '') + '</td>';
-                html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
                 html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
                 html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
+                html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
                 html += '</tr>';
               });
             } else {

@@ -4,6 +4,7 @@ import math
 import base64
 from odoo import http
 from odoo.http import request
+from odoo.osv import expression
 
 PAGE_SIZE = 25
 _logger = logging.getLogger(__name__)
@@ -105,14 +106,21 @@ class PublicInventory(http.Controller):
         # Prefilter có tồn thực tế > 0 để tránh rỗng
         domain += [("quantity", ">", 0)]
 
-        # Tìm theo từ khóa (OR 3 điều kiện)
+        # Tìm theo từ khóa: hỗ trợ nhiều từ khóa, phân cách bởi dấu phẩy
         if q:
-            domain += [
-                "|", "|",
-                ("product_id.name", "ilike", q),
-                ("product_id.default_code", "ilike", q),
-                ("product_id.barcode", "ilike", q),
-            ]
+            # tách theo dấu phẩy, loại rỗng, bỏ trùng
+            terms = list({t.strip() for t in q.split(",") if t.strip()})
+            search_dom = []
+            for t in terms:
+                # với mỗi term: OR 3 field
+                term_dom = [
+                    '|', '|',
+                    ('product_id.name', 'ilike', t),
+                    ('product_id.default_code', 'ilike', t),
+                    ('product_id.barcode', 'ilike', t),
+                ]
+                search_dom = term_dom if not search_dom else expression.OR([search_dom, term_dom])
+            domain += search_dom
 
         # >>>>>>>>>>>>>  FIX MULTI-COMPANY CONTEXT  <<<<<<<<<<<<<<
         company_ids = _companies_for_context(wid)
@@ -176,6 +184,8 @@ class PublicInventory(http.Controller):
                 "qty_forecasted": qty_forecasted,  # Được dự báo (virtual_available)
                 "qty_total": qty_total,            # Tồn thực tế (qty_on_hand)
                 "list_price": p.list_price,        # Giá bán
+                "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,  # Giá thương mại
+                "standard_price": p.standard_price,  # Giá gốc
                 "image_url": _get_product_image_url(p),  # URL hình ảnh
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
             })
