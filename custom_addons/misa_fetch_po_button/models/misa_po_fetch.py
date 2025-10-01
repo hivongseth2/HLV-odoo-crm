@@ -23,10 +23,10 @@ class MisaPOFetch(models.TransientModel):
         if not product_code:
             return None
         
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataPaging"
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/Grid"
         
         payload = {
-            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWU=",  # Base64: ID,ProductCode,ProductName
+            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",  # Base64: ID,ProductCode,ProductName
             "Sorts": [],
             "Start": 0,
             "Page": 1,
@@ -57,7 +57,7 @@ class MisaPOFetch(models.TransientModel):
             "IsGetCache": True,
             "IsCheckInactive": False,
             "IsConverted": False,
-            "SessionID": str(uuid.uuid4()),
+            "SessionID": "3d4c78be-b09b-7937-2752-11d1d338bf52",
             "LayoutCodeCheckPermission": "Product",
             "AISearchKeyword": ""
         }
@@ -66,12 +66,14 @@ class MisaPOFetch(models.TransientModel):
             resp = requests.post(url, headers=headers, json=payload, timeout=30)
             resp.raise_for_status()
             data = resp.json()
+            _logger.warning("✅ Lấy được dữ liệu cho ProductCode '%s': %s", product_code, data)
             
             products = data.get("Data", [])
             if products and len(products) > 0:
                 product_id = products[0].get("ID")
                 if product_id:
                     return str(product_id)
+                
                     
         except Exception as e:
             _logger.exception("Lỗi khi lấy ProductID từ ProductCode '%s': %s", product_code, e)
