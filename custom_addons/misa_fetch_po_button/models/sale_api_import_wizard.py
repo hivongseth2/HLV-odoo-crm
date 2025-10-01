@@ -206,18 +206,13 @@ class SaleApiImportWizard(models.TransientModel):
         start_datetime = datetime.combine(self.from_date, datetime.min.time())
         end_datetime = datetime.combine(self.to_date, datetime.max.time())
 
-        # stock_mapping = {
-        #     "HCM": "TSN/Stock",
-        #     "BENCAM": "KBC/Tồn kho",
-        #     "HIENDUC": "KHD/Tồn kho",
-        #     "HCM_SHOWROOM": "TSNSR/Stock",
-        # }
+        stock_mapping = {
+            "HCM": "TSN/Stock",
+            "BENCAM": "KBC/Tồn kho",
+            "HIENDUC": "KHD/Tồn kho",
+            "HCM_SHOWROOM": "TSNSR/Stock",
+        }
 
-        # stock_mapping = {
-        #     "ONLINE": "TSN/Stock",
-        #     "DEFAULT": "KBC/Tồn kho"
-        # }
-        
         e_accounts = {
             "TIKTOK HOÀNG LONG VŨ",
             "SHOPEE TRANG MILWAUKEE",
@@ -298,31 +293,16 @@ class SaleApiImportWizard(models.TransientModel):
                 )
                 phone_text = order.get("Phone")
 
-                # --- Xác định location/warehouse dựa vào e_accounts ---
-                # Các đơn thuộc e_accounts -> TSN/Stock
-                # Còn lại -> KBC/Tồn kho
-                if customer_name in e_accounts:
-                    location_name = "TSN/Stock"
-                else:
-                    location_name = "KBC/Tồn kho"
-                
-                location = self.env['stock.location'].search([
-                    ('complete_name', '=', location_name)
-                ], limit=1)
-                if not location:
-                    _logger.warning("❌ Không tìm thấy stock.location: %s", location_name)
-                    continue
 
-                warehouse = self.env['stock.warehouse'].search([
-                    ('view_location_id', '=', location.location_id.id)
-                ], limit=1)
-                if not warehouse:
-                    _logger.warning("🚫 Không tìm thấy warehouse cho location: %s", location_name)
-                    continue
+                # --- Gom dòng theo kho ---
+                lines_by_stock = defaultdict(list)
+                for l in product_lines:
+                    sid = l.get("StockIDText")
+                    if sid:
+                        lines_by_stock[sid].append(l)
 
-                # --- Kiểm tra có dòng hàng không ---
-                if not product_lines:
-                    _logger.warning("⛔ Không có dòng hàng hợp lệ cho SO %s", order.get("SaleOrderNo"))
+                if not lines_by_stock:
+                    _logger.warning("⛔ Không có dòng hàng hợp lệ theo kho cho SO %s", order.get("SaleOrderNo"))
                     continue
 
                 order_ref_base = order.get("SaleOrderNo")
@@ -333,7 +313,8 @@ class SaleApiImportWizard(models.TransientModel):
 
                 partner = odoo_utils._get_or_create_partner(customer_name)
                 
-                # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
+                    # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
+
                 delivery_contact = self._get_or_create_delivery_contact(
                     parent_partner=partner,
                     addr_str=shipping_address_str or order.get("ShippingAddress") or order.get("BillingAddress") or order_ref_base,
@@ -341,181 +322,210 @@ class SaleApiImportWizard(models.TransientModel):
                     province_text=province_text
                 )
 
-                # ========== TẠO SALE ORDER (GIỮ NGUYÊN TÊN) ==========
-                order_ref = order_ref_base  # giữ nguyên
-                # Tránh trùng
-                existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
-                if existing_order:
-                    if misa_id_str and not existing_order.misa_id:
-                        existing_order.misa_id = misa_id_str
-                    _logger.info("🔁 Bỏ qua SO đã tồn tại: %s", order_ref)
+                distinct_stocks = [s for s in lines_by_stock.keys() if s in stock_mapping]
+                if not distinct_stocks:
+                    _logger.warning("📛 Tất cả kho của đơn %s không nằm trong mapping -> bỏ qua", order_ref_base)
                     continue
 
-                order_total = sum(line_subtotal(l) for l in product_lines)
-                sale_order = self.env['sale.order'].create({
-                    'name': order_ref,
-                    'partner_id': partner.id,
-                    'date_order': order_date,
-                    'amount_total': order_total,
-                    'partner_shipping_id': delivery_contact.id, 
-                    'origin': origin,
-                    'warehouse_id': warehouse.id,
-                    'misa_id': misa_id_str,      
-                })
+                # ========== CASE 1: CHỈ 1 KHO -> GIỮ NGUYÊN TÊN SO ==========
+                if len(distinct_stocks) == 1:
+                    stock_id = distinct_stocks[0]
+                    grouped_lines = lines_by_stock[stock_id]
 
-                # Thêm line
-                for line in product_lines:
-                    product_code = line.get("ProductIDText")
-                    description = line.get("Description") or product_code
-                    qty = float(line.get("Amount", 1) or 0.0)
-                    price_unit = float(line.get("Price", 0) or 0.0)
-                    discount_percent = float(line.get("DiscountPercent", 0) or 0.0)
-                    uom_name = (line.get("UnitIDText") or "Cái").strip()
-                    note = line.get("DescriptionProduct") or ""
+                    # tìm location/warehouse
+                    location_name = stock_mapping[stock_id]
+                    location = self.env['stock.location'].search([
+                        ('complete_name', '=', location_name)
+                    ], limit=1)
+                    if not location:
+                        _logger.warning("❌ Không tìm thấy stock.location cho kho %s (%s)", stock_id, location_name)
+                        continue
 
-                    product = odoo_utils._get_or_create_product(
-                        code=product_code,
-                        name=description,
-                        unit_name=uom_name,
-                        cost=price_unit,
-                        product_type="consu",
-                        purchase_ok=True,
-                        sale_ok=True
-                    )
+                    warehouse = self.env['stock.warehouse'].search([
+                        ('view_location_id', '=', location.location_id.id)
+                    ], limit=1)
+                    if not warehouse:
+                        _logger.warning("🚫 Không tìm thấy warehouse cho kho: %s", stock_id)
+                        continue
+
+                    order_ref = order_ref_base  # giữ nguyên
+                    # Tránh trùng
+                    existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
+                    if existing_order:
+                        if misa_id_str and not existing_order.misa_id:
+                            existing_order.misa_id = misa_id_str
+                        _logger.info("🔁 Bỏ qua SO đã tồn tại: %s", order_ref)
+                        continue
+
+                    group_total = sum(line_subtotal(l) for l in grouped_lines)
+                    sale_order = self.env['sale.order'].create({
+                        'name': order_ref,
+                        'partner_id': partner.id,
+                        'date_order': order_date,
+                        'amount_total': group_total,
+                        'partner_shipping_id': delivery_contact.id, 
+                        'origin':origin,
+                        'warehouse_id': warehouse.id,
+                        'misa_id': misa_id_str,      
+                    })
                     
-                    misa_product_id = line.get("ProductID") or line.get("ProductId") or None
-                    qty_for_odoo = qty
-                    price_for_odoo = price_unit
-                    use_default_uom = True
                     
-                    qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
-                        product=product,
-                        misa_uom_text=uom_name,
-                        qty=qty,
-                        price=price_unit,
-                        misa_product_id=misa_product_id,
-                        headers=sale_headers
-                    )
-                    vals_line = {
-                        'order_id': sale_order.id,
-                        'product_id': product.id,
-                        'name': description,
-                        'product_uom_qty': qty_for_odoo,
-                        'price_unit': price_for_odoo,
-                        'discount': discount_percent,
-                        'note': note,
-                    }
-                    if not use_default_uom:
-                        vals_line['product_uom'] = product.uom_id.id
 
-                    self.env['sale.order.line'].create(vals_line)       
+                    # Thêm line
+                    for line in grouped_lines:
+                        product_code = line.get("ProductIDText")
+                        description = line.get("Description") or product_code
+                        qty = float(line.get("Amount", 1) or 0.0)
+                        price_unit = float(line.get("Price", 0) or 0.0)
+                        discount_percent = float(line.get("DiscountPercent", 0) or 0.0)
+                        uom_name = (line.get("UnitIDText") or "Cái").strip()
+                        note = line.get("DescriptionProduct") or ""
 
-                    # self.env['sale.order.line'].create({
-                    #     'order_id': sale_order.id,
-                    #     'product_id': product.id,
-                    #     'name': description,
-                    #     'product_uom_qty': qty,
-                    #     'price_unit': price_unit,
-                    #     'discount': discount_percent
-                    # })
+                        product = odoo_utils._get_or_create_product(
+                            code=product_code,
+                            name=description,
+                            unit_name=uom_name,
+                            cost=price_unit,
+                            product_type="consu",
+                            purchase_ok=True,
+                            sale_ok=True
+                        )
+                        
+                        misa_product_id = line.get("ProductID") or line.get("ProductId") or None
+                        qty_for_odoo = qty
+                        price_for_odoo = price_unit
+                        use_default_uom = True
+                        
+                        
+                        qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
+                            product=product,
+                            misa_uom_text=uom_name,
+                            qty=qty,
+                            price=price_unit,
+                            misa_product_id=misa_product_id,
+                            headers=sale_headers
+                        )
+                        vals_line = {
+                            'order_id': sale_order.id,
+                            'product_id': product.id,
+                            'name': description,
+                            'product_uom_qty': qty_for_odoo,
+                            'price_unit': price_for_odoo,
+                            'discount': discount_percent,
+                            'note': note,
+                        }
+                        if not use_default_uom:
+                            vals_line['product_uom'] = product.uom_id.id
 
-                # Confirm để tạo picking
-                sale_order.action_confirm()
+                        self.env['sale.order.line'].create(vals_line)       
 
-                # Đặt tên picking
-                pickings = sale_order.picking_ids
-                if pickings:
-                    picking = pickings[0]
-                    desired = base_pick_name
-                    if not desired:
-                        desired = order_ref_base
-                    exists = self.env['stock.picking'].search([('name', '=', desired)], limit=1)
-                    if exists:
-                        _logger.warning("⚠️ Mã phiếu pick %s đã tồn tại, NEXT tạo mã mới: %s", desired, f"{desired}_{picking.id}")
-                        # picking.name = f"{desired}_{picking.id}"
-                    else:
-                        picking.name = desired
-                    _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
-                                    # ========== CASE 2: NHIỀU KHO -> TÁCH NHIỀU SO, THÊM HẬU TỐ ==========
-                # else:
-                #     for stock_id in distinct_stocks:
-                #         grouped_lines = lines_by_stock[stock_id]
+                        # self.env['sale.order.line'].create({
+                        #     'order_id': sale_order.id,
+                        #     'product_id': product.id,
+                        #     'name': description,
+                        #     'product_uom_qty': qty,
+                        #     'price_unit': price_unit,
+                        #     'discount': discount_percent
+                        # })
 
-                #         location_name = stock_mapping[stock_id]
-                #         location = self.env['stock.location'].search([
-                #             ('complete_name', '=', location_name)
-                #         ], limit=1)
-                #         if not location:
-                #             _logger.warning("❌ Không tìm thấy stock.location cho kho %s (%s)", stock_id, location_name)
-                #             continue
+                    # Confirm để tạo picking
+                    sale_order.action_confirm()
 
-                #         warehouse = self.env['stock.warehouse'].search([
-                #             ('view_location_id', '=', location.location_id.id)
-                #         ], limit=1)
-                #         if not warehouse:
-                #             _logger.warning("🚫 Không tìm thấy warehouse cho kho: %s", stock_id)
-                #             continue
+                    # Đặt tên picking giữ nguyên logic cũ
+                    pickings = sale_order.picking_ids
+                    if pickings:
+                        picking = pickings[0]
+                        desired = base_pick_name
+                        if not desired:
+                            desired = order_ref_base
+                        exists = self.env['stock.picking'].search([('name', '=', desired)], limit=1)
+                        if exists:
+                            _logger.warning("⚠️ Mã phiếu pick %s đã tồn tại, NEXT tạo mã mới: %s", desired, f"{desired}_{picking.id}")
+                            # picking.name = f"{desired}_{picking.id}"
+                        else:
+                            picking.name = desired
+                        _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
 
-                #         order_ref = f"{order_ref_base}-{stock_id}"
+                # ========== CASE 2: NHIỀU KHO -> TÁCH NHIỀU SO, THÊM HẬU TỐ ==========
+                else:
+                    for stock_id in distinct_stocks:
+                        grouped_lines = lines_by_stock[stock_id]
 
-                #         existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
-                #         if existing_order:
-                #             _logger.info("🔁 Bỏ qua SO đã tồn tại: %s", order_ref)
-                #             continue
+                        location_name = stock_mapping[stock_id]
+                        location = self.env['stock.location'].search([
+                            ('complete_name', '=', location_name)
+                        ], limit=1)
+                        if not location:
+                            _logger.warning("❌ Không tìm thấy stock.location cho kho %s (%s)", stock_id, location_name)
+                            continue
 
-                #         group_total = sum(line_subtotal(l) for l in grouped_lines)
-                #         sale_order = self.env['sale.order'].create({
-                #             'name': order_ref,
-                #             'partner_id': partner.id,
-                #             'date_order': order_date,
-                #             'partner_shipping_id': delivery_contact.id, 
-                #             'amount_total': group_total,
-                #             'warehouse_id': warehouse.id,
-                #             'origin':origin,
-                #             'misa_id': misa_id_str,      
-                #         })
+                        warehouse = self.env['stock.warehouse'].search([
+                            ('view_location_id', '=', location.location_id.id)
+                        ], limit=1)
+                        if not warehouse:
+                            _logger.warning("🚫 Không tìm thấy warehouse cho kho: %s", stock_id)
+                            continue
 
-                #         # Thêm line
-                #         for line in grouped_lines:
-                #             product_code = line.get("ProductIDText")
-                #             description = line.get("Description") or product_code
-                #             qty = float(line.get("Amount", 1) or 0.0)
-                #             price_unit = float(line.get("Price", 0) or 0.0)
-                #             discount_percent = float(line.get("DiscountPercent", 0) or 0.0)
-                #             uom_name = (line.get("UnitIDText") or "Cái").strip()
-                #             note = line.get("DescriptionProduct") or ""
+                        order_ref = f"{order_ref_base}-{stock_id}"
 
-                #             product = odoo_utils._get_or_create_product(
-                #                 code=product_code,
-                #                 name=description,
-                #                 unit_name=uom_name,
-                #                 cost=price_unit,
-                #                 product_type="consu",
-                #                 purchase_ok=True,
-                #                 sale_ok=True
-                #             )
-                #             self.env['sale.order.line'].create({
-                #                 'order_id': sale_order.id,
-                #                 'product_id': product.id,
-                #                 'name': description,
-                #                 'product_uom_qty': qty,
-                #                 'price_unit': price_unit,
-                #                 'discount': discount_percent,
-                #                 'note': note,
-                #             })
+                        existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
+                        if existing_order:
+                            _logger.info("🔁 Bỏ qua SO đã tồn tại: %s", order_ref)
+                            continue
 
-                #         # Confirm -> tạo picking theo từng SO/warehouse
-                #         sale_order.action_confirm()
+                        group_total = sum(line_subtotal(l) for l in grouped_lines)
+                        sale_order = self.env['sale.order'].create({
+                            'name': order_ref,
+                            'partner_id': partner.id,
+                            'date_order': order_date,
+                            'partner_shipping_id': delivery_contact.id, 
+                            'amount_total': group_total,
+                            'warehouse_id': warehouse.id,
+                            'origin':origin,
+                            'misa_id': misa_id_str,      
+                        })
 
-                #         # Đặt tên picking: base_pick + hậu tố kho để unique
-                #         pick_base = base_pick_name or order_ref_base
-                #         desired_pick_name = f"{pick_base}-{stock_id}"
-                #         for picking in sale_order.picking_ids:
-                #             exists = self.env['stock.picking'].search([('name', '=', desired_pick_name)], limit=1)
-                #             new_name = f"{desired_pick_name}-{picking.id}" if exists else desired_pick_name
-                #             if picking.name != new_name:
-                #                 picking.name = new_name
-                #             _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
+                        # Thêm line
+                        for line in grouped_lines:
+                            product_code = line.get("ProductIDText")
+                            description = line.get("Description") or product_code
+                            qty = float(line.get("Amount", 1) or 0.0)
+                            price_unit = float(line.get("Price", 0) or 0.0)
+                            discount_percent = float(line.get("DiscountPercent", 0) or 0.0)
+                            uom_name = (line.get("UnitIDText") or "Cái").strip()
+                            note = line.get("DescriptionProduct") or ""
+
+                            product = odoo_utils._get_or_create_product(
+                                code=product_code,
+                                name=description,
+                                unit_name=uom_name,
+                                cost=price_unit,
+                                product_type="consu",
+                                purchase_ok=True,
+                                sale_ok=True
+                            )
+                            self.env['sale.order.line'].create({
+                                'order_id': sale_order.id,
+                                'product_id': product.id,
+                                'name': description,
+                                'product_uom_qty': qty,
+                                'price_unit': price_unit,
+                                'discount': discount_percent,
+                                'note': note,
+                            })
+
+                        # Confirm -> tạo picking theo từng SO/warehouse
+                        sale_order.action_confirm()
+
+                        # Đặt tên picking: base_pick + hậu tố kho để unique
+                        pick_base = base_pick_name or order_ref_base
+                        desired_pick_name = f"{pick_base}-{stock_id}"
+                        for picking in sale_order.picking_ids:
+                            exists = self.env['stock.picking'].search([('name', '=', desired_pick_name)], limit=1)
+                            new_name = f"{desired_pick_name}-{picking.id}" if exists else desired_pick_name
+                            if picking.name != new_name:
+                                picking.name = new_name
+                            _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
 
             # --- phân trang ---
             if len(orders) < 20:

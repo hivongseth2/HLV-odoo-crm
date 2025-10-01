@@ -2,6 +2,8 @@ from odoo import models, fields, _
 import logging
 import json
 from datetime import datetime, timedelta, timezone  # ⬅️ NEW
+import uuid
+import requests
 
 
 _logger = logging.getLogger(__name__)
@@ -11,7 +13,112 @@ class MisaPOFetch(models.TransientModel):
     _description = "MISA PO Fetch"
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
+    # ================== HELPERS QUY ĐỔI UOM ==================
+
+    def _misa_fetch_conversion_units(self, product_code, headers):
+        """
+        Gọi Product/DataSubPaging để lấy quy đổi UoM theo đúng payload bạn yêu cầu.
+        """
+        if not product_code:
+            return []
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+
+        payload = {
+            "Columns": "SUQsQ29udmVyc2lvblVuaXRJRCxDb252ZXJzaW9uVW5pdElEVGV4dCxDb252ZXJzaW9uUmF0ZSxEZXNjcmlwdGlvbixDb252ZXJzaW9uT3BlcmF0b3JJRCxDb252ZXJzaW9uT3BlcmF0b3JJRFRleHQsQ29udmVyc2lvblVuaXRQcmljZTIsQ29udmVyc2lvblVuaXRQcmljZSxDb252ZXJzaW9uVW5pdFByaWNlMSxDb252ZXJzaW9uVW5pdFByaWNlRml4ZWQ=",
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 20,
+            "Filters": [],
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {
+                "MasterID": str(product_code),
+                "TableName": "product_conversion_unit",
+                "MasterKey": "ProductCode",
+                "SumColumn": ""
+            },
+            "IsApproved": False,
+            "CustomPagingData": {
+                "SubFormConfig": {
+                    "ColumnFieldSubForm": "",
+                    "ColumnAggregateSubForm": "",
+                    "TableName": "product_conversion_unit",
+                    "ParentIDKey": "ProductCode",
+                    "IsBringSerialType": False,
+                    "AggregateField": []
+                }
+            },
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": str(uuid.uuid4()),
+            "AISearchKeyword": ""
+        }
+
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("Data", []) or []
+        except Exception as e:
+            _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s",   )
+            return []
+
+    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_code, headers):
+        """
+        Chuyển qty/price từ đơn vị lấy từ MISA (misa_uom_text) về đơn vị mặc định của product (product.uom_id).
+        Trả về: (qty_base, price_base, uom_is_default)
+        - uom_is_default = True nếu misa_uom_text trùng default (không cần convert)
+        """
+        default_uom_name = (product.uom_id and product.uom_id.name) or ""
+        if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
+            return qty, price, True  # không cần đổi
+
+        # Lấy bảng quy đổi theo ProductID
+        conversions = self._misa_fetch_conversion_units(misa_product_code, headers) if misa_product_code else []
+        # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
+        conv = next((
+            c for c in (conversions or [])
+            if (c.get("ConversionUnitIDText") or "").strip().lower() == misa_uom_text.strip().lower()
+        ), None)
+
+        if not conv:
+            _logger.warning("⚠️ Không tìm thấy mapping UoM cho '%s' -> giữ nguyên số liệu gốc", misa_uom_text)
+            return qty, price, False
+
+        try:
+            rate = float(conv.get("ConversionRate") or 0) or 0.0
+        except Exception:
+            rate = 0.0
+        try:
+            op_id = int(conv.get("ConversionOperatorID") or 1)  # 1=Nhân, 2=Chia
+        except Exception:
+            op_id = 1
+
+        if rate <= 0:
+            _logger.warning("⚠️ ConversionRate không hợp lệ (<=0) cho '%s'", misa_uom_text)
+            return qty, price, False
+
+        # Diễn giải:
+        # - op_id == 1 (Nhân): "1 Hộp = 60 Cuộn"
+        #   Dòng ở Hộp, default là Cuộn -> qty_base = qty * 60; price_base = price / 60
+        # - op_id == 2 (Chia): "1 Mét = 1/50 Cuộn"
+        #   Dòng ở Mét,  default là Cuộn -> qty_base = qty / 50; price_base = price * 50
+        if op_id == 1:
+            qty_base = qty * rate
+            price_base = price / rate if rate else price
+        else:  # op_id == 2 (Chia) hoặc bất kỳ khác coi như "Chia"
+            qty_base = qty / rate
+            price_base = price * rate
+
+        return qty_base, price_base, False
     
+
     def _get_or_create_vn_vat(self, rate, use='purchase'):
         Tax = self.env['account.tax'].with_company(self.env.company)
         TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
@@ -284,6 +391,7 @@ class MisaPOFetch(models.TransientModel):
                     unit_name = line.get("unit_name", "Cái").strip()
                     vat_rate = float(line.get("vat_rate", 0))
                     
+                    misa_product_code = line.get("inventory_item_id")
                     tax_ids = self._tax_ids_from_misa_line(line)
 
                     product = odoo_utils._get_or_create_product(
@@ -294,13 +402,15 @@ class MisaPOFetch(models.TransientModel):
                         purchase_ok=True,
                         sale_ok=True
                     )
+
+                    qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(product, unit_name, qty, price, misa_product_code, headers)
                     pol_vals = {
                         "order_id": po_rec.id,
                         "name": name,
                         "product_id": product.id,
-                        "product_qty": qty,
+                        "product_qty": qty_base,
                         "product_uom": product.uom_id.id,
-                        "price_unit": price,
+                        "price_unit": price_base,
                         "taxes_id": [(6, 0, tax_ids)]
                     }
                     
