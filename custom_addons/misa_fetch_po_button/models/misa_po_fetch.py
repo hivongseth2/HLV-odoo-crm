@@ -403,7 +403,6 @@ class MisaPOFetch(models.TransientModel):
                     unit_name = line.get("unit_name", "Cái").strip()
                     vat_rate = float(line.get("vat_rate", 0))
                     
-                    misa_product_code = line.get("inventory_item_id")
                     tax_ids = self._tax_ids_from_misa_line(line)
 
                     product = odoo_utils._get_or_create_product(
@@ -415,7 +414,7 @@ class MisaPOFetch(models.TransientModel):
                         sale_ok=True
                     )
 
-                    qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(product, unit_name, qty, price, misa_product_code, headers)
+                    qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(product, unit_name, qty, price, code, headers)
                     pol_vals = {
                         "order_id": po_rec.id,
                         "name": name,
