@@ -15,26 +15,45 @@ class MisaPOFetch(models.TransientModel):
     date_to = fields.Date(string="Đến ngày", required=True)
     # ================== HELPERS QUY ĐỔI UOM ==================
 
-    def _misa_get_product_id_from_code(self, product_code, headers):
-        """Trả về ProductID từ ProductCode"""
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+    def _misa_get_product_id_from_code(self, product_code: str):
+        """
+        Trả về ProductID (GUID) từ ProductCode qua CRM DataSubPaging.
+        Dùng CRM token (misa_utils._fetch_login_crm_token).
+        """
+        if not product_code:
+            return None
+
+        misa_utils = self.env['misa.api.utils']
+        try:
+            crm_token = misa_utils._fetch_login_crm_token()
+        except Exception as e:
+            _logger.exception("❌ Không lấy được CRM token: %s", e)
+            return None
+
+        url_candidates = [
+            "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging",
+            # fallback nếu môi trường / phiên bản khác:
+            "https://amisapp.misa.vn/crm/g1/api/business/Product/DataSubPaging",
+        ]
+
+        # chỉ cần 3 cột: ID, ProductCode, ProductName
+        columns_b64 = "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWU="
+
         payload = {
-            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWU=",  # ID, ProductCode, ProductName
+            "Columns": columns_b64,
             "Sorts": [],
             "Start": 0,
             "Page": 1,
             "PageSize": 1,
-            "Filters": [
-                {
-                    "Addition": 1,
-                    "InputType": 1,
-                    "IsFromFormula": True,
-                    "Operator": 1,
-                    "Property": "ProductCode",
-                    "Text": product_code,
-                    "Value": product_code
-                }
-            ],
+            "Filters": [{
+                "Addition": 1,
+                "InputType": 1,
+                "IsFromFormula": True,
+                "Operator": 1,              # =/contains (tùy backend), với code thường là bằng
+                "Property": "ProductCode",
+                "Text": product_code,
+                "Value": product_code
+            }],
             "Formula": "( 1 )",
             "LayoutCode": "Product",
             "DefaultTotal": False,
@@ -52,17 +71,36 @@ class MisaPOFetch(models.TransientModel):
             "SessionID": str(uuid.uuid4()),
             "AISearchKeyword": ""
         }
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
-            resp.raise_for_status()
-            data = resp.json()
-            items = data.get("Data", [])
-            if items:
-                return items[0].get("ID")  # ProductID
-            return None
-        except Exception as e:
-            _logger.exception("❗ Lỗi lấy ProductID từ ProductCode %s: %s", product_code, e)
-            return None
+
+        # Lưu ý: một số tenant yêu cầu header companycode
+        headers = {
+            "Authorization": f"Bearer {crm_token}",
+            "Content-Type": "application/json",
+            "companycode": "3R2PY2F4",  # nếu không cần thì bỏ, nhưng thường nên để
+        }
+
+        last_err = None
+        for url in url_candidates:
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=30)
+                if resp.status_code == 404:
+                    _logger.warning("⚠️ 404 tại %s, thử endpoint khác...", url)
+                    last_err = "404"
+                    continue
+                resp.raise_for_status()
+                js = resp.json()
+                rows = js.get("Data", []) or []
+                if rows:
+                    return rows[0].get("ID")  # ProductID (GUID)
+                _logger.info("ℹ️ Không thấy sản phẩm code=%s trên %s", product_code, url)
+                return None
+            except Exception as e:
+                last_err = str(e)
+                _logger.exception("❗ Lỗi gọi DataSubPaging (Product) ở %s: %s", url, e)
+
+        _logger.error("❌ Thất bại lấy ProductID cho code %s. Lỗi cuối: %s", product_code, last_err)
+        return None
+
 
     def _misa_fetch_conversion_units(self, product_code, headers):
         """
@@ -71,11 +109,15 @@ class MisaPOFetch(models.TransientModel):
         if not product_code:
             return []
 
-        product_id = self._misa_get_product_id_from_code(product_code, headers)
+        product_id = self._misa_get_product_id_from_code(product_code)
         if not product_id:
-            _logger.warning("⚠️ Không thể lấy conversion units vì không tìm thấy ProductID cho '%s'", product_code)
+            _logger.warning("📭 Không tìm thấy ProductID cho code %s -> bỏ qua conversion", product_code)
             return []
-        
+        try:
+            crm_token = self.env['misa.api.utils']._fetch_login_crm_token()
+        except Exception as e:
+            _logger.exception("❌ Không lấy được CRM token (conversion units): %s", e)
+            return []
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
 
         payload = {
