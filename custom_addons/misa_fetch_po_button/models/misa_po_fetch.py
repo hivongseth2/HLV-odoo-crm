@@ -15,7 +15,7 @@ class MisaPOFetch(models.TransientModel):
     date_to = fields.Date(string="Đến ngày", required=True)
     # ================== HELPERS QUY ĐỔI UOM ==================
 
-    def _misa_get_product_id_by_code(self, product_code, headers):
+    def _misa_get_product_id_by_code(self, product_code, product_name, crm_headers):
         """
         Gọi API DataPaging để lấy ProductID từ ProductCode.
         Trả về ProductID (string) hoặc None nếu không tìm thấy.
@@ -30,7 +30,7 @@ class MisaPOFetch(models.TransientModel):
             "Sorts": [],
             "Start": 0,
             "Page": 1,
-            "PageSize": 1,
+            "PageSize": 100,
             "Filters": [
                 {
                     "Group": None,
@@ -41,9 +41,19 @@ class MisaPOFetch(models.TransientModel):
                     "Property": "ProductCode",
                     "Text": product_code,
                     "Value": product_code
+                },
+                {
+                    "Group": None,
+                    "Addition": 1,
+                    "InputType": 1,
+                    "IsFromFormula": True,
+                    "Operator": 1,
+                    "Property": "ProductName",
+                    "Text": product_name,
+                    "Value": product_name
                 }
             ],
-            "Formula": "( 1 )",
+            "Formula": "( 1 OR 2 )",
             "LayoutCode": "Product",
             "DefaultTotal": False,
             "IsMappingData": False,
@@ -57,13 +67,13 @@ class MisaPOFetch(models.TransientModel):
             "IsGetCache": True,
             "IsCheckInactive": False,
             "IsConverted": False,
-            "SessionID": "3d4c78be-b09b-7937-2752-11d1d338bf52",
+            "SessionID": str(uuid.uuid4()),
             "LayoutCodeCheckPermission": "Product",
             "AISearchKeyword": ""
         }
         
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp = requests.post(url, headers=crm_headers, json=payload, timeout=30)
             resp.raise_for_status()
             data = resp.json()
             _logger.warning("✅ Lấy được dữ liệu cho ProductCode '%s': %s", product_code, data)
@@ -81,14 +91,14 @@ class MisaPOFetch(models.TransientModel):
         return None
 
 
-    def _misa_fetch_conversion_units(self, product_code, headers):
+    def _misa_fetch_conversion_units(self, product_code, crm_headers):
         """
         Gọi Product/DataSubPaging để lấy quy đổi UoM theo đúng payload bạn yêu cầu.
         """
         if not product_code:
             return []
 
-        product_id = self._misa_get_product_id_by_code(product_code, headers)
+        product_id = self._misa_get_product_id_by_code(product_code, None, crm_headers)
         if not product_id:
             return []
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
@@ -131,7 +141,7 @@ class MisaPOFetch(models.TransientModel):
         }
 
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp = requests.post(url, headers=crm_headers, json=payload, timeout=30)
             resp.raise_for_status()
             data = resp.json()
             return data.get("Data", []) or []
@@ -139,7 +149,7 @@ class MisaPOFetch(models.TransientModel):
             _logger.exception("❗ Lỗi gọi Product/DataSubPaging: %s", e)
             return []
 
-    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_code, headers):
+    def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_code, crm_headers):
         """
         Chuyển qty/price từ đơn vị lấy từ MISA (misa_uom_text) về đơn vị mặc định của product (product.uom_id).
         Trả về: (qty_base, price_base, uom_is_default)
@@ -150,7 +160,7 @@ class MisaPOFetch(models.TransientModel):
             return qty, price, True  # không cần đổi
 
         # Lấy bảng quy đổi theo ProductID
-        conversions = self._misa_fetch_conversion_units(misa_product_code, headers) if misa_product_code else []
+        conversions = self._misa_fetch_conversion_units(misa_product_code, crm_headers) if misa_product_code else []
         # Tìm dòng conversion khớp với UoM của MISA trên line (theo tên)
         conv = next((
             c for c in (conversions or [])
@@ -286,6 +296,8 @@ class MisaPOFetch(models.TransientModel):
         date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
 
         headers = misa_config.get_default_headers(access_token)
+        crm_token = misa_utils._fetch_login_crm_token()
+        crm_headers = misa_config.get_crm_header(crm_token)
 
         payload = {
             "filter": [
@@ -472,7 +484,7 @@ class MisaPOFetch(models.TransientModel):
                         sale_ok=True
                     )
 
-                    qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(product, unit_name, qty, price, code, headers)
+                    qty_base, price_base, is_default = self._convert_qty_price_to_default_uom(product, unit_name, qty, price, code, crm_headers)
                     pol_vals = {
                         "order_id": po_rec.id,
                         "name": name,
