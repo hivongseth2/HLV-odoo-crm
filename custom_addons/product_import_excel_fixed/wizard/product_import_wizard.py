@@ -150,6 +150,7 @@ class ProductImportWizard(models.TransientModel):
                 "standard_price": self._safe_float(cost_price),
                 "list_price": self._safe_float(price1),
                 "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
+                "is_storable": True,
             }
             if uom:
                 # set cả uom_id & uom_po_id
