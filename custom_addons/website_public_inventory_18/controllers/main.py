@@ -285,72 +285,74 @@ class PublicInventory(http.Controller):
     def product_breakdown(self, product_id=None, warehouse_id=None):
         if not _pw_allowed():
             return {"ok": False, "error": "access_denied", "rows": []}
-        """
-        Trả về danh sách tồn của product theo từng kho user được phép xem.
-        Nếu truyền warehouse_id: chỉ breakdown trong kho đó.
-        """
+
         env = request.env
         pid = _as_int_or_none(product_id)
         if not pid:
             return {"ok": False, "error": "invalid_product_id", "rows": []}
-        
-        if getattr(product.product_tmpl_id, "is_combo", False):
-            return {"ok": True, "rows": []}  # combo không có breakdown tồn kho
 
         # Company context như trang chính
         wid = _as_int_or_none(warehouse_id)
         company_ids = _companies_for_context(wid)
         if not company_ids:
             company_ids = env.companies.ids
+
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
+        Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
 
-        # Lấy product để tính virtual_available
+        # Lấy product
         product = Product.browse(pid).exists()
         if not product:
             return {"ok": False, "error": "product_not_found", "rows": []}
 
-        # Chọn danh sách kho
-        warehouses = []
+        # Không breakdown cho combo
+        if getattr(product.product_tmpl_id, "is_combo", False):
+            return {"ok": True, "rows": []}
+
+        # Chọn danh sách kho (recordset)
         if wid:
-            wh = env["stock.warehouse"].sudo().browse(wid).exists()
-            if wh:
-                warehouses = wh
-        if not warehouses:
+            wh = Warehouse.browse(wid).exists()
+            warehouses = wh if wh else Warehouse.browse([])
+        else:
             warehouses = _get_allowed_warehouses()
+
+        # Fallback: nếu cấu hình không giới hạn kho, lấy tất cả
+        if not warehouses:
+            warehouses = Warehouse.search([])
 
         rows = []
         for wh in warehouses:
+            # Domain tất cả quant của sản phẩm trong cây location nội bộ của kho
             domain = [
                 ("product_id", "=", pid),
                 ("location_id", "child_of", wh.view_location_id.id),
             ]
-            # nhóm toàn bộ theo product_id (chỉ 1)
+
             grps = Quant.read_group(
                 domain,
                 ["product_id", "quantity:sum", "reserved_quantity:sum"],
                 ["product_id"],
+                lazy=False,  # đảm bảo trả đúng 1 nhóm
             )
+
             if grps:
                 g = grps[0]
                 qty_total = _rg_sum(g, "quantity")
                 qty_reserved = _rg_sum(g, "reserved_quantity")
             else:
-                qty_total = qty_reserved = 0.0
+                # Không có quant -> vẫn trả 0 cho kho đó
+                qty_total = 0.0
+                qty_reserved = 0.0
 
-            # Tồn khả dụng = Tồn thực tế - Đã giữ hàng
             qty_available = qty_total - qty_reserved
 
             rows.append({
                 "warehouse_id": wh.id,
                 "warehouse_name": wh.name,
-                "qty_available": qty_available,   # Tồn khả dụng
-                "qty_total": qty_total,           # Tồn thực tế
-                "qty_reserved": qty_reserved,     # Đã giữ hàng
+                "qty_available": qty_available,
+                "qty_total": qty_total,
+                "qty_reserved": qty_reserved,
             })
-            _logger.debug(
-                "Breakdown pid=%s @WH %s: total=%.6f, reserved=%.6f, available=%.6f",
-                pid, wh.name, qty_total, qty_reserved, qty_available
-            )
 
         return {"ok": True, "rows": rows}
