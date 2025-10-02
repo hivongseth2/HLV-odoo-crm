@@ -74,36 +74,72 @@
                   </thead>
                   <tbody>
                     <t t-foreach="rows" t-as="r">
+                      <!-- Biến cục bộ: is_combo -->
+                      <t t-set="is_combo" t-value="r.get('is_combo', False)"/>
+
                       <!-- Hàng chính -->
                       <tr t-att-id="'row-'+str(r['id'])">
                         <td>
-                          <button type="button"
-                                  class="btn btn-sm btn-outline-primary btn-expand"
-                                  t-att-data-pid="r['id']"
-                                  title="Xem chi tiết theo kho">+</button>
-                        </td>
-                        <td>
-                          <t t-if="r.get('image_url')">
-                            <img t-att-src="r['image_url']" 
-                                 alt="Product Image" 
-                                 class="img-thumbnail"
-                                 style="width: 60px; height: 60px; object-fit: cover;"/>
+                          <!-- Nút expand: disable nếu là combo -->
+                          <t t-if="is_combo">
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    disabled="disabled"
+                                    title="Combo không theo dõi tồn kho">–</button>
                           </t>
                           <t t-else="">
-                            <div class="bg-light d-flex align-items-center justify-content-center" 
-                                 style="width: 60px; height: 60px; border: 1px solid #dee2e6;">
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-primary btn-expand"
+                                    t-att-data-pid="r['id']"
+                                    title="Xem chi tiết theo kho">+</button>
+                          </t>
+                        </td>
+
+                        <!-- Ảnh -->
+                        <td>
+                          <t t-if="r.get('image_url')">
+                            <img t-att-src="r['image_url']"
+                                alt="Product Image"
+                                class="img-thumbnail"
+                                style="width: 60px; height: 60px; object-fit: cover;"/>
+                          </t>
+                          <t t-else="">
+                            <div class="bg-light d-flex align-items-center justify-content-center"
+                                style="width: 60px; height: 60px; border: 1px solid #dee2e6;">
                               <small class="text-muted">N/A</small>
                             </div>
                           </t>
                         </td>
+
+                        <!-- Mã -->
                         <td><t t-esc="r['default_code']"/></td>
-                        <td><t t-esc="r['name']"/></td>
+
+                        <!-- Tên + badge COMBO -->
+                        <td>
+                          <t t-esc="r['name']"/>
+                          <t t-if="is_combo">
+                            <span class="badge bg-warning text-dark ms-2">COMBO</span>
+                          </t>
+                        </td>
+
+                        <!-- Barcode -->
                         <td><t t-esc="r['barcode']"/></td>
+
+                        <!-- ĐVT -->
                         <td><t t-esc="r['uom']"/></td>
-                        <!-- Được dự báo (virtual_available) -->
-                        <td class="text-end"><t t-esc="('%.2f' % r.get('qty_forecasted', 0.0))"/></td>
-                        <!-- Tồn thực tế (qty_on_hand) -->
-                        <td class="text-end"><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></td>
+
+                        <!-- Được dự báo (combo: '-') -->
+                        <td class="text-end">
+                          <t t-if="is_combo">-</t>
+                          <t t-else=""><t t-esc="('%.2f' % r.get('qty_forecasted', 0.0))"/></t>
+                        </td>
+
+                        <!-- Tồn thực tế (combo: '-') -->
+                        <td class="text-end">
+                          <t t-if="is_combo">-</t>
+                          <t t-else=""><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></t>
+                        </td>
+
                         <!-- Giá bán -->
                         <td class="text-end">
                           <t t-if="r.get('list_price')">
@@ -111,6 +147,7 @@
                           </t>
                           <t t-else="">-</t>
                         </td>
+
                         <!-- Giá bán thương mại -->
                         <td class="text-end">
                           <t t-set="v" t-value="r.get('commercial_price', 0.0)"/>
@@ -119,6 +156,7 @@
                           </t>
                           <t t-else="">-</t>
                         </td>
+
                         <!-- Giá gốc -->
                         <td class="text-end">
                           <t t-set="v" t-value="r.get('standard_price', 0.0)"/>
@@ -127,14 +165,15 @@
                           </t>
                           <t t-else="">-</t>
                         </td>
+
+                        <!-- Link website -->
                         <td>
                           <t t-if="r['website_url']">
                             <a t-att-href="r['website_url']" class="btn btn-sm btn-outline-secondary">Xem</a>
                           </t>
                         </td>
                       </tr>
-
-                      <!-- Hàng chi tiết sẽ chèn vào bằng JS khi bấm nút + -->
+                      <!-- Hàng chi tiết: KHÔNG render cho combo (vì đã disable nút) -->
                     </t>
                   </tbody>
                 </table>

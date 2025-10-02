@@ -200,6 +200,24 @@ class PublicInventory(http.Controller):
                 continue
             pid = g["product_id"][0]
             p = pmap.get(pid)
+            # Nếu là combo thì bỏ qua số lượng tồn
+            if getattr(p.product_tmpl_id, "is_combo", False):
+                rows.append({
+                    "id": pid,
+                    "name": p.name,
+                    "default_code": p.default_code or "",
+                    "barcode": p.barcode or "",
+                    "uom": p.uom_id.name,
+                    "qty_forecasted": 0.0,   # Không tính tồn
+                    "qty_total": 0.0,        # Không tính tồn
+                    "list_price": p.list_price,
+                    "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
+                    "standard_price": p.standard_price,
+                    "image_url": _get_product_image_url(p),
+                    "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
+                    "is_combo": True,
+                })
+                continue
             if not p:
                 continue
 
@@ -231,6 +249,7 @@ class PublicInventory(http.Controller):
                 "standard_price": p.standard_price,  # Giá gốc
                 "image_url": _get_product_image_url(p),  # URL hình ảnh
                 "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
+                "is_combo": False,
             })
 
             _logger.debug(
@@ -274,6 +293,9 @@ class PublicInventory(http.Controller):
         pid = _as_int_or_none(product_id)
         if not pid:
             return {"ok": False, "error": "invalid_product_id", "rows": []}
+        
+        if getattr(product.product_tmpl_id, "is_combo", False):
+            return {"ok": True, "rows": []}  # combo không có breakdown tồn kho
 
         # Company context như trang chính
         wid = _as_int_or_none(warehouse_id)
