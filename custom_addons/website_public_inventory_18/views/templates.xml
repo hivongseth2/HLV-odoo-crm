@@ -80,19 +80,10 @@
                       <!-- Hàng chính -->
                       <tr t-att-id="'row-'+str(r['id'])">
                         <td>
-                          <!-- Nút expand: disable nếu là combo -->
-                          <t t-if="is_combo">
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-secondary"
-                                    disabled="disabled"
-                                    title="Combo không theo dõi tồn kho">–</button>
-                          </t>
-                          <t t-else="">
-                            <button type="button"
-                                    class="btn btn-sm btn-outline-primary btn-expand"
-                                    t-att-data-pid="r['id']"
-                                    title="Xem chi tiết theo kho">+</button>
-                          </t>
+                          <button type="button"
+                                  class="btn btn-sm btn-outline-primary btn-expand"
+                                  t-att-data-pid="r['id']"
+                                  title="Xem chi tiết">+</button>
                         </td>
 
                         <!-- Ảnh -->
@@ -241,31 +232,95 @@
             try { return (parseFloat(n) || 0).toFixed(2); } catch(e) { return '0.00'; }
           }
 
-          function buildDetailTable(rows) {
+          function buildDetailTable(data) {
+            var mode = (data && data.mode) || "warehouses";
+            var rows = (data && data.rows) || [];
+
             var html = '';
             html += '<div class="p-2">';
             html += '<table class="table table-sm table-bordered mb-0">';
             html += '<thead><tr>';
-            html += '<th>Kho</th>';
-            // Thứ tự mới: Tồn thực tế -> Đã giữ hàng -> Tồn khả dụng
-            html += '<th class="text-end">Tồn thực tế</th>';
-            html += '<th class="text-end">Đã giữ hàng</th>';
-            html += '<th class="text-end">Tồn khả dụng</th>';
-            html += '</tr></thead><tbody>';
-            if (rows && rows.length) {
-              rows.forEach(function (r) {
-                html += '<tr>';
-                html += '<td>' + (r.warehouse_name || '') + '</td>';
-                html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
-                html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
-                html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
-                html += '</tr>';
-              });
+
+            if (mode === "components") {
+              // Bảng thành phần combo
+              html += '<th>Mã</th>';
+              html += '<th>Tên</th>';
+              html += '<th>ĐVT</th>';
+              html += '<th class="text-end">Trong mỗi combo</th>';
+              html += '<th class="text-end">Tồn thực tế</th>';
+              html += '<th class="text-end">Đã giữ hàng</th>';
+              html += '<th class="text-end">Tồn khả dụng</th>';
+              html += '</tr></thead><tbody>';
+
+              if (rows.length) {
+                rows.forEach(function (r) {
+                  html += '<tr>';
+                  html += '<td>' + (r.default_code || '') + '</td>';
+                  html += '<td>' + (r.name || '') + '</td>';
+                  html += '<td>' + (r.uom || '') + '</td>';
+                  html += '<td class="text-end">' + fmt(r.component_qty_in_combo) + '</td>';
+                  html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
+                  html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
+                  html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
+                  html += '</tr>';
+                });
+              } else {
+                html += '<tr><td colspan="7"><em>Không có thành phần combo.</em></td></tr>';
+              }
             } else {
-              html += '<tr><td colspan="4"><em>Không có dữ liệu chi tiết.</em></td></tr>';
+              // Mặc định: theo kho
+              html += '<th>Kho</th>';
+              html += '<th class="text-end">Tồn thực tế</th>';
+              html += '<th class="text-end">Đã giữ hàng</th>';
+              html += '<th class="text-end">Tồn khả dụng</th>';
+              html += '</tr></thead><tbody>';
+
+              if (rows.length) {
+                rows.forEach(function (r) {
+                  html += '<tr>';
+                  html += '<td>' + (r.warehouse_name || '') + '</td>';
+                  html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
+                  html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
+                  html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
+                  html += '</tr>';
+                });
+              } else {
+                html += '<tr><td colspan="4"><em>Không có dữ liệu chi tiết.</em></td></tr>';
+              }
             }
+
             html += '</tbody></table></div>';
             return html;
+          }
+          function loadBreakdown(pid, warehouse_id, done) {
+            var payload = {
+              jsonrpc: "2.0",
+              method: "call",
+              params: { 
+                product_id: pid, 
+                warehouse_id: warehouse_id || null 
+              },
+              id: new Date().getTime()
+            };
+
+            $.ajax({
+              url: "/search_stock/product_breakdown",
+              type: "POST",
+              dataType: "json",
+              contentType: "application/json; charset=utf-8",
+              data: JSON.stringify(payload),
+              success: function (resp) {
+                try {
+                  var result = (resp && resp.result) ? resp.result : resp;
+                  done(null, result);
+                } catch (e) {
+                  done(e);
+                }
+              },
+              error: function (xhr, status, error) { 
+                done(xhr || true); 
+              }
+            });
           }
           function ensureDetailRow($tr, pid) {
             var $next = $tr.next();
@@ -354,7 +409,7 @@
                   return;
                 }
                 console.log('Breakdown data:', data);
-                var html = buildDetailTable(data.rows || []);
+                var html = buildDetailTable(data || {mode: "warehouses", rows: []});
                 $detail.find('td').html(html);
               });
             });

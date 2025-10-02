@@ -291,8 +291,9 @@ class PublicInventory(http.Controller):
         if not pid:
             return {"ok": False, "error": "invalid_product_id", "rows": []}
 
-        # Company context như trang chính
         wid = _as_int_or_none(warehouse_id)
+
+        # Company context giống trang chính
         company_ids = _companies_for_context(wid)
         if not company_ids:
             company_ids = env.companies.ids
@@ -301,58 +302,111 @@ class PublicInventory(http.Controller):
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
         Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
 
-        # Lấy product
         product = Product.browse(pid).exists()
         if not product:
             return {"ok": False, "error": "product_not_found", "rows": []}
 
-        # Không breakdown cho combo
-        if getattr(product.product_tmpl_id, "is_combo", False):
-            return {"ok": True, "rows": []}
+        tmpl = product.product_tmpl_id
+        is_combo = bool(getattr(tmpl, "is_combo", False))
 
-        # Chọn danh sách kho (recordset)
-        if wid:
-            wh = Warehouse.browse(wid).exists()
-            warehouses = wh if wh else Warehouse.browse([])
-        else:
-            warehouses = _get_allowed_warehouses()
-
-        # Fallback: nếu cấu hình không giới hạn kho, lấy tất cả
-        if not warehouses:
-            warehouses = Warehouse.search([])
-
-        rows = []
-        for wh in warehouses:
-            # Domain tất cả quant của sản phẩm trong cây location nội bộ của kho
-            domain = [
-                ("product_id", "=", pid),
-                ("location_id", "child_of", wh.view_location_id.id),
-            ]
+        # Helper: lấy tổng tồn của 1 product trong 1 kho (hoặc tất cả kho được phép)
+        def _sum_for_product(p_id, wh):
+            if wh:
+                domain = [
+                    ("product_id", "=", p_id),
+                    ("location_id", "child_of", wh.view_location_id.id),
+                ]
+            else:
+                # Gộp theo tất cả kho được phép
+                allowed_whs = _get_allowed_warehouses()
+                if not allowed_whs:
+                    return (0.0, 0.0)
+                root_ids = allowed_whs.mapped("view_location_id").ids
+                domain = [
+                    ("product_id", "=", p_id),
+                    ("location_id", "child_of", root_ids),
+                ]
 
             grps = Quant.read_group(
                 domain,
                 ["product_id", "quantity:sum", "reserved_quantity:sum"],
                 ["product_id"],
-                lazy=False,  # đảm bảo trả đúng 1 nhóm
+                lazy=False,
             )
-
             if grps:
                 g = grps[0]
                 qty_total = _rg_sum(g, "quantity")
                 qty_reserved = _rg_sum(g, "reserved_quantity")
             else:
-                # Không có quant -> vẫn trả 0 cho kho đó
                 qty_total = 0.0
                 qty_reserved = 0.0
+            return (qty_total, qty_reserved)
 
-            qty_available = qty_total - qty_reserved
+        # Nếu là combo: trả về danh sách thành phần con + tồn của từng con
+        if is_combo:
+            ComboLine = env["combo.product"].sudo().with_context(allowed_company_ids=company_ids)
+            lines = ComboLine.search([("product_template_id", "=", tmpl.id)])
+
+            # Chọn kho (nếu có)
+            wh = None
+            if wid:
+                wh = Warehouse.browse(wid).exists()
+
+            rows = []
+            for line in lines:
+                child = line.product_id
+                if not child:
+                    continue
+                qty_total, qty_reserved = _sum_for_product(child.id, wh)
+                rows.append({
+                    "child_product_id": child.id,
+                    "default_code": child.default_code or "",
+                    "name": child.name or "",
+                    "uom": child.uom_id.name or "",
+                    "qty_total": qty_total,
+                    "qty_reserved": qty_reserved,
+                    "qty_available": qty_total - qty_reserved,
+                    "component_qty_in_combo": float(line.product_quantity or 1.0),  # Số lượng mỗi combo
+                })
+
+            return {"ok": True, "mode": "components", "rows": rows}
+
+        # Ngược lại: sản phẩm thường → breakdown theo kho như cũ
+        # Chọn danh sách kho
+        if wid:
+            wh = Warehouse.browse(wid).exists()
+            warehouses = wh if wh else Warehouse.browse([])
+        else:
+            warehouses = _get_allowed_warehouses()
+            if not warehouses:
+                warehouses = Warehouse.search([])
+
+        rows = []
+        for wh in warehouses:
+            domain = [
+                ("product_id", "=", pid),
+                ("location_id", "child_of", wh.view_location_id.id),
+            ]
+            grps = Quant.read_group(
+                domain,
+                ["product_id", "quantity:sum", "reserved_quantity:sum"],
+                ["product_id"],
+                lazy=False,
+            )
+            if grps:
+                g = grps[0]
+                qty_total = _rg_sum(g, "quantity")
+                qty_reserved = _rg_sum(g, "reserved_quantity")
+            else:
+                qty_total = 0.0
+                qty_reserved = 0.0
 
             rows.append({
                 "warehouse_id": wh.id,
                 "warehouse_name": wh.name,
-                "qty_available": qty_available,
+                "qty_available": qty_total - qty_reserved,
                 "qty_total": qty_total,
                 "qty_reserved": qty_reserved,
             })
 
-        return {"ok": True, "rows": rows}
+        return {"ok": True, "mode": "warehouses", "rows": rows}
