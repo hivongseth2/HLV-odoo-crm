@@ -279,10 +279,10 @@ class PublicInventory(http.Controller):
             return {"ok": False, "error": "access_denied", "rows": []}
         resp = self.inventory_page(q=q, warehouse_id=warehouse_id, page=page)
         return resp.qcontext.get("rows", [])
-
+    
     # ========= NEW: Breakdown theo từng kho cho 1 product =========
     @http.route(["/search_stock/product_breakdown"], type="json", auth="public", methods=["POST"])
-    def product_breakdown(self, product_id=None, warehouse_id=None):
+    def product_breakdown(self, product_id=None, warehouse_id=None, detail_mode=None):
         if not _pw_allowed():
             return {"ok": False, "error": "access_denied", "rows": []}
 
@@ -290,10 +290,37 @@ class PublicInventory(http.Controller):
         pid = _as_int_or_none(product_id)
         if not pid:
             return {"ok": False, "error": "invalid_product_id", "rows": []}
+        
+        def _sum_for_product_in_wh(Quant, product_id, warehouse):
+            """Trả về (qty_total, qty_reserved) của product trong 1 kho."""
+            domain = [
+                ("product_id", "=", product_id),
+                ("location_id", "child_of", warehouse.view_location_id.id),
+            ]
+            grps = Quant.read_group(
+                domain,
+                ["product_id", "quantity:sum", "reserved_quantity:sum"],
+                ["product_id"],
+                lazy=False,
+            )
+            if grps:
+                g = grps[0]
+                qt = _rg_sum(g, "quantity")
+                qr = _rg_sum(g, "reserved_quantity")
+            else:
+                qt = qr = 0.0
+            return qt, qr
+        # lấy param từ payload JSON-RPC (phòng trường hợp lib gọi khác)
+        params = request.jsonrequest.get("params") if hasattr(request, "jsonrequest") else {}
+        if params:
+            if warehouse_id is None:
+                warehouse_id = params.get("warehouse_id")
+            if detail_mode is None:
+                detail_mode = params.get("detail_mode")
 
         wid = _as_int_or_none(warehouse_id)
 
-        # Company context giống trang chính
+        # Company context như trang chính
         company_ids = _companies_for_context(wid)
         if not company_ids:
             company_ids = env.companies.ids
@@ -309,70 +336,49 @@ class PublicInventory(http.Controller):
         tmpl = product.product_tmpl_id
         is_combo = bool(getattr(tmpl, "is_combo", False))
 
-        # Helper: lấy tổng tồn của 1 product trong 1 kho (hoặc tất cả kho được phép)
-        def _sum_for_product(p_id, wh):
-            if wh:
-                domain = [
-                    ("product_id", "=", p_id),
-                    ("location_id", "child_of", wh.view_location_id.id),
-                ]
-            else:
-                # Gộp theo tất cả kho được phép
-                allowed_whs = _get_allowed_warehouses()
-                if not allowed_whs:
-                    return (0.0, 0.0)
-                root_ids = allowed_whs.mapped("view_location_id").ids
-                domain = [
-                    ("product_id", "=", p_id),
-                    ("location_id", "child_of", root_ids),
-                ]
-
-            grps = Quant.read_group(
-                domain,
-                ["product_id", "quantity:sum", "reserved_quantity:sum"],
-                ["product_id"],
-                lazy=False,
-            )
-            if grps:
-                g = grps[0]
-                qty_total = _rg_sum(g, "quantity")
-                qty_reserved = _rg_sum(g, "reserved_quantity")
-            else:
-                qty_total = 0.0
-                qty_reserved = 0.0
-            return (qty_total, qty_reserved)
-
-        # Nếu là combo: trả về danh sách thành phần con + tồn của từng con
+        # ===== Nếu là combo: components_by_warehouse =====
         if is_combo:
-            ComboLine = env["combo.product"].sudo().with_context(allowed_company_ids=company_ids)
-            lines = ComboLine.search([("product_template_id", "=", tmpl.id)])
-
-            # Chọn kho (nếu có)
-            wh = None
+            # Danh sách kho mục tiêu
             if wid:
                 wh = Warehouse.browse(wid).exists()
+                warehouses = wh if wh else Warehouse.browse([])
+            else:
+                warehouses = _get_allowed_warehouses()
+                if not warehouses:
+                    warehouses = Warehouse.search([])
+
+            ComboLine = env["combo.product"].sudo().with_context(allowed_company_ids=company_ids)
+            lines = ComboLine.search([("product_template_id", "=", tmpl.id)])
 
             rows = []
             for line in lines:
                 child = line.product_id
                 if not child:
                     continue
-                qty_total, qty_reserved = _sum_for_product(child.id, wh)
+
+                wh_rows = []
+                for wh in warehouses:
+                    qt, qr = _sum_for_product_in_wh(Quant, child.id, wh)
+                    wh_rows.append({
+                        "warehouse_id": wh.id,
+                        "warehouse_name": wh.name,
+                        "qty_total": qt,
+                        "qty_reserved": qr,
+                        "qty_available": qt - qr,
+                    })
+
                 rows.append({
                     "child_product_id": child.id,
                     "default_code": child.default_code or "",
                     "name": child.name or "",
                     "uom": child.uom_id.name or "",
-                    "qty_total": qty_total,
-                    "qty_reserved": qty_reserved,
-                    "qty_available": qty_total - qty_reserved,
-                    "component_qty_in_combo": float(line.product_quantity or 1.0),  # Số lượng mỗi combo
+                    "component_qty_in_combo": float(line.product_quantity or 1.0),
+                    "warehouses": wh_rows,
                 })
 
-            return {"ok": True, "mode": "components", "rows": rows}
+            return {"ok": True, "mode": "components_by_warehouse", "rows": rows}
 
-        # Ngược lại: sản phẩm thường → breakdown theo kho như cũ
-        # Chọn danh sách kho
+        # ===== Sản phẩm thường: breakdown theo kho như cũ =====
         if wid:
             wh = Warehouse.browse(wid).exists()
             warehouses = wh if wh else Warehouse.browse([])

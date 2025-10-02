@@ -83,6 +83,7 @@
                           <button type="button"
                                   class="btn btn-sm btn-outline-primary btn-expand"
                                   t-att-data-pid="r['id']"
+                                  t-att-data-is-combo="str(bool(r.get('is_combo'))).lower()"
                                   title="Xem chi tiết">+</button>
                         </td>
 
@@ -232,19 +233,26 @@
             try { return (parseFloat(n) || 0).toFixed(2); } catch(e) { return '0.00'; }
           }
 
+          /**
+          * data = { ok: true, mode: "components_by_warehouse" | "warehouses", rows: [...] }
+          * - components_by_warehouse:
+          *    rows[i] = {
+          *      default_code, name, uom, component_qty_in_combo,
+          *      warehouses: [{ warehouse_name, qty_total, qty_reserved, qty_available }, ...]
+          *    }
+          *    => Hiển thị header mỗi sản phẩm con: Mã | Tên | ĐVT | Trong mỗi combo | Tồn thực tế | Đã giữ hàng | Tồn khả dụng
+          *       và bên dưới là các dòng chi tiết theo từng kho (Tồn thực tế | Đã giữ hàng | Tồn khả dụng).
+          * - warehouses (sản phẩm thường): bảng theo từng kho như cũ.
+          */
           function buildDetailTable(data) {
             var mode = (data && data.mode) || "warehouses";
             var rows = (data && data.rows) || [];
 
-            var html = '';
-            html += '<div class="p-2">';
-            html += '<table class="table table-sm table-bordered mb-0">';
-            html += '<thead><tr>';
+            var html = '<div class="p-2"><table class="table table-sm table-bordered mb-0"><thead><tr>';
 
-            if (mode === "components") {
-              // Bảng thành phần combo
-              html += '<th>Mã</th>';
-              html += '<th>Tên</th>';
+            if (mode === "components_by_warehouse") {
+              // Header 7 cột yêu cầu
+              html += '<th colspan="2">Thành phần</th>';
               html += '<th>ĐVT</th>';
               html += '<th class="text-end">Trong mỗi combo</th>';
               html += '<th class="text-end">Tồn thực tế</th>';
@@ -252,77 +260,72 @@
               html += '<th class="text-end">Tồn khả dụng</th>';
               html += '</tr></thead><tbody>';
 
-              if (rows.length) {
-                rows.forEach(function (r) {
-                  html += '<tr>';
-                  html += '<td>' + (r.default_code || '') + '</td>';
-                  html += '<td>' + (r.name || '') + '</td>';
-                  html += '<td>' + (r.uom || '') + '</td>';
-                  html += '<td class="text-end">' + fmt(r.component_qty_in_combo) + '</td>';
-                  html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
-                  html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
-                  html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
-                  html += '</tr>';
-                });
-              } else {
+              if (!rows.length) {
                 html += '<tr><td colspan="7"><em>Không có thành phần combo.</em></td></tr>';
-              }
-            } else {
-              // Mặc định: theo kho
-              html += '<th>Kho</th>';
-              html += '<th class="text-end">Tồn thực tế</th>';
-              html += '<th class="text-end">Đã giữ hàng</th>';
-              html += '<th class="text-end">Tồn khả dụng</th>';
-              html += '</tr></thead><tbody>';
-
-              if (rows.length) {
-                rows.forEach(function (r) {
-                  html += '<tr>';
-                  html += '<td>' + (r.warehouse_name || '') + '</td>';
-                  html += '<td class="text-end">' + fmt(r.qty_total) + '</td>';
-                  html += '<td class="text-end">' + fmt(r.qty_reserved) + '</td>';
-                  html += '<td class="text-end">' + fmt(r.qty_available) + '</td>';
-                  html += '</tr>';
-                });
               } else {
-                html += '<tr><td colspan="4"><em>Không có dữ liệu chi tiết.</em></td></tr>';
+                rows.forEach(function (c) {
+                  // Tính tổng theo tất cả kho cho sản phẩm con
+                  var t_total = 0, t_reserved = 0, t_available = 0;
+                  (c.warehouses || []).forEach(function (w) {
+                    t_total += parseFloat(w.qty_total || 0);
+                    t_reserved += parseFloat(w.qty_reserved || 0);
+                    t_available += parseFloat(w.qty_available || 0);
+                  });
+
+                  // Hàng header cho component (hiển thị cả tổng)
+                  html += '<tr class="table-active">'
+                    + '<td style="width:140px;"><strong>' + (c.default_code || '') + '</strong></td>'
+                    + '<td><strong>' + (c.name || '') + '</strong></td>'
+                    + '<td>' + (c.uom || '') + '</td>'
+                    + '<td class="text-end">' + fmt(c.component_qty_in_combo) + '</td>'
+                    + '<td class="text-end">' + fmt(t_total) + '</td>'
+                    + '<td class="text-end">' + fmt(t_reserved) + '</td>'
+                    + '<td class="text-end">' + fmt(t_available) + '</td>'
+                    + '</tr>';
+
+                  // Các kho của component
+                  (c.warehouses || []).forEach(function (w) {
+                    html += '<tr>'
+                      + '<td colspan="2" class="ps-4">↳ ' + (w.warehouse_name || '') + '</td>'
+                      + '<td></td>'
+                      + '<td></td>'
+                      + '<td class="text-end">' + fmt(w.qty_total) + '</td>'
+                      + '<td class="text-end">' + fmt(w.qty_reserved) + '</td>'
+                      + '<td class="text-end">' + fmt(w.qty_available) + '</td>'
+                      + '</tr>';
+                  });
+                });
               }
+
+              html += '</tbody></table></div>';
+              return html;
+            }
+
+            // ======= Mặc định: breakdown theo kho cho sản phẩm thường =======
+            html += '<th>Kho</th>';
+            html += '<th class="text-end">Tồn thực tế</th>';
+            html += '<th class="text-end">Đã giữ hàng</th>';
+            html += '<th class="text-end">Tồn khả dụng</th>';
+            html += '</tr></thead><tbody>';
+
+            if (rows.length) {
+              rows.forEach(function (r) {
+                html += '<tr>'
+                  + '<td>' + (r.warehouse_name || '') + '</td>'
+                  + '<td class="text-end">' + fmt(r.qty_total) + '</td>'
+                  + '<td class="text-end">' + fmt(r.qty_reserved) + '</td>'
+                  + '<td class="text-end">' + fmt(r.qty_available) + '</td>'
+                  + '</tr>';
+              });
+            } else {
+              html += '<tr><td colspan="4"><em>Không có dữ liệu chi tiết.</em></td></tr>';
             }
 
             html += '</tbody></table></div>';
             return html;
           }
-          function loadBreakdown(pid, warehouse_id, done) {
-            var payload = {
-              jsonrpc: "2.0",
-              method: "call",
-              params: { 
-                product_id: pid, 
-                warehouse_id: warehouse_id || null 
-              },
-              id: new Date().getTime()
-            };
 
-            $.ajax({
-              url: "/search_stock/product_breakdown",
-              type: "POST",
-              dataType: "json",
-              contentType: "application/json; charset=utf-8",
-              data: JSON.stringify(payload),
-              success: function (resp) {
-                try {
-                  var result = (resp && resp.result) ? resp.result : resp;
-                  done(null, result);
-                } catch (e) {
-                  done(e);
-                }
-              },
-              error: function (xhr, status, error) { 
-                done(xhr || true); 
-              }
-            });
-          }
-          function ensureDetailRow($tr, pid) {
+          function ensureDetailRow($tr) {
             var $next = $tr.next();
             if ($next.length && $next.hasClass('detail-row')) {
               return $next;
@@ -332,7 +335,7 @@
               '<tr class="detail-row bg-light"><td colspan="' + colCount + '">'+
               '<div class="d-flex align-items-center gap-2 p-2">'+
               '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>'+
-              '<span>Đang tải chi tiết kho...</span>'+
+              '<span>Đang tải chi tiết...</span>'+
               '</div>'+
               '</td></tr>'
             );
@@ -340,19 +343,18 @@
             return $detail;
           }
 
-          function loadBreakdown(pid, warehouse_id, done) {
+          function loadBreakdown(pid, warehouse_id, detail_mode, done) {
             var payload = {
               jsonrpc: "2.0",
               method: "call",
-              params: { 
-                product_id: pid, 
-                warehouse_id: warehouse_id || null 
+              params: {
+                product_id: pid,
+                warehouse_id: warehouse_id || null,
+                detail_mode: detail_mode || null   // 'per_warehouse' cho combo
               },
               id: new Date().getTime()
             };
-            
-            console.log('Sending request:', payload);
-            
+
             $.ajax({
               url: "/search_stock/product_breakdown",
               type: "POST",
@@ -360,32 +362,28 @@
               contentType: "application/json; charset=utf-8",
               data: JSON.stringify(payload),
               success: function (resp) {
-                console.log('Response received:', resp);
                 try {
                   var result = (resp && resp.result) ? resp.result : resp;
                   done(null, result);
                 } catch (e) {
-                  console.error('Error parsing response:', e);
                   done(e);
                 }
               },
-              error: function (xhr, status, error) { 
-                console.error('AJAX error:', status, error, xhr.responseText);
-                done(xhr || true); 
+              error: function (xhr) {
+                done(xhr || true);
               }
             });
           }
 
           $(document).ready(function() {
-            console.log('Inventory page JS loaded');
-            
             $(document).on('click', '.btn-expand', function () {
               var $btn = $(this);
               var pid = $btn.data('pid');
+              // Yêu cầu có data-is-combo="true|false" ở nút
+              var isCombo = String($btn.data('is-combo')) === 'true';
+
               var $row = $btn.closest('tr');
               var $next = $row.next();
-
-              console.log('Expand button clicked for product:', pid);
 
               if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) {
                 $next.remove();
@@ -393,23 +391,22 @@
                 return;
               }
 
-              var $detail = ensureDetailRow($row, pid);
+              var $detail = ensureDetailRow($row);
               $btn.text('–');
 
               var currentWid = $('select[name="warehouse_id"]').val() || '';
-              console.log('Current warehouse:', currentWid);
-              
-              loadBreakdown(pid, currentWid, function (err, data) {
+              // Với combo: luôn yêu cầu chi tiết theo từng kho của từng sản phẩm con
+              var detailMode = isCombo ? 'per_warehouse' : null;
+
+              loadBreakdown(pid, currentWid, detailMode, function (err, data) {
                 if (err || !data || data.ok === false) {
                   var msg = (data && data.error) ? data.error : 'load_failed';
-                  console.error('Load breakdown error:', err, data);
                   $detail.find('td').html(
                     '<div class="alert alert-danger mb-0">Không tải được chi tiết (' + msg + ').</div>'
                   );
                   return;
                 }
-                console.log('Breakdown data:', data);
-                var html = buildDetailTable(data || {mode: "warehouses", rows: []});
+                var html = buildDetailTable(data || {});
                 $detail.find('td').html(html);
               });
             });
