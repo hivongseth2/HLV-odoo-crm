@@ -404,40 +404,34 @@ class SaleOrder(models.Model):
         revenue_status_id = data.get("RevenueStatusID")
         revenue_status_text = data.get("RevenueStatusIDText")
 
-        if revenue_status_id == 4 or (revenue_status_text or "").strip().lower() == "từ chối ghi".lower():
-            _logger.info("🚫 SO %s có trạng thái 'Từ chối ghi' trên MISA -> Force cancel", self.name)
+        if revenue_status_id == 4 or (revenue_status_text or "").strip().lower() == "từ chối ghi":
+            _logger.info("🚫 SO %s: MISA 'Từ chối ghi' → force-cancel", self.name)
+            try:
+                # 1) Hủy picking đang mở
+                for p in (self.picking_ids or []):
+                    if p.state in ('waiting', 'confirmed', 'assigned'):
+                        try:
+                            p.sudo().action_cancel()
+                        except Exception as pe:
+                            _logger.warning("Không thể cancel picking %s: %s", p.name, pe)
+                    elif p.state in ('draft',):
+                        try:
+                            p.sudo().unlink()
+                        except Exception as pe:
+                            _logger.warning("Không thể xóa picking draft %s: %s", p.name, pe)
 
-            # 1) Hủy picking mở (delivery)
-            for picking in (self.picking_ids or []):
-                if picking.state in ('waiting', 'confirmed', 'assigned'):
-                    try:
-                        picking.sudo().action_cancel()
-                    except Exception as e:
-                        _logger.warning("Không thể cancel picking %s: %s", picking.name, e)
-
-                elif picking.state in ('draft',):
-                    try:
-                        picking.sudo().unlink()
-                    except Exception as e:
-                        _logger.warning("Không thể xóa picking draft %s: %s", picking.name, e)
-
-            # 2) Hủy invoice chưa đăng
-            for inv in (self.invoice_ids or []):
-                try:
-                    if getattr(inv, 'state', None) in ('draft', 'cancel'):
+                # 2) Hủy invoice chưa ghi sổ; nếu posted → báo lỗi
+                for inv in (self.invoice_ids or []):
+                    st = getattr(inv, 'state', None)
+                    if st in ('draft', 'cancel'):
                         if hasattr(inv, 'button_cancel'):
                             inv.sudo().button_cancel()
                         elif hasattr(inv, 'action_cancel'):
                             inv.sudo().action_cancel()
-                    elif getattr(inv, 'state', None) == 'posted':
-                        # Không tự ý hủy invoice đã post
-                        raise UserError(_("Đơn có hóa đơn đã ghi sổ (%s). Hãy hủy/ghi bút toán trước khi hủy đơn.") % inv.name)
-                except Exception as e:
-                    _logger.warning("Không thể hủy invoice %s: %s", getattr(inv, 'name', 'n/a'), e)
-                    # Nếu muốn nghiêm ngặt thì raise ở đây
+                    elif st == 'posted':
+                        raise UserError(_("Đơn có hóa đơn đã ghi sổ (%s). Hãy hủy/bỏ ghi sổ trước khi hủy đơn.") % inv.name)
 
-            # 3) Hủy SO (mạnh tay nếu cần)
-            try:
+                # 3) Hủy SO (fallback cứng nếu action_cancel thất bại)
                 if self.state not in ('cancel', 'done'):
                     try:
                         self.sudo().action_cancel()
@@ -447,15 +441,18 @@ class SaleOrder(models.Model):
                             self.order_line.sudo()._action_cancel()
                         self.sudo().write({'state': 'cancel'})
 
-                # 4) Đảm bảo state là cancel: làm sạch cache và đọc lại
-                self.invalidate_cache(['state'])
+                # 4) Đảm bảo state là cancel
+                #    (flush ghi DB, xóa cache recordset rồi đọc lại)
+                self.flush()
+                self.invalidate_recordset()
                 state_now = self.sudo().read(['state'])[0]['state']
 
                 if state_now != 'cancel':
                     if hasattr(self.order_line, '_action_cancel'):
                         self.order_line.sudo()._action_cancel()
                     self.sudo().write({'state': 'cancel'})
-                    self.invalidate_cache(['state'])
+                    self.flush()
+                    self.invalidate_recordset()
                     state_now = self.sudo().read(['state'])[0]['state']
 
                 if state_now == 'cancel':
