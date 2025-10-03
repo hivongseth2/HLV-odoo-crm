@@ -174,6 +174,26 @@ class SaleOrder(models.Model):
         delivery_no  = data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress")  # hoặc gọi API địa chỉ chi tiết của bạn
+        revenue_status_id = data.get("RevenueStatusID")
+        revenue_status_text = data.get("RevenueStatusIDText")
+
+        if revenue_status_id == 4 or revenue_status_text == "Từ chối ghi":
+            _logger.info("🚫 SO %s có trạng thái 'Từ chối ghi' trên MISA -> Hủy phiếu", self.name)
+            try:
+                if self.state not in ('cancel', 'done'):
+                    self.action_cancel()
+                    self.message_post(body=_("Phiếu bị hủy khi đồng bộ do trạng thái MISA: Từ chối ghi"))
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _("Phiếu đã bị hủy"),
+                        'message': _("Trạng thái MISA: Từ chối ghi"),
+                        'type': 'warning'
+                    }
+                }
+            except Exception as e:
+                raise UserError(_("Không thể hủy phiếu: %s") % e)
 
         # 2) Lấy lines từ DataSubPaging
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
@@ -325,6 +345,28 @@ class SaleOrder(models.Model):
         data = self._misa_fetch_order()
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
+
+         # === THÊM MỚI: Kiểm tra trạng thái "Từ chối ghi" ===
+        revenue_status_id = data.get("RevenueStatusID")
+        revenue_status_text = data.get("RevenueStatusIDText")
+
+        if revenue_status_id == 4 or revenue_status_text == "Từ chối ghi":
+            _logger.info("🚫 SO %s có trạng thái 'Từ chối ghi' trên MISA -> Hủy phiếu", self.name)
+            try:
+                if self.state not in ('cancel', 'done'):
+                    self.action_cancel()
+                    self.message_post(body=_("Phiếu bị hủy khi đồng bộ do trạng thái MISA: Từ chối ghi"))
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _("Phiếu đã bị hủy"),
+                        'message': _("Trạng thái MISA: Từ chối ghi"),
+                        'type': 'warning'
+                    }
+                }
+            except Exception as e:
+                raise UserError(_("Không thể hủy phiếu: %s") % e)
 
         # 2) Chặn các trường hợp không an toàn
         if any(p.state == 'done' for p in self.picking_ids):

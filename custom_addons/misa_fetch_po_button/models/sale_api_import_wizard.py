@@ -252,6 +252,9 @@ class SaleApiImportWizard(models.TransientModel):
                 customer_name = order.get("AccountIDText") 
                 origin = order.get("SaleOrderName")
                 status = order.get("RevenueStatusIDText")
+                revenue_status_id = order.get("RevenueStatusID")
+                order_ref = order.get("SaleOrderNo")
+                order_id = order.get("ID")
 
                 # Bỏ qua đơn đã giao (DeliveryStatusID=2)
                 delivery_status = order.get("DeliveryStatusID", "0")
@@ -259,6 +262,24 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
                     continue
 
+                # Xử lý trạng thái "Từ chối ghi" (RevenueStatusID = 4)
+                if revenue_status_id == 4 or status == "Từ chối ghi":
+                    existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
+                    if existing_order:
+                        # Đã tồn tại -> hủy phiếu
+                        _logger.info("🚫 SO %s có trạng thái 'Từ chối ghi' -> Hủy phiếu", order_ref)
+                        try:
+                            if existing_order.state not in ('cancel', 'done'):
+                                existing_order.action_cancel()
+                                existing_order.message_post(body="Phiếu bị hủy do trạng thái MISA: Từ chối ghi")
+                        except Exception as e:
+                            _logger.warning("Không thể hủy SO %s: %s", order_ref, e)
+                    else:
+                        # Chưa tồn tại -> bỏ qua, không kéo về
+                        _logger.info("⏭️ Bỏ qua SO %s (chưa tồn tại) vì trạng thái 'Từ chối ghi'", order_ref)
+                    continue
+
+                # Bỏ qua SO 'Bản nháp' mà không thuộc e_accounts
                 if customer_name not in e_accounts and status == "Bản nháp":
                     _logger.info("⏭️ SO %s là 'Bản nháp' và không thuộc e_accounts => bỏ qua", order.get("SaleOrderNo"))
                     continue
