@@ -46,7 +46,7 @@ class SaleOrder(models.Model):
         self.ensure_one()
         misa_utils = self.env['misa.api.utils']
         misa_config = self.env['misa.config']
-        headers, _ = self._misa_headers()
+        headers, crm_headers = self._misa_headers()
 
         # bạn đã có sẵn helper get_crm_sale_order_detail_payload + get_list_product_by_order_crm
         order_detail_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/DataSubPaging"
@@ -339,7 +339,7 @@ class SaleOrder(models.Model):
         odoo_utils = env['odoo.utils']
 
         # Lấy headers cho các call phụ (convert UoM)
-        headers, _ = self._misa_headers()
+        headers, crm_headers = self._misa_headers()
 
         # 1) Lấy dữ liệu MISA trước khi đụng dữ liệu hiện hữu
         data = self._misa_fetch_order()
