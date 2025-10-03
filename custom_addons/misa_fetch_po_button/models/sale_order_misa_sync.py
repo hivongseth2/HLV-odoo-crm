@@ -442,24 +442,23 @@ class SaleOrder(models.Model):
                     try:
                         self.sudo().action_cancel()
                     except Exception as e1:
-                        _logger.warning("action_cancel thất bại: %s -> fallback _action_cancel + write(cancel)", e1)
+                        _logger.warning("action_cancel thất bại: %s → fallback _action_cancel + write(cancel)", e1)
                         if hasattr(self.order_line, '_action_cancel'):
                             self.order_line.sudo()._action_cancel()
                         self.sudo().write({'state': 'cancel'})
 
-                # Đến đây state phải là cancel
-                self.invalidate_recordset()
-                self.refresh()
+                # 4) Đảm bảo state là cancel: làm sạch cache và đọc lại
+                self.invalidate_cache(['state'])
+                state_now = self.sudo().read(['state'])[0]['state']
 
-                if self.state != 'cancel':
-                    # như một lớp an toàn cuối
+                if state_now != 'cancel':
                     if hasattr(self.order_line, '_action_cancel'):
                         self.order_line.sudo()._action_cancel()
                     self.sudo().write({'state': 'cancel'})
-                    self.invalidate_recordset()
-                    self.refresh()
+                    self.invalidate_cache(['state'])
+                    state_now = self.sudo().read(['state'])[0]['state']
 
-                if self.state == 'cancel':
+                if state_now == 'cancel':
                     self.message_post(body=_("Phiếu bị hủy khi đồng bộ do trạng thái MISA: Từ chối ghi"))
                     return {
                         'type': 'ir.actions.client',
@@ -471,7 +470,7 @@ class SaleOrder(models.Model):
                         }
                     }
                 else:
-                    raise UserError(_("Không thể đưa phiếu về trạng thái hủy. Vui lòng kiểm tra picking/invoice ràng buộc."))
+                    raise UserError(_("Không thể đưa phiếu về trạng thái hủy. Kiểm tra picking/invoice ràng buộc."))
 
             except Exception as e:
                 raise UserError(_("Không thể hủy phiếu khi đồng bộ: %s") % e)
