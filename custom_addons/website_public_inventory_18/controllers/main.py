@@ -469,3 +469,41 @@ class PublicInventory(http.Controller):
             })
 
         return {"ok": True, "mode": "warehouses", "rows": rows}
+    
+    @http.route(["/search_stock/suggest"], type="json", auth="public", methods=["POST"])
+    def search_suggest(self, q=""):
+        """Gợi ý tìm kiếm sản phẩm (tối đa 10 kết quả)"""
+        if not _pw_allowed():
+            return {"ok": False, "error": "access_denied", "products": []}
+        
+        env = request.env
+        q = (q or "").strip()
+        
+        if not q or len(q) < 2:
+            return {"ok": True, "products": []}
+        
+        # Company context
+        company_ids = env.companies.ids
+        Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
+        
+        # Tìm kiếm theo tên, mã, hoặc barcode
+        domain = [
+            '|', '|',
+            ('name', 'ilike', q),
+            ('default_code', 'ilike', q),
+            ('barcode', 'ilike', q),
+        ]
+        
+        products = Product.search(domain, limit=10, order='name')
+        
+        results = []
+        for p in products:
+            results.append({
+                "id": p.id,
+                "name": p.name,
+                "default_code": p.default_code or "",
+                "barcode": p.barcode or "",
+                "image_url": _get_product_image_url(p),
+            })
+        
+        return {"ok": True, "products": results}

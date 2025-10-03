@@ -37,6 +37,9 @@
             <form t-att-action="request.httprequest.path" method="get" class="row g-2 my-3">
               <div class="col-md-5">
                 <input name="q" t-att-value="q" class="form-control" placeholder="Tìm theo tên, mã, barcode"/>
+                <div id="search-suggestions" class="position-absolute w-100 bg-white border rounded shadow-sm" style="display:none; z-index:1050; max-height:400px; overflow-y:auto; top:100%; left:0; margin-top:2px;">
+                  <!-- Các item gợi ý sẽ được thêm động bằng JS -->
+                </div>
               </div>
               <div class="col-md-4">
                 <select name="warehouse_id" class="form-select">
@@ -54,7 +57,7 @@
                 <div class="form-check">
                   <input class="form-check-input" type="checkbox" name="low_stock" value="1"
                         t-att-checked="request.params.get('low_stock') in ('1','true','on')"/>
-                  <label class="form-check-label" for="">≤ 5</label>
+                  <label class="form-check-label" for="">Tồn ≤ 5</label>
                 </div>
               </div>
 
@@ -241,6 +244,175 @@
       <!-- JS: xử lý mở rộng chi tiết từng kho -->
       <script type="text/javascript"><![CDATA[
         (function () {
+          var searchTimeout = null;
+          // ===== SEARCH SUGGESTIONS =====
+          function debounce(func, wait) {
+            return function() {
+              var context = this, args = arguments;
+              clearTimeout(searchTimeout);
+              searchTimeout = setTimeout(function() {
+                func.apply(context, args);
+              }, wait);
+            };
+          }
+
+          function getCurrentSearchTerm($input) {
+            var fullText = $input.val() || '';
+            var cursorPos = $input[0].selectionStart || fullText.length;
+            var textBeforeCursor = fullText.substring(0, cursorPos);
+            var lastCommaIndex = textBeforeCursor.lastIndexOf(',');
+            var term = textBeforeCursor.substring(lastCommaIndex + 1).trim();
+            return {
+              term: term,
+              startPos: lastCommaIndex + 1,
+              fullText: fullText
+            };
+          }
+
+          function searchProducts(term, callback) {
+            if (!term || term.length < 2) {
+              callback([]);
+              return;
+            }
+
+            $.ajax({
+              url: "/search_stock/suggest",
+              type: "POST",
+              dataType: "json",
+              contentType: "application/json; charset=utf-8",
+              data: JSON.stringify({
+                jsonrpc: "2.0",
+                method: "call",
+                params: { q: term },
+                id: new Date().getTime()
+              }),
+              success: function(resp) {
+                var result = (resp && resp.result) ? resp.result : (resp || {});
+                callback(result.products || []);
+              },
+              error: function() {
+                callback([]);
+              }
+            });
+          }
+
+          function renderSuggestions(products) {
+            var $dropdown = $('#search-suggestions');
+            
+            if (!products || products.length === 0) {
+              $dropdown.hide().empty();
+              return;
+            }
+
+            var html = '';
+            products.forEach(function(p) {
+              html += '<div class="suggestion-item p-2 border-bottom" data-code="' + (p.default_code || '') + '" style="cursor:pointer;">';
+              html += '  <div class="d-flex align-items-center gap-2">';
+              
+              // Hình ảnh
+              if (p.image_url) {
+                html += '<img src="' + p.image_url + '" alt="" class="flex-shrink-0" style="width:40px; height:40px; object-fit:cover; border-radius:4px;"/>';
+              } else {
+                html += '<div class="flex-shrink-0 bg-light d-flex align-items-center justify-content-center" style="width:40px; height:40px; border-radius:4px; border:1px solid #dee2e6;"><small class="text-muted">N/A</small></div>';
+              }
+              
+              // Thông tin sản phẩm
+              html += '    <div class="flex-grow-1 overflow-hidden">';
+              html += '      <div class="fw-semibold text-truncate" style="font-size:0.9rem;">' + (p.name || '') + '</div>';
+              html += '      <div class="d-flex gap-2 text-muted" style="font-size:0.8rem;">';
+              html += '        <span class="badge bg-secondary">' + (p.default_code || 'N/A') + '</span>';
+              if (p.barcode) {
+                html += '      <span>' + p.barcode + '</span>';
+              }
+              html += '      </div>';
+              html += '    </div>';
+              html += '  </div>';
+              html += '</div>';
+            });
+
+            $dropdown.html(html).show();
+          }
+
+          function selectSuggestion($input, code) {
+            var searchInfo = getCurrentSearchTerm($input);
+            var fullText = searchInfo.fullText;
+            var startPos = searchInfo.startPos;
+            var cursorPos = $input[0].selectionStart || fullText.length;
+            
+            // Tìm vị trí dấu phẩy tiếp theo sau cursor (nếu có)
+            var textAfterCursor = fullText.substring(cursorPos);
+            var nextCommaIndex = textAfterCursor.indexOf(',');
+            var endPos = nextCommaIndex >= 0 ? cursorPos + nextCommaIndex : fullText.length;
+            
+            // Thay thế term hiện tại bằng mã sản phẩm + dấu phẩy
+            var before = fullText.substring(0, startPos).trim();
+            var after = fullText.substring(endPos).trim();
+            
+            var newValue = '';
+            if (before) {
+              newValue = before + ', ' + code + ', ';
+            } else {
+              newValue = code + ', ';
+            }
+            if (after && !after.startsWith(',')) {
+              newValue += after;
+            }
+            
+            $input.val(newValue);
+            
+            // Đặt cursor sau dấu phẩy vừa thêm
+            var newCursorPos = newValue.indexOf(code) + code.length + 2;
+            $input[0].setSelectionRange(newCursorPos, newCursorPos);
+            $input.focus();
+            
+            $('#search-suggestions').hide();
+          }
+
+          $(document).ready(function() {
+            var $searchInput = $('#search-input');
+            var $dropdown = $('#search-suggestions');
+
+            // Xử lý input với debounce
+            $searchInput.on('input', debounce(function() {
+              var searchInfo = getCurrentSearchTerm($searchInput);
+              var term = searchInfo.term;
+              
+              if (term && term.length >= 2) {
+                searchProducts(term, renderSuggestions);
+              } else {
+                $dropdown.hide();
+              }
+            }, 300));
+
+            // Xử lý click vào suggestion
+            $(document).on('click', '.suggestion-item', function() {
+              var code = $(this).data('code');
+              if (code) {
+                selectSuggestion($searchInput, code);
+              }
+            });
+
+            // Hover effect
+            $(document).on('mouseenter', '.suggestion-item', function() {
+              $(this).css('background-color', '#f8f9fa');
+            }).on('mouseleave', '.suggestion-item', function() {
+              $(this).css('background-color', '');
+            });
+
+            // Ẩn dropdown khi click ra ngoài
+            $(document).on('click', function(e) {
+              if (!$(e.target).closest('#search-input, #search-suggestions').length) {
+                $dropdown.hide();
+              }
+            });
+
+            // Xử lý phím ESC để đóng dropdown
+            $searchInput.on('keydown', function(e) {
+              if (e.key === 'Escape') {
+                $dropdown.hide();
+              }
+            });
+          });
           function fmt(n) {
             try { return (parseFloat(n) || 0).toFixed(2); } catch(e) { return '0.00'; }
           }
