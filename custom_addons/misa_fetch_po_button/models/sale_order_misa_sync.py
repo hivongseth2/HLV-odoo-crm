@@ -402,36 +402,41 @@ class SaleOrder(models.Model):
 
          # === THÊM MỚI: Kiểm tra trạng thái "Từ chối ghi" ===
         revenue_status_id = data.get("RevenueStatusID")
-        revenue_status_text = data.get("RevenueStatusIDText")
+        revenue_status_text = (data.get("RevenueStatusIDText") or "").strip().lower()
 
-        if revenue_status_id == 4 or (revenue_status_text or "").strip().lower() == "từ chối ghi":
+        if revenue_status_id == 4 or revenue_status_text == "từ chối ghi":
+            self.ensure_one()
             _logger.info("🚫 SO %s: MISA 'Từ chối ghi' → force-cancel", self.name)
             try:
-                # 1) Hủy picking đang mở
+                # 1) Hủy các picking còn mở
                 for p in (self.picking_ids or []):
-                    if p.state in ('waiting', 'confirmed', 'assigned'):
+                    st = p.state
+                    if st in ('waiting', 'confirmed', 'assigned'):
                         try:
                             p.sudo().action_cancel()
                         except Exception as pe:
                             _logger.warning("Không thể cancel picking %s: %s", p.name, pe)
-                    elif p.state in ('draft',):
+                    elif st == 'draft':
                         try:
                             p.sudo().unlink()
                         except Exception as pe:
                             _logger.warning("Không thể xóa picking draft %s: %s", p.name, pe)
 
-                # 2) Hủy invoice chưa ghi sổ; nếu posted → báo lỗi
+                # 2) Hủy invoice chưa ghi sổ; nếu đã posted → chặn
                 for inv in (self.invoice_ids or []):
                     st = getattr(inv, 'state', None)
                     if st in ('draft', 'cancel'):
-                        if hasattr(inv, 'button_cancel'):
-                            inv.sudo().button_cancel()
-                        elif hasattr(inv, 'action_cancel'):
-                            inv.sudo().action_cancel()
+                        try:
+                            if hasattr(inv, 'button_cancel'):
+                                inv.sudo().button_cancel()
+                            elif hasattr(inv, 'action_cancel'):
+                                inv.sudo().action_cancel()
+                        except Exception as ie:
+                            _logger.warning("Không thể hủy invoice %s: %s", getattr(inv, 'name', 'n/a'), ie)
                     elif st == 'posted':
                         raise UserError(_("Đơn có hóa đơn đã ghi sổ (%s). Hãy hủy/bỏ ghi sổ trước khi hủy đơn.") % inv.name)
 
-                # 3) Hủy SO (fallback cứng nếu action_cancel thất bại)
+                # 3) Hủy SO. Nếu action_cancel() lỗi → fallback hủy dòng rồi set state=cancel
                 if self.state not in ('cancel', 'done'):
                     try:
                         self.sudo().action_cancel()
@@ -441,19 +446,14 @@ class SaleOrder(models.Model):
                             self.order_line.sudo()._action_cancel()
                         self.sudo().write({'state': 'cancel'})
 
-                # 4) Đảm bảo state là cancel
-                #    (flush ghi DB, xóa cache recordset rồi đọc lại)
-                self.flush()
-                self.invalidate_recordset()
-                state_now = self.sudo().read(['state'])[0]['state']
-
+                # 4) Kiểm tra lại trạng thái bằng cách browse mới
+                state_now = self.sudo().browse(self.id).state
                 if state_now != 'cancel':
+                    # Thêm một lần fallback an toàn nữa
                     if hasattr(self.order_line, '_action_cancel'):
                         self.order_line.sudo()._action_cancel()
                     self.sudo().write({'state': 'cancel'})
-                    self.flush()
-                    self.invalidate_recordset()
-                    state_now = self.sudo().read(['state'])[0]['state']
+                    state_now = self.sudo().browse(self.id).state
 
                 if state_now == 'cancel':
                     self.message_post(body=_("Phiếu bị hủy khi đồng bộ do trạng thái MISA: Từ chối ghi"))
