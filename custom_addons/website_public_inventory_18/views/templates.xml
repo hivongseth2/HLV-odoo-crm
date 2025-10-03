@@ -308,27 +308,51 @@
               }
 
               var html = '';
-              products.forEach(function(p) {
-                html += '<div class="suggestion-item p-2 border-bottom" data-code="' + (p.default_code || '') + '" style="cursor:pointer;">';
-                html += '  <div class="d-flex align-items-center gap-2">';
+              products.forEach(function(p, index) {
+                var isLast = index === products.length - 1;
+                var borderClass = isLast ? '' : 'border-bottom';
                 
-                // Hình ảnh
+                html += '<div class="suggestion-item ' + borderClass + '" data-code="' + (p.default_code || '') + '" style="cursor:pointer; padding:12px 16px; transition: all 0.15s ease;">';
+                html += '  <div class="d-flex align-items-center" style="gap:12px;">';
+                
+                // Hình ảnh với viền đẹp hơn
                 if (p.image_url) {
-                  html += '<img src="' + p.image_url + '" alt="" class="flex-shrink-0" style="width:40px; height:40px; object-fit:cover; border-radius:4px;"/>';
+                  html += '<img src="' + p.image_url + '" alt="" class="flex-shrink-0" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.08);"/>';
                 } else {
-                  html += '<div class="flex-shrink-0 bg-light d-flex align-items-center justify-content-center" style="width:40px; height:40px; border-radius:4px; border:1px solid #dee2e6;"><small class="text-muted">N/A</small></div>';
+                  html += '<div class="flex-shrink-0 d-flex align-items-center justify-content-center" style="width:50px; height:50px; border-radius:6px; background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%); border:1px solid #dee2e6;">';
+                  html += '  <svg width="20" height="20" fill="#adb5bd" viewBox="0 0 16 16"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/></svg>';
+                  html += '</div>';
                 }
                 
-                // Thông tin sản phẩm
+                // Thông tin sản phẩm với typography cải thiện
                 html += '    <div class="flex-grow-1 overflow-hidden">';
-                html += '      <div class="fw-semibold text-truncate" style="font-size:0.9rem;">' + (p.name || '') + '</div>';
-                html += '      <div class="d-flex gap-2 text-muted" style="font-size:0.8rem;">';
-                html += '        <span class="badge bg-secondary">' + (p.default_code || 'N/A') + '</span>';
-                if (p.barcode) {
-                  html += '      <span>' + p.barcode + '</span>';
+                html += '      <div class="fw-medium text-truncate mb-1" style="font-size:0.925rem; color:#212529; line-height:1.3;">' + (p.name || '') + '</div>';
+                html += '      <div class="d-flex align-items-center flex-wrap" style="gap:8px; font-size:0.8rem;">';
+                
+                // Badge mã sản phẩm
+                if (p.default_code) {
+                  html += '        <span class="badge" style="background-color:#e7f3ff; color:#0066cc; font-weight:500; padding:3px 8px; border-radius:4px;">';
+                  html += '          <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16" style="margin-right:3px; vertical-align:text-top;"><path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3zm12 1a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0V4a1 1 0 0 0-1-1z"/></svg>';
+                  html += p.default_code;
+                  html += '        </span>';
                 }
+                
+                // Barcode
+                if (p.barcode) {
+                  html += '        <span style="color:#6c757d; display:flex; align-items:center; gap:4px;">';
+                  html += '          <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M0 3h1v10H0V3zm2 0h1v10H2V3zm2 0h.5v10H4V3zm2 0h.5v10H6V3zm2 0h2v10H8V3zm3 0h.5v10H11V3zm2 0h2v10h-2V3z"/></svg>';
+                  html += p.barcode;
+                  html += '        </span>';
+                }
+                
                 html += '      </div>';
                 html += '    </div>';
+                
+                // Icon chọn
+                html += '    <div class="flex-shrink-0 select-icon" style="opacity:0; transition: opacity 0.15s ease;">';
+                html += '      <svg width="20" height="20" fill="#198754" viewBox="0 0 16 16"><path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425a.247.247 0 0 1 .02-.022Z"/></svg>';
+                html += '    </div>';
+                
                 html += '  </div>';
                 html += '</div>';
               });
