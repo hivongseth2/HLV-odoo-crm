@@ -337,36 +337,68 @@
             }
 
             function selectSuggestion($input, code) {
-              var searchInfo = getCurrentSearchTerm($input);
-              var fullText = searchInfo.fullText;
-              var startPos = searchInfo.startPos;
+              var fullText = $input.val() || '';
               var cursorPos = $input[0].selectionStart || fullText.length;
               
-              // Tìm vị trí dấu phẩy tiếp theo sau cursor (nếu có)
+              // Tìm vị trí bắt đầu của term hiện tại (sau dấu phẩy gần nhất trước cursor)
+              var textBeforeCursor = fullText.substring(0, cursorPos);
+              var lastCommaIndex = textBeforeCursor.lastIndexOf(',');
+              var startPos = lastCommaIndex >= 0 ? lastCommaIndex + 1 : 0;
+              
+              // Tìm vị trí kết thúc của term hiện tại (trước dấu phẩy tiếp theo sau cursor)
               var textAfterCursor = fullText.substring(cursorPos);
               var nextCommaIndex = textAfterCursor.indexOf(',');
               var endPos = nextCommaIndex >= 0 ? cursorPos + nextCommaIndex : fullText.length;
               
-              // Thay thế term hiện tại bằng mã sản phẩm + dấu phẩy
-              var before = fullText.substring(0, startPos).trim();
-              var after = fullText.substring(endPos).trim();
+              // Lấy phần trước và sau term hiện tại
+              var before = fullText.substring(0, startPos);
+              var after = fullText.substring(endPos);
               
-              var newValue = '';
-              if (before) {
-                newValue = before + ', ' + code + ', ';
-              } else {
-                newValue = code + ', ';
-              }
-              if (after && !after.startsWith(',')) {
-                newValue += after;
+              // Xây dựng giá trị mới
+              var newValue = before;
+              
+              // Nếu có text phía trước và không kết thúc bằng dấu phẩy, thêm dấu phẩy + space
+              if (before && !before.trim().endsWith(',')) {
+                // Xóa space thừa ở cuối before
+                newValue = before.trimEnd();
+                if (newValue) {
+                  newValue += ', ';
+                }
+              } else if (before && before.trim().endsWith(',')) {
+                // Nếu đã có dấu phẩy, chỉ cần trim và thêm 1 space
+                newValue = before.trimEnd() + ' ';
               }
               
+              // Thêm mã sản phẩm
+              newValue += code;
+              
+              // Thêm dấu phẩy và space để nhập tiếp
+              newValue += ', ';
+              
+              // Nếu có text phía sau
+              if (after) {
+                // Nếu after bắt đầu bằng dấu phẩy, bỏ qua (tránh trùng)
+                if (after.trimStart().startsWith(',')) {
+                  after = after.trimStart().substring(1).trimStart();
+                }
+                if (after) {
+                  newValue += after;
+                }
+              }
+              
+              // Set giá trị mới
               $input.val(newValue);
               
-              // Đặt cursor sau dấu phẩy vừa thêm
-              var newCursorPos = newValue.indexOf(code) + code.length + 2;
-              $input[0].setSelectionRange(newCursorPos, newCursorPos);
-              $input.focus();
+              // Đặt cursor ngay sau dấu phẩy và space vừa thêm (sau mã sản phẩm)
+              var newCursorPos = (before.length > 0 ? before.trimEnd().length + 2 : 0) + code.length + 2;
+              
+              // Đảm bảo cursor không vượt quá độ dài text
+              newCursorPos = Math.min(newCursorPos, newValue.length);
+              
+              setTimeout(function() {
+                $input[0].setSelectionRange(newCursorPos, newCursorPos);
+                $input.focus();
+              }, 0);
               
               $('#search-suggestions').hide();
             }
