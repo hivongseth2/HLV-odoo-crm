@@ -494,7 +494,7 @@ class PublicInventory(http.Controller):
             ('barcode', 'ilike', q),
         ]
         
-        products = Product.search(domain, limit=10, order='name')
+        products = Product.search(domain, order='name')
         
         results = []
         for p in products:
