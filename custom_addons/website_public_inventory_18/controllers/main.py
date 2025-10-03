@@ -171,91 +171,144 @@ class PublicInventory(http.Controller):
             company_ids = env.companies.ids  # fallback: công ty hiện có
 
         Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
-
-        # Gộp theo product: sum(quantity) & sum(reserved_quantity)
-        groups = Quant.read_group(
-            domain,
-            ["product_id", "quantity:sum", "reserved_quantity:sum"],
-            ["product_id"],
-            limit=PAGE_SIZE,
-            offset=(page - 1) * PAGE_SIZE,
-            orderby="product_id",
-        )
-        _logger.debug("read_group returned %d groups", len(groups))
-
-        # Đếm nhóm để phân trang
-        count_groups = Quant.read_group(domain, ["product_id"], ["product_id"])
-        total = len(count_groups)
-        pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 1
-
-        # Lấy thông tin sản phẩm
-        prod_ids = [g["product_id"][0] for g in groups if g.get("product_id")]
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
-        products = Product.browse(prod_ids)
-        pmap = {p.id: p for p in products}
 
-        rows = []
-        for g in groups:
-            if not g.get("product_id"):
-                continue
-            pid = g["product_id"][0]
-            p = pmap.get(pid)
-            # Nếu là combo thì bỏ qua số lượng tồn
-            if getattr(p.product_tmpl_id, "is_combo", False):
+        # NEW: đọc tham số checkbox lọc tồn <= 5
+        low_stock = request.params.get('low_stock') in ('1', 'true', 'on')
+
+        if low_stock:
+            # Lấy tất cả nhóm, sau đó lọc bằng Python theo qty_total <= 5 và loại combo
+            groups_all = Quant.read_group(
+                domain,
+                ["product_id", "quantity:sum", "reserved_quantity:sum"],
+                ["product_id"],
+                orderby="product_id",
+                lazy=False,
+            )
+            gmap = {g["product_id"][0]: g for g in groups_all if g.get("product_id")}
+            prod_ids_all = list(gmap.keys())
+
+            products_all = Product.browse(prod_ids_all)
+            pmap_all = {p.id: p for p in products_all}
+
+            filtered_ids = []
+            for pid in prod_ids_all:
+                p = pmap_all.get(pid)
+                if not p:
+                    continue
+                if getattr(p.product_tmpl_id, "is_combo", False):
+                    continue
+                qty_total = _rg_sum(gmap[pid], "quantity")
+                if qty_total <= 5.0:
+                    filtered_ids.append(pid)
+
+            # Phân trang sau lọc
+            total = len(filtered_ids)
+            pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 1
+            start = (page - 1) * PAGE_SIZE
+            end = start + PAGE_SIZE
+            page_ids = filtered_ids[start:end]
+
+            products = Product.browse(page_ids)
+            pmap = {p.id: p for p in products}
+
+            rows = []
+            for pid in page_ids:
+                p = pmap.get(pid)
+                if not p:
+                    continue
+                g = gmap.get(pid) or {}
+                qty_total = _rg_sum(g, "quantity")
+                res = _rg_sum(g, "reserved_quantity")
+
+                p_ctx = p.with_context(warehouse=wid) if wid else p
+                qty_forecasted = p_ctx.virtual_available
+
                 rows.append({
                     "id": pid,
                     "name": p.name,
                     "default_code": p.default_code or "",
                     "barcode": p.barcode or "",
                     "uom": p.uom_id.name,
-                    "qty_forecasted": 0.0,   # Không tính tồn
-                    "qty_total": 0.0,        # Không tính tồn
+                    "qty_forecasted": qty_forecasted,
+                    "qty_total": qty_total,
                     "list_price": p.list_price,
                     "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
                     "standard_price": p.standard_price,
                     "image_url": _get_product_image_url(p),
                     "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
-                    "is_combo": True,
+                    "is_combo": False,
                 })
-                continue
-            if not p:
-                continue
-
-            qty_total = _rg_sum(g, "quantity")  # Tồn thực tế (qty_on_hand)
-            res = _rg_sum(g, "reserved_quantity")
-            
-            # Tính "Được dự báo" = virtual_available
-            # virtual_available = qty_on_hand - outgoing + incoming
-            # Nhưng để đơn giản, ta dùng computed field từ product
-            # Cần with_context để tính theo kho cụ thể
-            if wid:
-                p_ctx = p.with_context(warehouse=wid)
-            else:
-                # Nếu không chọn kho, lấy tổng
-                p_ctx = p
-            
-            qty_forecasted = p_ctx.virtual_available  # Được dự báo
-
-            rows.append({
-                "id": pid,
-                "name": p.name,
-                "default_code": p.default_code or "",
-                "barcode": p.barcode or "",
-                "uom": p.uom_id.name,
-                "qty_forecasted": qty_forecasted,  # Được dự báo (virtual_available)
-                "qty_total": qty_total,            # Tồn thực tế (qty_on_hand)
-                "list_price": p.list_price,        # Giá bán
-                "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0, # Giá thương mại
-                "standard_price": p.standard_price,  # Giá gốc
-                "image_url": _get_product_image_url(p),  # URL hình ảnh
-                "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
-                "is_combo": False,
-            })
-
-            _logger.debug(
-                "Product %s (%s): qty_total=%.6f, reserved=%.6f, forecasted=%.6f | raw=%s",
-                pid, p.default_code or "-", qty_total, res, qty_forecasted, g
+        else:
+            # Nhánh mặc định: dùng limit/offset như cũ
+            groups = Quant.read_group(
+                domain,
+                ["product_id", "quantity:sum", "reserved_quantity:sum"],
+                ["product_id"],
+                limit=PAGE_SIZE,
+                offset=(page - 1) * PAGE_SIZE,
+                orderby="product_id",
             )
+            _logger.debug("read_group returned %d groups", len(groups))
+
+            # Đếm nhóm để phân trang
+            count_groups = Quant.read_group(domain, ["product_id"], ["product_id"])
+            total = len(count_groups)
+            pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 1
+
+            prod_ids = [g["product_id"][0] for g in groups if g.get("product_id")]
+            products = Product.browse(prod_ids)
+            pmap = {p.id: p for p in products}
+
+            rows = []
+            for g in groups:
+                if not g.get("product_id"):
+                    continue
+                pid = g["product_id"][0]
+                p = pmap.get(pid)
+                if not p:
+                    continue
+
+                # Nếu là combo: giữ nguyên render như cũ (tồn '-')
+                if getattr(p.product_tmpl_id, "is_combo", False):
+                    rows.append({
+                        "id": pid,
+                        "name": p.name,
+                        "default_code": p.default_code or "",
+                        "barcode": p.barcode or "",
+                        "uom": p.uom_id.name,
+                        "qty_forecasted": 0.0,
+                        "qty_total": 0.0,
+                        "list_price": p.list_price,
+                        "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
+                        "standard_price": p.standard_price,
+                        "image_url": _get_product_image_url(p),
+                        "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
+                        "is_combo": True,
+                    })
+                    continue
+
+                qty_total = _rg_sum(g, "quantity")
+                res = _rg_sum(g, "reserved_quantity")
+
+                p_ctx = p.with_context(warehouse=wid) if wid else p
+                qty_forecasted = p_ctx.virtual_available
+
+                rows.append({
+                    "id": pid,
+                    "name": p.name,
+                    "default_code": p.default_code or "",
+                    "barcode": p.barcode or "",
+                    "uom": p.uom_id.name,
+                    "qty_forecasted": qty_forecasted,
+                    "qty_total": qty_total,
+                    "list_price": p.list_price,
+                    "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
+                    "standard_price": p.standard_price,
+                    "image_url": _get_product_image_url(p),
+                    "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
+                    "is_combo": False,
+                })
 
         Warehouses = _get_allowed_warehouses()
 
