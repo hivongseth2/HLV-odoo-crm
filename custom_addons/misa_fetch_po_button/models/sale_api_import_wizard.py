@@ -16,7 +16,56 @@ class SaleApiImportWizard(models.TransientModel):
     from_date = fields.Date(string="Từ ngày", required=True)
     to_date = fields.Date(string="Đến ngày", required=True)
     
-    
+    def _cancel_so_by_ref(self, order_ref: str) -> int:
+        """
+        Hủy tất cả Sale Order có name == order_ref.
+        Trả về số SO đã được đưa về trạng thái 'cancel'.
+        """
+        if not order_ref:
+            return 0
+
+        SaleOrder = self.env['sale.order'].sudo()
+        orders = SaleOrder.search([('name', '=', order_ref)])
+        canceled = 0
+
+        for so in orders:
+            try:
+                # Bỏ qua nếu đã cancel/done
+                if so.state in ('cancel', 'done'):
+                    continue
+
+                # Nếu có invoice đã post → cảnh báo & bỏ qua (tránh lỗi nghiệp vụ)
+                if so.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
+                    _logger.warning("SO %s có invoice đã ghi sổ → bỏ qua hủy. Hủy/bỏ ghi sổ invoice trước.", so.name)
+                    continue
+
+                # Hủy các picking còn mở (tránh kẹt state)
+                for p in so.picking_ids:
+                    if p.state in ('waiting', 'confirmed', 'assigned'):
+                        try:
+                            p.sudo().action_cancel()
+                        except Exception as pe:
+                            _logger.warning("Không thể cancel picking %s: %s", p.name, pe)
+
+                # Hủy SO (fallback nếu action_cancel lỗi)
+                try:
+                    so.sudo().action_cancel()
+                except Exception as e1:
+                    _logger.warning("action_cancel SO %s lỗi: %s → fallback write(cancel)", so.name, e1)
+                    so.sudo().write({'state': 'cancel'})
+
+                # Ghi log + message khi đã về cancel
+                so.invalidate_cache(['state'])
+                if so.state == 'cancel':
+                    so.message_post(body="Phiếu bị hủy do trạng thái MISA: Từ chối ghi")
+                    canceled += 1
+                else:
+                    _logger.warning("⚠️ Không đưa SO %s về 'cancel' được (state hiện tại: %s)", so.name, so.state)
+
+            except Exception as e:
+                _logger.warning("Không thể hủy SO %s: %s", so.name, e)
+
+        return canceled
     
     
     # ================== HELPERS QUY ĐỔI UOM ==================
@@ -231,50 +280,7 @@ class SaleApiImportWizard(models.TransientModel):
             "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
         }
 
-        def _cancel_so_by_ref(self, order_ref: str):
-            if not order_ref:
-                return 0
-
-            SaleOrder = self.env['sale.order'].sudo()
-            orders = SaleOrder.search([('name', '=', order_ref)])
-            canceled = 0
-
-            for so in orders:
-                try:
-                    if so.state in ('cancel', 'done'):
-                        continue
-
-                    # Nếu đã có invoice ghi sổ → cảnh báo và bỏ qua (tránh lỗi business)
-                    if so.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
-                        _logger.warning("SO %s có invoice đã ghi sổ → bỏ qua hủy. Hãy hủy/bỏ ghi sổ invoice trước.", so.name)
-                        continue
-
-                    # Hủy các picking còn mở (nếu có) để tránh kẹt trạng thái
-                    for p in so.picking_ids:
-                        if p.state in ('waiting', 'confirmed', 'assigned'):
-                            try:
-                                p.sudo().action_cancel()
-                            except Exception as pe:
-                                _logger.warning("Không thể cancel picking %s: %s", p.name, pe)
-
-                    # Hủy SO (fallback nếu action_cancel lỗi)
-                    try:
-                        so.sudo().action_cancel()
-                    except Exception as e1:
-                        _logger.warning("action_cancel SO %s lỗi: %s → fallback write(cancel)", so.name, e1)
-                        so.sudo().write({'state': 'cancel'})
-
-                    if so.state == 'cancel':
-                        so.message_post(body="Phiếu bị hủy do trạng thái MISA: Từ chối ghi")
-                        canceled += 1
-                    else:
-                        _logger.warning("⚠️ Không đưa SO %s về 'cancel' được (state hiện tại: %s)", so.name, so.state)
-
-                except Exception as e:
-                    _logger.warning("Không thể hủy SO %s: %s", so.name, e)
-
-            return canceled
-
+    
         def line_subtotal(l):
             qty = float(l.get("Amount", 1) or 0.0)
             price = float(l.get("Price", 0) or 0.0)
@@ -305,7 +311,6 @@ class SaleApiImportWizard(models.TransientModel):
                 if delivery_status is not None and str(delivery_status).strip() == "2":
                     _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
                     continue
-
                 # Xử lý trạng thái "Từ chối ghi" (RevenueStatusID = 4)
                 status_text = (order.get("RevenueStatusIDText") or "").strip().lower()
                 rev_id = str(order.get("RevenueStatusID") or "").strip()
