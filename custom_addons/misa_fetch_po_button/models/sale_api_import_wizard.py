@@ -29,9 +29,6 @@ class SaleApiImportWizard(models.TransientModel):
 
         if revenue_status_id == 4 or revenue_status_text == "từ chối ghi":
             _ = _
-            _logger = self.env['ir.logging']  # không dùng, chỉ để tránh undefined nếu bạn cần log
-            # Bạn muốn log dùng _logger.info(...) thì đảm bảo có _logger ở module của bạn
-            # Ở đây mình giữ đúng logic, bạn có thể thay bằng _logger nếu đã có ở file.
 
             try:
                 # 1) Hủy các picking còn mở
@@ -355,17 +352,17 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
                     continue
                 # Xử lý trạng thái "Từ chối ghi" (RevenueStatusID = 4)
-                status_text = (order.get("RevenueStatusIDText") or "").strip().lower()
-                rev_id = str(order.get("RevenueStatusID") or "").strip()
                 order_ref = order.get("SaleOrderNo") or ""
+                revenue_status_id = int(order.get("RevenueStatusID") or 0)
+                revenue_status_text = (order.get("RevenueStatusIDText") or "").strip().lower()
 
                 # Nếu là 'Từ chối ghi' → hủy các SO hiện có trùng tên rồi bỏ qua import
-                if rev_id == "4" or status_text == "từ chối ghi":
-                    n = self._cancel_so_by_ref(order_ref)
-                    if n:
-                        _logger.info("🚫 Đã hủy %s SO có name = %s do trạng thái MISA: Từ chối ghi", n, order_ref)
-                    else:
-                        _logger.info("⏭️ Không tìm thấy SO name = %s để hủy (Từ chối ghi)", order_ref)
+                if revenue_status_id == 4 or revenue_status_text == "từ chối ghi":
+                    orders = self.env['sale.order'].sudo().search([('name', '=', order_ref)])
+                    if orders:
+                        for so in orders:
+                            so.action_force_cancel_if_misa_rejected(revenue_status_id, revenue_status_text)
+                    # Sau khi xử lý hủy xong, không kéo về nữa
                     continue
 
 
