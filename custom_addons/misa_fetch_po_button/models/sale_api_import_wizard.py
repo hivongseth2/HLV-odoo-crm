@@ -202,6 +202,7 @@ class SaleApiImportWizard(models.TransientModel):
         rate = float(rate)
         country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
 
+        # 1) Lấy/tạo Tax Group "VAT"
         vat_group = TaxGroup.search([
             ('name', 'in', ['VAT', 'Thuế GTGT', 'GTGT']),
             ('company_id', '=', self.env.company.id),
@@ -214,6 +215,7 @@ class SaleApiImportWizard(models.TransientModel):
                 'sequence': 10,
             })
 
+        # 2) Tìm thuế cùng % trong công ty
         tax = Tax.search([
             ('type_tax_use', '=', use),           # 'sale' cho SO
             ('amount_type', '=', 'percent'),
@@ -221,10 +223,12 @@ class SaleApiImportWizard(models.TransientModel):
             ('company_id', '=', self.env.company.id),
         ], limit=1)
         if tax:
+            _logger.info("✅ Tìm thấy tax sẵn có: %s (id=%s)", tax.name, tax.id)
             return tax
 
+        # 3) Tạo thuế mới và GÁN tax_group_id
         rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
-        return Tax.create({
+        new_tax = Tax.create({
             'name': f'VAT VN {rate_str}%',
             'type_tax_use': use,
             'amount_type': 'percent',
@@ -235,6 +239,8 @@ class SaleApiImportWizard(models.TransientModel):
             'tax_group_id': vat_group.id,
             'active': True,
         })
+        _logger.info("✅ Tạo mới tax: %s (id=%s)", new_tax.name, new_tax.id)
+        return new_tax
 
     def _tax_ids_from_misa_sale_line(self, l: dict):
         """
@@ -242,48 +248,55 @@ class SaleApiImportWizard(models.TransientModel):
         - KCT (không chịu thuế): []  (để trống)
         - 0%: [tax_0_id]
         - x%: [tax_x_id]
-        Chấp nhận nhiều tên khóa khác nhau của MISA.
         """
+        # MISA có thể trả các dạng đánh dấu KCT khác nhau
         kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', -1, -2}
-        # Các khả năng tên trường phần trăm VAT từ CRM:
-        candidates = [
-            l.get('VATRate'), l.get('VatRate'), l.get('VATPercent'), l.get('TaxPercent'),
-            l.get('VAT'), l.get('vat_rate'), l.get('SaleVATRate'), l.get('TaxRate'),
-        ]
-        raw_rate = next((v for v in candidates if v not in (None, '')), None)
         
-        _logger.debug("🔍 _tax_ids_from_misa_sale_line - raw_rate: %s (type: %s)", raw_rate, type(raw_rate))
-
-        # Các cờ "không chịu VAT"
+        # Thử nhiều tên trường có thể có
+        raw_rate = (
+            l.get('VATRate') or 
+            l.get('VatRate') or 
+            l.get('VAT') or 
+            l.get('vat_rate') or 
+            l.get('VATPercent') or 
+            l.get('TaxPercent') or
+            l.get('SaleVATRate') or 
+            l.get('TaxRate')
+        )
+        
+        _logger.info("🔍 VAT raw_rate: %s (type: %s) từ line: %s", 
+                    raw_rate, type(raw_rate), l.get('ProductIDText'))
+        
+        # Một số API gửi thêm cờ bool
         is_not_vat = str(l.get('IsNotVAT', l.get('is_not_vat', ''))).lower() in ('1', 'true', 'yes')
+        
+        # 1) Nếu có cờ KCT hoặc raw_rate thuộc các marker → không chịu thuế
         if is_not_vat or raw_rate in kct_markers:
-            _logger.debug("⏭️ Không chịu VAT (is_not_vat=%s, raw_rate=%s) -> return []", is_not_vat, raw_rate)
+            _logger.info("⏭️ KCT - không chịu thuế")
             return []
-
+        
+        # 2) Nếu không có vat_rate → coi như KCT
         if raw_rate in (None, '', 'null'):
-            _logger.debug("⏭️ raw_rate rỗng -> return []")
+            _logger.info("⏭️ Không có dữ liệu VAT -> KCT")
             return []
-
+        
+        # 3) Còn lại cố gắng parse số %
         try:
             rate = float(raw_rate)
-            _logger.debug("✅ Convert thành công: rate=%s", rate)
         except Exception as e:
-            _logger.warning("❌ Không convert được raw_rate '%s' thành float: %s -> return []", raw_rate, e)
+            _logger.warning("❌ Không parse được VAT '%s': %s -> KCT", raw_rate, e)
             return []
-
+        
+        # 4) 0% khác KCT → tạo/gắn VAT 0%
         if abs(rate) < 1e-9:
-            _logger.debug("🔢 VAT 0%")
+            _logger.info("🔢 VAT 0%%")
             tax = self._get_or_create_vn_vat(0.0, use='sale')
-            result = [tax.id] if tax else []
-            _logger.debug("📤 Return tax_ids cho 0%%: %s", result)
-            return result
-
-        _logger.debug("🔢 VAT %.2f%%", rate)
+            return [tax.id] if tax else []
+        
+        # 5) Các mức khác
+        _logger.info("🔢 VAT %.2f%%", rate)
         tax = self._get_or_create_vn_vat(rate, use='sale')
-        result = [tax.id] if tax else []
-        _logger.debug("📤 Return tax_ids cho %.2f%%: %s (tax_name: %s)", 
-                    rate, result, tax.name if tax else 'None')
-        return result
+        return [tax.id] if tax else []
 
     def _update_existing_so_taxes(self, existing_order, product_lines):
         """
@@ -535,7 +548,9 @@ class SaleApiImportWizard(models.TransientModel):
                 misa_id_str = str(order_id) if order_id else False  # ### NEW
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)
-                _logger.warning("📦 Order product_lines %s", product_lines)
+                _logger.warning("📦 Order product_lines FULL DATA: %s", product_lines)
+                if product_lines and len(product_lines) > 0:
+                    _logger.warning("📦 Sample line keys: %s", list(product_lines[0].keys()))
                 
                 
                 shipping_address_str = misa_utils.get_shipping_address(
@@ -805,6 +820,10 @@ class SaleApiImportWizard(models.TransientModel):
                             if picking.name != new_name:
                                 picking.name = new_name
                             _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
+                _logger.warning("🔍 Order level VAT: VATRate=%s, VATPercent=%s, TaxRate=%s", 
+                    order.get('VATRate'), 
+                    order.get('VATPercent'),
+                    order.get('TaxRate'))
 
             # --- phân trang ---
             if len(orders) < 20:
