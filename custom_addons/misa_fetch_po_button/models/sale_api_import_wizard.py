@@ -193,6 +193,128 @@ class SaleApiImportWizard(models.TransientModel):
             price_base = price * rate
 
         return qty_base, price_base, False
+    
+    # ==== Helper lấy VAT ====
+    def _get_or_create_vn_vat(self, rate, use='sale'):
+        Tax = self.env['account.tax'].with_company(self.env.company)
+        TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
+
+        rate = float(rate)
+        country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
+
+        vat_group = TaxGroup.search([
+            ('name', 'in', ['VAT', 'Thuế GTGT', 'GTGT']),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+        if not vat_group:
+            vat_group = TaxGroup.create({
+                'name': 'VAT',
+                'company_id': self.env.company.id,
+                'country_id': country_vn.id or False,
+                'sequence': 10,
+            })
+
+        tax = Tax.search([
+            ('type_tax_use', '=', use),           # 'sale' cho SO
+            ('amount_type', '=', 'percent'),
+            ('amount', '=', rate),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+        if tax:
+            return tax
+
+        rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
+        return Tax.create({
+            'name': f'VAT VN {rate_str}%',
+            'type_tax_use': use,
+            'amount_type': 'percent',
+            'amount': rate,
+            'company_id': self.env.company.id,
+            'price_include': False,
+            'country_id': country_vn.id or False,
+            'tax_group_id': vat_group.id,
+            'active': True,
+        })
+
+    def _tax_ids_from_misa_sale_line(self, l: dict):
+        """
+        Trả về list tax_id cho dòng SO từ dữ liệu MISA.
+        - KCT (không chịu thuế): []  (để trống)
+        - 0%: [tax_0_id]
+        - x%: [tax_x_id]
+        Chấp nhận nhiều tên khóa khác nhau của MISA.
+        """
+        kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', -1, -2}
+        # Các khả năng tên trường phần trăm VAT từ CRM:
+        candidates = [
+            l.get('VATRate'), l.get('VatRate'), l.get('VATPercent'), l.get('TaxPercent'),
+            l.get('VAT'), l.get('vat_rate'), l.get('SaleVATRate'), l.get('TaxRate'),
+        ]
+        raw_rate = next((v for v in candidates if v not in (None, '')), None)
+
+        # Các cờ “không chịu VAT”
+        is_not_vat = str(l.get('IsNotVAT', l.get('is_not_vat', ''))).lower() in ('1', 'true', 'yes')
+        if is_not_vat or raw_rate in kct_markers:
+            return []
+
+        if raw_rate in (None, '', 'null'):
+            return []
+
+        try:
+            rate = float(raw_rate)
+        except Exception:
+            return []
+
+        if abs(rate) < 1e-9:
+            tax = self._get_or_create_vn_vat(0.0, use='sale')
+            return [tax.id] if tax else []
+
+        tax = self._get_or_create_vn_vat(rate, use='sale')
+        return [tax.id] if tax else []
+
+    def _update_existing_so_taxes(self, existing_order, product_lines):
+            """
+            Cập nhật thuế cho SO đã tồn tại.
+            So khớp dòng theo ProductIDText và cập nhật tax_id.
+            """
+            if existing_order.state in ('cancel', 'done'):
+                _logger.info("⚠️ SO %s đã ở trạng thái %s, không cập nhật thuế", existing_order.name, existing_order.state)
+                return False
+            
+            updated_count = 0
+            for misa_line in product_lines:
+                product_code = misa_line.get("ProductIDText")
+                if not product_code:
+                    continue
+                
+                # Tìm dòng SO tương ứng
+                odoo_line = existing_order.order_line.filtered(
+                    lambda l: l.product_id.default_code == product_code
+                )
+                
+                if not odoo_line:
+                    continue
+                
+                # Lấy thuế từ MISA
+                tax_ids = self._tax_ids_from_misa_sale_line(misa_line)
+                
+                # So sánh với thuế hiện tại
+                current_tax_ids = set(odoo_line[0].tax_id.ids)
+                new_tax_ids = set(tax_ids)
+                
+                if current_tax_ids != new_tax_ids:
+                    odoo_line[0].write({'tax_id': [(6, 0, tax_ids)]})
+                    _logger.info("✅ Cập nhật thuế cho line %s của SO %s: %s -> %s", 
+                            product_code, existing_order.name, current_tax_ids, new_tax_ids)
+                    updated_count += 1
+            
+            if updated_count > 0:
+                existing_order.message_post(
+                    body=_("Đã cập nhật thuế cho %d dòng hàng khi đồng bộ từ MISA") % updated_count
+                )
+                _logger.info("🔄 Đã cập nhật thuế cho %d dòng của SO %s", updated_count, existing_order.name)
+            
+            return updated_count > 0
 
     # ===== Helpers cho địa chỉ giao hàng =====
     def _vn_country(self):
@@ -434,12 +556,14 @@ class SaleApiImportWizard(models.TransientModel):
                         continue
 
                     order_ref = order_ref_base  # giữ nguyên
-                    # Tránh trùng
+                    # Kiểm tra SO đã tồn tại
                     existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
                     if existing_order:
                         if misa_id_str and not existing_order.misa_id:
                             existing_order.misa_id = misa_id_str
-                        _logger.info("🔁 Bỏ qua SO đã tồn tại: %s", order_ref)
+                        # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <
+                        self._update_existing_so_taxes(existing_order, grouped_lines)
+                        _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật thuế", order_ref)
                         continue
 
                     group_total = sum(line_subtotal(l) for l in grouped_lines)
@@ -501,6 +625,11 @@ class SaleApiImportWizard(models.TransientModel):
                         }
                         if not use_default_uom:
                             vals_line['product_uom'] = product.uom_id.id
+                        
+                        # VAT cho sale line
+                        tax_ids = self._tax_ids_from_misa_sale_line(line)
+                        if tax_ids:
+                            vals_line['tax_id'] = [(6, 0, tax_ids)]
 
                         self.env['sale.order.line'].create(vals_line)       
 
@@ -553,9 +682,14 @@ class SaleApiImportWizard(models.TransientModel):
 
                         order_ref = f"{order_ref_base}-{stock_id}"
 
+                        # Kiểm tra SO đã tồn tại
                         existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
                         if existing_order:
-                            _logger.info("🔁 Bỏ qua SO đã tồn tại: %s", order_ref)
+                            if misa_id_str and not existing_order.misa_id:
+                                existing_order.misa_id = misa_id_str
+                            # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <
+                            self._update_existing_so_taxes(existing_order, grouped_lines)
+                            _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật thuế", order_ref)
                             continue
 
                         group_total = sum(line_subtotal(l) for l in grouped_lines)
@@ -563,11 +697,11 @@ class SaleApiImportWizard(models.TransientModel):
                             'name': order_ref,
                             'partner_id': partner.id,
                             'date_order': order_date,
-                            'partner_shipping_id': delivery_contact.id, 
-                            'amount_total': group_total,
+                            'partner_shipping_id': delivery_contact.id,
+                            'amount_total': group_total,       # có thể để Odoo tự tính lại sau khi tạo line
                             'warehouse_id': warehouse.id,
-                            'origin':origin,
-                            'misa_id': misa_id_str,      
+                            'origin': origin,
+                            'misa_id': misa_id_str,
                         })
 
                         # Thêm line
@@ -589,7 +723,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 purchase_ok=True,
                                 sale_ok=True
                             )
-                            self.env['sale.order.line'].create({
+
+                            line_vals = {
                                 'order_id': sale_order.id,
                                 'product_id': product.id,
                                 'name': description,
@@ -597,7 +732,14 @@ class SaleApiImportWizard(models.TransientModel):
                                 'price_unit': price_unit,
                                 'discount': discount_percent,
                                 'note': note,
-                            })
+                            }
+
+                            # >>> NEW: map VAT từ dữ liệu MISA -> tax_id (many2many)
+                            tax_ids = self._tax_ids_from_misa_sale_line(line)
+                            if tax_ids:
+                                line_vals['tax_id'] = [(6, 0, tax_ids)]
+
+                            self.env['sale.order.line'].create(line_vals)
 
                         # Confirm -> tạo picking theo từng SO/warehouse
                         sale_order.action_confirm()
