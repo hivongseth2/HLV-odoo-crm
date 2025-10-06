@@ -217,16 +217,15 @@ class SaleApiImportWizard(models.TransientModel):
 
         # 2) Tìm thuế cùng % trong công ty
         tax = Tax.search([
-            ('type_tax_use', '=', use),           # 'sale' cho SO
+            ('type_tax_use', '=', use),
             ('amount_type', '=', 'percent'),
             ('amount', '=', rate),
             ('company_id', '=', self.env.company.id),
         ], limit=1)
         if tax:
-            _logger.info("✅ Tìm thấy tax sẵn có: %s (id=%s)", tax.name, tax.id)
             return tax
 
-        # 3) Tạo thuế mới và GÁN tax_group_id
+        # 3) Tạo thuế mới và gán tax_group_id
         rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
         new_tax = Tax.create({
             'name': f'VAT VN {rate_str}%',
@@ -242,61 +241,37 @@ class SaleApiImportWizard(models.TransientModel):
         _logger.info("✅ Tạo mới tax: %s (id=%s)", new_tax.name, new_tax.id)
         return new_tax
 
+
     def _tax_ids_from_misa_sale_line(self, l: dict):
         """
         Trả về list tax_id cho dòng SO từ dữ liệu MISA.
-        - KCT (không chịu thuế): []  (để trống)
-        - 0%: [tax_0_id]
-        - x%: [tax_x_id]
+        MISA CRM trả: TaxPercentIDText (ví dụ: '8%', '10%', 'KCT')
         """
-        # MISA có thể trả các dạng đánh dấu KCT khác nhau
-        kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', -1, -2}
-        
-        # Thử nhiều tên trường có thể có
-        raw_rate = (
-            l.get('VATRate') or 
-            l.get('VatRate') or 
-            l.get('VAT') or 
-            l.get('vat_rate') or 
-            l.get('VATPercent') or 
-            l.get('TaxPercent') or
-            l.get('SaleVATRate') or 
-            l.get('TaxRate')
-        )
-        
-        _logger.info("🔍 VAT raw_rate: %s (type: %s) từ line: %s", 
-                    raw_rate, type(raw_rate), l.get('ProductIDText'))
-        
-        # Một số API gửi thêm cờ bool
-        is_not_vat = str(l.get('IsNotVAT', l.get('is_not_vat', ''))).lower() in ('1', 'true', 'yes')
-        
-        # 1) Nếu có cờ KCT hoặc raw_rate thuộc các marker → không chịu thuế
-        if is_not_vat or raw_rate in kct_markers:
-            _logger.info("⏭️ KCT - không chịu thuế")
+        kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', 'Không chịu thuế', ''}
+
+        tax_text = l.get('TaxPercentIDText', '').strip()
+
+        # 1) Kiểm tra KCT
+        if not tax_text or tax_text.upper() in kct_markers:
             return []
-        
-        # 2) Nếu không có vat_rate → coi như KCT
-        if raw_rate in (None, '', 'null'):
-            _logger.info("⏭️ Không có dữ liệu VAT -> KCT")
-            return []
-        
-        # 3) Còn lại cố gắng parse số %
+
+        # 2) Parse số % từ text (loại bỏ ký tự %)
         try:
-            rate = float(raw_rate)
+            rate_str = tax_text.replace('%', '').strip()
+            rate = float(rate_str)
         except Exception as e:
-            _logger.warning("❌ Không parse được VAT '%s': %s -> KCT", raw_rate, e)
+            _logger.warning("❌ Không parse được VAT '%s': %s -> bỏ qua", tax_text, e)
             return []
-        
-        # 4) 0% khác KCT → tạo/gắn VAT 0%
+
+        # 3) 0% khác KCT → tạo/gắn VAT 0%
         if abs(rate) < 1e-9:
-            _logger.info("🔢 VAT 0%%")
             tax = self._get_or_create_vn_vat(0.0, use='sale')
             return [tax.id] if tax else []
-        
-        # 5) Các mức khác
-        _logger.info("🔢 VAT %.2f%%", rate)
+
+        # 4) Các mức khác (8%, 10%, v.v.)
         tax = self._get_or_create_vn_vat(rate, use='sale')
         return [tax.id] if tax else []
+
 
     def _update_existing_so_taxes(self, existing_order, product_lines):
         """
@@ -304,82 +279,44 @@ class SaleApiImportWizard(models.TransientModel):
         So khớp dòng theo ProductIDText và cập nhật tax_id.
         """
         if existing_order.state in ('cancel', 'done'):
-            _logger.info("⚠️ SO %s đã ở trạng thái %s, không cập nhật thuế", existing_order.name, existing_order.state)
+            _logger.info("⚠️ SO %s đã ở trạng thái %s, không cập nhật thuế",
+                        existing_order.name, existing_order.state)
             return False
-        
-        _logger.info("🔍 Bắt đầu cập nhật thuế cho SO %s, có %d dòng MISA", 
-                    existing_order.name, len(product_lines))
-        
+
         updated_count = 0
         for misa_line in product_lines:
             product_code = misa_line.get("ProductIDText")
             if not product_code:
-                _logger.warning("⚠️ Dòng MISA không có ProductIDText, bỏ qua: %s", misa_line)
                 continue
-            
-            # Log dữ liệu VAT từ MISA
-            _logger.info("📋 Dòng MISA - Product: %s, VAT data: VATRate=%s, VatRate=%s, VATPercent=%s, IsNotVAT=%s", 
-                        product_code,
-                        misa_line.get('VATRate'),
-                        misa_line.get('VatRate'),
-                        misa_line.get('VATPercent'),
-                        misa_line.get('IsNotVAT'))
-            
-            # Tìm dòng SO tương ứng
+
             odoo_line = existing_order.order_line.filtered(
                 lambda l: l.product_id.default_code == product_code
             )
-            
             if not odoo_line:
-                _logger.warning("⚠️ Không tìm thấy dòng Odoo cho product %s trong SO %s", 
-                            product_code, existing_order.name)
                 continue
-            
-            _logger.info("✅ Tìm thấy dòng Odoo: line_id=%s, product=%s", 
-                        odoo_line[0].id, product_code)
-            
-            # Lấy thuế từ MISA
+
             tax_ids = self._tax_ids_from_misa_sale_line(misa_line)
-            _logger.info("🔢 Tax_ids từ MISA: %s (type: %s)", tax_ids, type(tax_ids))
-            
-            # So sánh với thuế hiện tại
             current_tax_ids = set(odoo_line[0].tax_id.ids)
             new_tax_ids = set(tax_ids)
-            
-            _logger.info("📊 So sánh thuế - Hiện tại: %s, Mới: %s", current_tax_ids, new_tax_ids)
-            
+
             if current_tax_ids != new_tax_ids:
-                _logger.info("🔄 Sẽ cập nhật thuế cho line_id=%s: %s -> %s", 
-                            odoo_line[0].id, current_tax_ids, new_tax_ids)
-                
                 try:
                     odoo_line[0].write({'tax_id': [(6, 0, tax_ids)]})
-                    # Re-browse để xác nhận
-                    odoo_line[0].invalidate_cache()
-                    updated_tax = odoo_line[0].tax_id.ids
-                    _logger.info("✅ Đã cập nhật! Thuế sau khi write: %s", updated_tax)
-                    
-                    if set(updated_tax) != new_tax_ids:
-                        _logger.error("❌ LỖI: Thuế không được ghi đúng! Mong đợi %s, thực tế %s", 
-                                    new_tax_ids, updated_tax)
-                    else:
-                        updated_count += 1
-                        
+                    updated_count += 1
                 except Exception as e:
-                    _logger.error("❌ Lỗi khi write tax_id cho line %s: %s", odoo_line[0].id, e)
-            else:
-                _logger.info("⏭️ Thuế không thay đổi, bỏ qua cập nhật")
-        
+                    _logger.error("❌ Lỗi khi cập nhật thuế cho %s: %s",
+                                product_code, e)
+
         if updated_count > 0:
             existing_order.message_post(
-                body=_("Đã cập nhật thuế cho %d dòng hàng khi đồng bộ từ MISA") % updated_count
+                body=_("Đã cập nhật thuế cho %d dòng hàng khi đồng bộ từ MISA")
+                % updated_count
             )
-            _logger.info("🎯 Tổng kết: Đã cập nhật thuế cho %d/%d dòng của SO %s", 
-                        updated_count, len(product_lines), existing_order.name)
-        else:
-            _logger.info("ℹ️ Không có dòng nào cần cập nhật thuế cho SO %s", existing_order.name)
-        
+            _logger.info("🎯 Đã cập nhật %d dòng thuế cho SO %s",
+                        updated_count, existing_order.name)
+
         return updated_count > 0
+
 
     # ===== Helpers cho địa chỉ giao hàng =====
     def _vn_country(self):
