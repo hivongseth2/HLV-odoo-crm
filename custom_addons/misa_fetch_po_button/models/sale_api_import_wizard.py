@@ -361,7 +361,7 @@ class SaleApiImportWizard(models.TransientModel):
                     orders = self.env['sale.order'].sudo().search([('name', '=', order_ref)])
                     if orders:
                         for so in orders:
-                            so.action_force_cancel_if_misa_rejected(revenue_status_id, revenue_status_text)
+                            so._cancel_so_by_ref(revenue_status_id, revenue_status_text)
                     # Sau khi xử lý hủy xong, không kéo về nữa
                     continue
 
