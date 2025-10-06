@@ -231,6 +231,50 @@ class SaleApiImportWizard(models.TransientModel):
             "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
         }
 
+        def _cancel_so_by_ref(self, order_ref: str):
+            if not order_ref:
+                return 0
+
+            SaleOrder = self.env['sale.order'].sudo()
+            orders = SaleOrder.search([('name', '=', order_ref)])
+            canceled = 0
+
+            for so in orders:
+                try:
+                    if so.state in ('cancel', 'done'):
+                        continue
+
+                    # Nếu đã có invoice ghi sổ → cảnh báo và bỏ qua (tránh lỗi business)
+                    if so.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
+                        _logger.warning("SO %s có invoice đã ghi sổ → bỏ qua hủy. Hãy hủy/bỏ ghi sổ invoice trước.", so.name)
+                        continue
+
+                    # Hủy các picking còn mở (nếu có) để tránh kẹt trạng thái
+                    for p in so.picking_ids:
+                        if p.state in ('waiting', 'confirmed', 'assigned'):
+                            try:
+                                p.sudo().action_cancel()
+                            except Exception as pe:
+                                _logger.warning("Không thể cancel picking %s: %s", p.name, pe)
+
+                    # Hủy SO (fallback nếu action_cancel lỗi)
+                    try:
+                        so.sudo().action_cancel()
+                    except Exception as e1:
+                        _logger.warning("action_cancel SO %s lỗi: %s → fallback write(cancel)", so.name, e1)
+                        so.sudo().write({'state': 'cancel'})
+
+                    if so.state == 'cancel':
+                        so.message_post(body="Phiếu bị hủy do trạng thái MISA: Từ chối ghi")
+                        canceled += 1
+                    else:
+                        _logger.warning("⚠️ Không đưa SO %s về 'cancel' được (state hiện tại: %s)", so.name, so.state)
+
+                except Exception as e:
+                    _logger.warning("Không thể hủy SO %s: %s", so.name, e)
+
+            return canceled
+
         def line_subtotal(l):
             qty = float(l.get("Amount", 1) or 0.0)
             price = float(l.get("Price", 0) or 0.0)
@@ -263,68 +307,19 @@ class SaleApiImportWizard(models.TransientModel):
                     continue
 
                 # Xử lý trạng thái "Từ chối ghi" (RevenueStatusID = 4)
-                if revenue_status_id == 4 or status == "Từ chối ghi":
-                    existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
-                    if existing_order:
-                        # Đã tồn tại -> FORCE CANCEL an toàn
-                        _logger.info("🚫 SO %s có trạng thái 'Từ chối ghi' -> Force-cancel", order_ref)
-                        try:
-                            if existing_order.state not in ('cancel', 'done'):
-                                # 1) Hủy các picking còn mở, xóa draft
-                                for p in (existing_order.picking_ids or []):
-                                    st = p.state
-                                    if st in ('waiting', 'confirmed', 'assigned'):
-                                        try:
-                                            p.sudo().action_cancel()
-                                        except Exception as pe:
-                                            _logger.warning("Không thể cancel picking %s: %s", p.name, pe)
-                                    elif st == 'draft':
-                                        try:
-                                            p.sudo().unlink()
-                                        except Exception as pe:
-                                            _logger.warning("Không thể xóa picking draft %s: %s", p.name, pe)
+                status_text = (order.get("RevenueStatusIDText") or "").strip().lower()
+                rev_id = str(order.get("RevenueStatusID") or "").strip()
+                order_ref = order.get("SaleOrderNo") or ""
 
-                                # 2) Hủy invoice chưa ghi sổ; nếu có posted thì KHÔNG hủy SO và ghi log
-                                has_posted_inv = False
-                                for inv in (existing_order.invoice_ids or []):
-                                    st = getattr(inv, 'state', None)
-                                    if st in ('draft', 'cancel'):
-                                        try:
-                                            if hasattr(inv, 'button_cancel'):
-                                                inv.sudo().button_cancel()
-                                            elif hasattr(inv, 'action_cancel'):
-                                                inv.sudo().action_cancel()
-                                        except Exception as ie:
-                                            _logger.warning("Không thể hủy invoice %s: %s", getattr(inv, 'name', 'n/a'), ie)
-                                    elif st == 'posted':
-                                        has_posted_inv = True
-
-                                if has_posted_inv:
-                                    _logger.warning("SO %s có invoice đã ghi sổ → bỏ qua hủy đơn. Hãy bỏ ghi sổ/hủy hóa đơn trước.", order_ref)
-                                else:
-                                    # 3) Hủy SO; nếu action_cancel lỗi → fallback hủy dòng + set state=cancel
-                                    try:
-                                        existing_order.sudo().action_cancel()
-                                    except Exception as e1:
-                                        _logger.warning("action_cancel thất bại cho SO %s: %s → fallback _action_cancel + write(cancel)", order_ref, e1)
-                                        if hasattr(existing_order.order_line, '_action_cancel'):
-                                            existing_order.order_line.sudo()._action_cancel()
-                                        existing_order.sudo().write({'state': 'cancel'})
-
-                                # 4) Kiểm tra lại kết quả bằng cách browse mới
-                                state_now = existing_order.sudo().browse(existing_order.id).state
-                                if state_now == 'cancel':
-                                    existing_order.message_post(body="Phiếu bị hủy do trạng thái MISA: Từ chối ghi")
-                                    _logger.info("✅ SO %s đã về trạng thái cancel", order_ref)
-                                else:
-                                    _logger.warning("⚠️ Không đưa SO %s về trạng thái cancel được (state hiện tại: %s)", order_ref, state_now)
-
-                        except Exception as e:
-                            _logger.warning("Không thể hủy SO %s: %s", order_ref, e)
+                # Nếu là 'Từ chối ghi' → hủy các SO hiện có trùng tên rồi bỏ qua import
+                if rev_id == "4" or status_text == "từ chối ghi":
+                    n = self._cancel_so_by_ref(order_ref)
+                    if n:
+                        _logger.info("🚫 Đã hủy %s SO có name = %s do trạng thái MISA: Từ chối ghi", n, order_ref)
                     else:
-                        # Chưa tồn tại -> bỏ qua, không kéo về
-                        _logger.info("⏭️ Bỏ qua SO %s (chưa tồn tại) vì trạng thái 'Từ chối ghi'", order_ref)
+                        _logger.info("⏭️ Không tìm thấy SO name = %s để hủy (Từ chối ghi)", order_ref)
                     continue
+
 
                 # Bỏ qua SO 'Bản nháp' mà không thuộc e_accounts
                 if customer_name not in e_accounts and status == "Bản nháp":
