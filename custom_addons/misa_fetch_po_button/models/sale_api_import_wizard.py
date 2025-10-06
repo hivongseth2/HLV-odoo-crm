@@ -196,13 +196,20 @@ class SaleApiImportWizard(models.TransientModel):
     
     # ==== Helper lấy VAT ====
     def _get_or_create_vn_vat(self, rate, use='sale'):
+        """
+        Lấy hoặc tạo thuế VAT Việt Nam với định dạng tên cố định: 'VAT VN X%'.
+        Luôn gán country_id = Việt Nam, tax_group_id = 'VAT'.
+        """
         Tax = self.env['account.tax'].with_company(self.env.company)
         TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
 
         rate = float(rate)
+        # 🔹 Lấy quốc gia Việt Nam (ưu tiên mã VN, fallback theo tên)
         country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
+        if not country_vn:
+            country_vn = self.env['res.country'].search([('name', 'ilike', 'Viet%')], limit=1)
 
-        # 1) Lấy/tạo Tax Group "VAT"
+        # 🔹 Tìm / tạo nhóm thuế VAT
         vat_group = TaxGroup.search([
             ('name', 'in', ['VAT', 'Thuế GTGT', 'GTGT']),
             ('company_id', '=', self.env.company.id),
@@ -211,33 +218,47 @@ class SaleApiImportWizard(models.TransientModel):
             vat_group = TaxGroup.create({
                 'name': 'VAT',
                 'company_id': self.env.company.id,
-                'country_id': country_vn.id or False,
+                'country_id': country_vn.id or self.env.company.country_id.id,
                 'sequence': 10,
             })
 
-        # 2) Tìm thuế cùng % trong công ty
+        # 🔹 Tên thuế theo chuẩn VN
+        rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
+        vat_name = f'VAT VN {rate_str}%'
+
+        # 🔹 Tìm thuế cùng % trong công ty (ưu tiên theo tên chuẩn)
         tax = Tax.search([
             ('type_tax_use', '=', use),
             ('amount_type', '=', 'percent'),
             ('amount', '=', rate),
             ('company_id', '=', self.env.company.id),
         ], limit=1)
+
         if tax:
+            # Nếu tên đang khác chuẩn => cập nhật lại luôn cho đồng bộ
+            if tax.name != vat_name or tax.country_id.code != 'VN':
+                tax.write({
+                    'name': vat_name,
+                    'country_id': country_vn.id or self.env.company.country_id.id,
+                    'tax_group_id': vat_group.id,
+                })
             return tax
 
-        # 3) Tạo thuế mới và gán tax_group_id
-        rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
-        return Tax.create({
-            'name': f'VAT VN {rate_str}%',
+        # 🔹 Nếu chưa có, tạo mới đúng chuẩn
+        new_tax = Tax.create({
+            'name': vat_name,
             'type_tax_use': use,
             'amount_type': 'percent',
             'amount': rate,
             'company_id': self.env.company.id,
             'price_include': False,
-            'country_id': country_vn.id or False,
+            'country_id': country_vn.id or self.env.company.country_id.id,
             'tax_group_id': vat_group.id,
             'active': True,
         })
+        _logger.info("✅ Tạo mới thuế: %s (id=%s)", new_tax.name, new_tax.id)
+        return new_tax
+
 
 
     def _tax_ids_from_misa_sale_line(self, l: dict):
