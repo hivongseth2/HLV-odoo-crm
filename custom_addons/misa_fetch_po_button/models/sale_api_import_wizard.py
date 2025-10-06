@@ -17,12 +17,12 @@ class SaleApiImportWizard(models.TransientModel):
     from_date = fields.Date(string="Từ ngày", required=True)
     to_date = fields.Date(string="Đến ngày", required=True)
     
-    def _force_cancel_sale_order(self, so, revenue_status_id, revenue_status_text):
+    def _force_cancel_sale_order(self, so, revenue_status_id, status):
         """
         Hủy SO 'so' nếu trạng thái MISA là 'Từ chối ghi' (ID=4 hoặc text 'từ chối ghi').
         Chỉ dùng field/method sẵn có của sale.order, không thêm attribute lạ.
         """
-        txt = (revenue_status_text or "").strip().lower()
+        txt = (status or "").strip().lower()
         if not (revenue_status_id == 4 or txt == "từ chối ghi"):
             return False
 
@@ -322,7 +322,7 @@ class SaleApiImportWizard(models.TransientModel):
                 # --- Filter theo account & trạng thái ---
                 customer_name = order.get("AccountIDText") 
                 origin = order.get("SaleOrderName")
-                status = order.get("RevenueStatusIDText")
+                status = (order.get("RevenueStatusIDText") or "").strip().lower()
                 revenue_status_id = order.get("RevenueStatusID")
                 order_ref = order.get("SaleOrderNo")
                 order_id = order.get("ID")
@@ -332,17 +332,13 @@ class SaleApiImportWizard(models.TransientModel):
                 if delivery_status is not None and str(delivery_status).strip() == "2":
                     _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
                     continue
-                # Xử lý trạng thái "Từ chối ghi" (RevenueStatusID = 4)
-                order_ref = order.get("SaleOrderNo") or ""
-                revenue_status_id = int(order.get("RevenueStatusID") or 0)
-                revenue_status_text = (order.get("RevenueStatusIDText") or "").strip().lower()
-
+                
                 # Nếu là 'Từ chối ghi' → hủy các SO hiện có trùng tên rồi bỏ qua import
-                if revenue_status_id == 4 or revenue_status_text == "từ chối ghi":
+                if revenue_status_id == 4 or status == "từ chối ghi":
                     found = self.env['sale.order'].sudo().search([('name', '=', order_ref)])
                     if found:
                         for so in found:
-                            self._force_cancel_sale_order(so, revenue_status_id, revenue_status_text)
+                            self._force_cancel_sale_order(so, revenue_status_id, status)
                     continue
 
 
