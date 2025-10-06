@@ -249,7 +249,7 @@ class SaleApiImportWizard(models.TransientModel):
         """
         kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', 'Không chịu thuế', ''}
 
-        tax_text = l.get('TaxPercentIDText', '').strip()
+        tax_text = str(l.get('TaxPercentIDText') or '').strip()
 
         # 1) Kiểm tra KCT
         if not tax_text or tax_text.upper() in kct_markers:
