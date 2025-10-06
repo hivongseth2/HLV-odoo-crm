@@ -227,7 +227,7 @@ class SaleApiImportWizard(models.TransientModel):
 
         # 3) Tạo thuế mới và gán tax_group_id
         rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
-        new_tax = Tax.create({
+        return Tax.create({
             'name': f'VAT VN {rate_str}%',
             'type_tax_use': use,
             'amount_type': 'percent',
@@ -238,8 +238,6 @@ class SaleApiImportWizard(models.TransientModel):
             'tax_group_id': vat_group.id,
             'active': True,
         })
-        _logger.info("✅ Tạo mới tax: %s (id=%s)", new_tax.name, new_tax.id)
-        return new_tax
 
 
     def _tax_ids_from_misa_sale_line(self, l: dict):
@@ -757,10 +755,6 @@ class SaleApiImportWizard(models.TransientModel):
                             if picking.name != new_name:
                                 picking.name = new_name
                             _logger.info("📦 Đã gán mã phiếu pick: %s cho SO %s", picking.name, order_ref)
-                _logger.warning("🔍 Order level VAT: VATRate=%s, VATPercent=%s, TaxRate=%s", 
-                    order.get('VATRate'), 
-                    order.get('VATPercent'),
-                    order.get('TaxRate'))
 
             # --- phân trang ---
             if len(orders) < 20:
