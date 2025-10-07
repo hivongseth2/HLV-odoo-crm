@@ -96,7 +96,7 @@ class ProductImportWizard(models.TransientModel):
         
         price_store = self._first_non_empty(
             row,
-            ['giá hãng niêm yết', 'Giá list hãng dành cho tham khảo'],
+            ['Giá list hãng dành cho tham khảo','Giá hãng niêm yết','giá hãng niêm yết'],
             default=0.0
         )
             
