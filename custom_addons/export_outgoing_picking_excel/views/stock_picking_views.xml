@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <!-- Thêm nút vào hành động ở tree view của stock.picking -->
+  <record id="stock_picking_action_inherit_export_excel" model="ir.ui.view">
+    <field name="name">stock.picking.tree.inherit.export.excel</field>
+    <field name="model">stock.picking</field>
+    <field name="inherit_id" ref="stock.vpicktree"/>
+    <field name="arch" type="xml">
+      <xpath expr="//tree" position="context">
+        <context>
+          <value eval="{'search_default_picking_type': 1}"/>
+        </context>
+      </xpath>
+      <xpath expr="//button[@name='action_confirm']" position="after">
+        <!-- Nếu view gốc không có button này, bạn có thể đặt vào header của form -->
+        <button name="%(action_picking_export_wizard)d"
+                string="Xuất Excel lệnh xuất kho"
+                type="action"
+                class="btn-secondary"/>
+      </xpath>
+    </field>
+  </record>
+
+  <!-- Option: Thêm vào form view -->
+  <record id="stock_picking_form_inherit_export_excel" model="ir.ui.view">
+    <field name="name">stock.picking.form.inherit.export.excel</field>
+    <field name="model">stock.picking</field>
+    <field name="inherit_id" ref="stock.view_picking_form"/>
+    <field name="arch" type="xml">
+      <header position="inside">
+        <button name="%(action_picking_export_wizard)d"
+                string="Xuất Excel lệnh xuất kho"
+                type="action"
+                class="oe_highlight"/>
+      </header>
+    </field>
+  </record>
+
+</odoo>
