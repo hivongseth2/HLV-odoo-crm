@@ -326,6 +326,78 @@ class SaleOrder(models.Model):
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
 
+         # === THÊM MỚI: Kiểm tra trạng thái "Từ chối ghi" ===
+        revenue_status_id = data.get("RevenueStatusID")
+        revenue_status_text = (data.get("RevenueStatusIDText") or "").strip().lower()
+
+        if revenue_status_id == 4 or revenue_status_text == "từ chối ghi":
+            self.ensure_one()
+            _logger.info("🚫 SO %s: MISA 'Từ chối ghi' → force-cancel", self.name)
+            try:
+                # 1) Hủy các picking còn mở
+                for p in (self.picking_ids or []):
+                    st = p.state
+                    if st in ('waiting', 'confirmed', 'assigned'):
+                        try:
+                            p.sudo().action_cancel()
+                        except Exception as pe:
+                            _logger.warning("Không thể cancel picking %s: %s", p.name, pe)
+                    elif st == 'draft':
+                        try:
+                            p.sudo().unlink()
+                        except Exception as pe:
+                            _logger.warning("Không thể xóa picking draft %s: %s", p.name, pe)
+
+                # 2) Hủy invoice chưa ghi sổ; nếu đã posted → chặn
+                for inv in (self.invoice_ids or []):
+                    st = getattr(inv, 'state', None)
+                    if st in ('draft', 'cancel'):
+                        try:
+                            if hasattr(inv, 'button_cancel'):
+                                inv.sudo().button_cancel()
+                            elif hasattr(inv, 'action_cancel'):
+                                inv.sudo().action_cancel()
+                        except Exception as ie:
+                            _logger.warning("Không thể hủy invoice %s: %s", getattr(inv, 'name', 'n/a'), ie)
+                    elif st == 'posted':
+                        raise UserError(_("Đơn có hóa đơn đã ghi sổ (%s). Hãy hủy/bỏ ghi sổ trước khi hủy đơn.") % inv.name)
+
+                # 3) Hủy SO. Nếu action_cancel() lỗi → fallback hủy dòng rồi set state=cancel
+                if self.state not in ('cancel', 'done'):
+                    try:
+                        self.sudo().action_cancel()
+                    except Exception as e1:
+                        _logger.warning("action_cancel thất bại: %s → fallback _action_cancel + write(cancel)", e1)
+                        if hasattr(self.order_line, '_action_cancel'):
+                            self.order_line.sudo()._action_cancel()
+                        self.sudo().write({'state': 'cancel'})
+
+                # 4) Kiểm tra lại trạng thái bằng cách browse mới
+                state_now = self.sudo().browse(self.id).state
+                if state_now != 'cancel':
+                    # Thêm một lần fallback an toàn nữa
+                    if hasattr(self.order_line, '_action_cancel'):
+                        self.order_line.sudo()._action_cancel()
+                    self.sudo().write({'state': 'cancel'})
+                    state_now = self.sudo().browse(self.id).state
+
+                if state_now == 'cancel':
+                    self.message_post(body=_("Phiếu bị hủy khi đồng bộ do trạng thái MISA: Từ chối ghi"))
+                    return {
+                        'type': 'ir.actions.client',
+                        'tag': 'display_notification',
+                        'params': {
+                            'title': _("Phiếu đã bị hủy"),
+                            'message': _("Trạng thái MISA: Từ chối ghi"),
+                            'type': 'warning'
+                        }
+                    }
+                else:
+                    raise UserError(_("Không thể đưa phiếu về trạng thái hủy. Kiểm tra picking/invoice ràng buộc."))
+
+            except Exception as e:
+                raise UserError(_("Không thể hủy phiếu khi đồng bộ: %s") % e)
+
         # 2) Chặn các trường hợp không an toàn
         if any(p.state == 'done' for p in self.picking_ids):
             # raise UserError(_("Không thể xoá & tạo lại vì có phiếu giao đã 'done'."))
