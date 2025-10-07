@@ -83,7 +83,7 @@ class PickingExportWizard(models.TransientModel):
         return [
             # === NHÓM 1: Thông tin phiếu (8 cột) ===
             {'key': 'picking_type', 'name': 'Loại lệnh (*)', 'width': 20, 'group': 'picking'},
-            {'key': 'picking_name', 'name': 'Số lệnh xuất kho (*)', 'width': 18, 'group': 'picking'},
+            {'key': 'picking_name', 'name': 'Số lệnh xuất kho (*)', 'width': 25, 'group': 'picking'},
             {'key': 'scheduled_date', 'name': 'Ngày lập lệnh (*)', 'width': 15, 'group': 'picking'},
             {'key': 'date_deadline', 'name': 'Hạn xuất kho', 'width': 15, 'group': 'picking'},
             {'key': 'warehouse', 'name': 'Kho xuất (*)', 'width': 20, 'group': 'picking'},
@@ -110,7 +110,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'qty_done_main', 'name': 'SL thực xuất theo ĐVT chính', 'width': 20, 'group': 'product'},
             {'key': 'lot_name', 'name': 'Số lô', 'width': 15, 'group': 'product'},
             {'key': 'lot_expiry', 'name': 'Hạn sử dụng', 'width': 15, 'group': 'product'},
-            {'key': 'origin', 'name': 'Đơn đặt hàng', 'width': 18, 'group': 'product'},
+            {'key': 'origin', 'name': 'Đơn đặt hàng', 'width': 25, 'group': 'product'},
             {'key': 'custom_1', 'name': 'Trường mở rộng chi tiết 1', 'width': 15, 'group': 'product'},
             {'key': 'custom_2', 'name': 'Trường mở rộng chi tiết 2', 'width': 15, 'group': 'product'},
             {'key': 'custom_3', 'name': 'Trường mở rộng chi tiết 3', 'width': 15, 'group': 'product'},
