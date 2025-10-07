@@ -18,7 +18,6 @@ def _to_date_str(val):
     if not val:
         return ""
     if isinstance(val, str):
-        # Trường hợp Odoo trả dạng chuỗi ISO
         try:
             d = fields.Datetime.from_string(val)
             if d:
@@ -45,14 +44,12 @@ class PickingExportWizard(models.TransientModel):
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
 
-    # PHẠM VI KHO - Mặc định tất cả, có thể chọn nhiều kho
     warehouse_ids = fields.Many2many(
         "stock.warehouse",
         string="Kho xuất",
         help="Để trống = Tất cả kho. Chọn 1 hoặc nhiều kho để lọc cụ thể.",
     )
 
-    # Chỉ giữ state filter
     state_filter = fields.Selection(
         [
             ("all", "Tất cả"),
@@ -65,54 +62,53 @@ class PickingExportWizard(models.TransientModel):
         default="all",
     )
 
-    # ====== Định nghĩa cấu trúc cột ======
+    # ====== Định nghĩa cấu trúc cột ĐÚNG THỨ TỰ ======
     def _get_columns_definition(self):
         """
-        Định nghĩa các cột xuất Excel.
-        Trả về list of dict: {'key': 'internal_key', 'name': 'Tên hiển thị', 'width': 15}
+        Định nghĩa các cột xuất Excel theo đúng thứ tự yêu cầu.
+        group: 'picking' hoặc 'product' để phân màu
         """
         return [
-            # Thông tin phiếu
-            {'key': 'picking_type', 'name': 'Loại lệnh (*)', 'width': 20},
-            {'key': 'picking_name', 'name': 'Số lệnh xuất kho (*)', 'width': 18},
-            {'key': 'scheduled_date', 'name': 'Ngày lập lệnh (*)', 'width': 15},
-            {'key': 'date_deadline', 'name': 'Hạn xuất kho', 'width': 15},
-            {'key': 'warehouse', 'name': 'Kho xuất (*)', 'width': 20},
-            {'key': 'partner_code', 'name': 'Mã đối tượng', 'width': 15},
-            {'key': 'partner_name', 'name': 'Tên đối tượng nhận hàng', 'width': 30},
-            {'key': 'note', 'name': 'Diễn giải', 'width': 30},
-            {'key': 'origin', 'name': 'Đơn đặt hàng', 'width': 18},
+            # === NHÓM 1: Thông tin phiếu (8 cột) ===
+            {'key': 'picking_type', 'name': 'Loại lệnh (*)', 'width': 20, 'group': 'picking'},
+            {'key': 'picking_name', 'name': 'Số lệnh xuất kho (*)', 'width': 18, 'group': 'picking'},
+            {'key': 'scheduled_date', 'name': 'Ngày lập lệnh (*)', 'width': 15, 'group': 'picking'},
+            {'key': 'date_deadline', 'name': 'Hạn xuất kho', 'width': 15, 'group': 'picking'},
+            {'key': 'warehouse', 'name': 'Kho xuất (*)', 'width': 20, 'group': 'picking'},
+            {'key': 'partner_code', 'name': 'Mã đối tượng', 'width': 15, 'group': 'picking'},
+            {'key': 'partner_name', 'name': 'Tên đối tượng nhận hàng', 'width': 30, 'group': 'picking'},
+            {'key': 'note', 'name': 'Diễn giải', 'width': 30, 'group': 'picking'},
             
-            # Thông tin sản phẩm
-            {'key': 'product_code', 'name': 'Mã hàng (*)', 'width': 18},
-            {'key': 'product_name', 'name': 'Tên hàng', 'width': 35},
-            {'key': 'product_description', 'name': 'Mô tả sản phẩm', 'width': 30},
-            {'key': 'uom', 'name': 'Đơn vị tính', 'width': 12},
-            {'key': 'uom_ratio', 'name': 'Tỷ lệ chuyển đổi', 'width': 15},
-            {'key': 'location', 'name': 'Vị trí', 'width': 25},
-            
-            # Số lượng
-            {'key': 'qty_requested', 'name': 'SL yêu cầu', 'width': 12},
-            {'key': 'qty_requested_main', 'name': 'SL yêu cầu theo ĐVT chính', 'width': 20},
-            {'key': 'qty_done', 'name': 'SL thực xuất', 'width': 12},
-            {'key': 'qty_done_main', 'name': 'SL thực xuất theo ĐVT chính', 'width': 20},
-            
-            # Lô & HSD
-            {'key': 'lot_name', 'name': 'Số lô', 'width': 15},
-            {'key': 'lot_expiry', 'name': 'Hạn sử dụng', 'width': 15},
-            
-            # Kích thước (để dành)
-            {'key': 'length', 'name': 'Chiều dài', 'width': 12},
-            {'key': 'width', 'name': 'Chiều rộng', 'width': 12},
-            {'key': 'height', 'name': 'Chiều cao', 'width': 12},
-            {'key': 'radius', 'name': 'Bán kính', 'width': 12},
-            
-            # Trường mở rộng
-            {'key': 'custom_1', 'name': 'Trường mở rộng 1', 'width': 15},
-            {'key': 'custom_2', 'name': 'Trường mở rộng 2', 'width': 15},
-            {'key': 'custom_3', 'name': 'Trường mở rộng 3', 'width': 15},
-            {'key': 'custom_4', 'name': 'Trường mở rộng 4', 'width': 15},
-            {'key': 'custom_5', 'name': 'Trường mở rộng 5', 'width': 15},
+            # === NHÓM 2: Thông tin hàng hóa (29 cột) ===
+            {'key': 'product_code', 'name': 'Mã hàng (*)', 'width': 18, 'group': 'product'},
+            {'key': 'product_name', 'name': 'Tên hàng', 'width': 35, 'group': 'product'},
+            {'key': 'product_description', 'name': 'Mô tả sản phẩm', 'width': 30, 'group': 'product'},
+            {'key': 'product_spec', 'name': 'Mã quy cách', 'width': 15, 'group': 'product'},
+            {'key': 'uom', 'name': 'Đơn vị tính', 'width': 12, 'group': 'product'},
+            {'key': 'uom_ratio', 'name': 'Tỷ lệ chuyển đổi', 'width': 15, 'group': 'product'},
+            {'key': 'location', 'name': 'Vị trí', 'width': 25, 'group': 'product'},
+            {'key': 'length', 'name': 'Chiều dài', 'width': 12, 'group': 'product'},
+            {'key': 'width', 'name': 'Chiều rộng', 'width': 12, 'group': 'product'},
+            {'key': 'height', 'name': 'Chiều cao', 'width': 12, 'group': 'product'},
+            {'key': 'radius', 'name': 'Bán kính', 'width': 12, 'group': 'product'},
+            {'key': 'quantity', 'name': 'Lượng', 'width': 12, 'group': 'product'},
+            {'key': 'qty_requested', 'name': 'SL yêu cầu', 'width': 12, 'group': 'product'},
+            {'key': 'qty_requested_main', 'name': 'SL yêu cầu theo ĐVT chính', 'width': 20, 'group': 'product'},
+            {'key': 'qty_done', 'name': 'SL thực xuất', 'width': 12, 'group': 'product'},
+            {'key': 'qty_done_main', 'name': 'SL thực xuất theo ĐVT chính', 'width': 20, 'group': 'product'},
+            {'key': 'lot_name', 'name': 'Số lô', 'width': 15, 'group': 'product'},
+            {'key': 'lot_expiry', 'name': 'Hạn sử dụng', 'width': 15, 'group': 'product'},
+            {'key': 'origin', 'name': 'Đơn đặt hàng', 'width': 18, 'group': 'product'},
+            {'key': 'custom_1', 'name': 'Trường mở rộng chi tiết 1', 'width': 15, 'group': 'product'},
+            {'key': 'custom_2', 'name': 'Trường mở rộng chi tiết 2', 'width': 15, 'group': 'product'},
+            {'key': 'custom_3', 'name': 'Trường mở rộng chi tiết 3', 'width': 15, 'group': 'product'},
+            {'key': 'custom_4', 'name': 'Trường mở rộng chi tiết 4', 'width': 15, 'group': 'product'},
+            {'key': 'custom_5', 'name': 'Trường mở rộng chi tiết 5', 'width': 15, 'group': 'product'},
+            {'key': 'custom_6', 'name': 'Trường mở rộng chi tiết 6', 'width': 15, 'group': 'product'},
+            {'key': 'custom_7', 'name': 'Trường mở rộng chi tiết 7', 'width': 15, 'group': 'product'},
+            {'key': 'custom_8', 'name': 'Trường mở rộng chi tiết 8', 'width': 15, 'group': 'product'},
+            {'key': 'custom_9', 'name': 'Trường mở rộng chi tiết 9', 'width': 15, 'group': 'product'},
+            {'key': 'custom_10', 'name': 'Trường mở rộng chi tiết 10', 'width': 15, 'group': 'product'},
         ]
 
     # ====== Helpers ======
@@ -124,29 +120,23 @@ class PickingExportWizard(models.TransientModel):
         domain = [
             ("scheduled_date", ">=", fields.Date.to_date(self.date_from)),
             ("scheduled_date", "<=", fields.Date.to_date(self.date_to)),
-            ("picking_type_id.code", "=", "outgoing"),  # Cố định outgoing
+            ("picking_type_id.code", "=", "outgoing"),
         ]
 
-        # Lọc theo kho (nếu có chọn kho cụ thể)
         if self.warehouse_ids:
             domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
 
-        # Lọc trạng thái (nếu khác 'all')
         if self.state_filter and self.state_filter != "all":
             domain.append(("state", "=", self.state_filter))
 
         return domain
 
     def _partner_code(self, partner):
-        """Lấy mã đối tác theo thứ tự ưu tiên"""
         if not partner:
             return ""
         return partner.ref or (partner.barcode if hasattr(partner, "barcode") else None) or partner.vat or str(partner.id) or ""
 
     def _uom_ratio(self, from_uom, to_uom):
-        """
-        Trả về tỷ lệ chuyển đổi từ from_uom sang to_uom
-        """
         if not from_uom or not to_uom:
             return None
         if from_uom.id == to_uom.id:
@@ -157,39 +147,28 @@ class PickingExportWizard(models.TransientModel):
             return 1.0
 
     def _get_move_qty_done(self, move):
-        """
-        Lấy số lượng đã xuất của move.
-        """
         if hasattr(move, 'qty_done'):
             return move.qty_done or 0.0
-        # Fallback: tính tổng từ move lines
         return sum(ml.qty_done for ml in move.move_line_ids) or 0.0
 
     def _get_warehouse_name(self, picking):
-        """Lấy tên kho từ picking"""
         pt = picking.picking_type_id
         if pt and pt.warehouse_id:
             return pt.warehouse_id.name
-        # Fallback: thử lấy từ location
         if hasattr(picking.location_id, 'warehouse_id') and picking.location_id.warehouse_id:
             return picking.location_id.warehouse_id.name
         return ""
 
     def _get_move_line_rows(self, picking):
-        """
-        Trả về danh sách dict mỗi dòng xuất (ưu tiên stock.move.line; nếu không có, fallback stock.move).
-        """
         rows = []
         pt = picking.picking_type_id
         warehouse_name = self._get_warehouse_name(picking)
 
-        # Duyệt move line để bắt được lô/ hạn dùng & vị trí thực tế
         if picking.move_line_ids:
             for ml in picking.move_line_ids:
                 move = ml.move_id
                 prod = ml.product_id
                 
-                # Kiểm tra product có tồn tại không
                 if not prod:
                     continue
                     
@@ -201,11 +180,9 @@ class PickingExportWizard(models.TransientModel):
                 uom_main = prod.uom_id
                 ratio = self._uom_ratio(uom_line, uom_main)
 
-                # SL yêu cầu
                 qty_req = move.product_uom_qty or 0.0
                 qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
 
-                # SL thực xuất
                 qty_done = ml.qty_done or 0.0
                 qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
 
@@ -222,7 +199,6 @@ class PickingExportWizard(models.TransientModel):
                                 (ml.location_id and ml.location_id.display_name) or ""
 
                 rows.append({
-                    # Thông tin phiếu
                     'picking_type': pt.name or "",
                     'picking_name': picking.display_name or picking.name or "",
                     'scheduled_date': _to_date_str(picking.scheduled_date),
@@ -231,41 +207,37 @@ class PickingExportWizard(models.TransientModel):
                     'partner_code': self._partner_code(picking.partner_id),
                     'partner_name': (picking.partner_id and picking.partner_id.name) or "",
                     'note': picking.note or "",
-                    'origin': picking.origin or "",
-                    
-                    # Thông tin sản phẩm
                     'product_code': product_code,
                     'product_name': product_name,
                     'product_description': (prod.description_sale or prod.description_picking or prod.description) or "",
+                    'product_spec': getattr(prod, "default_code", "") or "",
                     'uom': uom_name,
                     'uom_ratio': ratio,
                     'location': location_name,
-                    
-                    # Số lượng
+                    'length': "",
+                    'width': "",
+                    'height': "",
+                    'radius': "",
+                    'quantity': "",
                     'qty_requested': qty_req,
                     'qty_requested_main': qty_req_main,
                     'qty_done': qty_done,
                     'qty_done_main': qty_done_main,
-                    
-                    # Lô & HSD
                     'lot_name': lot_name,
                     'lot_expiry': lot_expiry,
-                    
-                    # Kích thước
-                    'length': None,
-                    'width': None,
-                    'height': None,
-                    'radius': None,
-                    
-                    # Trường mở rộng
+                    'origin': picking.origin or "",
                     'custom_1': "",
                     'custom_2': "",
                     'custom_3': "",
                     'custom_4': "",
                     'custom_5': "",
+                    'custom_6': "",
+                    'custom_7': "",
+                    'custom_8': "",
+                    'custom_9': "",
+                    'custom_10': "",
                 })
         else:
-            # Fallback: không có move line, dùng move
             for mv in picking.move_ids_without_package:
                 prod = mv.product_id
                 
@@ -295,50 +267,58 @@ class PickingExportWizard(models.TransientModel):
                     'partner_code': self._partner_code(picking.partner_id),
                     'partner_name': (picking.partner_id and picking.partner_id.name) or "",
                     'note': picking.note or "",
-                    'origin': picking.origin or "",
-                    
                     'product_code': product_code,
                     'product_name': product_name,
                     'product_description': (prod.description_sale or prod.description_picking or prod.description) or "",
+                    'product_spec': getattr(prod, "default_code", "") or "",
                     'uom': uom_name,
                     'uom_ratio': ratio,
                     'location': (mv.location_id and mv.location_id.complete_name) or "",
-                    
+                    'length': "",
+                    'width': "",
+                    'height': "",
+                    'radius': "",
+                    'quantity': "",
                     'qty_requested': qty_req,
                     'qty_requested_main': qty_req_main,
                     'qty_done': qty_done,
                     'qty_done_main': qty_done_main,
-                    
                     'lot_name': "",
                     'lot_expiry': "",
-                    
-                    'length': None,
-                    'width': None,
-                    'height': None,
-                    'radius': None,
-                    
+                    'origin': picking.origin or "",
                     'custom_1': "",
                     'custom_2': "",
                     'custom_3': "",
                     'custom_4': "",
                     'custom_5': "",
+                    'custom_6': "",
+                    'custom_7': "",
+                    'custom_8': "",
+                    'custom_9': "",
+                    'custom_10': "",
                 })
         return rows
 
     def _create_excel_workbook(self, data_rows):
-        """
-        Tạo workbook Excel từ data_rows
-        """
+        """Tạo workbook Excel với 2 header rows"""
         wb = Workbook()
         ws = wb.active
         ws.title = "Lệnh xuất kho"
         
         columns = self._get_columns_definition()
         
-        # Định nghĩa style
-        header_font = Font(name='Arial', size=11, bold=True, color='FFFFFF')
-        header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
-        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        # Định nghĩa styles
+        # Header row 1 (group headers)
+        header1_font = Font(name='Arial', size=12, bold=True, color='FFFFFF')
+        header1_fill_picking = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')  # Xanh dương
+        header1_fill_product = PatternFill(start_color='70AD47', end_color='70AD47', fill_type='solid')  # Xanh lá
+        header1_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        
+        # Header row 2 (column names)
+        header2_font = Font(name='Arial', size=10, bold=True, color='000000')
+        header2_fill_picking = PatternFill(start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')  # Xanh nhạt
+        header2_fill_product = PatternFill(start_color='E2EFD9', end_color='E2EFD9', fill_type='solid')  # Xanh lá nhạt
+        header2_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         
         border_side = Side(style='thin', color='000000')
         border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
@@ -346,42 +326,78 @@ class PickingExportWizard(models.TransientModel):
         cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
         number_alignment = Alignment(horizontal='right', vertical='center')
         
-        # Ghi header
+        # === HEADER ROW 1: Group headers ===
+        # Tìm cột bắt đầu và kết thúc của mỗi group
+        picking_start = 1
+        picking_end = sum(1 for c in columns if c['group'] == 'picking')
+        product_start = picking_end + 1
+        product_end = len(columns)
+        
+        # Merge cells cho "Thông tin phiếu"
+        ws.merge_cells(start_row=1, start_column=picking_start, end_row=1, end_column=picking_end)
+        cell = ws.cell(row=1, column=picking_start)
+        cell.value = "THÔNG TIN PHIẾU"
+        cell.font = header1_font
+        cell.fill = header1_fill_picking
+        cell.alignment = header1_alignment
+        cell.border = border
+        
+        # Merge cells cho "Thông tin hàng hóa"
+        ws.merge_cells(start_row=1, start_column=product_start, end_row=1, end_column=product_end)
+        cell = ws.cell(row=1, column=product_start)
+        cell.value = "THÔNG TIN HÀNG HÓA"
+        cell.font = header1_font
+        cell.fill = header1_fill_product
+        cell.alignment = header1_alignment
+        cell.border = border
+        
+        # === HEADER ROW 2: Column names ===
         for col_idx, col_def in enumerate(columns, start=1):
-            cell = ws.cell(row=1, column=col_idx)
+            cell = ws.cell(row=2, column=col_idx)
             cell.value = col_def['name']
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = header_alignment
+            cell.font = header2_font
+            
+            # Màu theo group
+            if col_def['group'] == 'picking':
+                cell.fill = header2_fill_picking
+            else:
+                cell.fill = header2_fill_product
+                
+            cell.alignment = header2_alignment
             cell.border = border
             
             # Set column width
             ws.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
         
-        # Freeze header row
-        ws.freeze_panes = 'A2'
+        # Freeze panes (freeze 2 header rows và cột đầu tiên)
+        ws.freeze_panes = 'B3'
         
-        # Ghi data
-        for row_idx, row_data in enumerate(data_rows, start=2):
+        # === DATA ROWS ===
+        for row_idx, row_data in enumerate(data_rows, start=3):
             for col_idx, col_def in enumerate(columns, start=1):
                 cell = ws.cell(row=row_idx, column=col_idx)
                 value = row_data.get(col_def['key'], "")
                 
-                # Xử lý giá trị None
+                # Xử lý None và kiểu dữ liệu
                 if value is None:
                     value = ""
                 
                 cell.value = value
                 cell.border = border
                 
-                # Alignment theo kiểu dữ liệu
+                # Alignment
                 if isinstance(value, (int, float)) and value != "":
                     cell.alignment = number_alignment
+                    # Format number với 2 decimal cho ratio và quantities
+                    if col_def['key'] in ['uom_ratio', 'qty_requested', 'qty_requested_main', 'qty_done', 'qty_done_main']:
+                        if value and value != "":
+                            cell.number_format = '#,##0.00'
                 else:
                     cell.alignment = cell_alignment
         
-        # Set row height cho header
-        ws.row_dimensions[1].height = 30
+        # Set row heights
+        ws.row_dimensions[1].height = 25
+        ws.row_dimensions[2].height = 35
         
         return wb
 
