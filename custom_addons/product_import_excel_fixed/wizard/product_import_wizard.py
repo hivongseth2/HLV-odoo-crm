@@ -88,11 +88,24 @@ class ProductImportWizard(models.TransientModel):
             ['Giá thương mại'],
             default=0.0
         )
-
+        web_price = self._first_non_empty(
+            row,
+            ['Gía web', 'Giá web', 'Giá bán lẻ Web - khách lẻ'],
+            default=0.0
+        )
+        
+        price_store = self._first_non_empty(
+            row,
+            ['giá hãng niêm yết', 'Giá list hãng dành cho tham khảo'],
+            default=0.0
+        )
+            
         return {
             'standard_price': self._safe_float(cost_raw),
             'list_price': self._safe_float(price_raw),
             'x_studio_gi_bn_thng_mi': self._safe_float(trade_raw),
+            'x_studio_ga_web':self._safe_float(web_price),
+            'x_studio_ga_hng_nim_yt':self._safe_float(price_store)
         }
 
 
@@ -191,7 +204,10 @@ class ProductImportWizard(models.TransientModel):
             cost_price = price_dict['standard_price']
             price1 = price_dict['list_price']
             trade_price = price_dict['x_studio_gi_bn_thng_mi']
-
+            price_store = price_dict['x_studio_ga_hng_nim_yt']
+            web_price = price_dict['x_studio_ga_web']
+            
+    
             # ===== UOM từ cột DVT =====
             dvt_text = row.get('DVT')
             uom = self._find_uom_in_unit_category(dvt_text)  # đảm bảo thuộc Unit; fallback 'Cái'
@@ -208,7 +224,18 @@ class ProductImportWizard(models.TransientModel):
                 "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
                 "is_storable": True,
             }
+            
+            
+      
+
             values["x_studio_gi_bn_thng_mi"] = self._safe_float(trade_price)
+            
+            values["x_studio_ga_web"] = self._safe_float(web_price)
+            values["x_studio_ga_hng_nim_yt"] = self._safe_float(price_store)
+            
+ 
+
+            
             if uom:
                 # set cả uom_id & uom_po_id
                 values["uom_id"] = uom.id
@@ -275,6 +302,15 @@ class ProductImportWizard(models.TransientModel):
                 write_vals['x_studio_gi_bn_thng_mi'] = values['x_studio_gi_bn_thng_mi']
             if values.get('taxes_id'):
                 write_vals['taxes_id'] = values['taxes_id']
+                
+            if 'x_studio_ga_web' in values:
+                write_vals['x_studio_ga_web'] = values['x_studio_ga_web']   
+                
+            if 'x_studio_ga_hng_nim_yt' in values:
+                write_vals['x_studio_ga_hng_nim_yt'] = values['x_studio_ga_hng_nim_yt']   
+    
+                
+                
 
             if values.get('x_origin'):
                 write_vals['x_origin'] = values['x_origin']
