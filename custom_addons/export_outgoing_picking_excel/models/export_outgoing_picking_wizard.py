@@ -61,6 +61,18 @@ class PickingExportWizard(models.TransientModel):
         string="Trạng thái",
         default="all",
     )
+    def _find_sale_order(self, move, picking):
+        # 1) Từ sale_line_id trực tiếp
+        if getattr(move, 'sale_line_id', False) and move.sale_line_id.order_id:
+            return move.sale_line_id.order_id
+        # 2) Từ procurement group (nhiều trường hợp split/backorder vẫn còn link)
+        grp = getattr(move, 'group_id', False)
+        if grp and getattr(grp, 'sale_id', False):
+            return grp.sale_id
+        # 3) Từ picking (ít gặp nhưng để dự phòng)
+        if getattr(picking, 'sale_id', False):
+            return picking.sale_id
+        return False
 
     # ====== Định nghĩa cấu trúc cột ĐÚNG THỨ TỰ ======
     def _get_columns_definition(self):
@@ -76,7 +88,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'date_deadline', 'name': 'Hạn xuất kho', 'width': 15, 'group': 'picking'},
             {'key': 'warehouse', 'name': 'Kho xuất (*)', 'width': 20, 'group': 'picking'},
             {'key': 'partner_code', 'name': 'Mã đối tượng', 'width': 15, 'group': 'picking'},
-            {'key': 'partner_name', 'name': 'Tên đối tượng nhận hàng', 'width': 30, 'group': 'picking'},
+            {'key': 'partner_name', 'name': 'Tên đối tượng nhận hàng', 'width': 80, 'group': 'picking'},
             {'key': 'note', 'name': 'Diễn giải', 'width': 30, 'group': 'picking'},
 
             # === NHÓM 2: Thông tin hàng hóa (29 cột) ===
@@ -239,6 +251,9 @@ class PickingExportWizard(models.TransientModel):
 
                 location_name = (ml.location_id and ml.location_id.complete_name) or \
                                 (ml.location_id and ml.location_id.display_name) or ""
+                so = self._find_sale_order(move, picking)
+                so_name = so.name if so else (picking.origin or "")
+                note_val = (so and so.origin) or (picking.note or "")
 
                 rows.append({
                     'picking_type': pt.name or "",
@@ -248,7 +263,7 @@ class PickingExportWizard(models.TransientModel):
                     'warehouse': warehouse_name,
                     'partner_code': self._partner_code(picking.partner_id),
                     'partner_name': (picking.partner_id and picking.partner_id.name) or "",
-                    'note': picking.note or "",
+                    'note': note_val,
                     'product_code': product_code,
                     'product_name': product_name,
                     'product_description': (prod.description_sale or prod.description_picking or prod.description) or "",
@@ -313,6 +328,9 @@ class PickingExportWizard(models.TransientModel):
                 else:
                     qty_done = self._get_move_qty_done(mv)
                     qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
+                so = self._find_sale_order(mv, picking)
+                so_name = so.name if so else (picking.origin or "")
+                note_val = (so and so.origin) or (picking.note or "")
 
                 rows.append({
                     'picking_type': pt.name or "",
@@ -322,7 +340,7 @@ class PickingExportWizard(models.TransientModel):
                     'warehouse': warehouse_name,
                     'partner_code': self._partner_code(picking.partner_id),
                     'partner_name': (picking.partner_id and picking.partner_id.name) or "",
-                    'note': picking.note or "",
+                    'note': note_val,
                     'product_code': product_code,
                     'product_name': product_name,
                     'product_description': (prod.description_sale or prod.description_picking or prod.description) or "",
