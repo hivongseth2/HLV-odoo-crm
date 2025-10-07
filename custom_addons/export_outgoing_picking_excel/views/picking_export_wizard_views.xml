@@ -11,7 +11,6 @@
             <field name="date_to"/>
           </group>
           <group>
-            <!-- Phạm vi kho -->
             <field name="warehouse_scope"/>
             <field name="warehouse_ids"
                    domain="[('company_id','in', allowed_company_ids)]"

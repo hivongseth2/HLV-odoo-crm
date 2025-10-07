@@ -1,30 +1,23 @@
 <odoo>
-    <!-- (Tuỳ chọn) bỏ hẳn nút ở header form nếu không cần -->
-    <!--<record id="stock_picking_form_inherit_export_excel" model="ir.ui.view">
-      <field name="name">stock.picking.form.inherit.export.excel</field>
-      <field name="model">stock.picking</field>
-      <field name="inherit_id" ref="stock.view_picking_form"/>
-      <field name="arch" type="xml">
-        <header position="inside">
-          <button name="%(action_picking_export_wizard)d"
-                  string="Xuất Excel lệnh xuất kho"
-                  type="action"
-                  class="oe_highlight"/>
-        </header>
-      </field>
-    </record>-->
-  
-    <!-- (Giữ) Server Action: sẽ xuất hiện trong Action menu khi ở list hoặc form -->
-    <record id="action_server_open_export_wizard" model="ir.actions.server">
-      <field name="name">Xuất Excel lệnh xuất kho</field>
-      <field name="model_id" ref="stock.model_stock_picking"/>
-      <field name="binding_model_id" ref="stock.model_stock_picking"/>
-      <field name="binding_type">action</field>
-      <field name="state">code</field>
-      <field name="code">action = env.ref('export_outgoing_picking_excel.action_picking_export_wizard').read()[0]</field>
+    <!-- ✅ Action mở wizard -->
+    <record id="action_picking_export_wizard" model="ir.actions.act_window">
+      <field name="name">Xuất lệnh xuất kho (Excel)</field>
+      <field name="res_model">picking.export.wizard</field>
+      <field name="view_mode">form</field>
+      <field name="view_id" ref="export_outgoing_picking_excel.view_picking_export_wizard_form"/>
+      <field name="target">new</field>
     </record>
   
-    <!-- ✅ Menu riêng dưới "Báo cáo" (không cần chọn dòng, mở wizard trực tiếp) -->
+    <!-- (Tùy chọn) Server Action nếu bạn muốn bấm từ smart button/code -->
+    <record id="action_server_open_export_wizard" model="ir.actions.server">
+      <field name="name">Mở wizard xuất lệnh xuất kho (Excel)</field>
+      <field name="model_id" ref="stock.model_stock_picking"/>
+      <field name="state">code</field>
+      <!-- Có act_window rồi thì gọi _for_xml_id là gọn nhất -->
+      <field name="code">action = env["ir.actions.act_window"]._for_xml_id("export_outgoing_picking_excel.action_picking_export_wizard")</field>
+    </record>
+  
+    <!-- ✅ Menu mở wizard trực tiếp -->
     <menuitem id="menu_export_excel_root"
               name="Công cụ Excel"
               parent="stock.menu_stock_root"
