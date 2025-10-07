@@ -96,7 +96,7 @@ class ProductImportWizard(models.TransientModel):
         
         price_store = self._first_non_empty(
             row,
-            ['Giá list hãng dành cho tham khảo','Giá hãng niêm yết','giá hãng niêm yết'],
+            ['Giá hãng niêm yết','giá hãng niêm yết'],
             default=0.0
         )
             
@@ -105,7 +105,7 @@ class ProductImportWizard(models.TransientModel):
             'list_price': self._safe_float(price_raw),
             'x_studio_gi_bn_thng_mi': self._safe_float(trade_raw),
             'x_studio_ga_web':self._safe_float(web_price),
-            'x_studio_ga_hng_nim_yt':self._safe_float(price_store)
+            'x_studio_ga_hng_nim_yt':self._safe_float(price_store),
         }
 
 
