@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
-from odoo.modules.module import get_module_resource
 import base64
 
 import datetime
 from io import BytesIO
 
 try:
-    from openpyxl import load_workbook
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
 except ImportError:
-    load_workbook = None
+    Workbook = None
 
 
 def _to_date_str(val):
@@ -39,19 +40,18 @@ def _to_date_str(val):
 
 class PickingExportWizard(models.TransientModel):
     _name = "picking.export.wizard"
-    _description = "Xuất Excel lệnh xuất kho theo khoảng ngày (dùng template, full cột)"
+    _description = "Xuất Excel lệnh xuất kho theo khoảng ngày"
 
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
 
-    # PHẠM VI KHO - Sửa lại để mặc định tất cả, có thể chọn nhiều kho
+    # PHẠM VI KHO - Mặc định tất cả, có thể chọn nhiều kho
     warehouse_ids = fields.Many2many(
         "stock.warehouse",
         string="Kho xuất",
         help="Để trống = Tất cả kho. Chọn 1 hoặc nhiều kho để lọc cụ thể.",
     )
 
-    # Bỏ picking_type_id vì đã cố định là outgoing
     # Chỉ giữ state filter
     state_filter = fields.Selection(
         [
@@ -65,19 +65,57 @@ class PickingExportWizard(models.TransientModel):
         default="all",
     )
 
-    TEMPLATE_NAME = "Lenh_xuat_kho.xlsx"
-    TEMPLATE_REL_PATH = ("static", "template",)
+    # ====== Định nghĩa cấu trúc cột ======
+    def _get_columns_definition(self):
+        """
+        Định nghĩa các cột xuất Excel.
+        Trả về list of dict: {'key': 'internal_key', 'name': 'Tên hiển thị', 'width': 15}
+        """
+        return [
+            # Thông tin phiếu
+            {'key': 'picking_type', 'name': 'Loại lệnh (*)', 'width': 20},
+            {'key': 'picking_name', 'name': 'Số lệnh xuất kho (*)', 'width': 18},
+            {'key': 'scheduled_date', 'name': 'Ngày lập lệnh (*)', 'width': 15},
+            {'key': 'date_deadline', 'name': 'Hạn xuất kho', 'width': 15},
+            {'key': 'warehouse', 'name': 'Kho xuất (*)', 'width': 20},
+            {'key': 'partner_code', 'name': 'Mã đối tượng', 'width': 15},
+            {'key': 'partner_name', 'name': 'Tên đối tượng nhận hàng', 'width': 30},
+            {'key': 'note', 'name': 'Diễn giải', 'width': 30},
+            {'key': 'origin', 'name': 'Đơn đặt hàng', 'width': 18},
+            
+            # Thông tin sản phẩm
+            {'key': 'product_code', 'name': 'Mã hàng (*)', 'width': 18},
+            {'key': 'product_name', 'name': 'Tên hàng', 'width': 35},
+            {'key': 'product_description', 'name': 'Mô tả sản phẩm', 'width': 30},
+            {'key': 'uom', 'name': 'Đơn vị tính', 'width': 12},
+            {'key': 'uom_ratio', 'name': 'Tỷ lệ chuyển đổi', 'width': 15},
+            {'key': 'location', 'name': 'Vị trí', 'width': 25},
+            
+            # Số lượng
+            {'key': 'qty_requested', 'name': 'SL yêu cầu', 'width': 12},
+            {'key': 'qty_requested_main', 'name': 'SL yêu cầu theo ĐVT chính', 'width': 20},
+            {'key': 'qty_done', 'name': 'SL thực xuất', 'width': 12},
+            {'key': 'qty_done_main', 'name': 'SL thực xuất theo ĐVT chính', 'width': 20},
+            
+            # Lô & HSD
+            {'key': 'lot_name', 'name': 'Số lô', 'width': 15},
+            {'key': 'lot_expiry', 'name': 'Hạn sử dụng', 'width': 15},
+            
+            # Kích thước (để dành)
+            {'key': 'length', 'name': 'Chiều dài', 'width': 12},
+            {'key': 'width', 'name': 'Chiều rộng', 'width': 12},
+            {'key': 'height', 'name': 'Chiều cao', 'width': 12},
+            {'key': 'radius', 'name': 'Bán kính', 'width': 12},
+            
+            # Trường mở rộng
+            {'key': 'custom_1', 'name': 'Trường mở rộng 1', 'width': 15},
+            {'key': 'custom_2', 'name': 'Trường mở rộng 2', 'width': 15},
+            {'key': 'custom_3', 'name': 'Trường mở rộng 3', 'width': 15},
+            {'key': 'custom_4', 'name': 'Trường mở rộng 4', 'width': 15},
+            {'key': 'custom_5', 'name': 'Trường mở rộng 5', 'width': 15},
+        ]
 
     # ====== Helpers ======
-    def _get_template_path(self):
-        path = get_module_resource(
-            "export_outgoing_picking_excel",
-            *(self.TEMPLATE_REL_PATH + (self.TEMPLATE_NAME,))
-        )
-        if not path:
-            raise UserError(_("Không tìm thấy file template Excel trong module."))
-        return path
-
     def _domain(self):
         self.ensure_one()
         if self.date_from > self.date_to:
@@ -99,18 +137,6 @@ class PickingExportWizard(models.TransientModel):
 
         return domain
 
-    def _find_header_row(self, ws, scan_rows=100):
-        """Tìm hàng header: hàng có nhiều ô text nhất trong 1..scan_rows."""
-        best_row, best_count = None, 0
-        for r in range(1, min(ws.max_row, scan_rows) + 1):
-            values = [ws.cell(row=r, column=c).value for c in range(1, ws.max_column + 1)]
-            count = sum(1 for v in values if isinstance(v, str) and v.strip())
-            if count > best_count:
-                best_row, best_count = r, count
-        if not best_row:
-            raise UserError(_("Không xác định được dòng tiêu đề trong template."))
-        return best_row
-
     def _partner_code(self, partner):
         """Lấy mã đối tác theo thứ tự ưu tiên"""
         if not partner:
@@ -119,8 +145,7 @@ class PickingExportWizard(models.TransientModel):
 
     def _uom_ratio(self, from_uom, to_uom):
         """
-        Trả về (qty_in_to = 1 from_uom quy đổi sang to_uom), dùng _compute_quantity để an toàn.
-        Nếu cùng UoM => 1.0
+        Trả về tỷ lệ chuyển đổi từ from_uom sang to_uom
         """
         if not from_uom or not to_uom:
             return None
@@ -134,8 +159,6 @@ class PickingExportWizard(models.TransientModel):
     def _get_move_qty_done(self, move):
         """
         Lấy số lượng đã xuất của move.
-        Trong Odoo 18, stock.move không có quantity_done trực tiếp.
-        Cần tính tổng từ move_line_ids hoặc dùng qty_done
         """
         if hasattr(move, 'qty_done'):
             return move.qty_done or 0.0
@@ -155,7 +178,6 @@ class PickingExportWizard(models.TransientModel):
     def _get_move_line_rows(self, picking):
         """
         Trả về danh sách dict mỗi dòng xuất (ưu tiên stock.move.line; nếu không có, fallback stock.move).
-        Mục tiêu: lấp đầy tối đa các cột chi tiết (ĐVT, SL yêu cầu, SL thực xuất, Lô, HSD, Vị trí...)
         """
         rows = []
         pt = picking.picking_type_id
@@ -179,11 +201,11 @@ class PickingExportWizard(models.TransientModel):
                 uom_main = prod.uom_id
                 ratio = self._uom_ratio(uom_line, uom_main)
 
-                # SL yêu cầu: ưu tiên từ move (độc lập với qty_done)
+                # SL yêu cầu
                 qty_req = move.product_uom_qty or 0.0
                 qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
 
-                # SL thực xuất: từ move line
+                # SL thực xuất
                 qty_done = ml.qty_done or 0.0
                 qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
 
@@ -191,7 +213,6 @@ class PickingExportWizard(models.TransientModel):
                 lot_expiry = ""
                 if ml.lot_id:
                     lot_name = ml.lot_id.name or ""
-                    # life_date / use_date / expiration_date tuỳ cấu hình lô
                     life_date = getattr(ml.lot_id, "life_date", None) or \
                                 getattr(ml.lot_id, "expiration_date", None) or \
                                 getattr(ml.lot_id, "use_date", None)
@@ -201,55 +222,53 @@ class PickingExportWizard(models.TransientModel):
                                 (ml.location_id and ml.location_id.display_name) or ""
 
                 rows.append({
-                    # Header-level (phiếu)
-                    "Loại lệnh (*)": pt.name or "",
-                    "Số lệnh xuất kho (*)": picking.display_name or picking.name or "",
-                    "Ngày lập lệnh (*)": _to_date_str(picking.scheduled_date),
-                    "Hạn xuất kho": _to_date_str(picking.date_deadline),
-                    "Kho xuất (*)": warehouse_name,
-                    "Mã đối tượng": self._partner_code(picking.partner_id),
-                    "Tên đối tượng nhận hàng": (picking.partner_id and picking.partner_id.name) or "",
-                    "Diễn giải": picking.note or "",
-                    "Đơn đặt hàng": picking.origin or "",
-
-                    # Sản phẩm/chi tiết
-                    "Mã hàng (*)": product_code,
-                    "Tên hàng": product_name,
-                    "Mô tả sản phẩm": (prod.description_sale or prod.description_picking or prod.description) or "",
-                    "Mã quy cách": getattr(prod, "default_code", "") or "",
-                    "Đơn vị tính": uom_name,
-                    "Tỷ lệ chuyển đổi": ratio,
-                    "Vị trí": location_name,
-                    "Chiều dài": None,
-                    "Chiều rộng": None,
-                    "Chiều cao": None,
-                    "Bán kính": None,
-                    "Lượng": None,
-                    "SL yêu cầu": qty_req,
-                    "SL yêu cầu theo ĐVT chính": qty_req_main,
-                    "SL thực xuất": qty_done,
-                    "SL thực xuất theo ĐVT chính": qty_done_main,
-                    "Số lô": lot_name,
-                    "Hạn sử dụng": lot_expiry,
-
-                    # Trường mở rộng chi tiết 1..10
-                    "Trường mở rộng chi tiết 1": "",
-                    "Trường mở rộng chi tiết 2": "",
-                    "Trường mở rộng chi tiết 3": "",
-                    "Trường mở rộng chi tiết 4": "",
-                    "Trường mở rộng chi tiết 5": "",
-                    "Trường mở rộng chi tiết 6": "",
-                    "Trường mở rộng chi tiết 7": "",
-                    "Trường mở rộng chi tiết 8": "",
-                    "Trường mở rộng chi tiết 9": "",
-                    "Trường mở rộng chi tiết 10": "",
+                    # Thông tin phiếu
+                    'picking_type': pt.name or "",
+                    'picking_name': picking.display_name or picking.name or "",
+                    'scheduled_date': _to_date_str(picking.scheduled_date),
+                    'date_deadline': _to_date_str(picking.date_deadline),
+                    'warehouse': warehouse_name,
+                    'partner_code': self._partner_code(picking.partner_id),
+                    'partner_name': (picking.partner_id and picking.partner_id.name) or "",
+                    'note': picking.note or "",
+                    'origin': picking.origin or "",
+                    
+                    # Thông tin sản phẩm
+                    'product_code': product_code,
+                    'product_name': product_name,
+                    'product_description': (prod.description_sale or prod.description_picking or prod.description) or "",
+                    'uom': uom_name,
+                    'uom_ratio': ratio,
+                    'location': location_name,
+                    
+                    # Số lượng
+                    'qty_requested': qty_req,
+                    'qty_requested_main': qty_req_main,
+                    'qty_done': qty_done,
+                    'qty_done_main': qty_done_main,
+                    
+                    # Lô & HSD
+                    'lot_name': lot_name,
+                    'lot_expiry': lot_expiry,
+                    
+                    # Kích thước
+                    'length': None,
+                    'width': None,
+                    'height': None,
+                    'radius': None,
+                    
+                    # Trường mở rộng
+                    'custom_1': "",
+                    'custom_2': "",
+                    'custom_3': "",
+                    'custom_4': "",
+                    'custom_5': "",
                 })
         else:
-            # Fallback: không có move line, dùng move (ít thông tin hơn, không có lô)
+            # Fallback: không có move line, dùng move
             for mv in picking.move_ids_without_package:
                 prod = mv.product_id
                 
-                # Kiểm tra product có tồn tại không
                 if not prod:
                     continue
                     
@@ -264,93 +283,129 @@ class PickingExportWizard(models.TransientModel):
                 qty_req = mv.product_uom_qty or 0.0
                 qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
 
-                # FIX: Dùng hàm helper để lấy qty_done
                 qty_done = self._get_move_qty_done(mv)
                 qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
 
                 rows.append({
-                    "Loại lệnh (*)": pt.name or "",
-                    "Số lệnh xuất kho (*)": picking.display_name or picking.name or "",
-                    "Ngày lập lệnh (*)": _to_date_str(picking.scheduled_date),
-                    "Hạn xuất kho": _to_date_str(picking.date_deadline),
-                    "Kho xuất (*)": warehouse_name,
-                    "Mã đối tượng": self._partner_code(picking.partner_id),
-                    "Tên đối tượng nhận hàng": (picking.partner_id and picking.partner_id.name) or "",
-                    "Diễn giải": picking.note or "",
-                    "Đơn đặt hàng": picking.origin or "",
-
-                    "Mã hàng (*)": product_code,
-                    "Tên hàng": product_name,
-                    "Mô tả sản phẩm": (prod.description_sale or prod.description_picking or prod.description) or "",
-                    "Mã quy cách": getattr(prod, "default_code", "") or "",
-                    "Đơn vị tính": uom_name,
-                    "Tỷ lệ chuyển đổi": ratio,
-                    "Vị trí": (mv.location_id and mv.location_id.complete_name) or "",
-                    "Chiều dài": None,
-                    "Chiều rộng": None,
-                    "Chiều cao": None,
-                    "Bán kính": None,
-                    "Lượng": None,
-                    "SL yêu cầu": qty_req,
-                    "SL yêu cầu theo ĐVT chính": qty_req_main,
-                    "SL thực xuất": qty_done,
-                    "SL thực xuất theo ĐVT chính": qty_done_main,
-                    "Số lô": "",
-                    "Hạn sử dụng": "",
-
-                    "Trường mở rộng chi tiết 1": "",
-                    "Trường mở rộng chi tiết 2": "",
-                    "Trường mở rộng chi tiết 3": "",
-                    "Trường mở rộng chi tiết 4": "",
-                    "Trường mở rộng chi tiết 5": "",
-                    "Trường mở rộng chi tiết 6": "",
-                    "Trường mở rộng chi tiết 7": "",
-                    "Trường mở rộng chi tiết 8": "",
-                    "Trường mở rộng chi tiết 9": "",
-                    "Trường mở rộng chi tiết 10": "",
+                    'picking_type': pt.name or "",
+                    'picking_name': picking.display_name or picking.name or "",
+                    'scheduled_date': _to_date_str(picking.scheduled_date),
+                    'date_deadline': _to_date_str(picking.date_deadline),
+                    'warehouse': warehouse_name,
+                    'partner_code': self._partner_code(picking.partner_id),
+                    'partner_name': (picking.partner_id and picking.partner_id.name) or "",
+                    'note': picking.note or "",
+                    'origin': picking.origin or "",
+                    
+                    'product_code': product_code,
+                    'product_name': product_name,
+                    'product_description': (prod.description_sale or prod.description_picking or prod.description) or "",
+                    'uom': uom_name,
+                    'uom_ratio': ratio,
+                    'location': (mv.location_id and mv.location_id.complete_name) or "",
+                    
+                    'qty_requested': qty_req,
+                    'qty_requested_main': qty_req_main,
+                    'qty_done': qty_done,
+                    'qty_done_main': qty_done_main,
+                    
+                    'lot_name': "",
+                    'lot_expiry': "",
+                    
+                    'length': None,
+                    'width': None,
+                    'height': None,
+                    'radius': None,
+                    
+                    'custom_1': "",
+                    'custom_2': "",
+                    'custom_3': "",
+                    'custom_4': "",
+                    'custom_5': "",
                 })
         return rows
+
+    def _create_excel_workbook(self, data_rows):
+        """
+        Tạo workbook Excel từ data_rows
+        """
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Lệnh xuất kho"
+        
+        columns = self._get_columns_definition()
+        
+        # Định nghĩa style
+        header_font = Font(name='Arial', size=11, bold=True, color='FFFFFF')
+        header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        
+        border_side = Side(style='thin', color='000000')
+        border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
+        
+        cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
+        number_alignment = Alignment(horizontal='right', vertical='center')
+        
+        # Ghi header
+        for col_idx, col_def in enumerate(columns, start=1):
+            cell = ws.cell(row=1, column=col_idx)
+            cell.value = col_def['name']
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = border
+            
+            # Set column width
+            ws.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
+        
+        # Freeze header row
+        ws.freeze_panes = 'A2'
+        
+        # Ghi data
+        for row_idx, row_data in enumerate(data_rows, start=2):
+            for col_idx, col_def in enumerate(columns, start=1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                value = row_data.get(col_def['key'], "")
+                
+                # Xử lý giá trị None
+                if value is None:
+                    value = ""
+                
+                cell.value = value
+                cell.border = border
+                
+                # Alignment theo kiểu dữ liệu
+                if isinstance(value, (int, float)) and value != "":
+                    cell.alignment = number_alignment
+                else:
+                    cell.alignment = cell_alignment
+        
+        # Set row height cho header
+        ws.row_dimensions[1].height = 30
+        
+        return wb
 
     # ====== Action ======
     def action_export(self):
         self.ensure_one()
-        if load_workbook is None:
+        if Workbook is None:
             raise UserError(_("Thiếu thư viện openpyxl. Vui lòng cài đặt 'openpyxl' cho Python."))
 
         pickings = self.env["stock.picking"].sudo().search(self._domain(), order="scheduled_date asc, id asc")
         if not pickings:
             raise UserError(_("Không tìm thấy phiếu xuất kho nào trong khoảng ngày đã chọn."))
 
-        # Mở template & xác định header
-        template_path = self._get_template_path()
-        wb = load_workbook(template_path)
-        ws = wb.active
-        header_row = self._find_header_row(ws)
-        
-        # Map tên cột -> index cột
-        header_map = {}
-        for c in range(1, ws.max_column + 1):
-            name = ws.cell(row=header_row, column=c).value
-            if name:
-                header_map[str(name).strip()] = c
+        # Tạo dữ liệu
+        all_rows = []
+        for picking in pickings:
+            rows = self._get_move_line_rows(picking)
+            all_rows.extend(rows)
 
-        # Ghi từ dòng kế tiếp sau header
-        row_idx = header_row + 1
+        if not all_rows:
+            raise UserError(_("Không có dữ liệu chi tiết để xuất."))
 
-        # Duyệt từng picking -> tạo các dòng move line
-        for p in pickings:
-            rows = self._get_move_line_rows(p)
-            for r in rows:
-                # Ghi từng cột theo header có trong template
-                for header_name, col in header_map.items():
-                    if header_name in r:
-                        val = r[header_name]
-                        # Định dạng ngày cho các cột ngày
-                        if header_name in ("Ngày lập lệnh (*)", "Hạn xuất kho", "Hạn sử dụng"):
-                            ws.cell(row=row_idx, column=col, value=_to_date_str(val))
-                        else:
-                            ws.cell(row=row_idx, column=col, value=val)
-                row_idx += 1
+        # Tạo Excel workbook
+        wb = self._create_excel_workbook(all_rows)
 
         # Xuất file
         out = BytesIO()
