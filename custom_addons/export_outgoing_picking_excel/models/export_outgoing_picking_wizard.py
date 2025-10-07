@@ -88,12 +88,12 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'date_deadline', 'name': 'Hạn xuất kho', 'width': 15, 'group': 'picking'},
             {'key': 'warehouse', 'name': 'Kho xuất (*)', 'width': 20, 'group': 'picking'},
             {'key': 'partner_code', 'name': 'Mã đối tượng', 'width': 15, 'group': 'picking'},
-            {'key': 'partner_name', 'name': 'Tên đối tượng nhận hàng', 'width': 80, 'group': 'picking'},
+            {'key': 'partner_name', 'name': 'Tên đối tượng nhận hàng', 'width': 60, 'group': 'picking'},
             {'key': 'note', 'name': 'Diễn giải', 'width': 30, 'group': 'picking'},
 
             # === NHÓM 2: Thông tin hàng hóa (29 cột) ===
             {'key': 'product_code', 'name': 'Mã hàng (*)', 'width': 18, 'group': 'product'},
-            {'key': 'product_name', 'name': 'Tên hàng', 'width': 35, 'group': 'product'},
+            {'key': 'product_name', 'name': 'Tên hàng', 'width': 50, 'group': 'product'},
             {'key': 'product_description', 'name': 'Mô tả sản phẩm', 'width': 30, 'group': 'product'},
             {'key': 'product_spec', 'name': 'Mã quy cách', 'width': 15, 'group': 'product'},
             {'key': 'uom', 'name': 'Đơn vị tính', 'width': 12, 'group': 'product'},
@@ -396,7 +396,7 @@ class PickingExportWizard(models.TransientModel):
         border_side = Side(style='thin', color='000000')
         border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
 
-        cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
+        cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
         number_alignment = Alignment(horizontal='right', vertical='center')
 
         # Các chỉ số hàng
