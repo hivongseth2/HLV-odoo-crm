@@ -321,7 +321,7 @@ class ProductImportWizard(models.TransientModel):
                 write_vals['x_property'] = values['x_property']
 
             # Cập nhật UoM nếu xác định được và khác hiện tại
-            if uom and (product.uom_id.id != uom.id or product.uom_po_id.id != uom.id):
+            if uom and (product.uom_id.id != uom.id or product.uom_po_id.id != uom.id) and dvt_text:
                 write_vals['uom_id'] = uom.id
                 write_vals['uom_po_id'] = uom.id
 
