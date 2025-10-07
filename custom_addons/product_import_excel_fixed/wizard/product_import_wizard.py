@@ -232,9 +232,9 @@ class ProductImportWizard(models.TransientModel):
             values["x_studio_gi_bn_thng_mi"] = self._safe_float(trade_price)
             
             values["x_studio_ga_web"] = self._safe_float(web_price)
-            values["x_studio_ga_hng_nim_yt"] = self._safe_float(price_store)
             
- 
+            values["x_studio_ga_hng_nim_yt"] = self._safe_float(price_store)
+
 
             
             if dvt_text and uom:
@@ -309,9 +309,8 @@ class ProductImportWizard(models.TransientModel):
                 
             if 'x_studio_ga_hng_nim_yt' in values:
                 write_vals['x_studio_ga_hng_nim_yt'] = values['x_studio_ga_hng_nim_yt']   
-    
                 
-                
+            _logger.warning("value %s: %s , %s", product.display_name, price_store,values['x_studio_ga_hng_nim_yt'])
 
             if values.get('x_origin'):
                 write_vals['x_origin'] = values['x_origin']
