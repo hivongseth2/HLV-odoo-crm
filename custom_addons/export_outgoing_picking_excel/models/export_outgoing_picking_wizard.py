@@ -78,7 +78,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'partner_code', 'name': 'Mã đối tượng', 'width': 15, 'group': 'picking'},
             {'key': 'partner_name', 'name': 'Tên đối tượng nhận hàng', 'width': 30, 'group': 'picking'},
             {'key': 'note', 'name': 'Diễn giải', 'width': 30, 'group': 'picking'},
-            
+
             # === NHÓM 2: Thông tin hàng hóa (29 cột) ===
             {'key': 'product_code', 'name': 'Mã hàng (*)', 'width': 18, 'group': 'product'},
             {'key': 'product_name', 'name': 'Tên hàng', 'width': 35, 'group': 'product'},
@@ -159,6 +159,32 @@ class PickingExportWizard(models.TransientModel):
             return picking.location_id.warehouse_id.name
         return ""
 
+    def _extract_sale_refs(self, move):
+        """
+        Trả về (sale_line, sale_order_name) nếu tồn tại, ngược lại (None, picking.origin or '').
+        """
+        sol = getattr(move, 'sale_line_id', False) or False
+        so_name = ""
+        if sol and sol.order_id:
+            so_name = sol.order_id.name or ""
+        else:
+            so_name = move.picking_id.origin or ""
+        return sol, so_name
+
+    def _convert_qty_pair(self, qty_in_src_uom, src_uom, uom_line, uom_main):
+        """
+        Trả về (qty_for_column_qty_requested, qty_requested_main)
+        - qty_for_column_qty_requested theo uom_line
+        - qty_requested_main theo uom_main
+        """
+        qty_line = qty_in_src_uom
+        if src_uom and uom_line and src_uom.id != uom_line.id:
+            qty_line = src_uom._compute_quantity(qty_in_src_uom, uom_line)
+        qty_main = qty_line
+        if uom_line and uom_main and uom_line.id != uom_main.id:
+            qty_main = uom_line._compute_quantity(qty_line, uom_main)
+        return qty_line, qty_main
+
     def _get_move_line_rows(self, picking):
         rows = []
         pt = picking.picking_type_id
@@ -168,23 +194,39 @@ class PickingExportWizard(models.TransientModel):
             for ml in picking.move_line_ids:
                 move = ml.move_id
                 prod = ml.product_id
-                
                 if not prod:
                     continue
-                    
+
                 product_name = prod.display_name or prod.name or ""
                 product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
-                
+
+                # UoM chọn theo line trước, rồi về UoM chính
                 uom_line = ml.product_uom_id or move.product_uom or prod.uom_id
                 uom_name = (uom_line and uom_line.name) or ""
                 uom_main = prod.uom_id
                 ratio = self._uom_ratio(uom_line, uom_main)
 
-                qty_req = move.product_uom_qty or 0.0
-                qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
+                # Lấy tham chiếu Sale
+                sol, so_name = self._extract_sale_refs(move)
 
-                qty_done = ml.qty_done or 0.0
-                qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
+                # ====== SL yêu cầu từ Sale Order Line (nếu có) ======
+                if sol:
+                    qty_req_src = sol.product_uom_qty or 0.0
+                    src_uom = sol.product_uom or prod.uom_id
+                    qty_req, qty_req_main = self._convert_qty_pair(qty_req_src, src_uom, uom_line, uom_main)
+                else:
+                    # fallback theo move
+                    qty_req = move.product_uom_qty or 0.0
+                    qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
+
+                # ====== SL thực xuất từ qty_delivered (nếu có) ======
+                if sol:
+                    qty_done_src = sol.qty_delivered or 0.0
+                    src_uom = sol.product_uom or prod.uom_id
+                    qty_done, qty_done_main = self._convert_qty_pair(qty_done_src, src_uom, uom_line, uom_main)
+                else:
+                    qty_done = ml.qty_done or 0.0
+                    qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
 
                 lot_name = ""
                 lot_expiry = ""
@@ -225,7 +267,7 @@ class PickingExportWizard(models.TransientModel):
                     'qty_done_main': qty_done_main,
                     'lot_name': lot_name,
                     'lot_expiry': lot_expiry,
-                    'origin': picking.origin or "",
+                    'origin': so_name or "",
                     'custom_1': "",
                     'custom_2': "",
                     'custom_3': "",
@@ -240,23 +282,37 @@ class PickingExportWizard(models.TransientModel):
         else:
             for mv in picking.move_ids_without_package:
                 prod = mv.product_id
-                
                 if not prod:
                     continue
-                    
+
                 product_name = prod.display_name or prod.name or ""
                 product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
-                
+
                 uom_line = mv.product_uom or prod.uom_id
                 uom_name = (uom_line and uom_line.name) or ""
                 uom_main = prod.uom_id
                 ratio = self._uom_ratio(uom_line, uom_main)
 
-                qty_req = mv.product_uom_qty or 0.0
-                qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
+                # Lấy tham chiếu Sale
+                sol, so_name = self._extract_sale_refs(mv)
 
-                qty_done = self._get_move_qty_done(mv)
-                qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
+                # ====== SL yêu cầu từ Sale Order Line (nếu có) ======
+                if sol:
+                    qty_req_src = sol.product_uom_qty or 0.0
+                    src_uom = sol.product_uom or prod.uom_id
+                    qty_req, qty_req_main = self._convert_qty_pair(qty_req_src, src_uom, uom_line, uom_main)
+                else:
+                    qty_req = mv.product_uom_qty or 0.0
+                    qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
+
+                # ====== SL thực xuất từ qty_delivered (nếu có) ======
+                if sol:
+                    qty_done_src = sol.qty_delivered or 0.0
+                    src_uom = sol.product_uom or prod.uom_id
+                    qty_done, qty_done_main = self._convert_qty_pair(qty_done_src, src_uom, uom_line, uom_main)
+                else:
+                    qty_done = self._get_move_qty_done(mv)
+                    qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
 
                 rows.append({
                     'picking_type': pt.name or "",
@@ -285,7 +341,7 @@ class PickingExportWizard(models.TransientModel):
                     'qty_done_main': qty_done_main,
                     'lot_name': "",
                     'lot_expiry': "",
-                    'origin': picking.origin or "",
+                    'origin': so_name or "",
                     'custom_1': "",
                     'custom_2': "",
                     'custom_3': "",
@@ -300,105 +356,100 @@ class PickingExportWizard(models.TransientModel):
         return rows
 
     def _create_excel_workbook(self, data_rows):
-        """Tạo workbook Excel với 2 header rows"""
+        """Tạo workbook Excel với 2 header rows.
+        9 dòng đầu tiên bỏ qua, header ở dòng 8-9, data bắt đầu từ dòng 10."""
         wb = Workbook()
         ws = wb.active
         ws.title = "Lệnh xuất kho"
-        
+
         columns = self._get_columns_definition()
-        
+
         # Định nghĩa styles
-        # Header row 1 (group headers)
         header1_font = Font(name='Arial', size=12, bold=True, color='FFFFFF')
         header1_fill_picking = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')  # Xanh dương
         header1_fill_product = PatternFill(start_color='70AD47', end_color='70AD47', fill_type='solid')  # Xanh lá
         header1_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        
-        # Header row 2 (column names)
+
         header2_font = Font(name='Arial', size=10, bold=True, color='000000')
         header2_fill_picking = PatternFill(start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')  # Xanh nhạt
         header2_fill_product = PatternFill(start_color='E2EFD9', end_color='E2EFD9', fill_type='solid')  # Xanh lá nhạt
         header2_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        
+
         border_side = Side(style='thin', color='000000')
         border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
-        
+
         cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
         number_alignment = Alignment(horizontal='right', vertical='center')
-        
+
+        # Các chỉ số hàng
+        HEADER1_ROW = 8
+        HEADER2_ROW = 9
+        DATA_START = 10
+
         # === HEADER ROW 1: Group headers ===
-        # Tìm cột bắt đầu và kết thúc của mỗi group
         picking_start = 1
         picking_end = sum(1 for c in columns if c['group'] == 'picking')
         product_start = picking_end + 1
         product_end = len(columns)
-        
-        # Merge cells cho "Thông tin phiếu"
-        ws.merge_cells(start_row=1, start_column=picking_start, end_row=1, end_column=picking_end)
-        cell = ws.cell(row=1, column=picking_start)
+
+        ws.merge_cells(start_row=HEADER1_ROW, start_column=picking_start, end_row=HEADER1_ROW, end_column=picking_end)
+        cell = ws.cell(row=HEADER1_ROW, column=picking_start)
         cell.value = "THÔNG TIN PHIẾU"
         cell.font = header1_font
         cell.fill = header1_fill_picking
         cell.alignment = header1_alignment
         cell.border = border
-        
-        # Merge cells cho "Thông tin hàng hóa"
-        ws.merge_cells(start_row=1, start_column=product_start, end_row=1, end_column=product_end)
-        cell = ws.cell(row=1, column=product_start)
+
+        ws.merge_cells(start_row=HEADER1_ROW, start_column=product_start, end_row=HEADER1_ROW, end_column=product_end)
+        cell = ws.cell(row=HEADER1_ROW, column=product_start)
         cell.value = "THÔNG TIN HÀNG HÓA"
         cell.font = header1_font
         cell.fill = header1_fill_product
         cell.alignment = header1_alignment
         cell.border = border
-        
+
         # === HEADER ROW 2: Column names ===
         for col_idx, col_def in enumerate(columns, start=1):
-            cell = ws.cell(row=2, column=col_idx)
+            cell = ws.cell(row=HEADER2_ROW, column=col_idx)
             cell.value = col_def['name']
             cell.font = header2_font
-            
-            # Màu theo group
+
             if col_def['group'] == 'picking':
                 cell.fill = header2_fill_picking
             else:
                 cell.fill = header2_fill_product
-                
+
             cell.alignment = header2_alignment
             cell.border = border
-            
-            # Set column width
             ws.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
-        
-        # Freeze panes (freeze 2 header rows và cột đầu tiên)
-        ws.freeze_panes = 'B3'
-        
+
+        # Freeze panes: cố định 9 dòng đầu và cột A
+        ws.freeze_panes = 'B{}'.format(DATA_START)
+
         # === DATA ROWS ===
-        for row_idx, row_data in enumerate(data_rows, start=3):
+        for row_idx, row_data in enumerate(data_rows, start=DATA_START):
             for col_idx, col_def in enumerate(columns, start=1):
                 cell = ws.cell(row=row_idx, column=col_idx)
                 value = row_data.get(col_def['key'], "")
-                
-                # Xử lý None và kiểu dữ liệu
+
                 if value is None:
                     value = ""
-                
+
                 cell.value = value
                 cell.border = border
-                
-                # Alignment
+
                 if isinstance(value, (int, float)) and value != "":
                     cell.alignment = number_alignment
-                    # Format number với 2 decimal cho ratio và quantities
                     if col_def['key'] in ['uom_ratio', 'qty_requested', 'qty_requested_main', 'qty_done', 'qty_done_main']:
-                        if value and value != "":
+                        if value != "":
                             cell.number_format = '#,##0.00'
                 else:
                     cell.alignment = cell_alignment
-        
-        # Set row heights
-        ws.row_dimensions[1].height = 25
-        ws.row_dimensions[2].height = 35
-        
+
+        # Set row heights cho header
+        ws.row_dimensions[HEADER1_ROW].height = 25
+        ws.row_dimensions[HEADER2_ROW].height = 35
+
         return wb
 
     # ====== Action ======
