@@ -11,19 +11,10 @@
             <field name="date_to"/>
           </group>
           <group>
-            <field name="warehouse_scope"/>
-            <field name="warehouse_ids"
+            <field name="warehouse_ids" 
+                   widget="many2many_tags"
                    domain="[('company_id','in', allowed_company_ids)]"
-                   invisible="warehouse_scope == 'all'"
-                   required="warehouse_scope == 'some'"/>
-          </group>
-        </group>
-
-        <group>
-          <group>
-            <field name="picking_type_id" domain="[('code','=','outgoing')]"/>
-          </group>
-          <group>
+                   placeholder="Để trống = Tất cả kho"/>
             <field name="state_filter"/>
           </group>
         </group>

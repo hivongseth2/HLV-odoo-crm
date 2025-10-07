@@ -44,30 +44,15 @@ class PickingExportWizard(models.TransientModel):
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
 
-    # PHẠM VI KHO
-    warehouse_scope = fields.Selection(
-        [
-            ("all", "Tất cả kho"),
-            ("some", "Chọn kho cụ thể"),
-        ],
-        string="Phạm vi kho",
-        default="all",
-        required=True,
-        help="Chọn 'Tất cả kho' để xuất gộp toàn bộ kho trong 1 file."
-    )
+    # PHẠM VI KHO - Sửa lại để mặc định tất cả, có thể chọn nhiều kho
     warehouse_ids = fields.Many2many(
         "stock.warehouse",
         string="Kho xuất",
-        help="Chọn 1 hoặc nhiều kho khi phạm vi = 'Chọn kho cụ thể'",
+        help="Để trống = Tất cả kho. Chọn 1 hoặc nhiều kho để lọc cụ thể.",
     )
 
-    # (Giữ nếu bạn vẫn muốn lọc sâu theo 1 loại lệnh cụ thể)
-    picking_type_id = fields.Many2one(
-        "stock.picking.type",
-        string="Loại lệnh (mặc định: Lệnh xuất kho)",
-        domain=[("code", "=", "outgoing")],
-    )
-
+    # Bỏ picking_type_id vì đã cố định là outgoing
+    # Chỉ giữ state filter
     state_filter = fields.Selection(
         [
             ("all", "Tất cả"),
@@ -101,23 +86,18 @@ class PickingExportWizard(models.TransientModel):
         domain = [
             ("scheduled_date", ">=", fields.Date.to_date(self.date_from)),
             ("scheduled_date", "<=", fields.Date.to_date(self.date_to)),
-            ("picking_type_id.code", "=", "outgoing"),
+            ("picking_type_id.code", "=", "outgoing"),  # Cố định outgoing
         ]
 
-        # Lọc theo kho (nếu chọn kho cụ thể)
-        if self.warehouse_scope == "some" and self.warehouse_ids:
+        # Lọc theo kho (nếu có chọn kho cụ thể)
+        if self.warehouse_ids:
             domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
-
-        # Lọc sâu theo 1 picking type cụ thể (nếu có chọn)
-        if self.picking_type_id:
-            domain.append(("picking_type_id", "=", self.picking_type_id.id))
 
         # Lọc trạng thái (nếu khác 'all')
         if self.state_filter and self.state_filter != "all":
             domain.append(("state", "=", self.state_filter))
 
         return domain
-
 
     def _find_header_row(self, ws, scan_rows=100):
         """Tìm hàng header: hàng có nhiều ô text nhất trong 1..scan_rows."""
@@ -132,7 +112,10 @@ class PickingExportWizard(models.TransientModel):
         return best_row
 
     def _partner_code(self, partner):
-        return partner.ref or (partner.barcode if hasattr(partner, "barcode") else None) or (partner.vat or None) or (partner.id and str(partner.id)) or ""
+        """Lấy mã đối tác theo thứ tự ưu tiên"""
+        if not partner:
+            return ""
+        return partner.ref or (partner.barcode if hasattr(partner, "barcode") else None) or partner.vat or str(partner.id) or ""
 
     def _uom_ratio(self, from_uom, to_uom):
         """
@@ -143,7 +126,31 @@ class PickingExportWizard(models.TransientModel):
             return None
         if from_uom.id == to_uom.id:
             return 1.0
-        return from_uom._compute_quantity(1.0, to_uom)
+        try:
+            return from_uom._compute_quantity(1.0, to_uom)
+        except Exception:
+            return 1.0
+
+    def _get_move_qty_done(self, move):
+        """
+        Lấy số lượng đã xuất của move.
+        Trong Odoo 18, stock.move không có quantity_done trực tiếp.
+        Cần tính tổng từ move_line_ids hoặc dùng qty_done
+        """
+        if hasattr(move, 'qty_done'):
+            return move.qty_done or 0.0
+        # Fallback: tính tổng từ move lines
+        return sum(ml.qty_done for ml in move.move_line_ids) or 0.0
+
+    def _get_warehouse_name(self, picking):
+        """Lấy tên kho từ picking"""
+        pt = picking.picking_type_id
+        if pt and pt.warehouse_id:
+            return pt.warehouse_id.name
+        # Fallback: thử lấy từ location
+        if hasattr(picking.location_id, 'warehouse_id') and picking.location_id.warehouse_id:
+            return picking.location_id.warehouse_id.name
+        return ""
 
     def _get_move_line_rows(self, picking):
         """
@@ -152,16 +159,21 @@ class PickingExportWizard(models.TransientModel):
         """
         rows = []
         pt = picking.picking_type_id
-        warehouse_name = (pt.warehouse_id and pt.warehouse_id.name) or \
-                         (getattr(picking.location_id, "get_warehouse", None) and picking.location_id.get_warehouse() and picking.location_id.get_warehouse().name) or ""
+        warehouse_name = self._get_warehouse_name(picking)
 
         # Duyệt move line để bắt được lô/ hạn dùng & vị trí thực tế
         if picking.move_line_ids:
             for ml in picking.move_line_ids:
                 move = ml.move_id
                 prod = ml.product_id
+                
+                # Kiểm tra product có tồn tại không
+                if not prod:
+                    continue
+                    
                 product_name = prod.display_name or prod.name or ""
-                product_code = prod.default_code or (prod.barcode or "")
+                product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
+                
                 uom_line = ml.product_uom_id or move.product_uom or prod.uom_id
                 uom_name = (uom_line and uom_line.name) or ""
                 uom_main = prod.uom_id
@@ -169,7 +181,7 @@ class PickingExportWizard(models.TransientModel):
 
                 # SL yêu cầu: ưu tiên từ move (độc lập với qty_done)
                 qty_req = move.product_uom_qty or 0.0
-                qty_req_main  = uom_line._compute_quantity(qty_req,  uom_main) if (uom_line and uom_main) else qty_req
+                qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
 
                 # SL thực xuất: từ move line
                 qty_done = ml.qty_done or 0.0
@@ -179,11 +191,14 @@ class PickingExportWizard(models.TransientModel):
                 lot_expiry = ""
                 if ml.lot_id:
                     lot_name = ml.lot_id.name or ""
-                    # life_date / use_date tuỳ cấu hình lô
-                    life_date = getattr(ml.lot_id, "life_date", None) or getattr(ml.lot_id, "expiration_date", None)
+                    # life_date / use_date / expiration_date tuỳ cấu hình lô
+                    life_date = getattr(ml.lot_id, "life_date", None) or \
+                                getattr(ml.lot_id, "expiration_date", None) or \
+                                getattr(ml.lot_id, "use_date", None)
                     lot_expiry = _to_date_str(life_date)
 
-                location_name = (ml.location_id and ml.location_id.complete_name) or (ml.location_id and ml.location_id.display_name) or ""
+                location_name = (ml.location_id and ml.location_id.complete_name) or \
+                                (ml.location_id and ml.location_id.display_name) or ""
 
                 rows.append({
                     # Header-level (phiếu)
@@ -203,13 +218,13 @@ class PickingExportWizard(models.TransientModel):
                     "Mô tả sản phẩm": (prod.description_sale or prod.description_picking or prod.description) or "",
                     "Mã quy cách": getattr(prod, "default_code", "") or "",
                     "Đơn vị tính": uom_name,
-                    "Tỷ lệ chuyển đổi": ratio,  # 1 ĐVT dòng -> ? ĐVT chính
+                    "Tỷ lệ chuyển đổi": ratio,
                     "Vị trí": location_name,
-                    "Chiều dài": None,  # nếu có field riêng thì map thêm
+                    "Chiều dài": None,
                     "Chiều rộng": None,
                     "Chiều cao": None,
                     "Bán kính": None,
-                    "Lượng": None,  # tùy doanh nghiệp định nghĩa
+                    "Lượng": None,
                     "SL yêu cầu": qty_req,
                     "SL yêu cầu theo ĐVT chính": qty_req_main,
                     "SL thực xuất": qty_done,
@@ -217,7 +232,7 @@ class PickingExportWizard(models.TransientModel):
                     "Số lô": lot_name,
                     "Hạn sử dụng": lot_expiry,
 
-                    # Trường mở rộng chi tiết 1..10 (để trống, hoặc bạn map thêm)
+                    # Trường mở rộng chi tiết 1..10
                     "Trường mở rộng chi tiết 1": "",
                     "Trường mở rộng chi tiết 2": "",
                     "Trường mở rộng chi tiết 3": "",
@@ -233,15 +248,25 @@ class PickingExportWizard(models.TransientModel):
             # Fallback: không có move line, dùng move (ít thông tin hơn, không có lô)
             for mv in picking.move_ids_without_package:
                 prod = mv.product_id
+                
+                # Kiểm tra product có tồn tại không
+                if not prod:
+                    continue
+                    
                 product_name = prod.display_name or prod.name or ""
-                product_code = prod.default_code or (prod.barcode or "")
+                product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
+                
                 uom_line = mv.product_uom or prod.uom_id
                 uom_name = (uom_line and uom_line.name) or ""
                 uom_main = prod.uom_id
                 ratio = self._uom_ratio(uom_line, uom_main)
 
                 qty_req = mv.product_uom_qty or 0.0
-                qty_req_main  = uom_line._compute_quantity(qty_req,  uom_main) if (uom_line and uom_main) else qty_req
+                qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
+
+                # FIX: Dùng hàm helper để lấy qty_done
+                qty_done = self._get_move_qty_done(mv)
+                qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
 
                 rows.append({
                     "Loại lệnh (*)": pt.name or "",
@@ -268,8 +293,8 @@ class PickingExportWizard(models.TransientModel):
                     "Lượng": None,
                     "SL yêu cầu": qty_req,
                     "SL yêu cầu theo ĐVT chính": qty_req_main,
-                    "SL thực xuất": mv.quantity_done or 0.0,
-                    "SL thực xuất theo ĐVT chính": (uom_line._compute_quantity(mv.quantity_done, uom_main) if (uom_line and uom_main) else (mv.quantity_done or 0.0)),
+                    "SL thực xuất": qty_done,
+                    "SL thực xuất theo ĐVT chính": qty_done_main,
                     "Số lô": "",
                     "Hạn sử dụng": "",
 
@@ -301,6 +326,7 @@ class PickingExportWizard(models.TransientModel):
         wb = load_workbook(template_path)
         ws = wb.active
         header_row = self._find_header_row(ws)
+        
         # Map tên cột -> index cột
         header_map = {}
         for c in range(1, ws.max_column + 1):
@@ -315,7 +341,7 @@ class PickingExportWizard(models.TransientModel):
         for p in pickings:
             rows = self._get_move_line_rows(p)
             for r in rows:
-                # Ghi từng cột theo header có trong template (điền được bao nhiêu điền bấy nhiêu)
+                # Ghi từng cột theo header có trong template
                 for header_name, col in header_map.items():
                     if header_name in r:
                         val = r[header_name]
@@ -346,4 +372,3 @@ class PickingExportWizard(models.TransientModel):
             "url": f"/web/content/{attachment.id}?download=true",
             "target": "self",
         }
-
