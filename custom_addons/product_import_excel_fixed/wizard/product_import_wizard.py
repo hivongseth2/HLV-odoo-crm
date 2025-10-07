@@ -210,6 +210,7 @@ class ProductImportWizard(models.TransientModel):
     
             # ===== UOM từ cột DVT =====
             dvt_text = row.get('DVT')
+            
             uom = self._find_uom_in_unit_category(dvt_text)  # đảm bảo thuộc Unit; fallback 'Cái'
             if not uom:
                 _logger.warning("⚠ Không xác định được UoM; bỏ qua gán UoM cho dòng: %s", name)
@@ -236,7 +237,7 @@ class ProductImportWizard(models.TransientModel):
  
 
             
-            if uom:
+            if dvt_text and uom:
                 # set cả uom_id & uom_po_id
                 values["uom_id"] = uom.id
                 values["uom_po_id"] = uom.id
