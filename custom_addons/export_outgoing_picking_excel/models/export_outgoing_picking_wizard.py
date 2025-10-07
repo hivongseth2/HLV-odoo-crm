@@ -424,7 +424,7 @@ class PickingExportWizard(models.TransientModel):
             ws.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
 
         # Freeze panes: cố định 9 dòng đầu và cột A
-        ws.freeze_panes = 'B{}'.format(DATA_START)
+        # ws.freeze_panes = 'B{}'.format(DATA_START)
 
         # === DATA ROWS ===
         for row_idx, row_data in enumerate(data_rows, start=DATA_START):
