@@ -1,39 +1,38 @@
-<?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- Thêm nút vào hành động ở tree view của stock.picking -->
-  <record id="stock_picking_action_inherit_export_excel" model="ir.ui.view">
-    <field name="name">stock.picking.tree.inherit.export.excel</field>
-    <field name="model">stock.picking</field>
-    <field name="inherit_id" ref="stock.vpicktree"/>
-    <field name="arch" type="xml">
-      <xpath expr="//tree" position="context">
-        <context>
-          <value eval="{'search_default_picking_type': 1}"/>
-        </context>
-      </xpath>
-      <xpath expr="//button[@name='action_confirm']" position="after">
-        <!-- Nếu view gốc không có button này, bạn có thể đặt vào header của form -->
-        <button name="%(action_picking_export_wizard)d"
-                string="Xuất Excel lệnh xuất kho"
-                type="action"
-                class="btn-secondary"/>
-      </xpath>
-    </field>
-  </record>
-
-  <!-- Option: Thêm vào form view -->
-  <record id="stock_picking_form_inherit_export_excel" model="ir.ui.view">
-    <field name="name">stock.picking.form.inherit.export.excel</field>
-    <field name="model">stock.picking</field>
-    <field name="inherit_id" ref="stock.view_picking_form"/>
-    <field name="arch" type="xml">
-      <header position="inside">
-        <button name="%(action_picking_export_wizard)d"
-                string="Xuất Excel lệnh xuất kho"
-                type="action"
-                class="oe_highlight"/>
-      </header>
-    </field>
-  </record>
-
-</odoo>
+    <!-- (Tuỳ chọn) bỏ hẳn nút ở header form nếu không cần -->
+    <!--<record id="stock_picking_form_inherit_export_excel" model="ir.ui.view">
+      <field name="name">stock.picking.form.inherit.export.excel</field>
+      <field name="model">stock.picking</field>
+      <field name="inherit_id" ref="stock.view_picking_form"/>
+      <field name="arch" type="xml">
+        <header position="inside">
+          <button name="%(action_picking_export_wizard)d"
+                  string="Xuất Excel lệnh xuất kho"
+                  type="action"
+                  class="oe_highlight"/>
+        </header>
+      </field>
+    </record>-->
+  
+    <!-- (Giữ) Server Action: sẽ xuất hiện trong Action menu khi ở list hoặc form -->
+    <record id="action_server_open_export_wizard" model="ir.actions.server">
+      <field name="name">Xuất Excel lệnh xuất kho</field>
+      <field name="model_id" ref="stock.model_stock_picking"/>
+      <field name="binding_model_id" ref="stock.model_stock_picking"/>
+      <field name="binding_type">action</field>
+      <field name="state">code</field>
+      <field name="code">action = env.ref('export_outgoing_picking_excel.action_picking_export_wizard').read()[0]</field>
+    </record>
+  
+    <!-- ✅ Menu riêng dưới "Báo cáo" (không cần chọn dòng, mở wizard trực tiếp) -->
+    <menuitem id="menu_export_excel_root"
+              name="Công cụ Excel"
+              parent="stock.menu_stock_root"
+              sequence="98"/>
+    <menuitem id="menu_export_outgoing_picking_excel"
+              name="Xuất lệnh xuất kho (Excel)"
+              parent="menu_export_excel_root"
+              action="action_picking_export_wizard"
+              sequence="1"/>
+  </odoo>
+  

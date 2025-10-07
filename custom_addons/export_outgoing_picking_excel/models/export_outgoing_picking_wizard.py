@@ -2,6 +2,7 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 from odoo.modules.module import get_module_resource
+import base64
 
 import datetime
 from io import BytesIO
@@ -42,11 +43,31 @@ class PickingExportWizard(models.TransientModel):
 
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
+
+    # PHẠM VI KHO
+    warehouse_scope = fields.Selection(
+        [
+            ("all", "Tất cả kho"),
+            ("some", "Chọn kho cụ thể"),
+        ],
+        string="Phạm vi kho",
+        default="all",
+        required=True,
+        help="Chọn 'Tất cả kho' để xuất gộp toàn bộ kho trong 1 file."
+    )
+    warehouse_ids = fields.Many2many(
+        "stock.warehouse",
+        string="Kho xuất",
+        help="Chọn 1 hoặc nhiều kho khi phạm vi = 'Chọn kho cụ thể'",
+    )
+
+    # (Giữ nếu bạn vẫn muốn lọc sâu theo 1 loại lệnh cụ thể)
     picking_type_id = fields.Many2one(
         "stock.picking.type",
-        string="Loại lệnh (mặc định: Outgoing)",
+        string="Loại lệnh (mặc định: Lệnh xuất kho)",
         domain=[("code", "=", "outgoing")],
     )
+
     state_filter = fields.Selection(
         [
             ("all", "Tất cả"),
@@ -76,16 +97,27 @@ class PickingExportWizard(models.TransientModel):
         self.ensure_one()
         if self.date_from > self.date_to:
             raise UserError(_("Khoảng ngày không hợp lệ."))
+
         domain = [
             ("scheduled_date", ">=", fields.Date.to_date(self.date_from)),
             ("scheduled_date", "<=", fields.Date.to_date(self.date_to)),
             ("picking_type_id.code", "=", "outgoing"),
         ]
+
+        # Lọc theo kho (nếu chọn kho cụ thể)
+        if self.warehouse_scope == "some" and self.warehouse_ids:
+            domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
+
+        # Lọc sâu theo 1 picking type cụ thể (nếu có chọn)
         if self.picking_type_id:
             domain.append(("picking_type_id", "=", self.picking_type_id.id))
+
+        # Lọc trạng thái (nếu khác 'all')
         if self.state_filter and self.state_filter != "all":
             domain.append(("state", "=", self.state_filter))
+
         return domain
+
 
     def _find_header_row(self, ws, scan_rows=100):
         """Tìm hàng header: hàng có nhiều ô text nhất trong 1..scan_rows."""
@@ -102,7 +134,7 @@ class PickingExportWizard(models.TransientModel):
     def _partner_code(self, partner):
         return partner.ref or (partner.barcode if hasattr(partner, "barcode") else None) or (partner.vat or None) or (partner.id and str(partner.id)) or ""
 
-    def _uom_ratio(self, from_uom, to_uom, product):
+    def _uom_ratio(self, from_uom, to_uom):
         """
         Trả về (qty_in_to = 1 from_uom quy đổi sang to_uom), dùng _compute_quantity để an toàn.
         Nếu cùng UoM => 1.0
@@ -111,8 +143,7 @@ class PickingExportWizard(models.TransientModel):
             return None
         if from_uom.id == to_uom.id:
             return 1.0
-        # 1 đơn vị from_uom => ? to_uom
-        return from_uom._compute_quantity(1.0, to_uom, product=product)
+        return from_uom._compute_quantity(1.0, to_uom)
 
     def _get_move_line_rows(self, picking):
         """
@@ -134,15 +165,15 @@ class PickingExportWizard(models.TransientModel):
                 uom_line = ml.product_uom_id or move.product_uom or prod.uom_id
                 uom_name = (uom_line and uom_line.name) or ""
                 uom_main = prod.uom_id
-                ratio = self._uom_ratio(uom_line, uom_main, prod)
+                ratio = self._uom_ratio(uom_line, uom_main)
 
                 # SL yêu cầu: ưu tiên từ move (độc lập với qty_done)
                 qty_req = move.product_uom_qty or 0.0
-                qty_req_main = uom_line._compute_quantity(qty_req, uom_main, product=prod) if (uom_line and uom_main) else qty_req
+                qty_req_main  = uom_line._compute_quantity(qty_req,  uom_main) if (uom_line and uom_main) else qty_req
 
                 # SL thực xuất: từ move line
                 qty_done = ml.qty_done or 0.0
-                qty_done_main = uom_line._compute_quantity(qty_done, uom_main, product=prod) if (uom_line and uom_main) else qty_done
+                qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
 
                 lot_name = ""
                 lot_expiry = ""
@@ -207,10 +238,10 @@ class PickingExportWizard(models.TransientModel):
                 uom_line = mv.product_uom or prod.uom_id
                 uom_name = (uom_line and uom_line.name) or ""
                 uom_main = prod.uom_id
-                ratio = self._uom_ratio(uom_line, uom_main, prod)
+                ratio = self._uom_ratio(uom_line, uom_main)
 
                 qty_req = mv.product_uom_qty or 0.0
-                qty_req_main = uom_line._compute_quantity(qty_req, uom_main, product=prod) if (uom_line and uom_main) else qty_req
+                qty_req_main  = uom_line._compute_quantity(qty_req,  uom_main) if (uom_line and uom_main) else qty_req
 
                 rows.append({
                     "Loại lệnh (*)": pt.name or "",
@@ -238,7 +269,7 @@ class PickingExportWizard(models.TransientModel):
                     "SL yêu cầu": qty_req,
                     "SL yêu cầu theo ĐVT chính": qty_req_main,
                     "SL thực xuất": mv.quantity_done or 0.0,
-                    "SL thực xuất theo ĐVT chính": (uom_line._compute_quantity(mv.quantity_done, uom_main, product=prod) if (uom_line and uom_main) else (mv.quantity_done or 0.0)),
+                    "SL thực xuất theo ĐVT chính": (uom_line._compute_quantity(mv.quantity_done, uom_main) if (uom_line and uom_main) else (mv.quantity_done or 0.0)),
                     "Số lô": "",
                     "Hạn sử dụng": "",
 
@@ -305,7 +336,7 @@ class PickingExportWizard(models.TransientModel):
             "name": filename,
             "type": "binary",
             "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "datas": self.env["ir.binary"]._encode(out.read()),
+            "datas": base64.b64encode(out.getvalue()),
             "res_model": "picking.export.wizard",
             "res_id": self.id,
         })
@@ -315,3 +346,4 @@ class PickingExportWizard(models.TransientModel):
             "url": f"/web/content/{attachment.id}?download=true",
             "target": "self",
         }
+
