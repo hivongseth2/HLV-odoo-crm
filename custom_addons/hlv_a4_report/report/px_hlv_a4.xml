@@ -14,6 +14,20 @@
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait" />
     </record>
 
+    <record id="report_px_hlv_a5" model="ir.actions.report">
+      <field name="name">Phiếu xuất Hoàng Long Vũ - A5 (Ngang)</field>
+      <field name="model">stock.picking</field>
+      <field name="report_type">qweb-pdf</field>
+      <!-- dùng cùng template -->
+      <field name="report_name">hlv_a4_report.report_px_hlv_a4_doc</field>
+      <field name="print_report_name">
+          'Phiếu xuất Hoàng Long Vũ - A5 - %s' % (object.name or 'Picking')
+      </field>
+      <field name="binding_model_id" ref="stock.model_stock_picking"/>
+      <field name="binding_type">report</field>
+      <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a5_landscape"/>
+    </record>
+
     <!-- Template -->
     <template t-name="hlv_a4_report.report_px_hlv_a4_doc">
         <t t-call="web.html_container">
