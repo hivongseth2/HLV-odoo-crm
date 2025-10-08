@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <!-- Action report: BBGN A5 Không Ngày (Landscape) -->
+  <record id="bbgn_a5_khongngay" model="ir.actions.report">
+    <field name="name">BBGN A5 Không Ngày</field>
+    <field name="model">stock.picking</field>
+    <field name="report_type">qweb-pdf</field>
+    <field name="report_name">hlv_a4_report.bbgn_a5_khongngay_doc</field>
+    <field name="print_report_name">
+      'BBGN A5 Không Ngày - %s' % (object.name or 'Picking')
+    </field>
+    <field name="binding_model_id" ref="stock.model_stock_picking"/>
+    <field name="binding_type">report</field>
+    <!-- Trỏ đúng paperformat A5 landscape bạn đã khai báo -->
+    <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a5_landscape"/>
+  </record>
+
+  <!-- Template: BBGN A5 Không Ngày (tách CSS riêng, không dùng chung A4) -->
+  <template id="bbgn_a5_khongngay_doc">
+    <t t-call="web.html_container">
+      <t t-call="web.report_layout">
+
+        <style type="text/css">
+          /* ===== Fonts riêng cho A5 ===== */
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+            font-weight:400; font-style:normal; font-display:swap;
+          }
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf') format('truetype');
+            font-weight:700; font-style:normal; font-display:swap;
+          }
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf') format('truetype');
+            font-weight:400; font-style:italic; font-display:swap;
+          }
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf') format('truetype');
+            font-weight:700; font-style:italic; font-display:swap;
+          }
+
+          /* Base A5 landscape: giảm cỡ chữ/spacing để vừa khổ 210x148mm (lề 5mm) */
+          html, body, .o_report_layout, .o_report_layout * {
+            font-family:'HLV-TNR','DejaVu Sans',sans-serif !important;
+            font-size:11px !important;
+          }
+
+          .title-a5 { font-size:16px; font-weight:800; }
+          .fw-700   { font-weight:700; }
+          .mt-2 { margin-top:2px; }
+          .mt-4 { margin-top:4px; }
+          .mt-6 { margin-top:6px; }
+          .mt-8 { margin-top:8px; }
+          .mt-10{ margin-top:10px; }
+          table  { border-collapse:collapse; width:100%; }
+
+          /* Header */
+          .hdr-logo { width:165px; text-align:center; vertical-align:middle; padding-right:6px; }
+          .hdr-logo img { max-height:90px; height:80px; width:140px; object-fit:contain; position:relative; top:-8px; }
+          .hdr-info { vertical-align:top; padding-left:8px; }
+
+          /* Bảng hàng hóa cho A5 */
+          .bbgn-a5 th, .bbgn-a5 td { border:1px solid #000; }
+          .bbgn-a5 th { background:#eee; }
+
+          .col-stt  { width:28px; text-align:center; }
+          .col-name { width:auto; }
+          .col-uom  { width:86px; text-align:center; white-space:nowrap; }
+          .col-qty  { width:86px; text-align:center; white-space:nowrap; }
+          .col-note { width:140px; text-align:left; }
+        </style>
+
+        <div class="page">
+          <t t-foreach="docs" t-as="o">
+
+            <!-- Header công ty -->
+            <table class="mt-10">
+              <tr>
+                <td class="hdr-logo">
+                  <t t-if="o.company_id.logo">
+                    <img t-att-src="image_data_uri(o.company_id.logo)"/>
+                  </t>
+                  <t t-else="">
+                    <img t-att-src="'/web/image/res.company/%s/logo' % o.company_id.id"/>
+                  </t>
+                </td>
+
+                <td class="hdr-info">
+                  <div class="fw-700" style="font-size:13px;">CÔNG TY TNHH VI NA HOÀNG LONG VŨ</div>
+                  <div>
+                    <t t-set="addr" t-value="o.company_id.partner_id._display_address(without_company=True) or ''"/>
+                    <t t-foreach="addr.split(' - ')" t-as="line">
+                      <t t-esc="line"/><br/>
+                    </t>
+                  </div>
+                  <div>Mã số thuế: <span t-esc="o.company_id.vat or ''"/></div>
+                  <div>Website: <span t-esc="o.company_id.website or ''"/></div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Tiêu đề -->
+            <div style="text-align:center;" class="mt-2">
+              <div class="title-a5">BIÊN BẢN BÀN GIAO</div>
+
+              <!-- Năm tự động: ưu tiên date_done -> scheduled_date -> create_date -> năm hiện tại -->
+              <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.create_date"/>
+              <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')"/>
+
+              <div>(Số phiếu xuất: <span t-esc="o.name"/> – ngày ... tháng ... năm <t t-esc="year_str"/>)</div>
+            </div>
+
+            <!-- Hai bên -->
+            <table class="mt-6" style="font-size:11px;">
+              <tr>
+                <td style="width:170px;" class="fw-700">Đại diện bên nhận (A)</td>
+                <td class="fw-700" t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''"/>
+              </tr>
+              <tr>
+                <td>Ông (Bà)</td>
+                <td/>
+              </tr>
+              <tr>
+                <td>Địa chỉ</td>
+                <td>
+                  <t t-set="p" t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id"/>
+                  <t t-esc="(p.street or '') + (p.street2 and (', ' + p.street2) or '')"/>
+                </td>
+              </tr>
+              <tr>
+                <td class="fw-700" style="padding-top:4px;">Đại diện bên giao (B)</td>
+                <td class="fw-700" style="padding-top:4px;">CÔNG TY TNHH VI NA HOÀNG LONG VŨ</td>
+              </tr>
+              <tr>
+                <td>Ông (Bà)</td>
+                <td/>
+              </tr>
+              <tr>
+                <td>Địa chỉ</td>
+                <td>
+                  <t t-set="addr_b" t-value="o.company_id.partner_id._display_address(without_company=True) or ''"/>
+                  <t t-foreach="addr_b.split('-')" t-as="line">
+                    <t t-esc="line"/><br/>
+                  </t>
+                </td>
+              </tr>
+            </table>
+
+            <div class="fw-700 mt-6" style="margin-right:8px;">Bên B đã bàn giao cho bên A:</div>
+
+            <!-- Nguồn dữ liệu -->
+            <t t-set="is_done" t-value="o.state == 'done'"/>
+            <t t-set="lines"  t-value="is_done and o.move_line_ids or o.move_ids"/>
+
+            <!-- Bảng hàng hóa -->
+            <table class="bbgn-a5 mt-4">
+              <thead>
+                <tr>
+                  <th class="col-stt">STT</th>
+                  <th class="col-name">Tên hàng</th>
+                  <th class="col-uom">Đơn vị tính</th>
+                  <th class="col-qty">Số lượng</th>
+                  <th class="col-note">Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody>
+                <t t-set="idx" t-value="0"/>
+                <t t-foreach="lines" t-as="l">
+                  <!-- qty_show -->
+                  <t t-set="qty_show" t-value="0.0"/>
+                  <t t-if="l._name == 'stock.move'">
+                    <t t-set="qty_show" t-value="l.quantity or 0.0"/>
+                  </t>
+                  <t t-elif="l._name == 'stock.move.line'">
+                    <t t-set="qty_show" t-value="(l.move_id and l.move_id.quantity) or 0.0"/>
+                    <t t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
+                      <t t-set="qty_show" t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)"/>
+                    </t>
+                  </t>
+
+                  <t t-if="qty_show &gt; 0">
+                    <tr>
+                      <td class="col-stt"><t t-esc="idx + 1"/></td>
+
+                      <td class="col-name" style="padding:4px 6px;">
+                        <span t-esc="l.product_id and l.product_id.display_name or ''"/>
+                        <t t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
+                          <div style="font-size:10px; color:#444;" t-esc="l.description_picking"/>
+                        </t>
+                      </td>
+
+                      <td class="col-uom">
+                        <t t-if="l._name == 'stock.move.line'">
+                          <span t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
+                        </t>
+                        <t t-else="">
+                          <span t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
+                        </t>
+                      </td>
+
+                      <td class="col-qty"><span t-esc="'%0.2f' % qty_show"/></td>
+                      <td class="col-note"></td>
+                    </tr>
+                    <t t-set="idx" t-value="idx + 1"/>
+                  </t>
+                </t>
+
+                <!-- Không có dòng nào -->
+                <t t-if="idx == 0">
+                  <tr>
+                    <td colspan="5" style="text-align:center; font-style:italic; padding:6px;">
+                      Không có dòng hàng.
+                    </td>
+                  </tr>
+                </t>
+              </tbody>
+            </table>
+
+            <!-- Chữ ký -->
+            <table class="mt-8" style="text-align:center;">
+              <tr>
+                <td style="width:50%;" class="fw-700">ĐẠI DIỆN BÊN NHẬN<br/>(Ký, họ tên)</td>
+                <td style="width:50%;" class="fw-700">ĐẠI DIỆN BÊN GIAO<br/>(Ký, họ tên)</td>
+              </tr>
+              <tr>
+                <td style="height:80px;"></td>
+                <td style="height:80px;"></td>
+              </tr>
+            </table>
+
+          </t>
+        </div>
+
+      </t>
+    </t>
+  </template>
+
+</odoo>
