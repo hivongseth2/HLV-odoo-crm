@@ -8,14 +8,6 @@
       <field name="target">new</field>
     </record>
   
-    <!-- (Tùy chọn) Server Action nếu bạn muốn bấm từ smart button/code -->
-    <record id="action_server_open_export_wizard" model="ir.actions.server">
-      <field name="name">Mở wizard xuất lệnh xuất kho (Excel)</field>
-      <field name="model_id" ref="stock.model_stock_picking"/>
-      <field name="state">code</field>
-      <!-- Có act_window rồi thì gọi _for_xml_id là gọn nhất -->
-      <field name="code">action = env["ir.actions.act_window"]._for_xml_id("export_outgoing_picking_excel.action_picking_export_wizard")</field>
-    </record>
   
     <!-- ✅ Menu mở wizard trực tiếp -->
     <menuitem id="menu_export_excel_root"

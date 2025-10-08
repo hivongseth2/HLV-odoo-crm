@@ -2,7 +2,7 @@
 <odoo>
     <!-- Action report: Phiếu xuất kho kiêm bán hàng - Khách lẻ không hóa đơn -->
     <record id="report_pxbh_khachle_khonghd" model="ir.actions.report">
-        <field name="name">PXBH Khách lẻ không hóa đơn</field>
+        <field name="name">PXBH Khách lẻ không hóa đơn A4</field>
         <field name="model">stock.picking</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">hlv_a4_report.report_pxbh_khachle_khonghd_doc</field>
@@ -12,6 +12,19 @@
         <field name="binding_model_id" ref="stock.model_stock_picking" />
         <field name="binding_type">report</field>
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait" />
+    </record>
+
+    <record id="report_pxbh_khachle_khonghd_a5" model="ir.actions.report">
+        <field name="name">PXBH Khách lẻ không hóa đơn A5</field>
+        <field name="model">stock.picking</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hlv_a4_report.report_pxbh_khachle_khonghd_doc</field>
+        <field name="print_report_name">
+            'Phiếu Xuất Kho Kiêm Bán Hàng - Khách Lẻ Không Hóa Đơn - %s' % (object.name or 'Picking')
+        </field>
+        <field name="binding_model_id" ref="stock.model_stock_picking" />
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a5_landscape" />
     </record>
 
     <!-- Template -->
