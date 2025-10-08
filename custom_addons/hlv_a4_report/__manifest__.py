@@ -29,6 +29,10 @@
         'views/bbgn_date_wizard_views.xml',
         'report/print_proxy.xml',
         'report/px_hlv_a4.xml',
-
+        'report/bbgn_a5_khongngay.xml',
+        'report/pxbh_khachle_khonghd_a5.xml',
+        'report/px_hlv_a5.xml',
+        'report/bbbg_a5_co_po.xml',
+        'report/bbgn_a5_khong_gia.xml',
     ],
 }
