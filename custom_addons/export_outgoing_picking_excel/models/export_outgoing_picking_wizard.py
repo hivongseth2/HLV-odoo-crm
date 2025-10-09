@@ -153,16 +153,16 @@ class PickingExportWizard(models.TransientModel):
             raise UserError(_("Khoảng ngày không hợp lệ."))
 
         domain = [
-            ("scheduled_date", ">=", fields.Date.to_date(self.date_from)),
-            ("scheduled_date", "<=", fields.Date.to_date(self.date_to)),
-            ("picking_type_id.code", "=", "outgoing"),
+            ("picking_type_code", "=", "outgoing"),
+            ("date_done", ">=", fields.Date.to_date(self.date_from)),
+            ("date_done", "<=", fields.Date.to_date(self.date_to)),
+            ("state", "=", "done"),
         ]
 
         if self.warehouse_ids:
             domain.append(("picking_type_id.warehouse_id", "in", self.warehouse_ids.ids))
 
-        if self.state_filter and self.state_filter != "all":
-            domain.append(("state", "=", self.state_filter))
+        # Không cần lọc state_filter nữa vì đã cố định là 'done'
 
         return domain
 
