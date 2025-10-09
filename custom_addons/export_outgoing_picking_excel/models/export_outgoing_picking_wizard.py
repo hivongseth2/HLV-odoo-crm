@@ -196,15 +196,24 @@ class PickingExportWizard(models.TransientModel):
         partner_code = self._partner_code(partner)
         partner_name = (partner and partner.name) or ""
         partner_address = ""
+        import unicodedata
+        def normalize_addr(s):
+            # Chuẩn hóa: về chữ thường, loại bỏ dấu, loại bỏ khoảng trắng thừa
+            s = s.strip().lower()
+            s = unicodedata.normalize('NFD', s)
+            s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+            return s
         if partner:
             street = partner.street or ""
             city = partner.city or ""
             state = partner.state_id.name if partner.state_id else ""
-            # Loại bỏ lặp: chỉ lấy các thành phần khác nhau
             address_parts = []
+            normalized = set()
             for part in [street, city, state]:
-                if part and part not in address_parts:
+                norm = normalize_addr(part) if part else ""
+                if part and norm not in normalized:
                     address_parts.append(part)
+                    normalized.add(norm)
             partner_address = ", ".join(address_parts)
         partner_vat = (partner and partner.vat) or ""
         
