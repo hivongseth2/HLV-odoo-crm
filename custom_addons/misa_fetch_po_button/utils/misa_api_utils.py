@@ -2,6 +2,7 @@ import requests
 import logging
 from odoo import models
 import re
+from dateutil import parser as dtparser
 from requests.utils import dict_from_cookiejar
 from http.cookiejar import Cookie
 _logger = logging.getLogger(__name__)
@@ -99,8 +100,6 @@ class MisaApiUtils(models.AbstractModel):
             response = requests.post(url, headers=headers, json=payload)
         return response
 
-
-
     def _fetch_login_crm_token(self):
         """Fetch CRM token for MISA"""
         # Sử dụng session để duy trì cookie, bao gồm cả HttpOnly
@@ -165,6 +164,53 @@ class MisaApiUtils(models.AbstractModel):
         
 
         if not match:
+            def get_saleorder_owner_and_date(self, sale_order_id, token=None, companycode: str = "3R2PY2F4"):
+                """Return a dict with owner_code and sale_order_date for a Sale Order.
+
+                Calls: POST https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4
+                Payload: {"ID": "<sale_order_id>", "MISAEntityState": "2"}
+
+                - owner_code: the string inside parentheses of OwnerIDText, e.g.
+                  "NGUYỄN THÀNH LUÂN (NGUYENTHANHLUAN)" -> "NGUYENTHANHLUAN".
+                  If no parentheses, use the whole stripped text.
+                - sale_order_date: a Python date object parsed from SaleOrderDate; None if missing.
+                """
+                session = requests.Session()
+                url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {token}" if token else "",
+                    "User-Agent": "Odoo/HLV",
+                    "Accept": "application/json, text/plain, */*",
+                    "companycode": companycode,
+                }
+                payload = {"ID": str(sale_order_id), "MISAEntityState": "2"}
+
+                try:
+                    resp = session.post(url, headers=headers, json=payload, timeout=30)
+                    data = resp.json() if resp.content else {}
+                except Exception:
+                    _logger.exception("get_saleorder_owner_and_date: lỗi gọi FormDataNew cho SO=%s", sale_order_id)
+                    return {"owner_code": None, "sale_order_date": None}
+
+                cd = (data or {}).get("Data", {}).get("CurrentData", {}) or {}
+                raw_owner = str(cd.get("OwnerIDText") or "").strip()
+                owner_code = None
+                if raw_owner:
+                    m = re.search(r"\(([^)]+)\)\s*$", raw_owner)
+                    owner_code = (m.group(1).strip() if m else raw_owner)
+
+                date_text = cd.get("SaleOrderDate") or None
+                sale_date = None
+                if date_text:
+                    try:
+                        sale_date = dtparser.parse(str(date_text)).date()
+                    except Exception:
+                        _logger.warning("Không parse được SaleOrderDate='%s'", date_text)
+                        sale_date = None
+
+                return {"owner_code": owner_code, "sale_order_date": sale_date}
+
             raise Exception("Token not found in CRM HTML")
 
         return match.group("token")
@@ -303,7 +349,7 @@ class MisaApiUtils(models.AbstractModel):
             raise Exception(f"Lỗi khi xử lý response JSON: {e}")
 
     # === Lấy thông tin ID, TaxCode, AccountNumber của đối tác từ MISA CRM ===
-    def get_account_identity(self, account_id: int | str, token: str, companycode: str | None = None) -> dict:
+    def get_account_identity(self, account_id: int | str, sale_headers: object) -> dict:
         """
         Lấy ID, TaxCode, AccountNumber của đối tác từ FormDataNew:
         POST https://amisapp.misa.vn/crm/g2/api/business/Account/FormDataNew/Account/28/4
@@ -311,24 +357,25 @@ class MisaApiUtils(models.AbstractModel):
 
         Trả về: {"id": "...", "taxcode": "...", "account_number": "..."}
         """
-        if not account_id or not token:
-            _logger.warning("get_account_identity: thiếu account_id hoặc token")
-            return {}
+        # if not account_id or not token:
+        #     _logger.warning("get_account_identity: thiếu account_id hoặc token")
+        #     return {}
 
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Account/FormDataNew/Account/28/4"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json, text/plain, */*",
-            "User-Agent": "Odoo/HLV",
-        }
-        if companycode:
-            headers["companycode"] = companycode
+        url = ""
+        # headers = {
+        #     "Content-Type": "application/json",
+        #     "Authorization": f"Bearer {token}",
+        #     "Accept": "application/json, text/plain, */*",
+        #     "User-Agent": "Odoo/HLV",
+        # }
+        # headers = get_crm_header(token)
+        # if companycode:
+        #     headers["companycode"] = companycode
 
         payload = {"ID": str(account_id), "MISAEntityState": "2"}
 
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=30)
+            resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
             if resp.status_code != 200:
                 _logger.error("FormDataNew(Account) HTTP %s: %s", resp.status_code, resp.text[:300])
                 return {}

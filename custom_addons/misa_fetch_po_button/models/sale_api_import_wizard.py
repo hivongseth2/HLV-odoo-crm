@@ -515,6 +515,12 @@ class SaleApiImportWizard(models.TransientModel):
                     order_ref=order.get("SaleOrderNo"),
                     token=crm_token
                 )
+                # NEW: fetch OwnerIDText and SaleOrderDate from FormDataNew
+                owner_date = {}
+                try:
+                    owner_date = misa_utils.get_saleorder_owner_and_date(order_id, token=crm_token) or {}
+                except Exception as _e:
+                    _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", order_id, _e)
                 # tỉnh/thành để map state/city
                 province_text = (
                     order.get("ShippingProvinceIDCustomText")
@@ -546,7 +552,7 @@ class SaleApiImportWizard(models.TransientModel):
                 
                 try:
                     if account_id:
-                        ident = misa_utils.get_account_identity(account_id, crm_token) or {}
+                        ident = misa_utils.get_account_identity(account_id, sale_headers) or {}
                         commercial = partner.commercial_partner_id or partner
 
                         vals, msg = {}, []
@@ -610,11 +616,19 @@ class SaleApiImportWizard(models.TransientModel):
                             existing_order.misa_id = misa_id_str
                         # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <
                         self._update_existing_so_taxes(existing_order, grouped_lines)
+                        # Update MISA fields (owner code and order date)
+                        upd = {}
+                        if owner_date.get('owner_code'):
+                            upd['x_studio_misa_saler_code'] = owner_date['owner_code']
+                        if owner_date.get('sale_order_date'):
+                            upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+                        if upd:
+                            existing_order.write(upd)
                         _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật thuế", order_ref)
                         continue
 
                     group_total = sum(line_subtotal(l) for l in grouped_lines)
-                    sale_order = self.env['sale.order'].create({
+                    sale_vals = {
                         'name': order_ref,
                         'partner_id': partner.id,
                         'date_order': order_date,
@@ -623,7 +637,14 @@ class SaleApiImportWizard(models.TransientModel):
                         'origin':origin,
                         'warehouse_id': warehouse.id,
                         'misa_id': misa_id_str,      
-                    })
+                    }
+                    # If we have owner code/date, set the Studio fields
+                    if owner_date.get('owner_code'):
+                        sale_vals['x_studio_misa_saler_code'] = owner_date['owner_code']
+                    if owner_date.get('sale_order_date'):
+                        sale_vals['x_studio_misa_order_date'] = owner_date['sale_order_date']
+
+                    sale_order = self.env['sale.order'].create(sale_vals)
                     
                     
 
@@ -736,11 +757,18 @@ class SaleApiImportWizard(models.TransientModel):
                                 existing_order.misa_id = misa_id_str
                             # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <
                             self._update_existing_so_taxes(existing_order, grouped_lines)
+                            upd = {}
+                            if owner_date.get('owner_code'):
+                                upd['x_studio_misa_saler_code'] = owner_date['owner_code']
+                            if owner_date.get('sale_order_date'):
+                                upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+                            if upd:
+                                existing_order.write(upd)
                             _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật thuế", order_ref)
                             continue
 
                         group_total = sum(line_subtotal(l) for l in grouped_lines)
-                        sale_order = self.env['sale.order'].create({
+                        sale_vals = {
                             'name': order_ref,
                             'partner_id': partner.id,
                             'date_order': order_date,
@@ -749,7 +777,13 @@ class SaleApiImportWizard(models.TransientModel):
                             'warehouse_id': warehouse.id,
                             'origin': origin,
                             'misa_id': misa_id_str,
-                        })
+                        }
+                        if owner_date.get('owner_code'):
+                            sale_vals['x_studio_misa_saler_code'] = owner_date['owner_code']
+                        if owner_date.get('sale_order_date'):
+                            sale_vals['x_studio_misa_order_date'] = owner_date['sale_order_date']
+
+                        sale_order = self.env['sale.order'].create(sale_vals)
 
                         # Thêm line
                         for line in grouped_lines:
