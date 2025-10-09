@@ -200,7 +200,12 @@ class PickingExportWizard(models.TransientModel):
             street = partner.street or ""
             city = partner.city or ""
             state = partner.state_id.name if partner.state_id else ""
-            partner_address = ", ".join(filter(None, [street, city, state]))
+            # Loại bỏ lặp: chỉ lấy các thành phần khác nhau
+            address_parts = []
+            for part in [street, city, state]:
+                if part and part not in address_parts:
+                    address_parts.append(part)
+            partner_address = ", ".join(address_parts)
         partner_vat = (partner and partner.vat) or ""
         
         # Lấy thông tin từ Sale Order
