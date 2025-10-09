@@ -2,7 +2,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 import base64
-
 import datetime
 from io import BytesIO
 
@@ -21,25 +20,25 @@ def _to_date_str(val):
         try:
             d = fields.Datetime.from_string(val)
             if d:
-                return d.date().strftime("%d/%m/%Y")
+                return d.strftime("%A, %B %d, %Y")
         except Exception:
             try:
                 d2 = fields.Date.from_string(val)
                 if d2:
-                    return d2.strftime("%d/%m/%Y")
+                    return d2.strftime("%A, %B %d, %Y")
             except Exception:
                 return val
         return val
     if isinstance(val, datetime.datetime):
-        return val.date().strftime("%d/%m/%Y")
+        return val.strftime("%A, %B %d, %Y")
     if isinstance(val, datetime.date):
-        return val.strftime("%d/%m/%Y")
+        return val.strftime("%A, %B %d, %Y")
     return str(val)
 
 
 class PickingExportWizard(models.TransientModel):
     _name = "picking.export.wizard"
-    _description = "Xuất Excel lệnh xuất kho theo khoảng ngày"
+    _description = "Xuất Excel lệnh xuất kho theo template kế toán"
 
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
@@ -61,69 +60,93 @@ class PickingExportWizard(models.TransientModel):
         string="Trạng thái",
         default="all",
     )
+
     def _find_sale_order(self, move, picking):
         # 1) Từ sale_line_id trực tiếp
         if getattr(move, 'sale_line_id', False) and move.sale_line_id.order_id:
             return move.sale_line_id.order_id
-        # 2) Từ procurement group (nhiều trường hợp split/backorder vẫn còn link)
+        # 2) Từ procurement group
         grp = getattr(move, 'group_id', False)
         if grp and getattr(grp, 'sale_id', False):
             return grp.sale_id
-        # 3) Từ picking (ít gặp nhưng để dự phòng)
+        # 3) Từ picking
         if getattr(picking, 'sale_id', False):
             return picking.sale_id
         return False
 
-    # ====== Định nghĩa cấu trúc cột ĐÚNG THỨ TỰ ======
     def _get_columns_definition(self):
-        """
-        Định nghĩa các cột xuất Excel theo đúng thứ tự yêu cầu.
-        group: 'picking' hoặc 'product' để phân màu
-        """
+        """Định nghĩa các cột theo template kế toán"""
         return [
-            # === NHÓM 1: Thông tin phiếu (8 cột) ===
-            {'key': 'picking_type', 'name': 'Loại lệnh (*)', 'width': 20, 'group': 'picking'},
-            {'key': 'picking_name', 'name': 'Số lệnh xuất kho (*)', 'width': 25, 'group': 'picking'},
-            {'key': 'scheduled_date', 'name': 'Ngày lập lệnh (*)', 'width': 15, 'group': 'picking'},
-            {'key': 'date_deadline', 'name': 'Hạn xuất kho', 'width': 15, 'group': 'picking'},
-            {'key': 'warehouse', 'name': 'Kho xuất (*)', 'width': 20, 'group': 'picking'},
-            {'key': 'partner_code', 'name': 'Mã đối tượng', 'width': 15, 'group': 'picking'},
-            {'key': 'partner_name', 'name': 'Tên đối tượng nhận hàng', 'width': 60, 'group': 'picking'},
-            {'key': 'note', 'name': 'Diễn giải', 'width': 30, 'group': 'picking'},
-
-            # === NHÓM 2: Thông tin hàng hóa (29 cột) ===
-            {'key': 'product_code', 'name': 'Mã hàng (*)', 'width': 18, 'group': 'product'},
-            {'key': 'product_name', 'name': 'Tên hàng', 'width': 50, 'group': 'product'},
-            {'key': 'product_description', 'name': 'Mô tả sản phẩm', 'width': 30, 'group': 'product'},
-            {'key': 'product_spec', 'name': 'Mã quy cách', 'width': 15, 'group': 'product'},
-            {'key': 'uom', 'name': 'Đơn vị tính', 'width': 12, 'group': 'product'},
-            {'key': 'uom_ratio', 'name': 'Tỷ lệ chuyển đổi', 'width': 15, 'group': 'product'},
-            {'key': 'location', 'name': 'Vị trí', 'width': 25, 'group': 'product'},
-            {'key': 'length', 'name': 'Chiều dài', 'width': 12, 'group': 'product'},
-            {'key': 'width', 'name': 'Chiều rộng', 'width': 12, 'group': 'product'},
-            {'key': 'height', 'name': 'Chiều cao', 'width': 12, 'group': 'product'},
-            {'key': 'radius', 'name': 'Bán kính', 'width': 12, 'group': 'product'},
-            {'key': 'quantity', 'name': 'Lượng', 'width': 12, 'group': 'product'},
-            {'key': 'qty_requested', 'name': 'SL yêu cầu', 'width': 12, 'group': 'product'},
-            {'key': 'qty_requested_main', 'name': 'SL yêu cầu theo ĐVT chính', 'width': 20, 'group': 'product'},
-            {'key': 'qty_done', 'name': 'SL thực xuất', 'width': 12, 'group': 'product'},
-            {'key': 'qty_done_main', 'name': 'SL thực xuất theo ĐVT chính', 'width': 20, 'group': 'product'},
-            {'key': 'lot_name', 'name': 'Số lô', 'width': 15, 'group': 'product'},
-            {'key': 'lot_expiry', 'name': 'Hạn sử dụng', 'width': 15, 'group': 'product'},
-            {'key': 'origin', 'name': 'Đơn đặt hàng', 'width': 25, 'group': 'product'},
-            {'key': 'custom_1', 'name': 'Trường mở rộng chi tiết 1', 'width': 15, 'group': 'product'},
-            {'key': 'custom_2', 'name': 'Trường mở rộng chi tiết 2', 'width': 15, 'group': 'product'},
-            {'key': 'custom_3', 'name': 'Trường mở rộng chi tiết 3', 'width': 15, 'group': 'product'},
-            {'key': 'custom_4', 'name': 'Trường mở rộng chi tiết 4', 'width': 15, 'group': 'product'},
-            {'key': 'custom_5', 'name': 'Trường mở rộng chi tiết 5', 'width': 15, 'group': 'product'},
-            {'key': 'custom_6', 'name': 'Trường mở rộng chi tiết 6', 'width': 15, 'group': 'product'},
-            {'key': 'custom_7', 'name': 'Trường mở rộng chi tiết 7', 'width': 15, 'group': 'product'},
-            {'key': 'custom_8', 'name': 'Trường mở rộng chi tiết 8', 'width': 15, 'group': 'product'},
-            {'key': 'custom_9', 'name': 'Trường mở rộng chi tiết 9', 'width': 15, 'group': 'product'},
-            {'key': 'custom_10', 'name': 'Trường mở rộng chi tiết 10', 'width': 15, 'group': 'product'},
+            {'key': 'hinh_thuc_ban_hang', 'name': 'Hình thức bán hàng', 'width': 25},
+            {'key': 'phuong_thuc_thanh_toan', 'name': 'Phương thức thanh toán', 'width': 25},
+            {'key': 'kiem_phieu_xuat_kho', 'name': 'Kiêm phiếu xuất kho', 'width': 20},
+            {'key': 'lap_kem_hoa_don', 'name': 'Lập kèm hóa đơn', 'width': 18},
+            {'key': 'da_lap_hoa_don', 'name': 'Đã lập hóa đơn', 'width': 18},
+            {'key': 'ngay_hach_toan', 'name': 'Ngày hạch toán (*)', 'width': 25},
+            {'key': 'ngay_chung_tu', 'name': 'Ngày chứng từ (*)', 'width': 25},
+            {'key': 'so_chung_tu', 'name': 'Số chứng từ (*)', 'width': 20},
+            {'key': 'so_phieu_xuat', 'name': 'Số phiếu xuất', 'width': 20},
+            {'key': 'mau_so_hd', 'name': 'Mẫu số HĐ', 'width': 15},
+            {'key': 'ky_hieu_hd', 'name': 'Ký hiệu HĐ', 'width': 15},
+            {'key': 'so_hoa_don', 'name': 'Số hóa đơn', 'width': 15},
+            {'key': 'ngay_hoa_don', 'name': 'Ngày hóa đơn', 'width': 25},
+            {'key': 'ma_khach_hang', 'name': 'Mã khách hàng', 'width': 15},
+            {'key': 'ten_khach_hang', 'name': 'Tên khách hàng', 'width': 40},
+            {'key': 'dia_chi', 'name': 'Địa chỉ', 'width': 50},
+            {'key': 'ma_so_thue', 'name': 'Mã số thuế', 'width': 15},
+            {'key': 'don_vi_giao_dai_ly', 'name': 'Đơn vị giao đại lý', 'width': 30},
+            {'key': 'nguoi_nop', 'name': 'Người nộp', 'width': 25},
+            {'key': 'nop_vao_tk', 'name': 'Nộp vào TK', 'width': 15},
+            {'key': 'ten_ngan_hang', 'name': 'Tên ngân hàng', 'width': 30},
+            {'key': 'dien_giai', 'name': 'Diễn giải/Lý do nộp', 'width': 40},
+            {'key': 'ly_do_xuat', 'name': 'Lý do xuất', 'width': 40},
+            {'key': 'ma_nhan_vien', 'name': 'Mã nhân viên bán hàng', 'width': 20},
+            {'key': 'so_ct_phieu_thu', 'name': 'Số chứng từ kèm theo (Phiếu thu)', 'width': 25},
+            {'key': 'so_ct_phieu_xuat', 'name': 'Số chứng từ kèm theo (Phiếu xuất)', 'width': 25},
+            {'key': 'han_thanh_toan', 'name': 'Hạn thanh toán', 'width': 20},
+            {'key': 'ma_hang', 'name': 'Mã hàng (*)', 'width': 18},
+            {'key': 'thuoc_combo', 'name': 'Thuộc combo', 'width': 15},
+            {'key': 'ten_hang', 'name': 'Tên hàng', 'width': 40},
+            {'key': 'la_dong_ghi_chu', 'name': 'Là dòng ghi chú', 'width': 18},
+            {'key': 'hang_khuyen_mai', 'name': 'Hàng khuyến mại', 'width': 18},
+            {'key': 'chiet_khau_thuong_mai', 'name': 'Chiết khấu thương mại', 'width': 25},
+            {'key': 'tk_tien_no', 'name': 'TK Tiền/Chi phí/Nợ (*)', 'width': 22},
+            {'key': 'tk_doanh_thu_co', 'name': 'TK Doanh thu/Có (*)', 'width': 20},
+            {'key': 'dvt', 'name': 'ĐVT', 'width': 12},
+            {'key': 'so_luong', 'name': 'Số lượng', 'width': 12},
+            {'key': 'don_gia', 'name': 'Đơn giá', 'width': 15},
+            {'key': 'thanh_tien', 'name': 'Thành tiền', 'width': 15},
+            {'key': 'ty_le_ck', 'name': 'Tỷ lệ CK (%)', 'width': 12},
+            {'key': 'tien_chiet_khau', 'name': 'Tiền chiết khấu', 'width': 15},
+            {'key': 'tk_chiet_khau', 'name': 'TK chiết khấu', 'width': 15},
+            {'key': 'gia_tinh_thue_xk', 'name': 'Giá tính thuế XK', 'width': 15},
+            {'key': 'ty_le_thue_xk', 'name': '% thuế xuất khẩu', 'width': 15},
+            {'key': 'tien_thue_xk', 'name': 'Tiền thuế xuất khẩu', 'width': 18},
+            {'key': 'tk_thue_xk', 'name': 'TK thuế xuất khẩu', 'width': 18},
+            {'key': 'ty_le_thue_gtgt', 'name': '% thuế GTGT', 'width': 12},
+            {'key': 'ty_le_thue_khac', 'name': '% thuế suất KHAC', 'width': 18},
+            {'key': 'tien_thue_gtgt', 'name': 'Tiền thuế GTGT', 'width': 15},
+            {'key': 'tk_thue_gtgt', 'name': 'TK thuế GTGT', 'width': 15},
+            {'key': 'bien_kiem_soat', 'name': 'Biển kiểm soát ', 'width': 18},
+            {'key': 'hh_khong_th_tren_to_khai', 'name': 'HH không TH trên tờ khai thuế GTGT', 'width': 35},
+            {'key': 'ma_khoan_muc_cp', 'name': 'Mã khoản mục chi phí', 'width': 22},
+            {'key': 'ma_don_vi', 'name': 'Mã đơn vị', 'width': 15},
+            {'key': 'ma_doi_tuong_thcp', 'name': 'Mã đối tượng THCP', 'width': 20},
+            {'key': 'ma_cong_trinh', 'name': 'Mã công trình', 'width': 18},
+            {'key': 'so_don_dat_hang', 'name': 'Số đơn đặt hàng', 'width': 20},
+            {'key': 'so_hop_dong_ban', 'name': 'Số hợp đồng bán', 'width': 20},
+            {'key': 'ma_thong_ke', 'name': 'Mã thống kê', 'width': 15},
+            {'key': 'so_khe_uoc_cho_vay', 'name': 'Số khế ước cho vay', 'width': 20},
+            {'key': 'cp_khong_hop_ly', 'name': 'CP không hợp lý', 'width': 18},
+            {'key': 'ma_kho', 'name': 'Mã kho', 'width': 15},
+            {'key': 'tk_gia_von', 'name': 'TK giá vốn', 'width': 15},
+            {'key': 'tk_kho', 'name': 'TK Kho', 'width': 12},
+            {'key': 'don_gia_von', 'name': 'Đơn giá vốn', 'width': 15},
+            {'key': 'tien_von', 'name': 'Tiền vốn', 'width': 15},
+            {'key': 'hang_hoa_giu_ho', 'name': 'Hàng hóa giữ hộ/bán hộ', 'width': 25},
+            {'key': 'vi_tri', 'name': 'vị trí', 'width': 25},
         ]
 
-    # ====== Helpers ======
     def _domain(self):
         self.ensure_one()
         if self.date_from > self.date_to:
@@ -148,60 +171,52 @@ class PickingExportWizard(models.TransientModel):
             return ""
         return partner.ref or (partner.barcode if hasattr(partner, "barcode") else None) or partner.vat or str(partner.id) or ""
 
-    def _uom_ratio(self, from_uom, to_uom):
-        if not from_uom or not to_uom:
-            return None
-        if from_uom.id == to_uom.id:
-            return 1.0
-        try:
-            return from_uom._compute_quantity(1.0, to_uom)
-        except Exception:
-            return 1.0
-
-    def _get_move_qty_done(self, move):
-        if hasattr(move, 'qty_done'):
-            return move.qty_done or 0.0
-        return sum(ml.qty_done for ml in move.move_line_ids) or 0.0
-
-    def _get_warehouse_name(self, picking):
+    def _get_warehouse_code(self, picking):
+        """Lấy mã kho"""
         pt = picking.picking_type_id
         if pt and pt.warehouse_id:
-            return pt.warehouse_id.name
-        if hasattr(picking.location_id, 'warehouse_id') and picking.location_id.warehouse_id:
-            return picking.location_id.warehouse_id.name
+            return pt.warehouse_id.code or pt.warehouse_id.name or ""
         return ""
-
-    def _extract_sale_refs(self, move):
-        """
-        Trả về (sale_line, sale_order_name) nếu tồn tại, ngược lại (None, picking.origin or '').
-        """
-        sol = getattr(move, 'sale_line_id', False) or False
-        so_name = ""
-        if sol and sol.order_id:
-            so_name = sol.order_id.name or ""
-        else:
-            so_name = move.picking_id.origin or ""
-        return sol, so_name
-
-    def _convert_qty_pair(self, qty_in_src_uom, src_uom, uom_line, uom_main):
-        """
-        Trả về (qty_for_column_qty_requested, qty_requested_main)
-        - qty_for_column_qty_requested theo uom_line
-        - qty_requested_main theo uom_main
-        """
-        qty_line = qty_in_src_uom
-        if src_uom and uom_line and src_uom.id != uom_line.id:
-            qty_line = src_uom._compute_quantity(qty_in_src_uom, uom_line)
-        qty_main = qty_line
-        if uom_line and uom_main and uom_line.id != uom_main.id:
-            qty_main = uom_line._compute_quantity(qty_line, uom_main)
-        return qty_line, qty_main
 
     def _get_move_line_rows(self, picking):
         rows = []
-        pt = picking.picking_type_id
-        warehouse_name = self._get_warehouse_name(picking)
+        so = self._find_sale_order(picking.move_ids_without_package[0] if picking.move_ids_without_package else None, picking)
+        
+        # Thông tin chung từ Sale Order hoặc Picking
+        scheduled_date_str = _to_date_str(picking.scheduled_date)
+        picking_name = picking.name or ""
+        partner = picking.partner_id
+        partner_code = self._partner_code(partner)
+        partner_name = (partner and partner.name) or ""
+        partner_address = ""
+        if partner:
+            street = partner.street or ""
+            city = partner.city or ""
+            state = partner.state_id.name if partner.state_id else ""
+            partner_address = ", ".join(filter(None, [street, city, state]))
+        partner_vat = (partner and partner.vat) or ""
+        
+        # Lấy thông tin từ Sale Order
+        sale_name = so.name if so else (picking.origin or "")
+        sale_user = so.user_id if so else None
+        sale_user_code = ""
+        if sale_user:
+            sale_user_code = sale_user.login or sale_user.name or ""
+        
+        # Diễn giải
+        dien_giai = ""
+        if so and so.origin:
+            dien_giai = f"Xuất kho bán hàng cho {partner_name}"
+        elif picking.note:
+            dien_giai = picking.note
+        else:
+            dien_giai = f"Bán hàng {partner_name}"
+        
+        ly_do_xuat = dien_giai
+        
+        warehouse_code = self._get_warehouse_code(picking)
 
+        # Xử lý từng move line hoặc move
         if picking.move_line_ids:
             for ml in picking.move_line_ids:
                 move = ml.move_id
@@ -209,242 +224,209 @@ class PickingExportWizard(models.TransientModel):
                 if not prod:
                     continue
 
-                product_name = prod.display_name or prod.name or ""
-                product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
-
-                # UoM chọn theo line trước, rồi về UoM chính
-                uom_line = ml.product_uom_id or move.product_uom or prod.uom_id
-                uom_name = (uom_line and uom_line.name) or ""
-                uom_main = prod.uom_id
-                ratio = self._uom_ratio(uom_line, uom_main)
-
-                # Lấy tham chiếu Sale
-                sol, so_name = self._extract_sale_refs(move)
-
-                # ====== SL yêu cầu từ Sale Order Line (nếu có) ======
-                if sol:
-                    qty_req_src = sol.product_uom_qty or 0.0
-                    src_uom = sol.product_uom or prod.uom_id
-                    qty_req, qty_req_main = self._convert_qty_pair(qty_req_src, src_uom, uom_line, uom_main)
-                else:
-                    # fallback theo move
-                    qty_req = move.product_uom_qty or 0.0
-                    qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
-
-                # ====== SL thực xuất từ qty_delivered (nếu có) ======
-                if sol:
-                    qty_done_src = sol.qty_delivered or 0.0
-                    src_uom = sol.product_uom or prod.uom_id
-                    qty_done, qty_done_main = self._convert_qty_pair(qty_done_src, src_uom, uom_line, uom_main)
-                else:
-                    qty_done = ml.qty_done or 0.0
-                    qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
-
-                lot_name = ""
-                lot_expiry = ""
-                if ml.lot_id:
-                    lot_name = ml.lot_id.name or ""
-                    life_date = getattr(ml.lot_id, "life_date", None) or \
-                                getattr(ml.lot_id, "expiration_date", None) or \
-                                getattr(ml.lot_id, "use_date", None)
-                    lot_expiry = _to_date_str(life_date)
-
-                location_name = (ml.location_id and ml.location_id.complete_name) or \
-                                (ml.location_id and ml.location_id.display_name) or ""
-                so = self._find_sale_order(move, picking)
-                so_name = so.name if so else (picking.origin or "")
-                note_val = (so and so.origin) or (picking.note or "")
-
-                rows.append({
-                    'picking_type': pt.name or "",
-                    'picking_name': picking.display_name or picking.name or "",
-                    'scheduled_date': _to_date_str(picking.scheduled_date),
-                    'date_deadline': _to_date_str(picking.date_deadline),
-                    'warehouse': warehouse_name,
-                    'partner_code': self._partner_code(picking.partner_id),
-                    'partner_name': (picking.partner_id and picking.partner_id.name) or "",
-                    'note': note_val,
-                    'product_code': product_code,
-                    'product_name': product_name,
-                    'product_description': (prod.description_sale or prod.description_picking or prod.description) or "",
-                    'product_spec': getattr(prod, "default_code", "") or "",
-                    'uom': uom_name,
-                    'uom_ratio': ratio,
-                    'location': location_name,
-                    'length': "",
-                    'width': "",
-                    'height': "",
-                    'radius': "",
-                    'quantity': "",
-                    'qty_requested': qty_req,
-                    'qty_requested_main': qty_req_main,
-                    'qty_done': qty_done,
-                    'qty_done_main': qty_done_main,
-                    'lot_name': lot_name,
-                    'lot_expiry': lot_expiry,
-                    'origin': so_name or "",
-                    'custom_1': "",
-                    'custom_2': "",
-                    'custom_3': "",
-                    'custom_4': "",
-                    'custom_5': "",
-                    'custom_6': "",
-                    'custom_7': "",
-                    'custom_8': "",
-                    'custom_9': "",
-                    'custom_10': "",
-                })
+                row = self._build_row_data(
+                    picking, so, prod, ml, move,
+                    scheduled_date_str, picking_name, partner_code, partner_name,
+                    partner_address, partner_vat, sale_name, sale_user_code,
+                    dien_giai, ly_do_xuat, warehouse_code
+                )
+                rows.append(row)
         else:
             for mv in picking.move_ids_without_package:
                 prod = mv.product_id
                 if not prod:
                     continue
 
-                product_name = prod.display_name or prod.name or ""
-                product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
+                row = self._build_row_data(
+                    picking, so, prod, None, mv,
+                    scheduled_date_str, picking_name, partner_code, partner_name,
+                    partner_address, partner_vat, sale_name, sale_user_code,
+                    dien_giai, ly_do_xuat, warehouse_code
+                )
+                rows.append(row)
 
-                uom_line = mv.product_uom or prod.uom_id
-                uom_name = (uom_line and uom_line.name) or ""
-                uom_main = prod.uom_id
-                ratio = self._uom_ratio(uom_line, uom_main)
-
-                # Lấy tham chiếu Sale
-                sol, so_name = self._extract_sale_refs(mv)
-
-                # ====== SL yêu cầu từ Sale Order Line (nếu có) ======
-                if sol:
-                    qty_req_src = sol.product_uom_qty or 0.0
-                    src_uom = sol.product_uom or prod.uom_id
-                    qty_req, qty_req_main = self._convert_qty_pair(qty_req_src, src_uom, uom_line, uom_main)
-                else:
-                    qty_req = mv.product_uom_qty or 0.0
-                    qty_req_main = uom_line._compute_quantity(qty_req, uom_main) if (uom_line and uom_main) else qty_req
-
-                # ====== SL thực xuất từ qty_delivered (nếu có) ======
-                if sol:
-                    qty_done_src = sol.qty_delivered or 0.0
-                    src_uom = sol.product_uom or prod.uom_id
-                    qty_done, qty_done_main = self._convert_qty_pair(qty_done_src, src_uom, uom_line, uom_main)
-                else:
-                    qty_done = self._get_move_qty_done(mv)
-                    qty_done_main = uom_line._compute_quantity(qty_done, uom_main) if (uom_line and uom_main) else qty_done
-                so = self._find_sale_order(mv, picking)
-                so_name = so.name if so else (picking.origin or "")
-                note_val = (so and so.origin) or (picking.note or "")
-
-                rows.append({
-                    'picking_type': pt.name or "",
-                    'picking_name': picking.display_name or picking.name or "",
-                    'scheduled_date': _to_date_str(picking.scheduled_date),
-                    'date_deadline': _to_date_str(picking.date_deadline),
-                    'warehouse': warehouse_name,
-                    'partner_code': self._partner_code(picking.partner_id),
-                    'partner_name': (picking.partner_id and picking.partner_id.name) or "",
-                    'note': note_val,
-                    'product_code': product_code,
-                    'product_name': product_name,
-                    'product_description': (prod.description_sale or prod.description_picking or prod.description) or "",
-                    'product_spec': getattr(prod, "default_code", "") or "",
-                    'uom': uom_name,
-                    'uom_ratio': ratio,
-                    'location': (mv.location_id and mv.location_id.complete_name) or "",
-                    'length': "",
-                    'width': "",
-                    'height': "",
-                    'radius': "",
-                    'quantity': "",
-                    'qty_requested': qty_req,
-                    'qty_requested_main': qty_req_main,
-                    'qty_done': qty_done,
-                    'qty_done_main': qty_done_main,
-                    'lot_name': "",
-                    'lot_expiry': "",
-                    'origin': so_name or "",
-                    'custom_1': "",
-                    'custom_2': "",
-                    'custom_3': "",
-                    'custom_4': "",
-                    'custom_5': "",
-                    'custom_6': "",
-                    'custom_7': "",
-                    'custom_8': "",
-                    'custom_9': "",
-                    'custom_10': "",
-                })
         return rows
 
+    def _build_row_data(self, picking, so, prod, ml, move,
+                        scheduled_date_str, picking_name, partner_code, partner_name,
+                        partner_address, partner_vat, sale_name, sale_user_code,
+                        dien_giai, ly_do_xuat, warehouse_code):
+        """Xây dựng dữ liệu cho 1 dòng"""
+        
+        product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
+        product_name = prod.display_name or prod.name or ""
+        
+        # UoM
+        if ml:
+            uom = ml.product_uom_id or prod.uom_id
+            qty = ml.qty_done or 0.0
+            location_name = (ml.location_id and ml.location_id.complete_name) or ""
+        else:
+            uom = move.product_uom or prod.uom_id
+            qty = move.qty_done if hasattr(move, 'qty_done') else (move.product_uom_qty or 0.0)
+            location_name = (move.location_id and move.location_id.complete_name) or ""
+        
+        uom_name = (uom and uom.name) or ""
+        
+        # Lấy thông tin từ Sale Order Line
+        sol = getattr(move, 'sale_line_id', False) if move else False
+        don_gia = 0.0
+        thanh_tien = 0.0
+        ty_le_ck = 0.0
+        tien_chiet_khau = 0.0
+        ty_le_thue_gtgt = 0.0
+        tien_thue_gtgt = 0.0
+        
+        if sol:
+            don_gia = sol.price_unit or 0.0
+            thanh_tien = sol.price_subtotal or 0.0
+            ty_le_ck = sol.discount or 0.0
+            
+            # Tính tiền chiết khấu
+            if ty_le_ck > 0:
+                tien_chiet_khau = (don_gia * qty * ty_le_ck) / 100
+            
+            # Thuế GTGT
+            if sol.tax_id:
+                for tax in sol.tax_id:
+                    ty_le_thue_gtgt = tax.amount or 0.0
+                    break
+            
+            tien_thue_gtgt = (thanh_tien * ty_le_thue_gtgt) / 100
+        else:
+            # Fallback: lấy từ product
+            don_gia = prod.list_price or 0.0
+            thanh_tien = don_gia * qty
+        
+        # Đơn giá vốn và tiền vốn
+        don_gia_von = prod.standard_price or 0.0
+        tien_von = don_gia_von * qty
+
+        return {
+            # Hardcoded fields
+            'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
+            'phuong_thuc_thanh_toan': 'Chưa thu tiền',
+            'kiem_phieu_xuat_kho': 'Có',
+            'lap_kem_hoa_don': 'Có',
+            'da_lap_hoa_don': 'Đã lập',
+            
+            # Date fields
+            'ngay_hach_toan': scheduled_date_str,
+            'ngay_chung_tu': scheduled_date_str,
+            'so_chung_tu': picking_name,
+            'so_phieu_xuat': picking_name,
+            
+            # Invoice fields - hardcoded examples
+            'mau_so_hd': '01GTKT0/001',
+            'ky_hieu_hd': 'AB/20E',
+            'so_hoa_don': '',  # Để trống hoặc lấy từ invoice nếu có
+            'ngay_hoa_don': scheduled_date_str,
+            
+            # Partner info
+            'ma_khach_hang': partner_code,
+            'ten_khach_hang': partner_name,
+            'dia_chi': partner_address,
+            'ma_so_thue': partner_vat,
+            
+            # Other info
+            'don_vi_giao_dai_ly': '',
+            'nguoi_nop': partner_name,
+            'nop_vao_tk': '',
+            'ten_ngan_hang': '',
+            'dien_giai': dien_giai,
+            'ly_do_xuat': ly_do_xuat,
+            'ma_nhan_vien': sale_user_code,
+            'so_ct_phieu_thu': '',
+            'so_ct_phieu_xuat': sale_name,
+            'han_thanh_toan': '',
+            
+            # Product info
+            'ma_hang': product_code,
+            'thuoc_combo': '',
+            'ten_hang': product_name,
+            'la_dong_ghi_chu': 'không',
+            'hang_khuyen_mai': 'Không',
+            'chiet_khau_thuong_mai': '',
+            
+            # Account codes - hardcoded examples
+            'tk_tien_no': '1311_TMĐT',
+            'tk_doanh_thu_co': '511111',
+            
+            # Quantity and price
+            'dvt': uom_name,
+            'so_luong': qty,
+            'don_gia': don_gia,
+            'thanh_tien': thanh_tien,
+            'ty_le_ck': ty_le_ck,
+            'tien_chiet_khau': tien_chiet_khau,
+            'tk_chiet_khau': '',
+            
+            # Tax info
+            'gia_tinh_thue_xk': '',
+            'ty_le_thue_xk': '',
+            'tien_thue_xk': '',
+            'tk_thue_xk': '',
+            'ty_le_thue_gtgt': ty_le_thue_gtgt,
+            'ty_le_thue_khac': '',
+            'tien_thue_gtgt': tien_thue_gtgt,
+            'tk_thue_gtgt': '33311',
+            
+            # Other fields
+            'bien_kiem_soat': '',
+            'hh_khong_th_tren_to_khai': 'Không',
+            'ma_khoan_muc_cp': '',
+            'ma_don_vi': 'PKD',
+            'ma_doi_tuong_thcp': '',
+            'ma_cong_trinh': '',
+            'so_don_dat_hang': sale_name,
+            'so_hop_dong_ban': sale_name,
+            'ma_thong_ke': '',
+            'so_khe_uoc_cho_vay': '',
+            'cp_khong_hop_ly': 'Không',
+            
+            # Warehouse and cost
+            'ma_kho': warehouse_code,
+            'tk_gia_von': '6321_GV',
+            'tk_kho': '1561',
+            'don_gia_von': don_gia_von,
+            'tien_von': tien_von,
+            'hang_hoa_giu_ho': '',
+            'vi_tri': location_name,
+        }
+
     def _create_excel_workbook(self, data_rows):
-        """Tạo workbook Excel với 2 header rows.
-        9 dòng đầu tiên bỏ qua, header ở dòng 8-9, data bắt đầu từ dòng 10."""
+        """Tạo workbook Excel với header"""
         wb = Workbook()
         ws = wb.active
-        ws.title = "Lệnh xuất kho"
+        ws.title = "Xuất bán hàng hóa"
 
         columns = self._get_columns_definition()
 
-        # Định nghĩa styles
-        header1_font = Font(name='Arial', size=12, bold=True, color='FFFFFF')
-        header1_fill_picking = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')  # Xanh dương
-        header1_fill_product = PatternFill(start_color='70AD47', end_color='70AD47', fill_type='solid')  # Xanh lá
-        header1_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
-        header2_font = Font(name='Arial', size=10, bold=True, color='000000')
-        header2_fill_picking = PatternFill(start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')  # Xanh nhạt
-        header2_fill_product = PatternFill(start_color='E2EFD9', end_color='E2EFD9', fill_type='solid')  # Xanh lá nhạt
-        header2_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        # Styles
+        header_font = Font(name='Arial', size=10, bold=True)
+        header_fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
         border_side = Side(style='thin', color='000000')
         border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
 
-        cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
         number_alignment = Alignment(horizontal='right', vertical='center')
 
-        # Các chỉ số hàng
-        HEADER1_ROW = 8
-        HEADER2_ROW = 9
-        DATA_START = 10
+        # Header row
+        HEADER_ROW = 1
+        DATA_START = 2
 
-        # === HEADER ROW 1: Group headers ===
-        picking_start = 1
-        picking_end = sum(1 for c in columns if c['group'] == 'picking')
-        product_start = picking_end + 1
-        product_end = len(columns)
-
-        ws.merge_cells(start_row=HEADER1_ROW, start_column=picking_start, end_row=HEADER1_ROW, end_column=picking_end)
-        cell = ws.cell(row=HEADER1_ROW, column=picking_start)
-        cell.value = "THÔNG TIN PHIẾU"
-        cell.font = header1_font
-        cell.fill = header1_fill_picking
-        cell.alignment = header1_alignment
-        cell.border = border
-
-        ws.merge_cells(start_row=HEADER1_ROW, start_column=product_start, end_row=HEADER1_ROW, end_column=product_end)
-        cell = ws.cell(row=HEADER1_ROW, column=product_start)
-        cell.value = "THÔNG TIN HÀNG HÓA"
-        cell.font = header1_font
-        cell.fill = header1_fill_product
-        cell.alignment = header1_alignment
-        cell.border = border
-
-        # === HEADER ROW 2: Column names ===
         for col_idx, col_def in enumerate(columns, start=1):
-            cell = ws.cell(row=HEADER2_ROW, column=col_idx)
+            cell = ws.cell(row=HEADER_ROW, column=col_idx)
             cell.value = col_def['name']
-            cell.font = header2_font
-
-            if col_def['group'] == 'picking':
-                cell.fill = header2_fill_picking
-            else:
-                cell.fill = header2_fill_product
-
-            cell.alignment = header2_alignment
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
             cell.border = border
             ws.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
 
-        # Freeze panes: cố định 9 dòng đầu và cột A
-        # ws.freeze_panes = 'B{}'.format(DATA_START)
-
-        # === DATA ROWS ===
+        # Data rows
         for row_idx, row_data in enumerate(data_rows, start=DATA_START):
             for col_idx, col_def in enumerate(columns, start=1):
                 cell = ws.cell(row=row_idx, column=col_idx)
@@ -456,21 +438,23 @@ class PickingExportWizard(models.TransientModel):
                 cell.value = value
                 cell.border = border
 
+                # Number formatting
                 if isinstance(value, (int, float)) and value != "":
                     cell.alignment = number_alignment
-                    if col_def['key'] in ['uom_ratio', 'qty_requested', 'qty_requested_main', 'qty_done', 'qty_done_main']:
-                        if value != "":
-                            cell.number_format = '#,##0.00'
+                    if col_def['key'] in ['don_gia', 'thanh_tien', 'tien_chiet_khau', 
+                                         'tien_thue_gtgt', 'don_gia_von', 'tien_von']:
+                        cell.number_format = '#,##0'
+                    elif col_def['key'] in ['ty_le_ck', 'ty_le_thue_gtgt', 'ty_le_thue_xk']:
+                        cell.number_format = '0.00'
+                    elif col_def['key'] == 'so_luong':
+                        cell.number_format = '#,##0.00'
                 else:
                     cell.alignment = cell_alignment
 
-        # Set row heights cho header
-        ws.row_dimensions[HEADER1_ROW].height = 25
-        ws.row_dimensions[HEADER2_ROW].height = 35
+        ws.row_dimensions[HEADER_ROW].height = 30
 
         return wb
 
-    # ====== Action ======
     def action_export(self):
         self.ensure_one()
         if Workbook is None:
@@ -497,7 +481,7 @@ class PickingExportWizard(models.TransientModel):
         wb.save(out)
         out.seek(0)
 
-        filename = f"Lenh_xuat_kho_{self.date_from}_{self.date_to}.xlsx"
+        filename = f"Xuat_ban_hang_hoa_{self.date_from}_{self.date_to}.xlsx"
         attachment = self.env["ir.attachment"].sudo().create({
             "name": filename,
             "type": "binary",
