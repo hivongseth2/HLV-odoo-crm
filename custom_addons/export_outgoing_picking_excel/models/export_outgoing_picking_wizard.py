@@ -37,6 +37,12 @@ def _to_date_str(val):
 
 
 class PickingExportWizard(models.TransientModel):
+    def _harsh_warehouse_code(self, code):
+        if code == "KCB":
+            return "Bến Cam"
+        if code == "TSN":
+            return "Hồ Chí Minh"
+        return code
     _name = "picking.export.wizard"
     _description = "Xuất Excel lệnh xuất kho theo template kế toán"
 
@@ -175,7 +181,8 @@ class PickingExportWizard(models.TransientModel):
         """Lấy mã kho"""
         pt = picking.picking_type_id
         if pt and pt.warehouse_id:
-            return pt.warehouse_id.code or pt.warehouse_id.name or ""
+            code = pt.warehouse_id.code or pt.warehouse_id.name or ""
+            return self._harsh_warehouse_code(code)
         return ""
 
     def _get_move_line_rows(self, picking):

@@ -301,36 +301,57 @@ class MisaApiUtils(models.AbstractModel):
             return filtered_data
         except Exception as e:
             raise Exception(f"Lỗi khi xử lý response JSON: {e}")
-        
-    # ===== add to misa_api_utils.py =====
-    def get_account_taxcode(self, account_id: int | str, token: str) -> str | None:
+
+    def get_account_identity(self, account_id: int | str, token: str) -> dict:
         """
-        Trả về TaxCode của đối tác (Account) từ MISA CRM theo ID.
+        Lấy ID, TaxCode, AccountNumber của đối tác từ FormDataNew:
+        POST https://amisapp.misa.vn/crm/g1/api/business/Account/FormDataNew/Account/28/4
+        Payload: {"ID": "<AccountID>", "MISAEntityState": "2"}
+        Trả về: {"id": "...", "taxcode": "...", "account_number": "..."}
         """
         if not account_id or not token:
-            return None
+            return {}
 
-        url = (
-            f"https://amisapp.misa.vn/crm/g2/api/business/Account/{account_id}/"
-            "?columns=ID;Debt;DebtLimit;FormLayoutID;AccountName;AccountNumber;TaxCode"
-        )
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Account/FormDataNew/Account/28/4"
         headers = {
+            "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
-            "Accept": "application/json, text/plain, */*",
             "User-Agent": "PostmanRuntime/7.44.1",
-            "companycode": "3R2PY2F4",
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Connection": "keep-alive",
+            # nếu hệ thống bạn cần:
+            # "companycode": "3R2PY2F4",
         }
+        payload = {"ID": str(account_id), "MISAEntityState": "2"}
 
         try:
-            resp = requests.get(url, headers=headers, timeout=30)
-            # một số API của MISA trả 200 ngay cả khi lỗi nghiệp vụ -> cứ cố gắng json()
+            resp = requests.post(url, headers=headers, json=payload, timeout=30)
             data = resp.json() if resp.content else {}
         except Exception:
-            _logger.exception("❌ Lỗi gọi API Account detail (AccountID=%s)", account_id)
+            _logger.exception("❌ Lỗi gọi FormDataNew Account (AccountID=%s)", account_id)
+            return {}
+
+        # Dữ liệu thường nằm ở Data.CurrentData
+        cd = {}
+        if isinstance(data, dict):
+            cd = (data.get("Data") or {}).get("CurrentData") or data.get("CurrentData") or {}
+
+        def pick(d, *keys):
+            for k in keys:
+                if k in d:
+                    return d.get(k)
             return None
 
-        # cấu trúc thường thấy: {"Data": {...}} hoặc trả thẳng {...}
-        obj = (data.get("Data") if isinstance(data, dict) else None) or data or {}
-        tax = (obj.get("TaxCode") or "").strip()
-        return tax or None
+        rid = pick(cd, "ID", "Id", "id")
+        tax = pick(cd, "TaxCode", "taxCode", "taxcode")
+        acc = pick(cd, "AccountNumber", "accountNumber", "account_number")
+
+        return {
+            "id": (str(rid).strip() if rid is not None else None),
+            "taxcode": (str(tax).strip() if tax else None),
+            "account_number": (str(acc).strip() if acc else None),
+        }
+    
+
 

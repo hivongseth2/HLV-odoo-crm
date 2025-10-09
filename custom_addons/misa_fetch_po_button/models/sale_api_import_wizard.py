@@ -546,16 +546,38 @@ class SaleApiImportWizard(models.TransientModel):
                 
                 try:
                     if account_id:
-                        taxcode = misa_utils.get_account_taxcode(account_id, crm_token)
-                        if taxcode:
-                            # Ghi lên commercial_partner cho chắc (tránh ghi nhầm contact con)
-                            commercial = partner.commercial_partner_id or partner
-                            if commercial.vat != taxcode:
-                                commercial.write({"vat": taxcode})
-                                commercial.message_post(body=f"Cập nhật Mã số thuế (VAT) từ MISA: <b>{taxcode}</b>")
+                        ident = misa_utils.get_account_identity(account_id, crm_token) or {}
+                        commercial = partner.commercial_partner_id or partner
+
+                        vals = {}
+                        msg_parts = []
+
+                        # Chỉ cập nhật nếu field còn trống
+                        if ident.get("taxcode") and not commercial.vat:
+                            vals["vat"] = ident["taxcode"]
+                            msg_parts.append(f"VAT=<b>{ident['taxcode']}</b>")
+
+                        if ident.get("id") and not commercial.company_registry:
+                            vals["company_registry"] = ident["id"]
+                            msg_parts.append(f"ID công ty=<b>{ident['id']}</b>")
+
+                        if ident.get("account_number") and not commercial.ref:
+                            vals["ref"] = ident["account_number"]
+                            msg_parts.append(f"Tham chiếu=<b>{ident['account_number']}</b>")
+
+                        if vals:
+                            commercial.write(vals)
+                            if msg_parts:
+                                commercial.message_post(
+                                    body="Cập nhật từ MISA (FormDataNew): " + ", ".join(msg_parts)
+                                )
                 except Exception as e:
-                    _logger.warning("⚠️ Không thể cập nhật TaxCode cho AccountID=%s: %s", account_id, e)
-                    
+                    _logger.warning(
+                        "⚠️ Không thể cập nhật đối tác từ FormDataNew (AccountID=%s): %s",
+                        account_id,
+                        e,
+                    )
+
                     # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
 
                 delivery_contact = self._get_or_create_delivery_contact(
