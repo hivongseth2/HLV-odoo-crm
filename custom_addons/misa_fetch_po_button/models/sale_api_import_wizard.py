@@ -549,34 +549,23 @@ class SaleApiImportWizard(models.TransientModel):
                         ident = misa_utils.get_account_identity(account_id, crm_token) or {}
                         commercial = partner.commercial_partner_id or partner
 
-                        vals = {}
-                        msg_parts = []
-
-                        # Chỉ cập nhật nếu field còn trống
+                        vals, msg = {}, []
                         if ident.get("taxcode") and not commercial.vat:
-                            vals["vat"] = ident["taxcode"]
-                            msg_parts.append(f"VAT=<b>{ident['taxcode']}</b>")
-
+                            vals["vat"] = ident["taxcode"]; msg.append(f"VAT=<b>{ident['taxcode']}</b>")
                         if ident.get("id") and not commercial.company_registry:
-                            vals["company_registry"] = ident["id"]
-                            msg_parts.append(f"ID công ty=<b>{ident['id']}</b>")
-
+                            vals["company_registry"] = ident["id"]; msg.append(f"ID công ty=<b>{ident['id']}</b>")
                         if ident.get("account_number") and not commercial.ref:
-                            vals["ref"] = ident["account_number"]
-                            msg_parts.append(f"Tham chiếu=<b>{ident['account_number']}</b>")
+                            vals["ref"] = ident["account_number"]; msg.append(f"Tham chiếu=<b>{ident['account_number']}</b>")
 
                         if vals:
                             commercial.write(vals)
-                            if msg_parts:
-                                commercial.message_post(
-                                    body="Cập nhật từ MISA (FormDataNew): " + ", ".join(msg_parts)
-                                )
+                            commercial.message_post(body="Cập nhật từ MISA (FormDataNew): " + ", ".join(msg))
+                        else:
+                            _logger.info("Bỏ qua update đối tác %s (đã có đủ dữ liệu hoặc API rỗng).", commercial.display_name)
+                    else:
+                        _logger.info("Không có AccountID trong đơn, bỏ qua cập nhật đối tác.")
                 except Exception as e:
-                    _logger.warning(
-                        "⚠️ Không thể cập nhật đối tác từ FormDataNew (AccountID=%s): %s",
-                        account_id,
-                        e,
-                    )
+                    _logger.warning("Không thể cập nhật đối tác từ MISA (AccountID=%s): %s", account_id, e)
 
                     # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
 
