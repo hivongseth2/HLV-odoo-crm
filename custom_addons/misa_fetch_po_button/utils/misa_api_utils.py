@@ -361,7 +361,7 @@ class MisaApiUtils(models.AbstractModel):
         #     _logger.warning("get_account_identity: thiếu account_id hoặc token")
         #     return {}
 
-        url = ""
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Account/FormDataNew/Account/28/4"
         # headers = {
         #     "Content-Type": "application/json",
         #     "Authorization": f"Bearer {token}",
