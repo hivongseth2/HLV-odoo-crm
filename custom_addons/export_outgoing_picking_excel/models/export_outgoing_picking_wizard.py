@@ -205,8 +205,14 @@ class PickingExportWizard(models.TransientModel):
         
         # Lấy thông tin từ Sale Order
         sale_name = so.name if so else (picking.origin or "")
-        # Lấy mã nhân viên sale từ trường x_studio_misa_saler_code của sale.order
-        sale_user_code = getattr(so, 'x_studio_misa_saler_code', '') if so else ''
+        # Lấy mã nhân viên sale từ trường x_studio_misa_saler_code của sale.order, nếu không có thì lấy từ user Odoo
+        sale_user_code = ''
+        if so:
+            misa_code = getattr(so, 'x_studio_misa_saler_code', None)
+            if misa_code:
+                sale_user_code = misa_code
+            elif so.user_id:
+                sale_user_code = so.user_id.login or so.user_id.name or ''
         
         # Diễn giải
         dien_giai = ""
