@@ -518,7 +518,7 @@ class SaleApiImportWizard(models.TransientModel):
                 # NEW: fetch OwnerIDText and SaleOrderDate from FormDataNew
                 owner_date = {}
                 try:
-                    owner_date = misa_utils.get_saleorder_owner_and_date(order_id, token=crm_token) or {}
+                    owner_date = misa_utils.get_saleorder_owner_and_date(order_id, sale_headers) or {}
                 except Exception as _e:
                     _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", order_id, _e)
                 # tỉnh/thành để map state/city
