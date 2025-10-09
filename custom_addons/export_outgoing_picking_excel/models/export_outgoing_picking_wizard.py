@@ -38,7 +38,7 @@ def _to_date_str(val):
 
 class PickingExportWizard(models.TransientModel):
     def _harsh_warehouse_code(self, code):
-        if code == "KCB":
+        if code == "KBC":
             return "Bến Cam"
         if code == "TSN":
             return "Hồ Chí Minh"
@@ -205,10 +205,8 @@ class PickingExportWizard(models.TransientModel):
         
         # Lấy thông tin từ Sale Order
         sale_name = so.name if so else (picking.origin or "")
-        sale_user = so.user_id if so else None
-        sale_user_code = ""
-        if sale_user:
-            sale_user_code = sale_user.login or sale_user.name or ""
+        # Lấy mã nhân viên sale từ trường x_studio_misa_saler_code của sale.order
+        sale_user_code = getattr(so, 'x_studio_misa_saler_code', '') if so else ''
         
         # Diễn giải
         dien_giai = ""
