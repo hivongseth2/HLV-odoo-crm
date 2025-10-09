@@ -469,6 +469,7 @@ class SaleApiImportWizard(models.TransientModel):
                 revenue_status_id = order.get("RevenueStatusID")
                 order_ref = order.get("SaleOrderNo")
                 order_id = order.get("ID")
+                account_id = order.get("AccountID") or order.get("AccountId")
 
                 # Bỏ qua đơn đã giao (DeliveryStatusID=2)
                 delivery_status = order.get("DeliveryStatusID", "0")
@@ -543,6 +544,18 @@ class SaleApiImportWizard(models.TransientModel):
 
                 partner = odoo_utils._get_or_create_partner(customer_name)
                 
+                try:
+                    if account_id:
+                        taxcode = misa_utils.get_account_taxcode(account_id, crm_token)
+                        if taxcode:
+                            # Ghi lên commercial_partner cho chắc (tránh ghi nhầm contact con)
+                            commercial = partner.commercial_partner_id or partner
+                            if commercial.vat != taxcode:
+                                commercial.write({"vat": taxcode})
+                                commercial.message_post(body=f"Cập nhật Mã số thuế (VAT) từ MISA: <b>{taxcode}</b>")
+                except Exception as e:
+                    _logger.warning("⚠️ Không thể cập nhật TaxCode cho AccountID=%s: %s", account_id, e)
+                    
                     # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
 
                 delivery_contact = self._get_or_create_delivery_contact(

@@ -301,3 +301,36 @@ class MisaApiUtils(models.AbstractModel):
             return filtered_data
         except Exception as e:
             raise Exception(f"Lỗi khi xử lý response JSON: {e}")
+        
+    # ===== add to misa_api_utils.py =====
+    def get_account_taxcode(self, account_id: int | str, token: str) -> str | None:
+        """
+        Trả về TaxCode của đối tác (Account) từ MISA CRM theo ID.
+        """
+        if not account_id or not token:
+            return None
+
+        url = (
+            f"https://amisapp.misa.vn/crm/g2/api/business/Account/{account_id}/"
+            "?columns=ID;Debt;DebtLimit;FormLayoutID;AccountName;AccountNumber;TaxCode"
+        )
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json, text/plain, */*",
+            "User-Agent": "PostmanRuntime/7.44.1",
+            "companycode": "3R2PY2F4",
+        }
+
+        try:
+            resp = requests.get(url, headers=headers, timeout=30)
+            # một số API của MISA trả 200 ngay cả khi lỗi nghiệp vụ -> cứ cố gắng json()
+            data = resp.json() if resp.content else {}
+        except Exception:
+            _logger.exception("❌ Lỗi gọi API Account detail (AccountID=%s)", account_id)
+            return None
+
+        # cấu trúc thường thấy: {"Data": {...}} hoặc trả thẳng {...}
+        obj = (data.get("Data") if isinstance(data, dict) else None) or data or {}
+        tax = (obj.get("TaxCode") or "").strip()
+        return tax or None
+
