@@ -531,7 +531,7 @@ class SaleApiImportWizard(models.TransientModel):
                 phone_text = order.get("Phone")
 
                 
-                
+
                 # note: mấy cái isSet thì nối thêm StockIDText => misa ko trả kho cho combo => dùng để rơi vào case1 => phương pháp lấy kho của item con[1] để bỏ vào => rơi vào case 1
                 # === EXPAND COMBO: chuyển dòng combo cha → các dòng con ===
                 def _expand_combo_lines(lines: list[dict]) -> list[dict]:
@@ -787,6 +787,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'price_unit': price_for_odoo,
                             'discount': discount_percent,
                             'note': note,
+                            # KHÔNG truyền analytic_distribution hoặc các trường lạ
                         }
                         if not use_default_uom:
                             vals_line['product_uom'] = product.uom_id.id
@@ -796,7 +797,10 @@ class SaleApiImportWizard(models.TransientModel):
                         if tax_ids:
                             vals_line['tax_id'] = [(6, 0, tax_ids)]
 
-                        self.env['sale.order.line'].create(vals_line)       
+                        # Chỉ truyền các trường chuẩn, loại bỏ trường lạ
+                        allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id'}
+                        safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
+                        self.env['sale.order.line'].create(safe_vals_line)
 
                         # self.env['sale.order.line'].create({
                         #     'order_id': sale_order.id,
@@ -910,6 +914,7 @@ class SaleApiImportWizard(models.TransientModel):
                                 'price_unit': price_unit,
                                 'discount': discount_percent,
                                 'note': note,
+                                # KHÔNG truyền analytic_distribution hoặc các trường lạ
                             }
 
                             # >>> NEW: map VAT từ dữ liệu MISA -> tax_id (many2many)
@@ -917,7 +922,9 @@ class SaleApiImportWizard(models.TransientModel):
                             if tax_ids:
                                 line_vals['tax_id'] = [(6, 0, tax_ids)]
 
-                            self.env['sale.order.line'].create(line_vals)
+                            allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id'}
+                            safe_line_vals = {k: v for k, v in line_vals.items() if k in allowed_fields}
+                            self.env['sale.order.line'].create(safe_line_vals)
 
                         # Confirm -> tạo picking theo từng SO/warehouse
                         sale_order.action_confirm()
