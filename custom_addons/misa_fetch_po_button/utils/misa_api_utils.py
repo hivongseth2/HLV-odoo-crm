@@ -298,6 +298,7 @@ class MisaApiUtils(models.AbstractModel):
             data = response.json().get("Data", [])
             # 👇 Loại bỏ combo (IsSetProduct == True)
             filtered_data = [item for item in data if not item.get("IsSetProduct", False)]
+            # note: gọi thêm api trả thêm thông tin về combo product => nối vào object kiểu : nếu là item con thì map thêm productcode cha, nếu là cha thì trả thêm thông tin con
             return filtered_data
         except Exception as e:
             raise Exception(f"Lỗi khi xử lý response JSON: {e}")
