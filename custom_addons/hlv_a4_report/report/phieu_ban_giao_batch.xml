@@ -77,10 +77,7 @@
                                 <tr><td>Ông (Bà)</td><td/></tr>
                                 <tr>
                                     <td>Địa chỉ</td>
-                                    <td class="h6-fs" style="width:379.875px;">
-                                        <t t-set="p" t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id"/>
-                                        <t t-esc="(p.street or '') + (p.street2 and (', ' + p.street2) or '')"/>
-                                    </td>
+                                        <td class="h6-fs" style="width:379.875px;"> </td>
                                 </tr>
                                 <tr>
                                     <td style="padding-top:6px; font-weight:600;">Đại diện bên giao (B)</td>
