@@ -29,6 +29,7 @@
         'views/bbgn_date_wizard_views.xml',
         'report/print_proxy.xml',
         'report/px_hlv_a4.xml',
+        'report/px_hlv_a4_batch.xml',
         'report/bbgn_a5_khongngay.xml',
         'report/pxbh_khachle_khonghd_a5.xml',
         'report/px_hlv_a5.xml',
