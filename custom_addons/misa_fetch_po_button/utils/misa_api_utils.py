@@ -14,39 +14,40 @@ class MisaApiUtils(models.AbstractModel):
     def create_combo_product_if_missing(self, combo_data, children_data, env=None):
         """
         Tạo mới sản phẩm combo dạng service, tick is_combo, gán các sản phẩm con bên trong nếu chưa có trên Odoo.
-        combo_data: dict thông tin combo từ MISA (ProductID, ProductIDText, Description, UnitIDText...)
-        children_data: list các dict sản phẩm con
-        env: Odoo env, nếu không truyền thì dùng self.env
+        Chỉ truyền các trường chuẩn, tránh trường compute/custom lạ. Bọc lệnh tạo bằng try/except để tránh lỗi.
         """
         env = env or self.env
         Product = env['product.product']
         ProductTmpl = env['product.template']
-        # Kiểm tra combo đã tồn tại chưa (theo mã)
         combo_code = combo_data.get('ProductIDText')
         combo_name = combo_data.get('Description') or combo_data.get('ProductIDText')
         combo_uom = combo_data.get('UnitIDText') or 'Cái'
         combo_id = Product.search([('default_code', '=', combo_code)], limit=1)
         if combo_id:
             return combo_id
-        # Tìm UoM
         uom_obj = env['uom.uom'].search([('name', '=', combo_uom)], limit=1)
-        # Tạo sản phẩm combo mới
         combo_vals = {
             'name': combo_name,
             'default_code': combo_code,
             'type': 'service',
             'uom_id': uom_obj.id if uom_obj else False,
-            'is_combo': True,  # Cần có field này trong model
+            'is_combo': True,
             'sale_ok': True,
             'purchase_ok': False,
         }
-        # Nếu model là product.product, cần tạo template trước
-        tmpl = ProductTmpl.create(combo_vals)
-        combo_product = Product.create({
-            'product_tmpl_id': tmpl.id,
-            'default_code': combo_code,
-        })
-        # Tạo/gán các sản phẩm con
+        try:
+            tmpl = ProductTmpl.create(combo_vals)
+        except Exception as e:
+            _logger.error("Lỗi khi tạo product.template combo: %s", e)
+            return False
+        try:
+            combo_product = Product.create({
+                'product_tmpl_id': tmpl.id,
+                'default_code': combo_code,
+            })
+        except Exception as e:
+            _logger.error("Lỗi khi tạo product.product combo: %s", e)
+            return False
         child_ids = []
         for child in children_data:
             child_code = child.get('ProductIDText')
@@ -55,22 +56,30 @@ class MisaApiUtils(models.AbstractModel):
             child_obj = Product.search([('default_code', '=', child_code)], limit=1)
             if not child_obj:
                 uom_child = env['uom.uom'].search([('name', '=', child_uom)], limit=1)
-                tmpl_child = ProductTmpl.create({
+                child_vals = {
                     'name': child_name,
                     'default_code': child_code,
                     'type': 'product',
                     'uom_id': uom_child.id if uom_child else False,
                     'sale_ok': True,
                     'purchase_ok': True,
-                })
-                child_obj = Product.create({
-                    'product_tmpl_id': tmpl_child.id,
-                    'default_code': child_code,
-                })
+                }
+                try:
+                    tmpl_child = ProductTmpl.create(child_vals)
+                    child_obj = Product.create({
+                        'product_tmpl_id': tmpl_child.id,
+                        'default_code': child_code,
+                    })
+                except Exception as e:
+                    _logger.error("Lỗi khi tạo product/product.template con: %s", e)
+                    continue
             child_ids.append(child_obj.id)
-        # Gán các sản phẩm con vào combo (giả sử có field combo_line_ids many2many hoặc one2many)
+        # Gán các sản phẩm con vào combo nếu có field combo_line_ids
         if hasattr(combo_product, 'combo_line_ids'):
-            combo_product.write({'combo_line_ids': [(6, 0, child_ids)]})
+            try:
+                combo_product.write({'combo_line_ids': [(6, 0, child_ids)]})
+            except Exception as e:
+                _logger.error("Lỗi khi gán combo_line_ids: %s", e)
         return combo_product
 
 
