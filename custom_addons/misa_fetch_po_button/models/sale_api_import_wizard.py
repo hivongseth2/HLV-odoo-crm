@@ -529,7 +529,10 @@ class SaleApiImportWizard(models.TransientModel):
                     or order.get("BillingProvinceIDText")
                 )
                 phone_text = order.get("Phone")
-
+                
+                
+                
+                # note: mấy cái isSet thì nối thêm StockIDText => misa ko trả kho cho combo => dùng để rơi vào case1 => phương pháp lấy kho của item con[1] để bỏ vào => rơi vào case 1
 
                 # --- Gom dòng theo kho ---
                 lines_by_stock = defaultdict(list)
@@ -647,7 +650,7 @@ class SaleApiImportWizard(models.TransientModel):
                     sale_order = self.env['sale.order'].create(sale_vals)
                     
                     
-
+                    
                     # Thêm line
                     for line in grouped_lines:
                         product_code = line.get("ProductIDText")
@@ -655,9 +658,11 @@ class SaleApiImportWizard(models.TransientModel):
                         qty = float(line.get("Amount", 1) or 0.0)
                         price_unit = float(line.get("Price", 0) or 0.0)
                         discount_percent = float(line.get("DiscountPercent", 0) or 0.0)
+                        # note: uom_name của combo thường là "Bộ", trên này cũng phải if liine.isSet
                         uom_name = (line.get("UnitIDText") or "Cái").strip()
                         note = line.get("DescriptionProduct") or ""
-
+                        # note: if (!= line.isset => thì làm như bình thường, migrate thêm 1 trường parent_product (text) , để mã sản phẩm của combo cha vào)
+                        
                         product = odoo_utils._get_or_create_product(
                             code=product_code,
                             name=description,
@@ -667,6 +672,7 @@ class SaleApiImportWizard(models.TransientModel):
                             purchase_ok=True,
                             sale_ok=True
                         )
+                        # note: chỗ này thêm else để tạo _get_or_create_combo_product (hàm mới, type service , storage : false , isCombo true , hàm này chịu trách nhiệm tạo combo product và khai báo liên kết của combo)
                         
                         misa_product_id = line.get("ProductID") or line.get("ProductId") or None
                         qty_for_odoo = qty
@@ -682,6 +688,7 @@ class SaleApiImportWizard(models.TransientModel):
                             misa_product_id=misa_product_id,
                             headers=sale_headers
                         )
+                        # note: vals_line nhớ thêm parent_code (mã combo cha) vào
                         vals_line = {
                             'order_id': sale_order.id,
                             'product_id': product.id,
