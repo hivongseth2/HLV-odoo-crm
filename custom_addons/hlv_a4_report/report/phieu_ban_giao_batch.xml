@@ -50,7 +50,7 @@
                             </table>
                             <div style="text-align:center; margin-top:-5px">
                                 <div style="font-size:20px; font-weight:800;">BIÊN BẢN BÀN GIAO</div>
-                                <t t-set="d" t-value="o.date_done or o.scheduled_date or o.create_date"/>
+                                <t t-set="d" t-value="o.scheduled_date or o.create_date"/>
                                 <div>
                                     (Số phiếu xuất: <span t-esc="o.name"/>
                                     <t t-set="now" t-value="datetime.datetime.now()"/>
