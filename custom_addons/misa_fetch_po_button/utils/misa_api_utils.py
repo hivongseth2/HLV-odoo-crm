@@ -10,6 +10,68 @@ _logger = logging.getLogger(__name__)
 class MisaApiUtils(models.AbstractModel):
     _name = 'misa.api.utils'
     _description = 'MISA API Utilities'
+    
+    def create_combo_product_if_missing(self, combo_data, children_data, env=None):
+        """
+        Tạo mới sản phẩm combo dạng service, tick is_combo, gán các sản phẩm con bên trong nếu chưa có trên Odoo.
+        combo_data: dict thông tin combo từ MISA (ProductID, ProductIDText, Description, UnitIDText...)
+        children_data: list các dict sản phẩm con
+        env: Odoo env, nếu không truyền thì dùng self.env
+        """
+        env = env or self.env
+        Product = env['product.product']
+        ProductTmpl = env['product.template']
+        # Kiểm tra combo đã tồn tại chưa (theo mã)
+        combo_code = combo_data.get('ProductIDText')
+        combo_name = combo_data.get('Description') or combo_data.get('ProductIDText')
+        combo_uom = combo_data.get('UnitIDText') or 'Cái'
+        combo_id = Product.search([('default_code', '=', combo_code)], limit=1)
+        if combo_id:
+            return combo_id
+        # Tìm UoM
+        uom_obj = env['uom.uom'].search([('name', '=', combo_uom)], limit=1)
+        # Tạo sản phẩm combo mới
+        combo_vals = {
+            'name': combo_name,
+            'default_code': combo_code,
+            'type': 'service',
+            'uom_id': uom_obj.id if uom_obj else False,
+            'is_combo': True,  # Cần có field này trong model
+            'sale_ok': True,
+            'purchase_ok': False,
+        }
+        # Nếu model là product.product, cần tạo template trước
+        tmpl = ProductTmpl.create(combo_vals)
+        combo_product = Product.create({
+            'product_tmpl_id': tmpl.id,
+            'default_code': combo_code,
+        })
+        # Tạo/gán các sản phẩm con
+        child_ids = []
+        for child in children_data:
+            child_code = child.get('ProductIDText')
+            child_name = child.get('Description') or child_code
+            child_uom = child.get('UnitIDText') or 'Cái'
+            child_obj = Product.search([('default_code', '=', child_code)], limit=1)
+            if not child_obj:
+                uom_child = env['uom.uom'].search([('name', '=', child_uom)], limit=1)
+                tmpl_child = ProductTmpl.create({
+                    'name': child_name,
+                    'default_code': child_code,
+                    'type': 'product',
+                    'uom_id': uom_child.id if uom_child else False,
+                    'sale_ok': True,
+                    'purchase_ok': True,
+                })
+                child_obj = Product.create({
+                    'product_tmpl_id': tmpl_child.id,
+                    'default_code': child_code,
+                })
+            child_ids.append(child_obj.id)
+        # Gán các sản phẩm con vào combo (giả sử có field combo_line_ids many2many hoặc one2many)
+        if hasattr(combo_product, 'combo_line_ids'):
+            combo_product.write({'combo_line_ids': [(6, 0, child_ids)]})
+        return combo_product
 
 
     def _get_misa_token(self):
@@ -337,13 +399,100 @@ class MisaApiUtils(models.AbstractModel):
             raise Exception(f"API call failed: {response.status_code} - {response.text}")
 
         try:
-            data = response.json().get("Data", [])
-            # 👇 Loại bỏ combo (IsSetProduct == True)
-            filtered_data = [item for item in data if not item.get("IsSetProduct", False)]
-            # note: gọi thêm api trả thêm thông tin về combo product => nối vào object kiểu : nếu là item con thì map thêm productcode cha, nếu là cha thì trả thêm thông tin con
-            return filtered_data
+            data = response.json().get("Data", []) or []
+            # 🔁 GIỮ NGUYÊN, KHÔNG LOẠI COMBO CHA
+            return data
         except Exception as e:
             raise Exception(f"Lỗi khi xử lý response JSON: {e}")
+        
+
+    # === LẤY THÀNH PHẦN COMBO TỪ API g1/Product/DataSubPaging ===
+    def get_combo_children_by_product(self, combo_product_id: int | str, sale_headers: object) -> list[dict]:
+        """
+        Trả về list children theo mẫu:
+        [{"ProductID": 40824, "ProductIDText": "M18 FHIW2F12-0X0", "Description": "...", "UnitIDText": "Cái", "Amount": 1.0}, ...]
+        """
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Product/DataSubPaging"
+
+        # Payload tối thiểu dùng SubFormConfig chung của MISA (thực tế MISA sẽ map đúng SubForm cho Product):
+        payload = {
+            "Columns": "",
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 200,
+            "Filters": [],
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {
+                "MasterID": str(combo_product_id),
+                "TableName": "product",
+                "MasterKey": "ProductID",
+                "SumColumn": ""
+            },
+            "IsApproved": False,
+            "CustomPagingData": {
+                "SubFormConfig": {
+                    "ColumnFieldSubForm": "",
+                    "ColumnAggregateSubForm": "",
+                    "TableName": "product",
+                    "ParentIDKey": "ProductID",
+                    "IsBringSerialType": False,
+                    "AggregateField": []
+                }
+            },
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": "combo-fetch",
+            "AISearchKeyword": ""
+        }
+
+        try:
+            resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
+            if not resp.ok:
+                _logger.warning("⚠️ Product/DataSubPaging combo HTTP %s: %s", resp.status_code, resp.text[:300])
+                return []
+            js = resp.json() if resp.content else {}
+            return (js.get("Data") or []) if isinstance(js, dict) else []
+        except Exception as e:
+            _logger.exception("❗ Lỗi gọi Product/DataSubPaging (combo): %s", e)
+            return []
+
+    # === TÁCH MÃ CON TỪ TÊN COMBO (FALLBACK) ===
+    def parse_children_codes_from_text(self, combo_text: str) -> list[str]:
+        """
+        Ví dụ: 'Combo ... M18 FHIW2F12-0X0 + Pin M18B5 MILWAUKEE'
+        → ['M18 FHIW2F12-0X0', 'M18B5']
+        Cách làm: tách theo ' + ', sau đó lấy cụm có chữ/ số/ '-' và khoảng trắng ngắn, ưu tiên cụm IN HOA/CHỨA KÝ TỰ MÃ.
+        """
+        import re
+        if not combo_text:
+            return []
+        # tách theo dấu +; gom cụm có thể chứa mã
+        parts = [p.strip() for p in combo_text.split('+') if p and p.strip()]
+        out = []
+        for p in parts:
+            # ưu tiên đoạn trong ngoặc đơn
+            m = re.search(r"\(([^)]+)\)\s*$", p)
+            cand = m.group(1).strip() if m else p
+            # lọc cụm có nhiều chữ hoa/số/ký tự '-' hoặc khoảng trắng ngắn (để giữ 'M18 FHIW2F12-0X0')
+            # lấy cụm dài nhất có >= 3 ký tự A-Z/0-9/-/space
+            tokens = re.findall(r"[A-Z0-9][A-Z0-9\- ]{2,}", cand)
+            if tokens:
+                # chọn token dài nhất
+                best = max(tokens, key=len).strip()
+                out.append(re.sub(r"\s{2,}", " ", best))
+        # khử trùng
+        uniq = []
+        for c in out:
+            if c not in uniq:
+                uniq.append(c)
+        return uniq
 
     # === Lấy thông tin ID, TaxCode, AccountNumber của đối tác từ MISA CRM ===
     def get_account_identity(self, account_id: int | str, sale_headers: object) -> dict:

@@ -529,11 +529,101 @@ class SaleApiImportWizard(models.TransientModel):
                     or order.get("BillingProvinceIDText")
                 )
                 phone_text = order.get("Phone")
-                
+
                 
                 
                 # note: mấy cái isSet thì nối thêm StockIDText => misa ko trả kho cho combo => dùng để rơi vào case1 => phương pháp lấy kho của item con[1] để bỏ vào => rơi vào case 1
+                # === EXPAND COMBO: chuyển dòng combo cha → các dòng con ===
+                def _expand_combo_lines(lines: list[dict]) -> list[dict]:
+                    """
+                    Trả về danh sách dòng đã 'mở combo':
+                    - Nếu thấy IsSetProduct=True mà KHÔNG có IsChildProduct tương ứng → thử gọi API lấy con.
+                    - Nếu API rỗng → fallback tách mã con từ Description/Name.
+                    - Giữ nguyên các dòng thường.
+                    """
+                    if not lines:
+                        return []
 
+                    # lập map con hiện có (nếu MISA đã trả sẵn con trong DataSubPaging của SaleOrder)
+                    children_by_parent = {}
+                    for it in lines:
+                        if it.get("IsChildProduct") and (it.get("ParentProductID") or it.get("ParentProductIDText")):
+                            key = it.get("ParentProductID") or it.get("ParentProductIDText")
+                            children_by_parent.setdefault(str(key), []).append(it)
+
+                    out = []
+                    for it in lines:
+                        if not it.get("IsSetProduct", False):
+                            out.append(it)
+                            continue
+
+                        # là combo cha
+                        parent_pid = it.get("ProductID") or it.get("ProductId")
+                        parent_pcode = it.get("ProductIDText")
+                        parent_key = str(parent_pid or parent_pcode or "")
+
+                        # nếu đã có con trong 'lines' → bỏ qua, để nguyên (vì đã có con thật sự)
+                        if parent_key and children_by_parent.get(parent_key):
+                            out.append(it)  # vẫn giữ cha để downstream có thể dùng (hoặc bạn có thể bỏ nếu không muốn)
+                            continue
+
+                        # 1) ƯU TIÊN gọi API g1 Product/DataSubPaging
+                        try:
+                            kids = misa_utils.get_combo_children_by_product(parent_pid or parent_pcode, sale_headers) or []
+                        except Exception as _e:
+                            kids = []
+
+                        synthetic_children = []
+                        if kids:
+                            for k in kids:
+                                # Chuẩn hóa về format giống SaleOrder/DataSubPaging
+                                synthetic_children.append({
+                                    # liên kết cha
+                                    "IsChildProduct": True,
+                                    "ParentProductID": parent_pid,
+                                    "ParentProductIDText": parent_pcode,
+                                    # dữ liệu con
+                                    "ProductID": k.get("ProductID"),
+                                    "ProductIDText": k.get("ProductIDText"),
+                                    "Description": k.get("Description") or k.get("ProductIDText"),
+                                    "UnitIDText": k.get("UnitIDText") or "Cái",
+                                    "Amount": k.get("Amount") or 1.0,
+                                    "Price": 0.0,
+                                    "DiscountPercent": 0.0,
+                                    # cố gắng thừa kế kho từ cha (combo cha thường không có kho)
+                                    "StockIDText": it.get("StockIDText"),
+                                    # VAT nếu muốn: dùng cùng với cha
+                                    "TaxPercentIDText": it.get("TaxPercentIDText"),
+                                })
+                        else:
+                            # 2) FALLBACK: tách mã từ tên/description
+                            txt = it.get("Description") or it.get("ProductName") or it.get("ProductIDText") or ""
+                            codes = misa_utils.parse_children_codes_from_text(txt) or []
+                            for c in codes:
+                                synthetic_children.append({
+                                    "IsChildProduct": True,
+                                    "ParentProductID": parent_pid,
+                                    "ParentProductIDText": parent_pcode,
+                                    "ProductIDText": c,
+                                    "Description": c,
+                                    "UnitIDText": "Cái",
+                                    "Amount": 1.0,
+                                    "Price": 0.0,
+                                    "DiscountPercent": 0.0,
+                                    "StockIDText": it.get("StockIDText"),
+                                    "TaxPercentIDText": it.get("TaxPercentIDText"),
+                                })
+
+                        # nếu vẫn không có con → coi như giữ nguyên cha để không mất dữ liệu
+                        if not synthetic_children:
+                            out.append(it)
+                        else:
+                            # bạn có thể CHỌN: bỏ cha và chỉ giữ con. Ở đây mình bỏ cha để downstream không tạo line combo.
+                            out.extend(synthetic_children)
+
+                    return out
+                
+                product_lines = _expand_combo_lines(product_lines)
                 # --- Gom dòng theo kho ---
                 lines_by_stock = defaultdict(list)
                 for l in product_lines:
