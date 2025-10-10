@@ -9,7 +9,7 @@
         <field name="print_report_name">
             'Phiếu xuất kho theo lô - A4 - %s' % (object.name or 'Batch')
         </field>
-        <field name="binding_model_id" ref="stock_picking_batch_model_ref" />
+        <field name="binding_model_id" ref="stock.model_stock_picking_batch"/>
         <field name="binding_type">report</field>
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait" />
     </record>
