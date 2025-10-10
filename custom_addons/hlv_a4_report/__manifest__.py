@@ -35,5 +35,6 @@
         'report/px_hlv_a5.xml',
         'report/bbbg_a5_co_po.xml',
         'report/bbgn_a5_khong_gia.xml',
+        'report/phieu_ban_giao_batch.xml',
     ],
 }
