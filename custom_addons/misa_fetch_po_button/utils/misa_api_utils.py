@@ -11,41 +11,46 @@ class MisaApiUtils(models.AbstractModel):
     _name = 'misa.api.utils'
     _description = 'MISA API Utilities'
     
-    # misa_api_utils.py
-
     def get_or_create_combo_product(self, combo_data, children_data, env=None, sale_headers=None):
-        """
-        Tạo hoặc lấy combo, tick is_combo, chuẩn hoá UoM, và GẮN children vào combo item
-        (kể cả khi combo đã tồn tại). Nếu thiếu children_data → tự fetch từ MISA.
-        """
         env = env or self.env
         Product = env['product.product']
         ProductTmpl = env['product.template']
         OdooUtils = env['odoo.utils']
 
         combo_code = (combo_data.get('ProductIDText') or '').strip()
-        combo_name = (combo_data.get('Description') or combo_code or '').strip()
+        combo_name = (combo_data.get('Description') or combo_code).strip()
         combo_uom_name = (combo_data.get('UnitIDText') or 'Cái').strip()
         if not combo_code:
-            _logger.error("❌ Thiếu ProductIDText cho combo, bỏ qua tạo."); return False
+            _logger.error("❌ Thiếu ProductIDText cho combo"); return False
 
-        # UoM
+        # UoM cho combo cha
         try:
             combo_uom = OdooUtils._get_or_create_uom(combo_uom_name)
-        except Exception as e:
-            _logger.warning("⚠️ Không lấy được UoM '%s': %s -> dùng False", combo_uom_name, e)
+        except Exception:
             combo_uom = False
 
-        # ===== Helper: ghi children vào quan hệ combo =====
-        def _write_combo_children(combo_prod, children_list):
-            """children_list: [{ProductIDText, Amount, UnitIDText, Price, ...}]"""
-            if not children_list:
+        # === Helper: GHI VÀO TEMPLATE ===
+        def _write_combo_children(target_rec, children_list):
+            """
+            target_rec: product.template (không phải product.product)
+            children_list: [{ProductIDText, Amount, UnitIDText, Price, ...}]
+            """
+            if not target_rec or not children_list:
                 return
 
-            child_ids = []
-            child_lines_cmd = []
+            # Ưu tiên one2many combo_item_ids (model combo.product)
+            line_field = None
+            if hasattr(target_rec, 'combo_item_ids'):
+                line_field = target_rec._fields.get('combo_item_ids')
+            elif hasattr(target_rec, 'combo_line_ids'):
+                line_field = target_rec._fields.get('combo_line_ids')
 
-            # Chuẩn bị product con + dữ liệu số lượng/uom
+            is_o2m = bool(line_field and getattr(line_field, 'type', '') == 'one2many')
+            is_m2m = bool(line_field and getattr(line_field, 'type', '') == 'many2many')
+
+            cmds = []
+            m2m_child_ids = []
+
             for ch in children_list:
                 c_code = (ch.get('ProductIDText') or '').strip()
                 if not c_code:
@@ -62,46 +67,34 @@ class MisaApiUtils(models.AbstractModel):
                         cost=c_price, product_type='product', purchase_ok=True, sale_ok=True
                     )
 
-                child_ids.append(c_prod.id)
-
-                # Nếu có one2many kiểu chi tiết (model trung gian), chuẩn bị (0,0,{...})
-                # Thử đoán tên field trong dòng: product_id/child_product_id, quantity/qty, uom_id
-                # Lấy field info động
-                line_field = None
-                if hasattr(combo_prod, 'combo_item_ids'):
-                    line_field = combo_prod._fields.get('combo_item_ids')
-                elif hasattr(combo_prod, 'combo_line_ids'):
-                    # có thể là m2m; nếu là o2m thì cũng có comodel_name
-                    line_field = combo_prod._fields.get('combo_line_ids')
-
-                if line_field and getattr(line_field, 'comodel_name', False):
+                if is_o2m:
+                    # Dò tên field trong model combo.product
                     line_model = env[line_field.comodel_name]
-                    line_fields = line_model._fields
-                    f_prod = 'child_product_id' if 'child_product_id' in line_fields else ('product_id' if 'product_id' in line_fields else None)
-                    f_qty  = 'quantity' if 'quantity' in line_fields else ('qty' if 'qty' in line_fields else None)
-                    f_uom  = 'uom_id' if 'uom_id' in line_fields else None
+                    lf = line_model._fields
+                    f_prod = 'product_id' if 'product_id' in lf else ('child_product_id' if 'child_product_id' in lf else None)
+                    f_qty  = 'product_quantity' if 'product_quantity' in lf else ('qty' if 'qty' in lf else None)
+                    f_uom  = 'uom_id' if 'uom_id' in lf else None
+                    vals = {}
+                    if f_prod: vals[f_prod] = c_prod.id
+                    if f_qty:  vals[f_qty]  = c_qty
+                    if f_uom:  vals[f_uom]  = c_prod.uom_id.id
+                    cmds.append((0, 0, vals))
+                elif is_m2m:
+                    m2m_child_ids.append(c_prod.id)
 
-                    if f_prod and f_qty:
-                        vals = {f_prod: c_prod.id, f_qty: c_qty}
-                        if f_uom:
-                            vals[f_uom] = c_prod.uom_id.id
-                        child_lines_cmd.append((0, 0, vals))
+            if is_o2m and cmds:
+                # Xoá sạch rồi ghi lại cho chắc
+                target_rec.write({'combo_item_ids': [(5, 0, 0)] + cmds})
+                _logger.info("✅ Ghi %d dòng combo_item_ids cho %s", len(cmds), target_rec.name)
+            elif is_m2m and m2m_child_ids:
+                target_rec.write({'combo_line_ids': [(6, 0, m2m_child_ids)]})
+                _logger.info("✅ Ghi M2M combo_line_ids cho %s: %s", target_rec.name, m2m_child_ids)
 
-            # Ưu tiên one2many chi tiết nếu có:
-            if child_lines_cmd and hasattr(combo_prod, 'combo_item_ids'):
-                combo_prod.write({'combo_item_ids': [(5, 0, 0)] + child_lines_cmd})
-                _logger.info("✅ Cập nhật combo_item_ids cho %s với %d dòng.", combo_prod.default_code, len(child_lines_cmd))
-                return
-
-            # Nếu không có one2many chi tiết → fallback m2m
-            if child_ids and hasattr(combo_prod, 'combo_line_ids'):
-                combo_prod.write({'combo_line_ids': [(6, 0, child_ids)]})
-                _logger.info("✅ Cập nhật combo_line_ids (m2m) cho %s: %s", combo_prod.default_code, child_ids)
-
-        # ===== Tìm/ tạo combo
+        # === Lấy/tạo combo cha
         combo_prod = Product.search([('default_code', '=', combo_code)], limit=1)
         if combo_prod:
             tmpl = combo_prod.product_tmpl_id
+            # đảm bảo tick combo + uom
             if hasattr(tmpl, 'is_combo') and not getattr(tmpl, 'is_combo', False):
                 tmpl.write({'is_combo': True})
             if combo_uom:
@@ -109,52 +102,44 @@ class MisaApiUtils(models.AbstractModel):
                     upd = {}
                     if not tmpl.uom_id:
                         upd['uom_id'] = combo_uom.id
-                    elif tmpl.uom_id != combo_uom and tmpl.uom_id.category_id == combo_uom.category_id:
+                    elif tmpl.uom_id.category_id == combo_uom.category_id and tmpl.uom_id != combo_uom:
                         upd['uom_id'] = combo_uom.id
                     if upd: tmpl.write(upd)
                 except Exception as e:
-                    _logger.warning("⚠️ Không cập nhật UoM cho combo %s: %s", combo_code, e)
+                    _logger.warning("⚠️ UoM combo %s: %s", combo_code, e)
 
-            # 🔁 NEW: nếu thiếu children → tự fetch từ MISA
+            # thiếu con -> tự fetch
             if not children_data and sale_headers:
                 try:
-                    parent_pid = combo_data.get("ProductID") or combo_data.get("ProductId")
-                    parent_pcode = (combo_data.get("ProductIDText") or "").strip()
-                    master = parent_pid or parent_pcode
-                    if master:
-                        kids = self.get_combo_children_by_product(master, sale_headers) or []
-                        children_data = [{
-                            "IsChildProduct": True,
-                            "ParentProductID": parent_pid,
-                            "ParentProductIDText": parent_pcode,
-                            "ProductID": k.get("ProductID"),
-                            "ProductIDText": (k.get("ProductIDText") or "").strip(),
-                            "UnitIDText": (k.get("UnitIDText") or "Cái").strip(),
-                            "Amount": float(k.get("Amount") or 1.0),
-                            "Price": float(k.get("Price") or 0.0),
-                        } for k in kids]
+                    master = combo_data.get("ProductID") or combo_data.get("ProductId") or combo_code
+                    kids = self.get_combo_children_by_product(master, sale_headers) or []
+                    children_data = [{
+                        "ProductIDText": (k.get("ProductIDText") or "").strip(),
+                        "Description": (k.get("Description") or k.get("ProductIDText") or "").strip(),
+                        "UnitIDText": (k.get("UnitIDText") or "Cái").strip(),
+                        "Amount": float(k.get("Amount") or 1.0),
+                        "Price": float(k.get("Price") or 0.0),
+                    } for k in kids]
                 except Exception as e:
-                    _logger.warning("⚠️ Không fetch được children cho combo %s: %s", combo_code, e)
+                    _logger.warning("⚠️ Fetch children fail %s: %s", combo_code, e)
 
-            # 🔁 NEW: luôn (re)gán children cho combo cũ
-            _write_combo_children(combo_prod, children_data or [])
+            # 🔁 GHI VÀO TEMPLATE (FIX CHÍNH)
+            _write_combo_children(combo_prod.product_tmpl_id, children_data or [])
             return combo_prod
 
-        # Chưa có: tạo mới
-        combo_vals = {
+        # Chưa có -> tạo mới rồi ghi vào template
+        vals = {
             'name': combo_name or combo_code,
             'default_code': combo_code,
             'type': 'service', 'sale_ok': True, 'purchase_ok': False, 'is_combo': True,
         }
         if combo_uom:
-            combo_vals['uom_id'] = combo_uom.id
-        tmpl = ProductTmpl.create(combo_vals)
+            vals['uom_id'] = combo_uom.id
+        tmpl = ProductTmpl.create(vals)
         combo_prod = Product.create({'product_tmpl_id': tmpl.id, 'default_code': combo_code})
 
-        # Gán children cho combo mới (giữ cơ chế cũ nhưng qua helper để hỗ trợ cả one2many/m2m)
-        _write_combo_children(combo_prod, children_data or [])
+        _write_combo_children(tmpl, children_data or [])
         return combo_prod
-
 
     def _get_misa_token(self):
             # Step 1: Đăng nhập lấy cookie
