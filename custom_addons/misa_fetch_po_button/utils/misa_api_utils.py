@@ -24,6 +24,8 @@ class MisaApiUtils(models.AbstractModel):
         combo_code = (combo_data.get('ProductIDText') or '').strip()
         combo_name = (combo_data.get('Description') or combo_code).strip()
         combo_uom_name = (combo_data.get('UnitIDText') or 'Cái').strip()
+        # Lấy số lượng combo cha từ đơn hàng (để tính lại số lượng base cho children)
+        combo_qty_in_order = float(combo_data.get('Amount') or 1.0)
         
         if not combo_code:
             _logger.error("❌ Thiếu ProductIDText cho combo")
@@ -36,11 +38,12 @@ class MisaApiUtils(models.AbstractModel):
             combo_uom = False
 
         # === Helper: GHI VÀO TEMPLATE ===
-        def _write_combo_children(target_tmpl, children_list):
+        def _write_combo_children(target_tmpl, children_list, parent_qty_in_order=1.0):
             """
             Ghi thông tin sản phẩm con vào combo.product
             target_tmpl: record product.template
             children_list: [{ProductIDText, Amount, UnitIDText, Price, ...}]
+            parent_qty_in_order: số lượng combo cha trong đơn hàng (để tính lại base qty)
             """
             if not target_tmpl or not children_list:
                 return
@@ -51,16 +54,36 @@ class MisaApiUtils(models.AbstractModel):
                 old_lines.sudo().unlink()
                 _logger.info("🗑️ Đã xóa %d dòng combo.product cũ của %s", len(old_lines), target_tmpl.display_name)
 
-            created = 0
+            # 2) Loại bỏ trùng lặp: gom theo ProductIDText, giữ lại item đầu tiên
+            seen_codes = set()
+            unique_children = []
             for ch in children_list:
+                c_code = (ch.get('ProductIDText') or '').strip()
+                if c_code and c_code not in seen_codes:
+                    seen_codes.add(c_code)
+                    unique_children.append(ch)
+            
+            if len(unique_children) < len(children_list):
+                _logger.info("🔧 Đã loại bỏ %d dòng con trùng lặp", len(children_list) - len(unique_children))
+
+            created = 0
+            for ch in unique_children:
                 c_code = (ch.get('ProductIDText') or '').strip()
                 if not c_code:
                     continue
                 
                 c_name = (ch.get('Description') or c_code).strip()
                 c_uom_name = (ch.get('UnitIDText') or 'Cái').strip()
-                c_qty = float(ch.get('Amount') or 1.0)
+                c_qty_raw = float(ch.get('Amount') or 1.0)
                 c_price = float(ch.get('Price') or 0.0)
+                
+                # 🔧 FIX: Tính lại số lượng base (MISA trả về Amount đã nhân với qty đơn hàng)
+                # Ví dụ: combo cha qty=3, con base=0.1 → MISA trả Amount=0.3
+                # Ta cần chia ngược lại: 0.3 / 3 = 0.1
+                if parent_qty_in_order and parent_qty_in_order > 0:
+                    c_qty = c_qty_raw / parent_qty_in_order
+                else:
+                    c_qty = c_qty_raw
 
                 # Tìm/tạo sản phẩm con
                 c_prod = Product.search([('default_code', '=', c_code)], limit=1)
@@ -129,6 +152,7 @@ class MisaApiUtils(models.AbstractModel):
                     _logger.error("❌ Lỗi cập nhật template combo %s: %s", combo_code, e)
 
             # Nếu thiếu con -> tự fetch từ API
+            qty_divider = combo_qty_in_order  # Mặc định: children từ đơn hàng cần chia
             if not children_data and sale_headers:
                 try:
                     master = combo_data.get("ProductID") or combo_data.get("ProductId") or combo_code
@@ -140,13 +164,14 @@ class MisaApiUtils(models.AbstractModel):
                         "Amount": float(k.get("Amount") or 1.0),
                         "Price": float(k.get("Price") or 0.0),
                     } for k in kids]
+                    qty_divider = 1.0  # ✅ Data từ API riêng = BASE qty, không cần chia
                     _logger.info("📡 Đã fetch %d sản phẩm con cho combo %s từ API", 
                             len(children_data), combo_code)
                 except Exception as e:
                     _logger.warning("⚠️ Không fetch được children cho combo %s: %s", combo_code, e)
 
             # 🔥 LUÔN GHI CHILDREN VÀO TEMPLATE (cập nhật mỗi lần sync)
-            _write_combo_children(tmpl, children_data or [])
+            _write_combo_children(tmpl, children_data or [], qty_divider)
             _logger.info("✅ Đã cập nhật children cho combo đã tồn tại: %s", combo_code)
             return combo_prod
 
@@ -178,6 +203,7 @@ class MisaApiUtils(models.AbstractModel):
             return False
 
         # Fetch children nếu thiếu
+        qty_divider = combo_qty_in_order  # Mặc định: children từ đơn hàng cần chia
         if not children_data and sale_headers:
             try:
                 master = combo_data.get("ProductID") or combo_data.get("ProductId") or combo_code
@@ -189,11 +215,12 @@ class MisaApiUtils(models.AbstractModel):
                     "Amount": float(k.get("Amount") or 1.0),
                     "Price": float(k.get("Price") or 0.0),
                 } for k in kids]
+                qty_divider = 1.0  # ✅ Data từ API riêng = BASE qty, không cần chia
             except Exception as e:
                 _logger.warning("⚠️ Không fetch được children: %s", e)
 
         # Ghi children vào template
-        _write_combo_children(tmpl, children_data or [])
+        _write_combo_children(tmpl, children_data or [], qty_divider)
         
         return combo_prod
 
