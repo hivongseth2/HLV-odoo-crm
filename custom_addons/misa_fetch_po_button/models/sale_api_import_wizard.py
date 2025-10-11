@@ -583,19 +583,19 @@ class SaleApiImportWizard(models.TransientModel):
                                     "Amount": k.get("Amount") or 1.0,
                                     "StockIDText": it.get("StockIDText"),
                                 })
-                            if not combo_children:
-                                txt = it.get("Description") or it.get("ProductName") or it.get("ProductIDText") or ""
-                                codes = misa_utils.parse_children_codes_from_text(txt) or []
-                                for c in codes:
-                                    combo_children.append({
-                                        "IsChildProduct": True,
-                                        "ParentProductID": parent_pid,
-                                        "ParentProductIDText": parent_pcode,
-                                        "ProductIDText": c,
-                                        "UnitIDText": "Cái",
-                                        "Amount": 1.0,
-                                        "StockIDText": it.get("StockIDText"),
-                                    })
+                            # if not combo_children:
+                            #     txt = it.get("Description") or it.get("ProductName") or it.get("ProductIDText") or ""
+                            #     codes = misa_utils.parse_children_codes_from_text(txt) or []
+                            #     for c in codes:
+                            #         combo_children.append({
+                            #             "IsChildProduct": True,
+                            #             "ParentProductID": parent_pid,
+                            #             "ParentProductIDText": parent_pcode,
+                            #             "ProductIDText": c,
+                            #             "UnitIDText": "Cái",
+                            #             "Amount": 1.0,
+                            #             "StockIDText": it.get("StockIDText"),
+                            #         })
 
                         # thêm các dòng con chỉ gồm tên, số lượng, kho
                         for child in combo_children or []:
