@@ -337,18 +337,29 @@ class SaleApiImportWizard(models.TransientModel):
         return updated_count > 0
     def _update_existing_combo_products(self, existing_order, grouped_lines, sale_headers):
         """
-        Cập nhật thông tin combo product cho SO đã tồn tại:
-        1. Cập nhật is_combo = True nếu thiếu
-        2. Cập nhật danh sách sản phẩm con trong combo.product
-        3. Cập nhật product_id của dòng SO nếu cần
+        Cập nhật thông tin combo product cho SO đã tồn tại với DEBUG chi tiết
         """
         if existing_order.state in ('cancel', 'done'):
             _logger.info("⚠️ SO %s đã ở trạng thái %s, không cập nhật combo",
                         existing_order.name, existing_order.state)
             return False
 
+        _logger.warning("=" * 80)
+        _logger.warning("🔧 DEBUG _update_existing_combo_products")
+        _logger.warning("📦 SO: %s", existing_order.name)
+        _logger.warning("📋 Số dòng grouped_lines: %d", len(grouped_lines))
+        _logger.warning("=" * 80)
+
         misa_utils = self.env['misa.api.utils']
         updated_count = 0
+
+        # DEBUG: In ra TẤT CẢ các dòng để xem
+        for idx, line in enumerate(grouped_lines, 1):
+            _logger.warning("📦 Line #%d: IsSetProduct=%s, IsChildProduct=%s, ProductIDText=%s",
+                        idx,
+                        line.get("IsSetProduct", False),
+                        line.get("IsChildProduct", False),
+                        line.get("ProductIDText"))
 
         for misa_line in grouped_lines:
             # Chỉ xử lý dòng combo cha
@@ -359,7 +370,9 @@ class SaleApiImportWizard(models.TransientModel):
             if not product_code:
                 continue
 
-            _logger.info("🔍 Kiểm tra combo: %s", product_code)
+            _logger.warning("-" * 80)
+            _logger.warning("🔍 XỬ LÝ COMBO: %s", product_code)
+            _logger.warning("📦 Misa line data: %s", misa_line)
 
             # Thu thập danh sách con của combo này
             parent_key = str(
@@ -368,18 +381,32 @@ class SaleApiImportWizard(models.TransientModel):
                 or misa_line.get("ProductIDText")
                 or ""
             )
-            children_for_parent = [
-                c for c in grouped_lines
-                if c.get("IsChildProduct")
-                and str(
-                    c.get("ParentProductID")
-                    or c.get("ParentProductIDText")
-                    or ""
-                ) == parent_key
-            ]
+            
+            _logger.warning("🔑 Parent key: %s", parent_key)
+            
+            # DEBUG: Tìm children
+            children_for_parent = []
+            for c in grouped_lines:
+                is_child = c.get("IsChildProduct", False)
+                parent_id = str(c.get("ParentProductID") or c.get("ParentProductIDText") or "")
+                
+                _logger.warning("  👶 Checking: IsChild=%s, ParentID=%s, Match=%s, ProductIDText=%s",
+                            is_child, parent_id, parent_id == parent_key, c.get("ProductIDText"))
+                
+                if is_child and parent_id == parent_key:
+                    children_for_parent.append(c)
+                    _logger.warning("  ✅ MATCHED child: %s", c.get("ProductIDText"))
+
+            _logger.warning("👶 Tìm thấy %d children cho combo %s", len(children_for_parent), product_code)
+            _logger.warning("👶 Children data: %s", children_for_parent)
 
             # Tạo/cập nhật combo product
             try:
+                _logger.warning("🚀 Gọi get_or_create_combo_product")
+                _logger.warning("  - combo_data: %s", misa_line)
+                _logger.warning("  - children_data: %s", children_for_parent)
+                _logger.warning("  - has sale_headers: %s", bool(sale_headers))
+                
                 combo_product = misa_utils.get_or_create_combo_product(
                     combo_data=misa_line,
                     children_data=children_for_parent,
@@ -390,6 +417,9 @@ class SaleApiImportWizard(models.TransientModel):
                 if not combo_product:
                     _logger.warning("⚠️ Không tạo/cập nhật được combo %s", product_code)
                     continue
+
+                _logger.warning("✅ Combo product returned: id=%s, code=%s", 
+                            combo_product.id, combo_product.default_code)
 
                 # Tìm dòng SO tương ứng
                 so_line = existing_order.order_line.filtered(
@@ -413,6 +443,11 @@ class SaleApiImportWizard(models.TransientModel):
 
             except Exception as e:
                 _logger.exception("❌ Lỗi xử lý combo %s: %s", product_code, e)
+
+        _logger.warning("=" * 80)
+        _logger.warning("📊 KẾT QUẢ _update_existing_combo_products:")
+        _logger.warning("  ✅ Số combo đã cập nhật: %d", updated_count)
+        _logger.warning("=" * 80)
 
         if updated_count > 0:
             existing_order.message_post(

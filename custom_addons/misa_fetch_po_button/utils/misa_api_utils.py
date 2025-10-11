@@ -532,12 +532,15 @@ class MisaApiUtils(models.AbstractModel):
     # === LẤY THÀNH PHẦN COMBO TỪ API g1/Product/DataSubPaging ===
     def get_combo_children_by_product(self, combo_product_id: int | str, sale_headers: object) -> list[dict]:
         """
-        Trả về list children theo mẫu:
-        [{"ProductID": 40824, "ProductIDText": "M18 FHIW2F12-0X0", "Description": "...", "UnitIDText": "Cái", "Amount": 1.0}, ...]
+        Trả về list children với DEBUG chi tiết
         """
         url = "https://amisapp.misa.vn/crm/g1/api/business/Product/DataSubPaging"
-
-        # Payload tối thiểu dùng SubFormConfig chung của MISA (thực tế MISA sẽ map đúng SubForm cho Product):
+        
+        _logger.warning("=" * 80)
+        _logger.warning("📡 get_combo_children_by_product CALLED")
+        _logger.warning("🔑 combo_product_id: %s (type=%s)", combo_product_id, type(combo_product_id))
+        _logger.warning("🔌 URL: %s", url)
+        
         payload = {
             "Columns": "",
             "Sorts": [],
@@ -574,16 +577,50 @@ class MisaApiUtils(models.AbstractModel):
             "SessionID": "combo-fetch",
             "AISearchKeyword": ""
         }
+        
+        _logger.warning("📤 Payload: %s", payload)
+        _logger.warning("📤 Headers: %s", {k: v[:50] + '...' if len(str(v)) > 50 else v 
+                                        for k, v in (sale_headers or {}).items()})
 
         try:
+            _logger.warning("🚀 Đang gọi API...")
             resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
+            
+            _logger.warning("📥 Response status: %s", resp.status_code)
+            _logger.warning("📥 Response headers: %s", dict(resp.headers))
+            
             if not resp.ok:
-                _logger.warning("⚠️ Product/DataSubPaging combo HTTP %s: %s", resp.status_code, resp.text[:300])
+                _logger.warning("❌ HTTP không OK: %s", resp.status_code)
+                _logger.warning("📥 Response text (300 chars): %s", resp.text[:300])
                 return []
-            js = resp.json() if resp.content else {}
-            return (js.get("Data") or []) if isinstance(js, dict) else []
+            
+            try:
+                js = resp.json() if resp.content else {}
+                _logger.warning("📥 Response JSON keys: %s", list(js.keys()) if isinstance(js, dict) else type(js))
+                _logger.warning("📥 Full Response JSON: %s", js)
+            except Exception as json_err:
+                _logger.error("❌ Lỗi parse JSON: %s", json_err)
+                _logger.warning("📥 Raw response text: %s", resp.text[:500])
+                return []
+            
+            if isinstance(js, dict):
+                data = js.get("Data", []) or []
+                _logger.warning("📦 Data type: %s, length: %s", type(data), len(data) if isinstance(data, list) else 'N/A')
+                
+                if isinstance(data, list) and len(data) > 0:
+                    _logger.warning("👶 First item: %s", data[0])
+                    _logger.warning("👶 First item keys: %s", list(data[0].keys()) if isinstance(data[0], dict) else 'N/A')
+                
+                _logger.warning("=" * 80)
+                return data
+            else:
+                _logger.warning("⚠️ Response không phải dict")
+                _logger.warning("=" * 80)
+                return []
+                
         except Exception as e:
-            _logger.exception("❗ Lỗi gọi Product/DataSubPaging (combo): %s", e)
+            _logger.exception("❌ Lỗi gọi Product/DataSubPaging (combo): %s", e)
+            _logger.warning("=" * 80)
             return []
 
     # === TÁCH MÃ CON TỪ TÊN COMBO (FALLBACK) ===
