@@ -351,6 +351,8 @@ class SaleApiImportWizard(models.TransientModel):
 
         # ===== NHÓM CHILDREN THEO CHA (giống sync hard) =====
         children_by_parent = {}
+        
+        # PHƯƠNG PHÁP 1: Nhóm theo ParentProductID (nếu có)
         for ch in (grouped_lines or []):
             if not ch.get("IsChildProduct"):
                 continue
@@ -360,6 +362,25 @@ class SaleApiImportWizard(models.TransientModel):
             key = "|".join(sorted([k for k in keyset if k]))
             if key:
                 children_by_parent.setdefault(key, []).append(ch)
+        
+        # PHƯƠNG PHÁP 2: Nếu không có ParentProductID → dùng VỊ TRÍ (smart matching)
+        if not children_by_parent:
+            _logger.info("⚠️ Update combo: MISA không trả ParentProductID → dùng SMART MATCHING theo vị trí")
+            current_parent_key = None
+            for it in grouped_lines:
+                if it.get("IsSetProduct"):
+                    # Bắt đầu combo mới
+                    parent_pid = it.get("ProductID") or it.get("ProductId")
+                    parent_pcode = it.get("ProductIDText")
+                    parent_keys = {str(parent_pid or "").strip(), parent_pcode}
+                    current_parent_key = "|".join(sorted([k for k in parent_keys if k]))
+                    children_by_parent.setdefault(current_parent_key, [])
+                elif it.get("IsChildProduct") and current_parent_key:
+                    # Là con của combo hiện tại
+                    children_by_parent[current_parent_key].append(it)
+                else:
+                    # Dòng thường → reset
+                    current_parent_key = None
 
         # ===== XỬ LÝ TỪNG DÒNG COMBO =====
         for line in grouped_lines:
@@ -629,6 +650,8 @@ class SaleApiImportWizard(models.TransientModel):
                         return []
 
                     children_by_parent = {}
+                    
+                    # PHƯƠNG PHÁP 1: Nhóm theo ParentProductID (nếu có)
                     for it in lines:
                         if it.get("IsChildProduct") and (it.get("ParentProductID") or it.get("ParentProductIDText")):
                             # ✅ DÙNG CÙNG FORMAT KEY VỚI LOGIC TẠO SO (kết hợp ID + CODE)
@@ -638,6 +661,26 @@ class SaleApiImportWizard(models.TransientModel):
                             key = "|".join(sorted([k for k in keyset if k]))
                             if key:
                                 children_by_parent.setdefault(key, []).append(it)
+                    
+                    # PHƯƠNG PHÁP 2: Nếu không có ParentProductID → dùng VỊ TRÍ (smart matching)
+                    # Dòng IsChildProduct ngay sau IsSetProduct = con của nó
+                    if not children_by_parent:
+                        _logger.info("⚠️ MISA không trả ParentProductID → dùng SMART MATCHING theo vị trí")
+                        current_parent_key = None
+                        for idx, it in enumerate(lines):
+                            if it.get("IsSetProduct"):
+                                # Bắt đầu combo mới
+                                parent_pid = it.get("ProductID") or it.get("ProductId")
+                                parent_pcode = it.get("ProductIDText")
+                                parent_keys = {str(parent_pid or "").strip(), parent_pcode}
+                                current_parent_key = "|".join(sorted([k for k in parent_keys if k]))
+                                children_by_parent.setdefault(current_parent_key, [])
+                            elif it.get("IsChildProduct") and current_parent_key:
+                                # Là con của combo hiện tại
+                                children_by_parent[current_parent_key].append(it)
+                            else:
+                                # Dòng thường → reset
+                                current_parent_key = None
                     
                     _logger.info("📦 _expand_combo_lines: Đầu vào %d dòng, đã có %d children groups từ MISA", 
                                 len(lines), len(children_by_parent))
@@ -857,6 +900,8 @@ class SaleApiImportWizard(models.TransientModel):
                     
                     # ===== NHÓM CHILDREN THEO CHA (giống sync hard) =====
                     children_by_parent = {}
+                    
+                    # PHƯƠNG PHÁP 1: Nhóm theo ParentProductID (nếu có)
                     for ch in (grouped_lines or []):
                         if not ch.get("IsChildProduct"):
                             continue
@@ -866,6 +911,25 @@ class SaleApiImportWizard(models.TransientModel):
                         key = "|".join(sorted([k for k in keyset if k]))
                         if key:
                             children_by_parent.setdefault(key, []).append(ch)
+                    
+                    # PHƯƠNG PHÁP 2: Nếu không có ParentProductID → dùng VỊ TRÍ (smart matching)
+                    if not children_by_parent:
+                        _logger.info("⚠️ CASE 1: MISA không trả ParentProductID → dùng SMART MATCHING theo vị trí")
+                        current_parent_key = None
+                        for it in grouped_lines:
+                            if it.get("IsSetProduct"):
+                                # Bắt đầu combo mới
+                                parent_pid = it.get("ProductID") or it.get("ProductId")
+                                parent_pcode = it.get("ProductIDText")
+                                parent_keys = {str(parent_pid or "").strip(), parent_pcode}
+                                current_parent_key = "|".join(sorted([k for k in parent_keys if k]))
+                                children_by_parent.setdefault(current_parent_key, [])
+                            elif it.get("IsChildProduct") and current_parent_key:
+                                # Là con của combo hiện tại
+                                children_by_parent[current_parent_key].append(it)
+                            else:
+                                # Dòng thường → reset
+                                current_parent_key = None
                     
                     _logger.info("🔍 CASE 1: Tổng số children groups: %d", len(children_by_parent))
                     for k, v in children_by_parent.items():
@@ -1070,6 +1134,8 @@ class SaleApiImportWizard(models.TransientModel):
 
                         # ===== NHÓM CHILDREN THEO CHA (giống CASE 1 & sync hard) =====
                         children_by_parent = {}
+                        
+                        # PHƯƠNG PHÁP 1: Nhóm theo ParentProductID (nếu có)
                         for ch in (grouped_lines or []):
                             if not ch.get("IsChildProduct"):
                                 continue
@@ -1079,6 +1145,25 @@ class SaleApiImportWizard(models.TransientModel):
                             key = "|".join(sorted([k for k in keyset if k]))
                             if key:
                                 children_by_parent.setdefault(key, []).append(ch)
+                        
+                        # PHƯƠNG PHÁP 2: Nếu không có ParentProductID → dùng VỊ TRÍ (smart matching)
+                        if not children_by_parent:
+                            _logger.info("⚠️ CASE 2 (kho=%s): MISA không trả ParentProductID → dùng SMART MATCHING theo vị trí", stock_id)
+                            current_parent_key = None
+                            for it in grouped_lines:
+                                if it.get("IsSetProduct"):
+                                    # Bắt đầu combo mới
+                                    parent_pid = it.get("ProductID") or it.get("ProductId")
+                                    parent_pcode = it.get("ProductIDText")
+                                    parent_keys = {str(parent_pid or "").strip(), parent_pcode}
+                                    current_parent_key = "|".join(sorted([k for k in parent_keys if k]))
+                                    children_by_parent.setdefault(current_parent_key, [])
+                                elif it.get("IsChildProduct") and current_parent_key:
+                                    # Là con của combo hiện tại
+                                    children_by_parent[current_parent_key].append(it)
+                                else:
+                                    # Dòng thường → reset
+                                    current_parent_key = None
                         
                         _logger.info("🔍 CASE 2 (kho=%s): Tổng số children groups: %d", stock_id, len(children_by_parent))
                         for k, v in children_by_parent.items():
