@@ -73,7 +73,9 @@ class MisaApiSaleOrder(http.Controller):
             return {"ok": False, "error": "admin_not_found"}
 
         try:
-            env_admin = request.env(user=admin_user).sudo()
+            # env_admin = request.env(user=admin_user).sudo()
+            env_admin = request.env(user=admin_user)
+
             result = env_admin["sale.order"].api_resync_by_misa(
                 misa_order_id=misa_order_id,
                 warehouse_id=warehouse_id,
