@@ -337,7 +337,8 @@ class SaleApiImportWizard(models.TransientModel):
         return updated_count > 0
     def _update_existing_combo_products(self, existing_order, grouped_lines, sale_headers):
         """
-        Cập nhật thông tin combo product cho SO đã tồn tại với DEBUG chi tiết
+        Cập nhật combo product cho SO đã tồn tại.
+        MISA không trả ParentProductID -> Dùng SMART MATCHING theo vị trí dòng.
         """
         if existing_order.state in ('cancel', 'done'):
             _logger.info("⚠️ SO %s đã ở trạng thái %s, không cập nhật combo",
@@ -345,68 +346,60 @@ class SaleApiImportWizard(models.TransientModel):
             return False
 
         _logger.warning("=" * 80)
-        _logger.warning("🔧 DEBUG _update_existing_combo_products")
-        _logger.warning("📦 SO: %s", existing_order.name)
-        _logger.warning("📋 Số dòng grouped_lines: %d", len(grouped_lines))
+        _logger.warning("🔧 _update_existing_combo_products")
+        _logger.warning("📦 SO: %s | Số dòng: %d", existing_order.name, len(grouped_lines))
         _logger.warning("=" * 80)
 
         misa_utils = self.env['misa.api.utils']
         updated_count = 0
 
-        # DEBUG: In ra TẤT CẢ các dòng để xem
-        for idx, line in enumerate(grouped_lines, 1):
-            _logger.warning("📦 Line #%d: IsSetProduct=%s, IsChildProduct=%s, ProductIDText=%s",
-                        idx,
-                        line.get("IsSetProduct", False),
-                        line.get("IsChildProduct", False),
-                        line.get("ProductIDText"))
-
-        for misa_line in grouped_lines:
-            # Chỉ xử lý dòng combo cha
-            if not misa_line.get("IsSetProduct", False):
-                continue
-
-            product_code = misa_line.get("ProductIDText")
-            if not product_code:
-                continue
-
-            _logger.warning("-" * 80)
-            _logger.warning("🔍 XỬ LÝ COMBO: %s", product_code)
-            _logger.warning("📦 Misa line data: %s", misa_line)
-
-            # Thu thập danh sách con của combo này
-            parent_key = str(
-                misa_line.get("ProductID")
-                or misa_line.get("ProductId")
-                or misa_line.get("ProductIDText")
-                or ""
-            )
+        # 🔥 SMART MATCHING: Nhóm children theo vị trí
+        # Logic: Combo cha -> Children liên tiếp -> Sản phẩm thường/Combo mới
+        combo_groups = {}
+        current_combo = None
+        
+        for idx, line in enumerate(grouped_lines):
+            product_code = line.get("ProductIDText")
+            is_combo = line.get("IsSetProduct", False)
+            is_child = line.get("IsChildProduct", False)
             
-            _logger.warning("🔑 Parent key: %s", parent_key)
+            _logger.warning("📦 Line #%d: %s | Combo=%s | Child=%s", 
+                        idx + 1, product_code, is_combo, is_child)
             
-            # DEBUG: Tìm children
-            children_for_parent = []
-            for c in grouped_lines:
-                is_child = c.get("IsChildProduct", False)
-                parent_id = str(c.get("ParentProductID") or c.get("ParentProductIDText") or "")
+            if is_combo:
+                # Bắt đầu combo mới
+                current_combo = product_code
+                combo_groups[current_combo] = {
+                    'combo_line': line,
+                    'children': []
+                }
+                _logger.warning("  🎁 Bắt đầu combo: %s", current_combo)
                 
-                _logger.warning("  👶 Checking: IsChild=%s, ParentID=%s, Match=%s, ProductIDText=%s",
-                            is_child, parent_id, parent_id == parent_key, c.get("ProductIDText"))
+            elif is_child and current_combo:
+                # Là child của combo hiện tại
+                combo_groups[current_combo]['children'].append(line)
+                _logger.warning("  👶 Thêm child: %s vào combo %s", product_code, current_combo)
                 
-                if is_child and parent_id == parent_key:
-                    children_for_parent.append(c)
-                    _logger.warning("  ✅ MATCHED child: %s", c.get("ProductIDText"))
+            else:
+                # Dòng thường hoặc không rõ -> Reset
+                if current_combo:
+                    _logger.warning("  🔚 Kết thúc combo: %s", current_combo)
+                    current_combo = None
 
-            _logger.warning("👶 Tìm thấy %d children cho combo %s", len(children_for_parent), product_code)
-            _logger.warning("👶 Children data: %s", children_for_parent)
+        _logger.warning("-" * 80)
+        _logger.warning("📊 Tìm thấy %d combo để xử lý", len(combo_groups))
 
-            # Tạo/cập nhật combo product
+        # Xử lý từng combo
+        for combo_code, data in combo_groups.items():
+            misa_line = data['combo_line']
+            children_for_parent = data['children']
+
+            _logger.warning("=" * 80)
+            _logger.warning("🔍 XỬ LÝ COMBO: %s", combo_code)
+            _logger.warning("👶 Children: %s", [c.get("ProductIDText") for c in children_for_parent])
+
             try:
-                _logger.warning("🚀 Gọi get_or_create_combo_product")
-                _logger.warning("  - combo_data: %s", misa_line)
-                _logger.warning("  - children_data: %s", children_for_parent)
-                _logger.warning("  - has sale_headers: %s", bool(sale_headers))
-                
+                # Tạo/cập nhật combo product
                 combo_product = misa_utils.get_or_create_combo_product(
                     combo_data=misa_line,
                     children_data=children_for_parent,
@@ -415,45 +408,52 @@ class SaleApiImportWizard(models.TransientModel):
                 )
 
                 if not combo_product:
-                    _logger.warning("⚠️ Không tạo/cập nhật được combo %s", product_code)
+                    _logger.warning("⚠️ Không tạo/cập nhật được combo %s", combo_code)
                     continue
 
-                _logger.warning("✅ Combo product returned: id=%s, code=%s", 
-                            combo_product.id, combo_product.default_code)
+                _logger.warning("✅ Combo product: id=%s, code=%s, is_combo=%s", 
+                            combo_product.id, 
+                            combo_product.default_code,
+                            combo_product.product_tmpl_id.is_combo)
+
+                # Kiểm tra số lượng children trong combo.product
+                combo_lines = self.env['combo.product'].search([
+                    ('product_template_id', '=', combo_product.product_tmpl_id.id)
+                ])
+                _logger.warning("📋 Combo.product có %d dòng children", len(combo_lines))
+                for cl in combo_lines:
+                    _logger.warning("  - %s: qty=%s", cl.product_id.default_code, cl.product_quantity)
 
                 # Tìm dòng SO tương ứng
                 so_line = existing_order.order_line.filtered(
-                    lambda l: l.product_id.default_code == product_code
+                    lambda l: l.product_id.default_code == combo_code
                 )
 
                 if so_line:
-                    # Cập nhật product_id nếu khác
                     if so_line[0].product_id.id != combo_product.id:
                         try:
                             so_line[0].write({'product_id': combo_product.id})
-                            _logger.info("✅ Đã cập nhật product_id cho dòng %s", product_code)
+                            _logger.info("✅ Đã cập nhật product_id cho dòng SO %s", combo_code)
                             updated_count += 1
                         except Exception as e:
-                            _logger.error("❌ Lỗi cập nhật product_id cho %s: %s", product_code, e)
+                            _logger.error("❌ Lỗi cập nhật product_id: %s", e)
                     else:
-                        _logger.info("ℹ️ Combo %s đã đúng product_id, chỉ cập nhật children", product_code)
+                        _logger.info("ℹ️ Combo %s đã đúng product_id", combo_code)
                         updated_count += 1
                 else:
-                    _logger.warning("⚠️ Không tìm thấy dòng SO cho combo %s", product_code)
+                    _logger.warning("⚠️ Không tìm thấy dòng SO cho combo %s", combo_code)
 
             except Exception as e:
-                _logger.exception("❌ Lỗi xử lý combo %s: %s", product_code, e)
+                _logger.exception("❌ Lỗi xử lý combo %s", combo_code)
 
         _logger.warning("=" * 80)
-        _logger.warning("📊 KẾT QUẢ _update_existing_combo_products:")
-        _logger.warning("  ✅ Số combo đã cập nhật: %d", updated_count)
+        _logger.warning("📊 KẾT QUẢ: Đã cập nhật %d combo", updated_count)
         _logger.warning("=" * 80)
 
         if updated_count > 0:
             existing_order.message_post(
                 body=_("Đã cập nhật %d combo product khi đồng bộ từ MISA") % updated_count
             )
-            _logger.info("🎯 Đã cập nhật %d combo cho SO %s", updated_count, existing_order.name)
 
         return updated_count > 0
 
