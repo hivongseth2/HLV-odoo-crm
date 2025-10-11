@@ -773,6 +773,7 @@ class SaleApiImportWizard(models.TransientModel):
                             qty = float(line.get("Amount", 1) or 0.0)
                             price_unit = float(line.get("Price", 0) or 0.0)
                             uom_name = (line.get("UnitIDText") or "Cái").strip()
+                            misa_product_id = line.get("ProductID") or line.get("ProductId") or None
                             product = odoo_utils._get_or_create_product(
                                 code=product_code,
                                 name=product_code,
@@ -782,13 +783,21 @@ class SaleApiImportWizard(models.TransientModel):
                                 purchase_ok=True,
                                 sale_ok=True
                             )
+                            qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
+                                product=product,
+                                misa_uom_text=uom_name,
+                                qty=qty,
+                                price=price_unit,
+                                misa_product_id=misa_product_id,
+                                headers=sale_headers
+                            )
                             vals_line = {
                                 'order_id': sale_order.id,
                                 'product_id': product.id,
                                 'name': product_code,
-                                'product_uom_qty': qty,
+                                'product_uom_qty': qty_for_odoo,
                                 'product_uom': product.uom_id.id,
-                                'price_unit': price_unit,  # Truyền lại đơn giá cho sản phẩm con combo
+                                'price_unit': price_for_odoo,  # Truyền giá trị đã quy đổi cho sản phẩm con combo
                             }
                             allowed_fields = {'order_id','product_id','name','product_uom_qty','product_uom','price_unit'}
                             safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
