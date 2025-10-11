@@ -1265,3 +1265,57 @@ class SaleOrder(models.Model):
             }
         }
 
+# =====================API
+    @api.model
+    def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True):
+        """
+        Public API (RPC/JSON-RPC) để resync đơn bán theo MISA Order ID.
+        - Nếu tìm thấy SO có misa_id => gọi action_resync_from_misa_hard() trên record đó.
+        - Nếu không thấy và create_when_missing=True => tạo 1 SO bootstrap (tối thiểu) với misa_id rồi gọi resync.
+        Trả về: dict {'ok': bool, 'res_id': int or None, 'name': str or None, 'detail': str or None}
+        """
+        misa_order_id = (str(misa_order_id or '')).strip()
+        if not misa_order_id:
+            raise UserError(_("Thiếu misa_order_id"))
+        # 1) Tìm SO hiện hữu theo misa_id
+        so = self.search([('misa_id', '=', misa_order_id)], limit=1)
+        if so:
+            # Gọi hàm "hard resync" sẵn có
+            action = so.sudo().action_resync_from_misa_hard()
+            # action thường là ir.actions.act_window có res_id là SO mới
+            res_id = action.get('res_id') if isinstance(action, dict) else so.id
+            so_new = self.browse(res_id)
+            return {
+                'ok': True,
+                'res_id': so_new.id,
+                'name': so_new.name,
+                'detail': 'resynced_existing',
+            }
+        # 2) Không thấy → tạo SO bootstrap (nếu cho phép)
+        if not create_when_missing:
+            return {'ok': False, 'res_id': None, 'name': None, 'detail': 'not_found'}
+        # Chọn partner tối thiểu (public_partner nếu có)
+        try:
+            partner = self.env.ref('base.public_partner')
+        except Exception:
+            partner = self.env['res.partner'].search([], limit=1)
+        if not partner:
+            raise UserError(_("Không tìm thấy đối tác mặc định để bootstrap đơn."))
+        vals = {
+            'name': f"TMP-MISA-{misa_order_id}",
+            'partner_id': partner.id,
+            'misa_id': misa_order_id,
+        }
+        if warehouse_id:
+            vals['warehouse_id'] = int(warehouse_id)
+        so_boot = self.create(vals)
+        # Gọi lại resync cứng trên record bootstrap (hàm của bạn sẽ tự huỷ & tạo mới theo MISA)
+        action = so_boot.sudo().action_resync_from_misa_hard()
+        res_id = action.get('res_id') if isinstance(action, dict) else so_boot.id
+        so_new = self.browse(res_id)
+        return {
+            'ok': True,
+            'res_id': so_new.id,
+            'name': so_new.name,
+            'detail': 'created_then_resynced',
+        }
