@@ -732,15 +732,43 @@ class SaleApiImportWizard(models.TransientModel):
                             discount_percent = float(line.get("DiscountPercent", 0) or 0.0)
                             uom_name = (line.get("UnitIDText") or "Cái").strip()
                             note = line.get("DescriptionProduct") or ""
-                            product = odoo_utils._get_or_create_product(
-                                code=product_code,
-                                name=description,
-                                unit_name=uom_name,
-                                cost=price_unit,
-                                product_type="consu",
-                                purchase_ok=True,
-                                sale_ok=True
+                            # Thu thập danh sách con thuộc combo này trong nhóm hiện tại
+                            parent_key = str(
+                                line.get("ProductID")
+                                or line.get("ProductId")
+                                or line.get("ProductIDText")
+                                or ""
                             )
+                            children_for_parent = [
+                                c for c in grouped_lines
+                                if c.get("IsChildProduct")
+                                and str(
+                                    c.get("ParentProductID")
+                                    or c.get("ParentProductIDText")
+                                    or ""
+                                ) == parent_key
+                            ]
+
+                            # Tạo/gắn combo và tick is_combo (nếu chưa có)
+                            combo_product = misa_utils.create_combo_product_if_missing(
+                                combo_data=line,
+                                children_data=children_for_parent,
+                                env=self.env
+                            )
+
+                            # Fallback: nếu vì lý do gì đó tạo combo thất bại thì vẫn tạo product thường
+                            if not combo_product:
+                                product = odoo_utils._get_or_create_product(
+                                    code=product_code,
+                                    name=description,
+                                    unit_name=uom_name,
+                                    cost=price_unit,
+                                    product_type="consu",
+                                    purchase_ok=True,
+                                    sale_ok=True
+                                )
+                            else:
+                                product = combo_product
                             misa_product_id = line.get("ProductID") or line.get("ProductId") or None
                             qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
                                 product=product,
