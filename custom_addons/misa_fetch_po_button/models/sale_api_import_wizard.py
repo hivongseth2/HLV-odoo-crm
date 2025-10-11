@@ -335,6 +335,7 @@ class SaleApiImportWizard(models.TransientModel):
                         updated_count, existing_order.name)
 
         return updated_count > 0
+
     def _update_existing_combo_products(self, existing_order, grouped_lines, sale_headers):
         """
         Cập nhật combo product cho SO đã tồn tại.
@@ -637,115 +638,20 @@ class SaleApiImportWizard(models.TransientModel):
 
                 
 
-                # note: mấy cái isSet thì nối thêm StockIDText => misa ko trả kho cho combo => dùng để rơi vào case1 => phương pháp lấy kho của item con[1] để bỏ vào => rơi vào case 1
-                # === EXPAND COMBO: chuyển dòng combo cha → các dòng con ===
+                # === (ĐÃ SỬA) KHÔNG EXPAND COMBO: GIỮ NGUYÊN LIST, KHÔNG THÊM DÒNG CON ===
                 def _expand_combo_lines(lines: list[dict]) -> list[dict]:
                     """
-                    Trả về danh sách dòng gồm:
-                    - Dòng combo cha (IsSetProduct=True) giữ nguyên đầy đủ thông tin.
-                    - Các dòng con của combo chỉ gồm tên sản phẩm, số lượng, tên kho, IsChildProduct.
-                    - Các dòng thường giữ nguyên.
+                    Trước đây: chuyển combo cha → thêm các dòng con vào danh sách.
+                    Nay: để giống hard sync, KHÔNG thêm các dòng con vào SO.
+                    Vẫn có thể log phân tích/khóa nhóm để dùng đoạn sau, nhưng trả về nguyên list.
                     """
-                    if not lines:
-                        return []
-
-                    children_by_parent = {}
-                    
-                    # PHƯƠNG PHÁP 1: Nhóm theo ParentProductID (nếu có)
-                    for it in lines:
-                        if it.get("IsChildProduct") and (it.get("ParentProductID") or it.get("ParentProductIDText")):
-                            # ✅ DÙNG CÙNG FORMAT KEY VỚI LOGIC TẠO SO (kết hợp ID + CODE)
-                            p_id = it.get("ParentProductID") or it.get("ParentProductId")
-                            p_code = (it.get("ParentProductIDText") or "").strip()
-                            keyset = {str(p_id or "").strip(), p_code}
-                            key = "|".join(sorted([k for k in keyset if k]))
-                            if key:
-                                children_by_parent.setdefault(key, []).append(it)
-                    
-                    # PHƯƠNG PHÁP 2: Nếu không có ParentProductID → dùng VỊ TRÍ (smart matching)
-                    # Dòng IsChildProduct ngay sau IsSetProduct = con của nó
-                    if not children_by_parent:
-                        _logger.info("⚠️ MISA không trả ParentProductID → dùng SMART MATCHING theo vị trí")
-                        current_parent_key = None
-                        for idx, it in enumerate(lines):
-                            if it.get("IsSetProduct"):
-                                # Bắt đầu combo mới
-                                parent_pid = it.get("ProductID") or it.get("ProductId")
-                                parent_pcode = it.get("ProductIDText")
-                                parent_keys = {str(parent_pid or "").strip(), parent_pcode}
-                                current_parent_key = "|".join(sorted([k for k in parent_keys if k]))
-                                children_by_parent.setdefault(current_parent_key, [])
-                            elif it.get("IsChildProduct") and current_parent_key:
-                                # Là con của combo hiện tại
-                                children_by_parent[current_parent_key].append(it)
-                            else:
-                                # Dòng thường → reset
-                                current_parent_key = None
-                    
-                    _logger.info("📦 _expand_combo_lines: Đầu vào %d dòng, đã có %d children groups từ MISA", 
-                                len(lines), len(children_by_parent))
-                    for k, v in list(children_by_parent.items())[:3]:
-                        _logger.info("  → Sample key: '%s' → %d children", k, len(v))
-
-                    out = []
-                    for it in lines:
-                        if not it.get("IsSetProduct", False):
-                            out.append(it)
-                            continue
-
-                        # là combo cha
-                        parent_pid = it.get("ProductID") or it.get("ProductId")
-                        parent_pcode = it.get("ProductIDText")
-                        # ✅ DÙNG CÙNG FORMAT KEY
-                        parent_keys = {str(parent_pid or "").strip(), parent_pcode}
-                        parent_key = "|".join(sorted([k for k in parent_keys if k]))
-
-                        # luôn giữ dòng combo cha đầy đủ
-                        out.append(it)
-
-                        # lấy con
-                        combo_children = children_by_parent.get(parent_key)
-                        if not combo_children:
-                            _logger.info("  🔧 Combo %s (key=%s) thiếu children → fetch từ API", parent_pcode, parent_key)
-                            try:
-                                kids = misa_utils.get_combo_children_by_product(parent_pid or parent_pcode, sale_headers) or []
-                                _logger.info("    → API trả về %d children", len(kids))
-                            except Exception as e:
-                                _logger.warning("    → API lỗi: %s", e)
-                                kids = []
-                            combo_children = []
-                            for k in kids:
-                                combo_children.append({
-                                    "IsChildProduct": True,
-                                    "ParentProductID": parent_pid,
-                                    "ParentProductIDText": parent_pcode,
-                                    "ProductID": k.get("ProductID"),
-                                    "ProductIDText": k.get("ProductIDText"),
-                                    "UnitIDText": k.get("UnitIDText") or "Cái",
-                                    "Amount": k.get("Amount") or 1.0,
-                                    "StockIDText": it.get("StockIDText"),
-                                })
-                        else:
-                            _logger.info("  ✅ Combo %s đã có %d children từ MISA DataSubPaging", parent_pcode, len(combo_children))
-                            # if not combo_children:
-                            #     txt = it.get("Description") or it.get("ProductName") or it.get("ProductIDText") or ""
-                            #     codes = misa_utils.parse_children_codes_from_text(txt) or []
-                            #     for c in codes:
-                            #         combo_children.append({
-                            #             "IsChildProduct": True,
-                            #             "ParentProductID": parent_pid,
-                            #             "ParentProductIDText": parent_pcode,
-                            #             "ProductIDText": c,
-                            #             "UnitIDText": "Cái",
-                            #             "Amount": 1.0,
-                            #             "StockIDText": it.get("StockIDText"),
-                            #         })
-
-                        # thêm các dòng con chỉ gồm tên, số lượng, kho
-                        for child in combo_children or []:
-                            out.append(child)
-
-                    return out
+                    try:
+                        n_set = sum(1 for it in (lines or []) if it.get("IsSetProduct"))
+                        n_child = sum(1 for it in (lines or []) if it.get("IsChildProduct"))
+                        _logger.info("ℹ️ _expand_combo_lines: found %d combo-parent, %d child (child sẽ không expand vào SO).", n_set, n_child)
+                    except Exception:
+                        pass
+                    return lines or []
                 
                 product_lines = _expand_combo_lines(product_lines)
                 # --- Gom dòng theo kho ---
@@ -833,7 +739,7 @@ class SaleApiImportWizard(models.TransientModel):
                             existing_order.misa_id = misa_id_str
                         # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <<<
                         self._update_existing_so_taxes(existing_order, grouped_lines)
-                        # >>> CẬP NHẬT COMBO PRODUCT <<<
+                        # >>> CẬP NHẬT COMBO PRODUCT (chỉ dòng cha) <<<
                         self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
                         # Update MISA fields (owner code and order date)
                         upd = {}
@@ -843,40 +749,9 @@ class SaleApiImportWizard(models.TransientModel):
                             upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
                         if upd:
                             existing_order.write(upd)
-                        # BỔ SUNG: cập nhật combo/sản phẩm con cho đơn đã tồn tại
-                        for line in grouped_lines:
-                            if line.get("IsSetProduct", False):
-                                product_code = line.get("ProductIDText")
-                                description = line.get("Description") or product_code
-                                uom_name = (line.get("UnitIDText") or "Cái").strip()
-                                parent_key = str(
-                                    line.get("ProductID")
-                                    or line.get("ProductId")
-                                    or line.get("ProductIDText")
-                                    or ""
-                                )
-                                children_for_parent = [
-                                    c for c in grouped_lines
-                                    if c.get("IsChildProduct")
-                                    and str(
-                                        c.get("ParentProductID")
-                                        or c.get("ParentProductIDText")
-                                        or ""
-                                    ) == parent_key
-                                ]
-                                # Tạo/gắn combo và tick is_combo (nếu chưa có)
-                                combo_product = self.env['misa.api.utils'].get_or_create_combo_product(
-                                    combo_data=line,
-                                    children_data=children_for_parent,
-                                    env=self.env,
-                                    sale_headers=sale_headers,
-                                )
-                                # Nếu combo_product trả về thì cập nhật lại product_id cho dòng combo trong SO
-                                if combo_product:
-                                    so_line = existing_order.order_line.filtered(lambda l: l.product_id.default_code == product_code)
-                                    if so_line:
-                                        so_line[0].write({'product_id': combo_product.id})
-                        _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật combo/sản phẩm con", order_ref)
+
+                        # (giữ nguyên các xử lý khác; KHÔNG thêm dòng con)
+                        _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật combo (parent-only)/thuế", order_ref)
                         continue
 
                     group_total = sum(line_subtotal(l) for l in grouped_lines)
@@ -898,46 +773,9 @@ class SaleApiImportWizard(models.TransientModel):
 
                     sale_order = self.env['sale.order'].create(sale_vals)
                     
-                    # ===== NHÓM CHILDREN THEO CHA (giống sync hard) =====
-                    children_by_parent = {}
-                    
-                    # PHƯƠNG PHÁP 1: Nhóm theo ParentProductID (nếu có)
-                    for ch in (grouped_lines or []):
-                        if not ch.get("IsChildProduct"):
-                            continue
-                        p_id   = ch.get("ParentProductID") or ch.get("ParentProductId")
-                        p_code = (ch.get("ParentProductIDText") or "").strip()
-                        keyset = {str(p_id or "").strip(), p_code}
-                        key = "|".join(sorted([k for k in keyset if k]))
-                        if key:
-                            children_by_parent.setdefault(key, []).append(ch)
-                    
-                    # PHƯƠNG PHÁP 2: Nếu không có ParentProductID → dùng VỊ TRÍ (smart matching)
-                    if not children_by_parent:
-                        _logger.info("⚠️ CASE 1: MISA không trả ParentProductID → dùng SMART MATCHING theo vị trí")
-                        current_parent_key = None
-                        for it in grouped_lines:
-                            if it.get("IsSetProduct"):
-                                # Bắt đầu combo mới
-                                parent_pid = it.get("ProductID") or it.get("ProductId")
-                                parent_pcode = it.get("ProductIDText")
-                                parent_keys = {str(parent_pid or "").strip(), parent_pcode}
-                                current_parent_key = "|".join(sorted([k for k in parent_keys if k]))
-                                children_by_parent.setdefault(current_parent_key, [])
-                            elif it.get("IsChildProduct") and current_parent_key:
-                                # Là con của combo hiện tại
-                                children_by_parent[current_parent_key].append(it)
-                            else:
-                                # Dòng thường → reset
-                                current_parent_key = None
-                    
-                    _logger.info("🔍 CASE 1: Tổng số children groups: %d", len(children_by_parent))
-                    for k, v in children_by_parent.items():
-                        _logger.info("  → Key '%s': %d children", k, len(v))
-                    
-                    # ===== XỬ LÝ TỪNG DÒNG MISA =====
+                    # ===== XỬ LÝ TỪNG DÒNG MISA (parent-only) =====
                     for line in grouped_lines:
-                        # BỎ QUA dòng con -> giống sync hard (SO chỉ có 1 dòng CHA)
+                        # BỎ QUA dòng con -> giống sync hard
                         if line.get("IsChildProduct"):
                             continue
                         
@@ -953,27 +791,17 @@ class SaleApiImportWizard(models.TransientModel):
                         note = line.get("DescriptionProduct") or ""
                         misa_product_id = line.get("ProductID") or line.get("ProductId") or None
                         
-                        # NHÁNH COMBO CHA (giống sync hard: chỉ tạo 1 dòng cha, children đổ vào Combo Items)
+                        # NHÁNH COMBO CHA
                         if line.get("IsSetProduct", False):
-                            # Gom children của CHA hiện tại (khớp theo cả ID và CODE)
-                            parent_keys = {str(misa_product_id or "").strip(), product_code}
-                            ckey = "|".join(sorted([k for k in parent_keys if k]))
-                            children_for_parent = list(children_by_parent.get(ckey, []))
-                            
-                            _logger.info("🎯 COMBO CHA: %s (ID=%s) → Key='%s' → %d children found", 
-                                        product_code, misa_product_id, ckey, len(children_for_parent))
-                            if children_for_parent:
-                                _logger.info("  → Children: %s", [c.get("ProductIDText") for c in children_for_parent])
-
-                            # Tạo/lấy sản phẩm combo + ĐỔ Combo Items đúng schema combo.product
+                            # tạo/lấy combo product (children util sẽ tự xử lý bằng headers nếu cần)
                             combo_product = misa_utils.get_or_create_combo_product(
                                 combo_data=line,
-                                children_data=children_for_parent,   # có thể rỗng -> util tự fetch bằng headers
+                                children_data=[],           # không cần truyền children ở SO line
                                 env=self.env,
-                                sale_headers=sale_headers,           # BẮT BUỘC để util gọi API lấy con khi DataSubPaging không trả
+                                sale_headers=sale_headers,
                             )
 
-                            # Fallback nếu util lỗi: vẫn đảm bảo có product để không vỡ flow
+                            # Fallback: nếu util lỗi, vẫn tạo product thường để không vỡ flow
                             product = combo_product or odoo_utils._get_or_create_product(
                                 code=product_code,
                                 name=description,
@@ -984,7 +812,7 @@ class SaleApiImportWizard(models.TransientModel):
                                 sale_ok=True
                             )
                             
-                            # Quy đổi về UoM chuẩn theo conversion của MISA
+                            # Quy đổi UoM
                             qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
                                 product=product,
                                 misa_uom_text=uom_name,
@@ -1015,7 +843,7 @@ class SaleApiImportWizard(models.TransientModel):
                             self.env['sale.order.line'].create(safe_vals_line)
                             continue  # ✅ xong nhánh combo cha
                         
-                        # NHÁNH DÒNG THƯỜNG (giống sync hard)
+                        # NHÁNH DÒNG THƯỜNG
                         product = odoo_utils._get_or_create_product(
                             code=product_code,
                             name=description,
@@ -1102,7 +930,7 @@ class SaleApiImportWizard(models.TransientModel):
                                 existing_order.misa_id = misa_id_str
                             # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <
                             self._update_existing_so_taxes(existing_order, grouped_lines)
-                            # >>> THÊM: CẬP NHẬT COMBO PRODUCT <<<
+                            # >>> THÊM: CẬP NHẬT COMBO PRODUCT (parent-only) <<<
                             self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
                             upd = {}
                             if owner_date.get('owner_code'):
@@ -1132,46 +960,9 @@ class SaleApiImportWizard(models.TransientModel):
 
                         sale_order = self.env['sale.order'].create(sale_vals)
 
-                        # ===== NHÓM CHILDREN THEO CHA (giống CASE 1 & sync hard) =====
-                        children_by_parent = {}
-                        
-                        # PHƯƠNG PHÁP 1: Nhóm theo ParentProductID (nếu có)
-                        for ch in (grouped_lines or []):
-                            if not ch.get("IsChildProduct"):
-                                continue
-                            p_id   = ch.get("ParentProductID") or ch.get("ParentProductId")
-                            p_code = (ch.get("ParentProductIDText") or "").strip()
-                            keyset = {str(p_id or "").strip(), p_code}
-                            key = "|".join(sorted([k for k in keyset if k]))
-                            if key:
-                                children_by_parent.setdefault(key, []).append(ch)
-                        
-                        # PHƯƠNG PHÁP 2: Nếu không có ParentProductID → dùng VỊ TRÍ (smart matching)
-                        if not children_by_parent:
-                            _logger.info("⚠️ CASE 2 (kho=%s): MISA không trả ParentProductID → dùng SMART MATCHING theo vị trí", stock_id)
-                            current_parent_key = None
-                            for it in grouped_lines:
-                                if it.get("IsSetProduct"):
-                                    # Bắt đầu combo mới
-                                    parent_pid = it.get("ProductID") or it.get("ProductId")
-                                    parent_pcode = it.get("ProductIDText")
-                                    parent_keys = {str(parent_pid or "").strip(), parent_pcode}
-                                    current_parent_key = "|".join(sorted([k for k in parent_keys if k]))
-                                    children_by_parent.setdefault(current_parent_key, [])
-                                elif it.get("IsChildProduct") and current_parent_key:
-                                    # Là con của combo hiện tại
-                                    children_by_parent[current_parent_key].append(it)
-                                else:
-                                    # Dòng thường → reset
-                                    current_parent_key = None
-                        
-                        _logger.info("🔍 CASE 2 (kho=%s): Tổng số children groups: %d", stock_id, len(children_by_parent))
-                        for k, v in children_by_parent.items():
-                            _logger.info("  → Key '%s': %d children", k, len(v))
-                        
-                        # ===== XỬ LÝ TỪNG DÒNG MISA =====
+                        # ===== XỬ LÝ TỪNG DÒNG MISA (parent-only) =====
                         for line in grouped_lines:
-                            # BỎ QUA dòng con -> giống sync hard (SO chỉ có 1 dòng CHA)
+                            # BỎ QUA dòng con -> giống sync hard
                             if line.get("IsChildProduct"):
                                 continue
                             
@@ -1187,27 +978,15 @@ class SaleApiImportWizard(models.TransientModel):
                             note = line.get("DescriptionProduct") or ""
                             misa_product_id = line.get("ProductID") or line.get("ProductId") or None
                             
-                            # NHÁNH COMBO CHA (giống CASE 1)
+                            # NHÁNH COMBO CHA
                             if line.get("IsSetProduct", False):
-                                # Gom children của CHA hiện tại (khớp theo cả ID và CODE)
-                                parent_keys = {str(misa_product_id or "").strip(), product_code}
-                                ckey = "|".join(sorted([k for k in parent_keys if k]))
-                                children_for_parent = list(children_by_parent.get(ckey, []))
-                                
-                                _logger.info("🎯 COMBO CHA (CASE 2): %s (ID=%s) → Key='%s' → %d children found", 
-                                            product_code, misa_product_id, ckey, len(children_for_parent))
-                                if children_for_parent:
-                                    _logger.info("  → Children: %s", [c.get("ProductIDText") for c in children_for_parent])
-
-                                # Tạo/lấy sản phẩm combo + ĐỔ Combo Items đúng schema combo.product
                                 combo_product = misa_utils.get_or_create_combo_product(
                                     combo_data=line,
-                                    children_data=children_for_parent,   # có thể rỗng -> util tự fetch bằng headers
+                                    children_data=[],       # không expand children
                                     env=self.env,
-                                    sale_headers=sale_headers,           # BẮT BUỘC để util gọi API lấy con
+                                    sale_headers=sale_headers,
                                 )
 
-                                # Fallback nếu util lỗi: vẫn đảm bảo có product để không vỡ flow
                                 product = combo_product or odoo_utils._get_or_create_product(
                                     code=product_code,
                                     name=description,
@@ -1218,7 +997,6 @@ class SaleApiImportWizard(models.TransientModel):
                                     sale_ok=True
                                 )
                                 
-                                # Quy đổi về UoM chuẩn theo conversion của MISA
                                 qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
                                     product=product,
                                     misa_uom_text=uom_name,
@@ -1249,7 +1027,7 @@ class SaleApiImportWizard(models.TransientModel):
                                 self.env['sale.order.line'].create(safe_line_vals)
                                 continue  # ✅ xong nhánh combo cha
                             
-                            # NHÁNH DÒNG THƯỜNG (giống CASE 1)
+                            # NHÁNH DÒNG THƯỜNG
                             product = odoo_utils._get_or_create_product(
                                 code=product_code,
                                 name=description,
