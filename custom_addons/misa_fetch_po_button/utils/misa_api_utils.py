@@ -145,8 +145,9 @@ class MisaApiUtils(models.AbstractModel):
                 except Exception as e:
                     _logger.warning("⚠️ Không fetch được children cho combo %s: %s", combo_code, e)
 
-            # Ghi children vào template
+            # 🔥 LUÔN GHI CHILDREN VÀO TEMPLATE (cập nhật mỗi lần sync)
             _write_combo_children(tmpl, children_data or [])
+            _logger.info("✅ Đã cập nhật children cho combo đã tồn tại: %s", combo_code)
             return combo_prod
 
         # === Chưa có -> tạo mới ===

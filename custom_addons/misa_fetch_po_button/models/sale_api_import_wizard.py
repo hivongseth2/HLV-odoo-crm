@@ -335,7 +335,92 @@ class SaleApiImportWizard(models.TransientModel):
                         updated_count, existing_order.name)
 
         return updated_count > 0
+    def _update_existing_combo_products(self, existing_order, grouped_lines, sale_headers):
+        """
+        Cập nhật thông tin combo product cho SO đã tồn tại:
+        1. Cập nhật is_combo = True nếu thiếu
+        2. Cập nhật danh sách sản phẩm con trong combo.product
+        3. Cập nhật product_id của dòng SO nếu cần
+        """
+        if existing_order.state in ('cancel', 'done'):
+            _logger.info("⚠️ SO %s đã ở trạng thái %s, không cập nhật combo",
+                        existing_order.name, existing_order.state)
+            return False
 
+        misa_utils = self.env['misa.api.utils']
+        updated_count = 0
+
+        for misa_line in grouped_lines:
+            # Chỉ xử lý dòng combo cha
+            if not misa_line.get("IsSetProduct", False):
+                continue
+
+            product_code = misa_line.get("ProductIDText")
+            if not product_code:
+                continue
+
+            _logger.info("🔍 Kiểm tra combo: %s", product_code)
+
+            # Thu thập danh sách con của combo này
+            parent_key = str(
+                misa_line.get("ProductID")
+                or misa_line.get("ProductId")
+                or misa_line.get("ProductIDText")
+                or ""
+            )
+            children_for_parent = [
+                c for c in grouped_lines
+                if c.get("IsChildProduct")
+                and str(
+                    c.get("ParentProductID")
+                    or c.get("ParentProductIDText")
+                    or ""
+                ) == parent_key
+            ]
+
+            # Tạo/cập nhật combo product
+            try:
+                combo_product = misa_utils.get_or_create_combo_product(
+                    combo_data=misa_line,
+                    children_data=children_for_parent,
+                    env=self.env,
+                    sale_headers=sale_headers,
+                )
+
+                if not combo_product:
+                    _logger.warning("⚠️ Không tạo/cập nhật được combo %s", product_code)
+                    continue
+
+                # Tìm dòng SO tương ứng
+                so_line = existing_order.order_line.filtered(
+                    lambda l: l.product_id.default_code == product_code
+                )
+
+                if so_line:
+                    # Cập nhật product_id nếu khác
+                    if so_line[0].product_id.id != combo_product.id:
+                        try:
+                            so_line[0].write({'product_id': combo_product.id})
+                            _logger.info("✅ Đã cập nhật product_id cho dòng %s", product_code)
+                            updated_count += 1
+                        except Exception as e:
+                            _logger.error("❌ Lỗi cập nhật product_id cho %s: %s", product_code, e)
+                    else:
+                        _logger.info("ℹ️ Combo %s đã đúng product_id, chỉ cập nhật children", product_code)
+                        updated_count += 1
+                else:
+                    _logger.warning("⚠️ Không tìm thấy dòng SO cho combo %s", product_code)
+
+            except Exception as e:
+                _logger.exception("❌ Lỗi xử lý combo %s: %s", product_code, e)
+
+        if updated_count > 0:
+            existing_order.message_post(
+                body=_("Đã cập nhật %d combo product khi đồng bộ từ MISA") % updated_count
+            )
+            _logger.info("🎯 Đã cập nhật %d combo cho SO %s", updated_count, existing_order.name)
+
+        return updated_count > 0
 
     # ===== Helpers cho địa chỉ giao hàng =====
     def _vn_country(self):
@@ -687,8 +772,10 @@ class SaleApiImportWizard(models.TransientModel):
                     if existing_order:
                         if misa_id_str and not existing_order.misa_id:
                             existing_order.misa_id = misa_id_str
-                        # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <
+                        # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <<<
                         self._update_existing_so_taxes(existing_order, grouped_lines)
+                        # >>> CẬP NHẬT COMBO PRODUCT <<<
+                        self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
                         # Update MISA fields (owner code and order date)
                         upd = {}
                         if owner_date.get('owner_code'):
@@ -956,6 +1043,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 existing_order.misa_id = misa_id_str
                             # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <
                             self._update_existing_so_taxes(existing_order, grouped_lines)
+                            # >>> THÊM: CẬP NHẬT COMBO PRODUCT <<<
+                            self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
                             upd = {}
                             if owner_date.get('owner_code'):
                                 upd['x_studio_misa_saler_code'] = owner_date['owner_code']
