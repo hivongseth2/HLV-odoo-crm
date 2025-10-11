@@ -38,15 +38,12 @@ class MisaApiUtils(models.AbstractModel):
             if not target_rec or not children_list:
                 return
 
-            # Ưu tiên one2many combo_item_ids (model combo.product)
-            line_field = None
-            if hasattr(target_rec, 'combo_item_ids'):
-                line_field = target_rec._fields.get('combo_item_ids')
-            elif hasattr(target_rec, 'combo_line_ids'):
-                line_field = target_rec._fields.get('combo_line_ids')
+            # Sử dụng đúng trường combo_product_id (one2many) và combo_ids (many2many)
+            o2m_field = target_rec._fields.get('combo_product_id') if hasattr(target_rec, 'combo_product_id') else None
+            m2m_field = target_rec._fields.get('combo_ids') if hasattr(target_rec, 'combo_ids') else None
 
-            is_o2m = bool(line_field and getattr(line_field, 'type', '') == 'one2many')
-            is_m2m = bool(line_field and getattr(line_field, 'type', '') == 'many2many')
+            is_o2m = bool(o2m_field and getattr(o2m_field, 'type', '') == 'one2many')
+            is_m2m = bool(m2m_field and getattr(m2m_field, 'type', '') == 'many2many')
 
             cmds = []
             m2m_child_ids = []
@@ -69,26 +66,23 @@ class MisaApiUtils(models.AbstractModel):
 
                 if is_o2m:
                     # Dò tên field trong model combo.product
-                    line_model = env[line_field.comodel_name]
-                    lf = line_model._fields
-                    f_prod = 'product_id' if 'product_id' in lf else ('child_product_id' if 'child_product_id' in lf else None)
-                    f_qty  = 'product_quantity' if 'product_quantity' in lf else ('qty' if 'qty' in lf else None)
-                    f_uom  = 'uom_id' if 'uom_id' in lf else None
-                    vals = {}
-                    if f_prod: vals[f_prod] = c_prod.id
-                    if f_qty:  vals[f_qty]  = c_qty
-                    if f_uom:  vals[f_uom]  = c_prod.uom_id.id
+                    # Giả sử combo.product có các field: combo_product_id (many2one tới product.template), product_id (many2one tới product.product), qty, uom_id
+                    vals = {
+                        'product_id': c_prod.id,
+                        'qty': c_qty,
+                        'uom_id': c_prod.uom_id.id,
+                    }
                     cmds.append((0, 0, vals))
                 elif is_m2m:
                     m2m_child_ids.append(c_prod.id)
 
             if is_o2m and cmds:
                 # Xoá sạch rồi ghi lại cho chắc
-                target_rec.write({'combo_item_ids': [(5, 0, 0)] + cmds})
-                _logger.info("✅ Ghi %d dòng combo_item_ids cho %s", len(cmds), target_rec.name)
+                target_rec.write({'combo_product_id': [(5, 0, 0)] + cmds})
+                _logger.info("✅ Ghi %d dòng combo_product_id cho %s", len(cmds), target_rec.name)
             elif is_m2m and m2m_child_ids:
-                target_rec.write({'combo_line_ids': [(6, 0, m2m_child_ids)]})
-                _logger.info("✅ Ghi M2M combo_line_ids cho %s: %s", target_rec.name, m2m_child_ids)
+                target_rec.write({'combo_ids': [(6, 0, m2m_child_ids)]})
+                _logger.info("✅ Ghi M2M combo_ids cho %s: %s", target_rec.name, m2m_child_ids)
 
         # === Lấy/tạo combo cha
         combo_prod = Product.search([('default_code', '=', combo_code)], limit=1)
