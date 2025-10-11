@@ -532,15 +532,10 @@ class MisaApiUtils(models.AbstractModel):
     # === LẤY THÀNH PHẦN COMBO TỪ API g1/Product/DataSubPaging ===
     def get_combo_children_by_product(self, combo_product_id: int | str, sale_headers: object) -> list[dict]:
         """
-        Trả về list children với DEBUG chi tiết
+        Trả về danh sách children combo từ API MISA (rút gọn logger).
         """
         url = "https://amisapp.misa.vn/crm/g1/api/business/Product/DataSubPaging"
-        
-        _logger.warning("=" * 80)
-        _logger.warning("📡 get_combo_children_by_product CALLED")
-        _logger.warning("🔑 combo_product_id: %s (type=%s)", combo_product_id, type(combo_product_id))
-        _logger.warning("🔌 URL: %s", url)
-        
+
         payload = {
             "Columns": "",
             "Sorts": [],
@@ -577,51 +572,31 @@ class MisaApiUtils(models.AbstractModel):
             "SessionID": "combo-fetch",
             "AISearchKeyword": ""
         }
-        
-        _logger.warning("📤 Payload: %s", payload)
-        _logger.warning("📤 Headers: %s", {k: v[:50] + '...' if len(str(v)) > 50 else v 
-                                        for k, v in (sale_headers or {}).items()})
 
         try:
-            _logger.warning("🚀 Đang gọi API...")
             resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
-            
-            _logger.warning("📥 Response status: %s", resp.status_code)
-            _logger.warning("📥 Response headers: %s", dict(resp.headers))
-            
+
             if not resp.ok:
-                _logger.warning("❌ HTTP không OK: %s", resp.status_code)
-                _logger.warning("📥 Response text (300 chars): %s", resp.text[:300])
+                _logger.warning("HTTP %s khi gọi combo children cho %s",
+                                resp.status_code, combo_product_id)
                 return []
-            
+
             try:
                 js = resp.json() if resp.content else {}
-                _logger.warning("📥 Response JSON keys: %s", list(js.keys()) if isinstance(js, dict) else type(js))
-                _logger.warning("📥 Full Response JSON: %s", js)
             except Exception as json_err:
-                _logger.error("❌ Lỗi parse JSON: %s", json_err)
-                _logger.warning("📥 Raw response text: %s", resp.text[:500])
+                _logger.error("Lỗi parse JSON combo children: %s", json_err)
                 return []
-            
+
             if isinstance(js, dict):
                 data = js.get("Data", []) or []
-                _logger.warning("📦 Data type: %s, length: %s", type(data), len(data) if isinstance(data, list) else 'N/A')
-                
-                if isinstance(data, list) and len(data) > 0:
-                    _logger.warning("👶 First item: %s", data[0])
-                    _logger.warning("👶 First item keys: %s", list(data[0].keys()) if isinstance(data[0], dict) else 'N/A')
-                
-                _logger.warning("=" * 80)
-                return data
-            else:
-                _logger.warning("⚠️ Response không phải dict")
-                _logger.warning("=" * 80)
-                return []
-                
-        except Exception as e:
-            _logger.exception("❌ Lỗi gọi Product/DataSubPaging (combo): %s", e)
-            _logger.warning("=" * 80)
+                return data if isinstance(data, list) else []
+
             return []
+
+        except Exception as e:
+            _logger.exception("Lỗi gọi Product/DataSubPaging (combo): %s", e)
+            return []
+
 
     # === TÁCH MÃ CON TỪ TÊN COMBO (FALLBACK) ===
     # def parse_children_codes_from_text(self, combo_text: str) -> list[str]:
