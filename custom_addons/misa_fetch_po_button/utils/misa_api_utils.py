@@ -12,18 +12,24 @@ class MisaApiUtils(models.AbstractModel):
     _description = 'MISA API Utilities'
     
     def get_or_create_combo_product(self, combo_data, children_data, env=None, sale_headers=None):
+        """
+        Tạo/cập nhật combo product với cơ chế đúng theo model combo.product
+        """
         env = env or self.env
         Product = env['product.product']
         ProductTmpl = env['product.template']
+        ComboProduct = env['combo.product']
         OdooUtils = env['odoo.utils']
 
         combo_code = (combo_data.get('ProductIDText') or '').strip()
         combo_name = (combo_data.get('Description') or combo_code).strip()
         combo_uom_name = (combo_data.get('UnitIDText') or 'Cái').strip()
+        
         if not combo_code:
-            _logger.error("❌ Thiếu ProductIDText cho combo"); return False
+            _logger.error("❌ Thiếu ProductIDText cho combo")
+            return False
 
-        # UoM cho combo cha
+        # Lấy/tạo UoM cho combo cha
         try:
             combo_uom = OdooUtils._get_or_create_uom(combo_uom_name)
         except Exception:
@@ -32,69 +38,97 @@ class MisaApiUtils(models.AbstractModel):
         # === Helper: GHI VÀO TEMPLATE ===
         def _write_combo_children(target_tmpl, children_list):
             """
+            Ghi thông tin sản phẩm con vào combo.product
             target_tmpl: record product.template
             children_list: [{ProductIDText, Amount, UnitIDText, Price, ...}]
             """
             if not target_tmpl or not children_list:
                 return
 
-            Product = env['product.product']
-            OdooUtils = env['odoo.utils']
-            ComboProduct = env['combo.product']
-
-            # 1) Xoá sạch các dòng cũ đúng inverse field
+            # 1) Xóa sạch các dòng cũ
             old_lines = ComboProduct.search([('product_template_id', '=', target_tmpl.id)])
             if old_lines:
                 old_lines.sudo().unlink()
+                _logger.info("🗑️ Đã xóa %d dòng combo.product cũ của %s", len(old_lines), target_tmpl.display_name)
 
             created = 0
             for ch in children_list:
                 c_code = (ch.get('ProductIDText') or '').strip()
                 if not c_code:
                     continue
+                
                 c_name = (ch.get('Description') or c_code).strip()
                 c_uom_name = (ch.get('UnitIDText') or 'Cái').strip()
                 c_qty = float(ch.get('Amount') or 1.0)
                 c_price = float(ch.get('Price') or 0.0)
 
+                # Tìm/tạo sản phẩm con
                 c_prod = Product.search([('default_code', '=', c_code)], limit=1)
                 if not c_prod:
-                    c_prod = OdooUtils._get_or_create_product(
-                        code=c_code, name=c_name, unit_name=c_uom_name,
-                        cost=c_price, product_type='product', purchase_ok=True, sale_ok=True
-                    )
+                    try:
+                        c_prod = OdooUtils._get_or_create_product(
+                            code=c_code, 
+                            name=c_name, 
+                            unit_name=c_uom_name,
+                            cost=c_price, 
+                            product_type='product', 
+                            purchase_ok=True, 
+                            sale_ok=True
+                        )
+                    except Exception as e:
+                        _logger.error("❌ Không tạo được sản phẩm con %s: %s", c_code, e)
+                        continue
 
-                # 2) Tạo đúng schema: product_template_id, product_id, product_quantity, price
-                ComboProduct.sudo().create({
-                    'product_template_id': target_tmpl.id,
-                    'product_id': c_prod.id,
-                    'product_quantity': c_qty,
-                    'price': c_price,          # tuỳ bạn dùng/không dùng trên view
-                    # uom_id là related -> không cần set
-                })
-                created += 1
+                if not c_prod:
+                    _logger.warning("⚠️ Bỏ qua sản phẩm con %s (không tạo được)", c_code)
+                    continue
+
+                # 2) Tạo dòng combo.product theo đúng schema
+                try:
+                    ComboProduct.sudo().create({
+                        'product_template_id': target_tmpl.id,
+                        'product_id': c_prod.id,
+                        'product_quantity': c_qty,
+                        'price': c_price,
+                        # uom_id là related field nên không cần set
+                    })
+                    created += 1
+                    _logger.info("✅ Thêm sản phẩm con: %s (qty=%s) vào combo %s", 
+                            c_code, c_qty, target_tmpl.display_name)
+                except Exception as e:
+                    _logger.error("❌ Lỗi tạo combo.product cho %s: %s", c_code, e)
 
             _logger.info("✅ Đã tạo %s dòng combo.product cho combo %s", created, target_tmpl.display_name)
 
-        # === Lấy/tạo combo cha
+        # === Lấy/tạo combo cha ===
         combo_prod = Product.search([('default_code', '=', combo_code)], limit=1)
+        
         if combo_prod:
+            # Sản phẩm đã tồn tại
             tmpl = combo_prod.product_tmpl_id
-            # đảm bảo tick combo + uom
-            if hasattr(tmpl, 'is_combo') and not getattr(tmpl, 'is_combo', False):
-                tmpl.write({'is_combo': True})
+            
+            # Đảm bảo tick is_combo + cập nhật UoM nếu cần
+            update_vals = {}
+            if not getattr(tmpl, 'is_combo', False):
+                update_vals['is_combo'] = True
+            
             if combo_uom:
                 try:
-                    upd = {}
                     if not tmpl.uom_id:
-                        upd['uom_id'] = combo_uom.id
+                        update_vals['uom_id'] = combo_uom.id
                     elif tmpl.uom_id.category_id == combo_uom.category_id and tmpl.uom_id != combo_uom:
-                        upd['uom_id'] = combo_uom.id
-                    if upd: tmpl.write(upd)
+                        update_vals['uom_id'] = combo_uom.id
                 except Exception as e:
-                    _logger.warning("⚠️ UoM combo %s: %s", combo_code, e)
+                    _logger.warning("⚠️ Không cập nhật UoM cho combo %s: %s", combo_code, e)
+            
+            if update_vals:
+                try:
+                    tmpl.write(update_vals)
+                    _logger.info("🔄 Đã cập nhật combo template: %s", list(update_vals.keys()))
+                except Exception as e:
+                    _logger.error("❌ Lỗi cập nhật template combo %s: %s", combo_code, e)
 
-            # thiếu con -> tự fetch
+            # Nếu thiếu con -> tự fetch từ API
             if not children_data and sale_headers:
                 try:
                     master = combo_data.get("ProductID") or combo_data.get("ProductId") or combo_code
@@ -106,31 +140,60 @@ class MisaApiUtils(models.AbstractModel):
                         "Amount": float(k.get("Amount") or 1.0),
                         "Price": float(k.get("Price") or 0.0),
                     } for k in kids]
+                    _logger.info("📡 Đã fetch %d sản phẩm con cho combo %s từ API", 
+                            len(children_data), combo_code)
                 except Exception as e:
-                    _logger.warning("⚠️ Fetch children fail %s: %s", combo_code, e)
+                    _logger.warning("⚠️ Không fetch được children cho combo %s: %s", combo_code, e)
 
-            # 🔁 GHI VÀO TEMPLATE (FIX CHÍNH)
-            if combo_prod:  # đã tồn tại
-                tmpl = combo_prod.product_tmpl_id
-                _write_combo_children(tmpl, children_data or [])
-            else:  # tạo mới
-                tmpl = ProductTmpl.create(vals)
-                combo_prod = Product.create({'product_tmpl_id': tmpl.id, 'default_code': combo_code})
-                _write_combo_children(tmpl, children_data or [])
+            # Ghi children vào template
+            _write_combo_children(tmpl, children_data or [])
             return combo_prod
 
-        # Chưa có -> tạo mới rồi ghi vào template
+        # === Chưa có -> tạo mới ===
+        _logger.info("🆕 Tạo mới combo product: %s", combo_code)
+        
         vals = {
             'name': combo_name or combo_code,
             'default_code': combo_code,
-            'type': 'service', 'sale_ok': True, 'purchase_ok': False, 'is_combo': True,
+            'type': 'service',  # Combo thường là service
+            'sale_ok': True,
+            'purchase_ok': False,
+            'is_combo': True,
         }
+        
         if combo_uom:
             vals['uom_id'] = combo_uom.id
-        tmpl = ProductTmpl.create(vals)
-        combo_prod = Product.create({'product_tmpl_id': tmpl.id, 'default_code': combo_code})
+            vals['uom_po_id'] = combo_uom.id
+        
+        try:
+            tmpl = ProductTmpl.create(vals)
+            combo_prod = Product.create({
+                'product_tmpl_id': tmpl.id, 
+                'default_code': combo_code
+            })
+            _logger.info("✅ Đã tạo combo product mới: %s (id=%s)", combo_code, combo_prod.id)
+        except Exception as e:
+            _logger.error("❌ Lỗi tạo combo product %s: %s", combo_code, e)
+            return False
 
+        # Fetch children nếu thiếu
+        if not children_data and sale_headers:
+            try:
+                master = combo_data.get("ProductID") or combo_data.get("ProductId") or combo_code
+                kids = self.get_combo_children_by_product(master, sale_headers) or []
+                children_data = [{
+                    "ProductIDText": (k.get("ProductIDText") or "").strip(),
+                    "Description": (k.get("Description") or k.get("ProductIDText") or "").strip(),
+                    "UnitIDText": (k.get("UnitIDText") or "Cái").strip(),
+                    "Amount": float(k.get("Amount") or 1.0),
+                    "Price": float(k.get("Price") or 0.0),
+                } for k in kids]
+            except Exception as e:
+                _logger.warning("⚠️ Không fetch được children: %s", e)
+
+        # Ghi children vào template
         _write_combo_children(tmpl, children_data or [])
+        
         return combo_prod
 
     def _get_misa_token(self):
