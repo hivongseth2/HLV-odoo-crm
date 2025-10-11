@@ -786,8 +786,10 @@ class SaleApiImportWizard(models.TransientModel):
                                 'product_id': product.id,
                                 'name': product_code,
                                 'product_uom_qty': qty,
+                                'product_uom': product.uom_id.id,
+                                # Không truyền price_unit, discount, note, tax_id cho sản phẩm con combo
                             }
-                            allowed_fields = {'order_id','product_id','name','product_uom_qty'}
+                            allowed_fields = {'order_id','product_id','name','product_uom_qty','product_uom'}
                             safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
                             self.env['sale.order.line'].create(safe_vals_line)
                         # Dòng thường
