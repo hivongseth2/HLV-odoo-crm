@@ -24,6 +24,10 @@ class MisaApiUtils(models.AbstractModel):
         combo_uom = combo_data.get('UnitIDText') or 'Cái'
         combo_id = Product.search([('default_code', '=', combo_code)], limit=1)
         if combo_id:
+            # Nếu đã tồn tại nhưng chưa tick is_combo thì cập nhật lại
+            tmpl = combo_id.product_tmpl_id
+            if hasattr(tmpl, 'is_combo') and not getattr(tmpl, 'is_combo', False):
+                tmpl.write({'is_combo': True})
             return combo_id
         uom_obj = env['uom.uom'].search([('name', '=', combo_uom)], limit=1)
         combo_vals = {
