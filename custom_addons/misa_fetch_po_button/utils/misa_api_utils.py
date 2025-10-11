@@ -30,24 +30,24 @@ class MisaApiUtils(models.AbstractModel):
             combo_uom = False
 
         # === Helper: GHI VÀO TEMPLATE ===
-        def _write_combo_children(target_rec, children_list):
+        def _write_combo_children(target_tmpl, children_list):
             """
-            target_rec: product.template (không phải product.product)
+            target_tmpl: record product.template
             children_list: [{ProductIDText, Amount, UnitIDText, Price, ...}]
             """
-            if not target_rec or not children_list:
+            if not target_tmpl or not children_list:
                 return
 
-            # Sử dụng đúng trường combo_product_id (one2many) và combo_ids (many2many)
-            o2m_field = target_rec._fields.get('combo_product_id') if hasattr(target_rec, 'combo_product_id') else None
-            m2m_field = target_rec._fields.get('combo_ids') if hasattr(target_rec, 'combo_ids') else None
+            Product = env['product.product']
+            OdooUtils = env['odoo.utils']
+            ComboProduct = env['combo.product']
 
-            is_o2m = bool(o2m_field and getattr(o2m_field, 'type', '') == 'one2many')
-            is_m2m = bool(m2m_field and getattr(m2m_field, 'type', '') == 'many2many')
+            # 1) Xoá sạch các dòng cũ đúng inverse field
+            old_lines = ComboProduct.search([('product_template_id', '=', target_tmpl.id)])
+            if old_lines:
+                old_lines.sudo().unlink()
 
-            cmds = []
-            m2m_child_ids = []
-
+            created = 0
             for ch in children_list:
                 c_code = (ch.get('ProductIDText') or '').strip()
                 if not c_code:
@@ -64,25 +64,17 @@ class MisaApiUtils(models.AbstractModel):
                         cost=c_price, product_type='product', purchase_ok=True, sale_ok=True
                     )
 
-                if is_o2m:
-                    # Dò tên field trong model combo.product
-                    # Giả sử combo.product có các field: combo_product_id (many2one tới product.template), product_id (many2one tới product.product), qty, uom_id
-                    vals = {
-                        'product_id': c_prod.id,
-                        'qty': c_qty,
-                        'uom_id': c_prod.uom_id.id,
-                    }
-                    cmds.append((0, 0, vals))
-                elif is_m2m:
-                    m2m_child_ids.append(c_prod.id)
+                # 2) Tạo đúng schema: product_template_id, product_id, product_quantity, price
+                ComboProduct.sudo().create({
+                    'product_template_id': target_tmpl.id,
+                    'product_id': c_prod.id,
+                    'product_quantity': c_qty,
+                    'price': c_price,          # tuỳ bạn dùng/không dùng trên view
+                    # uom_id là related -> không cần set
+                })
+                created += 1
 
-            if is_o2m and cmds:
-                # Xoá sạch rồi ghi lại cho chắc
-                target_rec.write({'combo_product_id': [(5, 0, 0)] + cmds})
-                _logger.info("✅ Ghi %d dòng combo_product_id cho %s", len(cmds), target_rec.name)
-            elif is_m2m and m2m_child_ids:
-                target_rec.write({'combo_ids': [(6, 0, m2m_child_ids)]})
-                _logger.info("✅ Ghi M2M combo_ids cho %s: %s", target_rec.name, m2m_child_ids)
+            _logger.info("✅ Đã tạo %s dòng combo.product cho combo %s", created, target_tmpl.display_name)
 
         # === Lấy/tạo combo cha
         combo_prod = Product.search([('default_code', '=', combo_code)], limit=1)
@@ -118,7 +110,13 @@ class MisaApiUtils(models.AbstractModel):
                     _logger.warning("⚠️ Fetch children fail %s: %s", combo_code, e)
 
             # 🔁 GHI VÀO TEMPLATE (FIX CHÍNH)
-            _write_combo_children(combo_prod.product_tmpl_id, children_data or [])
+            if combo_prod:  # đã tồn tại
+                tmpl = combo_prod.product_tmpl_id
+                _write_combo_children(tmpl, children_data or [])
+            else:  # tạo mới
+                tmpl = ProductTmpl.create(vals)
+                combo_prod = Product.create({'product_tmpl_id': tmpl.id, 'default_code': combo_code})
+                _write_combo_children(tmpl, children_data or [])
             return combo_prod
 
         # Chưa có -> tạo mới rồi ghi vào template
