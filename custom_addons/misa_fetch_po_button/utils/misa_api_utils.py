@@ -10,7 +10,192 @@ _logger = logging.getLogger(__name__)
 class MisaApiUtils(models.AbstractModel):
     _name = 'misa.api.utils'
     _description = 'MISA API Utilities'
+    
+    def get_or_create_combo_product(self, combo_data, children_data, env=None, sale_headers=None):
+        """
+        Tạo/cập nhật combo product với cơ chế đúng theo model combo.product
+        """
+        env = env or self.env
+        Product = env['product.product']
+        ProductTmpl = env['product.template']
+        ComboProduct = env['combo.product']
+        OdooUtils = env['odoo.utils']
 
+        combo_code = (combo_data.get('ProductIDText') or '').strip()
+        combo_name = (combo_data.get('Description') or combo_code).strip()
+        combo_uom_name = (combo_data.get('UnitIDText') or 'Cái').strip()
+        
+        if not combo_code:
+            _logger.error("❌ Thiếu ProductIDText cho combo")
+            return False
+
+        # Lấy/tạo UoM cho combo cha
+        try:
+            combo_uom = OdooUtils._get_or_create_uom(combo_uom_name)
+        except Exception:
+            combo_uom = False
+
+        # === Helper: GHI VÀO TEMPLATE ===
+        def _write_combo_children(target_tmpl, children_list):
+            """
+            Ghi thông tin sản phẩm con vào combo.product
+            target_tmpl: record product.template
+            children_list: [{ProductIDText, Amount, UnitIDText, Price, ...}]
+            """
+            if not target_tmpl or not children_list:
+                return
+
+            # 1) Xóa sạch các dòng cũ
+            old_lines = ComboProduct.search([('product_template_id', '=', target_tmpl.id)])
+            if old_lines:
+                old_lines.sudo().unlink()
+                _logger.info("🗑️ Đã xóa %d dòng combo.product cũ của %s", len(old_lines), target_tmpl.display_name)
+
+            created = 0
+            for ch in children_list:
+                c_code = (ch.get('ProductIDText') or '').strip()
+                if not c_code:
+                    continue
+                
+                c_name = (ch.get('Description') or c_code).strip()
+                c_uom_name = (ch.get('UnitIDText') or 'Cái').strip()
+                c_qty = float(ch.get('Amount') or 1.0)
+                c_price = float(ch.get('Price') or 0.0)
+
+                # Tìm/tạo sản phẩm con
+                c_prod = Product.search([('default_code', '=', c_code)], limit=1)
+                if not c_prod:
+                    try:
+                        c_prod = OdooUtils._get_or_create_product(
+                            code=c_code, 
+                            name=c_name, 
+                            unit_name=c_uom_name,
+                            cost=c_price, 
+                            product_type='product', 
+                            purchase_ok=True, 
+                            sale_ok=True
+                        )
+                    except Exception as e:
+                        _logger.error("❌ Không tạo được sản phẩm con %s: %s", c_code, e)
+                        continue
+
+                if not c_prod:
+                    _logger.warning("⚠️ Bỏ qua sản phẩm con %s (không tạo được)", c_code)
+                    continue
+
+                # 2) Tạo dòng combo.product theo đúng schema
+                try:
+                    ComboProduct.sudo().create({
+                        'product_template_id': target_tmpl.id,
+                        'product_id': c_prod.id,
+                        'product_quantity': c_qty,
+                        'price': c_price,
+                        # uom_id là related field nên không cần set
+                    })
+                    created += 1
+                    _logger.info("✅ Thêm sản phẩm con: %s (qty=%s) vào combo %s", 
+                            c_code, c_qty, target_tmpl.display_name)
+                except Exception as e:
+                    _logger.error("❌ Lỗi tạo combo.product cho %s: %s", c_code, e)
+
+            _logger.info("✅ Đã tạo %s dòng combo.product cho combo %s", created, target_tmpl.display_name)
+
+        # === Lấy/tạo combo cha ===
+        combo_prod = Product.search([('default_code', '=', combo_code)], limit=1)
+        
+        if combo_prod:
+            # Sản phẩm đã tồn tại
+            tmpl = combo_prod.product_tmpl_id
+            
+            # Đảm bảo tick is_combo + cập nhật UoM nếu cần
+            update_vals = {}
+            if not getattr(tmpl, 'is_combo', False):
+                update_vals['is_combo'] = True
+            
+            if combo_uom:
+                try:
+                    if not tmpl.uom_id:
+                        update_vals['uom_id'] = combo_uom.id
+                    elif tmpl.uom_id.category_id == combo_uom.category_id and tmpl.uom_id != combo_uom:
+                        update_vals['uom_id'] = combo_uom.id
+                except Exception as e:
+                    _logger.warning("⚠️ Không cập nhật UoM cho combo %s: %s", combo_code, e)
+            
+            if update_vals:
+                try:
+                    tmpl.write(update_vals)
+                    _logger.info("🔄 Đã cập nhật combo template: %s", list(update_vals.keys()))
+                except Exception as e:
+                    _logger.error("❌ Lỗi cập nhật template combo %s: %s", combo_code, e)
+
+            # Nếu thiếu con -> tự fetch từ API
+            if not children_data and sale_headers:
+                try:
+                    master = combo_data.get("ProductID") or combo_data.get("ProductId") or combo_code
+                    kids = self.get_combo_children_by_product(master, sale_headers) or []
+                    children_data = [{
+                        "ProductIDText": (k.get("ProductIDText") or "").strip(),
+                        "Description": (k.get("Description") or k.get("ProductIDText") or "").strip(),
+                        "UnitIDText": (k.get("UnitIDText") or "Cái").strip(),
+                        "Amount": float(k.get("Amount") or 1.0),
+                        "Price": float(k.get("Price") or 0.0),
+                    } for k in kids]
+                    _logger.info("📡 Đã fetch %d sản phẩm con cho combo %s từ API", 
+                            len(children_data), combo_code)
+                except Exception as e:
+                    _logger.warning("⚠️ Không fetch được children cho combo %s: %s", combo_code, e)
+
+            # 🔥 LUÔN GHI CHILDREN VÀO TEMPLATE (cập nhật mỗi lần sync)
+            _write_combo_children(tmpl, children_data or [])
+            _logger.info("✅ Đã cập nhật children cho combo đã tồn tại: %s", combo_code)
+            return combo_prod
+
+        # === Chưa có -> tạo mới ===
+        _logger.info("🆕 Tạo mới combo product: %s", combo_code)
+        
+        vals = {
+            'name': combo_name or combo_code,
+            'default_code': combo_code,
+            'type': 'service',  # Combo thường là service
+            'sale_ok': True,
+            'purchase_ok': False,
+            'is_combo': True,
+        }
+        
+        if combo_uom:
+            vals['uom_id'] = combo_uom.id
+            vals['uom_po_id'] = combo_uom.id
+        
+        try:
+            tmpl = ProductTmpl.create(vals)
+            combo_prod = Product.create({
+                'product_tmpl_id': tmpl.id, 
+                'default_code': combo_code
+            })
+            _logger.info("✅ Đã tạo combo product mới: %s (id=%s)", combo_code, combo_prod.id)
+        except Exception as e:
+            _logger.error("❌ Lỗi tạo combo product %s: %s", combo_code, e)
+            return False
+
+        # Fetch children nếu thiếu
+        if not children_data and sale_headers:
+            try:
+                master = combo_data.get("ProductID") or combo_data.get("ProductId") or combo_code
+                kids = self.get_combo_children_by_product(master, sale_headers) or []
+                children_data = [{
+                    "ProductIDText": (k.get("ProductIDText") or "").strip(),
+                    "Description": (k.get("Description") or k.get("ProductIDText") or "").strip(),
+                    "UnitIDText": (k.get("UnitIDText") or "Cái").strip(),
+                    "Amount": float(k.get("Amount") or 1.0),
+                    "Price": float(k.get("Price") or 0.0),
+                } for k in kids]
+            except Exception as e:
+                _logger.warning("⚠️ Không fetch được children: %s", e)
+
+        # Ghi children vào template
+        _write_combo_children(tmpl, children_data or [])
+        
+        return combo_prod
 
     def _get_misa_token(self):
             # Step 1: Đăng nhập lấy cookie
@@ -337,13 +522,137 @@ class MisaApiUtils(models.AbstractModel):
             raise Exception(f"API call failed: {response.status_code} - {response.text}")
 
         try:
-            data = response.json().get("Data", [])
-            # 👇 Loại bỏ combo (IsSetProduct == True)
-            filtered_data = [item for item in data if not item.get("IsSetProduct", False)]
-            # note: gọi thêm api trả thêm thông tin về combo product => nối vào object kiểu : nếu là item con thì map thêm productcode cha, nếu là cha thì trả thêm thông tin con
-            return filtered_data
+            data = response.json().get("Data", []) or []
+            # 🔁 GIỮ NGUYÊN, KHÔNG LOẠI COMBO CHA
+            return data
         except Exception as e:
             raise Exception(f"Lỗi khi xử lý response JSON: {e}")
+        
+
+    # === LẤY THÀNH PHẦN COMBO TỪ API g1/Product/DataSubPaging ===
+    def get_combo_children_by_product(self, combo_product_id: int | str, sale_headers: object) -> list[dict]:
+        """
+        Trả về list children với DEBUG chi tiết
+        """
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Product/DataSubPaging"
+        
+        _logger.warning("=" * 80)
+        _logger.warning("📡 get_combo_children_by_product CALLED")
+        _logger.warning("🔑 combo_product_id: %s (type=%s)", combo_product_id, type(combo_product_id))
+        _logger.warning("🔌 URL: %s", url)
+        
+        payload = {
+            "Columns": "",
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": 200,
+            "Filters": [],
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "MappingValueObject": {
+                "MasterID": str(combo_product_id),
+                "TableName": "product",
+                "MasterKey": "ProductID",
+                "SumColumn": ""
+            },
+            "IsApproved": False,
+            "CustomPagingData": {
+                "SubFormConfig": {
+                    "ColumnFieldSubForm": "",
+                    "ColumnAggregateSubForm": "",
+                    "TableName": "product",
+                    "ParentIDKey": "ProductID",
+                    "IsBringSerialType": False,
+                    "AggregateField": []
+                }
+            },
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
+            "SessionID": "combo-fetch",
+            "AISearchKeyword": ""
+        }
+        
+        _logger.warning("📤 Payload: %s", payload)
+        _logger.warning("📤 Headers: %s", {k: v[:50] + '...' if len(str(v)) > 50 else v 
+                                        for k, v in (sale_headers or {}).items()})
+
+        try:
+            _logger.warning("🚀 Đang gọi API...")
+            resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
+            
+            _logger.warning("📥 Response status: %s", resp.status_code)
+            _logger.warning("📥 Response headers: %s", dict(resp.headers))
+            
+            if not resp.ok:
+                _logger.warning("❌ HTTP không OK: %s", resp.status_code)
+                _logger.warning("📥 Response text (300 chars): %s", resp.text[:300])
+                return []
+            
+            try:
+                js = resp.json() if resp.content else {}
+                _logger.warning("📥 Response JSON keys: %s", list(js.keys()) if isinstance(js, dict) else type(js))
+                _logger.warning("📥 Full Response JSON: %s", js)
+            except Exception as json_err:
+                _logger.error("❌ Lỗi parse JSON: %s", json_err)
+                _logger.warning("📥 Raw response text: %s", resp.text[:500])
+                return []
+            
+            if isinstance(js, dict):
+                data = js.get("Data", []) or []
+                _logger.warning("📦 Data type: %s, length: %s", type(data), len(data) if isinstance(data, list) else 'N/A')
+                
+                if isinstance(data, list) and len(data) > 0:
+                    _logger.warning("👶 First item: %s", data[0])
+                    _logger.warning("👶 First item keys: %s", list(data[0].keys()) if isinstance(data[0], dict) else 'N/A')
+                
+                _logger.warning("=" * 80)
+                return data
+            else:
+                _logger.warning("⚠️ Response không phải dict")
+                _logger.warning("=" * 80)
+                return []
+                
+        except Exception as e:
+            _logger.exception("❌ Lỗi gọi Product/DataSubPaging (combo): %s", e)
+            _logger.warning("=" * 80)
+            return []
+
+    # === TÁCH MÃ CON TỪ TÊN COMBO (FALLBACK) ===
+    # def parse_children_codes_from_text(self, combo_text: str) -> list[str]:
+    #     """
+    #     Ví dụ: 'Combo ... M18 FHIW2F12-0X0 + Pin M18B5 MILWAUKEE'
+    #     → ['M18 FHIW2F12-0X0', 'M18B5']
+    #     Cách làm: tách theo ' + ', sau đó lấy cụm có chữ/ số/ '-' và khoảng trắng ngắn, ưu tiên cụm IN HOA/CHỨA KÝ TỰ MÃ.
+    #     """
+    #     import re
+    #     if not combo_text:
+    #         return []
+    #     # tách theo dấu +; gom cụm có thể chứa mã
+    #     parts = [p.strip() for p in combo_text.split('+') if p and p.strip()]
+    #     out = []
+    #     for p in parts:
+    #         # ưu tiên đoạn trong ngoặc đơn
+    #         m = re.search(r"\(([^)]+)\)\s*$", p)
+    #         cand = m.group(1).strip() if m else p
+    #         # lọc cụm có nhiều chữ hoa/số/ký tự '-' hoặc khoảng trắng ngắn (để giữ 'M18 FHIW2F12-0X0')
+    #         # lấy cụm dài nhất có >= 3 ký tự A-Z/0-9/-/space
+    #         tokens = re.findall(r"[A-Z0-9][A-Z0-9\- ]{2,}", cand)
+    #         if tokens:
+    #             # chọn token dài nhất
+    #             best = max(tokens, key=len).strip()
+    #             out.append(re.sub(r"\s{2,}", " ", best))
+    #     # khử trùng
+    #     uniq = []
+    #     for c in out:
+    #         if c not in uniq:
+    #             uniq.append(c)
+    #     return uniq
 
     # === Lấy thông tin ID, TaxCode, AccountNumber của đối tác từ MISA CRM ===
     def get_account_identity(self, account_id: int | str, sale_headers: object) -> dict:
