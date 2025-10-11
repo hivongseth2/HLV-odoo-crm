@@ -722,7 +722,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 combo_product = self.env['misa.api.utils'].get_or_create_combo_product(
                                     combo_data=line,
                                     children_data=children_for_parent,
-                                    env=self.env
+                                    env=self.env,
+                                    sale_headers=sale_headers,
                                 )
                                 # Nếu combo_product trả về thì cập nhật lại product_id cho dòng combo trong SO
                                 if combo_product:
@@ -785,7 +786,8 @@ class SaleApiImportWizard(models.TransientModel):
                             combo_product = misa_utils.get_or_create_combo_product(
                                 combo_data=line,
                                 children_data=children_for_parent,
-                                env=self.env
+                                env=self.env,
+                                sale_headers=sale_headers,
                             )
 
                             # Fallback: nếu vì lý do gì đó tạo combo thất bại thì vẫn tạo product thường
