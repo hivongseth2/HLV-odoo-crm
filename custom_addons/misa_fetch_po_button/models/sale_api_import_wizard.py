@@ -771,12 +771,13 @@ class SaleApiImportWizard(models.TransientModel):
                         elif line.get("IsChildProduct", False):
                             product_code = line.get("ProductIDText")
                             qty = float(line.get("Amount", 1) or 0.0)
+                            price_unit = float(line.get("Price", 0) or 0.0)
                             uom_name = (line.get("UnitIDText") or "Cái").strip()
                             product = odoo_utils._get_or_create_product(
                                 code=product_code,
                                 name=product_code,
                                 unit_name=uom_name,
-                                cost=0.0,
+                                cost=price_unit,
                                 product_type="consu",
                                 purchase_ok=True,
                                 sale_ok=True
@@ -787,7 +788,7 @@ class SaleApiImportWizard(models.TransientModel):
                                 'name': product_code,
                                 'product_uom_qty': qty,
                                 'product_uom': product.uom_id.id,
-                                'price_unit': 0.0,  # Đảm bảo đơn giá luôn bằng 0 cho sản phẩm con combo
+                                'price_unit': price_unit,  # Truyền lại đơn giá cho sản phẩm con combo
                             }
                             allowed_fields = {'order_id','product_id','name','product_uom_qty','product_uom','price_unit'}
                             safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
