@@ -750,7 +750,7 @@ class SaleApiImportWizard(models.TransientModel):
                             ]
 
                             # Tạo/gắn combo và tick is_combo (nếu chưa có)
-                            combo_product = misa_utils.create_combo_product_if_missing(
+                            combo_product = misa_utils.get_or_create_combo_product(
                                 combo_data=line,
                                 children_data=children_for_parent,
                                 env=self.env
