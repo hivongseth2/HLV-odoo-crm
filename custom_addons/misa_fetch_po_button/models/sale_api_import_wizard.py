@@ -697,7 +697,39 @@ class SaleApiImportWizard(models.TransientModel):
                             upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
                         if upd:
                             existing_order.write(upd)
-                        _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật thuế", order_ref)
+                        # BỔ SUNG: cập nhật combo/sản phẩm con cho đơn đã tồn tại
+                        for line in grouped_lines:
+                            if line.get("IsSetProduct", False):
+                                product_code = line.get("ProductIDText")
+                                description = line.get("Description") or product_code
+                                uom_name = (line.get("UnitIDText") or "Cái").strip()
+                                parent_key = str(
+                                    line.get("ProductID")
+                                    or line.get("ProductId")
+                                    or line.get("ProductIDText")
+                                    or ""
+                                )
+                                children_for_parent = [
+                                    c for c in grouped_lines
+                                    if c.get("IsChildProduct")
+                                    and str(
+                                        c.get("ParentProductID")
+                                        or c.get("ParentProductIDText")
+                                        or ""
+                                    ) == parent_key
+                                ]
+                                # Tạo/gắn combo và tick is_combo (nếu chưa có)
+                                combo_product = self.env['misa.api.utils'].get_or_create_combo_product(
+                                    combo_data=line,
+                                    children_data=children_for_parent,
+                                    env=self.env
+                                )
+                                # Nếu combo_product trả về thì cập nhật lại product_id cho dòng combo trong SO
+                                if combo_product:
+                                    so_line = existing_order.order_line.filtered(lambda l: l.product_id.default_code == product_code)
+                                    if so_line:
+                                        so_line[0].write({'product_id': combo_product.id})
+                        _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật combo/sản phẩm con", order_ref)
                         continue
 
                     group_total = sum(line_subtotal(l) for l in grouped_lines)
