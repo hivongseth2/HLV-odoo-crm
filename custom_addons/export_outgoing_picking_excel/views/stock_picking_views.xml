@@ -1,0 +1,23 @@
+<odoo>
+    <!-- ✅ Action mở wizard -->
+    <record id="action_picking_export_wizard" model="ir.actions.act_window">
+      <field name="name">Xuất lệnh xuất kho (Excel)</field>
+      <field name="res_model">picking.export.wizard</field>
+      <field name="view_mode">form</field>
+      <field name="view_id" ref="export_outgoing_picking_excel.view_picking_export_wizard_form"/>
+      <field name="target">new</field>
+    </record>
+  
+  
+    <!-- ✅ Menu mở wizard trực tiếp -->
+    <menuitem id="menu_export_excel_root"
+              name="Công cụ Excel"
+              parent="stock.menu_stock_root"
+              sequence="98"/>
+    <menuitem id="menu_export_outgoing_picking_excel"
+              name="Xuất lệnh xuất kho (Excel)"
+              parent="menu_export_excel_root"
+              action="action_picking_export_wizard"
+              sequence="1"/>
+  </odoo>
+  
