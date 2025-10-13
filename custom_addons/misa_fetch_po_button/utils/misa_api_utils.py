@@ -296,19 +296,6 @@ class MisaApiUtils(models.AbstractModel):
             access_token = json_data.get("Data", {}).get("AccessToken", {}).get("Token", "")
             return access_token
 
-
-
-
-
-
-
-
-
-
-
-
-
-
     def _fetch_with_retry(self, url, headers, payload):
         """Fetch API with retry on token expiration"""
         response = requests.post(url, headers=headers, json=payload)
@@ -550,18 +537,20 @@ class MisaApiUtils(models.AbstractModel):
     def get_list_product_by_order_crm(self, api_url, header, payload):
         """
         Lấy TOÀN BỘ sản phẩm của đơn hàng từ MISA CRM.
-        Xử lý phân trang: tự động fetch tất cả các trang nếu PageCount > 1.
+        Xử lý phân trang dựa vào Total (vì PageCount không tin cậy).
         """
         session = requests.Session()
         all_products = []
         page = 1
+        page_size = 20  # MISA cố định
         max_pages = 100  # Giới hạn an toàn
+        total_expected = None  # Sẽ được set từ response đầu tiên
         
         while page <= max_pages:
             # Cập nhật payload cho trang hiện tại
             current_payload = payload.copy()
             current_payload['Page'] = page
-            current_payload['Start'] = (page - 1) * 20  # MISA PageSize = 20
+            current_payload['Start'] = (page - 1) * page_size
             
             try:
                 _logger.info("📄 Fetching MISA products: Page %d (Start=%d)", page, current_payload['Start'])
@@ -582,19 +571,37 @@ class MisaApiUtils(models.AbstractModel):
                 
                 # Lấy dữ liệu trang hiện tại
                 products = data.get("Data", []) or []
-                page_count = data.get("PageCount", 1)
-                total = data.get("Total", 0)
+                page_count_api = data.get("PageCount", 1)  # Không tin cậy
+                total_api = data.get("Total", 0)
                 
-                _logger.info("   ✓ Page %d/%d: %d products (Total: %d)", 
-                            page, page_count, len(products), total)
+                # Lưu total từ lần đầu
+                if total_expected is None:
+                    total_expected = total_api
                 
-                # Thêm vào danh sách tổng (GIỮ NGUYÊN, KHÔNG LỌC COMBO CHA)
+                # Tính số trang thực tế dựa vào Total
+                actual_pages_needed = (total_expected + page_size - 1) // page_size  # Làm tròn lên
+                
+                _logger.info("   ✓ Page %d/%d: %d products | Total=%d (API PageCount=%d - IGNORED)", 
+                            page, actual_pages_needed, len(products), total_api, page_count_api)
+                
+                # Thêm vào danh sách tổng
                 all_products.extend(products)
                 
-                # Điều kiện dừng
-                if page >= page_count or len(products) == 0:
-                    _logger.info("✅ Completed: %d products from %d page(s)", 
-                                len(all_products), page)
+                # ===== ĐIỀU KIỆN DỪNG (DỰA VÀO TOTAL, KHÔNG DỰA VÀO PageCount) =====
+                # Dừng nếu:
+                # 1. Không còn data trong response
+                if len(products) == 0:
+                    _logger.info("   → Dừng: Trang %d không có dữ liệu", page)
+                    break
+                
+                # 2. Đã lấy đủ số lượng theo Total
+                if len(all_products) >= total_expected:
+                    _logger.info("   → Dừng: Đã đủ %d/%d sản phẩm", len(all_products), total_expected)
+                    break
+                
+                # 3. Đã fetch đủ số trang tính toán
+                if page >= actual_pages_needed:
+                    _logger.info("   → Dừng: Đã fetch đủ %d trang", actual_pages_needed)
                     break
                 
                 page += 1
@@ -608,6 +615,9 @@ class MisaApiUtils(models.AbstractModel):
         
         if page > max_pages:
             _logger.warning("⚠️ Reached max_pages limit (%d), may have missing data!", max_pages)
+        
+        _logger.info("✅ Completed: %d products from %d page(s) (Expected: %d)", 
+                    len(all_products), page, total_expected or 0)
         
         # 🔁 GIỮ NGUYÊN, KHÔNG LOẠI COMBO CHA
         return all_products
