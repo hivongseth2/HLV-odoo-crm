@@ -1034,6 +1034,13 @@ class SaleOrder(models.Model):
             }
             if not is_default and product.uom_id:
                 vals_line['product_uom'] = product.uom_id.id
+            
+            tax_ids = self._tax_ids_from_misa_line(ln)
+            if tax_ids:
+                vals_line['tax_id'] = [(6, 0, tax_ids)]
+            else:
+                # Xóa thuế nếu MISA không có (KCT)
+                vals_line['tax_id'] = [(5, 0, 0)]
 
             if code in so_lines_by_code:
                 so_lines_by_code[code].write(vals_line)
