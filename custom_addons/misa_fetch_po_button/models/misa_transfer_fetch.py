@@ -57,12 +57,17 @@ class MisaTransferFetch(models.TransientModel):
     # ===== Helper: kho đích theo mã MISA (để lấy partner của kho đích) =====
     def _get_dest_warehouse_by_code(self, to_code):
         """Ví dụ: to_code = 'TSN' -> trả về record stock.warehouse của TSN"""
+        # Tùy theo mapping của bạn, ở dưới mình map code MISA -> warehouse.code
         code_map = {
-    
-            "HCM":        "TSN",
-            "HCM_SHOWROOM":"TSNSR",
-            "BENCAM":     "KBC",
-            "HIENDUC":    "KHD",
+            'HCM': 'KHSG',
+            'BENCAM': 'KBC',
+            'HIENDUC': 'KHD',
+            'TSN': 'TSN',
+            'HCM_SHOWROOM': 'TSNSR'
+            # "HCM":        "TSN",
+            # "HCM_SHOWROOM":"TSNSR",
+            # "BENCAM":     "KBC",
+            # "HIENDUC":    "KHD",
         }
         wh_code = code_map.get(to_code.upper())
         if not wh_code:
@@ -82,12 +87,12 @@ class MisaTransferFetch(models.TransientModel):
 
         # map mã MISA -> complete_name location NGUỒN (chỉ dùng cho from)
         source_location_map = {
-            "HCM":        "TSN/Stock",
+            "HCM":        "KHSG/Stock",
             "BENCAM":     "KBC/Tồn kho",
             "HIENDUC":    "KHD/Tồn kho",
+            "TSN":        "TSN/Stock",
             "HCM_SHOWROOM":"TSNSR/Stock",
         }
-        
         default_location_path = "Partners/Vendors"
 
         transit_loc = self._get_transit_location()  # dùng 1 lần cho toàn batch
@@ -176,16 +181,6 @@ class MisaTransferFetch(models.TransientModel):
                 if not grouped:
                     continue
 
-
-                uniq_from_ids = {k[0] for k in grouped.keys()}
-                uniq_to_wh_ids = {k[1] for k in grouped.keys() if k[1] != 0}
-                if len(uniq_from_ids) > 1 or len(uniq_to_wh_ids) > 1:
-                    _logger.warning(
-                        "⏭️  Bỏ qua refid %s (refno=%s) vì có %d kho nguồn và %d kho đích.",
-                        refid, refno, len(uniq_from_ids), len(uniq_to_wh_ids)
-                    )
-                    continue  # CHỈ bỏ qua phiếu này; các phiếu khác vẫn xử lý
-                
                 for (from_id, to_wh_id), related_lines in grouped.items():
                     from_loc = self.env['stock.location'].browse(from_id)
                     dest_wh  = self.env['stock.warehouse'].browse(to_wh_id) if to_wh_id else False

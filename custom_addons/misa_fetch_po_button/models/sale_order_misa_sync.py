@@ -46,7 +46,7 @@ class SaleOrder(models.Model):
         self.ensure_one()
         misa_utils = self.env['misa.api.utils']
         misa_config = self.env['misa.config']
-        headers, _ = self._misa_headers()
+        headers, crm_headers = self._misa_headers()
 
         # bạn đã có sẵn helper get_crm_sale_order_detail_payload + get_list_product_by_order_crm
         order_detail_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/DataSubPaging"
@@ -174,6 +174,80 @@ class SaleOrder(models.Model):
         delivery_no  = data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress")  # hoặc gọi API địa chỉ chi tiết của bạn
+        revenue_status_id = data.get("RevenueStatusID")
+        revenue_status_text = data.get("RevenueStatusIDText")
+
+        if revenue_status_id == 4 or (revenue_status_text or "").strip().lower() == "từ chối ghi".lower():
+            _logger.info("🚫 SO %s có trạng thái 'Từ chối ghi' trên MISA -> Force cancel", self.name)
+
+            # 1) Hủy picking mở (delivery)
+            for picking in (self.picking_ids or []):
+                if picking.state in ('waiting', 'confirmed', 'assigned'):
+                    try:
+                        picking.sudo().action_cancel()
+                    except Exception as e:
+                        _logger.warning("Không thể cancel picking %s: %s", picking.name, e)
+
+                elif picking.state in ('draft',):
+                    try:
+                        picking.sudo().unlink()
+                    except Exception as e:
+                        _logger.warning("Không thể xóa picking draft %s: %s", picking.name, e)
+
+            # 2) Hủy invoice chưa đăng
+            for inv in (self.invoice_ids or []):
+                try:
+                    if getattr(inv, 'state', None) in ('draft', 'cancel'):
+                        if hasattr(inv, 'button_cancel'):
+                            inv.sudo().button_cancel()
+                        elif hasattr(inv, 'action_cancel'):
+                            inv.sudo().action_cancel()
+                    elif getattr(inv, 'state', None) == 'posted':
+                        # Không tự ý hủy invoice đã post
+                        raise UserError(_("Đơn có hóa đơn đã ghi sổ (%s). Hãy hủy/ghi bút toán trước khi hủy đơn.") % inv.name)
+                except Exception as e:
+                    _logger.warning("Không thể hủy invoice %s: %s", getattr(inv, 'name', 'n/a'), e)
+                    # Nếu muốn nghiêm ngặt thì raise ở đây
+
+            # 3) Hủy SO (mạnh tay nếu cần)
+            try:
+                if self.state not in ('cancel', 'done'):
+                    try:
+                        self.sudo().action_cancel()
+                    except Exception as e1:
+                        _logger.warning("action_cancel thất bại: %s -> fallback _action_cancel + write(cancel)", e1)
+                        if hasattr(self.order_line, '_action_cancel'):
+                            self.order_line.sudo()._action_cancel()
+                        self.sudo().write({'state': 'cancel'})
+
+                # Đến đây state phải là cancel
+                self.invalidate_recordset()
+                self.refresh()
+
+                if self.state != 'cancel':
+                    # như một lớp an toàn cuối
+                    if hasattr(self.order_line, '_action_cancel'):
+                        self.order_line.sudo()._action_cancel()
+                    self.sudo().write({'state': 'cancel'})
+                    self.invalidate_recordset()
+                    self.refresh()
+
+                if self.state == 'cancel':
+                    self.message_post(body=_("Phiếu bị hủy khi đồng bộ do trạng thái MISA: Từ chối ghi"))
+                    return {
+                        'type': 'ir.actions.client',
+                        'tag': 'display_notification',
+                        'params': {
+                            'title': _("Phiếu đã bị hủy"),
+                            'message': _("Trạng thái MISA: Từ chối ghi"),
+                            'type': 'warning'
+                        }
+                    }
+                else:
+                    raise UserError(_("Không thể đưa phiếu về trạng thái hủy. Vui lòng kiểm tra picking/invoice ràng buộc."))
+
+            except Exception as e:
+                raise UserError(_("Không thể hủy phiếu khi đồng bộ: %s") % e)
 
         # 2) Lấy lines từ DataSubPaging
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
@@ -204,13 +278,17 @@ class SaleOrder(models.Model):
 
         self.write(vals_upd)
 
-        # 4) Upsert lines theo product_code
-        SaleLine = self.env['sale.order.line']
+        # ===== 4) Upsert lines theo product_code =====
+        SaleLine    = self.env['sale.order.line']
+        misa_utils  = self.env['misa.api.utils']
+        odoo_utils  = self.env['odoo.utils']
+
+        # Map các dòng hiện có trên SO theo default_code để upsert
         lines_by_code = {}
-        for l in self.order_line:
-            code = (l.product_id and l.product_id.default_code) or ''
+        for sol in self.order_line:
+            code = (sol.product_id and sol.product_id.default_code) or ''
             if code:
-                lines_by_code[code] = l
+                lines_by_code[code] = sol
 
         seen_codes = set()
 
@@ -220,17 +298,100 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
-        for ln in lines:
-            product_code   = ln.get("ProductIDText")
-            description    = ln.get("Description") or product_code
-            qty            = _flt(ln.get("Amount"), 0.0)
-            price_unit     = _flt(ln.get("Price"), 0.0)
-            discount_pct   = _flt(ln.get("DiscountPercent"), 0.0)
-            uom_name       = (ln.get("UnitIDText") or "Cái").strip()
-            note_text      = (ln.get("DescriptionProduct")
-                                or ln.get("Note")
-                                or "")
+        # 4.0) TIỀN XỬ LÝ: Nhóm các dòng CON theo CHA (khớp bằng cả ID/CODE để an toàn)
+        children_by_parent = {}
+        for ch in (lines or []):
+            if not ch.get("IsChildProduct"):
+                continue
+            p_id   = ch.get("ParentProductID") or ch.get("ParentProductId")
+            p_code = (ch.get("ParentProductIDText") or "").strip()
+            keyset = {str(p_id or "").strip(), p_code}
+            key = "|".join(sorted([k for k in keyset if k]))
+            if key:
+                children_by_parent.setdefault(key, []).append(ch)
 
+        # 4.1) XỬ LÝ TỪNG DÒNG MISA
+        for ln in (lines or []):
+            # BỎ QUA dòng con -> giống wizard (SO chỉ có 1 dòng CHA)
+            if ln.get("IsChildProduct"):
+                continue
+
+            product_code = (ln.get("ProductIDText") or "").strip()
+            if not product_code:
+                continue
+
+            description   = ln.get("Description") or product_code
+            qty           = _flt(ln.get("Amount"), 0.0)
+            price_unit    = _flt(ln.get("Price"), 0.0)
+            discount_pct  = _flt(ln.get("DiscountPercent"), 0.0)
+            uom_name      = (ln.get("UnitIDText") or "Cái").strip()
+            note_text     = (ln.get("DescriptionProduct") or ln.get("Note") or "")
+            misa_pid      = ln.get("ProductID") or ln.get("ProductId")
+
+            # 4.1.a) NHÁNH COMBO CHA (giống wizard: chỉ tạo 1 dòng cha, children đổ vào Combo Items)
+            if ln.get("IsSetProduct"):
+                # Gom children của CHA hiện tại (khớp theo cả ID và CODE)
+                parent_keys = {str(misa_pid or "").strip(), product_code}
+                ckey = "|".join(sorted([k for k in parent_keys if k]))
+                children_for_parent = list(children_by_parent.get(ckey, []))
+
+                # Lấy headers nếu chưa có
+                headers, _crm_token = self._misa_headers()
+
+                # Tạo/lấy sản phẩm combo + ĐỔ Combo Items đúng schema combo.product
+                combo_product = misa_utils.get_or_create_combo_product(
+                    combo_data=ln,
+                    children_data=children_for_parent,   # có thể rỗng -> util tự fetch bằng headers
+                    env=self.env,
+                    sale_headers=headers,                # BẮT BUỘC để util gọi API lấy con khi DataSubPaging không trả
+                )
+
+                # Fallback nếu util lỗi: vẫn đảm bảo có product để không vỡ flow
+                product = combo_product or odoo_utils._get_or_create_product(
+                    code=product_code,
+                    name=description,
+                    unit_name=uom_name,
+                    cost=price_unit,
+                    product_type="consu",
+                    purchase_ok=True,
+                    sale_ok=True,
+                )
+
+                # Quy đổi về UoM chuẩn theo conversion của MISA (giữ helper cũ)
+                qty_base, price_base, use_default = self._convert_qty_price_to_default_uom(
+                    product=product,
+                    misa_uom_text=uom_name,
+                    qty=qty,
+                    price=price_unit,
+                    misa_product_id=misa_pid,
+                    headers=headers,
+                )
+
+                vals = {
+                    'order_id': self.id,
+                    'product_id': product.id,
+                    'name': description,
+                    'product_uom_qty': qty_base,
+                    'price_unit': price_base,
+                    'discount': discount_pct,
+                    'note': note_text,
+                }
+                if not use_default and product.uom_id:
+                    vals['product_uom'] = product.uom_id.id
+
+                tax_ids = self._tax_ids_from_misa_line(ln)
+                if tax_ids:
+                    vals['tax_id'] = [(6, 0, tax_ids)]
+
+                # Upsert theo product_code
+                seen_codes.add(product_code)
+                if product_code in lines_by_code:
+                    lines_by_code[product_code].write(vals)
+                else:
+                    SaleLine.create(vals)
+                continue  # ✅ xong nhánh combo cha
+
+            # 4.1.b) NHÁNH DÒNG THƯỜNG (GIỮ NGUYÊN LOGIC CŨ)
             product = odoo_utils._get_or_create_product(
                 code=product_code,
                 name=description,
@@ -241,31 +402,37 @@ class SaleOrder(models.Model):
                 sale_ok=True,
             )
 
+            qty_base, price_base, use_default = self._convert_qty_price_to_default_uom(
+                product=product,
+                misa_uom_text=uom_name,
+                qty=qty,
+                price=price_unit,
+                misa_product_id=misa_pid,
+                headers=headers,
+            )
+
+            vals = {
+                'order_id': self.id,
+                'product_id': product.id,
+                'name': description,
+                'product_uom_qty': qty_base,
+                'price_unit': price_base,
+                'discount': discount_pct,
+                'note': note_text,
+            }
+            if not use_default and product.uom_id:
+                vals['product_uom'] = product.uom_id.id
+
+            tax_ids = self._tax_ids_from_misa_line(ln)
+            if tax_ids:
+                vals['tax_id'] = [(6, 0, tax_ids)]
+
             seen_codes.add(product_code)
             if product_code in lines_by_code:
-                lines_by_code[product_code].write({
-                    'name': description,
-                    'product_id': product.id,
-                    'product_uom_qty': qty,
-                    'price_unit': price_unit,
-                    'discount': discount_pct,
-                    'note': note_text,
-                })
+                lines_by_code[product_code].write(vals)
             else:
-                SaleLine.create({
-                    'order_id': self.id,
-                    'product_id': product.id,
-                    'name': description,
-                    'product_uom_qty': qty,
-                    'price_unit': price_unit,
-                    'discount': discount_pct,
-                    'note': note_text,
-                })
+                SaleLine.create(vals)
 
-        # (tuỳ) xoá line không còn trong MISA
-        for code, l in lines_by_code.items():
-            if code not in seen_codes:
-                l.unlink()
 
         # 5) Confirm nếu còn nháp
         if self.state in ('draft', 'sent'):
@@ -388,7 +555,7 @@ class SaleOrder(models.Model):
         odoo_utils = env['odoo.utils']
 
         # Lấy headers cho các call phụ (convert UoM)
-        headers, _ = self._misa_headers()
+        headers, crm_headers = self._misa_headers()
 
         # 1) Lấy dữ liệu MISA trước khi đụng dữ liệu hiện hữu
         data = self._misa_fetch_order()
@@ -620,6 +787,80 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
+        # ===== 8.0) BUILD COMBO_PARENT_MAP (logic từ wizard) =====
+        combo_parent_map = {}
+        
+        children_by_parent = {}
+        children_without_parent = []
+        
+        _logger.info("📦 Bắt đầu build combo map từ %s dòng", len(lines or []))
+        
+        # Phân loại children
+        for ch in (lines or []):
+            if not ch.get("IsChildProduct"):
+                continue
+            
+            p_id = ch.get("ParentProductID") or ch.get("ParentProductId")
+            p_code = (ch.get("ParentProductIDText") or "").strip()
+            
+            _logger.info("🔹 Child: '%s' | ParentID=%s | ParentCode='%s'",
+                        ch.get("ProductIDText"), p_id, p_code)
+            
+            if p_id or p_code:
+                # Có parent info → nhóm theo key
+                keyset = {str(p_id or "").strip(), p_code}
+                key = "|".join(sorted([k for k in keyset if k]))
+                children_by_parent.setdefault(key, []).append(ch)
+            else:
+                # KHÔNG có parent info → lưu lại để smart matching
+                _logger.info("   → Không có parent info, sẽ dùng smart matching")
+                children_without_parent.append(ch)
+        
+        # Smart matching cho children không có parent info
+        if children_without_parent:
+            _logger.info("🔍 Smart matching: %s children không có parent info", len(children_without_parent))
+            current_parent_code = None
+            for it in (lines or []):
+                if it.get("IsSetProduct"):
+                    # Gặp parent → lưu lại
+                    current_parent_code = it.get("ProductIDText")
+                    _logger.info("  👉 Parent: '%s'", current_parent_code)
+                elif it.get("IsChildProduct") and current_parent_code:
+                    # Child đứng sau parent → match
+                    if it in children_without_parent:
+                        children_by_parent.setdefault(current_parent_code, []).append(it)
+                        _logger.info("     ├─ Match child '%s' → parent '%s'",
+                                    it.get("ProductIDText"), current_parent_code)
+        
+        # Build combo_parent_map từ children_by_parent
+        for line in (lines or []):
+            if not line.get("IsSetProduct"):
+                continue
+            
+            product_code = line.get("ProductIDText")
+            p_id = line.get("ProductID") or line.get("ProductId")
+            
+            # Tìm children theo key
+            parent_keys = {str(p_id or "").strip(), product_code}
+            ckey = "|".join(sorted([k for k in parent_keys if k]))
+            children_for_parent = children_by_parent.get(ckey, [])
+            
+            # Fallback: tìm theo product_code trực tiếp (từ smart matching)
+            if not children_for_parent and product_code in children_by_parent:
+                children_for_parent = children_by_parent[product_code]
+            
+            if children_for_parent:
+                _logger.info("🔑 Combo parent '%s' (key='%s') có %s children",
+                            product_code, ckey, len(children_for_parent))
+            
+            for child in children_for_parent:
+                child_code = child.get("ProductIDText")
+                if child_code:
+                    combo_parent_map[child_code] = product_code
+                    _logger.info("  ├─ Map: '%s' → '%s'", child_code, product_code)
+        
+        _logger.info("🔍 Combo map cuối cùng: %s", combo_parent_map)
+
         # ===== 8.1) THÊM LINES (có quy đổi UoM nếu khác mặc định) =====
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
@@ -631,6 +872,9 @@ class SaleOrder(models.Model):
             note_text    = (ln.get("DescriptionProduct")
                 or ln.get("Note")
                 or "")
+
+            # Xác định loại dòng (để gán Studio fields)
+            is_combo_child = ln.get("IsChildProduct")
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             # sửa purchase_ok và sale_ok True
@@ -673,6 +917,22 @@ class SaleOrder(models.Model):
             tax_ids = self._tax_ids_from_misa_line(ln)
             if tax_ids:
                 vals_line['tax_id'] = [(6, 0, tax_ids)]
+            
+            # ===== GÁN 2 TRƯỜNG STUDIO CHO COMBO =====
+            if is_combo_child:
+                # Dòng combo child
+                vals_line['x_studio_is_combo_child'] = True
+                parent_code = combo_parent_map.get(product_code, False)
+                vals_line['x_studio_combo_parent_code'] = parent_code
+                
+                if parent_code:
+                    _logger.info("✅ Combo child '%s' → parent '%s'", product_code, parent_code)
+                else:
+                    _logger.warning("⚠️ Combo child '%s' KHÔNG tìm thấy parent trong map!", product_code)
+            else:
+                # Dòng thường hoặc combo parent
+                vals_line['x_studio_is_combo_child'] = False
+                vals_line['x_studio_combo_parent_code'] = False
                 
             env['sale.order.line'].create(vals_line)
 
@@ -702,7 +962,6 @@ class SaleOrder(models.Model):
             'res_id': new_so.id,
             'target': 'current',
         }
-
 
     def _sync_so_lines_from_misa_no_picking(self, lines, headers):
         """
@@ -775,6 +1034,13 @@ class SaleOrder(models.Model):
             }
             if not is_default and product.uom_id:
                 vals_line['product_uom'] = product.uom_id.id
+            
+            tax_ids = self._tax_ids_from_misa_line(ln)
+            if tax_ids:
+                vals_line['tax_id'] = [(6, 0, tax_ids)]
+            else:
+                # Xóa thuế nếu MISA không có (KCT)
+                vals_line['tax_id'] = [(5, 0, 0)]
 
             if code in so_lines_by_code:
                 so_lines_by_code[code].write(vals_line)
@@ -783,10 +1049,72 @@ class SaleOrder(models.Model):
 
             seen_codes.add(code)
 
-        # (tuỳ chọn) Xoá dòng không còn trong MISA
+        # --- Dọn dòng không còn trong MISA: ưu tiên XOÁ nếu an toàn, nếu không thì SET 0 / CẮT RESIDUAL ---
+        posted_inv_exists = bool(self.invoice_ids.filtered(lambda m: m.state == 'posted'))
+
         for code, line in so_lines_by_code.items():
-            if code not in seen_codes:
-                line.unlink()
+            if code in seen_codes:
+                continue
+
+            # 1) SO còn nháp -> xoá luôn
+            if self.state in ('draft', 'sent'):
+                try:
+                    line.unlink()
+                    _logger.info("🧹 Unlink dòng %s (SO nháp) vì không còn trong MISA", code)
+                except Exception as e:
+                    _logger.warning("Không thể unlink dòng %s ở nháp: %s", code, e)
+                continue
+
+            # 2) SO đã xác nhận
+            qty_delivered = float(getattr(line, 'qty_delivered', 0.0) or 0.0)
+            qty_ordered  = float(getattr(line, 'product_uom_qty', 0.0) or 0.0)
+
+            # Huỷ các move mở trước để không treo dự trữ
+            for mv in line.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
+                try:
+                    mv._action_cancel()
+                except Exception as e:
+                    _logger.warning("Không cancel được move mở của dòng %s: %s", code, e)
+
+            # Nếu đã có invoice posted -> KHÔNG tự chỉnh, tránh sai kế toán
+            if posted_inv_exists:
+                _logger.warning("⚠️ Dòng %s không còn trong MISA nhưng giữ nguyên (đã có invoice posted).", code)
+                continue
+
+            # 2a) Chưa giao gì (qty_delivered ~ 0): thử XOÁ trước, nếu không được thì SET 0
+            if qty_delivered <= 1e-6:
+                try:
+                    # Chỉ xóa nếu không còn ràng buộc kế toán: không có move 'done', không có invoice_lines hoạt động
+                    has_done_moves = bool(line.move_ids.filtered(lambda m: m.state == 'done'))
+                    has_active_inv_lines = bool(line.invoice_lines.filtered(lambda l: l.move_id.state != 'cancel'))
+                    if not has_done_moves and not has_active_inv_lines:
+                        line.unlink()
+                        _logger.info("🧹 Unlink dòng %s (đã xác nhận nhưng chưa giao gì, không ràng buộc).", code)
+                    else:
+                        # fallback: set 0
+                        line.write({'product_uom_qty': 0.0})
+                        _logger.info("↘️ Set 0 dòng %s (không xoá được do ràng buộc).", code)
+                except Exception as e:
+                    _logger.warning("Unlink thất bại dòng %s, fallback set 0: %s", code, e)
+                    try:
+                        line.write({'product_uom_qty': 0.0})
+                    except Exception as e2:
+                        _logger.warning("Không thể set 0 dòng %s: %s", code, e2)
+                continue
+
+            # 2b) ĐÃ GIAO MỘT PHẦN → KHÔNG xoá (để giữ lịch sử), chỉ cắt residual về 0
+            if qty_delivered + 1e-6 < qty_ordered:
+                try:
+                    line.write({'product_uom_qty': qty_delivered})
+                    _logger.info("✂️ Cắt residual %s: ordered %.2f -> delivered %.2f (MISA không còn dòng này).",
+                                code, qty_ordered, qty_delivered)
+                except Exception as e:
+                    _logger.warning("Không thể cắt residual dòng %s: %s", code, e)
+                continue
+
+            # 2c) ĐÃ GIAO ĐỦ (= ordered) → giữ nguyên (không còn residual để cắt/xoá)
+            _logger.info("✅ Dòng %s đã giao đủ (ordered=delivered), không chỉnh.", code)
+
 
 
     def _safe_unreserve_move(self, move):
@@ -1097,4 +1425,59 @@ class SaleOrder(models.Model):
                 'message': summary,
                 'type': 'success'
             }
+        }
+
+# =====================API
+    @api.model
+    def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True):
+        """
+        Public API (RPC/JSON-RPC) để resync đơn bán theo MISA Order ID.
+        - Nếu tìm thấy SO có misa_id => gọi action_resync_from_misa_hard() trên record đó.
+        - Nếu không thấy và create_when_missing=True => tạo 1 SO bootstrap (tối thiểu) với misa_id rồi gọi resync.
+        Trả về: dict {'ok': bool, 'res_id': int or None, 'name': str or None, 'detail': str or None}
+        """
+        misa_order_id = (str(misa_order_id or '')).strip()
+        if not misa_order_id:
+            raise UserError(_("Thiếu misa_order_id"))
+        # 1) Tìm SO hiện hữu theo misa_id
+        so = self.search([('misa_id', '=', misa_order_id)], limit=1)
+        if so:
+            # Gọi hàm "hard resync" sẵn có
+            action = so.sudo().action_resync_from_misa_hard()
+            # action thường là ir.actions.act_window có res_id là SO mới
+            res_id = action.get('res_id') if isinstance(action, dict) else so.id
+            so_new = self.browse(res_id)
+            return {
+                'ok': True,
+                'res_id': so_new.id,
+                'name': so_new.name,
+                'detail': 'resynced_existing',
+            }
+        # 2) Không thấy → tạo SO bootstrap (nếu cho phép)
+        if not create_when_missing:
+            return {'ok': False, 'res_id': None, 'name': None, 'detail': 'not_found'}
+        # Chọn partner tối thiểu (public_partner nếu có)
+        try:
+            partner = self.env.ref('base.public_partner')
+        except Exception:
+            partner = self.env['res.partner'].search([], limit=1)
+        if not partner:
+            raise UserError(_("Không tìm thấy đối tác mặc định để bootstrap đơn."))
+        vals = {
+            'name': f"TMP-MISA-{misa_order_id}",
+            'partner_id': partner.id,
+            'misa_id': misa_order_id,
+        }
+        if warehouse_id:
+            vals['warehouse_id'] = int(warehouse_id)
+        so_boot = self.create(vals)
+        # Gọi lại resync cứng trên record bootstrap (hàm của bạn sẽ tự huỷ & tạo mới theo MISA)
+        action = so_boot.sudo().action_resync_from_misa_hard()
+        res_id = action.get('res_id') if isinstance(action, dict) else so_boot.id
+        so_new = self.browse(res_id)
+        return {
+            'ok': True,
+            'res_id': so_new.id,
+            'name': so_new.name,
+            'detail': 'created_then_resynced',
         }
