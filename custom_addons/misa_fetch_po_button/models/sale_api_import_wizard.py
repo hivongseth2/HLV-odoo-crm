@@ -634,7 +634,7 @@ class SaleApiImportWizard(models.TransientModel):
 
                 
 
-                # === (ĐÃ SỬA) KHÔNG EXPAND COMBO: GIỮ NGUYÊN LIST, KHÔNG THÊM DÒNG CON ===
+                # === MAPPING COMBO CHILD ===
                 def _expand_combo_lines(lines: list[dict]) -> list[dict]:
                     """
                     Trước đây: chuyển combo cha → thêm các dòng con vào danh sách.
@@ -650,12 +650,27 @@ class SaleApiImportWizard(models.TransientModel):
                     return lines or []
                 
                 product_lines = _expand_combo_lines(product_lines)
-                # --- Gom dòng theo kho ---
+                
+                # --- Gom dòng theo kho (bao gồm cả combo children) ---
                 lines_by_stock = defaultdict(list)
+                current_stock_id = None  # Track kho hiện tại để gán cho combo children
+                
                 for l in product_lines:
                     sid = l.get("StockIDText")
+                    
                     if sid:
+                        # Dòng có StockIDText (combo cha hoặc dòng thường)
+                        current_stock_id = sid
                         lines_by_stock[sid].append(l)
+                    elif l.get("IsChildProduct") and current_stock_id:
+                        # Dòng combo con: gán vào kho của dòng cha (trước đó)
+                        lines_by_stock[current_stock_id].append(l)
+                        _logger.debug("🔗 Gán combo child '%s' vào kho '%s'", 
+                                     l.get("ProductIDText"), current_stock_id)
+                    elif sid is None and not l.get("IsChildProduct"):
+                        # Dòng không có kho và không phải combo con → bỏ qua
+                        _logger.warning("⚠️ Dòng '%s' không có StockIDText và không phải combo child", 
+                                       l.get("ProductIDText"))
 
                 if not lines_by_stock:
                     _logger.warning("⛔ Không có dòng hàng hợp lệ theo kho cho SO %s", order.get("SaleOrderNo"))
