@@ -790,6 +790,8 @@ class SaleApiImportWizard(models.TransientModel):
                     
                     # Nhóm children theo parent
                     _logger.info("📦 Bắt đầu build combo map từ %d dòng", len(grouped_lines))
+                    children_without_parent = []  # Track children không có parent info
+                    
                     for ch in (grouped_lines or []):
                         if not ch.get("IsChildProduct"):
                             continue
@@ -801,22 +803,40 @@ class SaleApiImportWizard(models.TransientModel):
                         _logger.info("  🔹 Child: '%s' | ParentID=%s | ParentCode='%s'", 
                                     child_code, p_id, p_code)
                         
-                        keyset = {str(p_id or "").strip(), p_code}
-                        key = "|".join(sorted([k for k in keyset if k]))
-                        if key:
-                            children_by_parent.setdefault(key, []).append(ch)
-                            _logger.info("     → Nhóm vào key='%s'", key)
+                        # Nếu có thông tin parent → nhóm theo key
+                        if p_id or p_code:
+                            keyset = {str(p_id or "").strip(), p_code}
+                            key = "|".join(sorted([k for k in keyset if k]))
+                            if key:
+                                children_by_parent.setdefault(key, []).append(ch)
+                                _logger.info("     → Nhóm vào key='%s'", key)
+                        else:
+                            # Không có thông tin parent → dùng smart matching
+                            children_without_parent.append(ch)
+                            _logger.info("     → Không có parent info, sẽ dùng smart matching")
                     
-                    # Smart matching nếu không có ParentProductID
-                    if not children_by_parent:
+                    # Smart matching cho children không có parent info
+                    if children_without_parent:
+                        _logger.info("🔍 Smart matching: %d children không có parent info", len(children_without_parent))
                         current_parent_code = None
+                        children_matched = set()  # Track những child đã match
+                        
                         for it in grouped_lines:
                             if it.get("IsSetProduct"):
+                                # Gặp parent mới
                                 current_parent_code = it.get("ProductIDText")
-                                children_by_parent.setdefault(current_parent_code or "", [])
+                                _logger.info("  👉 Parent: '%s'", current_parent_code)
                             elif it.get("IsChildProduct") and current_parent_code:
-                                children_by_parent[current_parent_code].append(it)
-                            else:
+                                # Child đứng sau parent → gán vào parent đó
+                                child_code = it.get("ProductIDText")
+                                # Chỉ match những child chưa có parent (trong danh sách children_without_parent)
+                                if any(ch.get("ProductIDText") == child_code for ch in children_without_parent):
+                                    if child_code not in children_matched:
+                                        children_by_parent.setdefault(current_parent_code, []).append(it)
+                                        children_matched.add(child_code)
+                                        _logger.info("     ├─ Match child '%s' → parent '%s'", child_code, current_parent_code)
+                            elif not it.get("IsChildProduct"):
+                                # Dòng thường → reset parent
                                 current_parent_code = None
                     
                     # Build map: child_code -> parent_code
@@ -826,10 +846,16 @@ class SaleApiImportWizard(models.TransientModel):
                         product_code = line.get("ProductIDText")
                         if not product_code:
                             continue
+                        
+                        # Tìm children theo key (nếu có ParentProductID)
                         misa_product_id = line.get("ProductID") or line.get("ProductId")
                         parent_keys = {str(misa_product_id or "").strip(), product_code}
                         ckey = "|".join(sorted([k for k in parent_keys if k]))
                         children_for_parent = children_by_parent.get(ckey, [])
+                        
+                        # HOẶC tìm theo product_code trực tiếp (từ smart matching)
+                        if not children_for_parent and product_code in children_by_parent:
+                            children_for_parent = children_by_parent[product_code]
                         
                         _logger.info("🔑 Combo parent '%s' (key='%s') có %d children", 
                                     product_code, ckey, len(children_for_parent))
@@ -984,26 +1010,36 @@ class SaleApiImportWizard(models.TransientModel):
                     # Build combo map cho toàn bộ product_lines (giống CASE 1)
                     combo_parent_map_global = {}
                     children_by_parent_global = {}
+                    children_without_parent_global = []
                     
                     for ch in (product_lines or []):
                         if not ch.get("IsChildProduct"):
                             continue
                         p_id = ch.get("ParentProductID") or ch.get("ParentProductId")
                         p_code = (ch.get("ParentProductIDText") or "").strip()
-                        keyset = {str(p_id or "").strip(), p_code}
-                        key = "|".join(sorted([k for k in keyset if k]))
-                        if key:
-                            children_by_parent_global.setdefault(key, []).append(ch)
+                        
+                        if p_id or p_code:
+                            keyset = {str(p_id or "").strip(), p_code}
+                            key = "|".join(sorted([k for k in keyset if k]))
+                            if key:
+                                children_by_parent_global.setdefault(key, []).append(ch)
+                        else:
+                            children_without_parent_global.append(ch)
                     
-                    if not children_by_parent_global:
+                    # Smart matching cho children không có parent info
+                    if children_without_parent_global:
                         current_parent_code = None
+                        children_matched = set()
                         for it in product_lines:
                             if it.get("IsSetProduct"):
                                 current_parent_code = it.get("ProductIDText")
-                                children_by_parent_global.setdefault(current_parent_code or "", [])
                             elif it.get("IsChildProduct") and current_parent_code:
-                                children_by_parent_global[current_parent_code].append(it)
-                            else:
+                                child_code = it.get("ProductIDText")
+                                if any(ch.get("ProductIDText") == child_code for ch in children_without_parent_global):
+                                    if child_code not in children_matched:
+                                        children_by_parent_global.setdefault(current_parent_code, []).append(it)
+                                        children_matched.add(child_code)
+                            elif not it.get("IsChildProduct"):
                                 current_parent_code = None
                     
                     for line in product_lines:
@@ -1012,10 +1048,15 @@ class SaleApiImportWizard(models.TransientModel):
                         product_code = line.get("ProductIDText")
                         if not product_code:
                             continue
+                        
                         misa_product_id = line.get("ProductID") or line.get("ProductId")
                         parent_keys = {str(misa_product_id or "").strip(), product_code}
                         ckey = "|".join(sorted([k for k in parent_keys if k]))
                         children_for_parent = children_by_parent_global.get(ckey, [])
+                        
+                        # Tìm theo product_code trực tiếp (từ smart matching)
+                        if not children_for_parent and product_code in children_by_parent_global:
+                            children_for_parent = children_by_parent_global[product_code]
                         
                         for child in children_for_parent:
                             child_code = child.get("ProductIDText")
