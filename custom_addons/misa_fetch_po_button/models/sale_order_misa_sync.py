@@ -1049,34 +1049,72 @@ class SaleOrder(models.Model):
 
             seen_codes.add(code)
 
-        # (an toàn) Đưa các dòng không còn trong MISA về 0 (hoặc xoá nếu còn nháp)
+        # --- Dọn dòng không còn trong MISA: ưu tiên XOÁ nếu an toàn, nếu không thì SET 0 / CẮT RESIDUAL ---
         posted_inv_exists = bool(self.invoice_ids.filtered(lambda m: m.state == 'posted'))
 
         for code, line in so_lines_by_code.items():
             if code in seen_codes:
                 continue
 
+            # 1) SO còn nháp -> xoá luôn
             if self.state in ('draft', 'sent'):
-                # Nháp → xoá được
-                line.unlink()
-                _logger.info("🧹 Unlink dòng %s (SO nháp) vì không còn trong MISA", code)
+                try:
+                    line.unlink()
+                    _logger.info("🧹 Unlink dòng %s (SO nháp) vì không còn trong MISA", code)
+                except Exception as e:
+                    _logger.warning("Không thể unlink dòng %s ở nháp: %s", code, e)
                 continue
 
-            # Đã xác nhận: KHÔNG đụng dòng đã giao/đã xuất hoá đơn
+            # 2) SO đã xác nhận
             qty_delivered = float(getattr(line, 'qty_delivered', 0.0) or 0.0)
+            qty_ordered  = float(getattr(line, 'product_uom_qty', 0.0) or 0.0)
 
-            # (tránh sai số float rất nhỏ)
-            if abs(qty_delivered) < 1e-6 and not posted_inv_exists:
+            # Huỷ các move mở trước để không treo dự trữ
+            for mv in line.move_ids.filtered(lambda m: m.state not in ('done', 'cancel')):
                 try:
-                    line.write({'product_uom_qty': 0.0})
-                    _logger.info("↘️ Set về 0 dòng %s (đã xác nhận, chưa giao, chưa có invoice posted)", code)
+                    mv._action_cancel()
                 except Exception as e:
-                    _logger.warning("Không thể set 0 dòng %s: %s", code, e)
-            else:
-                _logger.warning(
-                    "⚠️ Dòng %s không còn trong MISA nhưng giữ nguyên (đã giao >0 hoặc có invoice posted).",
-                    code
-                )
+                    _logger.warning("Không cancel được move mở của dòng %s: %s", code, e)
+
+            # Nếu đã có invoice posted -> KHÔNG tự chỉnh, tránh sai kế toán
+            if posted_inv_exists:
+                _logger.warning("⚠️ Dòng %s không còn trong MISA nhưng giữ nguyên (đã có invoice posted).", code)
+                continue
+
+            # 2a) Chưa giao gì (qty_delivered ~ 0): thử XOÁ trước, nếu không được thì SET 0
+            if qty_delivered <= 1e-6:
+                try:
+                    # Chỉ xóa nếu không còn ràng buộc kế toán: không có move 'done', không có invoice_lines hoạt động
+                    has_done_moves = bool(line.move_ids.filtered(lambda m: m.state == 'done'))
+                    has_active_inv_lines = bool(line.invoice_lines.filtered(lambda l: l.move_id.state != 'cancel'))
+                    if not has_done_moves and not has_active_inv_lines:
+                        line.unlink()
+                        _logger.info("🧹 Unlink dòng %s (đã xác nhận nhưng chưa giao gì, không ràng buộc).", code)
+                    else:
+                        # fallback: set 0
+                        line.write({'product_uom_qty': 0.0})
+                        _logger.info("↘️ Set 0 dòng %s (không xoá được do ràng buộc).", code)
+                except Exception as e:
+                    _logger.warning("Unlink thất bại dòng %s, fallback set 0: %s", code, e)
+                    try:
+                        line.write({'product_uom_qty': 0.0})
+                    except Exception as e2:
+                        _logger.warning("Không thể set 0 dòng %s: %s", code, e2)
+                continue
+
+            # 2b) ĐÃ GIAO MỘT PHẦN → KHÔNG xoá (để giữ lịch sử), chỉ cắt residual về 0
+            if qty_delivered + 1e-6 < qty_ordered:
+                try:
+                    line.write({'product_uom_qty': qty_delivered})
+                    _logger.info("✂️ Cắt residual %s: ordered %.2f -> delivered %.2f (MISA không còn dòng này).",
+                                code, qty_ordered, qty_delivered)
+                except Exception as e:
+                    _logger.warning("Không thể cắt residual dòng %s: %s", code, e)
+                continue
+
+            # 2c) ĐÃ GIAO ĐỦ (= ordered) → giữ nguyên (không còn residual để cắt/xoá)
+            _logger.info("✅ Dòng %s đã giao đủ (ordered=delivered), không chỉnh.", code)
+
 
 
     def _safe_unreserve_move(self, move):
