@@ -185,6 +185,88 @@ class PickingExportWizard(models.TransientModel):
             return self._harsh_warehouse_code(code)
         return ""
 
+    # ====== HELPERS: xác định parent combo cho 1 sale.order.line ======
+    def _guess_combo_parent_line(self, sol):
+        """
+        Tìm dòng combo cha cho sale.order.line 'sol'.
+        Ưu tiên:
+          1) product có quan hệ định nghĩa combo (is_combo / components)
+          2) Heuristic: lấy dòng combo cha gần nhất phía TRƯỚC trong cùng SO.
+        Trả về (parent_line or False).
+        """
+        if not sol or not sol.order_id:
+            return False
+
+        order = sol.order_id
+        # 1) Nếu mô hình combo của bạn có cờ/quan hệ, dùng cho CHẮC:
+        def _is_combo_parent_line(l):
+            # Nếu module combo có field is_combo ở product/product.template
+            if hasattr(l.product_id, 'is_combo') and l.product_id.is_combo:
+                return True
+            if hasattr(l.product_tmpl_id, 'is_combo') and l.product_tmpl_id.is_combo:
+                return True
+            # Nếu có quan hệ component (đổi tên field nếu hệ thống của bạn khác)
+            # ví dụ: l.product_id.combo_item_ids.mapped('product_id')
+            for fname in ('combo_item_ids', 'combo_component_ids', 'bom_line_ids'):
+                if hasattr(l.product_id, fname):
+                    try:
+                        comps = getattr(l.product_id, fname)
+                        # nếu có components thì đó là cha
+                        if comps and len(comps) > 0:
+                            return True
+                    except Exception:
+                        pass
+            # Heuristic tên mã combo (ví dụ "CB-" ở đầu)
+            code = (l.product_id.default_code or '').upper()
+            return code.startswith('CB-') or code.startswith('COMBO-')
+
+        # 2) Nếu chính dòng đang xét là parent thì… không coi là con
+        if _is_combo_parent_line(sol):
+            return False
+
+        # 3) Heuristic: nếu line giá = 0 → khả năng cao là con
+        if (sol.price_unit or 0.0) == 0.0:
+            # tìm dòng combo cha gần nhất phía TRƯỚC theo sequence
+            prev_parents = order.order_line.filtered(
+                lambda l: l.sequence <= sol.sequence and _is_combo_parent_line(l)
+            )
+            if prev_parents:
+                # Lấy parent gần nhất (sequence lớn nhất nhưng < sequence của con)
+                parent = prev_parents.sorted(key=lambda l: l.sequence, reverse=True)[0]
+                return parent
+
+        # 4) Nếu có định nghĩa component ở parent → dò theo component chính xác
+        # (nếu có field components) — tìm parent có chứa product hiện tại
+        for l in order.order_line:
+            if not _is_combo_parent_line(l):
+                continue
+            for fname in ('combo_item_ids', 'combo_component_ids', 'bom_line_ids'):
+                if hasattr(l.product_id, fname):
+                    try:
+                        comps = getattr(l.product_id, fname)
+                        comp_products = comps.mapped('product_id') if hasattr(comps, 'mapped') else comps
+                        if sol.product_id in comp_products:
+                            return l
+                    except Exception:
+                        pass
+
+        return False
+
+    def _thuoc_combo_code_for_move(self, move):
+        """
+        Trả về mã combo cha (default_code) cho move nếu là dòng con của combo.
+        Ngược lại trả ''.
+        """
+        sol = getattr(move, 'sale_line_id', False)
+        if not sol:
+            return ''
+
+        parent = self._guess_combo_parent_line(sol)
+        if not parent:
+            return ''
+
+        return parent.product_id.default_code or parent.product_id.display_name or ''
+
     def _get_move_line_rows(self, picking):
         rows = []
         so = self._find_sale_order(picking.move_ids_without_package[0] if picking.move_ids_without_package else None, picking)
@@ -367,7 +449,7 @@ class PickingExportWizard(models.TransientModel):
             
             # Product info
             'ma_hang': product_code,
-            'thuoc_combo': '',
+            'thuoc_combo': self._thuoc_combo_code_for_move(move),
             'ten_hang': product_name,
             'la_dong_ghi_chu': 'không',
             'hang_khuyen_mai': 'Không',
