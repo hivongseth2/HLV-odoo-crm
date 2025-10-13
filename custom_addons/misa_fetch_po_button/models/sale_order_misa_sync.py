@@ -787,6 +787,80 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
+        # ===== 8.0) BUILD COMBO_PARENT_MAP (logic từ wizard) =====
+        combo_parent_map = {}
+        
+        children_by_parent = {}
+        children_without_parent = []
+        
+        _logger.info("📦 Bắt đầu build combo map từ %s dòng", len(lines or []))
+        
+        # Phân loại children
+        for ch in (lines or []):
+            if not ch.get("IsChildProduct"):
+                continue
+            
+            p_id = ch.get("ParentProductID") or ch.get("ParentProductId")
+            p_code = (ch.get("ParentProductIDText") or "").strip()
+            
+            _logger.info("🔹 Child: '%s' | ParentID=%s | ParentCode='%s'",
+                        ch.get("ProductIDText"), p_id, p_code)
+            
+            if p_id or p_code:
+                # Có parent info → nhóm theo key
+                keyset = {str(p_id or "").strip(), p_code}
+                key = "|".join(sorted([k for k in keyset if k]))
+                children_by_parent.setdefault(key, []).append(ch)
+            else:
+                # KHÔNG có parent info → lưu lại để smart matching
+                _logger.info("   → Không có parent info, sẽ dùng smart matching")
+                children_without_parent.append(ch)
+        
+        # Smart matching cho children không có parent info
+        if children_without_parent:
+            _logger.info("🔍 Smart matching: %s children không có parent info", len(children_without_parent))
+            current_parent_code = None
+            for it in (lines or []):
+                if it.get("IsSetProduct"):
+                    # Gặp parent → lưu lại
+                    current_parent_code = it.get("ProductIDText")
+                    _logger.info("  👉 Parent: '%s'", current_parent_code)
+                elif it.get("IsChildProduct") and current_parent_code:
+                    # Child đứng sau parent → match
+                    if it in children_without_parent:
+                        children_by_parent.setdefault(current_parent_code, []).append(it)
+                        _logger.info("     ├─ Match child '%s' → parent '%s'",
+                                    it.get("ProductIDText"), current_parent_code)
+        
+        # Build combo_parent_map từ children_by_parent
+        for line in (lines or []):
+            if not line.get("IsSetProduct"):
+                continue
+            
+            product_code = line.get("ProductIDText")
+            p_id = line.get("ProductID") or line.get("ProductId")
+            
+            # Tìm children theo key
+            parent_keys = {str(p_id or "").strip(), product_code}
+            ckey = "|".join(sorted([k for k in parent_keys if k]))
+            children_for_parent = children_by_parent.get(ckey, [])
+            
+            # Fallback: tìm theo product_code trực tiếp (từ smart matching)
+            if not children_for_parent and product_code in children_by_parent:
+                children_for_parent = children_by_parent[product_code]
+            
+            if children_for_parent:
+                _logger.info("🔑 Combo parent '%s' (key='%s') có %s children",
+                            product_code, ckey, len(children_for_parent))
+            
+            for child in children_for_parent:
+                child_code = child.get("ProductIDText")
+                if child_code:
+                    combo_parent_map[child_code] = product_code
+                    _logger.info("  ├─ Map: '%s' → '%s'", child_code, product_code)
+        
+        _logger.info("🔍 Combo map cuối cùng: %s", combo_parent_map)
+
         # ===== 8.1) THÊM LINES (có quy đổi UoM nếu khác mặc định) =====
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
@@ -798,6 +872,9 @@ class SaleOrder(models.Model):
             note_text    = (ln.get("DescriptionProduct")
                 or ln.get("Note")
                 or "")
+
+            # Xác định loại dòng (để gán Studio fields)
+            is_combo_child = ln.get("IsChildProduct")
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             # sửa purchase_ok và sale_ok True
@@ -840,6 +917,22 @@ class SaleOrder(models.Model):
             tax_ids = self._tax_ids_from_misa_line(ln)
             if tax_ids:
                 vals_line['tax_id'] = [(6, 0, tax_ids)]
+            
+            # ===== GÁN 2 TRƯỜNG STUDIO CHO COMBO =====
+            if is_combo_child:
+                # Dòng combo child
+                vals_line['x_studio_is_combo_child'] = True
+                parent_code = combo_parent_map.get(product_code, False)
+                vals_line['x_studio_combo_parent_code'] = parent_code
+                
+                if parent_code:
+                    _logger.info("✅ Combo child '%s' → parent '%s'", product_code, parent_code)
+                else:
+                    _logger.warning("⚠️ Combo child '%s' KHÔNG tìm thấy parent trong map!", product_code)
+            else:
+                # Dòng thường hoặc combo parent
+                vals_line['x_studio_is_combo_child'] = False
+                vals_line['x_studio_combo_parent_code'] = False
                 
             env['sale.order.line'].create(vals_line)
 
