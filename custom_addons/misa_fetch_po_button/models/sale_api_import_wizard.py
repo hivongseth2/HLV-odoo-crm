@@ -610,11 +610,7 @@ class SaleApiImportWizard(models.TransientModel):
                 order_id = order.get("ID")
                 misa_id_str = str(order_id) if order_id else False  # ### NEW
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
-                product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)
-                _logger.warning("📦 Order product_lines FULL DATA: %s", product_lines)
-                if product_lines and len(product_lines) > 0:
-                    _logger.warning("📦 Sample line keys: %s", list(product_lines[0].keys()))
-                
+                product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)             
                 
                 shipping_address_str = misa_utils.get_shipping_address(
                     sale_order_id=order_id,

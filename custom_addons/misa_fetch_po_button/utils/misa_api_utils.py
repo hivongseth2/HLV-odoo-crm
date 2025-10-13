@@ -193,11 +193,20 @@ class MisaApiUtils(models.AbstractModel):
         
         try:
             tmpl = ProductTmpl.create(vals)
-            combo_prod = Product.create({
-                'product_tmpl_id': tmpl.id, 
-                'default_code': combo_code
-            })
-            _logger.info("✅ Đã tạo combo product mới: %s (id=%s)", combo_code, combo_prod.id)
+            # Check for existing product.product with same template and empty combination_indices
+            existing_combo_prod = Product.search([
+                ('product_tmpl_id', '=', tmpl.id),
+                ('combination_indices', '=', False)
+            ], limit=1)
+            if existing_combo_prod:
+                combo_prod = existing_combo_prod
+                _logger.info("♻️ Đã tìm thấy combo product tồn tại: %s (id=%s)", combo_code, combo_prod.id)
+            else:
+                combo_prod = Product.create({
+                    'product_tmpl_id': tmpl.id,
+                    'default_code': combo_code
+                })
+                _logger.info("✅ Đã tạo combo product mới: %s (id=%s)", combo_code, combo_prod.id)
         except Exception as e:
             _logger.error("❌ Lỗi tạo combo product %s: %s", combo_code, e)
             return False
@@ -471,9 +480,7 @@ class MisaApiUtils(models.AbstractModel):
         }
         api_payload = {"ID": str(sale_order_id), "MISAEntityState": "2"}
 
-        api_response = session.post(api_url, headers=api_headers, json=api_payload)
-        _logger.warning("API response headers: %s", dict(api_response.headers))
-        _logger.warning("API response text: %s", api_response.text)
+        api_response = session.post(api_url, headers=api_headers, json=api_payload) 
 
         # Nếu không 200 thì vẫn ráng parse JSON để fallback; nếu parse fail thì trả sale_order_id
         try:
@@ -623,38 +630,6 @@ class MisaApiUtils(models.AbstractModel):
         except Exception as e:
             _logger.exception("Lỗi gọi Product/DataSubPaging (combo): %s", e)
             return []
-
-
-    # === TÁCH MÃ CON TỪ TÊN COMBO (FALLBACK) ===
-    # def parse_children_codes_from_text(self, combo_text: str) -> list[str]:
-    #     """
-    #     Ví dụ: 'Combo ... M18 FHIW2F12-0X0 + Pin M18B5 MILWAUKEE'
-    #     → ['M18 FHIW2F12-0X0', 'M18B5']
-    #     Cách làm: tách theo ' + ', sau đó lấy cụm có chữ/ số/ '-' và khoảng trắng ngắn, ưu tiên cụm IN HOA/CHỨA KÝ TỰ MÃ.
-    #     """
-    #     import re
-    #     if not combo_text:
-    #         return []
-    #     # tách theo dấu +; gom cụm có thể chứa mã
-    #     parts = [p.strip() for p in combo_text.split('+') if p and p.strip()]
-    #     out = []
-    #     for p in parts:
-    #         # ưu tiên đoạn trong ngoặc đơn
-    #         m = re.search(r"\(([^)]+)\)\s*$", p)
-    #         cand = m.group(1).strip() if m else p
-    #         # lọc cụm có nhiều chữ hoa/số/ký tự '-' hoặc khoảng trắng ngắn (để giữ 'M18 FHIW2F12-0X0')
-    #         # lấy cụm dài nhất có >= 3 ký tự A-Z/0-9/-/space
-    #         tokens = re.findall(r"[A-Z0-9][A-Z0-9\- ]{2,}", cand)
-    #         if tokens:
-    #             # chọn token dài nhất
-    #             best = max(tokens, key=len).strip()
-    #             out.append(re.sub(r"\s{2,}", " ", best))
-    #     # khử trùng
-    #     uniq = []
-    #     for c in out:
-    #         if c not in uniq:
-    #             uniq.append(c)
-    #     return uniq
 
     # === Lấy thông tin ID, TaxCode, AccountNumber của đối tác từ MISA CRM ===
     def get_account_identity(self, account_id: int | str, sale_headers: object) -> dict:
