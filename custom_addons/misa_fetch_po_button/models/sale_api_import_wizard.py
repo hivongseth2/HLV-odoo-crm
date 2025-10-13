@@ -441,7 +441,136 @@ class SaleApiImportWizard(models.TransientModel):
             _logger.info("🎯 Đã cập nhật %d combo cho SO %s", updated_count, existing_order.name)
 
         return updated_count > 0
-
+    
+    def _add_missing_lines_to_existing_so(self, existing_order, grouped_lines, sale_headers):
+        """
+        Chỉ TẠO MỚI các dòng còn thiếu trong SO (từ trang 2+ của MISA).
+        KHÔNG sửa/cập nhật dòng đã có.        
+        Returns: số dòng đã tạo
+        """
+        if existing_order.state in ('cancel', 'done'):
+            _logger.info("⚠️ SO %s ở trạng thái %s, không thêm dòng",
+                        existing_order.name, existing_order.state)
+            return 0
+        
+        odoo_utils = self.env['odoo.utils']
+        misa_utils = self.env['misa.api.utils']
+        
+        # Map các dòng hiện có theo product code
+        existing_codes = set()
+        for line in existing_order.order_line:
+            code = (line.product_id.default_code or '').strip()
+            if code:
+                existing_codes.add(code)
+        
+        _logger.info("📋 SO %s: Có %d dòng hiện tại, MISA có %d dòng",
+                    existing_order.name, len(existing_codes), len(grouped_lines))
+        
+        created_count = 0
+        
+        # ===== XỬ LÝ TỪNG DÒNG MISA =====
+        for misa_line in grouped_lines:
+            product_code = (misa_line.get("ProductIDText") or "").strip()
+            if not product_code:
+                continue
+            
+            # Bỏ qua combo child
+            if misa_line.get("IsChildProduct"):
+                continue
+            
+            # ===== CHỈ XỬ LÝ DÒNG CHƯA CÓ =====
+            if product_code in existing_codes:
+                continue  # Dòng đã có → bỏ qua
+            
+            _logger.info("   ➕ Dòng thiếu: %s", product_code)
+            
+            # ===== LẤY THÔNG TIN TỪ MISA =====
+            description = misa_line.get("Description") or product_code
+            qty = float(misa_line.get("Amount", 1) or 0.0)
+            price_unit = float(misa_line.get("Price", 0) or 0.0)
+            discount_percent = float(misa_line.get("DiscountPercent", 0) or 0.0)
+            uom_name = (misa_line.get("UnitIDText") or "Cái").strip()
+            note = misa_line.get("DescriptionProduct") or misa_line.get("Note") or ""
+            misa_product_id = misa_line.get("ProductID") or misa_line.get("ProductId") or None
+            is_combo_parent = misa_line.get("IsSetProduct", False)
+            
+            # ===== TẠO/LẤY PRODUCT =====
+            if is_combo_parent:
+                # Combo parent
+                combo_product = misa_utils.get_or_create_combo_product(
+                    combo_data=misa_line,
+                    children_data=[],
+                    env=self.env,
+                    sale_headers=sale_headers,
+                )
+                product = combo_product or odoo_utils._get_or_create_product(
+                    code=product_code,
+                    name=description,
+                    unit_name=uom_name,
+                    cost=price_unit,
+                    product_type="consu",
+                    purchase_ok=True,
+                    sale_ok=True
+                )
+            else:
+                # Dòng thường
+                product = odoo_utils._get_or_create_product(
+                    code=product_code,
+                    name=description,
+                    unit_name=uom_name,
+                    cost=price_unit,
+                    product_type="consu",
+                    purchase_ok=True,
+                    sale_ok=True
+                )
+            
+            # ===== QUY ĐỔI UOM =====
+            qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
+                product=product,
+                misa_uom_text=uom_name,
+                qty=qty,
+                price=price_unit,
+                misa_product_id=misa_product_id,
+                headers=sale_headers
+            )
+            
+            # ===== CHUẨN BỊ VALS =====
+            vals_line = {
+                'order_id': existing_order.id,
+                'product_id': product.id,
+                'name': description,
+                'product_uom_qty': qty_for_odoo,
+                'price_unit': price_for_odoo,
+                'discount': discount_percent,
+                'note': note,
+            }
+            if not use_default_uom and product.uom_id:
+                vals_line['product_uom'] = product.uom_id.id
+            
+            # Thuế
+            tax_ids = self._tax_ids_from_misa_sale_line(misa_line)
+            if tax_ids:
+                vals_line['tax_id'] = [(6, 0, tax_ids)]
+            
+            # ===== TẠO DÒNG MỚI =====
+            try:
+                self.env['sale.order.line'].create(vals_line)
+                created_count += 1
+                _logger.info("      ✓ Created: %s (qty=%s, price=%s)", 
+                            product_code, qty_for_odoo, price_for_odoo)
+            except Exception as e:
+                _logger.error("      ❌ Lỗi tạo dòng %s: %s", product_code, e)
+        
+        # ===== POST MESSAGE =====
+        if created_count > 0:
+            existing_order.message_post(
+                body=_("Đã thêm %d dòng thiếu từ MISA (trang 2+)") % created_count
+            )
+            _logger.info("🎯 SO %s: Đã thêm %d dòng thiếu", existing_order.name, created_count)
+        else:
+            _logger.info("   ℹ️ Không có dòng thiếu cần thêm")
+        
+        return created_count
 
     # ===== Helpers cho địa chỉ giao hàng =====
     def _vn_country(self):
@@ -752,6 +881,8 @@ class SaleApiImportWizard(models.TransientModel):
                         self._update_existing_so_taxes(existing_order, grouped_lines)
                         # >>> CẬP NHẬT COMBO PRODUCT (chỉ dòng cha) <<<
                         self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
+                        # >>> TẠO MỚI CÁC DÒNG THIẾU (trang 2+) <<<
+                        self._add_missing_lines_to_existing_so(existing_order, grouped_lines, sale_headers)
                         # Update MISA fields (owner code and order date)
                         upd = {}
                         if owner_date.get('owner_code'):
@@ -1092,6 +1223,8 @@ class SaleApiImportWizard(models.TransientModel):
                             self._update_existing_so_taxes(existing_order, grouped_lines)
                             # >>> THÊM: CẬP NHẬT COMBO PRODUCT (parent-only) <<<
                             self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
+                            # >>> TẠO MỚI CÁC DÒNG THIẾU (trang 2+) <<<
+                            self._add_missing_lines_to_existing_so(existing_order, grouped_lines, sale_headers)
                             upd = {}
                             if owner_date.get('owner_code'):
                                 upd['x_studio_misa_saler_code'] = owner_date['owner_code']
