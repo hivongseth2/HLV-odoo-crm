@@ -815,12 +815,8 @@ class SaleApiImportWizard(models.TransientModel):
                     
                     _logger.info("🔍 Combo map: %s", combo_parent_map)
                     
-                    # ===== XỬ LÝ TỪNG DÒNG MISA (parent-only) =====
+                    # ===== XỬ LÝ TỪNG DÒNG MISA (bao gồm CẢ CHA VÀ CON) =====
                     for line in grouped_lines:
-                        # BỎ QUA dòng con -> giống sync hard
-                        if line.get("IsChildProduct"):
-                            continue
-                        
                         product_code = line.get("ProductIDText")
                         if not product_code:
                             continue
@@ -833,17 +829,19 @@ class SaleApiImportWizard(models.TransientModel):
                         note = line.get("DescriptionProduct") or ""
                         misa_product_id = line.get("ProductID") or line.get("ProductId") or None
                         
-                        # NHÁNH COMBO CHA
-                        if line.get("IsSetProduct", False):
-                            # tạo/lấy combo product (children util sẽ tự xử lý bằng headers nếu cần)
+                        # Xác định xem dòng này là gì
+                        is_combo_parent = line.get("IsSetProduct", False)
+                        is_combo_child = line.get("IsChildProduct", False)
+                        
+                        # ===== TẠO/LẤY PRODUCT =====
+                        if is_combo_parent:
+                            # COMBO CHA: tạo combo product
                             combo_product = misa_utils.get_or_create_combo_product(
                                 combo_data=line,
-                                children_data=[],           # không cần truyền children ở SO line
+                                children_data=[],  # util tự fetch children nếu cần
                                 env=self.env,
                                 sale_headers=sale_headers,
                             )
-                            
-                            # Fallback: nếu util lỗi, vẫn tạo product thường để không vỡ flow
                             product = combo_product or odoo_utils._get_or_create_product(
                                 code=product_code,
                                 name=description,
@@ -853,53 +851,39 @@ class SaleApiImportWizard(models.TransientModel):
                                 purchase_ok=True,
                                 sale_ok=True
                             )
+                        elif is_combo_child:
+                            # COMBO CON: chỉ get product (KHÔNG UPDATE cost vì MISA không trả giá đúng)
+                            # Tìm product existing TRƯỚC, nếu chưa có mới tạo với cost = 0
+                            product = self.env['product.product'].search([
+                                ('default_code', '=', product_code)
+                            ], limit=1)
                             
-                            # Quy đổi UoM
-                            qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
-                                product=product,
-                                misa_uom_text=uom_name,
-                                qty=qty,
-                                price=price_unit,
-                                misa_product_id=misa_product_id,
-                                headers=sale_headers
+                            if not product:
+                                # Chưa có → tạo mới với cost tạm = 0 (sẽ được cập nhật từ purchase order sau)
+                                _logger.info("🆕 Tạo product mới cho combo child: %s (cost tạm = 0)", product_code)
+                                product = odoo_utils._get_or_create_product(
+                                    code=product_code,
+                                    name=description,
+                                    unit_name=uom_name,
+                                    cost=0.0,  # Cost tạm, không lấy từ MISA vì không đúng
+                                    product_type="consu",
+                                    purchase_ok=True,
+                                    sale_ok=True
+                                )
+                            # Nếu đã có → dùng luôn, KHÔNG cập nhật cost
+                        else:
+                            # DÒNG THƯỜNG: tạo/cập nhật product với đầy đủ thông tin
+                            product = odoo_utils._get_or_create_product(
+                                code=product_code,
+                                name=description,
+                                unit_name=uom_name,
+                                cost=price_unit,  # Dòng thường có giá đầy đủ
+                                product_type="consu",
+                                purchase_ok=True,
+                                sale_ok=True
                             )
-                            
-                            vals_line = {
-                                'order_id': sale_order.id,
-                                'product_id': product.id,
-                                'name': description,
-                                'product_uom_qty': qty_for_odoo,
-                                'price_unit': price_for_odoo,
-                                'discount': discount_percent,
-                                'note': note,
-                            }
-                            if not use_default_uom and product.uom_id:
-                                vals_line['product_uom'] = product.uom_id.id
-                            
-                            tax_ids = self._tax_ids_from_misa_sale_line(line)
-                            if tax_ids:
-                                vals_line['tax_id'] = [(6, 0, tax_ids)]
-                            
-                            # 🆕 Studio fields cho combo
-                            vals_line['x_studio_is_combo_child'] = False  # Combo cha không phải child
-                            vals_line['x_studio_combo_parent_code'] = False
-                            
-                            allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
-                            safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
-                            self.env['sale.order.line'].create(safe_vals_line)
-                            continue  # ✅ xong nhánh combo cha
                         
-                        # NHÁNH DÒNG THƯỜNG
-                        product = odoo_utils._get_or_create_product(
-                            code=product_code,
-                            name=description,
-                            unit_name=uom_name,
-                            cost=price_unit,
-                            product_type="consu",
-                            purchase_ok=True,
-                            sale_ok=True
-                        )
-                        
+                        # ===== QUY ĐỔI UOM =====
                         qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
                             product=product,
                             misa_uom_text=uom_name,
@@ -909,6 +893,7 @@ class SaleApiImportWizard(models.TransientModel):
                             headers=sale_headers
                         )
                         
+                        # ===== TẠO SALE ORDER LINE =====
                         vals_line = {
                             'order_id': sale_order.id,
                             'product_id': product.id,
@@ -921,16 +906,21 @@ class SaleApiImportWizard(models.TransientModel):
                         if not use_default_uom and product.uom_id:
                             vals_line['product_uom'] = product.uom_id.id
                         
+                        # Thuế
                         tax_ids = self._tax_ids_from_misa_sale_line(line)
                         if tax_ids:
                             vals_line['tax_id'] = [(6, 0, tax_ids)]
                         
-                        # 🆕 Kiểm tra xem dòng này có phải child combo không
-                        is_combo_child = product_code in combo_parent_map
-                        combo_parent_code = combo_parent_map.get(product_code, False)
-                        
-                        vals_line['x_studio_is_combo_child'] = is_combo_child
-                        vals_line['x_studio_combo_parent_code'] = combo_parent_code if is_combo_child else False
+                        # ===== 🆕 STUDIO FIELDS =====
+                        if is_combo_child:
+                            # Dòng con combo: đánh dấu + lưu mã cha
+                            parent_code = combo_parent_map.get(product_code, False)
+                            vals_line['x_studio_is_combo_child'] = True
+                            vals_line['x_studio_combo_parent_code'] = parent_code
+                        else:
+                            # Dòng cha combo hoặc dòng thường
+                            vals_line['x_studio_is_combo_child'] = False
+                            vals_line['x_studio_combo_parent_code'] = False
                         
                         allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
                         safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
@@ -1054,16 +1044,12 @@ class SaleApiImportWizard(models.TransientModel):
 
                         sale_order = self.env['sale.order'].create(sale_vals)
 
-                        # ===== XỬ LÝ TỪNG DÒNG MISA (parent-only) =====
+                        # ===== XỬ LÝ TỪNG DÒNG MISA (bao gồm CẢ CHA VÀ CON) =====
                         for line in grouped_lines:
-                            # BỎ QUA dòng con -> giống sync hard
-                            if line.get("IsChildProduct"):
-                                continue
-                            
                             product_code = line.get("ProductIDText")
                             if not product_code:
                                 continue
-                                
+                            
                             description = line.get("Description") or product_code
                             qty = float(line.get("Amount", 1) or 0.0)
                             price_unit = float(line.get("Price", 0) or 0.0)
@@ -1072,15 +1058,19 @@ class SaleApiImportWizard(models.TransientModel):
                             note = line.get("DescriptionProduct") or ""
                             misa_product_id = line.get("ProductID") or line.get("ProductId") or None
                             
-                            # NHÁNH COMBO CHA
-                            if line.get("IsSetProduct", False):
+                            # Xác định loại dòng
+                            is_combo_parent = line.get("IsSetProduct", False)
+                            is_combo_child = line.get("IsChildProduct", False)
+                            
+                            # ===== TẠO/LẤY PRODUCT =====
+                            if is_combo_parent:
+                                # COMBO CHA
                                 combo_product = misa_utils.get_or_create_combo_product(
                                     combo_data=line,
-                                    children_data=[],       # không expand children
+                                    children_data=[],
                                     env=self.env,
                                     sale_headers=sale_headers,
                                 )
-
                                 product = combo_product or odoo_utils._get_or_create_product(
                                     code=product_code,
                                     name=description,
@@ -1090,52 +1080,38 @@ class SaleApiImportWizard(models.TransientModel):
                                     purchase_ok=True,
                                     sale_ok=True
                                 )
+                            elif is_combo_child:
+                                # COMBO CON: chỉ get product (KHÔNG UPDATE cost vì MISA không trả giá đúng)
+                                product = self.env['product.product'].search([
+                                    ('default_code', '=', product_code)
+                                ], limit=1)
                                 
-                                qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
-                                    product=product,
-                                    misa_uom_text=uom_name,
-                                    qty=qty,
-                                    price=price_unit,
-                                    misa_product_id=misa_product_id,
-                                    headers=sale_headers
+                                if not product:
+                                    # Chưa có → tạo mới với cost tạm = 0
+                                    _logger.info("🆕 Tạo product mới cho combo child: %s (cost tạm = 0)", product_code)
+                                    product = odoo_utils._get_or_create_product(
+                                        code=product_code,
+                                        name=description,
+                                        unit_name=uom_name,
+                                        cost=0.0,  # Cost tạm
+                                        product_type="consu",
+                                        purchase_ok=True,
+                                        sale_ok=True
+                                    )
+                                # Nếu đã có → dùng luôn, KHÔNG cập nhật cost
+                            else:
+                                # DÒNG THƯỜNG: có giá đầy đủ
+                                product = odoo_utils._get_or_create_product(
+                                    code=product_code,
+                                    name=description,
+                                    unit_name=uom_name,
+                                    cost=price_unit,
+                                    product_type="consu",
+                                    purchase_ok=True,
+                                    sale_ok=True
                                 )
-                                
-                                line_vals = {
-                                    'order_id': sale_order.id,
-                                    'product_id': product.id,
-                                    'name': description,
-                                    'product_uom_qty': qty_for_odoo,
-                                    'price_unit': price_for_odoo,
-                                    'discount': discount_percent,
-                                    'note': note,
-                                }
-                                if not use_default_uom and product.uom_id:
-                                    line_vals['product_uom'] = product.uom_id.id
-                                
-                                tax_ids = self._tax_ids_from_misa_sale_line(line)
-                                if tax_ids:
-                                    line_vals['tax_id'] = [(6, 0, tax_ids)]
-                                
-                                # 🆕 Studio fields cho combo
-                                line_vals['x_studio_is_combo_child'] = False
-                                line_vals['x_studio_combo_parent_code'] = False
-                                
-                                allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
-                                safe_line_vals = {k: v for k, v in line_vals.items() if k in allowed_fields}
-                                self.env['sale.order.line'].create(safe_line_vals)
-                                continue  # ✅ xong nhánh combo cha
                             
-                            # NHÁNH DÒNG THƯỜNG
-                            product = odoo_utils._get_or_create_product(
-                                code=product_code,
-                                name=description,
-                                unit_name=uom_name,
-                                cost=price_unit,
-                                product_type="consu",
-                                purchase_ok=True,
-                                sale_ok=True
-                            )
-                            
+                            # ===== QUY ĐỔI UOM =====
                             qty_for_odoo, price_for_odoo, use_default_uom = self._convert_qty_price_to_default_uom(
                                 product=product,
                                 misa_uom_text=uom_name,
@@ -1144,7 +1120,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 misa_product_id=misa_product_id,
                                 headers=sale_headers
                             )
-
+                            
+                            # ===== TẠO SALE ORDER LINE =====
                             line_vals = {
                                 'order_id': sale_order.id,
                                 'product_id': product.id,
@@ -1156,19 +1133,23 @@ class SaleApiImportWizard(models.TransientModel):
                             }
                             if not use_default_uom and product.uom_id:
                                 line_vals['product_uom'] = product.uom_id.id
-
-                            # >>> NEW: map VAT từ dữ liệu MISA -> tax_id (many2many)
+                            
+                            # Thuế
                             tax_ids = self._tax_ids_from_misa_sale_line(line)
                             if tax_ids:
                                 line_vals['tax_id'] = [(6, 0, tax_ids)]
                             
-                            # 🆕 Kiểm tra xem dòng này có phải child combo không
-                            is_combo_child = product_code in combo_parent_map_global
-                            combo_parent_code = combo_parent_map_global.get(product_code, False)
+                            # ===== 🆕 STUDIO FIELDS =====
+                            if is_combo_child:
+                                # Dòng con combo
+                                parent_code = combo_parent_map_global.get(product_code, False)
+                                line_vals['x_studio_is_combo_child'] = True
+                                line_vals['x_studio_combo_parent_code'] = parent_code
+                            else:
+                                # Dòng cha combo hoặc dòng thường
+                                line_vals['x_studio_is_combo_child'] = False
+                                line_vals['x_studio_combo_parent_code'] = False
                             
-                            line_vals['x_studio_is_combo_child'] = is_combo_child
-                            line_vals['x_studio_combo_parent_code'] = combo_parent_code if is_combo_child else False
-
                             allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
                             safe_line_vals = {k: v for k, v in line_vals.items() if k in allowed_fields}
                             self.env['sale.order.line'].create(safe_line_vals)
