@@ -789,15 +789,23 @@ class SaleApiImportWizard(models.TransientModel):
                     children_by_parent = {}
                     
                     # Nhóm children theo parent
+                    _logger.info("📦 Bắt đầu build combo map từ %d dòng", len(grouped_lines))
                     for ch in (grouped_lines or []):
                         if not ch.get("IsChildProduct"):
                             continue
+                        
+                        child_code = ch.get("ProductIDText")
                         p_id = ch.get("ParentProductID") or ch.get("ParentProductId")
                         p_code = (ch.get("ParentProductIDText") or "").strip()
+                        
+                        _logger.info("  🔹 Child: '%s' | ParentID=%s | ParentCode='%s'", 
+                                    child_code, p_id, p_code)
+                        
                         keyset = {str(p_id or "").strip(), p_code}
                         key = "|".join(sorted([k for k in keyset if k]))
                         if key:
                             children_by_parent.setdefault(key, []).append(ch)
+                            _logger.info("     → Nhóm vào key='%s'", key)
                     
                     # Smart matching nếu không có ParentProductID
                     if not children_by_parent:
@@ -823,12 +831,16 @@ class SaleApiImportWizard(models.TransientModel):
                         ckey = "|".join(sorted([k for k in parent_keys if k]))
                         children_for_parent = children_by_parent.get(ckey, [])
                         
+                        _logger.info("🔑 Combo parent '%s' (key='%s') có %d children", 
+                                    product_code, ckey, len(children_for_parent))
+                        
                         for child in children_for_parent:
                             child_code = child.get("ProductIDText")
                             if child_code:
                                 combo_parent_map[child_code] = product_code
+                                _logger.info("  ├─ Map: '%s' → '%s'", child_code, product_code)
                     
-                    _logger.info("🔍 Combo map: %s", combo_parent_map)
+                    _logger.info("🔍 Combo map cuối cùng: %s", combo_parent_map)
                     
                     # ===== XỬ LÝ TỪNG DÒNG MISA (bao gồm CẢ CHA VÀ CON) =====
                     for line in grouped_lines:
@@ -932,6 +944,14 @@ class SaleApiImportWizard(models.TransientModel):
                             parent_code = combo_parent_map.get(product_code, False)
                             vals_line['x_studio_is_combo_child'] = True
                             vals_line['x_studio_combo_parent_code'] = parent_code
+                            
+                            if parent_code:
+                                _logger.info("✅ Combo child '%s' → parent '%s'", product_code, parent_code)
+                            else:
+                                _logger.warning("⚠️ Combo child '%s' KHÔNG tìm thấy parent trong map! IsChildProduct=%s", 
+                                              product_code, line.get("IsChildProduct"))
+                                _logger.warning("   ParentProductID=%s, ParentProductIDText=%s", 
+                                              line.get("ParentProductID"), line.get("ParentProductIDText"))
                         else:
                             # Dòng cha combo hoặc dòng thường
                             vals_line['x_studio_is_combo_child'] = False
