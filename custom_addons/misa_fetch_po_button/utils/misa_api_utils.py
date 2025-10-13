@@ -548,19 +548,69 @@ class MisaApiUtils(models.AbstractModel):
 
 
     def get_list_product_by_order_crm(self, api_url, header, payload):
+        """
+        Lấy TOÀN BỘ sản phẩm của đơn hàng từ MISA CRM.
+        Xử lý phân trang: tự động fetch tất cả các trang nếu PageCount > 1.
+        """
         session = requests.Session()
-        response = session.post(api_url, headers=header, json=payload)
-        _logger.warning("📦response %s", response)
-
-        if response.status_code != 200:
-            raise Exception(f"API call failed: {response.status_code} - {response.text}")
-
-        try:
-            data = response.json().get("Data", []) or []
-            # 🔁 GIỮ NGUYÊN, KHÔNG LOẠI COMBO CHA
-            return data
-        except Exception as e:
-            raise Exception(f"Lỗi khi xử lý response JSON: {e}")
+        all_products = []
+        page = 1
+        max_pages = 100  # Giới hạn an toàn
+        
+        while page <= max_pages:
+            # Cập nhật payload cho trang hiện tại
+            current_payload = payload.copy()
+            current_payload['Page'] = page
+            current_payload['Start'] = (page - 1) * 20  # MISA PageSize = 20
+            
+            try:
+                _logger.info("📄 Fetching MISA products: Page %d (Start=%d)", page, current_payload['Start'])
+                
+                response = session.post(api_url, headers=header, json=current_payload)
+                
+                if response.status_code != 200:
+                    _logger.error("❌ API call failed at page %d: %s - %s", 
+                                page, response.status_code, response.text)
+                    break
+                
+                data = response.json()
+                
+                if not data.get("Success", True):
+                    _logger.warning("⚠️ MISA returned Success=False at page %d: %s", 
+                                page, data.get("Message"))
+                    break
+                
+                # Lấy dữ liệu trang hiện tại
+                products = data.get("Data", []) or []
+                page_count = data.get("PageCount", 1)
+                total = data.get("Total", 0)
+                
+                _logger.info("   ✓ Page %d/%d: %d products (Total: %d)", 
+                            page, page_count, len(products), total)
+                
+                # Thêm vào danh sách tổng (GIỮ NGUYÊN, KHÔNG LỌC COMBO CHA)
+                all_products.extend(products)
+                
+                # Điều kiện dừng
+                if page >= page_count or len(products) == 0:
+                    _logger.info("✅ Completed: %d products from %d page(s)", 
+                                len(all_products), page)
+                    break
+                
+                page += 1
+                
+            except requests.exceptions.RequestException as e:
+                _logger.exception("❌ Request error at page %d: %s", page, e)
+                break
+            except Exception as e:
+                _logger.exception("❌ Unexpected error at page %d: %s", page, e)
+                break
+        
+        if page > max_pages:
+            _logger.warning("⚠️ Reached max_pages limit (%d), may have missing data!", max_pages)
+        
+        # 🔁 GIỮ NGUYÊN, KHÔNG LOẠI COMBO CHA
+        return all_products
         
 
     # === LẤY THÀNH PHẦN COMBO TỪ API g1/Product/DataSubPaging ===
