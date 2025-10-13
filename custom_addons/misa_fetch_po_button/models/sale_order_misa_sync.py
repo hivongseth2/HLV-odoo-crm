@@ -1049,10 +1049,34 @@ class SaleOrder(models.Model):
 
             seen_codes.add(code)
 
-        # (tuỳ chọn) Xoá dòng không còn trong MISA
+        # (an toàn) Đưa các dòng không còn trong MISA về 0 (hoặc xoá nếu còn nháp)
+        posted_inv_exists = bool(self.invoice_ids.filtered(lambda m: m.state == 'posted'))
+
         for code, line in so_lines_by_code.items():
-            if code not in seen_codes:
+            if code in seen_codes:
+                continue
+
+            if self.state in ('draft', 'sent'):
+                # Nháp → xoá được
                 line.unlink()
+                _logger.info("🧹 Unlink dòng %s (SO nháp) vì không còn trong MISA", code)
+                continue
+
+            # Đã xác nhận: KHÔNG đụng dòng đã giao/đã xuất hoá đơn
+            qty_delivered = float(getattr(line, 'qty_delivered', 0.0) or 0.0)
+
+            # (tránh sai số float rất nhỏ)
+            if abs(qty_delivered) < 1e-6 and not posted_inv_exists:
+                try:
+                    line.write({'product_uom_qty': 0.0})
+                    _logger.info("↘️ Set về 0 dòng %s (đã xác nhận, chưa giao, chưa có invoice posted)", code)
+                except Exception as e:
+                    _logger.warning("Không thể set 0 dòng %s: %s", code, e)
+            else:
+                _logger.warning(
+                    "⚠️ Dòng %s không còn trong MISA nhưng giữ nguyên (đã giao >0 hoặc có invoice posted).",
+                    code
+                )
 
 
     def _safe_unreserve_move(self, move):
