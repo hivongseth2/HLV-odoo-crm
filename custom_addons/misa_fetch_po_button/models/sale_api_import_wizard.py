@@ -773,6 +773,52 @@ class SaleApiImportWizard(models.TransientModel):
 
                     sale_order = self.env['sale.order'].create(sale_vals)
                     
+                    # ===== BUILD MAP: COMBO CHILD -> PARENT CODE =====
+                    combo_parent_map = {}  # {child_product_code: parent_product_code}
+                    children_by_parent = {}
+                    
+                    # Nhóm children theo parent
+                    for ch in (grouped_lines or []):
+                        if not ch.get("IsChildProduct"):
+                            continue
+                        p_id = ch.get("ParentProductID") or ch.get("ParentProductId")
+                        p_code = (ch.get("ParentProductIDText") or "").strip()
+                        keyset = {str(p_id or "").strip(), p_code}
+                        key = "|".join(sorted([k for k in keyset if k]))
+                        if key:
+                            children_by_parent.setdefault(key, []).append(ch)
+                    
+                    # Smart matching nếu không có ParentProductID
+                    if not children_by_parent:
+                        current_parent_code = None
+                        for it in grouped_lines:
+                            if it.get("IsSetProduct"):
+                                current_parent_code = it.get("ProductIDText")
+                                children_by_parent.setdefault(current_parent_code or "", [])
+                            elif it.get("IsChildProduct") and current_parent_code:
+                                children_by_parent[current_parent_code].append(it)
+                            else:
+                                current_parent_code = None
+                    
+                    # Build map: child_code -> parent_code
+                    for line in grouped_lines:
+                        if not line.get("IsSetProduct"):
+                            continue
+                        product_code = line.get("ProductIDText")
+                        if not product_code:
+                            continue
+                        misa_product_id = line.get("ProductID") or line.get("ProductId")
+                        parent_keys = {str(misa_product_id or "").strip(), product_code}
+                        ckey = "|".join(sorted([k for k in parent_keys if k]))
+                        children_for_parent = children_by_parent.get(ckey, [])
+                        
+                        for child in children_for_parent:
+                            child_code = child.get("ProductIDText")
+                            if child_code:
+                                combo_parent_map[child_code] = product_code
+                    
+                    _logger.info("🔍 Combo map: %s", combo_parent_map)
+                    
                     # ===== XỬ LÝ TỪNG DÒNG MISA (parent-only) =====
                     for line in grouped_lines:
                         # BỎ QUA dòng con -> giống sync hard
@@ -782,7 +828,7 @@ class SaleApiImportWizard(models.TransientModel):
                         product_code = line.get("ProductIDText")
                         if not product_code:
                             continue
-                            
+                        
                         description = line.get("Description") or product_code
                         qty = float(line.get("Amount", 1) or 0.0)
                         price_unit = float(line.get("Price", 0) or 0.0)
@@ -800,7 +846,7 @@ class SaleApiImportWizard(models.TransientModel):
                                 env=self.env,
                                 sale_headers=sale_headers,
                             )
-
+                            
                             # Fallback: nếu util lỗi, vẫn tạo product thường để không vỡ flow
                             product = combo_product or odoo_utils._get_or_create_product(
                                 code=product_code,
@@ -838,7 +884,11 @@ class SaleApiImportWizard(models.TransientModel):
                             if tax_ids:
                                 vals_line['tax_id'] = [(6, 0, tax_ids)]
                             
-                            allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id'}
+                            # 🆕 Studio fields cho combo
+                            vals_line['x_studio_is_combo_child'] = False  # Combo cha không phải child
+                            vals_line['x_studio_combo_parent_code'] = False
+                            
+                            allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
                             safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
                             self.env['sale.order.line'].create(safe_vals_line)
                             continue  # ✅ xong nhánh combo cha
@@ -879,7 +929,14 @@ class SaleApiImportWizard(models.TransientModel):
                         if tax_ids:
                             vals_line['tax_id'] = [(6, 0, tax_ids)]
                         
-                        allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id'}
+                        # 🆕 Kiểm tra xem dòng này có phải child combo không
+                        is_combo_child = product_code in combo_parent_map
+                        combo_parent_code = combo_parent_map.get(product_code, False)
+                        
+                        vals_line['x_studio_is_combo_child'] = is_combo_child
+                        vals_line['x_studio_combo_parent_code'] = combo_parent_code if is_combo_child else False
+                        
+                        allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
                         safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
                         self.env['sale.order.line'].create(safe_vals_line)
 
@@ -903,6 +960,47 @@ class SaleApiImportWizard(models.TransientModel):
 
                 # ========== CASE 2: NHIỀU KHO -> TÁCH NHIỀU SO, THÊM HẬU TỐ ==========
                 else:
+                    # Build combo map cho toàn bộ product_lines (giống CASE 1)
+                    combo_parent_map_global = {}
+                    children_by_parent_global = {}
+                    
+                    for ch in (product_lines or []):
+                        if not ch.get("IsChildProduct"):
+                            continue
+                        p_id = ch.get("ParentProductID") or ch.get("ParentProductId")
+                        p_code = (ch.get("ParentProductIDText") or "").strip()
+                        keyset = {str(p_id or "").strip(), p_code}
+                        key = "|".join(sorted([k for k in keyset if k]))
+                        if key:
+                            children_by_parent_global.setdefault(key, []).append(ch)
+                    
+                    if not children_by_parent_global:
+                        current_parent_code = None
+                        for it in product_lines:
+                            if it.get("IsSetProduct"):
+                                current_parent_code = it.get("ProductIDText")
+                                children_by_parent_global.setdefault(current_parent_code or "", [])
+                            elif it.get("IsChildProduct") and current_parent_code:
+                                children_by_parent_global[current_parent_code].append(it)
+                            else:
+                                current_parent_code = None
+                    
+                    for line in product_lines:
+                        if not line.get("IsSetProduct"):
+                            continue
+                        product_code = line.get("ProductIDText")
+                        if not product_code:
+                            continue
+                        misa_product_id = line.get("ProductID") or line.get("ProductId")
+                        parent_keys = {str(misa_product_id or "").strip(), product_code}
+                        ckey = "|".join(sorted([k for k in parent_keys if k]))
+                        children_for_parent = children_by_parent_global.get(ckey, [])
+                        
+                        for child in children_for_parent:
+                            child_code = child.get("ProductIDText")
+                            if child_code:
+                                combo_parent_map_global[child_code] = product_code
+                    
                     for stock_id in distinct_stocks:
                         grouped_lines = lines_by_stock[stock_id]
 
@@ -1022,7 +1120,11 @@ class SaleApiImportWizard(models.TransientModel):
                                 if tax_ids:
                                     line_vals['tax_id'] = [(6, 0, tax_ids)]
                                 
-                                allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id'}
+                                # 🆕 Studio fields cho combo
+                                line_vals['x_studio_is_combo_child'] = False
+                                line_vals['x_studio_combo_parent_code'] = False
+                                
+                                allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
                                 safe_line_vals = {k: v for k, v in line_vals.items() if k in allowed_fields}
                                 self.env['sale.order.line'].create(safe_line_vals)
                                 continue  # ✅ xong nhánh combo cha
@@ -1063,8 +1165,15 @@ class SaleApiImportWizard(models.TransientModel):
                             tax_ids = self._tax_ids_from_misa_sale_line(line)
                             if tax_ids:
                                 line_vals['tax_id'] = [(6, 0, tax_ids)]
+                            
+                            # 🆕 Kiểm tra xem dòng này có phải child combo không
+                            is_combo_child = product_code in combo_parent_map_global
+                            combo_parent_code = combo_parent_map_global.get(product_code, False)
+                            
+                            line_vals['x_studio_is_combo_child'] = is_combo_child
+                            line_vals['x_studio_combo_parent_code'] = combo_parent_code if is_combo_child else False
 
-                            allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id'}
+                            allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
                             safe_line_vals = {k: v for k, v in line_vals.items() if k in allowed_fields}
                             self.env['sale.order.line'].create(safe_line_vals)
 
