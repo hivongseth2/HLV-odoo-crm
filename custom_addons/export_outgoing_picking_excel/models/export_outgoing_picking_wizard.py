@@ -42,6 +42,10 @@ class PickingExportWizard(models.TransientModel):
             return "BENCAM"
         if code == "TSN":
             return "HCM"
+        if code == "KHD":
+            return "HIENDUC"
+        if code == "TSNSR":
+            return "HCM_SHOWROOM"
         return code
     _name = "picking.export.wizard"
     _description = "Xuất Excel lệnh xuất kho theo template kế toán"
