@@ -111,7 +111,7 @@
               <div class="title-a5">BIÊN BẢN BÀN GIAO</div>
 
               <!-- Năm tự động: ưu tiên date_done -> scheduled_date -> create_date -> năm hiện tại -->
-              <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.create_date"/>
+              <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
               <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')"/>
 
               <div>(Số phiếu xuất: <span t-esc="o.name"/> – ngày ... tháng ... năm <t t-esc="year_str"/>)</div>
@@ -156,7 +156,7 @@
             <div class="fw-700 mt-6" style="margin-right:8px;">Bên B đã bàn giao cho bên A:</div>
 
             <!-- COMBO: Nguồn dữ liệu từ sale.order.line -->
-            <t t-set="lines" t-value="so and so.order_line or []"/>
+            <t t-set="lines" t-value="o.order_line or []"/>
 
             <!-- Bảng hàng hóa -->
             <table class="bbgn-a5 mt-4">

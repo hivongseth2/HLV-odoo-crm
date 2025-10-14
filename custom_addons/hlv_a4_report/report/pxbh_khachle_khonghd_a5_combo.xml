@@ -77,7 +77,7 @@
         <div class="page">
           <t t-foreach="docs" t-as="o">
             <!-- COMBO: Lấy sale.order -->
-            <t t-set="so" t-value="o.sale_id or (o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False"/>
+            <t t-set="so" t-value="o"/>
 
             <div class="page">
 
@@ -120,6 +120,7 @@
               <div style="text-align:center;" class="mt-2">
                 <div class="fs-title">PHIẾU XUẤT KHO KIÊM BÁN HÀNG</div>
                 <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.create_date or datetime.datetime.now()"/>
+                <t t-set="dt_src" t-value="o.date_order or o.create_date or datetime.datetime.now()"/>
                 <div class="fs-subtitle">
                   (Số phiếu xuất: <span t-esc="o.name"/>; ngày: <t t-esc="dt_src.strftime('%d/%m/%Y')"/>)
                 </div>
@@ -147,6 +148,7 @@
 
               <!-- COMBO: Chọn nguồn dữ liệu từ sale.order.line -->
               <t t-set="lines" t-value="so and so.order_line or []"/>
+            <t t-set="lines" t-value="o.order_line or []"/>
               <t t-set="total_untaxed" t-value="0.0"/>
 
               <!-- Bảng hàng hóa -->

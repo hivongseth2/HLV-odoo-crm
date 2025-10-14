@@ -130,7 +130,7 @@
                             <div style="text-align:center; margin-top:-5px">
                                 <div class="fs-title">PHIẾU XUẤT KHO KIÊM BÁN HÀNG</div>
                                 <!-- Năm tự động -->
-                                <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.date or o.create_date"/>
+                                <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
                                 <div class="fs-subtitle">
                                 (Số phiếu xuất: <span t-esc="o.name"/>; ngày:
                                 <t t-if="dt_src"><t t-esc="dt_src.strftime('%d/%m/%Y')"/></t>

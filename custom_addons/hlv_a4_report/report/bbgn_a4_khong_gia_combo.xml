@@ -62,7 +62,7 @@
                     <!-- bắt cầu sang sale.order -->
                     <t t-set="so" t-value="o"/>
                     <!-- Origin/PO lấy từ o.sale_id.source_id -->
-                    <t t-set="po_raw" t-value="o.sale_id.origin"/>
+                    <t t-set="po_raw" t-value="o.origin or ''"/>
                     <!-- Rút số PO: nếu có 'PO' thì lấy token ngay sau; nếu không thì gom toàn bộ chữ số -->
                     <t t-set="po_upper" t-value="(po_raw or '').upper()"/>
                      <t t-set="po_number" t-value="( '' if not po_upper else ( po_upper.split('PO')[-1].strip().split()[0] if 'PO' in po_upper else ''.join([c for c in (po_raw or '') if c.isdigit()]) ) )"/>
@@ -126,6 +126,7 @@
                             <div class="fs-14" style="font-weight:800;">BIÊN BẢN GIAO NHẬN HÀNG
                                     HÓA</div>
                             <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.create_date"/>
+                    <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
                             <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')"/>
                             <div>(No.: 
                                 <span t-esc="o.name"/> ; Date ..../..../

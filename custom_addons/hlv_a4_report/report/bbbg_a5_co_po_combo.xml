@@ -75,8 +75,8 @@
           <!-- Lấy sale.order nếu có -->
           <t t-set="so" t-value="o"/>
 
-          <!-- Xác định ngày -->
-          <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.create_date or (so and so.date_order)"/>
+          <!-- Xác định ngày: chỉ dùng date_order hoặc create_date -->
+          <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
           <t t-if="dt_src">
             <t t-set="d_str" t-value="dt_src.strftime('%d')"/>
             <t t-set="m_str" t-value="dt_src.strftime('%m')"/>
@@ -203,7 +203,7 @@
                         <span t-esc="l.product_uom and l.product_uom.name or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
                       </td>
                       <td class="col-qty"><span t-esc="'%0.2f' % qty_show"/></td>
-                      <td class="col-note"><t t-esc="(so and so.origin) or ''"/></td>
+                      <td class="col-note"><t t-esc="o.origin or ''"/></td>
                     </tr>
                   </t>
                 </t>
