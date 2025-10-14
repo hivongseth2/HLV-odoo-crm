@@ -1,0 +1,373 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Action report: BBGN A4 không giá COMBO -->
+    <record id="bbgn_a4_khong_gia_combo" model="ir.actions.report">
+        <field name="name">BBGN A4 không giá - COMBO</field>
+        <field name="model">stock.picking</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">hlv_a4_report.bbgn_a4_khong_gia_combo_doc</field>
+        <field name="print_report_name">
+            'BBGN A4 không giá COMBO - %s' % (object.name or 'Picking')
+        </field>
+        <field name="binding_model_id" ref="sale.model_sale_order" />
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait" />
+    </record>
+
+    <!-- Template -->
+<template t-name="hlv_a4_report.bbgn_a4_khong_gia_combo_doc">
+    <t t-call="web.html_container">
+        <t t-call="web.report_layout">
+            <style type="text/css">
+                    @font-face{
+                    font-family:'HLV-TNR';
+                    src:url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+                    font-weight:400; font-style:normal; font-display:swap;
+                    }
+                    @font-face{
+                    font-family:'HLV-TNR';
+                    src:url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf')
+                    format('truetype');
+                    font-weight:700; font-style:normal; font-display:swap;
+                    }
+                    @font-face{
+                    font-family:'HLV-TNR';
+                    src:url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf')
+                    format('truetype');
+                    font-weight:400; font-style:italic; font-display:swap;
+                    }
+                    @font-face{
+                    font-family:'HLV-TNR';
+                    src:url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf')
+                    format('truetype');
+                    font-weight:700; font-style:italic; font-display:swap;
+                    }
+
+                    /* Base 13px toàn form */
+                    html, body, .o_report_layout, .o_report_layout *{
+                    font-family:'HLV-TNR','DejaVu Serif','Liberation Serif',serif !important;
+                    font-size:12px !important;
+                    font-synthesis:none;
+                    }
+                    em, i { font-style:italic !important; font-weight:400 !important; }
+                    strong em, strong i, b em, b i { font-style:italic !important; font-weight:700
+                    !important; }
+
+                    /* Tiêu đề 14px: tên biên bản, tên công ty, BÊN A/B */
+                    .fs-14 { font-size:14px !important; }
+                </style>
+            <div class="page">
+                <t t-foreach="docs" t-as="o">
+                    <!-- bắt cầu sang sale.order -->
+                    <t t-set="so" t-value="o.sale_id or ((o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False)"/>
+                    <!-- Origin/PO lấy từ o.sale_id.source_id -->
+                    <t t-set="po_raw" t-value="o.sale_id.origin"/>
+                    <!-- Rút số PO: nếu có 'PO' thì lấy token ngay sau; nếu không thì gom toàn bộ chữ số -->
+                    <t t-set="po_upper" t-value="(po_raw or '').upper()"/>
+                     <t t-set="po_number" t-value="( '' if not po_upper else ( po_upper.split('PO')[-1].strip().split()[0] if 'PO' in po_upper else ''.join([c for c in (po_raw or '') if c.isdigit()]) ) )"/>
+                    <!-- Ngày từ wizard (giữ như bạn đang dùng) -->
+                    <t t-set="order_date_str" t-value="(data and data.get('bbgn_order_date')) or (o._context and o._context.get('bbgn_order_date')) or ''"/>
+                    <div class="page">
+                        <!-- Header công ty -->
+                        <table style="width:100%; margin-top:30px">
+                            <tr>
+                                <!-- Logo -->
+                                <td style="width:220px; text-align:center; vertical-align:middle; padding-right:5px">
+                                    <t t-if="o.company_id.logo">
+                                        <img t-att-src="image_data_uri(o.company_id.logo)" style="max-height:150px; position:relative; top:-20px; height:130px; width:180px; object-fit:contain; text-align:center; vertical-align:middle;"/>
+                                    </t>
+                                    <t t-else="">
+                                        <img t-att-src="'/web/image/res.company/%s/logo' % o.company_id.id" style="max-height:150px; height:150px; width:120px;"/>
+                                    </t>
+                                </td>
+                                <td style="vertical-align:top; padding-left:10px;">
+                                    <!-- Tên công ty -->
+                                    <div class="fs-14" style="font-weight:700">
+                                        <t>CÔNG TY TNHH VI NA HOÀNG LONG VŨ</t>
+                                    </div>
+                                    <!-- Địa chỉ -->
+                                    <div>Địa chỉ: 
+                                        <t t-esc="o.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''"/>
+                                    </div>
+                                    <!-- Điện thoại | Di động -->
+                                    <table style="width:100%; margin-top:2px; border-collapse:collapse;">
+                                        <tr>
+                                            <td style="padding:0 8px 0 0; white-space:nowrap;">Điện
+                                                    thoại:</td>
+                                            <td style="padding:0 12px 0 0;">
+                                                <t t-esc="o.company_id.phone or ''"/>
+                                            </td>
+                                            <td style="padding:0 0px; white-space:nowrap;">Di
+                                                    động:</td>
+                                            <td>
+                                                <t t-esc="o.company_id.mobile or o.company_id.partner_id.mobile or ''"/>
+                                            </td>
+                                        </tr>
+                                        <!-- Email | Website -->
+                                        <tr>
+                                            <td style="padding:2px 8px 0 0; white-space:nowrap;">
+                                                    Email:</td>
+                                            <td style="padding:2px 12px 0 0;">
+                                                <t t-esc="o.company_id.email or ''"/>
+                                            </td>
+                                            <td style="padding:2px 8px 0 0; white-space:nowrap;">
+                                                    Website:</td>
+                                            <td style="padding-top:2px;">
+                                                <t t-esc="o.company_id.website or ''"/>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                        <!-- Tiêu đề -->
+                        <div style="text-align:center; margin-top:-5px">
+                            <div class="fs-14" style="font-weight:800;">BIÊN BẢN GIAO NHẬN HÀNG
+                                    HÓA</div>
+                            <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.create_date"/>
+                            <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')"/>
+                            <div>(No.: 
+                                <span t-esc="o.name"/> ; Date ..../..../
+                                <t t-esc="year_str"/> )
+                            </div>
+                            <div style="font-style:italic; margin-top:8px; text-align:left;">
+                                    Căn cứ đơn đặt hàng ngày 
+                                <span t-esc="order_date_str"/> PO số: 
+                                <span t-esc="po_number"/> của 
+                                <span t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''"/>
+                            </div>
+                            <div style="margin-top:2px; text-align:left;"> Hôm nay, ngày 
+                                <span t-esc="datetime.datetime.now().strftime('%d/%m/%Y')"/> tại 
+                                <span t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''"/>,
+                                    Chúng tôi gồm: 
+                            </div>
+                        </div>
+                        <table style="width:100%; margin-top:10px;">
+                            <tr>
+                                <td colspan="2">
+                                    <span class="fs-14" style="font-weight:700;">BÊN A (Bên nhận
+                                            hàng):</span>
+                                    <span style="font-weight:700;">
+                                        <t t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''"/>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="padding-left:20px;"> Địa chỉ: 
+                                    <t t-set="p" t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id"/>
+                                    <span>
+                                        <t t-esc="(p._display_address(without_company=True).replace('\n',' ') or '')"/>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="padding-left:20px;"> Điện thoại : 
+                                    <span style="min-width:120px; display:inline-block;">
+                                        ....................................</span> Fax : 
+                                    <span style="min-width:120px; display:inline-block;">
+                                        .............................................</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="padding-left:20px;"> Đại diện Ông/bà: 
+                                    <span style="min-width:120px; display:inline-block;">
+                                        .............................................</span> Chức
+                                        vụ: 
+                                    <span style="min-width:120px; display:inline-block;">
+                                        .............................................</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="padding-top:6px;">
+                                    <span class="fs-14" style="font-weight:700;">BÊN B (Bên giao
+                                            hàng):</span>
+                                    <span style="font-weight:700;">
+                                        <t>CÔNG TY TNHH VI NA HOÀNG LONG VŨ</t>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="padding-left:20px; padding-right: 20px"> Địa chỉ: 
+                                    <t t-set="addr_b" t-value="o.company_id.partner_id._display_address(without_company=True) or ''"/>
+                                    <span>
+                                        <t t-foreach="addr_b.split('-')" t-as="line">
+                                            <t t-esc="line"/>
+                                            <br/>
+                                        </t>
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="padding-left:20px;"> Điện thoại : 
+                                    <span style="min-width:120px; display:inline-block;">
+                                        <t t-esc="o.company_id.phone or ''"/>
+                                    </span>
+                                        Fax : 
+                                    <span style="min-width:140px; display:inline-block;">
+                                        .............................................</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="padding-left:20px;"> Đại diện Ông/bà: 
+                                    <span style="min-width:120px; display:inline-block;">
+                                        .............................................</span> Chức
+                                        vụ: 
+                                    <span style="min-width:120px; display:inline-block;">
+                                        .............................................</span>
+                                </td>
+                            </tr>
+                        </table>
+                        <div style="font-style:italic; padding-bottom: 5px">Hai bên cùng thống nhất số lượng giao hàng như sau:</div>
+                        <!-- COMBO: Chọn nguồn dữ liệu từ sale.order.line -->
+                        <t t-set="lines" t-value="so and so.order_line or []"/>
+                        <!-- Bảng hàng hóa -->
+                        <table style="width:100%; border-collapse:collapse;">
+                            <thead>
+                                <tr>
+                                    <th style="font-weight:600;border:1px solid #000; width:38px; text-align:center; background:#eee;">
+                                            STT</th>
+                                    <th style="font-weight:600;border:1px solid #000; width:70px; text-align:center; background:#eee;">Số
+                                            PR</th>
+                                    <th style="font-weight:600;border:1px solid #000; width:300px; text-align:center; background:#eee;">Tên
+                                            hàng</th>
+                                    <th style="font-weight:600;border:1px solid #000; width:55px; text-align:center; background:#eee;">
+                                            DVT</th>
+                                    <th style="font-weight:600;border:1px solid #000; width:65px; text-align:center; background:#eee;">
+                                            SL</th>
+                                    <th style="font-weight:600;border:1px solid #000; width:95px; text-align:center; background:#eee;">Đơn
+                                            giá</th>
+                                    <th style="font-weight:600;border:1px solid #000; width:65px; text-align:center; background:#eee;">
+                                            Vat(%)</th>
+                                    <th style="font-weight:600;border:1px solid #000; width:85px; text-align:center; background:#eee;">
+                                            Vat</th>
+                                    <th style="font-weight:600;border:1px solid #000; width:115px; text-align:center; background:#eee;">Thành
+                                            Tiền</th>
+                                    <th style="font-weight:600;border:1px solid #000; width:100px; text-align:center; background:#eee;">Ghi
+                                            chú</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-set="idx" t-value="1"/>
+                                <t t-foreach="lines" t-as="l">
+                                    <!-- COMBO: kiểm tra is_combo_child -->
+                                    <t t-set="is_child" t-value="l.x_studio_is_combo_child"/>
+                                    <t t-set="qty_show" t-value="l.product_uom_qty or 0.0"/>
+                                    
+                                    <t t-if="qty_show &gt; 0">
+                                        <tr>
+                                            <td style="border:1px solid #000; text-align:center;">
+                                                <t t-if="not is_child">
+                                                    <t t-esc="idx"/>
+                                                    <t t-set="idx" t-value="idx + 1"/>
+                                                </t>
+                                            </td>
+                                            <!-- SỐ PR = sale.order.line.note -->
+                                            <td style="border:1px solid #000; text-align:center;">
+                                                <span t-esc="l.note or ''"/>
+                                            </td>
+
+                                            <td style="border:1px solid #000;">
+                                                <t t-if="is_child">
+                                                    <span style="padding-left:24px;">
+                                                        <t t-esc="l.product_id and l.product_id.display_name or ''"/>
+                                                    </span>
+                                                </t>
+                                                <t t-else="">
+                                                    <span t-esc="l.product_id and l.product_id.display_name or ''"/>
+                                                </t>
+                                            </td>
+                                            <td style="border:1px solid #000; text-align:center;">
+                                                <span t-esc="l.product_uom and l.product_uom.name or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
+                                            </td>
+                                            <td style="border:1px solid #000; text-align:center;">
+                                                <span t-esc="'%0.2f' % qty_show"/>
+                                            </td>
+                                            <td style="border:1px solid #000; text-align:right;"/>
+                                            <td style="border:1px solid #000; text-align:center;"/>
+                                            <td style="border:1px solid #000; text-align:right;"/>
+                                            <td style="border:1px solid #000; text-align:right;"/>
+                                            <td style="border:1px solid #000;"/>
+                                        </tr>
+                                    </t>
+                                </t>
+                                <!-- Không có dòng nào -->
+                                <t t-if="not lines">
+                                    <tr>
+                                        <td colspan="10" style="border:1px solid #000; text-align:center; font-style:italic;">
+                                                Không có dòng hàng.
+                                            </td>
+                                    </tr>
+                                </t>
+                                <!-- 3 hàng tổng -->
+                                <tr>
+                                    <!-- Gộp trái: STT -> SL -->
+                                    <td colspan="5" rowspan="3" style="border:1px solid #000; background:#eee;"/>
+                                    <!-- Nội dung giữa: Đơn giá -> Vat -->
+                                    <td colspan="3" style="border:1px solid #000; text-align:left; font-weight:600;">
+                                            Tổng tiền hàng (VNĐ)
+                                        </td>
+                                    <!-- Thành tiền: giữ riêng từng hàng -->
+                                    <td style="border:1px solid #000;"/>
+                                    <!-- Gộp phải: Ghi chú -->
+                                    <td rowspan="3" style="border:1px solid #000; background:#eee;"/>
+                                </tr>
+                                <tr>
+                                    <td colspan="3" style="border:1px solid #000; text-align:left; font-weight:600;">
+                                            Tổng thuế VAT (VNĐ)
+                                        </td>
+                                    <td style="border:1px solid #000;"/>
+                                </tr>
+                                <tr>
+                                    <td colspan="3" style="border:1px solid #000; text-align:left; font-weight:600;">
+                                            Tổng tiền thanh toán (VNĐ)
+                                        </td>
+                                    <td style="border:1px solid #000;"/>
+                                </tr>
+                                <!-- Bằng chữ: 2 cột, đều xám nhạt -->
+                                <tr>
+                                    <td colspan="5" style="border:1px solid #000; font-weight:600; background:#eee;">
+                                            Thành tiền thanh toán (Bằng chữ):
+                                        </td>
+                                    <td colspan="5" style="border:1px solid #000; background:#eee;"/>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <!-- Đoạn xác nhận bên dưới -->
+                        <div style="margin-top:10px; text-align:justify;"> Bên A xác nhận Bên B
+                                đã giao cho Bên A đúng chủng loại và đủ số lượng hàng như trên. 
+                            <br/>
+                                Hai bên đồng ý, thống nhất ký tên. Biên bản được lập thành 05 bản,
+                                bên mua giữ 04 bản, bên bán giữ 01 bản và có giá trị pháp lý như
+                                nhau. 
+                        </div>
+                        <div style="margin-top:12px;">
+                            <span style="font-style:italic; font-weight:600;">***Giao hàng tại
+                                    kho:</span>
+                            <span style="margin-left:40px;">Người nhận hàng:</span>
+                            <span style="margin-left:40px;">SĐT người nhận hàng:</span>
+                        </div>
+                        <!-- Chữ ký -->
+                        <table style="width:100%; margin-top:24px;">
+                            <tr>
+                                <td style="width:50%; padding-left:40px;">Đại diện bên nhận hàng</td>
+                                <td style="width:50%; text-align:right; padding-right:40px;">Đại
+                                        diện bên giao hàng</td>
+                            </tr>
+                            <tr>
+                                <td style="height:100px;"/>
+                                <td style="height:100px;"/>
+                            </tr>
+                        </table>
+                        <!-- Footer phân phối chính hãng -->
+                        <div style="position: fixed; bottom: 20px; left: 0; width: 100%; text-align: center; font-size: 11px; margin-top: 10px;">
+                                PHÂN PHỐI CHÍNH HÃNG:
+                                SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MAKITA-MILWAUKEE-DEWALT
+                            </div>
+                    </div>
+                </t>
+            </div>
+        </t>
+    </t>
+</template>
+</odoo>
