@@ -39,9 +39,9 @@ def _to_date_str(val):
 class PickingExportWizard(models.TransientModel):
     def _harsh_warehouse_code(self, code):
         if code == "KBC":
-            return "Bến Cam"
+            return "BENCAM"
         if code == "TSN":
-            return "Hồ Chí Minh"
+            return "HCM"
         return code
     _name = "picking.export.wizard"
     _description = "Xuất Excel lệnh xuất kho theo template kế toán"
@@ -398,8 +398,8 @@ class PickingExportWizard(models.TransientModel):
             'chiet_khau_thuong_mai': '',
             
             # Account codes - hardcoded examples
-            'tk_tien_no': '1311_TMĐT',
-            'tk_doanh_thu_co': '511111',
+            'tk_tien_no': '131',
+            'tk_doanh_thu_co': '5111',
             
             # Quantity and price
             'dvt': uom_name,
@@ -435,12 +435,12 @@ class PickingExportWizard(models.TransientModel):
             
             # Warehouse and cost
             'ma_kho': warehouse_code,
-            'tk_gia_von': '6321_GV',
-            'tk_kho': '1561',
+            'tk_gia_von': '632',
+            'tk_kho': '156',
             'don_gia_von': don_gia_von,
             'tien_von': tien_von,
             'hang_hoa_giu_ho': '',
-            'vi_tri': location_name,
+            'vi_tri': '',
         }
 
     def _create_excel_workbook(self, data_rows):
