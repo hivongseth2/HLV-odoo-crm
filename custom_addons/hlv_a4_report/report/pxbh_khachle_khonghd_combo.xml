@@ -140,7 +140,7 @@
                             
                             <table style="width:100%; margin-top:10px; border-collapse:collapse;">
                                 <!-- Lấy tên kho -->
-                                <t t-set="warehouse_name" t-value="(o.picking_type_id and o.picking_type_id.warehouse_id and o.picking_type_id.warehouse_id.name) or ''" />
+                                <t t-set="warehouse_name" t-value="''" />
                                 <t t-set="khachle_label" t-value="'KHÁCH LẺ CỬA HÀNG %s' % warehouse_name" />
                                 <!-- 1) Khách hàng -->
                                 <tr>

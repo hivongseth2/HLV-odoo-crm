@@ -116,7 +116,6 @@
               <!-- Tiêu đề -->
               <div style="text-align:center;" class="mt-2">
                 <div class="fs-title">PHIẾU XUẤT KHO KIÊM BÁN HÀNG</div>
-                <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.date or o.create_date"/>
                 <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
                 <div class="fs-subtitle">
                   (Số phiếu xuất: <span t-esc="o.name"/>; ngày:
@@ -127,8 +126,8 @@
 
               <!-- Thông tin KH -->
               <table class="mt-6">
-                <t t-set="warehouse_name" t-value="(o.picking_type_id and o.picking_type_id.warehouse_id and o.picking_type_id.warehouse_id.name) or ''"/>
-                <t t-set="khachle_label" t-value="(o.partner_id.commercial_partner_id.name)"/>
+                <t t-set="warehouse_name" t-value="(o.warehouse_id and o.warehouse_id.name) or ''"/>
+                <t t-set="khachle_label" t-value="o.partner_id and o.partner_id.commercial_partner_id and o.partner_id.commercial_partner_id.name or ''"/>
                 <tr>
                   <td class="fs-customer-info" style="width:120px;white-space:nowrap;">Khách hàng:</td>
                   <td class="fs-customer-info"><span t-esc="khachle_label"/></td>

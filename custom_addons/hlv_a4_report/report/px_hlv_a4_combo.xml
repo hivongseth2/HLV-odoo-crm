@@ -140,8 +140,8 @@
                             
                             <table style="width:100%; margin-top:10px; border-collapse:collapse;">
                                 <!-- Lấy tên kho -->
-                                <t t-set="warehouse_name" t-value="(o.picking_type_id and o.picking_type_id.warehouse_id and o.picking_type_id.warehouse_id.name) or ''"/>
-                                <t t-set="khachle_label" t-value="(o.partner_id.commercial_partner_id.name)"/>
+                                <t t-set="warehouse_name" t-value="''"/>
+                                <t t-set="khachle_label" t-value="o.partner_id and o.partner_id.commercial_partner_id and o.partner_id.commercial_partner_id.name or ''"/>
                                 <!-- 1) Khách hàng -->
                                 <tr>
                                     <td class="fs-customer-info" style="width:130px; white-space:nowrap;">Khách hàng:</td>

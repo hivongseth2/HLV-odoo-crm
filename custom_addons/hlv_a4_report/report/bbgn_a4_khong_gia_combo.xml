@@ -125,7 +125,7 @@
                         <div style="text-align:center; margin-top:-5px">
                             <div class="fs-14" style="font-weight:800;">BIÊN BẢN GIAO NHẬN HÀNG
                                     HÓA</div>
-                            <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.create_date"/>
+                            <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
                     <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
                             <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')"/>
                             <div>(No.: 
@@ -221,7 +221,7 @@
                         </table>
                         <div style="font-style:italic; padding-bottom: 5px">Hai bên cùng thống nhất số lượng giao hàng như sau:</div>
                         <!-- COMBO: Chọn nguồn dữ liệu từ sale.order.line -->
-                        <t t-set="lines" t-value="so and so.order_line or []"/>
+                        <t t-set="lines" t-value="o.order_line or []"/>
                         <!-- Bảng hàng hóa -->
                         <table style="width:100%; border-collapse:collapse;">
                             <thead>
