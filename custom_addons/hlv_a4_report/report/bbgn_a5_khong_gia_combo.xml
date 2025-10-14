@@ -92,7 +92,7 @@
         <div class="page">
           <t t-foreach="docs" t-as="o">
             <!-- Bridge sang SO -->
-            <t t-set="so" t-value="o.sale_id or ((o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False)"/>
+            <t t-set="so" t-value="o"/>
             <!-- PO number rút gọn như bản A4 -->
             <t t-set="po_raw" t-value="o.sale_id.origin"/>
             <t t-set="po_upper" t-value="(po_raw or '').upper()"/>

@@ -74,7 +74,7 @@
                 <div class="page">
                     <t t-foreach="docs" t-as="o">
                         <!-- COMBO: Lấy sale.order -->
-                        <t t-set="so" t-value="o.sale_id or (o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False"/>
+                        <t t-set="so" t-value="o"/>
 
                         <div class="page">
                             <!-- Header công ty -->

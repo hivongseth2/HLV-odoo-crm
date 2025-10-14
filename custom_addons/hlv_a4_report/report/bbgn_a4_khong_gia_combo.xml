@@ -60,7 +60,7 @@
             <div class="page">
                 <t t-foreach="docs" t-as="o">
                     <!-- bắt cầu sang sale.order -->
-                    <t t-set="so" t-value="o.sale_id or ((o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False)"/>
+                    <t t-set="so" t-value="o"/>
                     <!-- Origin/PO lấy từ o.sale_id.source_id -->
                     <t t-set="po_raw" t-value="o.sale_id.origin"/>
                     <!-- Rút số PO: nếu có 'PO' thì lấy token ngay sau; nếu không thì gom toàn bộ chữ số -->

@@ -73,7 +73,7 @@
 
         <t t-foreach="docs" t-as="o">
           <!-- Lấy sale.order nếu có -->
-          <t t-set="so" t-value="o.sale_id or (o.move_ids and o.move_ids[:1].sale_line_id and o.move_ids[:1].sale_line_id.order_id) or False"/>
+          <t t-set="so" t-value="o"/>
 
           <!-- Xác định ngày -->
           <t t-set="dt_src" t-value="o.date_done or o.scheduled_date or o.create_date or (so and so.date_order)"/>
