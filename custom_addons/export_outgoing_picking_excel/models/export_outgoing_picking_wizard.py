@@ -364,14 +364,14 @@ class PickingExportWizard(models.TransientModel):
             'da_lap_hoa_don': 'Đã lập',
             
             # Date fields
-            'ngay_hach_toan': scheduled_date_str,
-            'ngay_chung_tu': scheduled_date_str,
+            'ngay_hach_toan': _to_date_str(datetime.date.today()),
+            'ngay_chung_tu': _to_date_str(datetime.date.today()),
             'so_chung_tu': picking_name,
-            'so_phieu_xuat': picking_name,
+            'so_phieu_xuat': sale_name,
             
             # Invoice fields - hardcoded examples
             'mau_so_hd': '01GTKT0/001',
-            'ky_hieu_hd': 'AB/20E',
+            'ky_hieu_hd': '1C25TLV',
             'so_hoa_don': '',  # Để trống hoặc lấy từ invoice nếu có
             'ngay_hoa_don': scheduled_date_str,
             
