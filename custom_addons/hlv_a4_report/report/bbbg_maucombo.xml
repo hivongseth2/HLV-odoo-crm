@@ -58,13 +58,13 @@
                             <tr>
                                 <td
                                     style="width:220px; text-align:center; vertical-align:middle; padding-right:5px">
-                                    <t t-if="o.company_id.logo">
-                                        <img t-att-src="image_data_uri(o.company_id.logo)"
+                                    <t t-if="so.company_id.logo">
+                                        <img t-att-src="image_data_uri(so.company_id.logo)"
                                             style="max-height:150px; position:relative; top:-20px; height:130px; width:180px; object-fit:contain;" />
                                     </t>
                                     <t t-else="">
                                         <img
-                                            t-att-src="'/web/image/res.company/%s/logo' % o.company_id.id"
+                                            t-att-src="'/web/image/res.company/%s/logo' % so.company_id.id"
                                             style="max-height:150px; height:150px; width:120px;" />
                                     </t>
                                 </td>
@@ -74,15 +74,15 @@
                                         HOÀNG LONG VŨ</div>
                                     <div>
                                         <t t-set="addr"
-                                            t-value="o.company_id.partner_id._display_address(without_company=True) or ''" />
+                                            t-value="so.company_id.partner_id._display_address(without_company=True) or ''" />
                                         <t t-foreach="addr.split(' - ')" t-as="line">
                                             <t t-esc="line" />
                                             <br />
                                         </t>
                                     </div>
-                                    <div>Mã số thuế: <span t-esc="o.company_id.vat or ''" />
+                                    <div>Mã số thuế: <span t-esc="so.company_id.vat or ''" />
                                     </div>
-                                    <div>Website: <span t-esc="o.company_id.website or ''" />
+                                    <div>Website: <span t-esc="so.company_id.website or ''" />
                                     </div>
                                 </td>
                             </tr>
@@ -91,7 +91,7 @@
                         <!-- Tiêu đề -->
                         <div style="text-align:center; margin-top:-5px">
                             <div style="font-size:20px; font-weight:800;">BIÊN BẢN BÀN GIAO</div>
-                            <div>(Số phiếu xuất: <span t-esc="o.name" /> – ngày <t t-esc="d_str" />
+                            <div>(Số phiếu xuất: <span t-esc="so.name" /> – ngày <t t-esc="d_str" />
                                 tháng <t t-esc="m_str" /> năm <t t-esc="y_str" /> )</div>
                         </div>
 
@@ -100,7 +100,7 @@
                             <tr>
                                 <td style="width:180px; font-weight:600;">Đại diện bên nhận (A)</td>
                                 <td style="font-weight:700;"
-                                    t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''" />
+                                    t-esc="so.partner_id and so.partner_id.commercial_partner_id.name or ''" />
                             </tr>
                             <tr>
                                 <td>Ông (Bà)</td>
@@ -110,7 +110,7 @@
                                 <td>Địa chỉ</td>
                                 <td class="h6-fs" style="width:379.875px;">
                                     <t t-set="p"
-                                        t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id" />
+                                        t-value="so.partner_id and so.partner_id.commercial_partner_id or so.partner_id" />
                                     <t
                                         t-esc="(p.street or '') + (p.street2 and (', ' + p.street2) or '')" />
                                 </td>
@@ -128,7 +128,7 @@
                                 <td class="label">Địa chỉ</td>
                                 <td>
                                     <t t-set="addr_b"
-                                        t-value="o.company_id.partner_id._display_address(without_company=True) or ''" />
+                                        t-value="so.company_id.partner_id._display_address(without_company=True) or ''" />
                                     <t t-foreach="addr_b.split(' - ')" t-as="line">
                                         <t t-esc="line" />
                                         <br />
