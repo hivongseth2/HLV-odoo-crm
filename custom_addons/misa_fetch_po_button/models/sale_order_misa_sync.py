@@ -253,6 +253,14 @@ class SaleOrder(models.Model):
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
 
+        # Fetch OwnerIDText and SaleOrderDate from MISA
+        headers, _crm_token = self._misa_headers()
+        owner_date = {}
+        try:
+            owner_date = self.env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
+        except Exception as _e:
+            _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", misa_order_id, _e)
+
         # 3) Upsert header
         partner = odoo_utils._get_or_create_partner(partner_name or _("Khách hàng MISA"))
         vals_upd = {
@@ -264,6 +272,11 @@ class SaleOrder(models.Model):
                 vals_upd['date_order'] = dtparse(book_date).replace(tzinfo=None)
             except Exception:
                 pass
+        # Sync x_studio_misa_saler_code and x_studio_misa_order_date
+        if owner_date.get('owner_code'):
+            vals_upd['x_studio_misa_saler_code'] = owner_date['owner_code']
+        if owner_date.get('sale_order_date'):
+            vals_upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
         # Gán lại địa chỉ giao nếu bạn có helper build contact giao hàng
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
@@ -751,6 +764,13 @@ class SaleOrder(models.Model):
         shipping_addr = data.get("BillingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
 
+        # Fetch OwnerIDText and SaleOrderDate from MISA
+        owner_date = {}
+        try:
+            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
+        except Exception as _e:
+            _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", misa_order_id, _e)
+
         # địa chỉ giao hàng
         try:
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
@@ -778,6 +798,12 @@ class SaleOrder(models.Model):
                 vals_create['date_order'] = dtparse(book_date).replace(tzinfo=None)
             except Exception:
                 pass
+
+        # Sync x_studio_misa_saler_code and x_studio_misa_order_date
+        if owner_date.get('owner_code'):
+            vals_create['x_studio_misa_saler_code'] = owner_date['owner_code']
+        if owner_date.get('sale_order_date'):
+            vals_create['x_studio_misa_order_date'] = owner_date['sale_order_date']
 
         new_so = env['sale.order'].create(vals_create)
 
@@ -1165,6 +1191,24 @@ class SaleOrder(models.Model):
         odoo_utils = env['odoo.utils']
 
         _logger.info("=== Bắt đầu partial resync cho SO %s ===", self.name)
+
+        # --------- Cập nhật x_studio_misa_saler_code và x_studio_misa_order_date ---------
+        misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
+        owner_date = {}
+        try:
+            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
+        except Exception as _e:
+            _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", misa_order_id, _e)
+        
+        # Cập nhật các trường nếu có dữ liệu
+        vals_header_upd = {}
+        if owner_date.get('owner_code'):
+            vals_header_upd['x_studio_misa_saler_code'] = owner_date['owner_code']
+        if owner_date.get('sale_order_date'):
+            vals_header_upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+        if vals_header_upd:
+            self.write(vals_header_upd)
+            _logger.info("✅ Đã cập nhật misa_saler_code/order_date cho SO %s", self.name)
 
         # --------- Bước 0: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
         if self.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
