@@ -4,7 +4,7 @@
     <!-- Action report -->
     <record id="bbbg_a4_co_po_combo" model="ir.actions.report">
         <field name="name">BBBG A4 có PO - COMBO</field>
-        <field name="model">stock.picking</field>
+        <field name="model">sale.order</field>
         <field name="report_type">qweb-pdf</field>
         <!-- trỏ đúng template -->
         <field name="report_name">hlv_a4_report.bbbg_a4_co_po_combo_doc</field>

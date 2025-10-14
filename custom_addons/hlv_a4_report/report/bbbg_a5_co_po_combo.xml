@@ -4,7 +4,7 @@
   <!-- Action report: BBBG A5 có PO COMBO (Landscape) -->
   <record id="bbbg_a5_co_po_combo" model="ir.actions.report">
     <field name="name">BBBG A5 có PO - COMBO</field>
-    <field name="model">stock.picking</field>
+    <field name="model">sale.order</field>
     <field name="report_type">qweb-pdf</field>
     <field name="report_name">hlv_a4_report.bbbg_a5_co_po_combo_doc</field>
     <field name="print_report_name">

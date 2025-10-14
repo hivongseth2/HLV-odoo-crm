@@ -4,7 +4,7 @@
   <!-- Action report: BBGN A5 không giá COMBO (Landscape) -->
   <record id="bbgn_a5_khong_gia_combo" model="ir.actions.report">
     <field name="name">BBGN A5 không giá - COMBO</field>
-    <field name="model">stock.picking</field>
+    <field name="model">sale.order</field>
     <field name="report_type">qweb-pdf</field>
     <field name="report_name">hlv_a4_report.bbgn_a5_khong_gia_combo_doc</field>
     <field name="print_report_name">

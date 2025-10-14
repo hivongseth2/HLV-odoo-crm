@@ -4,7 +4,7 @@
   <!-- Action report: PXBH Khách lẻ không hóa đơn - A5 COMBO (Landscape) -->
   <record id="report_pxbh_khachle_khonghd_a5_combo" model="ir.actions.report">
     <field name="name">PXBH Khách lẻ không hóa đơn A5 - COMBO</field>
-    <field name="model">stock.picking</field>
+    <field name="model">sale.order</field>
     <field name="report_type">qweb-pdf</field>
     <field name="report_name">hlv_a4_report.report_pxbh_khachle_khonghd_a5_combo_doc</field>
     <field name="print_report_name">
