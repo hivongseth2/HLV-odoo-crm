@@ -786,17 +786,41 @@ class SaleApiImportWizard(models.TransientModel):
                 
                 for l in product_lines:
                     sid = l.get("StockIDText")
+                    is_combo_parent = l.get("IsSetProduct")
+                    is_combo_child = l.get("IsChildProduct")
                     
                     if sid:
                         # Dòng có StockIDText (combo cha hoặc dòng thường)
                         current_stock_id = sid
                         lines_by_stock[sid].append(l)
-                    elif l.get("IsChildProduct") and current_stock_id:
+                    elif is_combo_parent and not sid:
+                        # 🆕 COMBO CHA không có StockIDText (hoặc rỗng)
+                        # → Sẽ lấy kho từ DÒNG CON ĐẦU TIÊN
+                        # Tạm thời KHÔNG thêm vào lines_by_stock, chờ xử lý sau
+                        _logger.info("🔍 Combo parent '%s' không có StockIDText, sẽ lấy từ children", 
+                                    l.get("ProductIDText"))
+                        # Tìm dòng con đầu tiên để lấy kho
+                        next_child_stock = None
+                        for next_l in product_lines[product_lines.index(l)+1:]:
+                            if next_l.get("IsChildProduct"):
+                                next_child_stock = next_l.get("StockIDText")
+                                if next_child_stock:
+                                    break
+                        
+                        if next_child_stock:
+                            _logger.info("  ├─ Gán combo parent '%s' vào kho '%s' (từ child)", 
+                                        l.get("ProductIDText"), next_child_stock)
+                            current_stock_id = next_child_stock
+                            lines_by_stock[next_child_stock].append(l)
+                        else:
+                            _logger.warning("⚠️ Combo parent '%s' không tìm thấy kho từ children!", 
+                                          l.get("ProductIDText"))
+                    elif is_combo_child and current_stock_id:
                         # Dòng combo con: gán vào kho của dòng cha (trước đó)
                         lines_by_stock[current_stock_id].append(l)
                         _logger.debug("🔗 Gán combo child '%s' vào kho '%s'", 
                                      l.get("ProductIDText"), current_stock_id)
-                    elif sid is None and not l.get("IsChildProduct"):
+                    elif sid is None and not is_combo_child:
                         # Dòng không có kho và không phải combo con → bỏ qua
                         _logger.warning("⚠️ Dòng '%s' không có StockIDText và không phải combo child", 
                                        l.get("ProductIDText"))
