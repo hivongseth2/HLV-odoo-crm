@@ -9,6 +9,7 @@
         'security/ir.model.access.csv',
         'views/misa_transfer_button_view.xml',
         'views/misa_po_button_view.xml',
+        'views/misa_po_sync_view.xml',
         'views/misa_combined_button_view.xml',
         'views/sale_order_misa_sync.xml',
     ],
