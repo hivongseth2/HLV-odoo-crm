@@ -18,25 +18,62 @@ class MisaPOSync(models.TransientModel):
         help="Nhập mã đơn hàng cần đồng bộ (ví dụ: DMH12218)"
     )
 
-    def _custom_filter_from_code(self, code: str):
+    def _search_po_in_misa_simple(self, po_code: str, headers):
         """
-        Tạo customFilter cho 1 mã đơn duy nhất
+        Tìm kiếm đơn PO trong MISA theo mã đơn
+        Không dùng customFilter phức tạp, mà lấy nhiều đơn rồi filter trong Python
         """
-        if not code:
-            return []
+        if not po_code:
+            return None
         
-        return [{
-            "property": 4008,
-            "value": code,
-            "operator": 1,
-            "operand": 1,
-            "childrens": [
-                {"property": 57,   "value": code, "operator": 1, "operand": 2, "data_type": 1},
-                {"property": 2656, "value": code, "operator": 1, "operand": 2, "data_type": 1},
-                {"property": 4030, "value": code, "operator": 1, "operand": 2}
+        misa_utils = self.env['misa.api.utils']
+        
+        # Lấy tất cả đơn trong khoảng thời gian rộng (1 năm trở lại)
+        payload = {
+            "filter": [
+                {
+                    "property": 3972,
+                    "value": "2024-01-01T00:00:00.00Z",
+                    "operator": 10,
+                    "operand": 1,
+                    "data_type": 3
+                },
+                {
+                    "property": 3972,
+                    "value": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+                    "operator": 12,
+                    "operand": 1,
+                    "data_type": 3
+                }
             ],
-            "data_type": 1
-        }]
+            "loadMode": 2,
+            "pageIndex": 1,
+            "pageSize": 500,  # Lấy nhiều đơn để tìm
+            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1}]",
+            "summaryColumns": [5039, 5104, 247],
+            "useSp": False,
+            "view": 2
+        }
+        
+        response = misa_utils._fetch_with_retry(
+            "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2",
+            headers, payload
+        )
+        
+        if response.status_code != 200:
+            _logger.error("❌ Không thể gọi API MISA: %s", response.status_code)
+            return None
+        
+        all_pos = response.json().get("Data", {}).get("PageData", [])
+        
+        # Tìm đơn theo refno (mã đơn)
+        for po in all_pos:
+            if po.get("refno", "").strip().upper() == po_code.strip().upper():
+                _logger.info("✅ Tìm thấy đơn %s trong MISA", po_code)
+                return po
+        
+        _logger.warning("⚠️ Không tìm thấy đơn %s trong MISA (đã tìm %d đơn)", po_code, len(all_pos))
+        return None
 
     def _misa_get_product_id_by_code(self, product_code, product_name, crm_headers):
         """
@@ -299,52 +336,15 @@ class MisaPOSync(models.TransientModel):
         crm_token = misa_utils._fetch_login_crm_token()
         crm_headers = misa_config.get_crm_header(crm_token)
 
-        # Build payload
-        custom_filter = self._custom_filter_from_code(po_code)
-        
-        payload = {
-            "filter": [
-                {
-                    "property": 3972,
-                    "value": "2020-01-01T00:00:00.00Z",
-                    "operator": 10,
-                    "operand": 1,
-                    "data_type": 3
-                },
-                {
-                    "property": 3972,
-                    "value": datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-                    "operator": 12,
-                    "operand": 1,
-                    "data_type": 3
-                }
-            ],
-            "customFilter": custom_filter,
-            "loadMode": 3,
-            "pageIndex": 1,
-            "pageSize": 20,
-            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
-            "summaryColumns": [5039, 5104, 247],
-            "useSp": False,
-            "view": 2
-        }
-
-        # Gọi API MISA
-        response = misa_utils._fetch_with_retry(
-            "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2",
-            headers, payload
-        )
-
-        if response.status_code != 200:
-            raise models.UserError(f"❌ Không thể kết nối API MISA: {response.status_code}")
-
-        misa_data = response.json().get("Data", {}).get("PageData", [])
+        # Tìm đơn trong MISA bằng cách tìm kiếm đơn giản
+        _logger.info("🔍 Tìm kiếm đơn %s trong MISA...", po_code)
+        misa_po = self._search_po_in_misa_simple(po_code, headers)
         
         # Tìm PO trong Odoo
         odoo_po = self.env["purchase.order"].search([("name", "=", po_code)], limit=1)
 
         # Case 1: KHÔNG có trong MISA + CÓ trong Odoo → XÓA
-        if not misa_data:
+        if not misa_po:
             if odoo_po:
                 _logger.warning("🗑️ Xóa PO %s vì không tồn tại trong MISA", po_code)
                 if odoo_po.state not in ('draft', 'cancel'):
@@ -372,8 +372,7 @@ class MisaPOSync(models.TransientModel):
                     }
                 }
 
-        # Case 2 & 3: Có trong MISA
-        misa_po = misa_data[0]
+        # Case 2 & 3: Có trong MISA → Tạo mới hoặc cập nhật
         return self._create_or_update_po(
             misa_po, odoo_po, headers, crm_headers, misa_utils, odoo_utils
         )
