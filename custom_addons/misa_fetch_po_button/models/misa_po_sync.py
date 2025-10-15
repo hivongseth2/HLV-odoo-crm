@@ -1,4 +1,4 @@
-from odoo import models, fields, _
+from odoo import models, fields, api, _
 import logging
 from datetime import datetime, timezone
 import uuid
@@ -584,3 +584,128 @@ class MisaPOSync(models.TransientModel):
                 'sticky': False,
             }
         }
+
+
+# ===================== EXTEND PurchaseOrder với API =====================
+class PurchaseOrder(models.Model):
+    _inherit = 'purchase.order'
+    
+    @api.model
+    def api_sync_po_by_code(self, po_code, create_when_missing=True):
+        """
+        Public API (RPC/JSON-RPC) để đồng bộ PO theo mã đơn từ MISA.
+        
+        Workflow:
+        1. Tìm PO trong MISA theo mã đơn
+        2. Tìm PO trong Odoo theo name/origin
+        3. Nếu tìm thấy cả 2 → cập nhật
+        4. Nếu chỉ có trong MISA và create_when_missing=True → tạo mới
+        5. Nếu chỉ có trong Odoo → xóa (hoặc không làm gì)
+        
+        Args:
+            po_code (str): Mã đơn hàng (ví dụ: DMH12218)
+            create_when_missing (bool): Có tạo đơn mới nếu không tìm thấy trong Odoo
+        
+        Returns:
+            dict: {
+                'ok': bool,
+                'res_id': int or None,
+                'name': str or None,
+                'action': 'created' | 'updated' | 'deleted' | 'not_found',
+                'detail': str
+            }
+        """
+        from odoo.exceptions import UserError
+        
+        po_code = (str(po_code or '')).strip()
+        if not po_code:
+            return {'ok': False, 'error': 'missing_po_code', 'message': 'Thiếu mã đơn hàng'}
+        
+        _logger.info("🔍 API sync PO: po_code=%s, create_when_missing=%s", po_code, create_when_missing)
+        
+        # Get MISA headers
+        try:
+            misa_utils = self.env['misa.api.utils']
+            misa_config = self.env['misa.config']
+            token = misa_utils._fetch_login_token()
+            headers = misa_config.get_purchase_header(token)
+        except Exception as e:
+            _logger.exception("❌ Không thể lấy MISA headers: %s", e)
+            return {'ok': False, 'error': 'auth_failed', 'message': str(e)}
+        
+        # 1) Tìm PO trong MISA
+        sync_wizard = self.env['misa.po.sync']
+        misa_po = sync_wizard._search_po_in_misa(po_code, headers)
+        
+        # 2) Tìm PO trong Odoo
+        odoo_po = self.search([
+            '|',
+            ('name', '=', po_code),
+            ('origin', '=', po_code)
+        ], limit=1)
+        
+        # 3) Logic xử lý theo các trường hợp
+        if misa_po and odoo_po:
+            # Trường hợp 1: Có cả 2 → CẬP NHẬT
+            _logger.info("✅ Tìm thấy PO trong cả MISA và Odoo → Cập nhật")
+            try:
+                sync_wizard._create_or_update_po(misa_po, headers, existing_po=odoo_po)
+                return {
+                    'ok': True,
+                    'res_id': odoo_po.id,
+                    'name': odoo_po.name,
+                    'action': 'updated',
+                    'detail': f'Đã cập nhật đơn {odoo_po.name} từ MISA'
+                }
+            except Exception as e:
+                _logger.exception("❌ Lỗi cập nhật PO: %s", e)
+                return {'ok': False, 'error': 'update_failed', 'message': str(e)}
+        
+        elif misa_po and not odoo_po:
+            # Trường hợp 2: Chỉ có trong MISA → TẠO MỚI (nếu cho phép)
+            if not create_when_missing:
+                return {
+                    'ok': False,
+                    'res_id': None,
+                    'name': None,
+                    'action': 'not_found',
+                    'detail': f'Không tìm thấy đơn {po_code} trong Odoo và không cho phép tạo mới'
+                }
+            
+            _logger.info("➕ Chỉ có trong MISA → Tạo mới trong Odoo")
+            try:
+                new_po = sync_wizard._create_or_update_po(misa_po, headers, existing_po=None)
+                return {
+                    'ok': True,
+                    'res_id': new_po.id,
+                    'name': new_po.name,
+                    'action': 'created',
+                    'detail': f'Đã tạo mới đơn {new_po.name} từ MISA'
+                }
+            except Exception as e:
+                _logger.exception("❌ Lỗi tạo PO: %s", e)
+                return {'ok': False, 'error': 'create_failed', 'message': str(e)}
+        
+        elif not misa_po and odoo_po:
+            # Trường hợp 3: Chỉ có trong Odoo → XÓA (hoặc log warning)
+            _logger.warning("⚠️ Đơn %s chỉ có trong Odoo, không có trong MISA", po_code)
+            # Có thể chọn xóa hoặc chỉ báo cáo
+            # Ở đây tôi chọn không xóa tự động, chỉ báo cáo
+            return {
+                'ok': True,
+                'res_id': odoo_po.id,
+                'name': odoo_po.name,
+                'action': 'orphaned',
+                'detail': f'Đơn {odoo_po.name} tồn tại trong Odoo nhưng không còn trong MISA'
+            }
+        
+        else:
+            # Trường hợp 4: Không có ở đâu cả
+            _logger.warning("❌ Không tìm thấy đơn %s trong cả MISA và Odoo", po_code)
+            return {
+                'ok': False,
+                'res_id': None,
+                'name': None,
+                'action': 'not_found',
+                'detail': f'Không tìm thấy đơn {po_code} trong MISA'
+            }
