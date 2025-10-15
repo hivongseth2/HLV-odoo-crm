@@ -627,7 +627,7 @@ class PurchaseOrder(models.Model):
         try:
             misa_utils = self.env['misa.api.utils']
             misa_config = self.env['misa.config']
-            token = misa_utils._fetch_login_token()
+            token = misa_utils._get_misa_token()
             headers = misa_config.get_purchase_header(token)
         except Exception as e:
             _logger.exception("❌ Không thể lấy MISA headers: %s", e)
