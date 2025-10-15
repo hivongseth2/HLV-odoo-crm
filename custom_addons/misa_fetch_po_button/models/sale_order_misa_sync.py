@@ -888,41 +888,41 @@ class SaleOrder(models.Model):
         _logger.info("🔍 Combo map cuối cùng: %s", combo_parent_map)
 
         # ===== 8.0b) TẠO/CẬP NHẬT COMBO PRODUCTS TRƯỚC KHI TẠO LINES =====
-        # misa_utils = env['misa.api.utils']
-        # combo_products_created = set()  # Track các combo đã xử lý
+        misa_utils = env['misa.api.utils']
+        combo_products_created = set()  # Track các combo đã xử lý
         
-        # for ln in (lines or []):
-        #     if not ln.get("IsSetProduct"):
-        #         continue
+        for ln in (lines or []):
+            if not ln.get("IsSetProduct"):
+                continue
             
-        #     combo_code = (ln.get("ProductIDText") or "").strip()
-        #     if not combo_code or combo_code in combo_products_created:
-        #         continue
+            combo_code = (ln.get("ProductIDText") or "").strip()
+            if not combo_code or combo_code in combo_products_created:
+                continue
             
-        #     _logger.info("🔧 Tạo/cập nhật combo product: %s", combo_code)
+            _logger.info("🔧 Tạo/cập nhật combo product: %s", combo_code)
             
-        #     # Lấy children từ map đã build
-        #     p_id = ln.get("ProductID") or ln.get("ProductId")
-        #     parent_keys = {str(p_id or "").strip(), combo_code}
-        #     ckey = "|".join(sorted([k for k in parent_keys if k]))
-        #     children_for_parent = children_by_parent.get(ckey, [])
+            # Lấy children từ map đã build
+            p_id = ln.get("ProductID") or ln.get("ProductId")
+            parent_keys = {str(p_id or "").strip(), combo_code}
+            ckey = "|".join(sorted([k for k in parent_keys if k]))
+            children_for_parent = children_by_parent.get(ckey, [])
             
-        #     # Fallback: tìm theo product_code
-        #     if not children_for_parent and combo_code in children_by_parent:
-        #         children_for_parent = children_by_parent[combo_code]
+            # Fallback: tìm theo product_code
+            if not children_for_parent and combo_code in children_by_parent:
+                children_for_parent = children_by_parent[combo_code]
             
-        #     try:
-        #         # Gọi helper từ misa_utils để tạo/cập nhật combo
-        #         misa_utils.get_or_create_combo_product(
-        #             combo_data=ln,
-        #             children_data=children_for_parent,
-        #             env=env,
-        #             sale_headers=headers
-        #         )
-        #         combo_products_created.add(combo_code)
-        #         _logger.info("✅ Đã xử lý combo product: %s", combo_code)
-        #     except Exception as e:
-        #         _logger.exception("❌ Lỗi tạo combo product %s: %s", combo_code, e)
+            try:
+                # Gọi helper từ misa_utils để tạo/cập nhật combo
+                misa_utils.get_or_create_combo_product(
+                    combo_data=ln,
+                    children_data=children_for_parent,
+                    env=env,
+                    sale_headers=headers
+                )
+                combo_products_created.add(combo_code)
+                _logger.info("✅ Đã xử lý combo product: %s", combo_code)
+            except Exception as e:
+                _logger.exception("❌ Lỗi tạo combo product %s: %s", combo_code, e)
 
         # ===== 8.1) THÊM LINES (có quy đổi UoM nếu khác mặc định) =====
         for ln in (lines or []):
