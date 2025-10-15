@@ -38,12 +38,8 @@
         <field name="arch" type="xml">
             <form string="Lấy PO từ MISA">
                 <group>
-                    <field name="date_from"/>
-                    <field name="date_to"/>
-                </group>
-                <group>
-                    <field name="po_code" 
-                           placeholder="Nhập mã PO, cách nhau bởi dấu phẩy hoặc xuống dòng"/>
+                    <field name="date_from" required="1"/>
+                    <field name="date_to" required="1"/>
                 </group>
                 <footer>
                     <button name="action_fetch_po"

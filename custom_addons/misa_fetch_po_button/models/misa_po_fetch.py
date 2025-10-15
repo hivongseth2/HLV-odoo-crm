@@ -11,10 +11,8 @@ _logger = logging.getLogger(__name__)
 class MisaPOFetch(models.TransientModel):
     _name = "misa.po.fetch"
     _description = "MISA PO Fetch"
-    
-    date_from = fields.Date(string="Từ ngày", required=False)
-    date_to = fields.Date(string="Đến ngày", required=False)
-    po_code = fields.Text(string="Mã đơn hàng (tùy chọn)")
+    date_from = fields.Date(string="Từ ngày", required=True)
+    date_to = fields.Date(string="Đến ngày", required=True)
     # ================== HELPERS QUY ĐỔI UOM ==================
 
     def _misa_get_product_id_by_code(self, product_code, product_name, crm_headers):
@@ -277,31 +275,6 @@ class MisaPOFetch(models.TransientModel):
         tax = self._get_or_create_vn_vat(rate, use='purchase')
         return [tax.id] if tax else []
 
-    # ================ HELPERS XÂY FILTER ==================
-    def _custom_filter_from_codes(self, raw_codes: str):
-        """
-        raw_codes: 'DMH11111, DMH99999' hoặc nhiều dòng.
-        Trả về list customFilter theo đúng schema MISA để lọc theo mã đơn.
-        """
-        if not raw_codes:
-            return []
-
-        codes = [c.strip() for c in raw_codes.replace("\n", ",").split(",") if c.strip()]
-        blocks = []
-        for code in codes:
-            blocks.append({
-                "property": 4008,
-                "value": code,
-                "operator": 1,
-                "operand": 1,
-                "childrens": [
-                    {"property": 57,   "value": code, "operator": 1, "operand": 2, "data_type": 1},
-                    {"property": 2656, "value": code, "operator": 1, "operand": 2, "data_type": 1},
-                    {"property": 4030, "value": code, "operator": 1, "operand": 2}
-                ],
-                "data_type": 1
-            })
-        return blocks
 
 
     def action_fetch_po(self):
@@ -312,56 +285,22 @@ class MisaPOFetch(models.TransientModel):
             aware = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
             return aware.astimezone(timezone.utc).replace(tzinfo=None)
         
-        # ✅ VALIDATION: Đảm bảo ít nhất có mã HOẶC ngày
-        has_code = bool(self.po_code and self.po_code.strip())
-        has_date = bool(self.date_from and self.date_to)
-        
-        if not has_code and not has_date:
-            raise models.UserError(
-                "⚠️ Vui lòng nhập ít nhất một trong hai:\n"
-                "- Mã đơn hàng (PO Code)\n"
-                "- Khoảng thời gian (Từ ngày → Đến ngày)\n\n"
-                "Để đảm bảo an toàn, hệ thống không cho phép bỏ trống cả hai."
-            )
-        
-        # ✅ VALIDATION: Nếu có ngày thì phải có cả date_from và date_to
-        if (self.date_from and not self.date_to) or (not self.date_from and self.date_to):
-            raise models.UserError(
-                "⚠️ Nếu chọn theo ngày, vui lòng điền đầy đủ cả 'Từ ngày' và 'Đến ngày'."
-            )
+
         
         misa_utils = self.env['misa.api.utils']
         odoo_utils = self.env['odoo.utils']
         misa_config = self.env['misa.config']
         access_token = misa_utils._get_misa_token()
 
-        # ✅ Chỉ tạo date filter nếu có ngày
-        date_from_utc = None
-        date_to_utc = None
-        if has_date:
-            date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
-            date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
+        date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
+        date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
 
         headers = misa_config.get_default_headers(access_token)
         crm_token = misa_utils._fetch_login_crm_token()
         crm_headers = misa_config.get_crm_header(crm_token)
-        custom_filter = self._custom_filter_from_codes(self.po_code)
 
-        # ✅ Build payload filter động
         payload = {
-            "filter": [],
-            "loadMode": 2,
-            "pageIndex": 1,
-            "pageSize": 20, 
-            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
-            "summaryColumns": [5039, 5104, 247],
-            "useSp": False,
-            "view": 2
-        }
-        
-        # ✅ Chỉ thêm date filter nếu có ngày
-        if date_from_utc and date_to_utc:
-            payload["filter"].extend([
+            "filter": [
                 {
                     "property": 3972,
                     "value": date_from_utc.isoformat() + "Z",
@@ -376,12 +315,15 @@ class MisaPOFetch(models.TransientModel):
                     "operand": 1,
                     "data_type": 3
                 }
-            ])
-        
-        # ✅ Chỉ thêm customFilter nếu có mã
-        if custom_filter:
-            payload["customFilter"] = custom_filter
-
+            ],
+            "loadMode": 2,
+            "pageIndex": 1,
+            "pageSize": 20, 
+            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+            "summaryColumns": [5039, 5104, 247],
+            "useSp": False,
+            "view": 2
+        }
         stock_mapping = {
                 "HCM": "TSN/Stock",
                 "BENCAM": "KBC/Tồn kho",
@@ -409,7 +351,7 @@ class MisaPOFetch(models.TransientModel):
                 _logger.info("✅ Hết dữ liệu, dừng ở trang %s", page_index)
                 break
 
-        # ===============================
+# ===============================
             for po in page_data:
                 refid = po.get("refid")
                 supplier_name = po.get("account_object_name")
@@ -481,7 +423,7 @@ class MisaPOFetch(models.TransientModel):
                 stock_code = (
                     lines[0].get("stock_code", "").strip().replace(" ", "").upper()
                     if lines else None
-                )
+)
                 if stock_code not in stock_mapping:
                     _logger.warning("📛 Kho %s không nằm trong mapping, bỏ PO %s", stock_code, refno)
                     continue
