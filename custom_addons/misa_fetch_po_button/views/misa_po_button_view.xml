@@ -13,11 +13,15 @@
         <field name="model">misa.po.fetch</field>
         <field name="arch" type="xml">
             <form string="Lấy PO từ MISA">
-            <group>
-                <field name="date_from" required="1"/>
-                <field name="date_to" required="1"/>
-                <field name="po_code" placeholder="Nhập mã PO, cách nhau bởi dấu phẩy hoặc xuống dòng"/>
-            </group>
+                <group>
+                    <field name="date_from" required="1"/>
+                    <field name="date_to" required="1"/>
+                </group>
+                <group>
+                    <field name="po_code" 
+                           placeholder="Nhập mã PO, cách nhau bởi dấu phẩy hoặc xuống dòng"
+                           nolabel="1"/>
+                </group>
                 <footer>
                     <button name="action_fetch_po"
                             string="Lấy PO từ MISA"

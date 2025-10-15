@@ -11,9 +11,10 @@ _logger = logging.getLogger(__name__)
 class MisaPOFetch(models.TransientModel):
     _name = "misa.po.fetch"
     _description = "MISA PO Fetch"
+    
     date_from = fields.Date(string="Từ ngày", required=True)
     date_to = fields.Date(string="Đến ngày", required=True)
-    po_code   = fields.Char(string="Mã đơn hàng (tùy chọn)")
+    po_code = fields.Text(string="Mã đơn hàng (tùy chọn)")
     # ================== HELPERS QUY ĐỔI UOM ==================
 
     def _misa_get_product_id_by_code(self, product_code, product_name, crm_headers):
