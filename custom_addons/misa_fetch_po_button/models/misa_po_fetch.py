@@ -275,8 +275,6 @@ class MisaPOFetch(models.TransientModel):
         tax = self._get_or_create_vn_vat(rate, use='purchase')
         return [tax.id] if tax else []
 
-
-
     def action_fetch_po(self):
         def _to_naive_utc(dt_str: str):
             """'2025-08-26T00:00:00.000+07:00' -> 2025-08-25 17:00:00 (naive UTC)"""
