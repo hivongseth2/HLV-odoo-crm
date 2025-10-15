@@ -936,13 +936,7 @@ class SaleOrder(models.Model):
                 or ln.get("Note")
                 or "")
 
-            # Xác định loại dòng (để gán Studio fields)
-            is_combo_child = ln.get("IsChildProduct")
 
-            # BỎ QUA DÒNG CON COMBO (chỉ tạo dòng CHA)
-            if is_combo_child:
-                _logger.info("⏩ Bỏ qua combo child: %s (sẽ nằm trong combo.product)", product_code)
-                continue
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             # sửa purchase_ok và sale_ok True
