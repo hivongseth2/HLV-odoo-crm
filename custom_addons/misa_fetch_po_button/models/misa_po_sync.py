@@ -86,20 +86,14 @@ class MisaPOSync(models.TransientModel):
         
         response_data = response.json()
         data = response_data.get("Data", {})
-        total = data.get("Total", 0)
         
-        _logger.info("📊 Response từ MISA: Total=%s, Keys=%s", total, list(data.keys()))
-        
-        # Kiểm tra Total trước
-        if total == 0:
-            _logger.warning("⚠️ Không tìm thấy đơn %s trong MISA (Total=0)", po_code)
-            return None
-        
-        # Kiểm tra PageData
+        # QUAN TRỌNG: Kiểm tra PageData TRƯỚC, không dựa vào Total
+        # Vì MISA có thể trả Total=0 nhưng vẫn có PageData
         page_data = data.get("PageData", [])
         
         if not page_data:
-            _logger.warning("⚠️ Không tìm thấy đơn %s trong MISA (Total=%s nhưng PageData rỗng)", po_code, total)
+            total = data.get("Total", 0)
+            _logger.warning("⚠️ Không tìm thấy đơn %s trong MISA (PageData rỗng, Total=%s)", po_code, total)
             return None
         
         # Lấy đơn đầu tiên (vì filter theo mã nên chỉ có 1 kết quả)
