@@ -395,6 +395,9 @@ class SaleOrder(models.Model):
                 tax_ids = self._tax_ids_from_misa_line(ln)
                 if tax_ids:
                     vals['tax_id'] = [(6, 0, tax_ids)]
+                else:
+                    # MISA không có thuế → Clear thuế
+                    vals['tax_id'] = [(5, 0, 0)]
 
                 # Upsert theo product_code
                 seen_codes.add(product_code)
@@ -439,6 +442,9 @@ class SaleOrder(models.Model):
             tax_ids = self._tax_ids_from_misa_line(ln)
             if tax_ids:
                 vals['tax_id'] = [(6, 0, tax_ids)]
+            else:
+                # MISA không có thuế → Clear thuế
+                vals['tax_id'] = [(5, 0, 0)]
 
             seen_codes.add(product_code)
             if product_code in lines_by_code:
@@ -984,7 +990,9 @@ class SaleOrder(models.Model):
                 _logger.info("💰 Gán thuế cho '%s': %s (TaxPercentIDText='%s')", 
                             product_code, tax_ids, ln.get('TaxPercentIDText'))
             else:
-                _logger.info("⚠️ Không có thuế cho '%s' (TaxPercentIDText='%s')", 
+                # MISA không có thuế → Clear thuế (không dùng default)
+                vals_line['tax_id'] = [(5, 0, 0)]
+                _logger.info("⚠️ Không có thuế cho '%s' (TaxPercentIDText='%s') → Clear thuế", 
                             product_code, ln.get('TaxPercentIDText'))
             
             # ===== GÁN 2 TRƯỜNG STUDIO CHO COMBO =====
