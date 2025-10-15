@@ -16,6 +16,7 @@
             <group>
                 <field name="date_from" required="1"/>
                 <field name="date_to" required="1"/>
+                <field name="po_code" placeholder="Nhập mã PO, cách nhau bởi dấu phẩy hoặc xuống dòng"/>
             </group>
                 <footer>
                     <button name="action_fetch_po"
