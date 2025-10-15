@@ -887,6 +887,43 @@ class SaleOrder(models.Model):
         
         _logger.info("🔍 Combo map cuối cùng: %s", combo_parent_map)
 
+        # ===== 8.0b) TẠO/CẬP NHẬT COMBO PRODUCTS TRƯỚC KHI TẠO LINES =====
+        misa_utils = env['misa.api.utils']
+        combo_products_created = set()  # Track các combo đã xử lý
+        
+        for ln in (lines or []):
+            if not ln.get("IsSetProduct"):
+                continue
+            
+            combo_code = (ln.get("ProductIDText") or "").strip()
+            if not combo_code or combo_code in combo_products_created:
+                continue
+            
+            _logger.info("🔧 Tạo/cập nhật combo product: %s", combo_code)
+            
+            # Lấy children từ map đã build
+            p_id = ln.get("ProductID") or ln.get("ProductId")
+            parent_keys = {str(p_id or "").strip(), combo_code}
+            ckey = "|".join(sorted([k for k in parent_keys if k]))
+            children_for_parent = children_by_parent.get(ckey, [])
+            
+            # Fallback: tìm theo product_code
+            if not children_for_parent and combo_code in children_by_parent:
+                children_for_parent = children_by_parent[combo_code]
+            
+            try:
+                # Gọi helper từ misa_utils để tạo/cập nhật combo
+                misa_utils.get_or_create_combo_product(
+                    combo_data=ln,
+                    children_data=children_for_parent,
+                    env=env,
+                    sale_headers=headers
+                )
+                combo_products_created.add(combo_code)
+                _logger.info("✅ Đã xử lý combo product: %s", combo_code)
+            except Exception as e:
+                _logger.exception("❌ Lỗi tạo combo product %s: %s", combo_code, e)
+
         # ===== 8.1) THÊM LINES (có quy đổi UoM nếu khác mặc định) =====
         for ln in (lines or []):
             product_code = ln.get("ProductIDText")
@@ -901,6 +938,11 @@ class SaleOrder(models.Model):
 
             # Xác định loại dòng (để gán Studio fields)
             is_combo_child = ln.get("IsChildProduct")
+
+            # BỎ QUA DÒNG CON COMBO (chỉ tạo dòng CHA)
+            if is_combo_child:
+                _logger.info("⏩ Bỏ qua combo child: %s (sẽ nằm trong combo.product)", product_code)
+                continue
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             # sửa purchase_ok và sale_ok True
@@ -944,22 +986,8 @@ class SaleOrder(models.Model):
             if tax_ids:
                 vals_line['tax_id'] = [(6, 0, tax_ids)]
             
-            # ===== GÁN 2 TRƯỜNG STUDIO CHO COMBO =====
-            if is_combo_child:
-                # Dòng combo child
-                vals_line['x_studio_is_combo_child'] = True
-                parent_code = combo_parent_map.get(product_code, False)
-                vals_line['x_studio_combo_parent_code'] = parent_code
-                
-                if parent_code:
-                    _logger.info("✅ Combo child '%s' → parent '%s'", product_code, parent_code)
-                else:
-                    _logger.warning("⚠️ Combo child '%s' KHÔNG tìm thấy parent trong map!", product_code)
-            else:
-                # Dòng thường hoặc combo parent
-                vals_line['x_studio_is_combo_child'] = False
-                vals_line['x_studio_combo_parent_code'] = False
-                
+            # Không cần gán studio fields nữa vì đã bỏ qua combo children
+            # Chỉ có dòng CHA/thường được tạo → không cần flag
             env['sale.order.line'].create(vals_line)
 
         # ===== 9) Confirm & đặt tên picking theo MISA =====
