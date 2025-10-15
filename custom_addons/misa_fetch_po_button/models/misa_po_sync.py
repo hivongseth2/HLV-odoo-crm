@@ -354,9 +354,9 @@ class MisaPOSync(models.TransientModel):
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
                     'params': {
-                        'title': '✅ Đã xóa',
-                        'message': f'Đơn {po_code} đã bị xóa vì không tồn tại trong MISA',
-                        'type': 'success',
+                        'title': '🗑️ Đã xóa',
+                        'message': f'Đơn {po_code} đã xóa (không tồn tại trong MISA)',
+                        'type': 'warning',
                         'sticky': False,
                     }
                 }
@@ -365,8 +365,8 @@ class MisaPOSync(models.TransientModel):
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
                     'params': {
-                        'title': 'ℹ️ Thông báo',
-                        'message': f'Đơn {po_code} không tồn tại trong cả MISA và Odoo',
+                        'title': 'ℹ️ Không tìm thấy',
+                        'message': f'Đơn {po_code} không tồn tại',
                         'type': 'info',
                         'sticky': False,
                     }
@@ -480,7 +480,9 @@ class MisaPOSync(models.TransientModel):
             })
             
             po_rec = odoo_po
-            message = f'🔄 Đã đồng bộ lại đơn {refno} từ MISA'
+            total_lines = len(lines)
+            message = f'🔄 Đã đồng bộ: {refno} ({total_lines} dòng)'
+            title = '🔄 Cập nhật thành công'
         else:
             _logger.info("✅ Tạo mới PO %s từ MISA", refno)
             po_vals = {
@@ -492,7 +494,9 @@ class MisaPOSync(models.TransientModel):
                 "partner_ref": refno,
             }
             po_rec = self.env["purchase.order"].create(po_vals)
-            message = f'✅ Đã tạo mới đơn {refno} từ MISA'
+            total_lines = len(lines)
+            message = f'✅ Đã tạo: {refno} ({total_lines} dòng)'
+            title = '✅ Tạo mới thành công'
 
         # Tạo dòng sản phẩm
         for line in lines:
@@ -549,7 +553,7 @@ class MisaPOSync(models.TransientModel):
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': '✅ Thành công',
+                'title': title,
                 'message': message,
                 'type': 'success',
                 'sticky': False,
