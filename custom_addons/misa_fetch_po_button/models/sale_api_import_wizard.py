@@ -320,7 +320,11 @@ class SaleApiImportWizard(models.TransientModel):
 
             if current_tax_ids != new_tax_ids:
                 try:
-                    odoo_line[0].write({'tax_id': [(6, 0, tax_ids)]})
+                    if tax_ids:
+                        odoo_line[0].write({'tax_id': [(6, 0, tax_ids)]})
+                    else:
+                        # MISA không có thuế → Clear thuế
+                        odoo_line[0].write({'tax_id': [(5, 0, 0)]})
                     updated_count += 1
                 except Exception as e:
                     _logger.error("❌ Lỗi khi cập nhật thuế cho %s: %s",
@@ -551,6 +555,9 @@ class SaleApiImportWizard(models.TransientModel):
             tax_ids = self._tax_ids_from_misa_sale_line(misa_line)
             if tax_ids:
                 vals_line['tax_id'] = [(6, 0, tax_ids)]
+            else:
+                # MISA không có thuế → Clear thuế
+                vals_line['tax_id'] = [(5, 0, 0)]
             
             # ===== TẠO DÒNG MỚI =====
             try:
@@ -1118,6 +1125,9 @@ class SaleApiImportWizard(models.TransientModel):
                         tax_ids = self._tax_ids_from_misa_sale_line(line)
                         if tax_ids:
                             vals_line['tax_id'] = [(6, 0, tax_ids)]
+                        else:
+                            # MISA không có thuế (null) → Clear thuế trong Odoo (không dùng default)
+                            vals_line['tax_id'] = [(5, 0, 0)]  # Unlink all taxes
                         
                         # ===== 🆕 STUDIO FIELDS =====
                         if is_combo_child:
@@ -1371,6 +1381,9 @@ class SaleApiImportWizard(models.TransientModel):
                             tax_ids = self._tax_ids_from_misa_sale_line(line)
                             if tax_ids:
                                 line_vals['tax_id'] = [(6, 0, tax_ids)]
+                            else:
+                                # MISA không có thuế → Clear thuế
+                                line_vals['tax_id'] = [(5, 0, 0)]
                             
                             # ===== 🆕 STUDIO FIELDS =====
                             if is_combo_child:
