@@ -18,60 +18,6 @@ class MisaPOSync(models.TransientModel):
         help="Nhập mã đơn hàng cần đồng bộ (ví dụ: DMH12218)"
     )
 
-    def _get_po_detail_by_code(self, po_code: str, headers):
-        """
-        Lấy chi tiết đơn PO trực tiếp từ API get_paging_detail bằng mã đơn
-        """
-        if not po_code:
-            return None
-        
-        misa_utils = self.env['misa.api.utils']
-        
-        # Payload tìm theo mã đơn (refno)
-        detail_payload = {
-            "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
-            "filter": [
-                {
-                    "property": 4008,  # Có thể là property cho refno
-                    "operator": 1,     # Equal
-                    "operand": 1,
-                    "value": po_code,
-                    "data_type": 1
-                }
-            ],
-            "loadMode": 2,
-            "pageIndex": 1,
-            "pageSize": 100,
-            "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
-            "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
-            "useSp": False,
-            "view": 92
-        }
-        
-        _logger.info("📦 Thử lấy chi tiết đơn %s từ get_paging_detail...", po_code)
-        
-        detail_res = misa_utils._fetch_with_retry(
-            "https://actapp.misa.vn/g2/api/pu/v1/pu_order/get_paging_detail",
-            headers, detail_payload
-        )
-        
-        if detail_res.status_code != 200:
-            _logger.warning("❌ Không lấy được chi tiết từ get_paging_detail")
-            return None
-        
-        lines = detail_res.json().get("Data", {}).get("PageData", [])
-        
-        if lines:
-            _logger.info("✅ Lấy được %d dòng chi tiết từ get_paging_detail", len(lines))
-            # Tạo object giả cho đơn với thông tin cơ bản
-            return {
-                "refno": po_code,
-                "detail_lines": lines,
-                "from_detail_api": True
-            }
-        
-        return None
-
     def _search_po_in_misa(self, po_code: str, headers):
         """
         Tìm kiếm đơn PO trong MISA theo mã đơn sử dụng customFilter
@@ -124,13 +70,13 @@ class MisaPOSync(models.TransientModel):
             "useSp": False,
             "view": 2,
             "summaryColumns": [5039, 5104, 247],
-            "loadMode": 3  # loadMode = 3 khi dùng customFilter
+            "loadMode": 2  # loadMode = 2 (KHÔNG phải 3)
         }
         
         _logger.info("🔍 Tìm kiếm đơn %s trong MISA với customFilter...", po_code)
         
         response = misa_utils._fetch_with_retry(
-            "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2",
+            "https://actapp.misa.vn/g2/api/pu/v1/pu_order/paging_filter_v2",  # API đúng
             headers, payload
         )
         
@@ -153,10 +99,7 @@ class MisaPOSync(models.TransientModel):
         page_data = data.get("PageData", [])
         
         if not page_data:
-            _logger.warning("⚠️ Tìm thấy %s đơn nhưng PageData rỗng. Thử lấy từ get_paging_detail...", total)
-            # Nếu Total > 0 nhưng không có PageData, thử gọi API get_paging_detail trực tiếp
-            if total > 0:
-                return self._get_po_detail_by_code(po_code, headers)
+            _logger.warning("⚠️ Không tìm thấy đơn %s trong MISA (Total=%s nhưng PageData rỗng)", po_code, total)
             return None
         
         # Lấy đơn đầu tiên (vì filter theo mã nên chỉ có 1 kết quả)
@@ -475,67 +418,49 @@ class MisaPOSync(models.TransientModel):
             aware = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
             return aware.astimezone(timezone.utc).replace(tzinfo=None)
 
-        # Kiểm tra nếu đơn đã có detail_lines (từ get_paging_detail trực tiếp)
-        if misa_po.get("from_detail_api"):
-            _logger.info("📦 Sử dụng chi tiết đã lấy từ get_paging_detail")
-            lines = misa_po.get("detail_lines", [])
-            refno = misa_po.get("refno", "PO-MISA")
-            
-            if not lines:
-                raise models.UserError(f"⚠️ Đơn {refno} không có chi tiết sản phẩm")
-            
-            # Lấy thông tin từ dòng đầu tiên
-            first_line = lines[0]
-            supplier_name = first_line.get("account_object_name", "Unknown Supplier")
-            memo = first_line.get("description", "")
-            receive_date_str = first_line.get("receive_date") or first_line.get("refdate")
-            planned_naive_utc = _to_naive_utc(receive_date_str)
-            
-            partner = odoo_utils._get_or_create_partner(supplier_name)
-        else:
-            # Cách cũ: lấy từ misa_po và gọi API get_paging_detail
-            refid = misa_po.get("refid")
-            supplier_name = misa_po.get("account_object_name")
-            refno = misa_po.get("refno", "PO-MISA")
-            memo = misa_po.get("journal_memo", "")
-            receive_date_str = misa_po.get("receive_date") or misa_po.get("refdate")
-            planned_naive_utc = _to_naive_utc(receive_date_str)
+        # Lấy thông tin từ misa_po (PageData từ paging_filter_v2)
+        refid = misa_po.get("refid")
+        supplier_name = misa_po.get("account_object_name")
+        refno = misa_po.get("refno", "PO-MISA")
+        memo = misa_po.get("journal_memo", "")
+        receive_date_str = misa_po.get("receive_date") or misa_po.get("refdate")
+        planned_naive_utc = _to_naive_utc(receive_date_str)
 
-            partner = odoo_utils._get_or_create_partner(supplier_name)
+        partner = odoo_utils._get_or_create_partner(supplier_name)
 
-            # Lấy chi tiết
-            detail_payload = {
-                "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
-                "filter": [
-                    {
-                        "property": 3993,
-                        "operator": 7,
-                        "operand": 1,
-                        "value": refid,
-                        "data_type": 10
-                    }
-                ],
-                "loadMode": 2,
-                "pageIndex": 1,
-                "pageSize": 100,
-                "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
-                "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
-                "useSp": False,
-                "view": 92
-            }
+        # Lấy chi tiết đơn hàng từ API get_paging_detail
+        detail_payload = {
+            "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+            "filter": [
+                {
+                    "property": 3993,
+                    "operator": 7,
+                    "operand": 1,
+                    "value": refid,
+                    "data_type": 10
+                }
+            ],
+            "loadMode": 2,
+            "pageIndex": 1,
+            "pageSize": 100,
+            "sort": "[{\"property\":4555,\"desc\":false,\"data_type\":4,\"operand\":1}]",
+            "summaryColumns": [3488, 3870, 3895, 3896, 308, 5350],
+            "useSp": False,
+            "view": 92
+        }
 
-            detail_res = misa_utils._fetch_with_retry(
-                "https://actapp.misa.vn/g2/api/pu/v1/pu_order/get_paging_detail",
-                headers, detail_payload
-            )
+        detail_res = misa_utils._fetch_with_retry(
+            "https://actapp.misa.vn/g2/api/pu/v1/pu_order/get_paging_detail",
+            headers, detail_payload
+        )
 
-            if detail_res.status_code != 200:
-                raise models.UserError(f"❌ Không lấy được chi tiết PO {refno}")
+        if detail_res.status_code != 200:
+            raise models.UserError(f"❌ Không lấy được chi tiết PO {refno}")
 
-            lines = detail_res.json().get("Data", {}).get("PageData", [])
-            
-            if not lines:
-                raise models.UserError(f"⚠️ Đơn {refno} không có chi tiết sản phẩm")
+        lines = detail_res.json().get("Data", {}).get("PageData", [])
+        
+        if not lines:
+            raise models.UserError(f"⚠️ Đơn {refno} không có chi tiết sản phẩm")
 
         stock_code = lines[0].get("stock_code", "").strip().replace(" ", "").upper()
         
