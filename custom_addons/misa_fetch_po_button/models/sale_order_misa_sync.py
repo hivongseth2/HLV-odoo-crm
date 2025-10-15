@@ -936,7 +936,8 @@ class SaleOrder(models.Model):
                 or ln.get("Note")
                 or "")
 
-
+            # Xác định loại dòng (để gán Studio fields)
+            is_combo_child = ln.get("IsChildProduct")
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             # sửa purchase_ok và sale_ok True
@@ -980,8 +981,22 @@ class SaleOrder(models.Model):
             if tax_ids:
                 vals_line['tax_id'] = [(6, 0, tax_ids)]
             
-            # Không cần gán studio fields nữa vì đã bỏ qua combo children
-            # Chỉ có dòng CHA/thường được tạo → không cần flag
+            # ===== GÁN 2 TRƯỜNG STUDIO CHO COMBO =====
+            if is_combo_child:
+                # Dòng combo child
+                vals_line['x_studio_is_combo_child'] = True
+                parent_code = combo_parent_map.get(product_code, False)
+                vals_line['x_studio_combo_parent_code'] = parent_code
+                
+                if parent_code:
+                    _logger.info("✅ Combo child '%s' → parent '%s'", product_code, parent_code)
+                else:
+                    _logger.warning("⚠️ Combo child '%s' KHÔNG tìm thấy parent trong map!", product_code)
+            else:
+                # Dòng thường hoặc combo parent
+                vals_line['x_studio_is_combo_child'] = False
+                vals_line['x_studio_combo_parent_code'] = False
+                
             env['sale.order.line'].create(vals_line)
 
         # ===== 9) Confirm & đặt tên picking theo MISA =====
