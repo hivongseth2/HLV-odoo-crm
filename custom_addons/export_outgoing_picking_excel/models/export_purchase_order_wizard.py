@@ -212,7 +212,7 @@ class PurchaseExportWizard(models.TransientModel):
         # Giá và thuế
         don_gia = pol.price_unit or 0.0
         thanh_tien = pol.price_subtotal or 0.0
-        ty_le_ck = 0.0  # Purchase order thường không có discount trong standard Odoo
+        ty_le_ck = pol.discount or 0.0  # Purchase order thường không có discount trong standard Odoo
         tien_chiet_khau = 0.0
         
         # Thuế GTGT
@@ -295,9 +295,9 @@ class PurchaseExportWizard(models.TransientModel):
             'ma_don_vi': '',
             'ma_doi_tuong_thcp': '',
             'ma_cong_trinh': '',
-            'so_don_dat_hang': purchase_name,
-            'so_don_mua_hang': purchase_name,
-            'so_hop_dong_mua': purchase_name,
+            'so_don_dat_hang': '',
+            'so_don_mua_hang': '',
+            'so_hop_dong_mua': '',
             'so_hop_dong_ban': '',
             'ma_thong_ke': '',
             'so_khe_uoc_di_vay': '',
