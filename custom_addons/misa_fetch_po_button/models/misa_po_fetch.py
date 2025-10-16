@@ -520,7 +520,7 @@ class MisaPOFetch(models.TransientModel):
                     self.env["purchase.order.line"].create(pol_vals)
                     
                     
-                po_rec.write({'partner_ref': refno})      # tham chiếu NCC, dễ tra cứu
+                po_rec.write({'partner_ref': account_object_code})      # tham chiếu NCC, dễ tra cứu
                 po_rec.button_confirm()                   # xác nhận đơn mua
 
                 # Cập nhật ngày dự kiến + đảm bảo receipt đúng kho/location

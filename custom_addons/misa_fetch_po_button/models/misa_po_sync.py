@@ -659,7 +659,7 @@ class MisaPOSync(models.TransientModel):
                 'origin': memo,
                 'picking_type_id': picking_type.id,
                 'date_planned': planned_naive_utc or fields.Datetime.now(),
-                'partner_ref': refno,
+                'partner_ref': account_object_code,
             })
             
             po_rec = odoo_po
@@ -674,7 +674,7 @@ class MisaPOSync(models.TransientModel):
                 "picking_type_id": picking_type.id,
                 "name": refno,
                 "date_planned": planned_naive_utc or fields.Datetime.now(),
-                "partner_ref": refno,
+                "partner_ref": account_object_code,
             }
             po_rec = self.env["purchase.order"].create(po_vals)
             total_lines = len(lines)
