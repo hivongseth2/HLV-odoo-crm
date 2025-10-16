@@ -353,6 +353,9 @@ class MisaPOSync(models.TransientModel):
         Trả về dict {'ok': bool, 'error': str or None}
         """
         try:
+            # Sử dụng sudo() và with_context để bypass permissions
+            odoo_po = odoo_po.sudo().with_context(force_delete=True)
+            
             # Step 1: Kiểm tra điều kiện không cho phép xóa
             if any(inv.state == 'posted' for inv in odoo_po.invoice_ids):
                 return {
@@ -368,134 +371,157 @@ class MisaPOSync(models.TransientModel):
                     'message': f'Không thể xóa {po_code} vì có phiếu nhập đã hoàn thành'
                 }
             
-            # Step 2: Xóa invoices (draft)
+            _logger.info("🔧 Bắt đầu xóa PO %s (state=%s)", po_code, odoo_po.state)
+            
+            # Step 2: Xóa invoices (draft) - với context để bypass constraint
             for invoice in odoo_po.invoice_ids.filtered(lambda inv: inv.state == 'draft'):
                 try:
-                    invoice.sudo().unlink()
+                    invoice.with_context(force_delete=True).unlink()
+                    _logger.info("  ✓ Đã xóa invoice draft: %s", invoice.name)
                 except Exception as inv_err:
-                    _logger.warning("⚠️ Không thể xóa invoice %s: %s", invoice.name, inv_err)
+                    _logger.warning("  ⚠️ Không thể xóa invoice %s: %s", invoice.name, inv_err)
             
             # Step 3: Cancel invoices khác (không phải draft/posted)
             for invoice in odoo_po.invoice_ids.filtered(lambda inv: inv.state not in ('draft', 'cancel', 'posted')):
                 try:
                     if hasattr(invoice, 'button_cancel'):
-                        invoice.sudo().button_cancel()
+                        invoice.button_cancel()
                     elif hasattr(invoice, 'action_cancel'):
-                        invoice.sudo().action_cancel()
+                        invoice.action_cancel()
+                    _logger.info("  ✓ Đã cancel invoice: %s", invoice.name)
                 except Exception as inv_err:
-                    _logger.warning("⚠️ Không thể cancel invoice %s: %s", invoice.name, inv_err)
+                    _logger.warning("  ⚠️ Không thể cancel invoice %s: %s", invoice.name, inv_err)
             
-            # Step 4: Unreserve + Cancel pickings
-            picks_open = odoo_po.picking_ids.sudo().filtered(lambda p: p.state not in ('done', 'cancel'))
-            for p in picks_open:
-                # Reset qty_done
-                if p.move_line_ids:
-                    p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
+            # Step 4: Xử lý pickings
+            _logger.info("  📦 Xử lý %s pickings...", len(odoo_po.picking_ids))
+            picks_to_delete = []
+            
+            for p in odoo_po.picking_ids:
+                if p.state == 'done':
+                    _logger.info("    ⊗ Giữ picking done: %s", p.name)
+                    continue
+                
+                # Reset qty_done trên move_lines
+                for ml in p.move_line_ids:
+                    if ml.qty_done:
+                        ml.with_context(force_delete=True).write({'qty_done': 0})
                 
                 # Unreserve moves
-                try:
-                    mvs = p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel'))
-                    if mvs:
-                        if hasattr(mvs, '_do_unreserve'):
-                            mvs._do_unreserve()
-                        elif hasattr(mvs, 'do_unreserve'):
-                            mvs.do_unreserve()
-                except Exception as e:
-                    _logger.warning("Unreserve picking %s lỗi: %s", p.name, e)
+                for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                    try:
+                        if hasattr(mv, '_do_unreserve'):
+                            mv._do_unreserve()
+                        elif hasattr(mv, 'do_unreserve'):
+                            mv.do_unreserve()
+                    except Exception as e:
+                        _logger.debug("    Unreserve move failed: %s", e)
                 
                 # Cancel moves
-                try:
-                    mvs_to_cancel = p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel'))
-                    if mvs_to_cancel:
-                        if hasattr(mvs_to_cancel, '_action_cancel'):
-                            mvs_to_cancel._action_cancel()
+                for mv in p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel')):
+                    try:
+                        if hasattr(mv, '_action_cancel'):
+                            mv._action_cancel()
                         else:
-                            mvs_to_cancel.action_cancel()
-                except Exception as e:
-                    _logger.warning("Cancel move của picking %s lỗi: %s", p.name, e)
+                            mv.action_cancel()
+                    except Exception as e:
+                        _logger.debug("    Cancel move failed: %s", e)
                 
                 # Cancel picking
-                try:
-                    if hasattr(p, 'button_cancel'):
-                        p.button_cancel()
-                    else:
-                        p.action_cancel()
-                except Exception as e:
-                    _logger.warning("Huỷ picking %s lỗi: %s", p.name, e)
+                if p.state != 'cancel':
+                    try:
+                        if hasattr(p, 'button_cancel'):
+                            p.button_cancel()
+                        else:
+                            p.action_cancel()
+                        _logger.info("    ✓ Đã cancel picking: %s", p.name)
+                    except Exception as e:
+                        _logger.warning("    ⚠️ Cancel picking %s failed: %s", p.name, e)
+                        # Fallback: force cancel bằng write
+                        try:
+                            p.with_context(force_delete=True).write({'state': 'cancel'})
+                        except Exception as e2:
+                            _logger.error("    ✗ Force cancel failed: %s", e2)
+                
+                picks_to_delete.append(p)
             
-            # Step 5: Cancel PO (giống SO logic)
+            # Step 5: Cancel PO
+            _logger.info("  🛒 Cancel PO...")
             if odoo_po.state not in ('cancel', 'draft'):
                 try:
-                    odoo_po.sudo().button_cancel()
+                    odoo_po.button_cancel()
+                    _logger.info("    ✓ Đã cancel PO bằng button_cancel()")
                 except Exception as e:
-                    _logger.warning("button_cancel PO lỗi: %s → fallback", e)
-                    # Fallback: cancel lines rồi set state
+                    _logger.warning("    ⚠️ button_cancel failed: %s → Thử fallback", e)
+                    # Fallback 1: cancel lines
                     try:
-                        if hasattr(odoo_po.order_line, '_action_cancel'):
-                            odoo_po.order_line.sudo()._action_cancel()
-                        odoo_po.sudo().write({'state': 'cancel'})
+                        for line in odoo_po.order_line:
+                            if hasattr(line, '_action_cancel'):
+                                line._action_cancel()
+                        odoo_po.write({'state': 'cancel'})
+                        _logger.info("    ✓ Đã cancel PO bằng fallback (cancel lines + write)")
                     except Exception as e2:
-                        return {'ok': False, 'error': 'cancel_failed', 'message': str(e2)}
+                        _logger.error("    ✗ Fallback cancel failed: %s", e2)
+                        # Fallback 2: force write state
+                        try:
+                            odoo_po.with_context(force_delete=True).write({'state': 'cancel'})
+                            _logger.info("    ✓ Đã force cancel PO bằng write")
+                        except Exception as e3:
+                            return {'ok': False, 'error': 'cancel_failed', 'message': f'Không thể cancel PO: {e3}'}
             
-            # Refresh để đảm bảo state mới nhất
+            # Refresh cache
             self.env.invalidate_all()
+            odoo_po = odoo_po.sudo().browse(odoo_po.id)
             
-            # Fallback: force cancel nếu cần (giống SO)
-            still_open_picks = odoo_po.picking_ids.filtered(lambda p: p.state not in ('cancel', 'done'))
-            has_posted_inv = bool(odoo_po.invoice_ids.filtered(lambda inv: inv.state == 'posted'))
-            if odoo_po.state != 'cancel':
-                if not still_open_picks and not has_posted_inv:
-                    odoo_po.sudo().write({'state': 'cancel'})
-                else:
-                    return {
-                        'ok': False, 
-                        'error': 'cancel_failed',
-                        'message': 'PO chưa về cancel. Còn chứng từ ràng buộc.'
-                    }
+            _logger.info("  🔍 Trạng thái PO sau cancel: %s", odoo_po.state)
             
-            # Step 6: Xóa pickings (đều đã cancel)
-            for p in odoo_po.picking_ids:
-                if p.state != 'done':
-                    try:
-                        if p.state != 'cancel':
-                            if hasattr(p, 'button_cancel'):
-                                p.sudo().button_cancel()
-                            else:
-                                p.sudo().action_cancel()
-                        p.sudo().unlink()
-                    except Exception as e:
-                        return {'ok': False, 'error': 'delete_picking_failed', 'message': str(e)}
+            # Step 6: Xóa pickings
+            for p in picks_to_delete:
+                try:
+                    p.with_context(force_delete=True).unlink()
+                    _logger.info("    ✓ Đã xóa picking: %s", p.name)
+                except Exception as e:
+                    _logger.warning("    ⚠️ Không xóa được picking %s: %s", p.name, e)
             
-            # Step 7: Xóa invoices còn lại (draft/cancel)
-            for inv in odoo_po.invoice_ids:
-                if inv.state == 'draft':
-                    try:
-                        if hasattr(inv, 'button_cancel'):
-                            inv.button_cancel()
-                        elif hasattr(inv, 'action_cancel'):
-                            inv.action_cancel()
-                    except Exception:
-                        pass
-                    inv.unlink()
-                elif inv.state == 'cancel':
-                    inv.unlink()
+            # Step 7: Xóa invoices còn lại
+            for inv in odoo_po.invoice_ids.filtered(lambda i: i.state in ('draft', 'cancel')):
+                try:
+                    inv.with_context(force_delete=True).unlink()
+                    _logger.info("    ✓ Đã xóa invoice: %s", inv.name)
+                except Exception as e:
+                    _logger.warning("    ⚠️ Không xóa được invoice %s: %s", inv.name, e)
             
             # Step 8: Xóa order lines
+            _logger.info("  📋 Xóa %s order lines...", len(odoo_po.order_line))
             try:
-                odoo_po.order_line.sudo().unlink()
+                odoo_po.order_line.with_context(force_delete=True).unlink()
+                _logger.info("    ✓ Đã xóa tất cả order lines")
             except Exception as line_err:
-                _logger.warning("⚠️ Không thể xóa order lines: %s", line_err)
+                _logger.warning("    ⚠️ Không thể xóa order lines: %s", line_err)
             
-            # Step 9: Force state về draft (bypass workflow)
-            odoo_po.sudo().write({'state': 'draft'})
+            # Step 9: Force state về draft
+            if odoo_po.state != 'draft':
+                try:
+                    odoo_po.with_context(force_delete=True).write({'state': 'draft'})
+                    _logger.info("  ✓ Đã set state=draft")
+                except Exception as e:
+                    _logger.error("  ✗ Không thể set draft: %s", e)
+            
+            # Refresh lại một lần nữa
+            self.env.invalidate_all()
+            odoo_po = odoo_po.sudo().browse(odoo_po.id)
             
             # Step 10: Xóa PO
-            odoo_po.sudo().unlink()
-            
-            return {'ok': True}
+            _logger.info("  🗑️ Xóa PO (state=%s)...", odoo_po.state)
+            try:
+                odoo_po.with_context(force_delete=True).unlink()
+                _logger.info("✅ Đã xóa PO %s thành công!", po_code)
+                return {'ok': True}
+            except Exception as e:
+                _logger.error("❌ Lỗi cuối cùng khi unlink PO: %s", e)
+                return {'ok': False, 'error': 'unlink_failed', 'message': f'Không thể unlink: {e}'}
             
         except Exception as e:
-            _logger.exception("❌ Lỗi khi xoá PO %s: %s", po_code, e)
+            _logger.exception("❌ Lỗi tổng thể khi xoá PO %s: %s", po_code, e)
             return {'ok': False, 'error': 'delete_failed', 'message': str(e)}
 
     def _create_or_update_po(self, misa_po, odoo_po, headers, crm_headers, misa_utils, odoo_utils):
