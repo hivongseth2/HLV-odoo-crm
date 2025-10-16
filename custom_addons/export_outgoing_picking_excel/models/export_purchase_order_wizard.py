@@ -236,7 +236,7 @@ class PurchaseExportWizard(models.TransientModel):
         return {
             # Hardcoded fields
             'hinh_thuc_mua_hang': 'Mua hàng hóa trong nước',
-            'phuong_thuc_thanh_toan': '',
+            'phuong_thuc_thanh_toan': 'Chưa thanh toán',
             'nhan_kem_hoa_don': 'Nhận kèm hóa đơn',
             
             # Date fields - ngày hiện tại
