@@ -75,6 +75,7 @@ class MisaApiPurchaseOrder(http.Controller):
         # ---- Lấy tham số nghiệp vụ ----
         po_code = payload.get("po_code")
         create_when_missing = payload.get("create_when_missing", True)
+        delete_when_missing = payload.get("delete_when_missing", True)
 
         if not po_code:
             return {"ok": False, "error": "missing_po_code", "message": "Thiếu mã đơn hàng (po_code)"}
@@ -90,6 +91,7 @@ class MisaApiPurchaseOrder(http.Controller):
             result = env_admin["purchase.order"].api_sync_po_by_code(
                 po_code=po_code,
                 create_when_missing=bool(create_when_missing),
+                delete_when_missing=bool(delete_when_missing),
             )
             return result
         except Exception as e:

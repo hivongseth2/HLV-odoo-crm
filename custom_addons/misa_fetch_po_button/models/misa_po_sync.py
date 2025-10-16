@@ -568,10 +568,12 @@ class MisaPOSync(models.TransientModel):
     def _sync_po_core(self, po_code, *, delete_when_missing=True, create_when_missing=True):
         """
         Lõi đồng bộ: trả về JSON dict để API dùng được và wizard cũng có thể wrap thành notification.
-        Hành vi giống hệt wizard:
-        - Không có trong MISA + Có trong Odoo → (tuỳ chọn) XÓA
-        - Có trong cả hai → CẬP NHẬT (upsert lines, không xoá cứng khi PO đã xác nhận)
-        - Có trong MISA + Không có trong Odoo → TẠO MỚI
+        Logic tương đồng với SO sync:
+        - Không có trong MISA + Có trong Odoo + delete_when_missing=True → XÓA
+        - Không có trong MISA + Không có trong Odoo → NOT_FOUND
+        - Có trong MISA + Có trong Odoo → CẬP NHẬT
+        - Có trong MISA + Không có trong Odoo + create_when_missing=True → TẠO MỚI
+        - Có trong MISA + Không có trong Odoo + create_when_missing=False → NOT_ALLOWED
         """
         if not po_code or not po_code.strip():
             return {'ok': False, 'error': 'missing_po_code', 'message': '⚠️ Thiếu mã đơn hàng'}
@@ -582,7 +584,7 @@ class MisaPOSync(models.TransientModel):
         odoo_utils  = self.env['odoo.utils']
         misa_config = self.env['misa.config']
 
-        # token + headers y hệt wizard
+        # Token + headers (giống SO)
         try:
             access_token = misa_utils._get_misa_token()
             headers      = misa_config.get_default_headers(access_token)
@@ -592,47 +594,126 @@ class MisaPOSync(models.TransientModel):
             _logger.exception("❌ Lỗi token/headers: %s", e)
             return {'ok': False, 'error': 'auth_failed', 'message': str(e)}
 
-        # tìm MISA + Odoo
+        # Tìm trong MISA + Odoo
         misa_po = self._search_po_in_misa(po_code, headers)
-        odoo_po = self.env["purchase.order"].search([("name", "=", po_code)], limit=1)
+        odoo_po = self.env["purchase.order"].search([
+            '|',
+            ('name', '=', po_code),
+            ('partner_ref', '=', po_code)  # Thêm partner_ref để tìm linh hoạt hơn
+        ], limit=1)
 
-        # Không có trong MISA
+        # ===== CASE 1: Không có trong MISA =====
         if not misa_po:
-            if odoo_po and delete_when_missing:
-                try:
-                    _logger.warning("🗑️ Xoá PO %s vì không tồn tại trong MISA", po_code)
-                    if odoo_po.state not in ('draft', 'cancel'):
-                        odoo_po.button_cancel()
-                    odoo_po.unlink()
-                    return {'ok': True, 'action': 'deleted', 'name': po_code, 'res_id': None,
-                            'detail': f'Đơn {po_code} đã xoá (không tồn tại trong MISA)'}
-                except Exception as e:
-                    _logger.exception("❌ Lỗi khi xoá PO %s: %s", po_code, e)
-                    return {'ok': False, 'error': 'delete_failed', 'message': str(e)}
+            if odoo_po:
+                if delete_when_missing:
+                    # Xóa PO trong Odoo (giống SO logic)
+                    try:
+                        _logger.warning("🗑️ Xoá PO %s vì không tồn tại trong MISA", po_code)
+                        
+                        # Step 1: Cancel tất cả invoices (nếu có)
+                        for invoice in (odoo_po.invoice_ids or []):
+                            if invoice.state == 'draft':
+                                try:
+                                    invoice.button_cancel()
+                                    invoice.unlink()
+                                except Exception as inv_err:
+                                    _logger.warning("⚠️ Không thể xóa invoice %s: %s", invoice.name, inv_err)
+                            elif invoice.state not in ('cancel', 'posted'):
+                                try:
+                                    invoice.button_cancel()
+                                except Exception as inv_err:
+                                    _logger.warning("⚠️ Không thể cancel invoice %s: %s", invoice.name, inv_err)
+                        
+                        # Step 2: Cancel tất cả pickings
+                        for picking in (odoo_po.picking_ids or []):
+                            if picking.state not in ('done', 'cancel'):
+                                try:
+                                    # Reset qty_done nếu có
+                                    for move_line in (picking.move_line_ids or []):
+                                        move_line.qty_done = 0
+                                    picking.action_cancel()
+                                except Exception as pick_err:
+                                    _logger.warning("⚠️ Không thể cancel picking %s: %s", picking.name, pick_err)
+                        
+                        # Step 3: Cancel PO
+                        if odoo_po.state not in ('draft', 'cancel'):
+                            odoo_po.button_cancel()
+                        
+                        # Step 4: Xóa PO
+                        odoo_po.unlink()
+                        
+                        return {
+                            'ok': True,
+                            'action': 'deleted',
+                            'name': po_code,
+                            'res_id': None,
+                            'detail': f'Đơn {po_code} đã xoá (không tồn tại trong MISA)'
+                        }
+                    except Exception as e:
+                        _logger.exception("❌ Lỗi khi xoá PO %s: %s", po_code, e)
+                        return {'ok': False, 'error': 'delete_failed', 'message': str(e)}
+                else:
+                    # Không xóa, chỉ báo cáo orphaned (giống SO)
+                    return {
+                        'ok': True,
+                        'action': 'orphaned',
+                        'name': po_code,
+                        'res_id': odoo_po.id,
+                        'detail': f'Đơn {po_code} tồn tại trong Odoo nhưng không còn trong MISA'
+                    }
             else:
-                return {'ok': False, 'action': 'not_found', 'name': po_code, 'res_id': None,
-                        'detail': f'Không tìm thấy {po_code} trong MISA'}
+                # Không có ở đâu cả
+                return {
+                    'ok': False,
+                    'action': 'not_found',
+                    'name': po_code,
+                    'res_id': None,
+                    'detail': f'Không tìm thấy {po_code} trong MISA'
+                }
+        
+        # ===== CASE 2: Có trong MISA =====
         else:
+            # Check create_when_missing nếu chưa có trong Odoo
             if not odoo_po and not create_when_missing:
-                return {'ok': False, 'error': 'not_allowed',
-                        'detail': 'Không cho phép tạo mới khi thiếu trong Odoo'}
-        # Có trong MISA → tạo mới/cập nhật đúng logic của wizard
-        try:
-            existed = bool(odoo_po)
-            # Gọi cùng 1 hàm tạo/cập nhật như wizard (upsert lines, safe remove)
-            _ = self._create_or_update_po(misa_po, odoo_po, headers, crm_headers, misa_utils, odoo_utils)
-            # Lấy lại record sau khi upsert
-            after_po = odoo_po or self.env["purchase.order"].search([("name", "=", po_code)], limit=1)
-            return {
-                'ok': True,
-                'action': 'updated' if existed else 'created',
-                'res_id': after_po.id if after_po else None,
-                'name': after_po.name if after_po else po_code,
-                'detail': f'Đã {"cập nhật" if existed else "tạo mới"} đơn {po_code} từ MISA'
-            }
-        except Exception as e:
-            _logger.exception("❌ Lỗi upsert PO %s: %s", po_code, e)
-            return {'ok': False, 'error': 'update_failed', 'message': str(e)}
+                return {
+                    'ok': False,
+                    'action': 'not_allowed',
+                    'error': 'create_not_allowed',
+                    'name': po_code,
+                    'res_id': None,
+                    'detail': f'Không cho phép tạo mới đơn {po_code} (create_when_missing=False)'
+                }
+            
+            # Tạo mới hoặc cập nhật
+            try:
+                existed = bool(odoo_po)
+                
+                # Gọi hàm tạo/cập nhật (giống SO dùng sudo để đảm bảo quyền)
+                result = self.sudo()._create_or_update_po(
+                    misa_po, odoo_po, headers, crm_headers, misa_utils, odoo_utils
+                )
+                
+                # Lấy lại record sau khi upsert
+                after_po = odoo_po or self.env["purchase.order"].search([
+                    '|',
+                    ('name', '=', po_code),
+                    ('partner_ref', '=', po_code)
+                ], limit=1)
+                
+                return {
+                    'ok': True,
+                    'action': 'updated' if existed else 'created',
+                    'res_id': after_po.id if after_po else None,
+                    'name': after_po.name if after_po else po_code,
+                    'detail': f'Đã {"cập nhật" if existed else "tạo mới"} đơn {po_code} từ MISA'
+                }
+            except Exception as e:
+                _logger.exception("❌ Lỗi upsert PO %s: %s", po_code, e)
+                return {
+                    'ok': False,
+                    'error': 'update_failed' if existed else 'create_failed',
+                    'message': str(e)
+                }
 
 
 # ===================== EXTEND PurchaseOrder với API =====================
@@ -640,18 +721,25 @@ class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
 
     @api.model
-    def api_sync_po_by_code(self, po_code, create_when_missing=True):
+    def api_sync_po_by_code(self, po_code, create_when_missing=True, delete_when_missing=True):
         """
-        API JSON (/api/misa/purchase_order/sync) — gọi chung lõi với wizard.
-        - create_when_missing=True chỉ còn ý nghĩa nếu trong Odoo chưa có mà MISA có (thì sẽ tạo),
-          còn nhánh 'không có trong MISA' thì việc xoá phụ thuộc delete_when_missing ở core (đang = True để giống wizard).
+        Public API (RPC/JSON-RPC) để đồng bộ PO theo mã đơn từ MISA.
         """
+        po_code = (str(po_code or '')).strip()
+        if not po_code:
+            return {'ok': False, 'error': 'missing_po_code', 'message': 'Thiếu mã đơn hàng'}
+        
         try:
-            sync_wizard = self.env['misa.po.sync'].create({'po_code': po_code})
-            # delete_when_missing=True để API mirror wizard 100%
-            result = sync_wizard._sync_po_core(po_code, delete_when_missing=True, create_when_missing=create_when_missing)
-
+            # Tạo wizard (giống SO) và gọi core logic
+            sync_wizard = self.env['misa.po.sync'].sudo().create({'po_code': po_code})
+            
+            result = sync_wizard._sync_po_core(
+                po_code,
+                delete_when_missing=delete_when_missing,
+                create_when_missing=create_when_missing
+            )
+            
             return result
         except Exception as e:
-            _logger.exception("❌ API sync lỗi: %s", e)
+            _logger.exception("❌ API sync PO lỗi: %s", e)
             return {'ok': False, 'error': 'exception', 'message': str(e)}
