@@ -26,7 +26,10 @@ class MisaConfig(models.AbstractModel):
             "Connection":"keep-alive"
             
         }
-        
+    def get_purchase_header(self, access_token):
+        """Alias để tương thích ngược với code cũ gọi purchase header."""
+        return self.get_default_headers(access_token)
+      
         # header của list order
     def get_crm_header(self,token):
         return {
