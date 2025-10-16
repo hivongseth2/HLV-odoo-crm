@@ -635,20 +635,20 @@ class MisaPOSync(models.TransientModel):
                                 except Exception as pick_err:
                                     _logger.warning("⚠️ Không thể cancel picking %s: %s", picking.name, pick_err)
                         
-                        # Step 3: Cancel PO
+                        # Step 3: Cancel PO (QUAN TRỌNG: phải cancel trước khi unlink)
                         if odoo_po.state not in ('draft', 'cancel'):
                             odoo_po.button_cancel()
                         
-                        # Step 4: Xóa PO
-                        odoo_po.unlink()
+                        # Step 4: Set về draft nếu đang cancel (để có thể unlink)
+                        if odoo_po.state == 'cancel':
+                            # Xóa tất cả order_line trước
+                            if odoo_po.order_line:
+                                odoo_po.order_line.unlink()
+                            # Set về draft
+                            odoo_po.button_draft()
                         
-                        return {
-                            'ok': True,
-                            'action': 'deleted',
-                            'name': po_code,
-                            'res_id': None,
-                            'detail': f'Đơn {po_code} đã xoá (không tồn tại trong MISA)'
-                        }
+                        # Step 5: Xóa PO (giờ đã ở draft state)
+                        odoo_po.unlink()
                     except Exception as e:
                         _logger.exception("❌ Lỗi khi xoá PO %s: %s", po_code, e)
                         return {'ok': False, 'error': 'delete_failed', 'message': str(e)}
