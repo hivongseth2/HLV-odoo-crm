@@ -636,11 +636,6 @@ class PurchaseOrder(models.Model):
             # delete_when_missing=True để API mirror wizard 100%
             result = sync_wizard._sync_po_core(po_code, delete_when_missing=True)
 
-            # Tuỳ chọn: nếu không muốn tạo mới khi Odoo chưa có mà MISA có
-            if result.get('action') == 'created' and not create_when_missing:
-                # In case user sets create_when_missing=False, trả về not_allowed
-                return {'ok': False, 'error': 'not_allowed', 'message': 'Không cho phép tạo mới khi thiếu trong Odoo'}
-
             return result
         except Exception as e:
             _logger.exception("❌ API sync lỗi: %s", e)
