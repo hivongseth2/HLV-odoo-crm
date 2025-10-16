@@ -554,7 +554,26 @@ class MisaPOSync(models.TransientModel):
         receive_date_str = misa_po.get("receive_date") or misa_po.get("refdate")
         planned_naive_utc = _to_naive_utc(receive_date_str)
 
+        # Lấy thêm thông tin đối tác từ API
+        account_object_code = misa_po.get("account_object_code", "")
+        account_object_tax_code = misa_po.get("account_object_tax_code", "")
+        account_object_address = misa_po.get("account_object_address", "")
+
+        # Tạo/cập nhật partner với thông tin chi tiết từ MISA
         partner = odoo_utils._get_or_create_partner(supplier_name)
+        
+        # Cập nhật thông tin đối tác nếu có
+        partner_update_vals = {}
+        if account_object_code and not partner.ref:
+            partner_update_vals['ref'] = account_object_code
+        if account_object_tax_code and not partner.vat:
+            partner_update_vals['vat'] = account_object_tax_code
+        if account_object_address and not partner.street:
+            partner_update_vals['street'] = account_object_address
+        
+        if partner_update_vals:
+            partner.write(partner_update_vals)
+            _logger.info("✅ Cập nhật thông tin đối tác %s: %s", supplier_name, partner_update_vals)
 
         detail_payload = {
             "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
