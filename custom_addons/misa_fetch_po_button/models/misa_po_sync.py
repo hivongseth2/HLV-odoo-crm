@@ -565,7 +565,7 @@ class MisaPOSync(models.TransientModel):
                 'sticky': False,
             }
         }
-    def _sync_po_core(self, po_code: str, *, delete_when_missing: bool = True) -> dict:
+    def _sync_po_core(self, po_code, *, delete_when_missing=True, create_when_missing=True):
         """
         Lõi đồng bộ: trả về JSON dict để API dùng được và wizard cũng có thể wrap thành notification.
         Hành vi giống hệt wizard:
@@ -612,7 +612,10 @@ class MisaPOSync(models.TransientModel):
             else:
                 return {'ok': False, 'action': 'not_found', 'name': po_code, 'res_id': None,
                         'detail': f'Không tìm thấy {po_code} trong MISA'}
-
+        else:
+            if not odoo_po and not create_when_missing:
+                return {'ok': False, 'error': 'not_allowed',
+                        'detail': 'Không cho phép tạo mới khi thiếu trong Odoo'}
         # Có trong MISA → tạo mới/cập nhật đúng logic của wizard
         try:
             existed = bool(odoo_po)
@@ -646,7 +649,7 @@ class PurchaseOrder(models.Model):
         try:
             sync_wizard = self.env['misa.po.sync'].create({'po_code': po_code})
             # delete_when_missing=True để API mirror wizard 100%
-            result = sync_wizard._sync_po_core(po_code, delete_when_missing=True)
+            result = sync_wizard._sync_po_core(po_code, delete_when_missing=True, create_when_missing=create_when_missing)
 
             return result
         except Exception as e:
