@@ -456,12 +456,24 @@ class MisaPOSync(models.TransientModel):
         if odoo_po:
             _logger.info("🔄 Đồng bộ lại PO %s từ MISA", refno)
             
+            # QUAN TRỌNG: Cancel PO trước nếu đã confirm
+            # (không thể xóa dòng khi PO ở trạng thái "purchase")
+            need_reconfirm = False
+            if odoo_po.state not in ('draft', 'sent', 'cancel'):
+                _logger.info("⚠️ PO %s đang ở trạng thái %s → Cancel trước khi cập nhật", refno, odoo_po.state)
+                odoo_po.button_cancel()
+                need_reconfirm = True
+            
             # Hủy picking
             for picking in odoo_po.picking_ids:
                 if picking.state not in ('done', 'cancel'):
                     picking.action_cancel()
             
-            # Xóa dòng cũ
+            # Set về draft để có thể xóa dòng
+            if odoo_po.state == 'cancel':
+                odoo_po.button_draft()
+            
+            # Xóa dòng cũ (giờ có thể xóa vì đã draft)
             odoo_po.order_line.unlink()
             
             # Cập nhật
