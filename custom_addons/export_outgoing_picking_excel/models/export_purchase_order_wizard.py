@@ -176,17 +176,10 @@ class PurchaseExportWizard(models.TransientModel):
         
         partner_vat = (partner and partner.vat) or ""
         
-        # Lấy mã nhân viên mua hàng
-        purchase_user_code = ''
-        if purchase.user_id:
-            purchase_user_code = purchase.user_id.login or purchase.user_id.name or ''
-        
         # Diễn giải
-        dien_giai = f"Mua hàng từ {partner_name}"
-        if purchase.notes:
-            dien_giai = purchase.notes
-        
-        ly_do_chi = dien_giai
+        # dien_giai = f"Mua hàng từ {partner_name}"
+        # if purchase.notes:
+        #     dien_giai = purchase.notes
         
         # Xử lý từng order line
         for pol in purchase.order_line:
@@ -197,8 +190,7 @@ class PurchaseExportWizard(models.TransientModel):
             row = self._build_row_data(
                 purchase, pol, prod,
                 order_date_str, purchase_name, partner_code, partner_name,
-                partner_address, partner_vat, purchase_user_code,
-                dien_giai, ly_do_chi
+                partner_address, partner_vat
             )
             rows.append(row)
 
@@ -206,8 +198,7 @@ class PurchaseExportWizard(models.TransientModel):
 
     def _build_row_data(self, purchase, pol, prod,
                         order_date_str, purchase_name, partner_code, partner_name,
-                        partner_address, partner_vat, purchase_user_code,
-                        dien_giai, ly_do_chi):
+                        partner_address, partner_vat):
         """Xây dựng dữ liệu cho 1 dòng"""
         
         product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
@@ -267,7 +258,7 @@ class PurchaseExportWizard(models.TransientModel):
             'so_tk_nhan': '0486523679',
             'ten_ngan_hang_nhan': 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam',
             'ly_do_chi': '',
-            'ma_nhan_vien': purchase_user_code,
+            'ma_nhan_vien': 'DINHTRANTHIKIMQUYEN',
             'so_luong_ct_kem_theo': '',
             'han_thanh_toan': '',
             
