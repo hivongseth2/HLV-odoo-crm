@@ -661,7 +661,13 @@ class SaleOrder(models.Model):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
         # Lưu info trước khi xoá
+        # Ưu tiên lấy warehouse từ picking đầu tiên (giải quyết vấn đề combo không có kho ở dòng cha)
         old_wh = self.warehouse_id
+        if not old_wh and self.picking_ids:
+            # Nếu SO không có warehouse, lấy từ picking đầu tiên
+            first_pick = self.picking_ids.filtered(lambda p: p.picking_type_id and p.picking_type_id.warehouse_id)[:1]
+            if first_pick:
+                old_wh = first_pick.picking_type_id.warehouse_id
         order_no_fallback = self.name
 
         # ===== 3) HỦY PICKINGS CHƯA DONE (unreserve -> cancel move -> cancel picking) =====
