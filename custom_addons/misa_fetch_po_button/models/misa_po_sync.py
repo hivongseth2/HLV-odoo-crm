@@ -21,17 +21,12 @@ class MisaPOSync(models.TransientModel):
     def _search_po_in_misa(self, po_code: str, headers):
         """
         Tìm kiếm đơn PO trong MISA theo mã đơn sử dụng customFilter
-        Workflow:
-        1. Gọi paging_filter_v2 với customFilter chứa mã đơn
-        2. Nếu có kết quả → đơn tồn tại trong MISA
-        3. Nếu không có kết quả → đơn không tồn tại
         """
         if not po_code:
             return None
         
         misa_utils = self.env['misa.api.utils']
         
-        # Build customFilter theo đúng format MISA
         custom_filter = [{
             "property": 4008,
             "value": po_code,
@@ -45,13 +40,12 @@ class MisaPOSync(models.TransientModel):
             "data_type": 1
         }]
         
-        # Payload tìm kiếm theo mã đơn
         payload = {
             "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4008,\"desc\":true,\"data_type\":1,\"operand\":1}]",
             "filter": [
                 {
                     "property": 3972,
-                    "value": "2024-01-01T00:00:00.00Z",  # Từ 2024 để lấy đủ dữ liệu
+                    "value": "2024-01-01T00:00:00.00Z",
                     "operator": 10,
                     "operand": 1,
                     "data_type": 3
@@ -70,13 +64,13 @@ class MisaPOSync(models.TransientModel):
             "useSp": False,
             "view": 2,
             "summaryColumns": [5039, 5104, 247],
-            "loadMode": 2  # loadMode = 2 (KHÔNG phải 3)
+            "loadMode": 2
         }
         
         _logger.info("🔍 Tìm kiếm đơn %s trong MISA với customFilter...", po_code)
         
         response = misa_utils._fetch_with_retry(
-            "https://actapp.misa.vn/g2/api/pu/v1/pu_order/paging_filter_v2",  # API đúng
+            "https://actapp.misa.vn/g2/api/pu/v1/pu_order/paging_filter_v2",
             headers, payload
         )
         
@@ -86,9 +80,6 @@ class MisaPOSync(models.TransientModel):
         
         response_data = response.json()
         data = response_data.get("Data", {})
-        
-        # QUAN TRỌNG: Kiểm tra PageData TRƯỚC, không dựa vào Total
-        # Vì MISA có thể trả Total=0 nhưng vẫn có PageData
         page_data = data.get("PageData", [])
         
         if not page_data:
@@ -96,15 +87,12 @@ class MisaPOSync(models.TransientModel):
             _logger.warning("⚠️ Không tìm thấy đơn %s trong MISA (PageData rỗng, Total=%s)", po_code, total)
             return None
         
-        # Lấy đơn đầu tiên (vì filter theo mã nên chỉ có 1 kết quả)
         found_po = page_data[0]
         _logger.info("✅ Tìm thấy đơn %s trong MISA (refid: %s)", po_code, found_po.get("refid"))
         return found_po
 
     def _misa_get_product_id_by_code(self, product_code, product_name, crm_headers):
-        """
-        Gọi API DataPaging để lấy ProductID từ ProductCode.
-        """
+        """Gọi API DataPaging để lấy ProductID từ ProductCode."""
         if not product_code:
             return None
         
@@ -173,9 +161,7 @@ class MisaPOSync(models.TransientModel):
         return None
 
     def _misa_fetch_conversion_units(self, product_code, crm_headers):
-        """
-        Lấy quy đổi UoM từ MISA
-        """
+        """Lấy quy đổi UoM từ MISA"""
         if not product_code:
             return []
 
@@ -232,9 +218,7 @@ class MisaPOSync(models.TransientModel):
             return []
 
     def _convert_qty_price_to_default_uom(self, product, misa_uom_text, qty, price, misa_product_code, crm_headers):
-        """
-        Chuyển đổi qty/price về đơn vị mặc định
-        """
+        """Chuyển đổi qty/price về đơn vị mặc định"""
         default_uom_name = (product.uom_id and product.uom_id.name) or ""
         if not misa_uom_text or misa_uom_text.strip().lower() == default_uom_name.strip().lower():
             return qty, price, True
@@ -272,9 +256,7 @@ class MisaPOSync(models.TransientModel):
         return qty_base, price_base, False
 
     def _get_or_create_vn_vat(self, rate, use='purchase'):
-        """
-        Lấy hoặc tạo thuế VAT
-        """
+        """Lấy hoặc tạo thuế VAT"""
         Tax = self.env['account.tax'].with_company(self.env.company)
         TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
 
@@ -316,9 +298,7 @@ class MisaPOSync(models.TransientModel):
         })
 
     def _tax_ids_from_misa_line(self, line):
-        """
-        Xác định thuế từ dòng MISA
-        """
+        """Xác định thuế từ dòng MISA"""
         kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', -1, -2}
         raw_rate = line.get('vat_rate', None)
         is_not_vat = str(line.get('is_not_vat', '')).lower() in ('1', 'true', 'yes')
@@ -341,15 +321,12 @@ class MisaPOSync(models.TransientModel):
         return [tax.id] if tax else []
 
     def action_sync_po(self):
-        """
-        Wizard action: gọi lõi _sync_po_core rồi bọc ra display_notification (UI).
-        """
+        """Wizard action: gọi lõi _sync_po_core rồi bọc ra display_notification (UI)."""
         if not self.po_code or not self.po_code.strip():
             raise models.UserError("⚠️ Vui lòng nhập mã đơn hàng")
 
         result = self._sync_po_core(self.po_code, delete_when_missing=True)
 
-        # Map JSON -> UI notification
         title_map = {
             'created': '✅ Tạo mới thành công',
             'updated': '🔄 Cập nhật thành công',
@@ -370,18 +347,165 @@ class MisaPOSync(models.TransientModel):
             }
         }
 
+    def _safe_delete_po(self, odoo_po, po_code):
+        """
+        Helper: Xóa PO an toàn theo logic của SO (giống action_resync_from_misa_hard).
+        Trả về dict {'ok': bool, 'error': str or None}
+        """
+        try:
+            # Step 1: Kiểm tra điều kiện không cho phép xóa
+            if any(inv.state == 'posted' for inv in odoo_po.invoice_ids):
+                return {
+                    'ok': False, 
+                    'error': 'cannot_delete', 
+                    'message': f'Không thể xóa {po_code} vì có invoice đã ghi sổ'
+                }
+            
+            if any(pick.state == 'done' for pick in odoo_po.picking_ids):
+                return {
+                    'ok': False, 
+                    'error': 'cannot_delete', 
+                    'message': f'Không thể xóa {po_code} vì có phiếu nhập đã hoàn thành'
+                }
+            
+            # Step 2: Xóa invoices (draft)
+            for invoice in odoo_po.invoice_ids.filtered(lambda inv: inv.state == 'draft'):
+                try:
+                    invoice.sudo().unlink()
+                except Exception as inv_err:
+                    _logger.warning("⚠️ Không thể xóa invoice %s: %s", invoice.name, inv_err)
+            
+            # Step 3: Cancel invoices khác (không phải draft/posted)
+            for invoice in odoo_po.invoice_ids.filtered(lambda inv: inv.state not in ('draft', 'cancel', 'posted')):
+                try:
+                    if hasattr(invoice, 'button_cancel'):
+                        invoice.sudo().button_cancel()
+                    elif hasattr(invoice, 'action_cancel'):
+                        invoice.sudo().action_cancel()
+                except Exception as inv_err:
+                    _logger.warning("⚠️ Không thể cancel invoice %s: %s", invoice.name, inv_err)
+            
+            # Step 4: Unreserve + Cancel pickings
+            picks_open = odoo_po.picking_ids.sudo().filtered(lambda p: p.state not in ('done', 'cancel'))
+            for p in picks_open:
+                # Reset qty_done
+                if p.move_line_ids:
+                    p.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
+                
+                # Unreserve moves
+                try:
+                    mvs = p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel'))
+                    if mvs:
+                        if hasattr(mvs, '_do_unreserve'):
+                            mvs._do_unreserve()
+                        elif hasattr(mvs, 'do_unreserve'):
+                            mvs.do_unreserve()
+                except Exception as e:
+                    _logger.warning("Unreserve picking %s lỗi: %s", p.name, e)
+                
+                # Cancel moves
+                try:
+                    mvs_to_cancel = p.move_ids_without_package.filtered(lambda m: m.state not in ('done', 'cancel'))
+                    if mvs_to_cancel:
+                        if hasattr(mvs_to_cancel, '_action_cancel'):
+                            mvs_to_cancel._action_cancel()
+                        else:
+                            mvs_to_cancel.action_cancel()
+                except Exception as e:
+                    _logger.warning("Cancel move của picking %s lỗi: %s", p.name, e)
+                
+                # Cancel picking
+                try:
+                    if hasattr(p, 'button_cancel'):
+                        p.button_cancel()
+                    else:
+                        p.action_cancel()
+                except Exception as e:
+                    _logger.warning("Huỷ picking %s lỗi: %s", p.name, e)
+            
+            # Step 5: Cancel PO (giống SO logic)
+            if odoo_po.state not in ('cancel', 'draft'):
+                try:
+                    odoo_po.sudo().button_cancel()
+                except Exception as e:
+                    _logger.warning("button_cancel PO lỗi: %s → fallback", e)
+                    # Fallback: cancel lines rồi set state
+                    try:
+                        if hasattr(odoo_po.order_line, '_action_cancel'):
+                            odoo_po.order_line.sudo()._action_cancel()
+                        odoo_po.sudo().write({'state': 'cancel'})
+                    except Exception as e2:
+                        return {'ok': False, 'error': 'cancel_failed', 'message': str(e2)}
+            
+            # Refresh để đảm bảo state mới nhất
+            self.env.invalidate_all()
+            
+            # Fallback: force cancel nếu cần (giống SO)
+            still_open_picks = odoo_po.picking_ids.filtered(lambda p: p.state not in ('cancel', 'done'))
+            has_posted_inv = bool(odoo_po.invoice_ids.filtered(lambda inv: inv.state == 'posted'))
+            if odoo_po.state != 'cancel':
+                if not still_open_picks and not has_posted_inv:
+                    odoo_po.sudo().write({'state': 'cancel'})
+                else:
+                    return {
+                        'ok': False, 
+                        'error': 'cancel_failed',
+                        'message': 'PO chưa về cancel. Còn chứng từ ràng buộc.'
+                    }
+            
+            # Step 6: Xóa pickings (đều đã cancel)
+            for p in odoo_po.picking_ids:
+                if p.state != 'done':
+                    try:
+                        if p.state != 'cancel':
+                            if hasattr(p, 'button_cancel'):
+                                p.sudo().button_cancel()
+                            else:
+                                p.sudo().action_cancel()
+                        p.sudo().unlink()
+                    except Exception as e:
+                        return {'ok': False, 'error': 'delete_picking_failed', 'message': str(e)}
+            
+            # Step 7: Xóa invoices còn lại (draft/cancel)
+            for inv in odoo_po.invoice_ids:
+                if inv.state == 'draft':
+                    try:
+                        if hasattr(inv, 'button_cancel'):
+                            inv.button_cancel()
+                        elif hasattr(inv, 'action_cancel'):
+                            inv.action_cancel()
+                    except Exception:
+                        pass
+                    inv.unlink()
+                elif inv.state == 'cancel':
+                    inv.unlink()
+            
+            # Step 8: Xóa order lines
+            try:
+                odoo_po.order_line.sudo().unlink()
+            except Exception as line_err:
+                _logger.warning("⚠️ Không thể xóa order lines: %s", line_err)
+            
+            # Step 9: Force state về draft (bypass workflow)
+            odoo_po.sudo().write({'state': 'draft'})
+            
+            # Step 10: Xóa PO
+            odoo_po.sudo().unlink()
+            
+            return {'ok': True}
+            
+        except Exception as e:
+            _logger.exception("❌ Lỗi khi xoá PO %s: %s", po_code, e)
+            return {'ok': False, 'error': 'delete_failed', 'message': str(e)}
 
     def _create_or_update_po(self, misa_po, odoo_po, headers, crm_headers, misa_utils, odoo_utils):
-        """
-        Tạo mới hoặc cập nhật PO
-        """
+        """Tạo mới hoặc cập nhật PO"""
         def _to_naive_utc(dt_str: str):
             if not dt_str:
                 return False
             aware = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
             return aware.astimezone(timezone.utc).replace(tzinfo=None)
 
-        # Lấy thông tin từ misa_po (PageData từ paging_filter_v2)
         refid = misa_po.get("refid")
         supplier_name = misa_po.get("account_object_name")
         refno = misa_po.get("refno", "PO-MISA")
@@ -391,7 +515,6 @@ class MisaPOSync(models.TransientModel):
 
         partner = odoo_utils._get_or_create_partner(supplier_name)
 
-        # Lấy chi tiết đơn hàng từ API get_paging_detail
         detail_payload = {
             "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
             "filter": [
@@ -456,27 +579,21 @@ class MisaPOSync(models.TransientModel):
         if odoo_po:
             _logger.info("🔄 Đồng bộ lại PO %s từ MISA", refno)
             
-            # QUAN TRỌNG: Cancel PO trước nếu đã confirm
-            # (không thể xóa dòng khi PO ở trạng thái "purchase")
             need_reconfirm = False
             if odoo_po.state not in ('draft', 'sent', 'cancel'):
                 _logger.info("⚠️ PO %s đang ở trạng thái %s → Cancel trước khi cập nhật", refno, odoo_po.state)
                 odoo_po.button_cancel()
                 need_reconfirm = True
             
-            # Hủy picking
             for picking in odoo_po.picking_ids:
                 if picking.state not in ('done', 'cancel'):
                     picking.action_cancel()
             
-            # Set về draft để có thể xóa dòng
             if odoo_po.state == 'cancel':
                 odoo_po.button_draft()
             
-            # Xóa dòng cũ (giờ có thể xóa vì đã draft)
             odoo_po.order_line.unlink()
             
-            # Cập nhật
             odoo_po.write({
                 'partner_id': partner.id,
                 'origin': memo,
@@ -504,7 +621,6 @@ class MisaPOSync(models.TransientModel):
             message = f'✅ Đã tạo: {refno} ({total_lines} dòng)'
             title = '✅ Tạo mới thành công'
 
-        # Tạo dòng sản phẩm
         for line in lines:
             code = line.get("inventory_item_code", "unknown_code").strip()
             name = line.get("description", "unknown product").strip()
@@ -540,11 +656,9 @@ class MisaPOSync(models.TransientModel):
             
             self.env["purchase.order.line"].create(pol_vals)
 
-        # Xác nhận
         if po_rec.state == 'draft':
             po_rec.button_confirm()
 
-        # Cập nhật picking
         for picking in po_rec.picking_ids:
             if planned_naive_utc:
                 picking.scheduled_date = planned_naive_utc
@@ -565,6 +679,7 @@ class MisaPOSync(models.TransientModel):
                 'sticky': False,
             }
         }
+
     def _sync_po_core(self, po_code, *, delete_when_missing=True, create_when_missing=True):
         """
         Lõi đồng bộ: trả về JSON dict để API dùng được và wizard cũng có thể wrap thành notification.
@@ -584,7 +699,6 @@ class MisaPOSync(models.TransientModel):
         odoo_utils  = self.env['odoo.utils']
         misa_config = self.env['misa.config']
 
-        # Token + headers (giống SO)
         try:
             access_token = misa_utils._get_misa_token()
             headers      = misa_config.get_default_headers(access_token)
@@ -594,66 +708,37 @@ class MisaPOSync(models.TransientModel):
             _logger.exception("❌ Lỗi token/headers: %s", e)
             return {'ok': False, 'error': 'auth_failed', 'message': str(e)}
 
-        # Tìm trong MISA + Odoo
         misa_po = self._search_po_in_misa(po_code, headers)
         odoo_po = self.env["purchase.order"].search([
             '|',
             ('name', '=', po_code),
-            ('partner_ref', '=', po_code)  # Thêm partner_ref để tìm linh hoạt hơn
+            ('partner_ref', '=', po_code)
         ], limit=1)
 
         # ===== CASE 1: Không có trong MISA =====
         if not misa_po:
             if odoo_po:
                 if delete_when_missing:
-                    # Xóa PO trong Odoo (giống SO logic)
-                    try:
-                        _logger.warning("🗑️ Xoá PO %s vì không tồn tại trong MISA", po_code)
-                        
-                        # Step 1: Cancel tất cả invoices (nếu có)
-                        for invoice in (odoo_po.invoice_ids or []):
-                            if invoice.state == 'draft':
-                                try:
-                                    invoice.button_cancel()
-                                    invoice.unlink()
-                                except Exception as inv_err:
-                                    _logger.warning("⚠️ Không thể xóa invoice %s: %s", invoice.name, inv_err)
-                            elif invoice.state not in ('cancel', 'posted'):
-                                try:
-                                    invoice.button_cancel()
-                                except Exception as inv_err:
-                                    _logger.warning("⚠️ Không thể cancel invoice %s: %s", invoice.name, inv_err)
-                        
-                        # Step 2: Cancel tất cả pickings
-                        for picking in (odoo_po.picking_ids or []):
-                            if picking.state not in ('done', 'cancel'):
-                                try:
-                                    # Reset qty_done nếu có
-                                    for move_line in (picking.move_line_ids or []):
-                                        move_line.qty_done = 0
-                                    picking.action_cancel()
-                                except Exception as pick_err:
-                                    _logger.warning("⚠️ Không thể cancel picking %s: %s", picking.name, pick_err)
-                        
-                        # Step 3: Cancel PO (QUAN TRỌNG: phải cancel trước khi unlink)
-                        if odoo_po.state not in ('draft', 'cancel'):
-                            odoo_po.button_cancel()
-                        
-                        # Step 4: Set về draft nếu đang cancel (để có thể unlink)
-                        if odoo_po.state == 'cancel':
-                            # Xóa tất cả order_line trước
-                            if odoo_po.order_line:
-                                odoo_po.order_line.unlink()
-                            # Set về draft
-                            odoo_po.button_draft()
-                        
-                        # Step 5: Xóa PO (giờ đã ở draft state)
-                        odoo_po.unlink()
-                    except Exception as e:
-                        _logger.exception("❌ Lỗi khi xoá PO %s: %s", po_code, e)
-                        return {'ok': False, 'error': 'delete_failed', 'message': str(e)}
+                    _logger.warning("🗑️ Xoá PO %s vì không tồn tại trong MISA", po_code)
+                    
+                    # Gọi helper xóa an toàn (giống SO logic)
+                    delete_result = self._safe_delete_po(odoo_po, po_code)
+                    
+                    if delete_result['ok']:
+                        return {
+                            'ok': True,
+                            'action': 'deleted',
+                            'name': po_code,
+                            'res_id': None,
+                            'detail': f'Đơn {po_code} đã xoá (không tồn tại trong MISA)'
+                        }
+                    else:
+                        return {
+                            'ok': False,
+                            'error': delete_result.get('error', 'delete_failed'),
+                            'message': delete_result.get('message', 'Không thể xóa PO')
+                        }
                 else:
-                    # Không xóa, chỉ báo cáo orphaned (giống SO)
                     return {
                         'ok': True,
                         'action': 'orphaned',
@@ -662,7 +747,6 @@ class MisaPOSync(models.TransientModel):
                         'detail': f'Đơn {po_code} tồn tại trong Odoo nhưng không còn trong MISA'
                     }
             else:
-                # Không có ở đâu cả
                 return {
                     'ok': False,
                     'action': 'not_found',
@@ -673,7 +757,6 @@ class MisaPOSync(models.TransientModel):
         
         # ===== CASE 2: Có trong MISA =====
         else:
-            # Check create_when_missing nếu chưa có trong Odoo
             if not odoo_po and not create_when_missing:
                 return {
                     'ok': False,
@@ -684,16 +767,13 @@ class MisaPOSync(models.TransientModel):
                     'detail': f'Không cho phép tạo mới đơn {po_code} (create_when_missing=False)'
                 }
             
-            # Tạo mới hoặc cập nhật
             try:
                 existed = bool(odoo_po)
                 
-                # Gọi hàm tạo/cập nhật (giống SO dùng sudo để đảm bảo quyền)
                 result = self.sudo()._create_or_update_po(
                     misa_po, odoo_po, headers, crm_headers, misa_utils, odoo_utils
                 )
                 
-                # Lấy lại record sau khi upsert
                 after_po = odoo_po or self.env["purchase.order"].search([
                     '|',
                     ('name', '=', po_code),
@@ -730,7 +810,6 @@ class PurchaseOrder(models.Model):
             return {'ok': False, 'error': 'missing_po_code', 'message': 'Thiếu mã đơn hàng'}
         
         try:
-            # Tạo wizard (giống SO) và gọi core logic
             sync_wizard = self.env['misa.po.sync'].sudo().create({'po_code': po_code})
             
             result = sync_wizard._sync_po_core(
