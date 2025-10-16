@@ -263,10 +263,10 @@ class PurchaseExportWizard(models.TransientModel):
             
             # Other info - hardcoded
             'nguoi_giao_hang': 'Vũ Thị Bích Thủy',
-            'dien_giai': dien_giai,
+            'dien_giai': purchase.origin or "",
             'so_tk_nhan': '0486523679',
             'ten_ngan_hang_nhan': 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam',
-            'ly_do_chi': ly_do_chi,
+            'ly_do_chi': '',
             'ma_nhan_vien': purchase_user_code,
             'so_luong_ct_kem_theo': '',
             'han_thanh_toan': '',
@@ -274,7 +274,7 @@ class PurchaseExportWizard(models.TransientModel):
             # Product info
             'ma_hang': product_code,
             'ten_hang': product_name,
-            'la_dong_ghi_chu': 'không',
+            'la_dong_ghi_chu': '',
             'ma_kho': self._get_warehouse_code(purchase.picking_ids and purchase.picking_ids[0] or None),
             'hang_hoa_giu_ho': '',
             
@@ -400,7 +400,7 @@ class PurchaseExportWizard(models.TransientModel):
         wb.save(out)
         out.seek(0)
 
-        filename = f"Phieu_mua_hang_hoa_{self.date_from}_{self.date_to}.xlsx"
+        filename = f"Phieu_mua_hang_trong_nuoc_{self.date_from}_{self.date_to}.xlsx"
         attachment = self.env["ir.attachment"].sudo().create({
             "name": filename,
             "type": "binary",
