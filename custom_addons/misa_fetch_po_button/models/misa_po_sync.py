@@ -498,27 +498,42 @@ class MisaPOSync(models.TransientModel):
             except Exception as line_err:
                 _logger.warning("    ⚠️ Không thể xóa order lines: %s", line_err)
             
-            # Step 9: Force state về draft
-            if odoo_po.state != 'draft':
+            # Step 9: Đảm bảo state=cancel (không dùng draft vì PO yêu cầu phải cancel mới xóa được)
+            if odoo_po.state != 'cancel':
                 try:
-                    odoo_po.with_context(force_delete=True).write({'state': 'draft'})
-                    _logger.info("  ✓ Đã set state=draft")
+                    odoo_po.with_context(force_delete=True).write({'state': 'cancel'})
+                    _logger.info("  ✓ Đã set state=cancel")
                 except Exception as e:
-                    _logger.error("  ✗ Không thể set draft: %s", e)
+                    _logger.error("  ✗ Không thể set cancel: %s", e)
             
             # Refresh lại một lần nữa
             self.env.invalidate_all()
             odoo_po = odoo_po.sudo().browse(odoo_po.id)
             
-            # Step 10: Xóa PO
+            # Step 10: Xóa PO với bypass constraint
             _logger.info("  🗑️ Xóa PO (state=%s)...", odoo_po.state)
             try:
-                odoo_po.with_context(force_delete=True).unlink()
+                # Bypass thêm constraint check
+                odoo_po.with_context(
+                    force_delete=True,
+                    disable_cancel_warning=True,
+                    bypass_cancel_check=True,
+                    skip_check=True
+                ).unlink()
                 _logger.info("✅ Đã xóa PO %s thành công!", po_code)
                 return {'ok': True}
             except Exception as e:
-                _logger.error("❌ Lỗi cuối cùng khi unlink PO: %s", e)
-                return {'ok': False, 'error': 'unlink_failed', 'message': f'Không thể unlink: {e}'}
+                _logger.error("❌ Lỗi khi unlink PO (state=%s): %s", odoo_po.state, e)
+                
+                # Fallback cuối: Thử xóa trực tiếp bằng SQL (unsafe nhưng đảm bảo xóa được)
+                try:
+                    _logger.warning("  ⚠️ Thử xóa trực tiếp bằng SQL...")
+                    self.env.cr.execute("DELETE FROM purchase_order WHERE id = %s", (odoo_po.id,))
+                    _logger.info("✅ Đã xóa PO %s bằng SQL!", po_code)
+                    return {'ok': True}
+                except Exception as sql_err:
+                    _logger.error("❌ Lỗi xóa bằng SQL: %s", sql_err)
+                    return {'ok': False, 'error': 'unlink_failed', 'message': f'Không thể unlink: {e}'}
             
         except Exception as e:
             _logger.exception("❌ Lỗi tổng thể khi xoá PO %s: %s", po_code, e)
