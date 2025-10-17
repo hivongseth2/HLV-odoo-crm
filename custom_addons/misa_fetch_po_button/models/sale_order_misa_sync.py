@@ -662,13 +662,48 @@ class SaleOrder(models.Model):
 
         # Lưu info trước khi xoá
         # Ưu tiên lấy warehouse từ picking đầu tiên (giải quyết vấn đề combo không có kho ở dòng cha)
-        old_wh = self.warehouse_id
-        if not old_wh and self.picking_ids:
-            # Nếu SO không có warehouse, lấy từ picking đầu tiên
-            first_pick = self.picking_ids.filtered(lambda p: p.picking_type_id and p.picking_type_id.warehouse_id)[:1]
-            if first_pick:
-                old_wh = first_pick.picking_type_id.warehouse_id
+        # old_wh = self.warehouse_id
+        # if not old_wh and self.picking_ids:
+        #     # Nếu SO không có warehouse, lấy từ picking đầu tiên
+        #     first_pick = self.picking_ids.filtered(lambda p: p.picking_type_id and p.picking_type_id.warehouse_id)[:1]
+        #     if first_pick:
+        #         old_wh = first_pick.picking_type_id.warehouse_id
+        # order_no_fallback = self.name
+        
+                # ===== Xác định warehouse theo dòng đầu tiên có StockIDText =====
+        stock_mapping = {
+            "HCM": "TSN/Stock",
+            "BENCAM": "KBC/Tồn kho",
+            "HIENDUC": "KHD/Tồn kho",
+            "HCM_SHOWROOM": "TSNSR/Stock",
+        }
+
+        old_wh = None
+        stock_id = None
+
+        # Tìm dòng đầu tiên có StockIDText hợp lệ
+        for l in (lines or []):
+            sid = (l.get("StockIDText") or "").strip()
+            if sid:
+                stock_id = sid
+                break
+
+        if stock_id and stock_id in stock_mapping:
+            location_name = stock_mapping[stock_id]
+            location = self.env['stock.location'].search([
+                ('complete_name', '=', location_name)
+            ], limit=1)
+
+            if location and location.warehouse_id:
+                old_wh = location.warehouse_id
+                _logger.info("🏭 Lấy warehouse từ dòng MISA: %s → %s", stock_id, old_wh.name)
+            else:
+                _logger.warning("⚠️ Không tìm thấy location/warehouse cho %s", location_name)
+        else:
+            _logger.warning("⚠️ Không xác định được StockIDText hợp lệ, fallback warehouse None")
+
         order_no_fallback = self.name
+
 
         # ===== 3) HỦY PICKINGS CHƯA DONE (unreserve -> cancel move -> cancel picking) =====
         picks_open = self.picking_ids.sudo().filtered(lambda p: p.state not in ('done', 'cancel'))
