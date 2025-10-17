@@ -39,9 +39,13 @@ def _to_date_str(val):
 class PickingExportWizard(models.TransientModel):
     def _harsh_warehouse_code(self, code):
         if code == "KBC":
-            return "Bến Cam"
+            return "BENCAM"
         if code == "TSN":
-            return "Hồ Chí Minh"
+            return "HCM"
+        if code == "KHD":
+            return "HIENDUC"
+        if code == "TSNSR":
+            return "HCM_SHOWROOM"
         return code
     _name = "picking.export.wizard"
     _description = "Xuất Excel lệnh xuất kho theo template kế toán"
@@ -184,6 +188,30 @@ class PickingExportWizard(models.TransientModel):
             code = pt.warehouse_id.code or pt.warehouse_id.name or ""
             return self._harsh_warehouse_code(code)
         return ""
+
+    # ====== HELPERS: xác định parent combo cho 1 sale.order.line ======
+    def _thuoc_combo_code_for_move(self, move):
+        """
+        Trả về mã combo cha (default_code) cho move nếu là dòng con của combo.
+        Sử dụng Studio fields x_studio_is_combo_child và x_studio_combo_parent_code
+        để xác định chính xác thay vì dựa vào giá = 0.
+        """
+        sol = getattr(move, 'sale_line_id', False)
+        if not sol:
+            return ''
+        
+        # 🆕 Đọc từ Studio fields
+        try:
+            is_combo_child = getattr(sol, 'x_studio_is_combo_child', False)
+            combo_parent_code = getattr(sol, 'x_studio_combo_parent_code', False)
+            
+            if is_combo_child and combo_parent_code:
+                return combo_parent_code
+        except Exception as e:
+            # Fallback nếu Studio fields không tồn tại
+            pass
+        
+        return ''
 
     def _get_move_line_rows(self, picking):
         rows = []
@@ -336,14 +364,14 @@ class PickingExportWizard(models.TransientModel):
             'da_lap_hoa_don': 'Đã lập',
             
             # Date fields
-            'ngay_hach_toan': scheduled_date_str,
-            'ngay_chung_tu': scheduled_date_str,
+            'ngay_hach_toan': _to_date_str(datetime.date.today()),
+            'ngay_chung_tu': _to_date_str(datetime.date.today()),
             'so_chung_tu': picking_name,
-            'so_phieu_xuat': picking_name,
+            'so_phieu_xuat': sale_name,
             
             # Invoice fields - hardcoded examples
             'mau_so_hd': '01GTKT0/001',
-            'ky_hieu_hd': 'AB/20E',
+            'ky_hieu_hd': '1C25TLV',
             'so_hoa_don': '',  # Để trống hoặc lấy từ invoice nếu có
             'ngay_hoa_don': scheduled_date_str,
             
@@ -367,15 +395,15 @@ class PickingExportWizard(models.TransientModel):
             
             # Product info
             'ma_hang': product_code,
-            'thuoc_combo': '',
+            'thuoc_combo': self._thuoc_combo_code_for_move(move),
             'ten_hang': product_name,
             'la_dong_ghi_chu': 'không',
             'hang_khuyen_mai': 'Không',
             'chiet_khau_thuong_mai': '',
             
             # Account codes - hardcoded examples
-            'tk_tien_no': '1311_TMĐT',
-            'tk_doanh_thu_co': '511111',
+            'tk_tien_no': '131',
+            'tk_doanh_thu_co': '5111',
             
             # Quantity and price
             'dvt': uom_name,
@@ -411,12 +439,12 @@ class PickingExportWizard(models.TransientModel):
             
             # Warehouse and cost
             'ma_kho': warehouse_code,
-            'tk_gia_von': '6321_GV',
-            'tk_kho': '1561',
+            'tk_gia_von': '632',
+            'tk_kho': '156',
             'don_gia_von': don_gia_von,
             'tien_von': tien_von,
             'hang_hoa_giu_ho': '',
-            'vi_tri': location_name,
+            'vi_tri': '',
         }
 
     def _create_excel_workbook(self, data_rows):

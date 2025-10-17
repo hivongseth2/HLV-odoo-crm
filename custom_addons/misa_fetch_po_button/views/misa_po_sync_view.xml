@@ -1,0 +1,36 @@
+<odoo>
+    <!-- Action mở form đồng bộ PO -->
+    <record id="action_misa_po_sync" model="ir.actions.act_window">
+        <field name="name">Đồng bộ PO theo mã</field>
+        <field name="res_model">misa.po.sync</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Form đồng bộ PO -->
+    <record id="view_misa_po_sync_form" model="ir.ui.view">
+        <field name="name">misa.po.sync.form</field>
+        <field name="model">misa.po.sync</field>
+        <field name="arch" type="xml">
+            <form string="Đồng bộ PO từ MISA theo mã">
+                <group>
+                    <field name="po_code" placeholder="Ví dụ: DMH12218"/>
+                </group>
+                <footer>
+                    <button name="action_sync_po"
+                            string="Đồng bộ"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Menu trong Mua hàng (Purchase) -->
+    <menuitem id="menu_misa_po_sync"
+              name="Đồng bộ PO theo mã"
+              parent="purchase.menu_purchase_root"
+              action="action_misa_po_sync"
+              sequence="99"/>
+</odoo>

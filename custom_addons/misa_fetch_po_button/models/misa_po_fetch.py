@@ -275,8 +275,6 @@ class MisaPOFetch(models.TransientModel):
         tax = self._get_or_create_vn_vat(rate, use='purchase')
         return [tax.id] if tax else []
 
-
-
     def action_fetch_po(self):
         def _to_naive_utc(dt_str: str):
             """'2025-08-26T00:00:00.000+07:00' -> 2025-08-25 17:00:00 (naive UTC)"""
@@ -358,6 +356,11 @@ class MisaPOFetch(models.TransientModel):
                 refno = po.get("refno", "PO-MISA")
                 memo = po.get("journal_memo", "")
 
+                # Lấy thêm thông tin đối tác từ API
+                account_object_code = po.get("account_object_code", "")
+                account_object_tax_code = po.get("account_object_tax_code", "")
+                account_object_address = po.get("account_object_address", "")
+
                 # chỉ lấy đơn "chưa thực hiện" ---
                 def _as_bool(val):
                     if isinstance(val, bool):
@@ -376,7 +379,21 @@ class MisaPOFetch(models.TransientModel):
                 planned_naive_utc = _to_naive_utc(receive_date_str)
 
 
+                # Tạo/cập nhật partner với thông tin chi tiết từ MISA
                 partner = odoo_utils._get_or_create_partner(supplier_name)
+                
+                # Cập nhật thông tin đối tác nếu có
+                partner_update_vals = {}
+                if account_object_code and not partner.ref:
+                    partner_update_vals['ref'] = account_object_code
+                if account_object_tax_code and not partner.vat:
+                    partner_update_vals['vat'] = account_object_tax_code
+                if account_object_address and not partner.street:
+                    partner_update_vals['street'] = account_object_address
+                
+                if partner_update_vals:
+                    partner.write(partner_update_vals)
+                    _logger.info("✅ Cập nhật thông tin đối tác %s: %s", supplier_name, partner_update_vals)
 
                 detail_page_index = 1
                 all_detail_lines = []
@@ -503,7 +520,7 @@ class MisaPOFetch(models.TransientModel):
                     self.env["purchase.order.line"].create(pol_vals)
                     
                     
-                po_rec.write({'partner_ref': refno})      # tham chiếu NCC, dễ tra cứu
+                po_rec.write({'partner_ref': account_object_code})      # tham chiếu NCC, dễ tra cứu
                 po_rec.button_confirm()                   # xác nhận đơn mua
 
                 # Cập nhật ngày dự kiến + đảm bảo receipt đúng kho/location

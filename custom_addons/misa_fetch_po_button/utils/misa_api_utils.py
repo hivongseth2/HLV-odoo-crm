@@ -24,6 +24,8 @@ class MisaApiUtils(models.AbstractModel):
         combo_code = (combo_data.get('ProductIDText') or '').strip()
         combo_name = (combo_data.get('Description') or combo_code).strip()
         combo_uom_name = (combo_data.get('UnitIDText') or 'Cái').strip()
+        # Lấy số lượng combo cha từ đơn hàng (để tính lại số lượng base cho children)
+        combo_qty_in_order = float(combo_data.get('Amount') or 1.0)
         
         if not combo_code:
             _logger.error("❌ Thiếu ProductIDText cho combo")
@@ -36,11 +38,12 @@ class MisaApiUtils(models.AbstractModel):
             combo_uom = False
 
         # === Helper: GHI VÀO TEMPLATE ===
-        def _write_combo_children(target_tmpl, children_list):
+        def _write_combo_children(target_tmpl, children_list, parent_qty_in_order=1.0):
             """
             Ghi thông tin sản phẩm con vào combo.product
             target_tmpl: record product.template
             children_list: [{ProductIDText, Amount, UnitIDText, Price, ...}]
+            parent_qty_in_order: số lượng combo cha trong đơn hàng (để tính lại base qty)
             """
             if not target_tmpl or not children_list:
                 return
@@ -51,16 +54,36 @@ class MisaApiUtils(models.AbstractModel):
                 old_lines.sudo().unlink()
                 _logger.info("🗑️ Đã xóa %d dòng combo.product cũ của %s", len(old_lines), target_tmpl.display_name)
 
-            created = 0
+            # 2) Loại bỏ trùng lặp: gom theo ProductIDText, giữ lại item đầu tiên
+            seen_codes = set()
+            unique_children = []
             for ch in children_list:
+                c_code = (ch.get('ProductIDText') or '').strip()
+                if c_code and c_code not in seen_codes:
+                    seen_codes.add(c_code)
+                    unique_children.append(ch)
+            
+            if len(unique_children) < len(children_list):
+                _logger.info("🔧 Đã loại bỏ %d dòng con trùng lặp", len(children_list) - len(unique_children))
+
+            created = 0
+            for ch in unique_children:
                 c_code = (ch.get('ProductIDText') or '').strip()
                 if not c_code:
                     continue
                 
                 c_name = (ch.get('Description') or c_code).strip()
                 c_uom_name = (ch.get('UnitIDText') or 'Cái').strip()
-                c_qty = float(ch.get('Amount') or 1.0)
+                c_qty_raw = float(ch.get('Amount') or 1.0)
                 c_price = float(ch.get('Price') or 0.0)
+                
+                # 🔧 FIX: Tính lại số lượng base (MISA trả về Amount đã nhân với qty đơn hàng)
+                # Ví dụ: combo cha qty=3, con base=0.1 → MISA trả Amount=0.3
+                # Ta cần chia ngược lại: 0.3 / 3 = 0.1
+                if parent_qty_in_order and parent_qty_in_order > 0:
+                    c_qty = c_qty_raw / parent_qty_in_order
+                else:
+                    c_qty = c_qty_raw
 
                 # Tìm/tạo sản phẩm con
                 c_prod = Product.search([('default_code', '=', c_code)], limit=1)
@@ -129,6 +152,7 @@ class MisaApiUtils(models.AbstractModel):
                     _logger.error("❌ Lỗi cập nhật template combo %s: %s", combo_code, e)
 
             # Nếu thiếu con -> tự fetch từ API
+            qty_divider = combo_qty_in_order  # Mặc định: children từ đơn hàng cần chia
             if not children_data and sale_headers:
                 try:
                     master = combo_data.get("ProductID") or combo_data.get("ProductId") or combo_code
@@ -140,13 +164,14 @@ class MisaApiUtils(models.AbstractModel):
                         "Amount": float(k.get("Amount") or 1.0),
                         "Price": float(k.get("Price") or 0.0),
                     } for k in kids]
+                    qty_divider = 1.0  # ✅ Data từ API riêng = BASE qty, không cần chia
                     _logger.info("📡 Đã fetch %d sản phẩm con cho combo %s từ API", 
                             len(children_data), combo_code)
                 except Exception as e:
                     _logger.warning("⚠️ Không fetch được children cho combo %s: %s", combo_code, e)
 
             # 🔥 LUÔN GHI CHILDREN VÀO TEMPLATE (cập nhật mỗi lần sync)
-            _write_combo_children(tmpl, children_data or [])
+            _write_combo_children(tmpl, children_data or [], qty_divider)
             _logger.info("✅ Đã cập nhật children cho combo đã tồn tại: %s", combo_code)
             return combo_prod
 
@@ -168,16 +193,26 @@ class MisaApiUtils(models.AbstractModel):
         
         try:
             tmpl = ProductTmpl.create(vals)
-            combo_prod = Product.create({
-                'product_tmpl_id': tmpl.id, 
-                'default_code': combo_code
-            })
-            _logger.info("✅ Đã tạo combo product mới: %s (id=%s)", combo_code, combo_prod.id)
+            # Check for existing product.product with same template and empty combination_indices
+            existing_combo_prod = Product.search([
+                ('product_tmpl_id', '=', tmpl.id),
+                ('combination_indices', '=', False)
+            ], limit=1)
+            if existing_combo_prod:
+                combo_prod = existing_combo_prod
+                _logger.info("♻️ Đã tìm thấy combo product tồn tại: %s (id=%s)", combo_code, combo_prod.id)
+            else:
+                combo_prod = Product.create({
+                    'product_tmpl_id': tmpl.id,
+                    'default_code': combo_code
+                })
+                _logger.info("✅ Đã tạo combo product mới: %s (id=%s)", combo_code, combo_prod.id)
         except Exception as e:
             _logger.error("❌ Lỗi tạo combo product %s: %s", combo_code, e)
             return False
 
         # Fetch children nếu thiếu
+        qty_divider = combo_qty_in_order  # Mặc định: children từ đơn hàng cần chia
         if not children_data and sale_headers:
             try:
                 master = combo_data.get("ProductID") or combo_data.get("ProductId") or combo_code
@@ -189,11 +224,12 @@ class MisaApiUtils(models.AbstractModel):
                     "Amount": float(k.get("Amount") or 1.0),
                     "Price": float(k.get("Price") or 0.0),
                 } for k in kids]
+                qty_divider = 1.0  # ✅ Data từ API riêng = BASE qty, không cần chia
             except Exception as e:
                 _logger.warning("⚠️ Không fetch được children: %s", e)
 
         # Ghi children vào template
-        _write_combo_children(tmpl, children_data or [])
+        _write_combo_children(tmpl, children_data or [], qty_divider)
         
         return combo_prod
 
@@ -259,19 +295,6 @@ class MisaApiUtils(models.AbstractModel):
 
             access_token = json_data.get("Data", {}).get("AccessToken", {}).get("Token", "")
             return access_token
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def _fetch_with_retry(self, url, headers, payload):
         """Fetch API with retry on token expiration"""
@@ -444,9 +467,7 @@ class MisaApiUtils(models.AbstractModel):
         }
         api_payload = {"ID": str(sale_order_id), "MISAEntityState": "2"}
 
-        api_response = session.post(api_url, headers=api_headers, json=api_payload)
-        _logger.warning("API response headers: %s", dict(api_response.headers))
-        _logger.warning("API response text: %s", api_response.text)
+        api_response = session.post(api_url, headers=api_headers, json=api_payload) 
 
         # Nếu không 200 thì vẫn ráng parse JSON để fallback; nếu parse fail thì trả sale_order_id
         try:
@@ -514,33 +535,101 @@ class MisaApiUtils(models.AbstractModel):
 
 
     def get_list_product_by_order_crm(self, api_url, header, payload):
+        """
+        Lấy TOÀN BỘ sản phẩm của đơn hàng từ MISA CRM.
+        Xử lý phân trang dựa vào Total (vì PageCount không tin cậy).
+        """
         session = requests.Session()
-        response = session.post(api_url, headers=header, json=payload)
-        _logger.warning("📦response %s", response)
-
-        if response.status_code != 200:
-            raise Exception(f"API call failed: {response.status_code} - {response.text}")
-
-        try:
-            data = response.json().get("Data", []) or []
-            # 🔁 GIỮ NGUYÊN, KHÔNG LOẠI COMBO CHA
-            return data
-        except Exception as e:
-            raise Exception(f"Lỗi khi xử lý response JSON: {e}")
+        all_products = []
+        page = 1
+        page_size = 20  # MISA cố định
+        max_pages = 100  # Giới hạn an toàn
+        total_expected = None  # Sẽ được set từ response đầu tiên
+        
+        while page <= max_pages:
+            # Cập nhật payload cho trang hiện tại
+            current_payload = payload.copy()
+            current_payload['Page'] = page
+            current_payload['Start'] = (page - 1) * page_size
+            
+            try:
+                _logger.info("📄 Fetching MISA products: Page %d (Start=%d)", page, current_payload['Start'])
+                
+                response = session.post(api_url, headers=header, json=current_payload)
+                
+                if response.status_code != 200:
+                    _logger.error("❌ API call failed at page %d: %s - %s", 
+                                page, response.status_code, response.text)
+                    break
+                
+                data = response.json()
+                
+                if not data.get("Success", True):
+                    _logger.warning("⚠️ MISA returned Success=False at page %d: %s", 
+                                page, data.get("Message"))
+                    break
+                
+                # Lấy dữ liệu trang hiện tại
+                products = data.get("Data", []) or []
+                page_count_api = data.get("PageCount", 1)  # Không tin cậy
+                total_api = data.get("Total", 0)
+                
+                # Lưu total từ lần đầu
+                if total_expected is None:
+                    total_expected = total_api
+                
+                # Tính số trang thực tế dựa vào Total
+                actual_pages_needed = (total_expected + page_size - 1) // page_size  # Làm tròn lên
+                
+                _logger.info("   ✓ Page %d/%d: %d products | Total=%d (API PageCount=%d - IGNORED)", 
+                            page, actual_pages_needed, len(products), total_api, page_count_api)
+                
+                # Thêm vào danh sách tổng
+                all_products.extend(products)
+                
+                # ===== ĐIỀU KIỆN DỪNG (DỰA VÀO TOTAL, KHÔNG DỰA VÀO PageCount) =====
+                # Dừng nếu:
+                # 1. Không còn data trong response
+                if len(products) == 0:
+                    _logger.info("   → Dừng: Trang %d không có dữ liệu", page)
+                    break
+                
+                # 2. Đã lấy đủ số lượng theo Total
+                if len(all_products) >= total_expected:
+                    _logger.info("   → Dừng: Đã đủ %d/%d sản phẩm", len(all_products), total_expected)
+                    break
+                
+                # 3. Đã fetch đủ số trang tính toán
+                if page >= actual_pages_needed:
+                    _logger.info("   → Dừng: Đã fetch đủ %d trang", actual_pages_needed)
+                    break
+                
+                page += 1
+                
+            except requests.exceptions.RequestException as e:
+                _logger.exception("❌ Request error at page %d: %s", page, e)
+                break
+            except Exception as e:
+                _logger.exception("❌ Unexpected error at page %d: %s", page, e)
+                break
+        
+        if page > max_pages:
+            _logger.warning("⚠️ Reached max_pages limit (%d), may have missing data!", max_pages)
+        
+        _logger.info("✅ Completed: %d products from %d page(s) (Expected: %d)", 
+                    len(all_products), page, total_expected or 0)
+        
+        # 🔁 GIỮ NGUYÊN, KHÔNG LOẠI COMBO CHA
+        return all_products
         
 
     # === LẤY THÀNH PHẦN COMBO TỪ API g1/Product/DataSubPaging ===
     def get_combo_children_by_product(self, combo_product_id: int | str, sale_headers: object) -> list[dict]:
         """
-        Trả về list children với DEBUG chi tiết
+        Trả về danh sách children combo từ API MISA (rút gọn logger).
         """
         url = "https://amisapp.misa.vn/crm/g1/api/business/Product/DataSubPaging"
-        
-        _logger.warning("=" * 80)
-        _logger.warning("📡 get_combo_children_by_product CALLED")
-        _logger.warning("🔑 combo_product_id: %s (type=%s)", combo_product_id, type(combo_product_id))
-        _logger.warning("🔌 URL: %s", url)
-        
+
         payload = {
             "Columns": "",
             "Sorts": [],
@@ -577,82 +666,30 @@ class MisaApiUtils(models.AbstractModel):
             "SessionID": "combo-fetch",
             "AISearchKeyword": ""
         }
-        
-        _logger.warning("📤 Payload: %s", payload)
-        _logger.warning("📤 Headers: %s", {k: v[:50] + '...' if len(str(v)) > 50 else v 
-                                        for k, v in (sale_headers or {}).items()})
 
         try:
-            _logger.warning("🚀 Đang gọi API...")
             resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
-            
-            _logger.warning("📥 Response status: %s", resp.status_code)
-            _logger.warning("📥 Response headers: %s", dict(resp.headers))
-            
+
             if not resp.ok:
-                _logger.warning("❌ HTTP không OK: %s", resp.status_code)
-                _logger.warning("📥 Response text (300 chars): %s", resp.text[:300])
+                _logger.warning("HTTP %s khi gọi combo children cho %s",
+                                resp.status_code, combo_product_id)
                 return []
-            
+
             try:
                 js = resp.json() if resp.content else {}
-                _logger.warning("📥 Response JSON keys: %s", list(js.keys()) if isinstance(js, dict) else type(js))
-                _logger.warning("📥 Full Response JSON: %s", js)
             except Exception as json_err:
-                _logger.error("❌ Lỗi parse JSON: %s", json_err)
-                _logger.warning("📥 Raw response text: %s", resp.text[:500])
+                _logger.error("Lỗi parse JSON combo children: %s", json_err)
                 return []
-            
+
             if isinstance(js, dict):
                 data = js.get("Data", []) or []
-                _logger.warning("📦 Data type: %s, length: %s", type(data), len(data) if isinstance(data, list) else 'N/A')
-                
-                if isinstance(data, list) and len(data) > 0:
-                    _logger.warning("👶 First item: %s", data[0])
-                    _logger.warning("👶 First item keys: %s", list(data[0].keys()) if isinstance(data[0], dict) else 'N/A')
-                
-                _logger.warning("=" * 80)
-                return data
-            else:
-                _logger.warning("⚠️ Response không phải dict")
-                _logger.warning("=" * 80)
-                return []
-                
-        except Exception as e:
-            _logger.exception("❌ Lỗi gọi Product/DataSubPaging (combo): %s", e)
-            _logger.warning("=" * 80)
+                return data if isinstance(data, list) else []
+
             return []
 
-    # === TÁCH MÃ CON TỪ TÊN COMBO (FALLBACK) ===
-    # def parse_children_codes_from_text(self, combo_text: str) -> list[str]:
-    #     """
-    #     Ví dụ: 'Combo ... M18 FHIW2F12-0X0 + Pin M18B5 MILWAUKEE'
-    #     → ['M18 FHIW2F12-0X0', 'M18B5']
-    #     Cách làm: tách theo ' + ', sau đó lấy cụm có chữ/ số/ '-' và khoảng trắng ngắn, ưu tiên cụm IN HOA/CHỨA KÝ TỰ MÃ.
-    #     """
-    #     import re
-    #     if not combo_text:
-    #         return []
-    #     # tách theo dấu +; gom cụm có thể chứa mã
-    #     parts = [p.strip() for p in combo_text.split('+') if p and p.strip()]
-    #     out = []
-    #     for p in parts:
-    #         # ưu tiên đoạn trong ngoặc đơn
-    #         m = re.search(r"\(([^)]+)\)\s*$", p)
-    #         cand = m.group(1).strip() if m else p
-    #         # lọc cụm có nhiều chữ hoa/số/ký tự '-' hoặc khoảng trắng ngắn (để giữ 'M18 FHIW2F12-0X0')
-    #         # lấy cụm dài nhất có >= 3 ký tự A-Z/0-9/-/space
-    #         tokens = re.findall(r"[A-Z0-9][A-Z0-9\- ]{2,}", cand)
-    #         if tokens:
-    #             # chọn token dài nhất
-    #             best = max(tokens, key=len).strip()
-    #             out.append(re.sub(r"\s{2,}", " ", best))
-    #     # khử trùng
-    #     uniq = []
-    #     for c in out:
-    #         if c not in uniq:
-    #             uniq.append(c)
-    #     return uniq
+        except Exception as e:
+            _logger.exception("Lỗi gọi Product/DataSubPaging (combo): %s", e)
+            return []
 
     # === Lấy thông tin ID, TaxCode, AccountNumber của đối tác từ MISA CRM ===
     def get_account_identity(self, account_id: int | str, sale_headers: object) -> dict:

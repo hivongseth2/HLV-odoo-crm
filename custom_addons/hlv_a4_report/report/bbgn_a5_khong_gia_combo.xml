@@ -1,0 +1,370 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <!-- Action report: BBGN A5 không giá COMBO (Landscape) -->
+  <record id="bbgn_a5_khong_gia_combo" model="ir.actions.report">
+    <field name="name">BBGN A5 không giá</field>
+    <field name="model">stock.picking</field>
+    <field name="report_type">qweb-pdf</field>
+    <field name="report_name">hlv_a4_report.bbgn_a5_khong_gia_combo_doc</field>
+    <field name="print_report_name">
+      'BBGN A5 không giá - %s' % (object.name or 'Picking')
+    </field>
+    <field name="binding_model_id" ref="stock.model_stock_picking"/>
+    <field name="binding_type">report</field>
+    <!-- Trỏ đúng paperformat A5 landscape bạn đã tạo -->
+    <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a5_landscape"/>
+  </record>
+
+  <!-- Template: BBGN A5 không giá COMBO (tách CSS riêng, không đụng A4) -->
+  <template id="bbgn_a5_khong_gia_combo_doc">
+    <t t-call="web.html_container">
+      <t t-call="web.report_layout">
+        <style type="text/css">
+          /* ===== Fonts riêng A5 ===== */
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman.ttf') format('truetype');
+            font-weight:400; font-style:normal; font-display:swap;
+          }
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman-bold.ttf') format('truetype');
+            font-weight:700; font-style:normal; font-display:swap;
+          }
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman-italic.ttf') format('truetype');
+            font-weight:400; font-style:italic; font-display:swap;
+          }
+          @font-face{
+            font-family:'HLV-TNR';
+            src:url('/hlv_a4_report/static/fonts/times-new-roman-bolditalic.ttf') format('truetype');
+            font-weight:700; font-style:italic; font-display:swap;
+          }
+
+          /* Base: A5 landscape (210x148mm, lề 5mm) – giảm cỡ chữ cho vừa khổ */
+          html, body, .o_report_layout, .o_report_layout * {
+            font-family:'HLV-TNR','DejaVu Serif','Liberation Serif',serif !important;
+            font-size:11px !important;
+            font-synthesis:none;
+          }
+          em, i { font-style:italic !important; font-weight:400 !important; }
+          strong em, strong i, b em, b i { font-style:italic !important; font-weight:700 !important; }
+
+          .fs-13 { font-size:13px !important; }
+          .fs-12 { font-size:12px !important; }
+          .fs-11 { font-size:11px !important; }
+
+          table { border-collapse:collapse; width:100%; }
+          .bbgn-a5 th, .bbgn-a5 td { border:1px solid #000; }
+          .bbgn-a5 th { background:#eee; font-weight:600; text-align:center; }
+
+          /* Header */
+          .hdr-logo { width:165px; text-align:center; vertical-align:middle; padding-right:6px; }
+          .hdr-logo img { max-height:90px; height:80px; width:140px; object-fit:contain; position:relative; top:-8px; }
+          .hdr-info { vertical-align:top; padding-left:8px; }
+
+          /* Cột bảng – thu gọn cho A5 */
+          .col-stt { width:28px; text-align:center; }
+          .col-pr  { width:60px; text-align:center; white-space:nowrap; }
+          .col-name{ width:auto; }
+          .col-uom { width:48px; text-align:center; white-space:nowrap; }
+          .col-qty { width:54px; text-align:center; white-space:nowrap; }
+          .col-price { width:72px; text-align:right; white-space:nowrap; }
+          .col-vatp  { width:52px; text-align:center; white-space:nowrap; }
+          .col-vat   { width:72px; text-align:right; white-space:nowrap; }
+          .col-amt   { width:92px; text-align:right; white-space:nowrap; }
+          .col-note  { width:88px; text-align:left; }
+
+          .mt-2 { margin-top:2px; }
+          .mt-4 { margin-top:4px; }
+          .mt-6 { margin-top:6px; }
+          .mt-8 { margin-top:8px; }
+          .mt-10{ margin-top:10px; }
+          .mt-12{ margin-top:12px; }
+          .txt-ctr{ text-align:center; }
+          .txt-r  { text-align:right; }
+          .txt-l  { text-align:left;  }
+          .fw-700 { font-weight:700; }
+        </style>
+
+        <div class="page">
+          <t t-foreach="docs" t-as="picking">
+            <!-- Lấy sale.order để hiển thị thông tin -->
+            <t t-set="so" t-value="picking.sale_id or (picking.move_ids and picking.move_ids[0].sale_line_id and picking.move_ids[0].sale_line_id.order_id)"/>
+            <!-- PO number rút gọn như bản A4 -->
+            <t t-set="po_raw" t-value="(so and so.origin) or picking.origin or ''"/>
+            <t t-set="po_upper" t-value="(po_raw or '').upper()"/>
+            <t t-set="po_number" t-value="( '' if not po_upper else ( po_upper.split('PO')[-1].strip().split()[0] if 'PO' in po_upper else ''.join([c for c in (po_raw or '') if c.isdigit()]) ) )"/>
+            <!-- Ngày theo wizard/context -->
+            <t t-set="order_date_str" t-value="(data and data.get('bbgn_order_date')) or (picking._context and picking._context.get('bbgn_order_date')) or ''"/>
+
+            <!-- Header công ty -->
+            <table class="mt-10" style="width:100%;">
+              <tr>
+                <td class="hdr-logo">
+                  <t t-if="picking.company_id.logo">
+                    <img t-att-src="image_data_uri(picking.company_id.logo)"/>
+                  </t>
+                  <t t-else="">
+                    <img t-att-src="'/web/image/res.company/%s/logo' % picking.company_id.id"/>
+                  </t>
+                </td>
+                <td class="hdr-info">
+                  <div class="fs-12 fw-700">CÔNG TY TNHH VI NA HOÀNG LONG VŨ</div>
+                  <div>
+                    Địa chỉ:
+                    <t t-esc="picking.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''"/>
+                  </div>
+                  <table class="mt-2" style="width:100%;">
+                    <tr>
+                      <td style="padding:0 6px 0 0; white-space:nowrap;">Điện thoại:</td>
+                      <td style="padding:0 10px 0 0;"><t t-esc="picking.company_id.phone or ''"/></td>
+                      <td style="padding:0; white-space:nowrap;">Di động:</td>
+                      <td><t t-esc="picking.company_id.mobile or picking.company_id.partner_id.mobile or ''"/></td>
+                    </tr>
+                    <tr>
+                      <td style="padding:2px 6px 0 0; white-space:nowrap;">Email:</td>
+                      <td style="padding:2px 10px 0 0;"><t t-esc="picking.company_id.email or ''"/></td>
+                      <td style="padding:2px 6px 0 0; white-space:nowrap;">Website:</td>
+                      <td style="padding-top:2px;"><t t-esc="picking.company_id.website or ''"/></td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Tiêu đề -->
+            <div class="txt-ctr mt-2">
+              <div class="fs-13 fw-700">BIÊN BẢN GIAO NHẬN HÀNG HÓA</div>
+              <t t-set="dt_src" t-value="picking.date_done or picking.scheduled_date or picking.create_date or (so and so.date_order)"/>
+              <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')"/>
+              <div class="fs-11">
+                (No.: <span t-esc="picking.name"/> ; Date ..../..../<t t-esc="year_str"/>)
+              </div>
+              <div class="mt-4" style="font-style:italic; text-align:left;">
+                Căn cứ đơn đặt hàng ngày <span t-esc="order_date_str"/> PO số:
+                <span t-esc="po_number"/> của
+                <span t-esc="so and so.partner_id and so.partner_id.commercial_partner_id.name or ''"/>
+              </div>
+              <div class="mt-2" style="text-align:left;">
+                Hôm nay, ngày <span t-esc="datetime.datetime.now().strftime('%d/%m/%Y')"/> tại
+                <span t-esc="so and so.partner_id and so.partner_id.commercial_partner_id.name or ''"/>, Chúng tôi gồm:
+              </div>
+            </div>
+
+            <!-- Thông tin hai bên -->
+            <table class="mt-6" style="width:100%;">
+              <tr>
+                <td colspan="2">
+                  <span class="fs-12 fw-700">BÊN A (Bên nhận hàng):</span>
+                  <span class="fw-700">
+                    <t t-esc="so and so.partner_id and so.partner_id.commercial_partner_id.name or ''"/>
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-left:16px;">
+                  Địa chỉ:
+                  <t t-set="p" t-value="so and so.partner_id and so.partner_id.commercial_partner_id or so.partner_id"/>
+                  <span><t t-esc="(p._display_address(without_company=True).replace('\n',' ') or '')"/></span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-left:16px;">
+                  Điện thoại :
+                  <span style="min-width:110px; display:inline-block;">....................................</span>
+                  Fax :
+                  <span style="min-width:110px; display:inline-block;">.............................................</span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-left:16px;">
+                  Đại diện Ông/bà:
+                  <span style="min-width:110px; display:inline-block;">.............................................</span>
+                  Chức vụ:
+                  <span style="min-width:110px; display:inline-block;">.............................................</span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" class="mt-4">
+                  <span class="fs-12 fw-700">BÊN B (Bên giao hàng):</span>
+                  <span class="fw-700">CÔNG TY TNHH VI NA HOÀNG LONG VŨ</span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-left:16px; padding-right:16px;">
+                  Địa chỉ:
+                  <t t-set="addr_b" t-value="picking.company_id.partner_id._display_address(without_company=True) or ''"/>
+                  <span>
+                    <t t-foreach="addr_b.split('-')" t-as="line">
+                      <t t-esc="line"/><br/>
+                    </t>
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-left:16px;">
+                  Điện thoại :
+                  <span style="min-width:110px; display:inline-block;"><t t-esc="picking.company_id.phone or ''"/></span>
+                  Fax :
+                  <span style="min-width:130px; display:inline-block;">.............................................</span>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-left:16px;">
+                  Đại diện Ông/bà:
+                  <span style="min-width:110px; display:inline-block;">.............................................</span>
+                  Chức vụ:
+                  <span style="min-width:110px; display:inline-block;">.............................................</span>
+                </td>
+              </tr>
+            </table>
+
+            <div class="mt-4" style="font-style:italic; padding-bottom:4px;">
+              Hai bên cùng thống nhất số lượng giao hàng như sau:
+            </div>
+
+            <!-- COMBO: Lấy dữ liệu từ helper với picking -->
+            <t t-set="enriched_lines" t-value="env['hlv.report.helper'].get_enriched_lines_for_picking_combo(picking)"/>
+
+            <!-- Bảng hàng hóa (giữ nguyên cột như A4, chỉ thu gọn width) -->
+            <table class="bbgn-a5">
+              <thead>
+                <tr>
+                  <th class="col-stt">STT</th>
+                  <th class="col-pr">Số PR</th>
+                  <th class="col-name">Tên hàng</th>
+                  <th class="col-uom">DVT</th>
+                  <th class="col-qty">SL</th>
+                  <th class="col-price">Đơn giá</th>
+                  <th class="col-vatp">Vat(%)</th>
+                  <th class="col-vat">Vat</th>
+                  <th class="col-amt">Thành Tiền</th>
+                  <th class="col-note">Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody>
+                <t t-set="idx" t-value="1"/>
+                <t t-foreach="enriched_lines" t-as="line_data">
+                  <!-- Sử dụng dữ liệu từ helper -->
+                  <t t-set="is_child" t-value="line_data['is_combo_child']"/>
+                  <t t-set="qty_show" t-value="line_data['qty']"/>
+
+                  <t t-if="qty_show &gt; 0 and line_data['type'] != 'parent'">
+                    <tr>
+                      <td class="col-stt">
+                        <t t-if="line_data['type'] == 'parent'">
+                          <t t-esc="idx"/>
+                          <t t-set="idx" t-value="idx + 1"/>
+                        </t>
+                      </td>
+                      <!-- PR = stock.picking.line.note -->
+                      <td class="col-pr">
+                        <span t-esc="line_data.get('sol') and line_data['sol'].note or ''"/>
+                      </td>
+
+                      <td class="col-name" style="padding:3px 5px;">
+                        <t t-if="is_child">
+                          <span style="padding-left:20px;">
+                            <t t-esc="line_data['product_name']"/>
+                          </span>
+                        </t>
+                        <t t-else="">
+                          <span t-esc="line_data['product_name']"/>
+                        </t>
+                      </td>
+
+                      <td class="col-uom">
+                        <span t-esc="line_data['uom']"/>
+                      </td>
+
+                      <td class="col-qty"><span t-esc="'%0.2f' % qty_show"/></td>
+
+                      <!-- Các cột giá/VAT để trống giống bản A4 "không giá" -->
+                      <td class="col-price"></td>
+                      <td class="col-vatp"></td>
+                      <td class="col-vat"></td>
+                      <td class="col-amt"></td>
+
+                      <td class="col-note">
+                        <t t-esc="(so and so.origin) or ''"/>
+                      </td>
+                    </tr>
+                  </t>
+                </t>
+
+                <!-- Không có dòng -->
+                <t t-if="not enriched_lines">
+                  <tr>
+                    <td colspan="10" style="text-align:center; font-style:italic; padding:6px;">
+                      Không có dòng hàng.
+                    </td>
+                  </tr>
+                </t>
+
+                <!-- 3 hàng tổng (giữ cấu trúc, thu gọn padding) -->
+                <tr>
+                  <td colspan="5" rowspan="3" style="background:#eee;"></td>
+                  <td colspan="3" class="txt-l fw-700">Tổng tiền hàng (VNĐ)</td>
+                  <td class="txt-r"></td>
+                  <td rowspan="3" style="background:#eee;"></td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="txt-l fw-700">Tổng thuế VAT (VNĐ)</td>
+                  <td class="txt-r"></td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="txt-l fw-700">Tổng tiền thanh toán (VNĐ)</td>
+                  <td class="txt-r"></td>
+                </tr>
+
+                <!-- Bằng chữ -->
+                <tr>
+                  <td colspan="5" class="fw-700" style="background:#eee;">
+                    Thành tiền thanh toán (Bằng chữ):
+                  </td>
+                  <td colspan="5" style="background:#eee;"></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- Đoạn xác nhận -->
+            <div class="mt-6" style="text-align:justify;">
+              Bên A xác nhận Bên B đã giao cho Bên A đúng chủng loại và đủ số lượng hàng như trên.
+              <br/>Hai bên đồng ý, thống nhất ký tên. Biên bản được lập thành 05 bản, bên mua giữ 04 bản,
+              bên bán giữ 01 bản và có giá trị pháp lý như nhau.
+            </div>
+
+            <div class="mt-6">
+              <span style="font-style:italic; font-weight:600;">***Giao hàng tại kho:</span>
+              <span style="margin-left:24px;">Người nhận hàng:</span>
+              <span style="margin-left:24px;">SĐT người nhận hàng:</span>
+            </div>
+
+            <!-- Chữ ký -->
+            <table class="mt-8" style="width:100%;">
+              <tr>
+                <td style="width:50%; padding-left:28px;">Đại diện bên nhận hàng</td>
+                <td style="width:50%; text-align:right; padding-right:28px;">Đại diện bên giao hàng</td>
+              </tr>
+              <tr>
+                <td style="height:80px;"></td>
+                <td style="height:80px;"></td>
+              </tr>
+            </table>
+
+            <!-- Footer -->
+            <div style="position: fixed; bottom: 16px; left: 0; width: 100%; text-align: center; font-size: 10px; margin-top: 8px;">
+              PHÂN PHỐI CHÍNH HÃNG:
+              SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MAKITA-MILWAUKEE-DEWALT
+            </div>
+
+          </t>
+        </div>
+      </t>
+    </t>
+  </template>
+
+</odoo>

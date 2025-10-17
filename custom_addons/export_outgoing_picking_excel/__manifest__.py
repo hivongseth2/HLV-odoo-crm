@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 {
-    "name": "HLV Export Outgoing Picking Excel",
-    "summary": "Xuất Excel lệnh xuất kho (stock.picking - outgoing) theo khoảng ngày",
+    "name": "HLV Export Outgoing Picking & Purchase Order Excel",
+    "summary": "Xuất Excel lệnh xuất kho (stock.picking - outgoing) và đơn mua hàng theo khoảng ngày",
     "version": "18.0.1.0.0",
     "author": "HLV",
     "category": "Inventory/Reporting",
     "license": "LGPL-3",
-    "depends": ["stock"],
+    "depends": ["stock", "purchase"],
     "data": [
         "security/ir.model.access.csv",
         "views/picking_export_wizard_views.xml", 
+        "views/purchase_export_wizard_views.xml",
         "views/stock_picking_views.xml",
     ],
     "assets": {},
