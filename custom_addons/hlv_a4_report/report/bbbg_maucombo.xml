@@ -183,7 +183,7 @@
                                 <t t-foreach="enriched_lines" t-as="line_data">
                                     <tr>
                                         <td style="border:1px solid #000; padding:6px; text-align:center;">
-                                            <t t-if="line_data['type'] == 'parent'">
+                                            <t t-if="line_data['type'] != 'child'">
                                                 <t t-esc="idx" />
                                                 <t t-set="idx" t-value="idx + 1" />
                                             </t>
