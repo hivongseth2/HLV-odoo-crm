@@ -120,7 +120,7 @@
                         <!-- Tiêu đề -->
                         <div style="text-align:center; margin-top:-5px">
                             <div style="font-size:20px; font-weight:800;">BIÊN BẢN BÀN GIAO</div>
-                            <div>(Số phiếu xuất: <span t-esc="picking.name" /><t t-if="so"> / SO: <span t-esc="so.name"/></t> – ngày <t t-esc="d_str" />
+                            <div>(Số phiếu xuất: <span t-esc="picking.name" /> ngày <t t-esc="d_str" />
                                 tháng <t t-esc="m_str" /> năm <t t-esc="y_str" /> )</div>
                         </div>
 

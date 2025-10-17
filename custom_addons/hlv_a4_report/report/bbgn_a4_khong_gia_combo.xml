@@ -4,13 +4,13 @@
     <!-- Action report: BBGN A4 không giá COMBO -->
     <record id="bbgn_a4_khong_gia_combo" model="ir.actions.report">
         <field name="name">BBGN A4 không giá - COMBO</field>
-        <field name="model">sale.order</field>
+        <field name="model">stock.picking</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">hlv_a4_report.bbgn_a4_khong_gia_combo_doc</field>
         <field name="print_report_name">
             'BBGN A4 không giá COMBO - %s' % (object.name or 'Picking')
         </field>
-        <field name="binding_model_id" ref="sale.model_sale_order" />
+        <field name="binding_model_id" ref="stock.model_stock_picking" />
         <field name="binding_type">report</field>
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait" />
     </record>
@@ -58,27 +58,32 @@
                     .fs-14 { font-size:14px !important; }
                 </style>
             <div class="page">
-                <t t-foreach="docs" t-as="o">
-                    <!-- bắt cầu sang sale.order -->
-                    <t t-set="so" t-value="o"/>
-                    <!-- Origin/PO lấy từ o.sale_id.source_id -->
-                    <t t-set="po_raw" t-value="o.origin or ''"/>
+                <t t-foreach="docs" t-as="picking">
+                    <!-- Lấy sale.order để hiển thị thông tin -->
+                    <t t-set="so" t-value="picking.sale_id or (picking.move_ids and picking.move_ids[0].sale_line_id and picking.move_ids[0].sale_line_id.order_id)"/>
+                    
+                    <!-- Origin/PO lấy từ so hoặc picking -->
+                    <t t-set="po_raw" t-value="(so and so.origin) or picking.origin or ''"/>
                     <!-- Rút số PO: nếu có 'PO' thì lấy token ngay sau; nếu không thì gom toàn bộ chữ số -->
                     <t t-set="po_upper" t-value="(po_raw or '').upper()"/>
                      <t t-set="po_number" t-value="( '' if not po_upper else ( po_upper.split('PO')[-1].strip().split()[0] if 'PO' in po_upper else ''.join([c for c in (po_raw or '') if c.isdigit()]) ) )"/>
                     <!-- Ngày từ wizard (giữ như bạn đang dùng) -->
-                    <t t-set="order_date_str" t-value="(data and data.get('bbgn_order_date')) or (o._context and o._context.get('bbgn_order_date')) or ''"/>
-                    <div class="page">
+                    <t t-set="order_date_str" t-value="(data and data.get('bbgn_order_date')) or (picking._context and picking._context.get('bbgn_order_date')) or ''"/>
+                    
+                    <!-- Nguồn ngày -->
+                    <t t-set="dt_src" t-value="picking.date_done or picking.scheduled_date or (so and so.date_order) or picking.create_date"/>
+                    <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')"/>
+                    
                         <!-- Header công ty -->
                         <table style="width:100%; margin-top:30px">
                             <tr>
                                 <!-- Logo -->
                                 <td style="width:220px; text-align:center; vertical-align:middle; padding-right:5px">
-                                    <t t-if="o.company_id.logo">
-                                        <img t-att-src="image_data_uri(o.company_id.logo)" style="max-height:150px; position:relative; top:-20px; height:130px; width:180px; object-fit:contain; text-align:center; vertical-align:middle;"/>
+                                    <t t-if="picking.company_id.logo">
+                                        <img t-att-src="image_data_uri(picking.company_id.logo)" style="max-height:150px; position:relative; top:-20px; height:130px; width:180px; object-fit:contain; text-align:center; vertical-align:middle;"/>
                                     </t>
                                     <t t-else="">
-                                        <img t-att-src="'/web/image/res.company/%s/logo' % o.company_id.id" style="max-height:150px; height:150px; width:120px;"/>
+                                        <img t-att-src="'/web/image/res.company/%s/logo' % picking.company_id.id" style="max-height:150px; height:150px; width:120px;"/>
                                     </t>
                                 </td>
                                 <td style="vertical-align:top; padding-left:10px;">
@@ -88,7 +93,7 @@
                                     </div>
                                     <!-- Địa chỉ -->
                                     <div>Địa chỉ: 
-                                        <t t-esc="o.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''"/>
+                                        <t t-esc="picking.company_id.partner_id._display_address(without_company=True).replace('\n',' ') or ''"/>
                                     </div>
                                     <!-- Điện thoại | Di động -->
                                     <table style="width:100%; margin-top:2px; border-collapse:collapse;">
@@ -96,12 +101,12 @@
                                             <td style="padding:0 8px 0 0; white-space:nowrap;">Điện
                                                     thoại:</td>
                                             <td style="padding:0 12px 0 0;">
-                                                <t t-esc="o.company_id.phone or ''"/>
+                                                <t t-esc="picking.company_id.phone or ''"/>
                                             </td>
                                             <td style="padding:0 0px; white-space:nowrap;">Di
                                                     động:</td>
                                             <td>
-                                                <t t-esc="o.company_id.mobile or o.company_id.partner_id.mobile or ''"/>
+                                                <t t-esc="picking.company_id.mobile or picking.company_id.partner_id.mobile or ''"/>
                                             </td>
                                         </tr>
                                         <!-- Email | Website -->
@@ -109,12 +114,12 @@
                                             <td style="padding:2px 8px 0 0; white-space:nowrap;">
                                                     Email:</td>
                                             <td style="padding:2px 12px 0 0;">
-                                                <t t-esc="o.company_id.email or ''"/>
+                                                <t t-esc="picking.company_id.email or ''"/>
                                             </td>
                                             <td style="padding:2px 8px 0 0; white-space:nowrap;">
                                                     Website:</td>
                                             <td style="padding-top:2px;">
-                                                <t t-esc="o.company_id.website or ''"/>
+                                                <t t-esc="picking.company_id.website or ''"/>
                                             </td>
                                         </tr>
                                     </table>
@@ -123,24 +128,20 @@
                         </table>
                         <!-- Tiêu đề -->
                         <div style="text-align:center; margin-top:-5px">
-                            <div class="fs-14" style="font-weight:800;">BIÊN BẢN GIAO NHẬN HÀNG
-                                    HÓA</div>
-                            <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
-                    <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
-                            <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')"/>
+                            <div class="fs-14" style="font-weight:800;">BIÊN BẢN GIAO NHẬN HÀNG HÓA</div>
                             <div>(No.: 
-                                <span t-esc="o.name"/> ; Date ..../..../
+                                <span t-esc="picking.name"/> ; Date ..../..../
                                 <t t-esc="year_str"/> )
                             </div>
                             <div style="font-style:italic; margin-top:8px; text-align:left;">
                                     Căn cứ đơn đặt hàng ngày 
                                 <span t-esc="order_date_str"/> PO số: 
                                 <span t-esc="po_number"/> của 
-                                <span t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''"/>
+                                <span t-esc="so.partner_id and so.partner_id.commercial_partner_id.name or ''"/>
                             </div>
                             <div style="margin-top:2px; text-align:left;"> Hôm nay, ngày 
                                 <span t-esc="datetime.datetime.now().strftime('%d/%m/%Y')"/> tại 
-                                <span t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''"/>,
+                                <span t-esc="so.partner_id and so.partner_id.commercial_partner_id.name or ''"/>,
                                     Chúng tôi gồm: 
                             </div>
                         </div>
@@ -150,13 +151,13 @@
                                     <span class="fs-14" style="font-weight:700;">BÊN A (Bên nhận
                                             hàng):</span>
                                     <span style="font-weight:700;">
-                                        <t t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''"/>
+                                        <t t-esc="picking.partner_id and picking.partner_id.commercial_partner_id.name or ''"/>
                                     </span>
                                 </td>
                             </tr>
                             <tr>
                                 <td colspan="2" style="padding-left:20px;"> Địa chỉ: 
-                                    <t t-set="p" t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id"/>
+                                    <t t-set="p" t-value="picking.partner_id and picking.partner_id.commercial_partner_id or picking.partner_id"/>
                                     <span>
                                         <t t-esc="(p._display_address(without_company=True).replace('\n',' ') or '')"/>
                                     </span>
@@ -190,7 +191,7 @@
                             </tr>
                             <tr>
                                 <td colspan="2" style="padding-left:20px; padding-right: 20px"> Địa chỉ: 
-                                    <t t-set="addr_b" t-value="o.company_id.partner_id._display_address(without_company=True) or ''"/>
+                                    <t t-set="addr_b" t-value="picking.company_id.partner_id._display_address(without_company=True) or ''"/>
                                     <span>
                                         <t t-foreach="addr_b.split('-')" t-as="line">
                                             <t t-esc="line"/>
@@ -202,7 +203,7 @@
                             <tr>
                                 <td colspan="2" style="padding-left:20px;"> Điện thoại : 
                                     <span style="min-width:120px; display:inline-block;">
-                                        <t t-esc="o.company_id.phone or ''"/>
+                                        <t t-esc="picking.company_id.phone or ''"/>
                                     </span>
                                         Fax : 
                                     <span style="min-width:140px; display:inline-block;">
@@ -220,8 +221,9 @@
                             </tr>
                         </table>
                         <div style="font-style:italic; padding-bottom: 5px">Hai bên cùng thống nhất số lượng giao hàng như sau:</div>
-                        <!-- COMBO: Chọn nguồn dữ liệu từ sale.order.line -->
-                        <t t-set="lines" t-value="o.order_line or []"/>
+                        <!-- COMBO: Dùng helper để lấy lines (bao gồm cả parent) -->
+                        <t t-set="enriched_lines" t-value="env['hlv.report.helper'].get_enriched_lines_for_picking_combo(picking)"/>
+                        
                         <!-- Bảng hàng hóa -->
                         <table style="width:100%; border-collapse:collapse;">
                             <thead>
@@ -250,50 +252,42 @@
                             </thead>
                             <tbody>
                                 <t t-set="idx" t-value="1"/>
-                                <t t-foreach="lines" t-as="l">
-                                    <!-- COMBO: kiểm tra is_combo_child -->
-                                    <t t-set="is_child" t-value="l.x_studio_is_combo_child"/>
-                                    <t t-set="qty_show" t-value="l.product_uom_qty or 0.0"/>
-                                    
-                                    <t t-if="qty_show &gt; 0">
-                                        <tr>
-                                            <td style="border:1px solid #000; text-align:center;">
-                                                <t t-if="not is_child">
-                                                    <t t-esc="idx"/>
-                                                    <t t-set="idx" t-value="idx + 1"/>
-                                                </t>
-                                            </td>
-                                            <!-- SỐ PR = sale.order.line.note -->
-                                            <td style="border:1px solid #000; text-align:center;">
-                                                <span t-esc="l.note or ''"/>
-                                            </td>
+                                <t t-foreach="enriched_lines" t-as="line_data">
+                                    <tr>
+                                        <td style="border:1px solid #000; text-align:center;">
+                                            <t t-if="line_data['type'] == 'parent'">
+                                                <t t-esc="idx"/>
+                                                <t t-set="idx" t-value="idx + 1"/>
+                                            </t>
+                                        </td>
+                                        <!-- SỐ PR = sale.order.line.note -->
+                                        <td style="border:1px solid #000; text-align:center;">
+                                            <span t-esc="line_data['sol'].note if line_data.get('sol') else ''"/>
+                                        </td>
 
-                                            <td style="border:1px solid #000;">
-                                                <t t-if="is_child">
-                                                    <span style="padding-left:24px;">
-                                                        <t t-esc="l.product_id and l.product_id.display_name or ''"/>
-                                                    </span>
-                                                </t>
-                                                <t t-else="">
-                                                    <span t-esc="l.product_id and l.product_id.display_name or ''"/>
-                                                </t>
-                                            </td>
-                                            <td style="border:1px solid #000; text-align:center;">
-                                                <span t-esc="l.product_uom and l.product_uom.name or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
-                                            </td>
-                                            <td style="border:1px solid #000; text-align:center;">
-                                                <span t-esc="'%0.2f' % qty_show"/>
-                                            </td>
-                                            <td style="border:1px solid #000; text-align:right;"/>
-                                            <td style="border:1px solid #000; text-align:center;"/>
-                                            <td style="border:1px solid #000; text-align:right;"/>
-                                            <td style="border:1px solid #000; text-align:right;"/>
-                                            <td style="border:1px solid #000;"/>
-                                        </tr>
-                                    </t>
+                                        <td style="border:1px solid #000;">
+                                            <t t-if="line_data['is_combo_child']">
+                                                <span style="padding-left:24px;" t-esc="line_data['product_name']"/>
+                                            </t>
+                                            <t t-else="">
+                                                <span t-esc="line_data['product_name']"/>
+                                            </t>
+                                        </td>
+                                        <td style="border:1px solid #000; text-align:center;">
+                                            <span t-esc="line_data['uom']"/>
+                                        </td>
+                                        <td style="border:1px solid #000; text-align:center;">
+                                            <span t-esc="'%0.2f' % line_data['qty']"/>
+                                        </td>
+                                        <td style="border:1px solid #000; text-align:right;"/>
+                                        <td style="border:1px solid #000; text-align:center;"/>
+                                        <td style="border:1px solid #000; text-align:right;"/>
+                                        <td style="border:1px solid #000; text-align:right;"/>
+                                        <td style="border:1px solid #000;"/>
+                                    </tr>
                                 </t>
                                 <!-- Không có dòng nào -->
-                                <t t-if="not lines">
+                                <t t-if="not enriched_lines">
                                     <tr>
                                         <td colspan="10" style="border:1px solid #000; text-align:center; font-style:italic;">
                                                 Không có dòng hàng.
@@ -365,8 +359,8 @@
                                 PHÂN PHỐI CHÍNH HÃNG:
                                 SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MAKITA-MILWAUKEE-DEWALT
                             </div>
-                    </div>
                 </t>
+                
             </div>
         </t>
     </t>

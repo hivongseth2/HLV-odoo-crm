@@ -19,7 +19,7 @@
     </record>
 
     <!-- 2. BBBG A4 có PO COMBO (sale.order) -->
-    <record id="bbbg_a4_co_po_combo" model="ir.actions.report">
+    <!-- <record id="bbbg_a4_co_po_combo" model="ir.actions.report">
         <field name="name">BBBG A4 có PO - COMBO</field>
         <field name="model">sale.order</field>
         <field name="report_type">qweb-pdf</field>
@@ -28,7 +28,7 @@
         <field name="binding_model_id" ref="sale.model_sale_order"/>
         <field name="binding_type">report</field>
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait"/>
-    </record>
+    </record> -->
 
     <!-- 3. BBBG A5 có PO (stock.picking) -->
     <record id="bbbg_a5_co_po" model="ir.actions.report">
@@ -43,7 +43,7 @@
     </record>
 
     <!-- 4. BBBG A5 có PO COMBO (sale.order) -->
-    <record id="bbbg_a5_co_po_combo" model="ir.actions.report">
+    <!-- <record id="bbbg_a5_co_po_combo" model="ir.actions.report">
         <field name="name">BBBG A5 có PO - COMBO</field>
         <field name="model">sale.order</field>
         <field name="report_type">qweb-pdf</field>
@@ -52,7 +52,7 @@
         <field name="binding_model_id" ref="sale.model_sale_order"/>
         <field name="binding_type">report</field>
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a5_landscape"/>
-    </record>
+    </record> -->
 
     <!-- ==================== BASE STYLES ==================== -->
     

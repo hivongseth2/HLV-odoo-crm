@@ -4,13 +4,13 @@
     <!-- Action report -->
     <record id="bbgn_a4_khongngay_combo" model="ir.actions.report">
         <field name="name">BBGN A4 Không Ngày - COMBO</field>
-        <field name="model">sale.order</field>
+        <field name="model">stock.picking</field>
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">hlv_a4_report.bbgn_a4_khongngay_combo_doc</field>
         <field name="print_report_name">
             'BBGN A4 Không Ngày COMBO - %s' % (object.name or 'Picking')
         </field>
-        <field name="binding_model_id" ref="sale.model_sale_order" />
+        <field name="binding_model_id" ref="stock.model_stock_picking" />
         <field name="binding_type">report</field>
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait" />
     </record>
@@ -61,9 +61,9 @@
                 </style>
 
                 <div class="page">
-                    <t t-foreach="docs" t-as="o">
-                        <!-- COMBO: Lấy sale.order -->
-                        <t t-set="so" t-value="o"/>
+                    <t t-foreach="docs" t-as="picking">
+                        <!-- Lấy sale.order để hiển thị thông tin -->
+                        <t t-set="so" t-value="picking.sale_id or (picking.move_ids and picking.move_ids[0].sale_line_id and picking.move_ids[0].sale_line_id.order_id)"/>
 
                         <div class="page">
 
@@ -73,13 +73,13 @@
                                     <!-- Logo -->
                                     <td
                                         style="width:220px; text-align:center; vertical-align:middle; padding-right:5px">
-                                        <t t-if="o.company_id.logo">
-                                            <img t-att-src="image_data_uri(o.company_id.logo)"
+                                        <t t-if="picking.company_id.logo">
+                                            <img t-att-src="image_data_uri(picking.company_id.logo)"
                                                 style="max-height:150px; position:relative; top:-20px; height:130px; width:180px; object-fit:contain; text-align:center; vertical-align:middle;" />
                                         </t>
                                         <t t-else="">
                                             <img
-                                                t-att-src="'/web/image/res.company/%s/logo' % o.company_id.id"
+                                                t-att-src="'/web/image/res.company/%s/logo' % picking.company_id.id"
                                                 style="max-height:150px; height:150px; width:120px;" />
                                         </t>
                                     </td>
@@ -91,14 +91,14 @@
                                             </div>
                                         <div>
                                             <t t-set="addr"
-                                                t-value="o.company_id.partner_id._display_address(without_company=True) or ''" />
+                                                t-value="picking.company_id.partner_id._display_address(without_company=True) or ''" />
                                             <t t-foreach="addr.split(' - ')" t-as="line">
                                                 <t t-esc="line" />
                                                 <br />
                                             </t>
                                         </div>
-                                        <div>Mã số thuế: <span t-esc="o.company_id.vat or ''" /></div>
-                                        <div>Website: <span t-esc="o.company_id.website or ''" /></div>
+                                        <div>Mã số thuế: <span t-esc="picking.company_id.vat or ''" /></div>
+                                        <div>Website: <span t-esc="picking.company_id.website or ''" /></div>
                                     </td>
                                 </tr>
                             </table>
@@ -121,7 +121,7 @@
                                 <tr>
                                     <td style="width:180px; font-weight:600;">Đại diện bên nhận (A)</td>
                                     <td style="font-weight:700;"
-                                        t-esc="o.partner_id and o.partner_id.commercial_partner_id.name or ''" />
+                                        t-esc="so and so.partner_id and so.partner_id.commercial_partner_id.name or ''" />
                                 </tr>
                                 <tr>
                                     <td>Ông (Bà)</td>
@@ -131,7 +131,7 @@
                                     <td>Địa chỉ</td>
                                     <td class="h6-fs" style="width:379.875px;">
                                         <t t-set="p"
-                                            t-value="o.partner_id and o.partner_id.commercial_partner_id or o.partner_id" />
+                                            t-value="so and so.partner_id and so.partner_id.commercial_partner_id or so.partner_id" />
                                         <t
                                             t-esc="(p.street or '') + (p.street2 and (', ' + p.street2) or '')" />
                                     </td>
@@ -150,7 +150,7 @@
                                     <td class="label">Địa chỉ</td>
                                     <td>
                                         <t t-set="addr_b"
-                                            t-value="o.company_id.partner_id._display_address(without_company=True) or ''" />
+                                            t-value="picking.company_id.partner_id._display_address(without_company=True) or ''" />
                                         <t t-foreach="addr_b.split('-')" t-as="line">
                                             <t t-esc="line" />
                                             <br />
@@ -162,8 +162,8 @@
                             <div style="margin:15px 15px 6px 0; font-weight:700">Bên B đã bàn giao
                                 cho bên A:</div>
 
-                            <!-- COMBO: Chọn nguồn dữ liệu từ sale.order.line -->
-                            <t t-set="lines" t-value="o.order_line or []"/>
+                            <!-- COMBO: Lấy dữ liệu từ helper với picking -->
+                            <t t-set="enriched_lines" t-value="env['hlv.report.helper'].get_enriched_lines_for_picking_combo(picking)"/>
 
                             <!-- Bảng hàng hóa -->
                             <table
@@ -187,18 +187,18 @@
                                 </thead>
                                 <tbody>
                                     <t t-set="idx" t-value="1" />
-                                    <t t-foreach="lines" t-as="l">
-                                        <!-- COMBO: kiểm tra is_combo_child -->
-                                        <t t-set="is_child" t-value="l.x_studio_is_combo_child"/>
-                                        <t t-set="qty_show" t-value="l.product_uom_qty or 0.0"/>
+                                    <t t-foreach="enriched_lines" t-as="line_data">
+                                        <!-- Sử dụng dữ liệu từ helper -->
+                                        <t t-set="is_child" t-value="line_data['is_combo_child']"/>
+                                        <t t-set="qty_show" t-value="line_data['qty']"/>
 
                                         <!-- Chỉ render khi qty_show > 0 -->
-                                        <t t-if="qty_show &gt; 0">
+                                        <t t-if="qty_show &gt; 0 and line_data['type'] != 'parent'">
                                             <tr>
                                                 <!-- STT -->
                                                 <td
                                                     style="border:1px solid #000; padding:6px; text-align:center;">
-                                                    <t t-if="not is_child">
+                                                    <t t-if="line_data['type'] == 'parent'">
                                                         <t t-esc="idx" />
                                                         <t t-set="idx" t-value="idx + 1"/>
                                                     </t>
@@ -208,18 +208,18 @@
                                                 <td style="border:1px solid #000; padding:6px;">
                                                     <t t-if="is_child">
                                                         <span style="padding-left:24px;">
-                                                            <t t-esc="l.product_id and l.product_id.display_name or ''"/>
+                                                            <t t-esc="line_data['product_name']"/>
                                                         </span>
                                                     </t>
                                                     <t t-else="">
-                                                        <span t-esc="l.product_id and l.product_id.display_name or ''" />
+                                                        <span t-esc="line_data['product_name']" />
                                                     </t>
                                                 </td>
 
                                                 <!-- Đơn vị tính -->
                                                 <td
                                                     style="border:1px solid #000; padding:6px; text-align:center;">
-                                                    <span t-esc="l.product_uom and l.product_uom.name or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''" />
+                                                    <span t-esc="line_data['uom']" />
                                                 </td>
 
                                                 <!-- Số lượng -->
@@ -235,7 +235,7 @@
                                     </t>
 
                                     <!-- Không có dòng nào đủ điều kiện -->
-                                    <t t-if="not lines">
+                                    <t t-if="not enriched_lines">
                                         <tr>
                                             <td colspan="5"
                                                 style="border:1px solid #000; padding:8px; text-align:center; font-style:italic;">
