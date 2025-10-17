@@ -11,22 +11,6 @@ class HlvReportHelper(models.AbstractModel):
     def get_combo_parent_lines_for_picking(self, picking):
         """
         Lấy danh sách các dòng combo parent cần hiển thị trong báo cáo picking.
-        
-        Logic:
-        - Duyệt qua các stock.move trong picking
-        - Với mỗi move, kiểm tra xem có sale.order.line nào có x_studio_combo_parent_code 
-          trùng với product code của move không
-        - Nếu có → lấy dòng combo parent tương ứng
-        - Trả về: recordset các dòng SO line cần hiển thị (bao gồm cả parent và child)
-        
-        Args:
-            picking: recordset stock.picking
-            
-        Returns:
-            dict: {
-                'lines_to_show': recordset sale.order.line (cả parent lẫn child),
-                'parent_map': dict {child_product_code: parent_sol} để mapping
-            }
         """
         SaleLine = self.env['sale.order.line']
         if not picking or not picking.move_ids:
@@ -62,14 +46,14 @@ class HlvReportHelper(models.AbstractModel):
                 and not getattr(l, 'x_studio_is_combo_child', False)
             )
 
-        # Map mã parent → chính xác parent SOL (nếu trùng mã nhiều dòng, ưu tiên sequence nhỏ hơn)
+        # Map mã parent → chính xác parent SOL
         parent_sol_by_code = {}
         for pl in sorted(parent_lines, key=lambda l: (l.sequence or 0, l.id)):
             pcode = pl.product_id.default_code if pl.product_id else False
             if pcode and pcode not in parent_sol_by_code:
                 parent_sol_by_code[pcode] = pl
 
-        # Child lines là các dòng có mã xuất hiện trong picking (cả child lẫn standalone)
+        # Child lines là các dòng có mã xuất hiện trong picking
         child_lines = sale_order.order_line.filtered(
             lambda l: l.product_id and l.product_id.default_code in picking_product_codes
         )
@@ -85,22 +69,31 @@ class HlvReportHelper(models.AbstractModel):
     @api.model
     def get_enriched_lines_for_picking_combo(self, picking):
         """
-        Build danh sách hiển thị (parent trước, rồi tới các child của nó; còn lại là standalone).
-        Fix: tính qty của parent dựa trên qty của child trong picking.
+        Build danh sách hiển thị với số lượng thực tế đã giao trong picking này.
+        
+        LOGIC TÍNH SỐ LƯỢNG COMBO CHA:
+        - Dựa vào số lượng thực tế đã giao của các sản phẩm con trong picking
+        - Tìm số lượng combo tối thiểu có thể tạo thành từ các con
+        - Ví dụ: Combo gồm 2A + 3B, nếu giao 4A + 6B → tạo được 2 combo
         """
         result_data = self.get_combo_parent_lines_for_picking(picking)
         lines_to_show = result_data['lines_to_show']
-        parent_sol_by_code = result_data.get('parent_sol_by_code', {})  # {parent_code: parent_sol}
+        parent_sol_by_code = result_data.get('parent_sol_by_code', {})
 
         if not lines_to_show:
             return []
 
-        # Tổng qty theo sale_line_id trong picking này
-        sol_qty_in_picking = {}
+        # Tính tổng qty ĐÃ GIAO (done_qty) theo sale_line_id trong picking này
+        sol_qty_done = {}
         for move in picking.move_ids:
             if move.sale_line_id:
-                sol_qty_in_picking[move.sale_line_id.id] = sol_qty_in_picking.get(move.sale_line_id.id, 0.0) + (move.product_uom_qty or 0.0)
+                # Quantity_done là số lượng thực tế đã giao
+                qty = move.quantity_done if move.state == 'done' else move.product_uom_qty
+                sol_qty_done[move.sale_line_id.id] = sol_qty_done.get(move.sale_line_id.id, 0.0) + (qty or 0.0)
 
+        # Lấy thông tin combo từ SO để tính tỷ lệ
+        sale_order = picking.sale_id or (picking.move_ids and picking.move_ids[0].sale_line_id and picking.move_ids[0].sale_line_id.order_id)
+        
         # Gom nhóm children theo parent_code
         children_by_parent_code = {}  # {parent_code: [child_sol, ...]}
         standalone_lines = []
@@ -124,44 +117,40 @@ class HlvReportHelper(models.AbstractModel):
 
         for sol in standalone_lines:
             code = sol.product_id.default_code if sol.product_id else ''
-            qty_parent_move = sol_qty_in_picking.get(sol.id, 0.0)
+            qty_parent_done = sol_qty_done.get(sol.id, 0.0)
 
             # Là parent nếu có children cùng parent_code = mã này
             is_combo_parent = code in children_by_parent_code
 
             if is_combo_parent:
-                # TÍNH QTY PARENT TỪ CHILD:
-                parent_qty_from_children = None
-                parent_qty_on_so = sol.product_uom_qty or 0.0  # qty parent trên SOL (để suy tỷ lệ)
+                # TÍNH SỐ LƯỢNG COMBO CHA TỪ SỐ LƯỢNG CON ĐÃ GIAO
+                parent_qty_calculated = None
+                parent_qty_on_so = sol.product_uom_qty or 1.0  # Để tránh chia cho 0
+                
                 for child_sol in children_by_parent_code[code]:
-                    child_qty_in_picking = sol_qty_in_picking.get(child_sol.id, 0.0)
-                    if child_qty_in_picking <= 0:
-                        continue
-
-                    # Tỷ lệ component = child_qty_trên_SOL / parent_qty_trên_SOL
-                    # (nếu trên SO: child_qty = parent_qty * component_qty)
-                    comp_ratio = 0.0
+                    child_qty_done = sol_qty_done.get(child_sol.id, 0.0)
+                    
+                    # Tỷ lệ component trong SO (ví dụ: 1 combo = 2A, thì ratio = 2)
                     child_qty_on_so = child_sol.product_uom_qty or 0.0
-                    if parent_qty_on_so and parent_qty_on_so > 0:
-                        comp_ratio = child_qty_on_so / parent_qty_on_so
+                    component_ratio = child_qty_on_so / parent_qty_on_so if parent_qty_on_so > 0 else 1.0
+                    
+                    if component_ratio > 0:
+                        # Số combo có thể tạo = số lượng con đã giao / tỷ lệ component
+                        possible_combo_qty = child_qty_done / component_ratio
+                        
+                        # Lấy MIN để đảm bảo đủ tất cả component
+                        if parent_qty_calculated is None:
+                            parent_qty_calculated = possible_combo_qty
+                        else:
+                            parent_qty_calculated = min(parent_qty_calculated, possible_combo_qty)
 
-                    # Nếu không có tỷ lệ (edge case), fallback: coi comp_ratio = 1 để không crash
-                    if comp_ratio and comp_ratio > 0:
-                        candidate_parent_qty = child_qty_in_picking / comp_ratio
-                    else:
-                        candidate_parent_qty = child_qty_in_picking  # fallback
+                # Nếu parent có move riêng (edge case), lấy max
+                parent_qty_final = parent_qty_calculated or 0.0
+                if qty_parent_done > 0:
+                    parent_qty_final = max(parent_qty_final, qty_parent_done)
 
-                    parent_qty_from_children = candidate_parent_qty if parent_qty_from_children is None else min(parent_qty_from_children, candidate_parent_qty)
-
-                # Fallback cuối: nếu không child nào có qty>0 thì coi như 0
-                parent_qty_from_children = parent_qty_from_children or 0.0
-
-                # Nếu parent có move riêng, dùng max để không bị thấp
-                parent_qty_final = max(qty_parent_move, parent_qty_from_children)
-
-                # CHỈ PUSH PARENT NÊU CÓ QTY > 0 (tránh hiển thị combo không có trong picking)
+                # CHỈ HIỂN THỊ NẾU CÓ SỐ LƯỢNG > 0
                 if parent_qty_final > 0:
-                    # Push parent
                     enriched.append({
                         'type': 'parent',
                         'product_name': sol.product_id.display_name if sol.product_id else '',
@@ -175,9 +164,9 @@ class HlvReportHelper(models.AbstractModel):
                         'sol': sol,
                     })
 
-                    # Push children (chỉ child có qty>0 trong picking)
+                    # Push children (chỉ child có qty>0)
                     for child_sol in children_by_parent_code[code]:
-                        child_qty = sol_qty_in_picking.get(child_sol.id, 0.0)
+                        child_qty = sol_qty_done.get(child_sol.id, 0.0)
                         if child_qty > 0:
                             enriched.append({
                                 'type': 'child',
@@ -194,7 +183,7 @@ class HlvReportHelper(models.AbstractModel):
 
             else:
                 # Standalone (không phải parent combo)
-                qty = sol_qty_in_picking.get(sol.id, 0.0)
+                qty = sol_qty_done.get(sol.id, 0.0)
                 if qty > 0:
                     enriched.append({
                         'type': 'standalone',
