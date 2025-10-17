@@ -965,7 +965,7 @@ class SaleApiImportWizard(models.TransientModel):
                     sale_order = self.env['sale.order'].create(sale_vals)
                     
                     # ===== BUILD MAP: COMBO CHILD -> PARENT CODE (HYBRID) =====
-                    combo_parent_map = {}  # {child_product_code: parent_product_code}
+                    combo_parent_map = {}  # {misa_line_id: parent_code} - DÙNG LINE ID
                     children_by_parent = {}  # {parent_code: [child_data, ...]}
                     children_without_parent = []
                     
@@ -991,10 +991,12 @@ class SaleApiImportWizard(models.TransientModel):
                             continue
                         
                         child_code = (ch.get("ProductIDText") or "").strip()
+                        child_misa_id = ch.get("ID")  # MISA line ID (unique)
                         p_id = ch.get("ParentProductID") or ch.get("ParentProductId")
                         p_code = (ch.get("ParentProductIDText") or "").strip()
                         
-                        _logger.info("  🔹 Child: '%s' | ParentID=%s | ParentCode='%s'", child_code, p_id, p_code)
+                        _logger.info("  🔹 Child: '%s' (ID=%s) | ParentID=%s | ParentCode='%s'", 
+                                   child_code, child_misa_id, p_id, p_code)
                         
                         # Xác định parent_code bằng explicit data
                         parent_code = None
@@ -1006,28 +1008,31 @@ class SaleApiImportWizard(models.TransientModel):
                             _logger.info("     ✅ Explicit: ParentProductID=%s → '%s'", p_id, parent_code)
                         
                         # Lưu mapping hoặc đưa vào danh sách cần smart matching
-                        if child_code and parent_code:
-                            combo_parent_map[child_code] = parent_code
+                        if child_misa_id and parent_code:
+                            combo_parent_map[child_misa_id] = parent_code  # KEY = MISA LINE ID
                             children_by_parent.setdefault(parent_code, []).append(ch)
-                            _logger.info("     🔗 Explicit map: '%s' → '%s'", child_code, parent_code)
+                            _logger.info("     🔗 Explicit map: ID=%s ('%s') → '%s'", child_misa_id, child_code, parent_code)
                         else:
                             children_without_parent.append(ch)
-                            _logger.info("     ⏳ Child '%s' cần smart matching", child_code)
+                            _logger.info("     ⏳ Child '%s' (ID=%s) cần smart matching", child_code, child_misa_id)
                     
                     # Bước 3: Smart matching cho children không có explicit parent
                     if children_without_parent:
                         _logger.info("🔄 Wizard: Smart matching %d children...", len(children_without_parent))
+                        matched_child_ids = set()
                         current_parent_code = None
                         for it in (grouped_lines or []):
                             if it.get("IsSetProduct"):
                                 current_parent_code = (it.get("ProductIDText") or "").strip()
                             elif it.get("IsChildProduct") and current_parent_code:
-                                if any(c.get("ProductIDText") == it.get("ProductIDText") for c in children_without_parent):
+                                child_misa_id = it.get("ID")
+                                is_in_list = any(c.get("ID") == child_misa_id for c in children_without_parent)
+                                if is_in_list and child_misa_id not in matched_child_ids:
                                     child_code = (it.get("ProductIDText") or "").strip()
-                                    if child_code not in combo_parent_map:
-                                        combo_parent_map[child_code] = current_parent_code
-                                        children_by_parent.setdefault(current_parent_code, []).append(it)
-                                        _logger.info("     🔗 Smart map: '%s' → '%s'", child_code, current_parent_code)
+                                    combo_parent_map[child_misa_id] = current_parent_code  # KEY = MISA LINE ID
+                                    children_by_parent.setdefault(current_parent_code, []).append(it)
+                                    matched_child_ids.add(child_misa_id)
+                                    _logger.info("     🔗 Smart map: ID=%s ('%s') → '%s'", child_misa_id, child_code, current_parent_code)
                     
                     _logger.info("🔍 Wizard: Combo map cuối cùng: %s", combo_parent_map)
                     
@@ -1132,16 +1137,18 @@ class SaleApiImportWizard(models.TransientModel):
                         
                         # ===== 🆕 STUDIO FIELDS =====
                         if is_combo_child:
-                            # Dòng con combo: đánh dấu + lưu mã cha
-                            parent_code = combo_parent_map.get(product_code, False)
+                            # Dòng con combo: đánh dấu + lưu mã cha - TRA CỨU THEO MISA LINE ID
+                            misa_line_id = line.get("ID")
+                            parent_code = combo_parent_map.get(misa_line_id, False)
                             vals_line['x_studio_is_combo_child'] = True
                             vals_line['x_studio_combo_parent_code'] = parent_code
                             
                             if parent_code:
-                                _logger.info("✅ Combo child '%s' → parent '%s'", product_code, parent_code)
+                                _logger.info("✅ Combo child '%s' (ID=%s) → parent '%s'", 
+                                           product_code, misa_line_id, parent_code)
                             else:
-                                _logger.warning("⚠️ Combo child '%s' KHÔNG tìm thấy parent trong map! IsChildProduct=%s", 
-                                              product_code, line.get("IsChildProduct"))
+                                _logger.warning("⚠️ Combo child '%s' (ID=%s) KHÔNG tìm thấy parent trong map! IsChildProduct=%s", 
+                                              product_code, misa_line_id, line.get("IsChildProduct"))
                                 _logger.warning("   ParentProductID=%s, ParentProductIDText=%s", 
                                               line.get("ParentProductID"), line.get("ParentProductIDText"))
                         else:
@@ -1174,7 +1181,7 @@ class SaleApiImportWizard(models.TransientModel):
                 # ========== CASE 2: NHIỀU KHO -> TÁCH NHIỀU SO, THÊM HẬU TỐ ==========
                 else:
                     # Build combo map cho toàn bộ product_lines (HYBRID)
-                    combo_parent_map_global = {}
+                    combo_parent_map_global = {}  # {misa_line_id: parent_code}
                     children_by_parent_global = {}
                     children_without_parent_global = []
                     
@@ -1198,6 +1205,7 @@ class SaleApiImportWizard(models.TransientModel):
                             continue
                         
                         child_code = (ch.get("ProductIDText") or "").strip()
+                        child_misa_id = ch.get("ID")
                         p_id = ch.get("ParentProductID") or ch.get("ParentProductId")
                         p_code = (ch.get("ParentProductIDText") or "").strip()
                         
@@ -1209,8 +1217,8 @@ class SaleApiImportWizard(models.TransientModel):
                             parent_code = parent_id_to_code_global[str(p_id)]
                         
                         # Lưu mapping hoặc đưa vào danh sách cần smart matching
-                        if child_code and parent_code:
-                            combo_parent_map_global[child_code] = parent_code
+                        if child_misa_id and parent_code:
+                            combo_parent_map_global[child_misa_id] = parent_code  # KEY = MISA LINE ID
                             children_by_parent_global.setdefault(parent_code, []).append(ch)
                         else:
                             children_without_parent_global.append(ch)
@@ -1218,16 +1226,18 @@ class SaleApiImportWizard(models.TransientModel):
                     # Bước 3: Smart matching cho children không có explicit parent
                     if children_without_parent_global:
                         _logger.info("🔄 Multi-warehouse: Smart matching %d children...", len(children_without_parent_global))
+                        matched_child_ids = set()
                         current_parent_code = None
                         for it in (product_lines or []):
                             if it.get("IsSetProduct"):
                                 current_parent_code = (it.get("ProductIDText") or "").strip()
                             elif it.get("IsChildProduct") and current_parent_code:
-                                if any(c.get("ProductIDText") == it.get("ProductIDText") for c in children_without_parent_global):
-                                    child_code = (it.get("ProductIDText") or "").strip()
-                                    if child_code not in combo_parent_map_global:
-                                        combo_parent_map_global[child_code] = current_parent_code
-                                        children_by_parent_global.setdefault(current_parent_code, []).append(it)
+                                child_misa_id = it.get("ID")
+                                is_in_list = any(c.get("ID") == child_misa_id for c in children_without_parent_global)
+                                if is_in_list and child_misa_id not in matched_child_ids:
+                                    combo_parent_map_global[child_misa_id] = current_parent_code  # KEY = MISA LINE ID
+                                    children_by_parent_global.setdefault(current_parent_code, []).append(it)
+                                    matched_child_ids.add(child_misa_id)
                     
                     for stock_id in distinct_stocks:
                         grouped_lines = lines_by_stock[stock_id]
@@ -1388,10 +1398,14 @@ class SaleApiImportWizard(models.TransientModel):
                             
                             # ===== 🆕 STUDIO FIELDS =====
                             if is_combo_child:
-                                # Dòng con combo
-                                parent_code = combo_parent_map_global.get(product_code, False)
+                                # Dòng con combo - TRA CỨU THEO MISA LINE ID
+                                misa_line_id = line.get("ID")
+                                parent_code = combo_parent_map_global.get(misa_line_id, False)
                                 line_vals['x_studio_is_combo_child'] = True
                                 line_vals['x_studio_combo_parent_code'] = parent_code
+                                if not parent_code:
+                                    _logger.warning("⚠️ Multi-warehouse: Child '%s' (ID=%s) không tìm thấy parent!", 
+                                                  product_code, misa_line_id)
                             else:
                                 # Dòng cha combo hoặc dòng thường
                                 line_vals['x_studio_is_combo_child'] = False
