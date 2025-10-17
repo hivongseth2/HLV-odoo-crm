@@ -726,6 +726,7 @@ class SaleApiImportWizard(models.TransientModel):
                 customer_name = order.get("AccountIDText") 
                 origin = order.get("SaleOrderName")
                 status = (order.get("RevenueStatusIDText") or "").strip().lower()
+                status_id = order.get("RevenueStatusID")
                 revenue_status_id = order.get("RevenueStatusID")
                 order_ref = order.get("SaleOrderNo")
                 order_id = order.get("ID")
@@ -748,7 +749,8 @@ class SaleApiImportWizard(models.TransientModel):
 
 
                 # Bỏ qua SO 'Bản nháp' mà không thuộc e_accounts
-                if customer_name not in e_accounts and status == "Bản nháp":
+                #if customer_name not in e_accounts and status == "Bản nháp" :
+                if customer_name not in e_accounts and (status in ["Bản nháp", "bản nháp"] or status_id == 1):
                     _logger.info("⏭️ SO %s là 'Bản nháp' và không thuộc e_accounts => bỏ qua", order.get("SaleOrderNo"))
                     continue
 
