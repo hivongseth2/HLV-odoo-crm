@@ -96,6 +96,11 @@ class HlvReportHelper(models.AbstractModel):
         Trả về danh sách các dòng hiển thị kết hợp giữa stock.move và sale.order.line
         cho báo cáo combo, bao gồm cả dòng parent.
         
+        Logic cải tiến:
+        - Duyệt qua từng sale.order.line riêng biệt
+        - Với mỗi SOL, chỉ lấy qty_delivered (số lượng đã giao trong picking này)
+        - Điều này tránh tình huống sản phẩm B vừa là combo child vừa mua lẻ
+        
         Returns:
             list of dict: [
                 {
@@ -119,35 +124,72 @@ class HlvReportHelper(models.AbstractModel):
         if not lines_to_show:
             return []
         
-        # Build dict để mapping product_code -> move (để lấy qty thực tế từ picking)
-        move_by_code = {}
-        for move in picking.move_ids:
-            if move.product_id and move.product_id.default_code:
-                move_by_code[move.product_id.default_code] = move
+        # Build mapping: (product_code, sale_line_id) -> qty trong picking này
+        # Dựa trên stock.move.line (chi tiết move) thay vì stock.move
+        sol_qty_in_picking = {}  # {sol.id: qty_delivered}
         
-        # Sắp xếp lines: parent trước, child sau
-        sorted_lines = sorted(
-            lines_to_show,
-            key=lambda l: (
-                l.x_studio_combo_parent_code or '',  # group by parent
-                0 if not l.x_studio_is_combo_child else 1  # parent trước
-            )
-        )
+        for move in picking.move_ids:
+            if move.sale_line_id:
+                sol_id = move.sale_line_id.id
+                if sol_id not in sol_qty_in_picking:
+                    sol_qty_in_picking[sol_id] = 0.0
+                # Cộng dồn qty từ move này
+                sol_qty_in_picking[sol_id] += move.product_uom_qty or 0.0
+        
+        # Build mapping parent_code -> parent SOL để lấy sequence
+        parent_sol_map = {}  # {parent_code: parent_sol}
+        for sol in lines_to_show:
+            if not sol.x_studio_is_combo_child and sol.product_id and sol.product_id.default_code:
+                parent_sol_map[sol.product_id.default_code] = sol
+        
+        # Sắp xếp lines: 
+        # 1. Ưu tiên parent trước
+        # 2. Child sắp xếp ngay sau parent của nó
+        # 3. Sản phẩm lẻ (không phải combo) xếp cuối
+        def get_sort_key(sol):
+            # Nếu là parent combo → xếp theo sequence của nó
+            if not sol.x_studio_is_combo_child:
+                return (sol.sequence or 0, 0, sol.id)
+            
+            # Nếu là child → xếp ngay sau parent của nó
+            parent_code = sol.x_studio_combo_parent_code
+            if parent_code and parent_code in parent_sol_map:
+                parent_sol = parent_sol_map[parent_code]
+                # Xếp ngay sau parent: dùng sequence của parent, type=1 (child), sequence của child
+                return (parent_sol.sequence or 0, 1, sol.sequence or 0, sol.id)
+            
+            # Trường hợp đặc biệt: child nhưng không tìm thấy parent
+            return (sol.sequence or 0, 1, sol.sequence or 0, sol.id)
+        
+        sorted_lines = sorted(lines_to_show, key=get_sort_key)
         
         enriched_lines = []
         for sol in sorted_lines:
             product_code = sol.product_id.default_code if sol.product_id else ''
             
-            # Lấy qty từ move (picking) hoặc từ SO line
-            qty = 0.0
-            move = move_by_code.get(product_code)
-            if move:
-                qty = move.product_uom_qty or 0.0
-            else:
-                qty = sol.product_uom_qty or 0.0
+            # Lấy qty từ mapping (số lượng thực tế giao trong picking này)
+            # Nếu không có trong picking → kiểm tra xem có phải là parent không
+            qty = sol_qty_in_picking.get(sol.id, 0.0)
             
-            # Chỉ hiển thị nếu qty > 0
-            if qty <= 0:
+            # Với parent line: không có move trực tiếp, nhưng vẫn cần hiển thị
+            # → lấy qty = 0 hoặc qty từ SO line để hiển thị thông tin
+            if not sol.x_studio_is_combo_child and qty == 0:
+                # Đây là parent, kiểm tra xem có child nào được giao không
+                has_delivered_child = False
+                parent_code = sol.product_id.default_code
+                for other_sol in lines_to_show:
+                    if (other_sol.x_studio_is_combo_child and 
+                        other_sol.x_studio_combo_parent_code == parent_code and
+                        sol_qty_in_picking.get(other_sol.id, 0.0) > 0):
+                        has_delivered_child = True
+                        break
+                
+                # Nếu có child được giao → hiển thị parent với qty = 0
+                if not has_delivered_child:
+                    continue
+            
+            # Bỏ qua nếu qty <= 0 (trừ parent có child)
+            if qty <= 0 and sol.x_studio_is_combo_child:
                 continue
             
             enriched_lines.append({
