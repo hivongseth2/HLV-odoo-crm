@@ -159,36 +159,38 @@ class HlvReportHelper(models.AbstractModel):
                 # Nếu parent có move riêng, dùng max để không bị thấp
                 parent_qty_final = max(qty_parent_move, parent_qty_from_children)
 
-                # Push parent
-                enriched.append({
-                    'type': 'parent',
-                    'product_name': sol.product_id.display_name if sol.product_id else '',
-                    'product_code': code,
-                    'qty': parent_qty_final,
-                    'uom': sol.product_uom.name if sol.product_uom else '',
-                    'price_unit': sol.price_unit or 0.0,
-                    'tax_percent': sol.tax_id[0].amount if sol.tax_id else 0.0,
-                    'is_combo_child': False,
-                    'parent_code': '',
-                    'sol': sol,
-                })
+                # CHỈ PUSH PARENT NÊU CÓ QTY > 0 (tránh hiển thị combo không có trong picking)
+                if parent_qty_final > 0:
+                    # Push parent
+                    enriched.append({
+                        'type': 'parent',
+                        'product_name': sol.product_id.display_name if sol.product_id else '',
+                        'product_code': code,
+                        'qty': parent_qty_final,
+                        'uom': sol.product_uom.name if sol.product_uom else '',
+                        'price_unit': sol.price_unit or 0.0,
+                        'tax_percent': sol.tax_id[0].amount if sol.tax_id else 0.0,
+                        'is_combo_child': False,
+                        'parent_code': '',
+                        'sol': sol,
+                    })
 
-                # Push children (chỉ child có qty>0 trong picking)
-                for child_sol in children_by_parent_code[code]:
-                    child_qty = sol_qty_in_picking.get(child_sol.id, 0.0)
-                    if child_qty > 0:
-                        enriched.append({
-                            'type': 'child',
-                            'product_name': child_sol.product_id.display_name if child_sol.product_id else '',
-                            'product_code': child_sol.product_id.default_code if child_sol.product_id else '',
-                            'qty': child_qty,
-                            'uom': child_sol.product_uom.name if child_sol.product_uom else '',
-                            'price_unit': child_sol.price_unit or 0.0,
-                            'tax_percent': child_sol.tax_id[0].amount if child_sol.tax_id else 0.0,
-                            'is_combo_child': True,
-                            'parent_code': getattr(child_sol, 'x_studio_combo_parent_code', '') or '',
-                            'sol': child_sol,
-                        })
+                    # Push children (chỉ child có qty>0 trong picking)
+                    for child_sol in children_by_parent_code[code]:
+                        child_qty = sol_qty_in_picking.get(child_sol.id, 0.0)
+                        if child_qty > 0:
+                            enriched.append({
+                                'type': 'child',
+                                'product_name': child_sol.product_id.display_name if child_sol.product_id else '',
+                                'product_code': child_sol.product_id.default_code if child_sol.product_id else '',
+                                'qty': child_qty,
+                                'uom': child_sol.product_uom.name if child_sol.product_uom else '',
+                                'price_unit': child_sol.price_unit or 0.0,
+                                'tax_percent': child_sol.tax_id[0].amount if child_sol.tax_id else 0.0,
+                                'is_combo_child': True,
+                                'parent_code': getattr(child_sol, 'x_studio_combo_parent_code', '') or '',
+                                'sol': child_sol,
+                            })
 
             else:
                 # Standalone (không phải parent combo)
