@@ -109,10 +109,10 @@
 
                                 <!-- Năm tự động: ưu tiên date_done -> scheduled_date -> create_date
                                 -> năm hiện tại -->
-                                <t t-set="dt_src" t-value="o.date_order or o.create_date" />
+                                <t t-set="dt_src" t-value="picking.date_done or picking.scheduled_date or picking.create_date or (so and so.date_order)" />
                                 <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')" />
 
-                                <div> (Số phiếu xuất: <span t-esc="o.name" /> – ngày ... tháng ...
+                                <div> (Số phiếu xuất: <span t-esc="picking.name" /> – ngày ... tháng ...
                                     năm <t t-esc="year_str" />) </div>
                             </div>
 

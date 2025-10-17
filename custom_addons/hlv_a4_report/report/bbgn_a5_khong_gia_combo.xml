@@ -138,10 +138,10 @@
             <!-- Tiêu đề -->
             <div class="txt-ctr mt-2">
               <div class="fs-13 fw-700">BIÊN BẢN GIAO NHẬN HÀNG HÓA</div>
-              <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
+              <t t-set="dt_src" t-value="picking.date_done or picking.scheduled_date or picking.create_date or (so and so.date_order)"/>
               <t t-set="year_str" t-value="(dt_src and dt_src.strftime('%Y')) or datetime.datetime.now().strftime('%Y')"/>
               <div class="fs-11">
-                (No.: <span t-esc="o.name"/> ; Date ..../..../<t t-esc="year_str"/>)
+                (No.: <span t-esc="picking.name"/> ; Date ..../..../<t t-esc="year_str"/>)
               </div>
               <div class="mt-4" style="font-style:italic; text-align:left;">
                 Căn cứ đơn đặt hàng ngày <span t-esc="order_date_str"/> PO số:
@@ -296,7 +296,7 @@
                 </t>
 
                 <!-- Không có dòng -->
-                <t t-if="not lines">
+                <t t-if="not enriched_lines">
                   <tr>
                     <td colspan="10" style="text-align:center; font-style:italic; padding:6px;">
                       Không có dòng hàng.
