@@ -661,7 +661,13 @@ class SaleOrder(models.Model):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
         # Lưu info trước khi xoá
+        # Ưu tiên lấy warehouse từ picking đầu tiên (giải quyết vấn đề combo không có kho ở dòng cha)
         old_wh = self.warehouse_id
+        if not old_wh and self.picking_ids:
+            # Nếu SO không có warehouse, lấy từ picking đầu tiên
+            first_pick = self.picking_ids.filtered(lambda p: p.picking_type_id and p.picking_type_id.warehouse_id)[:1]
+            if first_pick:
+                old_wh = first_pick.picking_type_id.warehouse_id
         order_no_fallback = self.name
 
         # ===== 3) HỦY PICKINGS CHƯA DONE (unreserve -> cancel move -> cancel picking) =====
@@ -819,79 +825,94 @@ class SaleOrder(models.Model):
             except Exception:
                 return dv
 
-        # ===== 8.0) BUILD COMBO_PARENT_MAP (logic từ wizard) =====
-        combo_parent_map = {}
+        # ===== 8.0) BUILD COMBO_PARENT_MAP (HYBRID: Explicit + Smart Matching) =====
+        combo_parent_map = {}  # {misa_line_id: parent_code} - DÙNG LINE ID THAY VÌ PRODUCT CODE
+        children_by_parent = {}  # {parent_code: [child_data, ...]}
+        children_without_parent = []  # Children không có ParentProductID/ParentProductIDText
         
-        children_by_parent = {}
-        children_without_parent = []
+        # Build map: parent_id/code -> parent_code (để tra cứu ngược)
+        parent_id_to_code = {}  # {parent_id: parent_code}
+        parent_code_set = set()  # Set các parent_code để kiểm tra
         
         _logger.info("📦 Bắt đầu build combo map từ %s dòng", len(lines or []))
         
-        # Phân loại children
+        # Bước 1: Scan tất cả parent để build mapping ID->CODE
+        for line in (lines or []):
+            if line.get("IsSetProduct"):  # Đây là combo parent
+                parent_code = (line.get("ProductIDText") or "").strip()
+                parent_id = line.get("ProductID") or line.get("ProductId")
+                
+                if parent_code:
+                    parent_code_set.add(parent_code)
+                    if parent_id:
+                        parent_id_to_code[str(parent_id)] = parent_code
+                    _logger.info("🔵 Parent found: ID=%s → CODE='%s'", parent_id, parent_code)
+        
+        # Bước 2: Scan children - ưu tiên explicit, thu thập children_without_parent cho smart matching
         for ch in (lines or []):
             if not ch.get("IsChildProduct"):
                 continue
             
+            child_code = (ch.get("ProductIDText") or "").strip()
+            child_misa_id = ch.get("ID")  # MISA line ID (unique)
             p_id = ch.get("ParentProductID") or ch.get("ParentProductId")
             p_code = (ch.get("ParentProductIDText") or "").strip()
             
-            _logger.info("🔹 Child: '%s' | ParentID=%s | ParentCode='%s'",
-                        ch.get("ProductIDText"), p_id, p_code)
+            _logger.info("🔹 Child: '%s' (MISA ID=%s) | ParentID=%s | ParentCode='%s'", 
+                        child_code, child_misa_id, p_id, p_code)
             
-            if p_id or p_code:
-                # Có parent info → nhóm theo key
-                keyset = {str(p_id or "").strip(), p_code}
-                key = "|".join(sorted([k for k in keyset if k]))
-                children_by_parent.setdefault(key, []).append(ch)
+            # Xác định parent_code bằng explicit data
+            parent_code = None
+            
+            # Ưu tiên 1: ParentProductIDText (chính xác nhất)
+            if p_code and p_code in parent_code_set:
+                parent_code = p_code
+                _logger.info("   ✅ Dùng ParentProductIDText: '%s'", parent_code)
+            
+            # Ưu tiên 2: Tra ParentProductID → parent_code
+            elif p_id and str(p_id) in parent_id_to_code:
+                parent_code = parent_id_to_code[str(p_id)]
+                _logger.info("   ✅ Tra ParentProductID=%s → '%s'", p_id, parent_code)
+            
+            # Lưu mapping hoặc đưa vào danh sách cần smart matching
+            if parent_code and child_misa_id:
+                combo_parent_map[child_misa_id] = parent_code  # KEY = MISA LINE ID
+                children_by_parent.setdefault(parent_code, []).append(ch)
+                _logger.info("   🔗 Explicit map: MISA_ID=%s ('%s') → parent '%s'", 
+                            child_misa_id, child_code, parent_code)
             else:
-                # KHÔNG có parent info → lưu lại để smart matching
-                _logger.info("   → Không có parent info, sẽ dùng smart matching")
                 children_without_parent.append(ch)
+                _logger.info("   ⏳ Child '%s' (ID=%s) cần smart matching", child_code, child_misa_id)
         
-        # Smart matching cho children không có parent info
+        # Bước 3: Smart matching cho children không có explicit parent (dựa trên SortOrder)
         if children_without_parent:
-            _logger.info("🔍 Smart matching: %s children không có parent info", len(children_without_parent))
+            _logger.info("🔄 Smart matching cho %s children...", len(children_without_parent))
+            
+            # Tạo set để track children đã match (dùng ID duy nhất)
+            matched_child_ids = set()
             current_parent_code = None
+            
             for it in (lines or []):
                 if it.get("IsSetProduct"):
-                    # Gặp parent → lưu lại
-                    current_parent_code = it.get("ProductIDText")
-                    _logger.info("  👉 Parent: '%s'", current_parent_code)
+                    current_parent_code = (it.get("ProductIDText") or "").strip()
+                    _logger.info("   🔵 Smart match context: parent='%s'", current_parent_code)
                 elif it.get("IsChildProduct") and current_parent_code:
-                    # Child đứng sau parent → match
-                    if it in children_without_parent:
+                    child_code = (it.get("ProductIDText") or "").strip()
+                    child_misa_id = it.get("ID")  # ID duy nhất từ MISA
+                    
+                    # Kiểm tra: child này có trong danh sách cần match + chưa được match
+                    is_in_list = any(c.get("ID") == child_misa_id for c in children_without_parent)
+                    already_matched = child_misa_id in matched_child_ids
+                    
+                    if is_in_list and not already_matched:
+                        combo_parent_map[child_misa_id] = current_parent_code  # KEY = MISA LINE ID
                         children_by_parent.setdefault(current_parent_code, []).append(it)
-                        _logger.info("     ├─ Match child '%s' → parent '%s'",
-                                    it.get("ProductIDText"), current_parent_code)
-        
-        # Build combo_parent_map từ children_by_parent
-        for line in (lines or []):
-            if not line.get("IsSetProduct"):
-                continue
-            
-            product_code = line.get("ProductIDText")
-            p_id = line.get("ProductID") or line.get("ProductId")
-            
-            # Tìm children theo key
-            parent_keys = {str(p_id or "").strip(), product_code}
-            ckey = "|".join(sorted([k for k in parent_keys if k]))
-            children_for_parent = children_by_parent.get(ckey, [])
-            
-            # Fallback: tìm theo product_code trực tiếp (từ smart matching)
-            if not children_for_parent and product_code in children_by_parent:
-                children_for_parent = children_by_parent[product_code]
-            
-            if children_for_parent:
-                _logger.info("🔑 Combo parent '%s' (key='%s') có %s children",
-                            product_code, ckey, len(children_for_parent))
-            
-            for child in children_for_parent:
-                child_code = child.get("ProductIDText")
-                if child_code:
-                    combo_parent_map[child_code] = product_code
-                    _logger.info("  ├─ Map: '%s' → '%s'", child_code, product_code)
+                        matched_child_ids.add(child_misa_id)  # Đánh dấu đã match
+                        _logger.info("   🔗 Smart map: MISA_ID=%s ('%s') → parent '%s'", 
+                                   child_misa_id, child_code, current_parent_code)
         
         _logger.info("🔍 Combo map cuối cùng: %s", combo_parent_map)
+        _logger.info("📊 Children by parent: %s", {k: len(v) for k, v in children_by_parent.items()})
 
         # ===== 8.0b) TẠO/CẬP NHẬT COMBO PRODUCTS TRƯỚC KHI TẠO LINES =====
         misa_utils = env['misa.api.utils']
@@ -907,15 +928,13 @@ class SaleOrder(models.Model):
             
             _logger.info("🔧 Tạo/cập nhật combo product: %s", combo_code)
             
-            # Lấy children từ map đã build
-            p_id = ln.get("ProductID") or ln.get("ProductId")
-            parent_keys = {str(p_id or "").strip(), combo_code}
-            ckey = "|".join(sorted([k for k in parent_keys if k]))
-            children_for_parent = children_by_parent.get(ckey, [])
+            # Lấy children từ map đã build (TRA TRỰC TIẾP THEO CODE)
+            children_for_parent = children_by_parent.get(combo_code, [])
             
-            # Fallback: tìm theo product_code
-            if not children_for_parent and combo_code in children_by_parent:
-                children_for_parent = children_by_parent[combo_code]
+            if children_for_parent:
+                _logger.info("   📋 Tìm thấy %s children cho combo '%s'", len(children_for_parent), combo_code)
+            else:
+                _logger.warning("   ⚠️ KHÔNG tìm thấy children cho combo '%s'", combo_code)
             
             try:
                 # Gọi helper từ misa_utils để tạo/cập nhật combo
@@ -983,24 +1002,32 @@ class SaleOrder(models.Model):
             if not use_default_uom and product.uom_id:
                 vals_line['product_uom'] = product.uom_id.id
 
+            # Gán thuế (cho CẢ cha lẫn con)
             tax_ids = self._tax_ids_from_misa_line(ln)
             if tax_ids:
                 vals_line['tax_id'] = [(6, 0, tax_ids)]
+                _logger.info("💰 Gán thuế cho '%s': %s (TaxPercentIDText='%s')", 
+                            product_code, tax_ids, ln.get('TaxPercentIDText'))
             else:
                 # MISA không có thuế → Clear thuế (không dùng default)
                 vals_line['tax_id'] = [(5, 0, 0)]
+                _logger.info("⚠️ Không có thuế cho '%s' (TaxPercentIDText='%s') → Clear thuế", 
+                            product_code, ln.get('TaxPercentIDText'))
             
             # ===== GÁN 2 TRƯỜNG STUDIO CHO COMBO =====
             if is_combo_child:
-                # Dòng combo child
+                # Dòng combo child - TRA CỨU THEO MISA LINE ID
                 vals_line['x_studio_is_combo_child'] = True
-                parent_code = combo_parent_map.get(product_code, False)
+                misa_line_id = ln.get("ID")  # MISA line ID (unique)
+                parent_code = combo_parent_map.get(misa_line_id, False)
                 vals_line['x_studio_combo_parent_code'] = parent_code
                 
                 if parent_code:
-                    _logger.info("✅ Combo child '%s' → parent '%s'", product_code, parent_code)
+                    _logger.info("✅ Combo child '%s' (MISA_ID=%s) → parent '%s'", 
+                               product_code, misa_line_id, parent_code)
                 else:
-                    _logger.warning("⚠️ Combo child '%s' KHÔNG tìm thấy parent trong map!", product_code)
+                    _logger.warning("⚠️ Combo child '%s' (MISA_ID=%s) KHÔNG tìm thấy parent trong map!", 
+                                  product_code, misa_line_id)
             else:
                 # Dòng thường hoặc combo parent
                 vals_line['x_studio_is_combo_child'] = False
