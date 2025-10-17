@@ -1,6 +1,6 @@
 # controllers/misa_api.py
 # -*- coding: utf-8 -*-
-import logging, json
+import logging, json,re
 from odoo import http
 from odoo.http import request
 
@@ -84,4 +84,74 @@ class MisaApiSaleOrder(http.Controller):
             return result
         except Exception as e:
             _logger.exception("MISA API /resync exception: %s", e)
+            return {"ok": False, "error": "exception", "message": str(e)}
+
+
+    @http.route('/api/misa/sale_order/resync_by_name', type='json', auth='none', methods=['POST'], csrf=False)
+    def api_misa_sale_order_resync_by_name(self, **payload):
+        # ---- parse body y như bạn đang làm ở trên ----
+        try:
+            if not payload:
+                try:
+                    body = request.httprequest.get_json(force=False, silent=True)
+                except Exception:
+                    body = None
+                if body is None:
+                    raw = (request.httprequest.data or b'').decode('utf-8', errors='ignore')
+                    try:
+                        body = json.loads(raw) if raw else {}
+                    except Exception:
+                        body = {}
+                payload = dict(body or {})
+        except Exception:
+            pass
+
+        # ---- Token ----
+        raw_token = (payload.get("token") if isinstance(payload, dict) else None) \
+                    or request.httprequest.headers.get('X-MISA-Token')
+        token = (raw_token or "").strip()
+        expected = request.env['ir.config_parameter'].sudo().get_param('misa.api.token') or "hoanglongvu"
+        token = re.sub(r'[\u200B-\u200D\uFEFF]', '', token)
+        expected = re.sub(r'[\u200B-\u200D\uFEFF]', '', expected)
+        if token != expected:
+            return {"ok": False, "error": "invalid_token", "message": "Token không hợp lệ."}
+
+        name = (payload.get("name") or "").strip()
+        if not name:
+            return {"ok": False, "error": "missing_name", "message": "Thiếu tham số name"}
+
+        # ---- Switch sang user admin (KHÔNG .sudo() trên Environment) ----
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        if not admin_user:
+            return {"ok": False, "error": "admin_not_found"}
+
+        env_admin = request.env(user=admin_user)  # <-- KHÔNG .sudo() ở đây
+
+        # Tìm SO theo name, cho phép sudo trên recordset nếu cần
+        SaleOrder = env_admin["sale.order"].sudo()  # <-- sudo trên model/recordset
+        order = SaleOrder.search([("name", "=", name)], limit=1)
+        if not order:
+            return {"ok": False, "error": "not_found", "message": f"Không tìm thấy sale.order có name={name}"}
+
+        # Field đúng là misa_id (không phải misa_order_id)
+        misa_order_id = getattr(order, "misa_id", False)
+        if not misa_order_id:
+            return {"ok": False, "error": "no_misa_id", "message": f"Đơn {name} chưa có misa_id"}
+
+        warehouse_id = payload.get("warehouse_id")
+        create_when_missing = payload.get("create_when_missing", True)
+
+        try:
+            # Gọi API model chuẩn
+            result = env_admin["sale.order"].api_resync_by_misa(
+                misa_order_id=misa_order_id,
+                warehouse_id=warehouse_id,
+                create_when_missing=bool(create_when_missing),
+            )
+            # Bổ sung thông tin tra cứu
+            result["name_lookup"] = name
+            result["misa_order_id"] = misa_order_id
+            return result
+        except Exception as e:
+            _logger.exception("MISA API /resync_by_name exception: %s", e)
             return {"ok": False, "error": "exception", "message": str(e)}
