@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- ==================== PAPER FORMATS ==================== -->
-    <!-- Giả sử bạn đã có paperformat_hlv_a4_portrait và paperformat_hlv_a5_landscape -->
-
     <!-- ==================== ACTION REPORTS ==================== -->
     
     <!-- 1. BBBG A4 có PO (stock.picking) -->
@@ -18,19 +15,7 @@
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait"/>
     </record>
 
-    <!-- 2. BBBG A4 có PO COMBO (sale.order) -->
-    <!-- <record id="bbbg_a4_co_po_combo" model="ir.actions.report">
-        <field name="name">BBBG A4 có PO - COMBO</field>
-        <field name="model">sale.order</field>
-        <field name="report_type">qweb-pdf</field>
-        <field name="report_name">hlv_a4_report.bbbg_a4_co_po_combo_doc</field>
-        <field name="print_report_name">'BBBG A4 có PO COMBO - %s' % (object.name or 'Picking')</field>
-        <field name="binding_model_id" ref="sale.model_sale_order"/>
-        <field name="binding_type">report</field>
-        <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a4_portrait"/>
-    </record> -->
-
-    <!-- 3. BBBG A5 có PO (stock.picking) -->
+    <!-- 2. BBBG A5 có PO (stock.picking) -->
     <record id="bbbg_a5_co_po" model="ir.actions.report">
         <field name="name">BBBG A5 có PO</field>
         <field name="model">stock.picking</field>
@@ -41,18 +26,6 @@
         <field name="binding_type">report</field>
         <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a5_landscape"/>
     </record>
-
-    <!-- 4. BBBG A5 có PO COMBO (sale.order) -->
-    <!-- <record id="bbbg_a5_co_po_combo" model="ir.actions.report">
-        <field name="name">BBBG A5 có PO - COMBO</field>
-        <field name="model">sale.order</field>
-        <field name="report_type">qweb-pdf</field>
-        <field name="report_name">hlv_a4_report.bbbg_a5_co_po_combo_doc</field>
-        <field name="print_report_name">'BBBG A5 có PO COMBO - %s' % (object.name or 'Picking')</field>
-        <field name="binding_model_id" ref="sale.model_sale_order"/>
-        <field name="binding_type">report</field>
-        <field name="paperformat_id" ref="hlv_a4_report.paperformat_hlv_a5_landscape"/>
-    </record> -->
 
     <!-- ==================== BASE STYLES ==================== -->
     
@@ -297,111 +270,8 @@
                     </t>
 
                     <t t-set="is_done" t-value="o.state == 'done'"/>
-                    <t t-set="lines" t-value="is_done and o.move_line_ids or o.move_ids"/>
-
-                    <div class="page">
-                        <t t-set="company" t-value="o.company_id"/>
-                        <t t-set="partner" t-value="o.partner_id"/>
-                        <t t-set="doc_name" t-value="o.name"/>
-                        
-                        <t t-call="hlv_a4_report.bbbg_header_a4"/>
-                        <t t-call="hlv_a4_report.bbbg_title_a4"/>
-                        <t t-call="hlv_a4_report.bbbg_parties_a4"/>
-
-                        <div style="margin:15px 15px 6px 0; font-weight:700">Bên B đã bàn giao cho bên A:</div>
-
-                        <table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:13px;">
-                            <thead>
-                                <tr>
-                                    <th style="border:1px solid #000; padding:6px; width:40px; text-align:center;">STT</th>
-                                    <th style="border:1px solid #000; padding:6px;">Tên hàng</th>
-                                    <th style="border:1px solid #000; padding:6px; width:120px; text-align:center;">Đơn vị tính</th>
-                                    <th style="border:1px solid #000; padding:6px; width:120px; text-align:center;">Số lượng</th>
-                                    <th style="border:1px solid #000; padding:6px; width:160px; text-align:center;">Ghi chú</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <t t-set="idx" t-value="0"/>
-                                <t t-foreach="lines" t-as="l">
-                                    <t t-set="qty_show" t-value="0.0"/>
-                                    <t t-if="l._name == 'stock.move'">
-                                        <t t-set="qty_show" t-value="l.quantity or 0.0"/>
-                                    </t>
-                                    <t t-elif="l._name == 'stock.move.line'">
-                                        <t t-set="qty_show" t-value="(l.move_id and l.move_id.quantity) or 0.0"/>
-                                        <t t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
-                                            <t t-set="qty_show" t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)"/>
-                                        </t>
-                                    </t>
-
-                                    <t t-if="qty_show &gt; 0">
-                                        <tr>
-                                            <td style="border:1px solid #000; padding:6px; text-align:center;">
-                                                <t t-esc="idx + 1"/>
-                                            </td>
-                                            <td style="border:1px solid #000; padding:6px;">
-                                                <span t-esc="l.product_id and l.product_id.display_name or ''"/>
-                                                <t t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
-                                                    <div style="font-size:12px; color:#444;" t-esc="l.description_picking"/>
-                                                </t>
-                                            </td>
-                                            <td style="border:1px solid #000; padding:6px; text-align:center;">
-                                                <t t-if="l._name == 'stock.move.line'">
-                                                    <span t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
-                                                </t>
-                                                <t t-else="">
-                                                    <span t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
-                                                </t>
-                                            </td>
-                                            <td style="border:1px solid #000; padding:6px; text-align:center;">
-                                                <span t-esc="'%0.2f' % qty_show"/>
-                                            </td>
-                                            <td style="border:1px solid #000; padding:6px;">
-                                                <t t-esc="(so and so.origin) or ''"/>
-                                            </td>
-                                        </tr>
-                                        <t t-set="idx" t-value="idx + 1"/>
-                                    </t>
-                                </t>
-
-                                <t t-if="idx == 0">
-                                    <tr>
-                                        <td colspan="5" style="border:1px solid #000; padding:8px; text-align:center; font-style:italic;">
-                                            Không có dòng hàng.
-                                        </td>
-                                    </tr>
-                                </t>
-                            </tbody>
-                        </table>
-
-                        <t t-call="hlv_a4_report.bbbg_signature_a4"/>
-                    </div>
-                </t>
-            </t>
-        </t>
-    </template>
-
-    <!-- 2. BBBG A4 có PO COMBO (sale.order) -->
-    <template id="bbbg_a4_co_po_combo_doc">
-        <t t-call="web.html_container">
-            <t t-call="web.report_layout">
-                <t t-call="hlv_a4_report.bbbg_a4_styles"/>
-
-                <t t-foreach="docs" t-as="o">
-                    <t t-set="so" t-value="o"/>
-                    <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
-                    <t t-if="dt_src">
-                        <t t-set="d_str" t-value="dt_src.strftime('%d')"/>
-                        <t t-set="m_str" t-value="dt_src.strftime('%m')"/>
-                        <t t-set="y_str" t-value="dt_src.strftime('%Y')"/>
-                    </t>
-                    <t t-else="">
-                        <t t-set="d_str" t-value="datetime.datetime.now().strftime('%d')"/>
-                        <t t-set="m_str" t-value="datetime.datetime.now().strftime('%m')"/>
-                        <t t-set="y_str" t-value="datetime.datetime.now().strftime('%Y')"/>
-                    </t>
-
-                    <t t-set="lines" t-value="so and so.order_line or []"/>
+                    <!-- Sử dụng helper model để tự động xử lý combo -->
+                    <t t-set="enriched_lines" t-value="env['hlv.report.helper'].get_enriched_lines_for_picking_combo(o)"/>
 
                     <div class="page">
                         <t t-set="company" t-value="o.company_id"/>
@@ -426,42 +296,40 @@
                             </thead>
                             <tbody>
                                 <t t-set="idx" t-value="1"/>
-                                <t t-foreach="lines" t-as="l">
-                                    <t t-set="is_child" t-value="l.x_studio_is_combo_child"/>
-                                    <t t-set="qty_show" t-value="l.product_uom_qty or 0.0"/>
+                                <t t-foreach="enriched_lines" t-as="line_data">
+                                    <t t-set="is_child" t-value="line_data['is_combo_child']"/>
+                                    <t t-set="qty_show" t-value="line_data['qty']"/>
 
-                                    <t t-if="qty_show &gt; 0">
+                                    <t t-if="qty_show &gt; 0 and line_data['type'] != 'parent'">
                                         <tr>
                                             <td style="border:1px solid #000; padding:6px; text-align:center;">
-                                                <t t-if="not is_child">
+                                                <t t-if="line_data['type'] == 'parent'">
                                                     <t t-esc="idx"/>
                                                     <t t-set="idx" t-value="idx + 1"/>
                                                 </t>
                                             </td>
                                             <td style="border:1px solid #000; padding:6px;">
                                                 <t t-if="is_child">
-                                                    <span style="padding-left:24px;">
-                                                        <t t-esc="l.product_id and l.product_id.display_name or ''"/>
-                                                    </span>
+                                                    <span style="padding-left:24px;" t-esc="line_data['product_name']"/>
                                                 </t>
                                                 <t t-else="">
-                                                    <span t-esc="l.product_id and l.product_id.display_name or ''"/>
+                                                    <span t-esc="line_data['product_name']"/>
                                                 </t>
                                             </td>
                                             <td style="border:1px solid #000; padding:6px; text-align:center;">
-                                                <span t-esc="l.product_uom and l.product_uom.name or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
+                                                <span t-esc="line_data['uom']"/>
                                             </td>
                                             <td style="border:1px solid #000; padding:6px; text-align:center;">
                                                 <span t-esc="'%0.2f' % qty_show"/>
                                             </td>
                                             <td style="border:1px solid #000; padding:6px;">
-                                                <t t-esc="o.origin or ''"/>
+                                                <t t-esc="(so and so.origin) or ''"/>
                                             </td>
                                         </tr>
                                     </t>
                                 </t>
 
-                                <t t-if="not lines">
+                                <t t-if="not enriched_lines">
                                     <tr>
                                         <td colspan="5" style="border:1px solid #000; padding:8px; text-align:center; font-style:italic;">
                                             Không có dòng hàng.
@@ -499,105 +367,8 @@
                     </t>
 
                     <t t-set="is_done" t-value="o.state == 'done'"/>
-                    <t t-set="lines" t-value="is_done and o.move_line_ids or o.move_ids"/>
-
-                    <div class="page a5-wrap">
-                        <t t-set="company" t-value="o.company_id"/>
-                        <t t-set="partner" t-value="o.partner_id"/>
-                        <t t-set="doc_name" t-value="o.name"/>
-                        
-                        <t t-call="hlv_a4_report.bbbg_header_a5"/>
-                        <t t-call="hlv_a4_report.bbbg_title_a5"/>
-                        <t t-call="hlv_a4_report.bbbg_parties_a5"/>
-
-                        <div style="margin:10px 6px 4px 0;" class="a5-strong">Bên B đã bàn giao cho bên A:</div>
-
-                        <table class="tbl" style="font-size:11px; margin-top:4px;">
-                            <thead>
-                                <tr>
-                                    <th class="col-stt">STT</th>
-                                    <th>Tên hàng</th>
-                                    <th class="col-uom">Đơn vị tính</th>
-                                    <th class="col-qty">Số lượng</th>
-                                    <th class="col-note">Ghi chú</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <t t-set="idx" t-value="0"/>
-                                <t t-foreach="lines" t-as="l">
-                                    <t t-set="qty_show" t-value="0.0"/>
-                                    <t t-if="l._name == 'stock.move'">
-                                        <t t-set="qty_show" t-value="l.quantity or 0.0"/>
-                                    </t>
-                                    <t t-elif="l._name == 'stock.move.line'">
-                                        <t t-set="qty_show" t-value="(l.move_id and l.move_id.quantity) or 0.0"/>
-                                        <t t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
-                                            <t t-set="qty_show" t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)"/>
-                                        </t>
-                                    </t>
-
-                                    <t t-if="qty_show &gt; 0">
-                                        <tr>
-                                            <td class="col-stt"><t t-esc="idx + 1"/></td>
-                                            <td>
-                                                <span t-esc="l.product_id and l.product_id.display_name or ''"/>
-                                                <t t-if="l._name == 'stock.move' and l.description_picking and (not l.product_id or l.description_picking not in (l.product_id.display_name or ''))">
-                                                    <div style="font-size:10px; color:#444;" t-esc="l.description_picking"/>
-                                                </t>
-                                            </td>
-                                            <td class="col-uom">
-                                                <t t-if="l._name == 'stock.move.line'">
-                                                    <span t-esc="(l.product_uom_id and l.product_uom_id.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
-                                                </t>
-                                                <t t-else="">
-                                                    <span t-esc="(l.product_uom and l.product_uom.name) or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
-                                                </t>
-                                            </td>
-                                            <td class="col-qty"><span t-esc="'%0.2f' % qty_show"/></td>
-                                            <td class="col-note"><t t-esc="(so and so.origin) or ''"/></td>
-                                        </tr>
-                                        <t t-set="idx" t-value="idx + 1"/>
-                                    </t>
-                                </t>
-
-                                <t t-if="idx == 0">
-                                    <tr>
-                                        <td colspan="5" style="text-align:center; font-style:italic; padding:8px;">
-                                            Không có dòng hàng.
-                                        </td>
-                                    </tr>
-                                </t>
-                            </tbody>
-                        </table>
-
-                        <t t-call="hlv_a4_report.bbbg_signature_a5"/>
-                    </div>
-                </t>
-            </t>
-        </t>
-    </template>
-
-    <!-- 4. BBBG A5 có PO COMBO (sale.order) -->
-    <template id="bbbg_a5_co_po_combo_doc">
-        <t t-call="web.html_container">
-            <t t-call="web.report_layout">
-                <t t-call="hlv_a4_report.bbbg_a5_styles"/>
-
-                <t t-foreach="docs" t-as="o">
-                    <t t-set="so" t-value="o"/>
-                    <t t-set="dt_src" t-value="o.date_order or o.create_date"/>
-                    <t t-if="dt_src">
-                        <t t-set="d_str" t-value="dt_src.strftime('%d')"/>
-                        <t t-set="m_str" t-value="dt_src.strftime('%m')"/>
-                        <t t-set="y_str" t-value="dt_src.strftime('%Y')"/>
-                    </t>
-                    <t t-else="">
-                        <t t-set="d_str" t-value="datetime.datetime.now().strftime('%d')"/>
-                        <t t-set="m_str" t-value="datetime.datetime.now().strftime('%m')"/>
-                        <t t-set="y_str" t-value="datetime.datetime.now().strftime('%Y')"/>
-                    </t>
-
-                    <t t-set="lines" t-value="so and so.order_line or []"/>
+                    <!-- Sử dụng helper model để tự động xử lý combo -->
+                    <t t-set="enriched_lines" t-value="env['hlv.report.helper'].get_enriched_lines_for_picking_combo(o)"/>
 
                     <div class="page a5-wrap">
                         <t t-set="company" t-value="o.company_id"/>
@@ -622,38 +393,36 @@
                             </thead>
                             <tbody>
                                 <t t-set="idx" t-value="1"/>
-                                <t t-foreach="lines" t-as="l">
-                                    <t t-set="is_child" t-value="l.x_studio_is_combo_child"/>
-                                    <t t-set="qty_show" t-value="l.product_uom_qty or 0.0"/>
+                                <t t-foreach="enriched_lines" t-as="line_data">
+                                    <t t-set="is_child" t-value="line_data['is_combo_child']"/>
+                                    <t t-set="qty_show" t-value="line_data['qty']"/>
 
-                                    <t t-if="qty_show &gt; 0">
+                                    <t t-if="qty_show &gt; 0 and line_data['type'] != 'parent'">
                                         <tr>
                                             <td class="col-stt">
-                                                <t t-if="not is_child">
+                                                <t t-if="line_data['type'] == 'parent'">
                                                     <t t-esc="idx"/>
                                                     <t t-set="idx" t-value="idx + 1"/>
                                                 </t>
                                             </td>
                                             <td>
                                                 <t t-if="is_child">
-                                                    <span style="padding-left:20px;">
-                                                        <t t-esc="l.product_id and l.product_id.display_name or ''"/>
-                                                    </span>
+                                                    <span style="padding-left:20px;" t-esc="line_data['product_name']"/>
                                                 </t>
                                                 <t t-else="">
-                                                    <span t-esc="l.product_id and l.product_id.display_name or ''"/>
+                                                    <span t-esc="line_data['product_name']"/>
                                                 </t>
                                             </td>
                                             <td class="col-uom">
-                                                <span t-esc="l.product_uom and l.product_uom.name or (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''"/>
+                                                <span t-esc="line_data['uom']"/>
                                             </td>
                                             <td class="col-qty"><span t-esc="'%0.2f' % qty_show"/></td>
-                                            <td class="col-note"><t t-esc="o.origin or ''"/></td>
+                                            <td class="col-note"><t t-esc="(so and so.origin) or ''"/></td>
                                         </tr>
                                     </t>
                                 </t>
 
-                                <t t-if="not lines">
+                                <t t-if="not enriched_lines">
                                     <tr>
                                         <td colspan="5" style="text-align:center; font-style:italic; padding:8px;">
                                             Không có dòng hàng.
@@ -669,5 +438,4 @@
             </t>
         </t>
     </template>
-
 </odoo>
