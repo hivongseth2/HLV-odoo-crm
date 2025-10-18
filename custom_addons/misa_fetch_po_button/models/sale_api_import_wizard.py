@@ -740,10 +740,10 @@ class SaleApiImportWizard(models.TransientModel):
                 
                 # Nếu là 'Từ chối ghi' → hủy các SO hiện có trùng tên rồi bỏ qua import
                 if revenue_status_id == 4 or status == "từ chối ghi":
-                    found = self.env['sale.order'].sudo().search([('name', '=', order_ref)])
-                    if found:
-                        for so in found:
-                            self._force_cancel_sale_order(so, revenue_status_id, status)
+                    # found = self.env['sale.order'].sudo().search([('name', '=', order_ref)])
+                    # if found:
+                    #     for so in found:
+                    #         self._force_cancel_sale_order(so, revenue_status_id, status)
                     continue
 
 
@@ -926,25 +926,25 @@ class SaleApiImportWizard(models.TransientModel):
                     # Kiểm tra SO đã tồn tại
                     existing_order = self.env['sale.order'].search([('name', '=', order_ref)], limit=1)
                     if existing_order:
-                        if misa_id_str and not existing_order.misa_id:
-                            existing_order.misa_id = misa_id_str
-                        # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <<<
-                        self._update_existing_so_taxes(existing_order, grouped_lines)
-                        # >>> CẬP NHẬT COMBO PRODUCT (chỉ dòng cha) <<<
-                        self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
-                        # >>> TẠO MỚI CÁC DÒNG THIẾU (trang 2+) <<<
-                        self._add_missing_lines_to_existing_so(existing_order, grouped_lines, sale_headers)
-                        # Update MISA fields (owner code and order date)
-                        upd = {}
-                        if owner_date.get('owner_code'):
-                            upd['x_studio_misa_saler_code'] = owner_date['owner_code']
-                        if owner_date.get('sale_order_date'):
-                            upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
-                        if upd:
-                            existing_order.write(upd)
+                        # if misa_id_str and not existing_order.misa_id:
+                        #     existing_order.misa_id = misa_id_str
+                        # # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <<<
+                        # self._update_existing_so_taxes(existing_order, grouped_lines)
+                        # # >>> CẬP NHẬT COMBO PRODUCT (chỉ dòng cha) <<<
+                        # self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
+                        # # >>> TẠO MỚI CÁC DÒNG THIẾU (trang 2+) <<<
+                        # self._add_missing_lines_to_existing_so(existing_order, grouped_lines, sale_headers)
+                        # # Update MISA fields (owner code and order date)
+                        # upd = {}
+                        # if owner_date.get('owner_code'):
+                        #     upd['x_studio_misa_saler_code'] = owner_date['owner_code']
+                        # if owner_date.get('sale_order_date'):
+                        #     upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+                        # if upd:
+                        #     existing_order.write(upd)
 
-                        # (giữ nguyên các xử lý khác; KHÔNG thêm dòng con)
-                        _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật combo (parent-only)/thuế", order_ref)
+                        # # (giữ nguyên các xử lý khác; KHÔNG thêm dòng con)
+                        # _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật combo (parent-only)/thuế", order_ref)
                         continue
 
                     group_total = sum(line_subtotal(l) for l in grouped_lines)
