@@ -1,19 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-  <!-- ẨN report gốc KHỎI MENU In bằng cách gán vào group_no_one -->
-  <record id="bbgn_a4_khong_gia" model="ir.actions.report">
-    <field name="name">BBGN A4 không giá (ẩn)</field>
-    <field name="model">stock.picking</field>
-    <field name="report_type">qweb-pdf</field>
-    <field name="report_name">hlv_a4_report.bbbg_maucombo</field>
-    <!-- KHÔNG sửa binding_type / binding_model_id -->
-    <field name="groups_id" eval="[(6, 0, [ref('base.group_no_one')])]"/>
-  </record>
-
   <!-- Proxy hiện trong menu In, mở popup chọn ngày -->
   <record id="proxy_print_bbgn_a4_khong_gia" model="ir.actions.server">
-    <field name="name">BBGN A4 không giá</field>
+    <field name="name">BBGN A4 không giá (chọn ngày)</field>
     <field name="model_id" ref="stock.model_stock_picking"/>
     <field name="state">code</field>
 

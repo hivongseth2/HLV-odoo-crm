@@ -2,7 +2,7 @@
 <odoo>
 
     <!-- Action report -->
-    <record id="bbbg_a4_co_po" model="ir.actions.report">
+    <record id="bbbg_maucombo" model="ir.actions.report">
         <field name="name">BBBG COMBO</field>
         <field name="model">stock.picking</field>
         <field name="report_type">qweb-pdf</field>

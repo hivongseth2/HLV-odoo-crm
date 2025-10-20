@@ -13,7 +13,8 @@ class BbgnDateWizard(models.TransientModel):
         dt = fields.Date.to_date(self.order_date) if self.order_date else None
         order_date_str = dt.strftime('%d/%m/%Y') if dt else ''
 
-        action = self.env.ref('hlv_a4_report.bbgn_a4_khong_gia').sudo().report_action(
+        # Gọi report bbgn_a4_khong_gia_combo (có thể chọn ngày)
+        action = self.env.ref('hlv_a4_report.bbgn_a4_khong_gia_combo').sudo().report_action(
             self.picking_id,
             data={'bbgn_order_date': order_date_str},   # ƯU TIÊN đọc từ data trong QWeb
             config=False
