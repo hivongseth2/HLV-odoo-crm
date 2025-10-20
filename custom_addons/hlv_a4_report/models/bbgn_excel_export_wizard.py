@@ -80,15 +80,21 @@ class BBGNExcelExportWizard(models.TransientModel):
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
-                # Điều chỉnh kích thước logo để phù hợp với bố cục
-                target_width = 180
+                # Điều chỉnh kích thước logo để phù hợp với bố cục (A1:B4)
+                # Chiều rộng cột A (18) + cột B (16) = 34 ký tự ≈ 245 pixels
+                # Chiều cao 4 hàng x 40 = 160 pixels
+                target_width = 240
+                target_height = 155
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width:
-                    ratio = target_width / float(img.width)
+                    # Tính tỷ lệ để fit vào khung, giữ nguyên aspect ratio
+                    width_ratio = target_width / float(img.width)
+                    height_ratio = target_height / float(img.height)
+                    ratio = min(width_ratio, height_ratio)  # Chọn tỷ lệ nhỏ hơn để fit
                     img.width = int(img.width * ratio)
                     img.height = int(img.height * ratio)
                 else:
                     img.width = target_width
-                    img.height = 130
+                    img.height = target_height
 
                 ws.add_image(img, 'A1')
                 ws.merge_cells('A1:B4')
@@ -414,15 +420,15 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         # Chữ ký
         row += 2
-        ws.merge_cells(f'A{row}:E{row}')
+        ws.merge_cells(f'A{row}:D{row}')
         ws[f'A{row}'] = 'Đại diện bên nhận hàng'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = center_align
 
-        ws.merge_cells(f'F{row}:J{row}')
-        ws[f'F{row}'] = 'Đại diện bên giao hàng'
-        ws[f'F{row}'].font = normal_font
-        ws[f'F{row}'].alignment = center_align
+        ws.merge_cells(f'E{row}:J{row}')
+        ws[f'E{row}'] = 'Đại diện bên giao hàng'
+        ws[f'E{row}'].font = normal_font
+        ws[f'E{row}'].alignment = center_align
 
         # Footer
         row += 5
