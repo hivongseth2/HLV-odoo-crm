@@ -24,10 +24,8 @@
         <field name="binding_model_id" ref="stock.model_stock_picking"/>
         <field name="binding_type">report</field>
         <field name="state">code</field>
-        <field name="code">
-            wizard = env['bbgn.excel.export.wizard'].create({})
-            action = wizard.with_context(active_id=record.id).action_export_excel()
-        </field>
+        <field name="code">wizard = env['bbgn.excel.export.wizard'].create({})
+action = wizard.with_context(active_id=record.id).action_export_excel()</field>
     </record>
 
     <!-- Hoặc giữ wizard action nếu muốn xác nhận -->
