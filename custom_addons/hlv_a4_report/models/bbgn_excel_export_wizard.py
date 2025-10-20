@@ -89,9 +89,17 @@ class BBGNExcelExportWizard(models.TransientModel):
         row = 1
 
         # Tính toán kích thước khung A1:B4 cho logo
-        # Excel column width: 1 unit ≈ 7 pixels (với font mặc định)
-        # Với Times New Roman, sử dụng hệ số 7.5 cho chính xác hơn
-        logo_cell_width_px = (col_a_width + col_b_width) * 7.5  # ≈ 255 pixels
+        # Excel column width công thức chính xác cho merged cells:
+        # pixels = ((256 * width + 128/7)/256) * 7 + 5 (nếu width > 1)
+        # Với Times New Roman và merged cells A1:B4
+        def excel_column_width_to_pixels(width):
+            """Chuyển đổi Excel column width sang pixels (chính xác)"""
+            if width <= 1:
+                return int(((256 * width + 18) / 256) * 7)
+            else:
+                return int(((256 * width + 18) / 256) * 7) + 5
+        
+        logo_cell_width_px = excel_column_width_to_pixels(col_a_width) + excel_column_width_to_pixels(col_b_width)
         
         # Excel row height: 1 point = 96/72 pixels (96 DPI)
         # 1 point = 1.333... pixels
