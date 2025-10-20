@@ -90,8 +90,9 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         # Tính toán kích thước khung A1:B4 cho logo
         # Chiều rộng: cột A + cột B
-        # 1 character width trong Excel ≈ 7 pixels
-        logo_cell_width = (col_a_width + col_b_width) * 7  # ≈ 238 pixels
+        # Với Times New Roman size 12: 1 đơn vị column width ≈ 9-10 pixels
+        # (Times New Roman rộng hơn Calibri mặc định)
+        logo_cell_width = (col_a_width + col_b_width) * 9.5  # ≈ 323 pixels
         
         # Chiều cao: 4 hàng, mỗi hàng 30 points
         # 1 point = 1.33 pixels khi render trong Excel
