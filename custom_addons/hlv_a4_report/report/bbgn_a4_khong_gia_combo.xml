@@ -8,7 +8,7 @@
         <field name="report_type">qweb-pdf</field>
         <field name="report_name">hlv_a4_report.bbgn_a4_khong_gia_combo_doc</field>
         <field name="print_report_name">
-            'BBGN A4 không giá - %s' % (object.name or 'Picking')
+            'BBGN A4 không giá - CB - %s' % (object.name or 'Picking')
         </field>
         <field name="binding_model_id" ref="stock.model_stock_picking" />
         <field name="binding_type">report</field>
@@ -255,7 +255,7 @@
                                 <t t-foreach="enriched_lines" t-as="line_data">
                                     <tr>
                                         <td style="border:1px solid #000; text-align:center;">
-                                            <t t-if="line_data['type'] == 'parent'">
+                                            <t t-if="line_data['type'] != 'child'">
                                                 <t t-esc="idx"/>
                                                 <t t-set="idx" t-value="idx + 1"/>
                                             </t>
