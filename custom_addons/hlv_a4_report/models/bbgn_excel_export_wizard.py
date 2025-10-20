@@ -9,8 +9,10 @@ try:
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from openpyxl.utils import get_column_letter
+    from openpyxl.drawing.image import Image as XLImage
 except ImportError:
     Workbook = None
+    XLImage = None
 
 
 class BBGNExcelExportWizard(models.TransientModel):
@@ -71,11 +73,38 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         # Header - Logo và thông tin công ty
         row = 1
-        ws.merge_cells(f'A{row}:B{row+3}')
-        ws[f'A{row}'] = 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
-        ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].alignment = center_align
+        
+        # Thêm logo nếu có
+        if picking.company_id.logo and XLImage:
+            try:
+                # Decode logo từ base64
+                logo_data = base64.b64decode(picking.company_id.logo)
+                logo_stream = BytesIO(logo_data)
+                
+                # Tạo image object
+                img = XLImage(logo_stream)
+                
+                # Điều chỉnh kích thước logo (width x height in pixels)
+                img.width = 180
+                img.height = 130
+                
+                # Thêm logo vào ô A1
+                ws.add_image(img, 'A1')
+                
+            except Exception as e:
+                # Nếu có lỗi khi thêm logo, ghi text thay thế
+                ws.merge_cells(f'A{row}:B{row+3}')
+                ws[f'A{row}'] = 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
+                ws[f'A{row}'].font = bold_font
+                ws[f'A{row}'].alignment = center_align
+        else:
+            # Nếu không có logo, hiển thị text
+            ws.merge_cells(f'A{row}:B{row+3}')
+            ws[f'A{row}'] = 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
+            ws[f'A{row}'].font = bold_font
+            ws[f'A{row}'].alignment = center_align
 
+        # Thông tin công ty bên phải
         ws.merge_cells(f'C{row}:J{row}')
         ws[f'C{row}'] = 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
         ws[f'C{row}'].font = header_font
@@ -278,7 +307,6 @@ class BBGNExcelExportWizard(models.TransientModel):
         grey_fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
         
         # Row 1: Tổng tiền hàng
-        # Gộp A-E (màu xám) - rowspan 3
         for col in range(1, 6):  # A-E
             for r in range(row, row + 3):
                 cell = ws.cell(row=r, column=col)
@@ -286,7 +314,6 @@ class BBGNExcelExportWizard(models.TransientModel):
                 cell.border = thin_border
         ws.merge_cells(f'A{row}:E{row+2}')
 
-        # Gộp F-H (label)
         ws.merge_cells(f'F{row}:H{row}')
         for col in range(6, 9):  # F-H
             cell = ws.cell(row=row, column=col)
@@ -296,11 +323,9 @@ class BBGNExcelExportWizard(models.TransientModel):
         cell.font = bold_font
         cell.alignment = left_align
 
-        # Cột I (Thành tiền)
         cell = ws.cell(row=row, column=9)
         cell.border = thin_border
 
-        # Cột J (màu xám) - rowspan 3
         for r in range(row, row + 3):
             cell = ws.cell(row=r, column=10)
             cell.fill = grey_fill
@@ -311,7 +336,7 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         # Row 2: Tổng thuế VAT
         ws.merge_cells(f'F{row}:H{row}')
-        for col in range(6, 9):  # F-H
+        for col in range(6, 9):
             cell = ws.cell(row=row, column=col)
             cell.border = thin_border
         cell = ws.cell(row=row, column=6)
@@ -326,7 +351,7 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         # Row 3: Tổng tiền thanh toán
         ws.merge_cells(f'F{row}:H{row}')
-        for col in range(6, 9):  # F-H
+        for col in range(6, 9):
             cell = ws.cell(row=row, column=col)
             cell.border = thin_border
         cell = ws.cell(row=row, column=6)
@@ -340,9 +365,8 @@ class BBGNExcelExportWizard(models.TransientModel):
         row += 1
 
         # Bằng chữ
-        # Gộp A-E
         ws.merge_cells(f'A{row}:E{row}')
-        for col in range(1, 6):  # A-E
+        for col in range(1, 6):
             cell = ws.cell(row=row, column=col)
             cell.fill = grey_fill
             cell.border = thin_border
@@ -351,9 +375,8 @@ class BBGNExcelExportWizard(models.TransientModel):
         cell.font = bold_font
         cell.alignment = left_align
 
-        # Gộp F-J
         ws.merge_cells(f'F{row}:J{row}')
-        for col in range(6, 11):  # F-J
+        for col in range(6, 11):
             cell = ws.cell(row=row, column=col)
             cell.fill = grey_fill
             cell.border = thin_border
@@ -407,6 +430,12 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws.column_dimensions['H'].width = 12
         ws.column_dimensions['I'].width = 15
         ws.column_dimensions['J'].width = 15
+        
+        # Điều chỉnh chiều cao của các hàng logo
+        ws.row_dimensions[1].height = 32
+        ws.row_dimensions[2].height = 32
+        ws.row_dimensions[3].height = 32
+        ws.row_dimensions[4].height = 32
 
         # Tạo file
         output = BytesIO()
