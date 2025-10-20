@@ -282,7 +282,7 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         row += 1
         ws.merge_cells(f'A{row}:J{row}')
-        ws[f'A{row}'] = f'    Điện thoại: {picking.company_id.phone or ""}    ................................................................    Fax: ................................................................'
+        ws[f'A{row}'] = f'    Điện thoại: {picking.company_id.phone or ""}     ..................................   Fax: ................................................................'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
 
