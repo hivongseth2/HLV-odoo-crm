@@ -73,38 +73,26 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         # Header - Logo và thông tin công ty
         row = 1
-        
+
         # Thêm logo nếu có
         if picking.company_id.logo and XLImage:
             try:
-                # Decode logo từ base64
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
-                
-                # Tạo image object
                 img = XLImage(logo_stream)
-                
-                # Điều chỉnh kích thước logo (width x height in pixels)
-                img.width = 180
-                img.height = 130
-                
-                # Thêm logo vào ô A1
+                img.width = 150  # Giảm width xuống
+                img.height = 100  # Giảm height xuống
                 ws.add_image(img, 'A1')
-                
             except Exception as e:
-                # Nếu có lỗi khi thêm logo, ghi text thay thế
-                ws.merge_cells(f'A{row}:B{row+3}')
-                ws[f'A{row}'] = 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
-                ws[f'A{row}'].font = bold_font
-                ws[f'A{row}'].alignment = center_align
-        else:
-            # Nếu không có logo, hiển thị text
-            ws.merge_cells(f'A{row}:B{row+3}')
-            ws[f'A{row}'] = 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
-            ws[f'A{row}'].font = bold_font
-            ws[f'A{row}'].alignment = center_align
+                pass
+                
+        # Điều chỉnh chiều cao của các hàng logo để tạo khoảng trống
+        ws.row_dimensions[1].height = 25
+        ws.row_dimensions[2].height = 25
+        ws.row_dimensions[3].height = 25
+        ws.row_dimensions[4].height = 25
 
-        # Thông tin công ty bên phải
+        # Thông tin công ty bên phải - BẮT ĐẦU TỪ ROW 1
         ws.merge_cells(f'C{row}:J{row}')
         ws[f'C{row}'] = 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
         ws[f'C{row}'].font = header_font
