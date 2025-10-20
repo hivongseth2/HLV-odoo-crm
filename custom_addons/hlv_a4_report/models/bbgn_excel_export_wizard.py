@@ -311,48 +311,55 @@ class BBGNExcelExportWizard(models.TransientModel):
             cell.border = thin_border
             cell.fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
 
-        # Data rows - TÍNH TOÁN GIÁ TRỊ
+        # Data rows - XỬ LÝ COMBO ĐÚNG: Parent có giá, Children chỉ hiển thị tên thụt vào
         row += 1
         idx = 1
         total_amount_untaxed = 0.0  # Tổng tiền hàng (chưa thuế)
         total_tax = 0.0  # Tổng thuế VAT
         
         for line_data in enriched_lines:
-            # Chỉ tính cho dòng thực (không tính parent trong combo)
-            if line_data['type'] == 'parent':
-                continue
-                
+            line_type = line_data['type']
+            is_child = line_data['is_combo_child']
             qty = line_data['qty'] or 0.0
-            unit_price = line_data.get('price_unit', 0.0) or 0.0
-            tax_percent = line_data.get('tax_percent', 0.0) or 0.0
             
-            # Tính toán
-            line_total = qty * unit_price  # Thành tiền (trước thuế)
-            line_tax_value = line_total * tax_percent / 100.0  # Thuế VAT
+            # Chỉ tính giá cho PARENT và STANDALONE (không tính cho CHILD)
+            if line_type == 'parent' or line_type == 'standalone':
+                unit_price = line_data.get('price_unit', 0.0) or 0.0
+                tax_percent = line_data.get('tax_percent', 0.0) or 0.0
+                line_total = qty * unit_price
+                line_tax_value = line_total * tax_percent / 100.0
+                
+                # Cộng dồn tổng
+                total_amount_untaxed += line_total
+                total_tax += line_tax_value
+            else:
+                # CHILD: không có giá
+                unit_price = 0.0
+                tax_percent = 0.0
+                line_total = 0.0
+                line_tax_value = 0.0
             
-            # Cộng dồn
-            total_amount_untaxed += line_total
-            total_tax += line_tax_value
-            
-            # STT
+            # STT - Chỉ đánh số cho parent và standalone
             cell = ws.cell(row=row, column=1)
-            cell.value = idx
-            idx += 1
+            if line_type != 'child':
+                cell.value = idx
+                idx += 1
             cell.alignment = center_align
             cell.border = thin_border
             cell.font = normal_font
 
             # Số PR
             cell = ws.cell(row=row, column=2)
-            cell.value = line_data.get('sol').note if line_data.get('sol') else ''
+            if line_type != 'child':
+                cell.value = line_data.get('sol').note if line_data.get('sol') else ''
             cell.alignment = center_align
             cell.border = thin_border
             cell.font = normal_font
 
-            # Tên hàng
+            # Tên hàng - CHILD thụt vào 4 spaces
             cell = ws.cell(row=row, column=3)
             product_name = line_data['product_name']
-            if line_data['is_combo_child']:
+            if is_child:
                 product_name = '    ' + product_name  # Indent child
             cell.value = product_name
             cell.alignment = left_align
@@ -373,33 +380,37 @@ class BBGNExcelExportWizard(models.TransientModel):
             cell.border = thin_border
             cell.font = normal_font
 
-            # Đơn giá
+            # Đơn giá - CHỈ hiển thị cho parent và standalone
             cell = ws.cell(row=row, column=6)
-            cell.value = round(unit_price, 0)
-            cell.number_format = '#,##0'
+            if line_type != 'child':
+                cell.value = round(unit_price, 0)
+                cell.number_format = '#,##0'
             cell.alignment = right_align
             cell.border = thin_border
             cell.font = normal_font
 
-            # VAT(%)
+            # VAT(%) - CHỈ hiển thị cho parent và standalone
             cell = ws.cell(row=row, column=7)
-            cell.value = tax_percent
+            if line_type != 'child':
+                cell.value = tax_percent
             cell.alignment = center_align
             cell.border = thin_border
             cell.font = normal_font
 
-            # Thuế VAT
+            # Thuế VAT - CHỈ hiển thị cho parent và standalone
             cell = ws.cell(row=row, column=8)
-            cell.value = round(line_tax_value, 0)
-            cell.number_format = '#,##0'
+            if line_type != 'child':
+                cell.value = round(line_tax_value, 0)
+                cell.number_format = '#,##0'
             cell.alignment = right_align
             cell.border = thin_border
             cell.font = normal_font
 
-            # Thành tiền
+            # Thành tiền - CHỈ hiển thị cho parent và standalone
             cell = ws.cell(row=row, column=9)
-            cell.value = round(line_total, 0)
-            cell.number_format = '#,##0'
+            if line_type != 'child':
+                cell.value = round(line_total, 0)
+                cell.number_format = '#,##0'
             cell.alignment = right_align
             cell.border = thin_border
             cell.font = normal_font
