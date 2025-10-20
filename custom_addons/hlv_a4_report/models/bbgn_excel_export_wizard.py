@@ -87,10 +87,10 @@ class BBGNExcelExportWizard(models.TransientModel):
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
                 # Kích thước khung A1:B4:
-                # Chiều rộng: cột A (18) + cột B (16) = 34 ký tự ≈ 320 pixels (7 pixels/ký tự)
-                # Chiều cao: 4 hàng x 30 point ≈ 200 pixels (1.33 pixels/point)
-                target_width = 320
-                target_height = 200
+                # Chiều rộng: cột A (18) + cột B (16) = 34 ký tự ≈ 350 pixels (7 pixels/ký tự)
+                # Chiều cao: 4 hàng x 30 point ≈ 175 pixels (1.33 pixels/point)
+                target_width = 350
+                target_height = 175
                 
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0:
                     # Tính tỷ lệ để fit vào khung, giữ aspect ratio
