@@ -74,6 +74,12 @@ class BBGNExcelExportWizard(models.TransientModel):
         # Header - Logo và thông tin công ty
         row = 1
 
+        # Điều chỉnh chiều cao các hàng header trước (để logo fit đúng)
+        ws.row_dimensions[1].height = 30
+        ws.row_dimensions[2].height = 30
+        ws.row_dimensions[3].height = 30
+        ws.row_dimensions[4].height = 30
+
         # Thêm logo nếu có (căn giữa trong vùng A1:B4)
         if picking.company_id.logo and XLImage:
             try:
@@ -82,9 +88,10 @@ class BBGNExcelExportWizard(models.TransientModel):
                 img = XLImage(logo_stream)
                 # Điều chỉnh kích thước logo để phù hợp với bố cục (A1:B4)
                 # Chiều rộng cột A (18) + cột B (16) = 34 ký tự ≈ 245 pixels
-                # Chiều cao 4 hàng x 40 = 160 pixels
-                target_width = 240
-                target_height = 155
+                # Chiều cao 4 hàng x 30 = 120 pixels
+                # Đặt kích thước lớn hơn để logo rõ ràng
+                target_width = 280
+                target_height = 140
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width:
                     # Tính tỷ lệ để fit vào khung, giữ nguyên aspect ratio
                     width_ratio = target_width / float(img.width)
@@ -100,12 +107,6 @@ class BBGNExcelExportWizard(models.TransientModel):
                 ws.merge_cells('A1:B4')
             except Exception as e:
                 pass
-                
-        # Điều chỉnh chiều cao các hàng header
-        ws.row_dimensions[1].height = 22
-        ws.row_dimensions[2].height = 18
-        ws.row_dimensions[3].height = 18
-        ws.row_dimensions[4].height = 18
 
         # Thông tin công ty bên phải
         # Row 1: Tên công ty (font 14, bold)
@@ -448,12 +449,6 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws.column_dimensions['H'].width = 12
         ws.column_dimensions['I'].width = 15
         ws.column_dimensions['J'].width = 15
-        
-        # Điều chỉnh chiều cao của các hàng logo
-        ws.row_dimensions[1].height = 40
-        ws.row_dimensions[2].height = 40
-        ws.row_dimensions[3].height = 40
-        ws.row_dimensions[4].height = 40
 
         # Tạo file
         output = BytesIO()
