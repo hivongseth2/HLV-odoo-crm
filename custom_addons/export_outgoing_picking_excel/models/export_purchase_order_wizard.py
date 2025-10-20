@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-from odoo import api, fields, models, _
+from odoo import fields, models, _
 from odoo.exceptions import UserError
 import base64
-import datetime
+from datetime import date, datetime as dt
 from io import BytesIO
+import unicodedata
 
 try:
     from openpyxl import Workbook
@@ -14,48 +15,38 @@ except ImportError:
 
 
 def _to_date_str(val):
+    """Trả về 'Monday, January 01, 2024' từ date/datetime/chuỗi ngày; rỗng nếu không hợp lệ."""
     if not val:
         return ""
-    if isinstance(val, str):
+    if isinstance(val, (date, dt)):
+        d = val.date() if isinstance(val, dt) else val
+    else:
         try:
-            d = fields.Datetime.from_string(val)
-            if d:
-                return d.strftime("%A, %B %d, %Y")
+            d = fields.Date.to_date(val)
         except Exception:
-            try:
-                d2 = fields.Date.from_string(val)
-                if d2:
-                    return d2.strftime("%A, %B %d, %Y")
-            except Exception:
-                return val
-        return val
-    if isinstance(val, datetime.datetime):
-        return val.strftime("%A, %B %d, %Y")
-    if isinstance(val, datetime.date):
-        return val.strftime("%A, %B %d, %Y")
-    return str(val)
+            return str(val)
+    return d.strftime("%A, %B %d, %Y")
 
 
 class PurchaseExportWizard(models.TransientModel):
     _name = "purchase.export.wizard"
     _description = "Xuất Excel lệnh mua hàng theo template kế toán"
 
-    def _harsh_warehouse_code(self, code):
-        if code == "KBC":
-            return "BENCAM"
-        if code == "TSN":
-            return "HCM"
-        if code == "KHD":
-            return "HIENDUC"
-        if code == "TSNSR":
-            return "HCM_SHOWROOM"
-        return code
+    _WH_MAP = {
+        "KBC": "BENCAM",
+        "TSN": "HCM",
+        "KHD": "HIENDUC",
+        "TSNSR": "HCM_SHOWROOM",
+    }
 
     date_from = fields.Date(string="Từ ngày", required=True)
-    date_to = fields.Date(string="Đến ngày", required=True)
+    date_to   = fields.Date(string="Đến ngày", required=True)
+
+    def _harsh_warehouse_code(self, code):
+        return self._WH_MAP.get(code, code)
 
     def _get_columns_definition(self):
-        """Định nghĩa các cột theo template kế toán mua hàng"""
+        """Định nghĩa cột cố định theo template mua hàng."""
         return [
             {'key': 'hinh_thuc_mua_hang', 'name': 'Hình thức mua hàng', 'width': 25},
             {'key': 'phuong_thuc_thanh_toan', 'name': 'Phương thức thanh toán', 'width': 25},
@@ -120,139 +111,107 @@ class PurchaseExportWizard(models.TransientModel):
         self.ensure_one()
         if self.date_from > self.date_to:
             raise UserError(_("Khoảng ngày không hợp lệ."))
-
-        domain = [
+        return [
             ("date_order", ">=", fields.Date.to_date(self.date_from)),
             ("date_order", "<=", fields.Date.to_date(self.date_to)),
             ("receipt_status", "!=", "pending"),
         ]
 
-        return domain
-
     def _partner_code(self, partner):
         if not partner:
             return ""
-        return partner.ref or (partner.barcode if hasattr(partner, "barcode") else None) or partner.vat or str(partner.id) or ""
+        return partner.ref or getattr(partner, "barcode", None) or partner.vat or str(partner.id) or ""
 
     def _get_warehouse_code(self, picking):
-        """Lấy mã kho"""
-        pt = picking.picking_type_id
-        if pt and pt.warehouse_id:
-            code = pt.warehouse_id.code or pt.warehouse_id.name or ""
-            return self._harsh_warehouse_code(code)
-        return ""
-    
+        """Lấy mã kho từ picking_type.warehouse_id."""
+        if not picking or not picking.picking_type_id or not picking.picking_type_id.warehouse_id:
+            return ""
+        code = picking.picking_type_id.warehouse_id.code or picking.picking_type_id.warehouse_id.name or ""
+        return self._harsh_warehouse_code(code)
+
+    @staticmethod
+    def _normalize_addr_token(s):
+        s = (s or "").strip().lower()
+        s = unicodedata.normalize("NFD", s)
+        return "".join(c for c in s if unicodedata.category(c) != "Mn")
+
+    def _compose_partner_address(self, partner):
+        if not partner:
+            return ""
+        parts = [partner.street or "", partner.city or "", partner.state_id.name if partner.state_id else ""]
+        seen, out = set(), []
+        for p in parts:
+            token = self._normalize_addr_token(p)
+            if p and token not in seen:
+                out.append(p)
+                seen.add(token)
+        return ", ".join(out)
+
     def _get_purchase_line_rows(self, purchase):
-        rows = []
-        
-        # Thông tin chung từ Purchase Order
         order_date_str = _to_date_str(purchase.date_order)
-        purchase_name = purchase.name or ""
-        partner = purchase.partner_id
-        partner_code = self._partner_code(partner)
-        partner_name = (partner and partner.name) or ""
-        
-        # Địa chỉ
-        partner_address = ""
-        import unicodedata
-        def normalize_addr(s):
-            s = s.strip().lower()
-            s = unicodedata.normalize('NFD', s)
-            s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
-            return s
-        
-        if partner:
-            street = partner.street or ""
-            city = partner.city or ""
-            state = partner.state_id.name if partner.state_id else ""
-            address_parts = []
-            normalized = set()
-            for part in [street, city, state]:
-                norm = normalize_addr(part) if part else ""
-                if part and norm not in normalized:
-                    address_parts.append(part)
-                    normalized.add(norm)
-            partner_address = ", ".join(address_parts)
-        
-        partner_vat = (partner and partner.vat) or ""
-        
-        # Diễn giải
-        # dien_giai = f"Mua hàng từ {partner_name}"
-        # if purchase.notes:
-        #     dien_giai = purchase.notes
-        
-        # Xử lý từng order line
+        purchase_name  = purchase.name or ""
+        partner        = purchase.partner_id
+        partner_code   = self._partner_code(partner)
+        partner_name   = partner.name or ""
+        partner_vat    = partner.vat or ""
+        partner_addr   = self._compose_partner_address(partner)
+        ma_kho         = self._get_warehouse_code(purchase.picking_ids[:1] and purchase.picking_ids[0] or None)
+
+        rows = []
         for pol in purchase.order_line:
-            prod = pol.product_id
-            if not prod:
+            if not pol.product_id:
                 continue
-
-            row = self._build_row_data(
-                purchase, pol, prod,
+            rows.append(self._build_row_data(
+                purchase, pol, pol.product_id,
                 order_date_str, purchase_name, partner_code, partner_name,
-                partner_address, partner_vat
-            )
-            rows.append(row)
-
+                partner_addr, partner_vat, ma_kho
+            ))
         return rows
 
     def _build_row_data(self, purchase, pol, prod,
                         order_date_str, purchase_name, partner_code, partner_name,
-                        partner_address, partner_vat):
-        """Xây dựng dữ liệu cho 1 dòng"""
-        
-        product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
+                        partner_address, partner_vat, ma_kho):
+        product_code = prod.default_code or getattr(prod, 'barcode', '') or ""
         product_name = prod.display_name or prod.name or ""
-        
-        # UoM
-        uom = pol.product_uom or prod.uom_id
-        uom_name = (uom and uom.name) or ""
-        qty = pol.product_qty or 0.0
-        
-        # Giá và thuế
-        don_gia = pol.price_unit or 0.0
-        thanh_tien = pol.price_subtotal or 0.0
-        ty_le_ck = pol.discount or 0.0  # Purchase order thường không có discount trong standard Odoo
-        tien_chiet_khau = 0.0
-        
-        # Thuế GTGT
-        ty_le_thue_gtgt = 0.0
-        tien_thue_gtgt = 0.0
-        if pol.taxes_id:
-            for tax in pol.taxes_id:
-                ty_le_thue_gtgt = tax.amount or 0.0
-                break
-            tien_thue_gtgt = (thanh_tien * ty_le_thue_gtgt) / 100
+        uom          = pol.product_uom or prod.uom_id
+        uom_name     = uom.name if uom else ""
+        qty          = pol.product_qty or 0.0
+        don_gia      = pol.price_unit or 0.0
+        thanh_tien   = pol.price_subtotal or 0.0
+        ty_le_ck     = getattr(pol, "discount", 0.0) or 0.0
+
+        ty_le_thue_gtgt = next((t.amount or 0.0 for t in pol.taxes_id), 0.0)
+        tien_thue_gtgt  = thanh_tien * ty_le_thue_gtgt / 100.0
 
         return {
-            # Hardcoded fields
+            # Fixed fields
             'hinh_thuc_mua_hang': 'Mua hàng hóa trong nước',
             'phuong_thuc_thanh_toan': 'Chưa thanh toán',
             'nhan_kem_hoa_don': 'Nhận kèm hóa đơn',
-            
-            # Date fields - ngày hiện tại
-            'ngay_hach_toan': _to_date_str(datetime.date.today()),
-            'ngay_chung_tu': _to_date_str(datetime.date.today()),
+
+            # Dates (ngày hiện tại)
+            'ngay_hach_toan': _to_date_str(date.today()),
+            'ngay_chung_tu': _to_date_str(date.today()),
             'so_phieu_nhap': purchase_name,
             'so_ct_ghi_no': '',
-            
-            # Invoice fields - hardcoded
+
+            # Invoice-ish fields
             'mau_so_hd': '01GTKT0/001',
             'ky_hieu_hd': 'AB/20E',
             'so_hoa_don': purchase.origin or "",
             'ngay_hoa_don': order_date_str,
-            
-            # Account fields - hardcoded
+
+            # Bank chi
             'so_tk_chi': '04080082835',
             'ten_ngan_hang_chi': 'Ngân hàng quốc tế Việt Nam',
-            
-            # Partner info
+
+            # Partner
             'ma_nha_cung_cap': partner_code,
             'ten_nha_cung_cap': partner_name,
             'dia_chi': partner_address,
             'ma_so_thue': partner_vat,
-            
-            # Other info - hardcoded
+
+            # Misc fixed
             'nguoi_giao_hang': 'Vũ Thị Bích Thủy',
             'dien_giai': purchase.origin or "",
             'so_tk_nhan': '0486523679',
@@ -261,33 +220,33 @@ class PurchaseExportWizard(models.TransientModel):
             'ma_nhan_vien': 'DINHTRANTHIKIMQUYEN',
             'so_luong_ct_kem_theo': '',
             'han_thanh_toan': '',
-            
-            # Product info
+
+            # Product
             'ma_hang': product_code,
             'ten_hang': product_name,
             'la_dong_ghi_chu': '',
-            'ma_kho': self._get_warehouse_code(purchase.picking_ids and purchase.picking_ids[0] or None),
+            'ma_kho': ma_kho,
             'hang_hoa_giu_ho': '',
-            
-            # Account codes - hardcoded
+
+            # Accounts (hardcoded)
             'tk_kho': '156',
             'tk_cong_no': '331',
-            
-            # Quantity and price
+
+            # Qty/price
             'dvt': uom_name,
             'so_luong': qty,
             'don_gia': don_gia,
             'thanh_tien': thanh_tien,
             'ty_le_ck': ty_le_ck,
-            'tien_chiet_khau': tien_chiet_khau,
-            
-            # Tax info
+            'tien_chiet_khau': 0.0,
+
+            # Tax
             'ty_le_thue_gtgt': ty_le_thue_gtgt,
             'ty_le_thue_khac': '',
             'tien_thue_gtgt': tien_thue_gtgt,
             'tk_thue_gtgt': '1331',
-            
-            # Other fields
+
+            # Others
             'phi_hang_ve_kho': '',
             'nhom_hhdv_mua_vao': '',
             'so_lenh_san_xuat': '',
@@ -306,7 +265,6 @@ class PurchaseExportWizard(models.TransientModel):
         }
 
     def _create_excel_workbook(self, data_rows):
-        """Tạo workbook Excel với header"""
         wb = Workbook()
         ws = wb.active
         ws.title = "Mua hàng hóa"
@@ -317,18 +275,15 @@ class PurchaseExportWizard(models.TransientModel):
         header_font = Font(name='Arial', size=10, bold=True)
         header_fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
         header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
         border_side = Side(style='thin', color='000000')
         border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
-
         cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
         number_alignment = Alignment(horizontal='right', vertical='center')
 
-        # Header row
-        HEADER_ROW = 1
-        DATA_START = 2
+        HEADER_ROW, DATA_START = 1, 2
 
-        for col_idx, col_def in enumerate(columns, start=1):
+        # Header
+        for col_idx, col_def in enumerate(columns, 1):
             cell = ws.cell(row=HEADER_ROW, column=col_idx)
             cell.value = col_def['name']
             cell.font = header_font
@@ -337,24 +292,18 @@ class PurchaseExportWizard(models.TransientModel):
             cell.border = border
             ws.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
 
-        # Data rows
-        for row_idx, row_data in enumerate(data_rows, start=DATA_START):
-            for col_idx, col_def in enumerate(columns, start=1):
-                cell = ws.cell(row=row_idx, column=col_idx)
-                value = row_data.get(col_def['key'], "")
-
-                if value is None:
-                    value = ""
-
-                cell.value = value
+        # Data
+        for row_idx, row_data in enumerate(data_rows, DATA_START):
+            for col_idx, col_def in enumerate(columns, 1):
+                v = row_data.get(col_def['key'], "")
+                v = "" if v is None else v
+                cell = ws.cell(row=row_idx, column=col_idx, value=v)
                 cell.border = border
-
-                # Number formatting
-                if isinstance(value, (int, float)) and value != "":
+                if isinstance(v, (int, float)):
                     cell.alignment = number_alignment
-                    if col_def['key'] in ['don_gia', 'thanh_tien', 'tien_chiet_khau', 'tien_thue_gtgt']:
+                    if col_def['key'] in {'don_gia', 'thanh_tien', 'tien_chiet_khau', 'tien_thue_gtgt'}:
                         cell.number_format = '#,##0'
-                    elif col_def['key'] in ['ty_le_ck', 'ty_le_thue_gtgt', 'ty_le_thue_khac']:
+                    elif col_def['key'] in {'ty_le_ck', 'ty_le_thue_gtgt', 'ty_le_thue_khac'}:
                         cell.number_format = '0.00'
                     elif col_def['key'] == 'so_luong':
                         cell.number_format = '#,##0.00'
@@ -362,7 +311,6 @@ class PurchaseExportWizard(models.TransientModel):
                     cell.alignment = cell_alignment
 
         ws.row_dimensions[HEADER_ROW].height = 30
-
         return wb
 
     def action_export(self):
@@ -377,8 +325,7 @@ class PurchaseExportWizard(models.TransientModel):
         # Tạo dữ liệu
         all_rows = []
         for purchase in purchases:
-            rows = self._get_purchase_line_rows(purchase)
-            all_rows.extend(rows)
+            all_rows.extend(self._get_purchase_line_rows(purchase))
 
         if not all_rows:
             raise UserError(_("Không có dữ liệu chi tiết để xuất."))
@@ -386,7 +333,6 @@ class PurchaseExportWizard(models.TransientModel):
         # Tạo Excel workbook
         wb = self._create_excel_workbook(all_rows)
 
-        # Xuất file
         out = BytesIO()
         wb.save(out)
         out.seek(0)
