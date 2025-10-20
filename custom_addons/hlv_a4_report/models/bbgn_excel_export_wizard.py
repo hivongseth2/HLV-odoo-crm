@@ -120,20 +120,52 @@ class BBGNExcelExportWizard(models.TransientModel):
                 img = XLImage(logo_stream)
                 
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0:
-                    # Tính tỷ lệ để fit vào khung, giữ aspect ratio
+                    # Tính tỷ lệ để fit vào khung, giữ aspect ratio (logo vuông)
                     width_ratio = logo_cell_width_px / float(img.width)
                     height_ratio = logo_cell_height_px / float(img.height)
-                    ratio = min(width_ratio, height_ratio)
+                    ratio = min(width_ratio, height_ratio)  # Giữ logo vừa trong khung
                     
-                    # Scale logo với padding nhỏ (2%) để logo gần sát khung hơn
-                    img.width = int(img.width * ratio * 0.98)
-                    img.height = int(img.height * ratio * 0.98)
+                    # Scale logo với padding nhỏ (2%)
+                    new_width = int(img.width * ratio * 0.98)
+                    new_height = int(img.height * ratio * 0.98)
+                    img.width = new_width
+                    img.height = new_height
+                    
+                    # Tính toán offset để căn giữa logo trong khung A1:B4
+                    # Khoảng trống bên trái = (chiều rộng khung - chiều rộng logo) / 2
+                    offset_x = (logo_cell_width_px - new_width) / 2
+                    offset_y = (logo_cell_height_px - new_height) / 2
+                    
+                    # Anchor với offset để căn giữa
+                    # openpyxl anchor format: từ ô A1, dịch chuyển theo pixels
+                    img.anchor = 'A1'
+                    # Điều chỉnh vị trí bằng cách set anchor properties
+                    from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
+                    # Tạo anchor marker với offset
+                    img.anchor = f'A1'
+                    
+                    # Thêm logo vào worksheet
+                    ws.add_image(img, 'A1')
+                    
+                    # Điều chỉnh anchor sau khi thêm để căn giữa
+                    if hasattr(img, '_positioned'):
+                        # Set offset từ góc trên-trái của cell A1
+                        img.anchor._from.colOff = int(offset_x * 9525)  # Convert px to EMU (1px = 9525 EMU)
+                        img.anchor._from.rowOff = int(offset_y * 9525)
                 else:
-                    # Fallback: sử dụng kích thước khung với padding nhỏ
-                    img.width = int(logo_cell_width_px * 0.98)
-                    img.height = int(logo_cell_height_px * 0.98)
+                    # Fallback: logo vuông, căn giữa
+                    size = int(min(logo_cell_width_px, logo_cell_height_px) * 0.98)
+                    img.width = size
+                    img.height = size
+                    
+                    offset_x = (logo_cell_width_px - size) / 2
+                    offset_y = (logo_cell_height_px - size) / 2
+                    
+                    ws.add_image(img, 'A1')
+                    if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
+                        img.anchor._from.colOff = int(offset_x * 9525)
+                        img.anchor._from.rowOff = int(offset_y * 9525)
 
-                ws.add_image(img, 'A1')
                 ws.merge_cells('A1:B4')
             except Exception as e:
                 pass
