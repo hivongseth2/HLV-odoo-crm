@@ -80,9 +80,19 @@ class BBGNExcelExportWizard(models.TransientModel):
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
-                img.width = 150  # Giảm width xuống
-                img.height = 100  # Giảm height xuống
+                # Tăng chiều rộng logo (px) và giữ đúng tỉ lệ gốc
+                target_width = 260  # <-- tăng/giảm tuỳ ý: 220–320 là hợp lý
+                if getattr(img, "width", None) and getattr(img, "height", None) and img.width:
+                    ratio = target_width / float(img.width)
+                    img.width = int(img.width * ratio)
+                    img.height = int(img.height * ratio)
+                else:
+                    # fallback: nếu thiếu metadata, đặt cứng
+                    img.width = target_width
+                    img.height = 140
+
                 ws.add_image(img, 'A1')
+                ws.merge_cells('A1:B4')
             except Exception as e:
                 pass
                 
@@ -408,9 +418,9 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws[f'A{row}'].alignment = center_align
 
         # Set column widths
-        ws.column_dimensions['A'].width = 8
-        ws.column_dimensions['B'].width = 12
-        ws.column_dimensions['C'].width = 40
+        ws.column_dimensions['A'].width = 18
+        ws.column_dimensions['B'].width = 16
+        ws.column_dimensions['C'].width = 42
         ws.column_dimensions['D'].width = 10
         ws.column_dimensions['E'].width = 10
         ws.column_dimensions['F'].width = 15
@@ -420,10 +430,10 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws.column_dimensions['J'].width = 15
         
         # Điều chỉnh chiều cao của các hàng logo
-        ws.row_dimensions[1].height = 32
-        ws.row_dimensions[2].height = 32
-        ws.row_dimensions[3].height = 32
-        ws.row_dimensions[4].height = 32
+        ws.row_dimensions[1].height = 40
+        ws.row_dimensions[2].height = 40
+        ws.row_dimensions[3].height = 40
+        ws.row_dimensions[4].height = 40
 
         # Tạo file
         output = BytesIO()
