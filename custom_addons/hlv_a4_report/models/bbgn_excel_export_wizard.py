@@ -71,35 +71,59 @@ class BBGNExcelExportWizard(models.TransientModel):
         else:
             po_number = ''.join([c for c in (po_raw or '') if c.isdigit()])
 
+        # Set column widths trước để tính toán chính xác
+        col_a_width = 18
+        col_b_width = 16
+        ws.column_dimensions['A'].width = col_a_width
+        ws.column_dimensions['B'].width = col_b_width
+        ws.column_dimensions['C'].width = 42
+        ws.column_dimensions['D'].width = 10
+        ws.column_dimensions['E'].width = 10
+        ws.column_dimensions['F'].width = 15
+        ws.column_dimensions['G'].width = 10
+        ws.column_dimensions['H'].width = 12
+        ws.column_dimensions['I'].width = 15
+        ws.column_dimensions['J'].width = 15
+
         # Header - Logo và thông tin công ty
         row = 1
 
-        # Điều chỉnh chiều cao các hàng header trước (để logo fit đúng)
-        ws.row_dimensions[1].height = 30
-        ws.row_dimensions[2].height = 30
-        ws.row_dimensions[3].height = 30
-        ws.row_dimensions[4].height = 30
+        # Tính toán kích thước khung A1:B4 cho logo
+        # Chiều rộng: cột A + cột B
+        # 1 character width trong Excel ≈ 7 pixels
+        logo_cell_width = (col_a_width + col_b_width) * 7  # ≈ 238 pixels
+        
+        # Chiều cao: 4 hàng, mỗi hàng 30 points
+        # 1 point = 1.33 pixels khi render trong Excel
+        logo_row_height_points = 30
+        logo_cell_height = 4 * logo_row_height_points * 1.33  # ≈ 160 pixels
+        
+        # Điều chỉnh chiều cao các hàng header
+        ws.row_dimensions[1].height = logo_row_height_points
+        ws.row_dimensions[2].height = logo_row_height_points
+        ws.row_dimensions[3].height = logo_row_height_points
+        ws.row_dimensions[4].height = logo_row_height_points
 
-        # Thêm logo nếu có (fit đầy khung A1:B4)
+        # Thêm logo nếu có (fit vào khung A1:B4)
         if picking.company_id.logo and XLImage:
             try:
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
-                # Kích thước khung A1:B4:
-                target_width = 400
-                target_height = 165
                 
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0:
                     # Tính tỷ lệ để fit vào khung, giữ aspect ratio
-                    width_ratio = target_width / float(img.width)
-                    height_ratio = target_height / float(img.height)
+                    width_ratio = logo_cell_width / float(img.width)
+                    height_ratio = logo_cell_height / float(img.height)
                     ratio = min(width_ratio, height_ratio)
-                    img.width = int(img.width * ratio)
-                    img.height = int(img.height * ratio)
+                    
+                    # Scale logo với tỷ lệ nhỏ hơn để có padding
+                    img.width = int(img.width * ratio * 0.95)
+                    img.height = int(img.height * ratio * 0.95)
                 else:
-                    img.width = target_width
-                    img.height = target_height
+                    # Fallback nếu không lấy được kích thước gốc
+                    img.width = int(logo_cell_width * 0.95)
+                    img.height = int(logo_cell_height * 0.95)
 
                 ws.add_image(img, 'A1')
                 ws.merge_cells('A1:B4')
@@ -435,18 +459,6 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws[f'A{row}'] = 'PHÂN PHỐI CHÍNH HÃNG: SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MAKITA-MILWAUKEE-DEWALT'
         ws[f'A{row}'].font = Font(name='Times New Roman', size=10)
         ws[f'A{row}'].alignment = center_align
-
-        # Set column widths
-        ws.column_dimensions['A'].width = 18
-        ws.column_dimensions['B'].width = 16
-        ws.column_dimensions['C'].width = 42
-        ws.column_dimensions['D'].width = 10
-        ws.column_dimensions['E'].width = 10
-        ws.column_dimensions['F'].width = 15
-        ws.column_dimensions['G'].width = 10
-        ws.column_dimensions['H'].width = 12
-        ws.column_dimensions['I'].width = 15
-        ws.column_dimensions['J'].width = 15
 
         # Tạo file
         output = BytesIO()
