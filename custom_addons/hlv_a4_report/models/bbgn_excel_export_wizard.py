@@ -43,10 +43,12 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws = wb.active
         ws.title = 'BBGN'
 
-        # Định nghĩa styles
+        # Định nghĩa styles - FONT SIZE VỪA PHẢI (không dùng fitToPage nên giữ font đọc được)
         header_font = Font(name='Times New Roman', size=14, bold=True)
+        title_font = Font(name='Times New Roman', size=16, bold=True)
         normal_font = Font(name='Times New Roman', size=12)
         bold_font = Font(name='Times New Roman', size=12, bold=True)
+        small_font = Font(name='Times New Roman', size=11)
         center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
         left_align = Alignment(horizontal='left', vertical='center', wrap_text=True)
         right_align = Alignment(horizontal='right', vertical='center')
@@ -71,19 +73,19 @@ class BBGNExcelExportWizard(models.TransientModel):
         else:
             po_number = ''.join([c for c in (po_raw or '') if c.isdigit()])
 
-        # Set column widths trước để tính toán chính xác
-        col_a_width = 18
-        col_b_width = 16
+        # Set column widths - TỐI ƯU HÓA CHO IN (không dùng fitToPage nên có thể rộng hơn)
+        col_a_width = 5    # STT
+        col_b_width = 12   # Số PR
         ws.column_dimensions['A'].width = col_a_width
         ws.column_dimensions['B'].width = col_b_width
-        ws.column_dimensions['C'].width = 42
-        ws.column_dimensions['D'].width = 10
-        ws.column_dimensions['E'].width = 10
-        ws.column_dimensions['F'].width = 15
-        ws.column_dimensions['G'].width = 10
-        ws.column_dimensions['H'].width = 12
-        ws.column_dimensions['I'].width = 15
-        ws.column_dimensions['J'].width = 15
+        ws.column_dimensions['C'].width = 38   # Tên hàng
+        ws.column_dimensions['D'].width = 8    # DVT
+        ws.column_dimensions['E'].width = 7    # SL
+        ws.column_dimensions['F'].width = 13   # Đơn giá
+        ws.column_dimensions['G'].width = 7    # VAT%
+        ws.column_dimensions['H'].width = 13   # Thuế VAT
+        ws.column_dimensions['I'].width = 14   # Thành tiền
+        ws.column_dimensions['J'].width = 12   # Ghi chú
 
         # Header - Logo và thông tin công ty
         row = 1
@@ -213,9 +215,9 @@ class BBGNExcelExportWizard(models.TransientModel):
         row += 2
         ws.merge_cells(f'A{row}:J{row}')
         ws[f'A{row}'] = 'BIÊN BẢN GIAO NHẬN HÀNG HÓA'
-        ws[f'A{row}'].font = Font(name='Times New Roman', size=16, bold=True)
+        ws[f'A{row}'].font = title_font
         ws[f'A{row}'].alignment = center_align
-        ws.row_dimensions[row].height = 32
+        ws.row_dimensions[row].height = 30
 
         row += 1
         ws.merge_cells(f'A{row}:J{row}')
@@ -309,15 +311,33 @@ class BBGNExcelExportWizard(models.TransientModel):
             cell.border = thin_border
             cell.fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
 
-        # Data rows
+        # Data rows - TÍNH TOÁN GIÁ TRỊ
         row += 1
         idx = 1
+        total_amount_untaxed = 0.0  # Tổng tiền hàng (chưa thuế)
+        total_tax = 0.0  # Tổng thuế VAT
+        
         for line_data in enriched_lines:
+            # Chỉ tính cho dòng thực (không tính parent trong combo)
+            if line_data['type'] == 'parent':
+                continue
+                
+            qty = line_data['qty'] or 0.0
+            unit_price = line_data.get('price_unit', 0.0) or 0.0
+            tax_percent = line_data.get('tax_percent', 0.0) or 0.0
+            
+            # Tính toán
+            line_total = qty * unit_price  # Thành tiền (trước thuế)
+            line_tax_value = line_total * tax_percent / 100.0  # Thuế VAT
+            
+            # Cộng dồn
+            total_amount_untaxed += line_total
+            total_tax += line_tax_value
+            
             # STT
             cell = ws.cell(row=row, column=1)
-            if line_data['type'] != 'child':
-                cell.value = idx
-                idx += 1
+            cell.value = idx
+            idx += 1
             cell.alignment = center_align
             cell.border = thin_border
             cell.font = normal_font
@@ -348,31 +368,38 @@ class BBGNExcelExportWizard(models.TransientModel):
 
             # SL
             cell = ws.cell(row=row, column=5)
-            cell.value = round(line_data['qty'], 2)
+            cell.value = round(qty, 2)
             cell.alignment = center_align
             cell.border = thin_border
             cell.font = normal_font
 
-            # Đơn giá (trống)
+            # Đơn giá
             cell = ws.cell(row=row, column=6)
+            cell.value = round(unit_price, 0)
+            cell.number_format = '#,##0'
             cell.alignment = right_align
             cell.border = thin_border
             cell.font = normal_font
 
-            # Vat(%) (trống)
+            # VAT(%)
             cell = ws.cell(row=row, column=7)
+            cell.value = tax_percent
             cell.alignment = center_align
             cell.border = thin_border
             cell.font = normal_font
 
-            # Vat (trống)
+            # Thuế VAT
             cell = ws.cell(row=row, column=8)
+            cell.value = round(line_tax_value, 0)
+            cell.number_format = '#,##0'
             cell.alignment = right_align
             cell.border = thin_border
             cell.font = normal_font
 
-            # Thành tiền (trống)
+            # Thành tiền
             cell = ws.cell(row=row, column=9)
+            cell.value = round(line_total, 0)
+            cell.number_format = '#,##0'
             cell.alignment = right_align
             cell.border = thin_border
             cell.font = normal_font
@@ -394,8 +421,11 @@ class BBGNExcelExportWizard(models.TransientModel):
             cell.border = thin_border
             row += 1
 
-        # 3 hàng tổng
+        # 3 hàng tổng - ĐIỀN GIÁ TRỊ
         grey_fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
+        
+        # Tính tổng tiền thanh toán
+        total_amount_total = total_amount_untaxed + total_tax
         
         # Row 1: Tổng tiền hàng
         for col in range(1, 6):  # A-E
@@ -415,6 +445,10 @@ class BBGNExcelExportWizard(models.TransientModel):
         cell.alignment = left_align
 
         cell = ws.cell(row=row, column=9)
+        cell.value = round(total_amount_untaxed, 0)
+        cell.number_format = '#,##0'
+        cell.alignment = right_align
+        cell.font = bold_font
         cell.border = thin_border
 
         for r in range(row, row + 3):
@@ -436,6 +470,10 @@ class BBGNExcelExportWizard(models.TransientModel):
         cell.alignment = left_align
 
         cell = ws.cell(row=row, column=9)
+        cell.value = round(total_tax, 0)
+        cell.number_format = '#,##0'
+        cell.alignment = right_align
+        cell.font = bold_font
         cell.border = thin_border
 
         row += 1
@@ -451,11 +489,15 @@ class BBGNExcelExportWizard(models.TransientModel):
         cell.alignment = left_align
 
         cell = ws.cell(row=row, column=9)
+        cell.value = round(total_amount_total, 0)
+        cell.number_format = '#,##0'
+        cell.alignment = right_align
+        cell.font = bold_font
         cell.border = thin_border
 
         row += 1
 
-        # Bằng chữ
+        # Bằng chữ - CHUYỂN ĐỔI SỐ THÀNH CHỮ
         ws.merge_cells(f'A{row}:E{row}')
         for col in range(1, 6):
             cell = ws.cell(row=row, column=col)
@@ -471,6 +513,12 @@ class BBGNExcelExportWizard(models.TransientModel):
             cell = ws.cell(row=row, column=col)
             cell.fill = grey_fill
             cell.border = thin_border
+        # Chuyển số thành chữ (Vietnamese) - Sử dụng hlv.amount
+        amount_text = self.env['hlv.amount'].amount_to_text_vn(total_amount_total)
+        cell = ws.cell(row=row, column=6)
+        cell.value = amount_text
+        cell.font = Font(name='Times New Roman', size=12, italic=True)
+        cell.alignment = left_align
 
         # Xác nhận
         row += 2
@@ -495,20 +543,54 @@ class BBGNExcelExportWizard(models.TransientModel):
         row += 2
         ws.merge_cells(f'A{row}:D{row}')
         ws[f'A{row}'] = 'Đại diện bên nhận hàng'
-        ws[f'A{row}'].font = normal_font
+        ws[f'A{row}'].font = bold_font
         ws[f'A{row}'].alignment = center_align
 
         ws.merge_cells(f'E{row}:J{row}')
         ws[f'E{row}'] = 'Đại diện bên giao hàng'
-        ws[f'E{row}'].font = normal_font
+        ws[f'E{row}'].font = bold_font
         ws[f'E{row}'].alignment = center_align
 
-        # Footer
+        # Thêm spacing cho chữ ký (5 rows trống)
         row += 5
-        ws.merge_cells(f'A{row}:J{row}')
-        ws[f'A{row}'] = 'PHÂN PHỐI CHÍNH HÃNG: SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MAKITA-MILWAUKEE-DEWALT'
-        ws[f'A{row}'].font = Font(name='Times New Roman', size=10)
-        ws[f'A{row}'].alignment = center_align
+
+        # ===== CẤU HÌNH IN PDF TỐI ƯU =====
+        # Set page setup - KHÔNG dùng fitToPage để tránh nội dung bị thu nhỏ quá
+        ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE  # Khổ ngang
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        
+        # KHÔNG set fitToHeight/fitToWidth để giữ kích thước font gốc
+        # ws.page_setup.fitToHeight = 1  
+        # ws.page_setup.fitToWidth = 1
+        
+        # Set print area (chỉ nội dung chính, không bao gồm footer)
+        ws.print_area = f'A1:J{row}'
+        
+        # Margins - Vừa phải để tối ưu không gian nhưng không làm mất nội dung
+        ws.page_margins.left = 0.7
+        ws.page_margins.right = 0.7
+        ws.page_margins.top = 0.75
+        ws.page_margins.bottom = 1.0  # Tăng bottom margin cho footer
+        ws.page_margins.header = 0.3
+        ws.page_margins.footer = 0.5
+        
+        # Print options
+        ws.print_options.horizontalCentered = True
+        ws.print_options.verticalCentered = False
+        
+        # KHÔNG dùng fitToPage - để giữ kích thước font gốc
+        # ws.sheet_properties.pageSetUpPr.fitToPage = True
+        
+        # Đặt footer ở cuối trang (sẽ luôn nằm ở cuối mọi trang khi in)
+        footer_text = 'PHÂN PHỐI CHÍNH HÃNG: SKF-NSK-KOYO-NTN-ASAHI-IKO-MITSUBOSHI-LS-HANYOUNG-BOSCH-MAKITA-MILWAUKEE-DEWALT'
+        ws.oddFooter.center.text = footer_text
+        ws.oddFooter.center.size = 10
+        ws.oddFooter.center.font = "Times New Roman"
+        
+        # Footer cho trang chẵn (nếu in 2 mặt)
+        ws.evenFooter.center.text = footer_text
+        ws.evenFooter.center.size = 10
+        ws.evenFooter.center.font = "Times New Roman"
 
         # Tạo file
         output = BytesIO()
