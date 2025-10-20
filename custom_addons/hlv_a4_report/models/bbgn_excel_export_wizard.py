@@ -80,31 +80,24 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws.row_dimensions[3].height = 30
         ws.row_dimensions[4].height = 30
 
-        # Thêm logo nếu có (fit đầy khung A1:B4)
+        # Merge cells trước
+        ws.merge_cells('A1:B4')
+        
+        # Thêm logo nếu có (auto fit theo ô merge A1:B4)
         if picking.company_id.logo and XLImage:
             try:
+                from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
+                from openpyxl.utils.units import pixels_to_EMU
+                
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
-                # Kích thước khung A1:B4:
-                # Chiều rộng: cột A (18) + cột B (16) = 34 ký tự ≈ 350 pixels (7 pixels/ký tự)
-                # Chiều cao: 4 hàng x 30 point ≈ 175 pixels (1.33 pixels/point)
-                target_width = 350
-                target_height = 175
                 
-                if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0:
-                    # Tính tỷ lệ để fit vào khung, giữ aspect ratio
-                    width_ratio = target_width / float(img.width)
-                    height_ratio = target_height / float(img.height)
-                    ratio = min(width_ratio, height_ratio)
-                    img.width = int(img.width * ratio)
-                    img.height = int(img.height * ratio)
-                else:
-                    img.width = target_width
-                    img.height = target_height
-
-                ws.add_image(img, 'A1')
-                ws.merge_cells('A1:B4')
+                # Sử dụng anchor để logo tự động fit vào vùng A1:B4
+                # Tạo anchor từ A1 đến B4
+                img.anchor = 'A1:B4'
+                
+                ws.add_image(img)
             except Exception as e:
                 pass
 
