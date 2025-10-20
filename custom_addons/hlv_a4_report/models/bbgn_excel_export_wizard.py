@@ -80,20 +80,20 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws.row_dimensions[3].height = 30
         ws.row_dimensions[4].height = 30
 
-        # Thêm logo nếu có (căn giữa trong vùng A1:B4)
+        # Thêm logo nếu có (fit đầy khung A1:B4)
         if picking.company_id.logo and XLImage:
             try:
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
-                # Điều chỉnh kích thước logo để phù hợp với bố cục (A1:B4)
-                # Chiều rộng cột A (18) + cột B (16) = 34 ký tự ≈ 245 pixels
-                # Chiều cao 4 hàng x 30 = 120 pixels
-                # Đặt kích thước lớn hơn để logo rõ ràng
-                target_width = 280
-                target_height = 140
-                if getattr(img, "width", None) and getattr(img, "height", None) and img.width:
-                    # Tính tỷ lệ để fit vào khung, giữ nguyên aspect ratio
+                # Kích thước khung A1:B4:
+                # Chiều rộng: cột A (18) + cột B (16) = 34 ký tự ≈ 320 pixels (7 pixels/ký tự)
+                # Chiều cao: 4 hàng x 30 point ≈ 200 pixels (1.33 pixels/point)
+                target_width = 320
+                target_height = 200
+                
+                if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0:
+                    # Tính tỷ lệ để fit vào khung, giữ aspect ratio
                     width_ratio = target_width / float(img.width)
                     height_ratio = target_height / float(img.height)
                     ratio = min(width_ratio, height_ratio)
