@@ -74,40 +74,41 @@ class BBGNExcelExportWizard(models.TransientModel):
         # Header - Logo và thông tin công ty
         row = 1
 
-        # Thêm logo nếu có
+        # Thêm logo nếu có (căn giữa trong vùng A1:B4)
         if picking.company_id.logo and XLImage:
             try:
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
-                # Tăng chiều rộng logo (px) và giữ đúng tỉ lệ gốc
-                target_width = 260  # <-- tăng/giảm tuỳ ý: 220–320 là hợp lý
+                # Điều chỉnh kích thước logo để phù hợp với bố cục
+                target_width = 180
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width:
                     ratio = target_width / float(img.width)
                     img.width = int(img.width * ratio)
                     img.height = int(img.height * ratio)
                 else:
-                    # fallback: nếu thiếu metadata, đặt cứng
                     img.width = target_width
-                    img.height = 140
+                    img.height = 130
 
                 ws.add_image(img, 'A1')
                 ws.merge_cells('A1:B4')
             except Exception as e:
                 pass
                 
-        # Điều chỉnh chiều cao của các hàng logo để tạo khoảng trống
-        ws.row_dimensions[1].height = 25
-        ws.row_dimensions[2].height = 25
-        ws.row_dimensions[3].height = 25
-        ws.row_dimensions[4].height = 25
+        # Điều chỉnh chiều cao các hàng header
+        ws.row_dimensions[1].height = 22
+        ws.row_dimensions[2].height = 18
+        ws.row_dimensions[3].height = 18
+        ws.row_dimensions[4].height = 18
 
-        # Thông tin công ty bên phải - BẮT ĐẦU TỪ ROW 1
+        # Thông tin công ty bên phải
+        # Row 1: Tên công ty (font 14, bold)
         ws.merge_cells(f'C{row}:J{row}')
         ws[f'C{row}'] = 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
         ws[f'C{row}'].font = header_font
         ws[f'C{row}'].alignment = left_align
 
+        # Row 2: Địa chỉ
         row += 1
         ws.merge_cells(f'C{row}:J{row}')
         addr = picking.company_id.partner_id._display_address(without_company=True).replace('\n', ' ') or ''
@@ -115,17 +116,43 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align
 
+        # Row 3: Điện thoại và Di động (2 cột như PDF)
         row += 1
-        ws.merge_cells(f'C{row}:J{row}')
-        ws[f'C{row}'] = f'Điện thoại: {picking.company_id.phone or ""} | Email: {picking.company_id.email or ""}'
+        ws[f'C{row}'] = 'Điện thoại:'
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align
+        
+        ws[f'D{row}'] = picking.company_id.phone or ''
+        ws[f'D{row}'].font = normal_font
+        ws[f'D{row}'].alignment = left_align
+        
+        ws[f'F{row}'] = 'Di động:'
+        ws[f'F{row}'].font = normal_font
+        ws[f'F{row}'].alignment = left_align
+        
+        ws.merge_cells(f'G{row}:J{row}')
+        ws[f'G{row}'] = picking.company_id.mobile or picking.company_id.partner_id.mobile or ''
+        ws[f'G{row}'].font = normal_font
+        ws[f'G{row}'].alignment = left_align
 
+        # Row 4: Email và Website (2 cột như PDF)
         row += 1
-        ws.merge_cells(f'C{row}:J{row}')
-        ws[f'C{row}'] = f'Website: {picking.company_id.website or ""}'
+        ws[f'C{row}'] = 'Email:'
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align
+        
+        ws[f'D{row}'] = picking.company_id.email or ''
+        ws[f'D{row}'].font = normal_font
+        ws[f'D{row}'].alignment = left_align
+        
+        ws[f'F{row}'] = 'Website:'
+        ws[f'F{row}'].font = normal_font
+        ws[f'F{row}'].alignment = left_align
+        
+        ws.merge_cells(f'G{row}:J{row}')
+        ws[f'G{row}'] = picking.company_id.website or ''
+        ws[f'G{row}'].font = normal_font
+        ws[f'G{row}'].alignment = left_align
 
         # Tiêu đề
         row += 2
