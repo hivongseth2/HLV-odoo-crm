@@ -7,11 +7,7 @@
         <field name="arch" type="xml">
             <form string="Xuất Excel BBGN không giá">
                 <group>
-                    <p>
-                        Nhấn nút "Xuất Excel" để tải file BBGN không giá dạng Excel.
-                        <br/>
-                        Ngày sẽ được lấy từ ngày hiện tại.
-                    </p>
+                    <p>Xuất biên bản giao nhận không giá ra file Excel (ngày hiện tại)</p>
                 </group>
                 <footer>
                     <button string="Xuất Excel" name="action_export_excel" type="object" class="btn-primary"/>
@@ -21,13 +17,26 @@
         </field>
     </record>
 
-    <!-- Action to open wizard -->
-    <record id="action_bbgn_excel_export_wizard" model="ir.actions.act_window">
+    <!-- Server action để xuất Excel trực tiếp -->
+    <record id="action_bbgn_excel_export_direct" model="ir.actions.server">
+        <field name="name">BBGN Excel không giá</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_type">report</field>
+        <field name="state">code</field>
+        <field name="code">
+            wizard = env['bbgn.excel.export.wizard'].create({})
+            action = wizard.with_context(active_id=record.id).action_export_excel()
+        </field>
+    </record>
+
+    <!-- Hoặc giữ wizard action nếu muốn xác nhận -->
+    <!-- <record id="action_bbgn_excel_export_wizard" model="ir.actions.act_window">
         <field name="name">Xuất Excel BBGN không giá</field>
         <field name="res_model">bbgn.excel.export.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
         <field name="binding_model_id" ref="stock.model_stock_picking"/>
         <field name="binding_type">action</field>
-    </record>
+    </record> -->
 </odoo>

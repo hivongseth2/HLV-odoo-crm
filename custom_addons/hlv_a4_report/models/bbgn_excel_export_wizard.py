@@ -19,7 +19,7 @@ class BBGNExcelExportWizard(models.TransientModel):
 
     def _get_active_picking(self):
         """Lấy picking từ context"""
-        active_id = self._context.get('active_id')
+        active_id = self._context.get('active_id') or self._context.get('active_ids', [False])[0]
         if active_id:
             return self.env['stock.picking'].browse(active_id)
         return False
@@ -275,35 +275,49 @@ class BBGNExcelExportWizard(models.TransientModel):
             row += 1
 
         # 3 hàng tổng
+        grey_fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
+        
         # Row 1: Tổng tiền hàng
-        ws.merge_cells(f'A{row}:E{row}')
-        cell = ws.cell(row=row, column=1)
-        cell.fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
-        cell.border = thin_border
+        # Gộp A-E (màu xám) - rowspan 3
+        for col in range(1, 6):  # A-E
+            for r in range(row, row + 3):
+                cell = ws.cell(row=r, column=col)
+                cell.fill = grey_fill
+                cell.border = thin_border
+        ws.merge_cells(f'A{row}:E{row+2}')
 
+        # Gộp F-H (label)
         ws.merge_cells(f'F{row}:H{row}')
+        for col in range(6, 9):  # F-H
+            cell = ws.cell(row=row, column=col)
+            cell.border = thin_border
         cell = ws.cell(row=row, column=6)
         cell.value = 'Tổng tiền hàng (VNĐ)'
         cell.font = bold_font
         cell.alignment = left_align
-        cell.border = thin_border
 
+        # Cột I (Thành tiền)
         cell = ws.cell(row=row, column=9)
         cell.border = thin_border
 
-        cell = ws.cell(row=row, column=10)
-        cell.fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
-        cell.border = thin_border
+        # Cột J (màu xám) - rowspan 3
+        for r in range(row, row + 3):
+            cell = ws.cell(row=r, column=10)
+            cell.fill = grey_fill
+            cell.border = thin_border
+        ws.merge_cells(f'J{row}:J{row+2}')
 
         row += 1
 
         # Row 2: Tổng thuế VAT
         ws.merge_cells(f'F{row}:H{row}')
+        for col in range(6, 9):  # F-H
+            cell = ws.cell(row=row, column=col)
+            cell.border = thin_border
         cell = ws.cell(row=row, column=6)
         cell.value = 'Tổng thuế VAT (VNĐ)'
         cell.font = bold_font
         cell.alignment = left_align
-        cell.border = thin_border
 
         cell = ws.cell(row=row, column=9)
         cell.border = thin_border
@@ -312,11 +326,13 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         # Row 3: Tổng tiền thanh toán
         ws.merge_cells(f'F{row}:H{row}')
+        for col in range(6, 9):  # F-H
+            cell = ws.cell(row=row, column=col)
+            cell.border = thin_border
         cell = ws.cell(row=row, column=6)
         cell.value = 'Tổng tiền thanh toán (VNĐ)'
         cell.font = bold_font
         cell.alignment = left_align
-        cell.border = thin_border
 
         cell = ws.cell(row=row, column=9)
         cell.border = thin_border
@@ -324,18 +340,23 @@ class BBGNExcelExportWizard(models.TransientModel):
         row += 1
 
         # Bằng chữ
+        # Gộp A-E
         ws.merge_cells(f'A{row}:E{row}')
+        for col in range(1, 6):  # A-E
+            cell = ws.cell(row=row, column=col)
+            cell.fill = grey_fill
+            cell.border = thin_border
         cell = ws.cell(row=row, column=1)
         cell.value = 'Bằng chữ:'
         cell.font = bold_font
         cell.alignment = left_align
-        cell.fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
-        cell.border = thin_border
 
+        # Gộp F-J
         ws.merge_cells(f'F{row}:J{row}')
-        cell = ws.cell(row=row, column=6)
-        cell.fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
-        cell.border = thin_border
+        for col in range(6, 11):  # F-J
+            cell = ws.cell(row=row, column=col)
+            cell.fill = grey_fill
+            cell.border = thin_border
 
         # Xác nhận
         row += 2
