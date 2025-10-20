@@ -74,8 +74,8 @@ class BBGNExcelExportWizard(models.TransientModel):
             po_number = ''.join([c for c in (po_raw or '') if c.isdigit()])
 
         # Set column widths - TỐI ƯU HÓA CHO IN (không dùng fitToPage nên có thể rộng hơn)
-        col_a_width = 5    # STT
-        col_b_width = 12   # Số PR
+        col_a_width = 6    # STT
+        col_b_width = 14   # Số PR
         ws.column_dimensions['A'].width = col_a_width
         ws.column_dimensions['B'].width = col_b_width
         ws.column_dimensions['C'].width = 38   # Tên hàng
@@ -105,8 +105,8 @@ class BBGNExcelExportWizard(models.TransientModel):
         
         # Excel row height: 1 point = 96/72 pixels (96 DPI)
         # 1 point = 1.333... pixels
-        logo_row_height_points = 35  # Tăng từ 30 lên 35 để logo to hơn
-        logo_cell_height_px = 4 * logo_row_height_points * 96 / 72  # = 186.67 pixels
+        logo_row_height_points = 30
+        logo_cell_height_px = 4 * logo_row_height_points * 96 / 72  # = 160 pixels
         
         # Điều chỉnh chiều cao các hàng header
         ws.row_dimensions[1].height = logo_row_height_points
@@ -127,9 +127,9 @@ class BBGNExcelExportWizard(models.TransientModel):
                     height_ratio = logo_cell_height_px / float(img.height)
                     ratio = min(width_ratio, height_ratio)  # Giữ logo vừa trong khung
                     
-                    # Scale logo với padding nhỏ hơn để logo to hơn (giảm từ 2% xuống 1%)
-                    new_width = int(img.width * ratio * 0.99)
-                    new_height = int(img.height * ratio * 0.99)
+                    # Scale logo với padding nhỏ (2%)
+                    new_width = int(img.width * ratio * 0.98)
+                    new_height = int(img.height * ratio * 0.98)
                     img.width = new_width
                     img.height = new_height
                     
@@ -155,8 +155,8 @@ class BBGNExcelExportWizard(models.TransientModel):
                         img.anchor._from.colOff = int(offset_x * 9525)  # Convert px to EMU (1px = 9525 EMU)
                         img.anchor._from.rowOff = int(offset_y * 9525)
                 else:
-                    # Fallback: logo vuông, căn giữa - padding nhỏ hơn để logo to hơn
-                    size = int(min(logo_cell_width_px, logo_cell_height_px) * 0.99)
+                    # Fallback: logo vuông, căn giữa
+                    size = int(min(logo_cell_width_px, logo_cell_height_px) * 0.98)
                     img.width = size
                     img.height = size
                     
