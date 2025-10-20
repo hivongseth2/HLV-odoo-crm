@@ -146,6 +146,7 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws[f'A{row}'] = 'BIÊN BẢN GIAO NHẬN HÀNG HÓA'
         ws[f'A{row}'].font = Font(name='Times New Roman', size=16, bold=True)
         ws[f'A{row}'].alignment = center_align
+        ws.row_dimensions[row].height = 32
 
         row += 1
         ws.merge_cells(f'A{row}:J{row}')
