@@ -82,7 +82,7 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws.column_dimensions['D'].width = 8    # DVT
         ws.column_dimensions['E'].width = 7    # SL
         ws.column_dimensions['F'].width = 13   # Đơn giá
-        ws.column_dimensions['G'].width = 7    # VAT%
+        ws.column_dimensions['G'].width = 8    # VAT%
         ws.column_dimensions['H'].width = 13   # Thuế VAT
         ws.column_dimensions['I'].width = 14   # Thành tiền
         ws.column_dimensions['J'].width = 12   # Ghi chú
@@ -257,13 +257,13 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         row += 1
         ws.merge_cells(f'A{row}:J{row}')
-        ws[f'A{row}'] = '    Điện thoại: ............................ Fax: ............................'
+        ws[f'A{row}'] = '    Điện thoại: ................................................................    Fax: ................................................................'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
 
         row += 1
         ws.merge_cells(f'A{row}:J{row}')
-        ws[f'A{row}'] = '    Đại diện Ông/bà: ............................ Chức vụ: ............................'
+        ws[f'A{row}'] = '    Đại diện Ông/bà: ................................................................    Chức vụ: ................................................................'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
 
@@ -282,13 +282,13 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         row += 1
         ws.merge_cells(f'A{row}:J{row}')
-        ws[f'A{row}'] = f'    Điện thoại: {picking.company_id.phone or ""} Fax: ............................'
+        ws[f'A{row}'] = f'    Điện thoại: {picking.company_id.phone or ""}    ................................................................    Fax: ................................................................'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
 
         row += 1
         ws.merge_cells(f'A{row}:J{row}')
-        ws[f'A{row}'] = '    Đại diện Ông/bà: ............................ Chức vụ: ............................'
+        ws[f'A{row}'] = '    Đại diện Ông/bà: ................................................................    Chức vụ: ................................................................'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
 
@@ -325,7 +325,7 @@ class BBGNExcelExportWizard(models.TransientModel):
             # Chỉ tính giá cho PARENT và STANDALONE (không tính cho CHILD)
             if line_type == 'parent' or line_type == 'standalone':
                 unit_price = line_data.get('price_unit', 0.0) or 0.0
-                tax_percent = line_data.get('tax_percent', 0.0) or 0.0
+                tax_percent = line_data.get('tax_percent', 0.0)
                 line_total = qty * unit_price
                 line_tax_value = line_total * tax_percent / 100.0
                 
@@ -348,10 +348,11 @@ class BBGNExcelExportWizard(models.TransientModel):
             cell.border = thin_border
             cell.font = normal_font
 
-            # Số PR
+            # Số PR - Lấy từ sale.order.line.note (chỉ cho parent và standalone)
             cell = ws.cell(row=row, column=2)
             if line_type != 'child':
-                cell.value = line_data.get('sol').note if line_data.get('sol') else ''
+                sol = line_data.get('sol')
+                cell.value = (sol and sol.note) or ''
             cell.alignment = center_align
             cell.border = thin_border
             cell.font = normal_font
@@ -392,7 +393,7 @@ class BBGNExcelExportWizard(models.TransientModel):
             # VAT(%) - CHỈ hiển thị cho parent và standalone
             cell = ws.cell(row=row, column=7)
             if line_type != 'child':
-                cell.value = tax_percent
+                cell.value = f"{tax_percent}%"
             cell.alignment = center_align
             cell.border = thin_border
             cell.font = normal_font
@@ -567,7 +568,7 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         # ===== CẤU HÌNH IN PDF TỐI ƯU =====
         # Set page setup - KHÔNG dùng fitToPage để tránh nội dung bị thu nhỏ quá
-        ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE  # Khổ ngang
+        ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT  # Khổ dọc
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         
         # KHÔNG set fitToHeight/fitToWidth để giữ kích thước font gốc
