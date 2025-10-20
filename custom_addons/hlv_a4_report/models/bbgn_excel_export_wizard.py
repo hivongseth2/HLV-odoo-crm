@@ -89,7 +89,7 @@ class BBGNExcelExportWizard(models.TransientModel):
                     # Tính tỷ lệ để fit vào khung, giữ nguyên aspect ratio
                     width_ratio = target_width / float(img.width)
                     height_ratio = target_height / float(img.height)
-                    ratio = min(width_ratio, height_ratio)  # Chọn tỷ lệ nhỏ hơn để fit
+                    ratio = min(width_ratio, height_ratio)
                     img.width = int(img.width * ratio)
                     img.height = int(img.height * ratio)
                 else:
