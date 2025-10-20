@@ -89,15 +89,14 @@ class BBGNExcelExportWizard(models.TransientModel):
         row = 1
 
         # Tính toán kích thước khung A1:B4 cho logo
-        # Chiều rộng: cột A + cột B
-        # Với Times New Roman size 12: 1 đơn vị column width ≈ 9-10 pixels
-        # (Times New Roman rộng hơn Calibri mặc định)
-        logo_cell_width = (col_a_width + col_b_width) * 9.5  # ≈ 323 pixels
+        # Excel column width: 1 unit ≈ 7 pixels (với font mặc định)
+        # Với Times New Roman, sử dụng hệ số 7.5 cho chính xác hơn
+        logo_cell_width_px = (col_a_width + col_b_width) * 7.5  # ≈ 255 pixels
         
-        # Chiều cao: 4 hàng, mỗi hàng 30 points
-        # 1 point = 1.33 pixels khi render trong Excel
+        # Excel row height: 1 point = 96/72 pixels (96 DPI)
+        # 1 point = 1.333... pixels
         logo_row_height_points = 30
-        logo_cell_height = 4 * logo_row_height_points * 1.33  # ≈ 160 pixels
+        logo_cell_height_px = 4 * logo_row_height_points * 96 / 72  # = 160 pixels
         
         # Điều chỉnh chiều cao các hàng header
         ws.row_dimensions[1].height = logo_row_height_points
@@ -114,17 +113,17 @@ class BBGNExcelExportWizard(models.TransientModel):
                 
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0:
                     # Tính tỷ lệ để fit vào khung, giữ aspect ratio
-                    width_ratio = logo_cell_width / float(img.width)
-                    height_ratio = logo_cell_height / float(img.height)
+                    width_ratio = logo_cell_width_px / float(img.width)
+                    height_ratio = logo_cell_height_px / float(img.height)
                     ratio = min(width_ratio, height_ratio)
                     
-                    # Scale logo với tỷ lệ nhỏ hơn để có padding
-                    img.width = int(img.width * ratio * 0.95)
-                    img.height = int(img.height * ratio * 0.95)
+                    # Scale logo với padding nhỏ (2%) để logo gần sát khung hơn
+                    img.width = int(img.width * ratio * 0.98)
+                    img.height = int(img.height * ratio * 0.98)
                 else:
-                    # Fallback nếu không lấy được kích thước gốc
-                    img.width = int(logo_cell_width * 0.95)
-                    img.height = int(logo_cell_height * 0.95)
+                    # Fallback: sử dụng kích thước khung với padding nhỏ
+                    img.width = int(logo_cell_width_px * 0.98)
+                    img.height = int(logo_cell_height_px * 0.98)
 
                 ws.add_image(img, 'A1')
                 ws.merge_cells('A1:B4')
@@ -281,12 +280,14 @@ class BBGNExcelExportWizard(models.TransientModel):
                 idx += 1
             cell.alignment = center_align
             cell.border = thin_border
+            cell.font = normal_font
 
             # Số PR
             cell = ws.cell(row=row, column=2)
             cell.value = line_data.get('sol').note if line_data.get('sol') else ''
             cell.alignment = center_align
             cell.border = thin_border
+            cell.font = normal_font
 
             # Tên hàng
             cell = ws.cell(row=row, column=3)
@@ -296,42 +297,50 @@ class BBGNExcelExportWizard(models.TransientModel):
             cell.value = product_name
             cell.alignment = left_align
             cell.border = thin_border
+            cell.font = normal_font
 
             # DVT
             cell = ws.cell(row=row, column=4)
             cell.value = line_data['uom']
             cell.alignment = center_align
             cell.border = thin_border
+            cell.font = normal_font
 
             # SL
             cell = ws.cell(row=row, column=5)
             cell.value = round(line_data['qty'], 2)
             cell.alignment = center_align
             cell.border = thin_border
+            cell.font = normal_font
 
             # Đơn giá (trống)
             cell = ws.cell(row=row, column=6)
             cell.alignment = right_align
             cell.border = thin_border
+            cell.font = normal_font
 
             # Vat(%) (trống)
             cell = ws.cell(row=row, column=7)
             cell.alignment = center_align
             cell.border = thin_border
+            cell.font = normal_font
 
             # Vat (trống)
             cell = ws.cell(row=row, column=8)
             cell.alignment = right_align
             cell.border = thin_border
+            cell.font = normal_font
 
             # Thành tiền (trống)
             cell = ws.cell(row=row, column=9)
             cell.alignment = right_align
             cell.border = thin_border
+            cell.font = normal_font
 
             # Ghi chú (trống)
             cell = ws.cell(row=row, column=10)
             cell.border = thin_border
+            cell.font = normal_font
 
             row += 1
 
