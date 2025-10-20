@@ -116,43 +116,29 @@ class BBGNExcelExportWizard(models.TransientModel):
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align
 
-        # Row 3: Điện thoại và Di động (2 cột như PDF)
+        # Row 3: Điện thoại và Di động (merge để tránh bị kéo dãn bởi cột C)
         row += 1
-        ws[f'C{row}'] = 'Điện thoại:'
+        ws.merge_cells(f'C{row}:D{row}')
+        ws[f'C{row}'] = f'Điện thoại: {picking.company_id.phone or ""}'
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align
         
-        ws[f'D{row}'] = picking.company_id.phone or ''
-        ws[f'D{row}'].font = normal_font
-        ws[f'D{row}'].alignment = left_align
-        
-        ws[f'F{row}'] = 'Di động:'
-        ws[f'F{row}'].font = normal_font
-        ws[f'F{row}'].alignment = left_align
-        
-        ws.merge_cells(f'G{row}:J{row}')
-        ws[f'G{row}'] = picking.company_id.mobile or picking.company_id.partner_id.mobile or ''
-        ws[f'G{row}'].font = normal_font
-        ws[f'G{row}'].alignment = left_align
+        ws.merge_cells(f'E{row}:J{row}')
+        ws[f'E{row}'] = f'Di động: {picking.company_id.mobile or picking.company_id.partner_id.mobile or ""}'
+        ws[f'E{row}'].font = normal_font
+        ws[f'E{row}'].alignment = left_align
 
-        # Row 4: Email và Website (2 cột như PDF)
+        # Row 4: Email và Website (merge để tránh bị kéo dãn bởi cột C)
         row += 1
-        ws[f'C{row}'] = 'Email:'
+        ws.merge_cells(f'C{row}:D{row}')
+        ws[f'C{row}'] = f'Email: {picking.company_id.email or ""}'
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align
         
-        ws[f'D{row}'] = picking.company_id.email or ''
-        ws[f'D{row}'].font = normal_font
-        ws[f'D{row}'].alignment = left_align
-        
-        ws[f'F{row}'] = 'Website:'
-        ws[f'F{row}'].font = normal_font
-        ws[f'F{row}'].alignment = left_align
-        
-        ws.merge_cells(f'G{row}:J{row}')
-        ws[f'G{row}'] = picking.company_id.website or ''
-        ws[f'G{row}'].font = normal_font
-        ws[f'G{row}'].alignment = left_align
+        ws.merge_cells(f'E{row}:J{row}')
+        ws[f'E{row}'] = f'Website: {picking.company_id.website or ""}'
+        ws[f'E{row}'].font = normal_font
+        ws[f'E{row}'].alignment = left_align
 
         # Tiêu đề
         row += 2
