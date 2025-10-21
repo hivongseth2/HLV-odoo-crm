@@ -32,9 +32,8 @@ class BBBGExcelExportWizard(models.TransientModel):
         if not text:
             return 15  # Default height
         
-        # Ước tính số ký tự trên 1 dòng
-        # Giảm xuống 0.75 để tính cho dấu tiếng Việt và padding
-        chars_per_line = int(column_width * 0.75)
+        # Ước tính số ký tự trên 1 dòng (1 Excel unit ≈ 1 ký tự với Times New Roman)
+        chars_per_line = int(column_width * 0.9)  # 90% để tính padding
         
         # Tính số dòng cần thiết
         text_length = len(str(text))
@@ -44,10 +43,10 @@ class BBBGExcelExportWizard(models.TransientModel):
         if '\n' in str(text):
             num_lines = max(num_lines, str(text).count('\n') + 1)
         
-        # Chiều cao = số dòng * font_size * 1.3 (tăng line spacing)
-        row_height = num_lines * font_size * 1.3
+        # Chiều cao = số dòng * font_size * 1.2 (line spacing)
+        row_height = num_lines * font_size * 1.2
         
-        return max(18, row_height)  # Minimum 18 points
+        return max(15, row_height)  # Minimum 15 points
 
     def _get_active_picking(self):
         """Lấy picking từ context"""
@@ -83,7 +82,6 @@ class BBBGExcelExportWizard(models.TransientModel):
         left_align = Alignment(horizontal='left', vertical='center', wrap_text=False)
         left_align_wrap = Alignment(horizontal='left', vertical='top', wrap_text=True)
         right_align = Alignment(horizontal='right', vertical='center')
-        right_align = Alignment(horizontal='right', vertical='center')
         
         thin_border = Border(
             left=Side(style='thin'),
@@ -102,11 +100,13 @@ class BBBGExcelExportWizard(models.TransientModel):
         # Header - Logo và thông tin công ty
         row = 1
 
-        # Merge cells trước khi tính toán logo
+        # Merge cells cho logo
         ws.merge_cells('A1:B4')
         
-        # Không cứng chiều cao - để tự động điều chỉnh theo nội dung bên phải
-        # Logo sẽ được scale để fit vào không gian có sẵn
+        # CỐ ĐỊNH chiều cao các hàng header cho logo (KHÔNG tự động điều chỉnh)
+        logo_row_height_points = 28
+        for i in range(1, 5):
+            ws.row_dimensions[i].height = logo_row_height_points
 
         # Thêm logo vào giữa ô merge A1:B4
         if picking.company_id.logo and XLImage:
@@ -115,44 +115,56 @@ class BBBGExcelExportWizard(models.TransientModel):
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
                 
-                # Tính chiều rộng ô A+B
-                col_a_width_px = int(((256 * 6 + 18) / 256) * 7) + 5
-                col_b_width_px = int(((256 * 40 + 18) / 256) * 7) + 5
+                # Tính chiều cao CHUẨN XÁC của ô merge (4 hàng, mỗi hàng 28 points)
+                # 1 point = 1.333 pixels tại 96 DPI
+                total_height_px = 4 * logo_row_height_points * 1.333
+                
+                # Tính chiều rộng CHUẨN XÁC của ô merge A+B
+                # Excel column width formula: pixels = ((256 * width + {truncate(128/7)}) / 256) * 7 + 5
+                col_a_width_px = ((256 * 6 + 18) / 256) * 7 + 5
+                col_b_width_px = ((256 * 40 + 18) / 256) * 7 + 5
                 total_width_px = col_a_width_px + col_b_width_px
                 
-                # Scale logo để fit width (không cần tính height vì sẽ tự động)
-                if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0:
-                    # Scale theo chiều rộng, giữ tỷ lệ
-                    max_width = int(total_width_px * 0.9)  # 90% để có padding
-                    if img.width > max_width:
-                        scale_ratio = max_width / float(img.width)
-                        img.width = int(img.width * scale_ratio)
-                        img.height = int(img.height * scale_ratio)
+                # Scale logo để vừa với ô, giữ tỷ lệ aspect ratio
+                if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0 and img.height > 0:
+                    # Tính tỷ lệ scale theo cả chiều rộng và cao, lấy giá trị nhỏ hơn
+                    scale_height = (total_height_px * 0.9) / float(img.height)  # 90% để có padding
+                    scale_width = (total_width_px * 0.9) / float(img.width)
+                    scale = min(scale_height, scale_width)
                     
-                    # Tính offset X để căn giữa
-                    offset_x = (total_width_px - img.width) / 2
+                    new_height = int(img.height * scale)
+                    new_width = int(img.width * scale)
                     
-                    # Đặt anchor tại A1 với offset để căn giữa
+                    img.height = new_height
+                    img.width = new_width
+                    
+                    # Tính offset để căn giữa cả 2 chiều
+                    offset_x = (total_width_px - new_width) / 2
+                    offset_y = (total_height_px - new_height) / 2
+                    
+                    # Đặt anchor tại A1 với offset căn giữa
                     img.anchor = 'A1'
                     ws.add_image(img)
                     
-                    # Set offset sau khi add image
+                    # Set offset (1 EMU = 1/914400 inch, 1 pixel ≈ 9525 EMU at 96 DPI)
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
                         img.anchor._from.colOff = int(offset_x * 9525)
-                        img.anchor._from.rowOff = 0
+                        img.anchor._from.rowOff = int(offset_y * 9525)
                 else:
-                    # Fallback: logo nhỏ
-                    img.width = 80
-                    img.height = 80
+                    # Fallback nếu không có dimension
+                    size = int(min(total_height_px, total_width_px) * 0.9)
+                    img.height = size
+                    img.width = size
                     
-                    offset_x = (total_width_px - 80) / 2
+                    offset_x = (total_width_px - size) / 2
+                    offset_y = (total_height_px - size) / 2
                     
                     img.anchor = 'A1'
                     ws.add_image(img)
                     
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
                         img.anchor._from.colOff = int(offset_x * 9525)
-                        img.anchor._from.rowOff = 0
+                        img.anchor._from.rowOff = int(offset_y * 9525)
                     
             except Exception as e:
                 pass
@@ -164,8 +176,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'C{row}'] = company_name_header
         ws[f'C{row}'].font = header_font
         ws[f'C{row}'].alignment = left_align_wrap
-        # C+D+E = 18+13+22 = 53 units
-        ws.row_dimensions[row].height = self._calculate_row_height(company_name_header, 53, 14)
+        # KHÔNG điều chỉnh chiều cao - đã cố định ở trên cho logo
 
         # Row 2: Địa chỉ
         row += 1
@@ -174,7 +185,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'C{row}'] = addr
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align_wrap
-        ws.row_dimensions[row].height = self._calculate_row_height(addr, 53, 13)
+        # KHÔNG điều chỉnh chiều cao - đã cố định ở trên cho logo
 
         # Row 3: Mã số thuế
         row += 1
@@ -183,7 +194,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'C{row}'] = tax_text
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align_wrap
-        ws.row_dimensions[row].height = self._calculate_row_height(tax_text, 53, 13)
+        # KHÔNG điều chỉnh chiều cao - đã cố định ở trên cho logo
 
         # Row 4: Website
         row += 1
@@ -192,7 +203,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'C{row}'] = website_text
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align_wrap
-        ws.row_dimensions[row].height = self._calculate_row_height(website_text, 53, 13)
+        # KHÔNG điều chỉnh chiều cao - đã cố định ở trên cho logo
 
         # Tiêu đề
         row += 2
@@ -291,7 +302,6 @@ class BBBGExcelExportWizard(models.TransientModel):
             cell.border = thin_border
             cell.fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
 
-        # Lấy dữ liệu lines - SỬ DỤNG ENRICHED LINES TỪ HELPER
         # Data rows - Xử lý combo: Parent hiển thị bình thường, Children thụt vào
         row += 1
         idx = 0
