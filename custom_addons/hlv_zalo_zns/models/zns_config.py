@@ -51,46 +51,66 @@ class ZaloZNSConfig(models.Model):
         return (not self.token_expires_at) or (fields.Datetime.now() >= self.token_expires_at)
 
     def request_access_token_with_code(self, code, code_verifier=None):
-        """Exchange OAuth code -> access token.
-        Adjust endpoint/params to your Zalo OA app type if needed.
-        """
         self.ensure_one()
         endpoint = 'https://oauth.zaloapp.com/v4/oa/access_token'
         data = {
+            'grant_type': 'authorization_code',
             'app_id': self.app_id,
-            'app_secret': self.app_secret,
             'code': code,
+            # 'redirect_uri': self.callback_url,  # Bật dòng này nếu Zalo yêu cầu so khớp redirect_uri
         }
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        if code_verifier:
+            data['code_verifier'] = code_verifier
+
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'secret_key': self.app_secret,   # QUAN TRỌNG cho v4
+        }
+
         r = requests.post(endpoint, data=data, headers=headers, timeout=15)
         r.raise_for_status()
         j = r.json()
+
+        access = j.get('access_token')
+        refresh = j.get('refresh_token')
+        if not access:
+            # Log để dễ debug nếu Zalo trả lỗi dạng khác
+            _logger.error("Zalo token exchange response: %s", r.text)
+            raise UserError(_("Failed to get access_token from Zalo."))
+
         self.write({
-            "access_token": j.get("access_token"),
-            "refresh_token": j.get("refresh_token"),
+            "access_token": access,
+            "refresh_token": refresh,
             "token_expires_at": fields.Datetime.now() + timedelta(seconds=int(j.get("expires_in", 3600)) - 60),
         })
-        _logger.info("Zalo access token stored, expires_in=%s", j.get("expires_in"))
+        _logger.info("Zalo access token stored (expires_in=%s)", j.get("expires_in"))
         return j
 
+
     def refresh_access_token(self):
-        """Use refresh_token to get a new access token."""
         for rec in self:
             if not rec.refresh_token:
                 continue
             try:
                 endpoint = 'https://oauth.zaloapp.com/v4/oa/access_token'
                 data = {
+                    'grant_type': 'refresh_token',
                     'app_id': rec.app_id,
-                    'app_secret': rec.app_secret,
                     'refresh_token': rec.refresh_token,
                 }
-                headers = {"Content-Type": "application/x-www-form-urlencoded"}
+                headers = {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'secret_key': rec.app_secret,  # QUAN TRỌNG
+                }
                 r = requests.post(endpoint, data=data, headers=headers, timeout=15)
                 r.raise_for_status()
                 j = r.json()
+                access = j.get('access_token')
+                if not access:
+                    _logger.error("Zalo refresh response: %s", r.text)
+                    continue
                 rec.write({
-                    "access_token": j.get("access_token"),
+                    "access_token": access,
                     "refresh_token": j.get("refresh_token", rec.refresh_token),
                     "token_expires_at": fields.Datetime.now() + timedelta(seconds=int(j.get("expires_in", 3600)) - 60),
                 })
@@ -98,31 +118,68 @@ class ZaloZNSConfig(models.Model):
             except Exception as e:
                 _logger.exception("Refresh Zalo token failed: %s", e)
 
+
     # ---- Sending ZNS ----
     def send_zns(self, msisdn, params):
-        """Send a ZNS message using the approved template.
-        NOTE: Adjust endpoint and payload to match Zalo's latest ZNS API.
-        """
         self.ensure_one()
         if (not self.access_token) or self._token_expired():
             self.refresh_access_token()
         if not self.access_token:
             raise UserError(_("No valid access token"))
 
-        # Example endpoint (adjust to actual ZNS send endpoint if different)
-        endpoint = "https://openapi.zalo.me/v2.0/oa/message"
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
+        # ❶ Endpoint ZNS – nếu anh đã có endpoint chính xác của ZNS thì thay ở đây
+        endpoint = "https://business.openapi.zalo.me/message/template"  # <- chỉnh theo tài liệu ZNS của OA anh
+
+        # ❷ Body ZNS: map params đúng template của anh
         body = {
             "template_id": self.template_id,
-            "to": msisdn,
-            "params": params or {},
+            # "oa_id": self.oa_id,        # nhiều nơi ZNS cần kèm oa_id, nếu có hãy mở dòng này
+            "phone": msisdn,              # nhiều tài liệu ZNS dùng 'phone' (msisdn)
+            "template_data": params,      # name, order_code, phone_number, price, status, date
+            # "mode": "production",       # nếu Zalo yêu cầu
+            # "tracking_id": str(uuid.uuid4()),
         }
-        r = requests.post(endpoint, headers=headers, json=body, timeout=20)
-        if r.status_code >= 400:
-            _logger.error("ZNS send failed %s: %s", r.status_code, r.text)
-            r.raise_for_status()
-        _logger.info("ZNS sent to %s; response=%s", msisdn, r.text)
-        return r.json()
+
+        # ❸ Thử kiểu header 1: access_token (thường dùng với ZNS)
+        headers1 = {
+            "Content-Type": "application/json",
+            "access_token": self.access_token,
+        }
+
+        # ❹ Thử kiểu header 2: Authorization: Bearer (fallback nếu ❸ trả -216)
+        headers2 = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.access_token}",
+        }
+
+        import requests, logging
+        _logger = logging.getLogger(__name__)
+
+        # Try headers1
+        r = requests.post(endpoint, json=body, headers=headers1, timeout=20)
+        txt = r.text
+        try:
+            j = r.json()
+        except Exception:
+            j = {"raw": txt}
+
+        if r.status_code == 200 and not str(j.get("error", "")).startswith("-"):
+            _logger.info("ZNS sent OK (hdr1) to %s; resp=%s", msisdn, txt)
+            return j
+
+        _logger.info("ZNS retry with Bearer; status=%s, resp=%s", r.status_code, txt)
+
+        # Retry with headers2
+        r2 = requests.post(endpoint, json=body, headers=headers2, timeout=20)
+        txt2 = r2.text
+        try:
+            j2 = r2.json()
+        except Exception:
+            j2 = {"raw": txt2}
+
+        if r2.status_code >= 400:
+            _logger.error("ZNS send failed (hdr2) %s: %s", r2.status_code, txt2)
+            r2.raise_for_status()
+
+        _logger.info("ZNS sent (hdr2) to %s; resp=%s", msisdn, txt2)
+        return j2
