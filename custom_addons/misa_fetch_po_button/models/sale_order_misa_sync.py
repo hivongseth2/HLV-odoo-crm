@@ -580,6 +580,7 @@ class SaleOrder(models.Model):
         data = self._misa_fetch_order()
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
+        
 
          # === THÊM MỚI: Kiểm tra trạng thái "Từ chối ghi" ===
         revenue_status_id = data.get("RevenueStatusID")
@@ -682,6 +683,7 @@ class SaleOrder(models.Model):
 
         old_wh = None
         stock_id = None
+        zns = False
 
         # Tìm dòng đầu tiên có StockIDText hợp lệ
         for l in (lines or []):
@@ -831,6 +833,9 @@ class SaleOrder(models.Model):
         except Exception as e:
             _logger.warning("Không set delivery contact: %s", e)
             shipping_id = False
+            
+        zns = bool(data.get("CustomField23", False))
+
 
         vals_create = {
             'name': order_no,
@@ -839,6 +844,8 @@ class SaleOrder(models.Model):
             'warehouse_id': old_wh.id or False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'partner_shipping_id': shipping_id,
+            'x_studio_zns': zns
+
         }
         if book_date:
             from dateutil.parser import parse as dtparse
