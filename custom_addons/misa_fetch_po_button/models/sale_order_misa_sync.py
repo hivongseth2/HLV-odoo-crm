@@ -842,6 +842,7 @@ class SaleOrder(models.Model):
             'warehouse_id': old_wh.id or False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'partner_shipping_id': shipping_id,
+            'x_studio_zns': zns
         }
         if book_date:
             from dateutil.parser import parse as dtparse
