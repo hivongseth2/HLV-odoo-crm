@@ -51,12 +51,21 @@ class StockPicking(models.Model):
 
     # ---- Gửi ZNS cho phiếu OUT ----
     def _zns_send_for_out_picking(self, picking):
-        # Chỉ gửi khi là OUT & chưa gửi trước đó
+    # Chỉ gửi khi là OUT & chưa gửi trước đó
         if getattr(picking, "picking_type_code", "") != "outgoing":
             _logger.info("ZNS skip: %s is not outgoing (type=%s)", picking.name, picking.picking_type_code)
             return
         if picking.zns_sent:
             _logger.info("ZNS skip: %s already sent (zns_sent=True)", picking.name)
+            return
+
+        # Lấy SO và kiểm tra cờ x_studio_zns
+        so = picking._zns_resolve_sale_order()
+        if not so:
+            _logger.info("ZNS skip: %s has no related sale order", picking.name)
+            return
+        if not bool(so.sudo().x_studio_zns):
+            _logger.info("ZNS skip: SO %s has x_studio_zns=False", so.name)
             return
 
         config = self.env['hlv.zalo.zns'].sudo().search([], limit=1)
@@ -72,20 +81,16 @@ class StockPicking(models.Model):
             _logger.info("ZNS skip: no shipping partner for %s", picking.name)
             return
 
-        so = picking._zns_resolve_sale_order()
-        order_code = so.name if so else picking.name
-
+        order_code = so.name
         msisdn = _vn_msisdn(ship_partner.mobile or ship_partner.phone or "")
         if not msisdn:
             _logger.info("ZNS skip: empty phone for %s", picking.name)
             return
 
-        # Giá: lấy từ SO, ép INT để tránh 'invalid format'
         amount = float(so.amount_total) if so else 0.0
         price_value = int(round(amount))
         date_str = fields.Date.context_today(self).strftime("%d/%m/%Y")
 
-        # Tham số đúng theo template anh đang dùng
         params = {
             "name": ship_partner.name or "",
             "order_code": order_code,
@@ -99,10 +104,10 @@ class StockPicking(models.Model):
         try:
             resp = config.sudo().send_zns(msisdn, params)
             _logger.info("ZNS sent OK: %s resp=%s", picking.name, resp)
-            # đặt cờ để không gửi lại lần sau
             picking.sudo().write({"zns_sent": True})
         except Exception as e:
             _logger.exception("ZNS send ERROR on %s: %s", picking.name, e)
+
 
     # ---- Gắn vào button_validate để chắc chắn chạy ----
     def button_validate(self):
