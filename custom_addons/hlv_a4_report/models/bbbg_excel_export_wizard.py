@@ -271,7 +271,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
 
         # Đại diện bên giao (B) + Tên công ty trong cùng 1 dòng
-        row += 2
+        row += 1
         ws.merge_cells(f'A{row}:E{row}')
         company_name = picking.company_id.name or ''
         text_content = f'Đại diện bên giao (B): {company_name}'
