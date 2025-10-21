@@ -81,6 +81,7 @@ class MisaConfig(models.AbstractModel):
             "Start": start,
             "Page": page,
             "PageSize": page_size,
+            "CustomColumns":"Q3VzdG9tRmllbGQyMw==",
             "Filters": [
                 {
                     "Value": value_json,

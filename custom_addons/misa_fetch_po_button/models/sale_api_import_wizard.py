@@ -731,6 +731,7 @@ class SaleApiImportWizard(models.TransientModel):
                 order_ref = order.get("SaleOrderNo")
                 order_id = order.get("ID")
                 account_id = order.get("AccountID") or order.get("AccountId")
+                zns = bool(order.get("CustomField23", False))
 
                 # Bỏ qua đơn đã giao (DeliveryStatusID=2)
                 delivery_status = order.get("DeliveryStatusID", "0")
@@ -956,7 +957,8 @@ class SaleApiImportWizard(models.TransientModel):
                         'partner_shipping_id': delivery_contact.id, 
                         'origin':origin,
                         'warehouse_id': warehouse.id,
-                        'misa_id': misa_id_str,      
+                        'misa_id': misa_id_str, 
+                        'x_studio_zns': zns           
                     }
                     # If we have owner code/date, set the Studio fields
                     if owner_date.get('owner_code'):

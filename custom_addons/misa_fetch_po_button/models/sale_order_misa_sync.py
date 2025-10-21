@@ -680,6 +680,8 @@ class SaleOrder(models.Model):
 
         old_wh = None
         stock_id = None
+        zns = False
+
 
         # Tìm dòng đầu tiên có StockIDText hợp lệ
         for l in (lines or []):
@@ -830,6 +832,8 @@ class SaleOrder(models.Model):
         except Exception as e:
             _logger.warning("Không set delivery contact: %s", e)
             shipping_id = False
+            
+        zns = bool(data.get("CustomField23", False))
 
         vals_create = {
             'name': order_no,
