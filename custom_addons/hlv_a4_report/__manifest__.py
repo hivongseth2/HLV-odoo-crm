@@ -21,6 +21,8 @@
     # always loaded
     'data': [
         'security/ir.model.access.csv',
+        'views/bbgn_date_wizard_views.xml',
+        'views/bbgn_excel_export_wizard_views.xml',
         'report/paperformat.xml',
         'report/bbgn_a4_khongngay.xml',
         'report/bbgn_a4_khong_gia.xml',
