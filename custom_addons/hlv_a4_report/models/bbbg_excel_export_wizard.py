@@ -32,8 +32,9 @@ class BBBGExcelExportWizard(models.TransientModel):
         if not text:
             return 15  # Default height
         
-        # Ước tính số ký tự trên 1 dòng (1 Excel unit ≈ 1 ký tự với Times New Roman)
-        chars_per_line = int(column_width * 0.9)  # 90% để tính padding
+        # Ước tính số ký tự trên 1 dòng
+        # Giảm xuống 0.75 để tính cho dấu tiếng Việt và padding
+        chars_per_line = int(column_width * 0.75)
         
         # Tính số dòng cần thiết
         text_length = len(str(text))
@@ -43,10 +44,10 @@ class BBBGExcelExportWizard(models.TransientModel):
         if '\n' in str(text):
             num_lines = max(num_lines, str(text).count('\n') + 1)
         
-        # Chiều cao = số dòng * font_size * 1.2 (line spacing)
-        row_height = num_lines * font_size * 1.2
+        # Chiều cao = số dòng * font_size * 1.3 (tăng line spacing)
+        row_height = num_lines * font_size * 1.3
         
-        return max(15, row_height)  # Minimum 15 points
+        return max(18, row_height)  # Minimum 18 points
 
     def _get_active_picking(self):
         """Lấy picking từ context"""
@@ -104,10 +105,8 @@ class BBBGExcelExportWizard(models.TransientModel):
         # Merge cells trước khi tính toán logo
         ws.merge_cells('A1:B4')
         
-        # Điều chỉnh chiều cao các hàng header
-        logo_row_height_points = 28
-        for i in range(1, 5):
-            ws.row_dimensions[i].height = logo_row_height_points
+        # Không cứng chiều cao - để tự động điều chỉnh theo nội dung bên phải
+        # Logo sẽ được scale để fit vào không gian có sẵn
 
         # Thêm logo vào giữa ô merge A1:B4
         if picking.company_id.logo and XLImage:
@@ -116,26 +115,22 @@ class BBBGExcelExportWizard(models.TransientModel):
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
                 
-                # Tính chiều cao tổng của ô merge (4 hàng)
-                total_height_px = 4 * logo_row_height_points * 96 / 72
+                # Tính chiều rộng ô A+B
+                col_a_width_px = int(((256 * 6 + 18) / 256) * 7) + 5
+                col_b_width_px = int(((256 * 40 + 18) / 256) * 7) + 5
+                total_width_px = col_a_width_px + col_b_width_px
                 
-                # Logo sẽ chiếm full chiều cao ô merge
+                # Scale logo để fit width (không cần tính height vì sẽ tự động)
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0:
-                    # Scale theo chiều cao để full viền trên dưới
-                    height_ratio = total_height_px / float(img.height)
-                    new_height = int(img.height * height_ratio)
-                    new_width = int(img.width * height_ratio)
+                    # Scale theo chiều rộng, giữ tỷ lệ
+                    max_width = int(total_width_px * 0.9)  # 90% để có padding
+                    if img.width > max_width:
+                        scale_ratio = max_width / float(img.width)
+                        img.width = int(img.width * scale_ratio)
+                        img.height = int(img.height * scale_ratio)
                     
-                    img.height = new_height
-                    img.width = new_width
-                    
-                    # Tính offset X để căn giữa (chiều rộng ô A+B)
-                    # Cột A = 6 units, Cột B = 40 units
-                    col_a_width_px = int(((256 * 6 + 18) / 256) * 7) + 5
-                    col_b_width_px = int(((256 * 40 + 18) / 256) * 7) + 5
-                    total_width_px = col_a_width_px + col_b_width_px
-                    
-                    offset_x = (total_width_px - new_width) / 2
+                    # Tính offset X để căn giữa
+                    offset_x = (total_width_px - img.width) / 2
                     
                     # Đặt anchor tại A1 với offset để căn giữa
                     img.anchor = 'A1'
@@ -146,15 +141,11 @@ class BBBGExcelExportWizard(models.TransientModel):
                         img.anchor._from.colOff = int(offset_x * 9525)
                         img.anchor._from.rowOff = 0
                 else:
-                    # Fallback: logo vuông
-                    size = int(total_height_px)
-                    img.height = size
-                    img.width = size
+                    # Fallback: logo nhỏ
+                    img.width = 80
+                    img.height = 80
                     
-                    col_a_width_px = int(((256 * 6 + 18) / 256) * 7) + 5
-                    col_b_width_px = int(((256 * 40 + 18) / 256) * 7) + 5
-                    total_width_px = col_a_width_px + col_b_width_px
-                    offset_x = (total_width_px - size) / 2
+                    offset_x = (total_width_px - 80) / 2
                     
                     img.anchor = 'A1'
                     ws.add_image(img)
