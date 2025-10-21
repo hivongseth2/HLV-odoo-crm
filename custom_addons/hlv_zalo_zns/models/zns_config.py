@@ -121,29 +121,65 @@ class ZaloZNSConfig(models.Model):
 
     # ---- Sending ZNS ----
     def send_zns(self, msisdn, params):
-        """Send a ZNS message using the approved template.
-        NOTE: Adjust endpoint and payload to match Zalo's latest ZNS API.
-        """
         self.ensure_one()
         if (not self.access_token) or self._token_expired():
             self.refresh_access_token()
         if not self.access_token:
             raise UserError(_("No valid access token"))
 
-        # Example endpoint (adjust to actual ZNS send endpoint if different)
-        endpoint = "https://openapi.zalo.me/v2.0/oa/message"
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json",
-        }
+        # ❶ Endpoint ZNS – nếu anh đã có endpoint chính xác của ZNS thì thay ở đây
+        endpoint = "https://business.openapi.zalo.me/message/template"  # <- chỉnh theo tài liệu ZNS của OA anh
+
+        # ❷ Body ZNS: map params đúng template của anh
         body = {
             "template_id": self.template_id,
-            "to": msisdn,
-            "params": params or {},
+            # "oa_id": self.oa_id,        # nhiều nơi ZNS cần kèm oa_id, nếu có hãy mở dòng này
+            "phone": msisdn,              # nhiều tài liệu ZNS dùng 'phone' (msisdn)
+            "template_data": params,      # name, order_code, phone_number, price, status, date
+            # "mode": "production",       # nếu Zalo yêu cầu
+            # "tracking_id": str(uuid.uuid4()),
         }
-        r = requests.post(endpoint, headers=headers, json=body, timeout=20)
-        if r.status_code >= 400:
-            _logger.error("ZNS send failed %s: %s", r.status_code, r.text)
-            r.raise_for_status()
-        _logger.info("ZNS sent to %s; response=%s", msisdn, r.text)
-        return r.json()
+
+        # ❸ Thử kiểu header 1: access_token (thường dùng với ZNS)
+        headers1 = {
+            "Content-Type": "application/json",
+            "access_token": self.access_token,
+        }
+
+        # ❹ Thử kiểu header 2: Authorization: Bearer (fallback nếu ❸ trả -216)
+        headers2 = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.access_token}",
+        }
+
+        import requests, logging
+        _logger = logging.getLogger(__name__)
+
+        # Try headers1
+        r = requests.post(endpoint, json=body, headers=headers1, timeout=20)
+        txt = r.text
+        try:
+            j = r.json()
+        except Exception:
+            j = {"raw": txt}
+
+        if r.status_code == 200 and not str(j.get("error", "")).startswith("-"):
+            _logger.info("ZNS sent OK (hdr1) to %s; resp=%s", msisdn, txt)
+            return j
+
+        _logger.info("ZNS retry with Bearer; status=%s, resp=%s", r.status_code, txt)
+
+        # Retry with headers2
+        r2 = requests.post(endpoint, json=body, headers=headers2, timeout=20)
+        txt2 = r2.text
+        try:
+            j2 = r2.json()
+        except Exception:
+            j2 = {"raw": txt2}
+
+        if r2.status_code >= 400:
+            _logger.error("ZNS send failed (hdr2) %s: %s", r2.status_code, txt2)
+            r2.raise_for_status()
+
+        _logger.info("ZNS sent (hdr2) to %s; resp=%s", msisdn, txt2)
+        return j2
