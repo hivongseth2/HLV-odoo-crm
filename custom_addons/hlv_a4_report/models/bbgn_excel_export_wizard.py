@@ -263,7 +263,7 @@ class BBGNExcelExportWizard(models.TransientModel):
 
         row += 1
         ws.merge_cells(f'A{row}:J{row}')
-        ws[f'A{row}'] = '        Đại diện Ông/bà: ................................................................    Chức vụ: ................................................................'
+        ws[f'A{row}'] = '    Đại diện Ông/bà: ................................................................    Chức vụ: ................................................................'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
 
