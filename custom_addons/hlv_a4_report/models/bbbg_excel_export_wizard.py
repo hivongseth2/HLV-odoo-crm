@@ -113,9 +113,10 @@ class BBBGExcelExportWizard(models.TransientModel):
         height_addr = self._calculate_row_height(addr, 53, 13)
         height_tax = self._calculate_row_height(tax_text, 53, 13)
         height_website = self._calculate_row_height(website_text, 53, 13)
+        height_row5 = 18  # Chiều cao dòng 5 trống
         
-        # Tổng chiều cao của 4 dòng thông tin
-        total_info_height = height_company_name + height_addr + height_tax + height_website
+        # Tổng chiều cao của 5 dòng thông tin (4 dòng có nội dung + 1 dòng trống)
+        total_info_height = height_company_name + height_addr + height_tax + height_website + height_row5
         
         # ====== THÔNG TIN CÔNG TY (tự động điều chỉnh chiều cao) ======
         # Row 1: Tên công ty
@@ -149,18 +150,24 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'C{row}'].alignment = left_align_wrap
         ws.row_dimensions[row].height = height_website
 
+        # Row 5: Dòng trống để tạo khoảng cách
+        row += 1
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = ''  # Dòng trống
+        ws.row_dimensions[row].height = height_row5
+
         # ====== LOGO (độc lập, overlay lên cột A:B) ======
-        # Merge cells cho logo từ A1:B4 (không cố định chiều cao)
+        # Merge cells cho logo từ A1:B5 để cover toàn bộ 5 dòng
         ws.merge_cells('A1:B5')
         
-        # Thêm logo với kích thước tính theo tổng chiều cao thực tế của 4 dòng
+        # Thêm logo với kích thước tính theo tổng chiều cao thực tế của 5 dòng
         if picking.company_id.logo and XLImage:
             try:
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
                 
-                # Tính chiều cao THỰC TẾ của vùng logo (tổng 4 dòng đã tính)
+                # Tính chiều cao THỰC TẾ của vùng logo (tổng 5 dòng đã tính)
                 # 1 point = 1.333 pixels tại 96 DPI
                 total_height_px = total_info_height * 1.333
                 
@@ -185,8 +192,8 @@ class BBBGExcelExportWizard(models.TransientModel):
                     # Tính offset để căn giữa theo chiều dọc và ngang trong vùng A:B
                     offset_x = (total_width_px - new_width) / 2
                     offset_y = (total_height_px - new_height) / 2
-                    
-                    # Đặt anchor tại B1 (góc trên bên trái)
+
+                    # Đặt anchor tại B1 (góc trên bên trái vùng logo)
                     img.anchor = 'B1'
                     ws.add_image(img)
                     
