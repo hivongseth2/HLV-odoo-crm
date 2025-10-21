@@ -32,8 +32,9 @@ class BBBGExcelExportWizard(models.TransientModel):
         if not text:
             return 15  # Default height
         
-        # Ước tính số ký tự trên 1 dòng (1 Excel unit ≈ 1 ký tự với Times New Roman)
-        chars_per_line = int(column_width * 0.9)  # 90% để tính padding
+        # Ước tính số ký tự trên 1 dòng
+        # Giảm xuống 0.75 để tính cho dấu tiếng Việt và padding
+        chars_per_line = int(column_width * 0.75)
         
         # Tính số dòng cần thiết
         text_length = len(str(text))
@@ -43,10 +44,10 @@ class BBBGExcelExportWizard(models.TransientModel):
         if '\n' in str(text):
             num_lines = max(num_lines, str(text).count('\n') + 1)
         
-        # Chiều cao = số dòng * font_size * 1.2 (line spacing)
-        row_height = num_lines * font_size * 1.2
+        # Chiều cao = số dòng * font_size * 1.3 (tăng line spacing)
+        row_height = num_lines * font_size * 1.3
         
-        return max(15, row_height)  # Minimum 15 points
+        return max(18, row_height)  # Minimum 18 points
 
     def _get_active_picking(self):
         """Lấy picking từ context"""
@@ -138,12 +139,13 @@ class BBBGExcelExportWizard(models.TransientModel):
                     img.height = new_height
                     img.width = new_width
                     
-                    # Tính offset để căn giữa cả 2 chiều
-                    offset_x = (total_width_px - new_width) / 2
+                    # Tính offset để căn giữa theo chiều dọc, bên trái cột B theo chiều ngang
+                    # Chiều ngang: đặt ở bên trái cột B (không cần offset ngang)
+                    offset_x = 0
                     offset_y = (total_height_px - new_height) / 2
                     
-                    # Đặt anchor tại A1 với offset căn giữa
-                    img.anchor = 'A1'
+                    # Đặt anchor tại B1 (bên trái cột B)
+                    img.anchor = 'B1'
                     ws.add_image(img)
                     
                     # Set offset (1 EMU = 1/914400 inch, 1 pixel ≈ 9525 EMU at 96 DPI)
@@ -156,10 +158,10 @@ class BBBGExcelExportWizard(models.TransientModel):
                     img.height = size
                     img.width = size
                     
-                    offset_x = (total_width_px - size) / 2
+                    offset_x = 0  # Bên trái cột B
                     offset_y = (total_height_px - size) / 2
                     
-                    img.anchor = 'A1'
+                    img.anchor = 'B1'  # Neo tại cột B
                     ws.add_image(img)
                     
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
