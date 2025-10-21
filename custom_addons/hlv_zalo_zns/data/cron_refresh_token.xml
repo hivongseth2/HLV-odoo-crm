@@ -3,14 +3,11 @@
   <data noupdate="1">
     <record id="ir_cron_hlv_zalo_refresh" model="ir.cron">
       <field name="name">HLV Zalo - refresh token</field>
-
-      <!-- Dùng model_name + method (khỏi cần ref model_*) -->
       <field name="state">model</field>
       <field name="model_name">hlv.zalo.zns</field>
       <field name="method">refresh_access_token</field>
-      <field name="args">()</field>        <!-- không tham số -->
-      <field name="kwargs">{}</field>      <!-- không keyword args -->
-
+      <field name="args">()</field>      
+      <field name="kwargs">{}</field>   
       <field name="interval_number">30</field>
       <field name="interval_type">minutes</field>
       <field name="numbercall">-1</field>
