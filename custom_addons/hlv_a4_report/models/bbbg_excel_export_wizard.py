@@ -19,6 +19,36 @@ class BBBGExcelExportWizard(models.TransientModel):
     _name = 'bbbg.excel.export.wizard'
     _description = 'Xuất Excel Biên Bản Bàn Giao'
 
+    def _calculate_row_height(self, text, column_width, font_size=13):
+        """
+        Tính chiều cao dòng dựa trên độ dài text và chiều rộng cột
+        Args:
+            text: Nội dung text
+            column_width: Tổng chiều rộng các cột đã merge (Excel units)
+            font_size: Kích thước font
+        Returns:
+            Chiều cao dòng tính bằng points
+        """
+        if not text:
+            return 15  # Default height
+        
+        # Ước tính số ký tự trên 1 dòng
+        # Giảm xuống 0.75 để tính cho dấu tiếng Việt và padding
+        chars_per_line = int(column_width * 0.75)
+        
+        # Tính số dòng cần thiết
+        text_length = len(str(text))
+        num_lines = max(1, (text_length + chars_per_line - 1) // chars_per_line)
+        
+        # Kiểm tra nếu có \n trong text
+        if '\n' in str(text):
+            num_lines = max(num_lines, str(text).count('\n') + 1)
+        
+        # Chiều cao = số dòng * font_size * 1.3 (tăng line spacing)
+        row_height = num_lines * font_size * 1.3
+        
+        return max(18, row_height)  # Minimum 18 points
+
     def _get_active_picking(self):
         """Lấy picking từ context"""
         active_id = self._context.get('active_id') or self._context.get('active_ids', [False])[0]
@@ -35,6 +65,9 @@ class BBBGExcelExportWizard(models.TransientModel):
         if not picking:
             raise UserError(_('Không tìm thấy phiếu giao hàng'))
 
+        # Lấy dữ liệu combo từ helper (giống BBGN)
+        enriched_lines = self.env['hlv.report.helper'].get_enriched_lines_for_picking_combo(picking)
+
         # Tạo workbook
         wb = Workbook()
         ws = wb.active
@@ -47,7 +80,9 @@ class BBBGExcelExportWizard(models.TransientModel):
         bold_font = Font(name='Times New Roman', size=13, bold=True)
         small_font = Font(name='Times New Roman', size=12)
         center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        left_align = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        left_align = Alignment(horizontal='left', vertical='center', wrap_text=False)
+        left_align_wrap = Alignment(horizontal='left', vertical='top', wrap_text=True)
+        left_align_no_wrap = Alignment(horizontal='left', vertical='center', wrap_text=False)
         right_align = Alignment(horizontal='right', vertical='center')
         
         thin_border = Border(
@@ -60,100 +95,130 @@ class BBBGExcelExportWizard(models.TransientModel):
         # Set column widths
         ws.column_dimensions['A'].width = 6    # STT
         ws.column_dimensions['B'].width = 40   # Tên hàng
-        ws.column_dimensions['C'].width = 15   # Đơn vị tính
-        ws.column_dimensions['D'].width = 12   # Số lượng
-        ws.column_dimensions['E'].width = 20   # Ghi chú
+        ws.column_dimensions['C'].width = 18   # Đơn vị tính
+        ws.column_dimensions['D'].width = 13   # Số lượng
+        ws.column_dimensions['E'].width = 22   # Ghi chú
 
-        # Header - Logo và thông tin công ty
+        # ============= HEADER - LOGO VÀ THÔNG TIN CÔNG TY =============
         row = 1
-
-        # Tính toán kích thước khung A1:A4 cho logo
-        def excel_column_width_to_pixels(width):
-            """Chuyển đổi Excel column width sang pixels"""
-            if width <= 1:
-                return int(((256 * width + 18) / 256) * 7)
-            else:
-                return int(((256 * width + 18) / 256) * 7) + 5
         
-        logo_cell_width_px = excel_column_width_to_pixels(6) * 2  # Dùng 2 cột cho logo
-        logo_row_height_points = 30
-        logo_cell_height_px = 4 * logo_row_height_points * 96 / 72
+        # Tính toán số dòng cần thiết cho thông tin công ty
+        company_name_header = picking.company_id.name or 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
+        addr = picking.company_id.partner_id._display_address(without_company=True).replace('\n', ' ') or ''
+        tax_text = f'Mã số thuế: {picking.company_id.vat or ""}'
+        website_text = f'Website: {picking.company_id.website or ""}'
         
-        # Điều chỉnh chiều cao các hàng header
-        for i in range(1, 5):
-            ws.row_dimensions[i].height = logo_row_height_points
+        # Tính chiều cao cho từng dòng thông tin công ty (C+D+E = 53 units)
+        height_company_name = self._calculate_row_height(company_name_header, 53, 14)
+        height_addr = self._calculate_row_height(addr, 53, 13)
+        height_tax = self._calculate_row_height(tax_text, 53, 13)
+        height_website = self._calculate_row_height(website_text, 53, 13)
+        height_row5 = 18  # Chiều cao dòng 5 trống
+        
+        # Tổng chiều cao của 5 dòng thông tin (4 dòng có nội dung + 1 dòng trống)
+        total_info_height = height_company_name + height_addr + height_tax + height_website + height_row5
+        
+        # ====== THÔNG TIN CÔNG TY (tự động điều chỉnh chiều cao) ======
+        # Row 1: Tên công ty
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = company_name_header
+        ws[f'C{row}'].font = header_font
+        ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = height_company_name
 
-        # Thêm logo nếu có (fit vào khung A1:A4)
+        # Row 2: Địa chỉ
+        row += 1
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = addr
+        ws[f'C{row}'].font = normal_font
+        ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = height_addr
+
+        # Row 3: Mã số thuế
+        row += 1
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = tax_text
+        ws[f'C{row}'].font = normal_font
+        ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = height_tax
+
+        # Row 4: Website
+        row += 1
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = website_text
+        ws[f'C{row}'].font = normal_font
+        ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = height_website
+
+        # Row 5: Dòng trống để tạo khoảng cách
+        row += 1
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = ''  # Dòng trống
+        ws.row_dimensions[row].height = height_row5
+
+        # ====== LOGO (độc lập, overlay lên cột A:B) ======
+        # Merge cells cho logo từ A1:B5 để cover toàn bộ 5 dòng
+        ws.merge_cells('A1:B5')
+        
+        # Thêm logo với kích thước tính theo tổng chiều cao thực tế của 5 dòng
         if picking.company_id.logo and XLImage:
             try:
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
                 
-                if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0:
-                    width_ratio = logo_cell_width_px / float(img.width)
-                    height_ratio = logo_cell_height_px / float(img.height)
-                    ratio = min(width_ratio, height_ratio)
+                # Tính chiều cao THỰC TẾ của vùng logo (tổng 5 dòng đã tính)
+                # 1 point = 1.333 pixels tại 96 DPI
+                total_height_px = total_info_height * 1.333
+                
+                # Tính chiều rộng của vùng logo (A+B)
+                col_a_width_px = ((256 * 6 + 18) / 256) * 7 + 5
+                col_b_width_px = ((256 * 40 + 18) / 256) * 7 + 5
+                total_width_px = col_a_width_px + col_b_width_px
+                
+                # Scale logo để vừa với ô, giữ tỷ lệ aspect ratio
+                if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0 and img.height > 0:
+                    # Tính tỷ lệ scale theo cả chiều rộng và cao, lấy giá trị nhỏ hơn
+                    scale_height = (total_height_px * 1) / float(img.height)
+                    scale_width = (total_width_px * 1) / float(img.width)
+                    scale = min(scale_height, scale_width)
                     
-                    new_width = int(img.width * ratio * 0.98)
-                    new_height = int(img.height * ratio * 0.98)
-                    img.width = new_width
+                    new_height = int(img.height * scale)
+                    new_width = int(img.width * scale)
+                    
                     img.height = new_height
+                    img.width = new_width
                     
-                    offset_x = (logo_cell_width_px - new_width) / 2
-                    offset_y = (logo_cell_height_px - new_height) / 2
+                    # Tính offset để căn giữa theo chiều dọc và ngang trong vùng A:B
+                    offset_x = (total_width_px - new_width) / 2
+                    offset_y = (total_height_px - new_height) / 2
+
+                    # Đặt anchor tại B1 (góc trên bên trái vùng logo)
+                    img.anchor = 'B1'
+                    ws.add_image(img)
                     
-                    img.anchor = 'A1'
-                    ws.add_image(img, 'A1')
-                    
+                    # Set offset (1 pixel ≈ 9525 EMU at 96 DPI)
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
                         img.anchor._from.colOff = int(offset_x * 9525)
                         img.anchor._from.rowOff = int(offset_y * 9525)
                 else:
-                    size = int(min(logo_cell_width_px, logo_cell_height_px) * 0.98)
-                    img.width = size
+                    # Fallback nếu không có dimension
+                    size = int(min(total_height_px, total_width_px) * 0.95)
                     img.height = size
+                    img.width = size
                     
-                    offset_x = (logo_cell_width_px - size) / 2
-                    offset_y = (logo_cell_height_px - size) / 2
+                    offset_x = (total_width_px - size) / 2
+                    offset_y = (total_height_px - size) / 2
                     
-                    ws.add_image(img, 'A1')
+                    img.anchor = 'A1'
+                    ws.add_image(img)
+                    
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
                         img.anchor._from.colOff = int(offset_x * 9525)
                         img.anchor._from.rowOff = int(offset_y * 9525)
-
-                ws.merge_cells('A1:A4')
+                    
             except Exception as e:
                 pass
-
-        # Thông tin công ty bên phải
-        # Row 1: Tên công ty
-        ws.merge_cells(f'B{row}:E{row}')
-        ws[f'B{row}'] = picking.company_id.name or 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
-        ws[f'B{row}'].font = header_font
-        ws[f'B{row}'].alignment = left_align
-
-        # Row 2: Địa chỉ
-        row += 1
-        ws.merge_cells(f'B{row}:E{row}')
-        addr = picking.company_id.partner_id._display_address(without_company=True).replace('\n', ' ') or ''
-        ws[f'B{row}'] = addr
-        ws[f'B{row}'].font = normal_font
-        ws[f'B{row}'].alignment = left_align
-
-        # Row 3: Mã số thuế
-        row += 1
-        ws.merge_cells(f'B{row}:E{row}')
-        ws[f'B{row}'] = f'Mã số thuế: {picking.company_id.vat or ""}'
-        ws[f'B{row}'].font = normal_font
-        ws[f'B{row}'].alignment = left_align
-
-        # Row 4: Website
-        row += 1
-        ws.merge_cells(f'B{row}:E{row}')
-        ws[f'B{row}'] = f'Website: {picking.company_id.website or ""}'
-        ws[f'B{row}'].font = normal_font
-        ws[f'B{row}'].alignment = left_align
 
         # Tiêu đề
         row += 2
@@ -171,72 +236,68 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = center_align
 
-        # Thông tin hai bên
+        # Thông tin hai bên - merge toàn bộ dòng để tránh mất nội dung
         row += 2
         
-        # Đại diện bên nhận (A)
-        ws.merge_cells(f'A{row}:B{row}')
-        ws[f'A{row}'] = 'Đại diện bên nhận (A)'
+        # Đại diện bên nhận (A) + Tên công ty trong cùng 1 dòng
+        ws.merge_cells(f'A{row}:E{row}')
+        partner_name = picking.partner_id.commercial_partner_id.name if picking.partner_id else ''
+        text_content = f'Đại diện bên nhận (A): {partner_name}'
+        ws[f'A{row}'] = text_content
         ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].alignment = left_align
-        
-        ws.merge_cells(f'C{row}:E{row}')
-        ws[f'C{row}'] = picking.partner_id.commercial_partner_id.name if picking.partner_id else ''
-        ws[f'C{row}'].font = header_font
-        ws[f'C{row}'].alignment = left_align
+        ws[f'A{row}'].alignment = left_align_wrap
+        # Tính chiều cao tự động: A+B+C+D+E = 6+40+18+13+22 = 99 units
+        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
 
         # Ông (Bà)
         row += 1
-        ws[f'A{row}'] = 'Ông (Bà)'
+        ws.merge_cells(f'A{row}:E{row}')
+        ws[f'A{row}'] = 'Ông (Bà):'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
-        ws.merge_cells(f'B{row}:E{row}')
+        ws.row_dimensions[row].height = 18
 
         # Địa chỉ bên A
         row += 1
-        ws[f'A{row}'] = 'Địa chỉ'
-        ws[f'A{row}'].font = normal_font
-        ws[f'A{row}'].alignment = left_align
-        
-        ws.merge_cells(f'B{row}:E{row}')
+        ws.merge_cells(f'A{row}:E{row}')
         p = picking.partner_id.commercial_partner_id or picking.partner_id
         p_addr = ''
         if p:
             p_addr = (p.street or '') + (p.street2 and (', ' + p.street2) or '')
-        ws[f'B{row}'] = p_addr
-        ws[f'B{row}'].font = normal_font
-        ws[f'B{row}'].alignment = left_align
+        text_content = f'Địa chỉ: {p_addr}'
+        ws[f'A{row}'] = text_content
+        ws[f'A{row}'].font = normal_font
+        ws[f'A{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
 
-        # Đại diện bên giao (B)
-        row += 2
-        ws.merge_cells(f'A{row}:B{row}')
-        ws[f'A{row}'] = 'Đại diện bên giao (B)'
+        # Đại diện bên giao (B) + Tên công ty trong cùng 1 dòng
+        row += 1
+        ws.merge_cells(f'A{row}:E{row}')
+        company_name = picking.company_id.name or ''
+        text_content = f'Đại diện bên giao (B): {company_name}'
+        ws[f'A{row}'] = text_content
         ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].alignment = left_align
-        
-        ws.merge_cells(f'C{row}:E{row}')
-        ws[f'C{row}'] = picking.company_id.name or ''
-        ws[f'C{row}'].font = header_font
-        ws[f'C{row}'].alignment = left_align
+        ws[f'A{row}'].alignment = left_align_no_wrap  # Sử dụng no_wrap để không bị tăng chiều cao
+        # Chiều cao cố định cho dòng 1 dòng
+        ws.row_dimensions[row].height = 18
 
         # Ông (Bà)
         row += 1
-        ws[f'A{row}'] = 'Ông (Bà)'
+        ws.merge_cells(f'A{row}:E{row}')
+        ws[f'A{row}'] = 'Ông (Bà):'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
-        ws.merge_cells(f'B{row}:E{row}')
+        ws.row_dimensions[row].height = 18
 
         # Địa chỉ bên B
         row += 1
-        ws[f'A{row}'] = 'Địa chỉ'
-        ws[f'A{row}'].font = normal_font
-        ws[f'A{row}'].alignment = left_align
-        
-        ws.merge_cells(f'B{row}:E{row}')
+        ws.merge_cells(f'A{row}:E{row}')
         addr_b = picking.company_id.partner_id._display_address(without_company=True).replace('\n', ', ') or ''
-        ws[f'B{row}'] = addr_b
-        ws[f'B{row}'].font = normal_font
-        ws[f'B{row}'].alignment = left_align
+        text_content = f'Địa chỉ: {addr_b}'
+        ws[f'A{row}'] = text_content
+        ws[f'A{row}'].font = normal_font
+        ws[f'A{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
 
         # Bên B đã bàn giao
         row += 2
@@ -257,55 +318,43 @@ class BBBGExcelExportWizard(models.TransientModel):
             cell.border = thin_border
             cell.fill = PatternFill(start_color='EEEEEE', end_color='EEEEEE', fill_type='solid')
 
-        # Lấy dữ liệu lines
-        is_done = picking.state == 'done'
-        lines = is_done and picking.move_line_ids or picking.move_ids
-
-        # Data rows
+        # Data rows - Xử lý combo: Parent hiển thị bình thường, Children thụt vào
         row += 1
         idx = 0
         
-        for l in lines:
-            # Tính qty_show
-            qty_show = 0.0
-            if l._name == 'stock.move':
-                qty_show = l.quantity or 0.0
-            elif l._name == 'stock.move.line':
-                qty_show = (l.move_id and l.move_id.quantity) or 0.0
-                if l.product_uom_id and l.move_id and l.move_id.product_uom:
-                    qty_show = l.move_id.product_uom._compute_quantity(
-                        l.move_id.quantity or 0.0, l.product_uom_id
-                    )
+        for line_data in enriched_lines:
+            line_type = line_data['type']
+            is_child = line_data['is_combo_child']
+            qty = line_data['qty'] or 0.0
+            product_name = line_data.get('product_name', '')
+            uom_name = line_data.get('uom', '')  # Helper trả về 'uom' chứ không phải 'uom_name'
 
-            # Chỉ render khi qty_show > 0
-            if qty_show > 0:
-                # STT
+            # Chỉ render khi có qty > 0
+            if qty > 0:
+                # STT - chỉ hiển thị cho parent và standalone
                 cell = ws.cell(row=row, column=1)
-                cell.value = idx + 1
+                if not is_child:
+                    idx += 1
+                    cell.value = idx
+                else:
+                    cell.value = ''  # Combo child không có STT
                 cell.alignment = center_align
                 cell.border = thin_border
                 cell.font = normal_font
 
-                # Tên hàng
+                # Tên hàng - thụt vào nếu là combo child
                 cell = ws.cell(row=row, column=2)
-                product_name = l.product_id.display_name if l.product_id else ''
-                # Thêm description nếu có
-                if l._name == 'stock.move' and l.description_picking:
-                    if not l.product_id or l.description_picking not in (l.product_id.display_name or ''):
-                        product_name += '\n' + l.description_picking
-                cell.value = product_name
-                cell.alignment = left_align
+                if is_child:
+                    # Thụt vào 2 spaces cho combo child
+                    cell.value = f'  {product_name}'
+                else:
+                    cell.value = product_name
+                cell.alignment = left_align_wrap
                 cell.border = thin_border
                 cell.font = normal_font
 
                 # Đơn vị tính
                 cell = ws.cell(row=row, column=3)
-                if l._name == 'stock.move.line':
-                    uom_name = (l.product_uom_id and l.product_uom_id.name) or \
-                               (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''
-                else:
-                    uom_name = (l.product_uom and l.product_uom.name) or \
-                               (l.product_id and l.product_id.uom_id and l.product_id.uom_id.name) or ''
                 cell.value = uom_name
                 cell.alignment = center_align
                 cell.border = thin_border
@@ -313,7 +362,7 @@ class BBBGExcelExportWizard(models.TransientModel):
 
                 # Số lượng
                 cell = ws.cell(row=row, column=4)
-                cell.value = round(qty_show, 2)
+                cell.value = round(qty, 2)
                 cell.number_format = '0.00'
                 cell.alignment = center_align
                 cell.border = thin_border
@@ -325,7 +374,6 @@ class BBBGExcelExportWizard(models.TransientModel):
                 cell.font = normal_font
 
                 row += 1
-                idx += 1
 
         # Nếu không có dòng nào
         if idx == 0:
@@ -340,14 +388,17 @@ class BBBGExcelExportWizard(models.TransientModel):
         # Chữ ký
         row += 3
         ws.merge_cells(f'A{row}:B{row}')
-        ws[f'A{row}'] = 'ĐẠI DIỆN BÊN NHẬN\n(Ký, họ tên)'
+        signature_text = 'ĐẠI DIỆN BÊN NHẬN\n(Ký, họ tên)'
+        ws[f'A{row}'] = signature_text
         ws[f'A{row}'].font = bold_font
         ws[f'A{row}'].alignment = center_align
+        # A+B = 6+40 = 46 units, có 2 dòng
+        ws.row_dimensions[row].height = self._calculate_row_height(signature_text, 46, 13)
 
-        ws.merge_cells(f'D{row}:E{row}')
-        ws[f'D{row}'] = 'ĐẠI DIỆN BÊN GIAO\n(Ký, họ tên)'
-        ws[f'D{row}'].font = bold_font
-        ws[f'D{row}'].alignment = center_align
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = 'ĐẠI DIỆN BÊN GIAO\n(Ký, họ tên)'
+        ws[f'C{row}'].font = bold_font
+        ws[f'C{row}'].alignment = center_align
 
         # Spacing cho chữ ký
         row += 5
