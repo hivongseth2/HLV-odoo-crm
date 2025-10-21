@@ -30,25 +30,27 @@
     </field>
   </record>
 
-  <record id="view_hlv_zalo_zns_tree" model="ir.ui.view">
-    <field name="name">hlv.zalo.zns.tree</field>
+  <record id="view_hlv_zalo_zns_list" model="ir.ui.view">
+    <field name="name">hlv.zalo.zns.list</field>
     <field name="model">hlv.zalo.zns</field>
     <field name="arch" type="xml">
-      <tree>
+      <list>
         <field name="name"/>
         <field name="app_id"/>
         <field name="oa_id"/>
         <field name="template_id"/>
         <field name="token_expires_at"/>
-      </tree>
+      </list>
     </field>
   </record>
 
-  <record id="action_hlv_zalo_zns" model="ir.actions.act_window">
-    <field name="name">Zalo ZNS</field>
-    <field name="res_model">hlv.zalo.zns</field>
-    <field name="view_mode">tree,form</field>
-  </record>
+
+<record id="action_hlv_zalo_zns" model="ir.actions.act_window">
+  <field name="name">Zalo ZNS</field>
+  <field name="res_model">hlv.zalo.zns</field>
+  <field name="view_mode">list,form</field>
+</record>
+
 
   <menuitem id="menu_hlv_root" name="HLV Tools" sequence="50"/>
   <menuitem id="menu_hlv_zalo" name="Zalo" parent="menu_hlv_root" sequence="10"/>
