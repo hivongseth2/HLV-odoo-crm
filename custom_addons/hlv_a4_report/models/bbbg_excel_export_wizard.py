@@ -108,9 +108,23 @@ class BBBGExcelExportWizard(models.TransientModel):
                     img.anchor = 'A1'
                     ws.add_image(img, 'A1')
                     
+                    # Try to center the image inside the merged area by setting
+                    # the anchor start cell and offsets, and also the end marker
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
-                        img.anchor._from.colOff = int(offset_x * 9525)
-                        img.anchor._from.rowOff = int(offset_y * 9525)
+                        try:
+                            img.anchor._from.col = 0
+                            img.anchor._from.row = 0
+                            img.anchor._from.colOff = int(offset_x * 9525)
+                            img.anchor._from.rowOff = int(offset_y * 9525)
+                        except Exception:
+                            pass
+                    if hasattr(img, 'anchor') and hasattr(img.anchor, '_to'):
+                        try:
+                            # make the image area span to column B (index 1) and row 4 (index 3)
+                            img.anchor._to.col = 1
+                            img.anchor._to.row = 3
+                        except Exception:
+                            pass
                 else:
                     size = int(min(logo_cell_width_px, logo_cell_height_px) * 0.9)
                     img.width = size
@@ -121,8 +135,19 @@ class BBBGExcelExportWizard(models.TransientModel):
                     
                     ws.add_image(img, 'A1')
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
-                        img.anchor._from.colOff = int(offset_x * 9525)
-                        img.anchor._from.rowOff = int(offset_y * 9525)
+                        try:
+                            img.anchor._from.col = 0
+                            img.anchor._from.row = 0
+                            img.anchor._from.colOff = int(offset_x * 9525)
+                            img.anchor._from.rowOff = int(offset_y * 9525)
+                        except Exception:
+                            pass
+                    if hasattr(img, 'anchor') and hasattr(img.anchor, '_to'):
+                        try:
+                            img.anchor._to.col = 1
+                            img.anchor._to.row = 3
+                        except Exception:
+                            pass
 
                 ws.merge_cells('A1:B4')
             except Exception as e:
@@ -177,36 +202,66 @@ class BBBGExcelExportWizard(models.TransientModel):
         row += 2
         
         # Đại diện bên nhận (A) - Gộp thành 1 dòng
-        ws.merge_cells(f'A{row}:E{row}')
-        ws[f'A{row}'] = f'Đại diện bên nhận (A): {picking.partner_id.commercial_partner_id.name if picking.partner_id else ""}'
+        # Restore two-column layout for parties (left=A, right=B)
+        # Đại diện bên nhận (A)
+        ws.merge_cells(f'A{row}:B{row}')
+        ws[f'A{row}'] = 'Đại diện bên nhận (A)'
         ws[f'A{row}'].font = bold_font
         ws[f'A{row}'].alignment = left_align
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = picking.partner_id.commercial_partner_id.name if picking.partner_id else ''
+        ws[f'C{row}'].font = header_font
+        ws[f'C{row}'].alignment = left_align_wrap
 
-        # Ông (Bà) - Địa chỉ bên A - Gộp
+        # Ông (Bà)
         row += 1
-        ws.merge_cells(f'A{row}:E{row}')
+        ws[f'A{row}'] = 'Ông (Bà):'
+        ws[f'A{row}'].font = normal_font
+        ws[f'A{row}'].alignment = left_align
+        ws.merge_cells(f'B{row}:E{row}')
+
+        # Địa chỉ bên A
+        row += 1
+        ws[f'A{row}'] = 'Địa chỉ:'
+        ws[f'A{row}'].font = normal_font
+        ws[f'A{row}'].alignment = left_align
+        ws.merge_cells(f'B{row}:E{row}')
         p = picking.partner_id.commercial_partner_id or picking.partner_id
         p_addr = ''
         if p:
             p_addr = (p.street or '') + (p.street2 and (', ' + p.street2) or '')
-        ws[f'A{row}'] = p_addr
-        ws[f'A{row}'].font = normal_font
-        ws[f'A{row}'].alignment = left_align
+        ws[f'B{row}'] = p_addr
+        ws[f'B{row}'].font = normal_font
+        ws[f'B{row}'].alignment = left_align
 
-        # Đại diện bên giao (B) - Gộp thành 1 dòng
+        # Đại diện bên giao (B)
         row += 2
-        ws.merge_cells(f'A{row}:E{row}')
-        ws[f'A{row}'] = f'Đại diện bên giao (B): {picking.company_id.name or ""}'
+        ws.merge_cells(f'A{row}:B{row}')
+        ws[f'A{row}'] = 'Đại diện bên giao (B)'
         ws[f'A{row}'].font = bold_font
         ws[f'A{row}'].alignment = left_align
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = picking.company_id.name or ''
+        ws[f'C{row}'].font = header_font
+        ws[f'C{row}'].alignment = left_align_wrap
 
-        # Ông (Bà) - Địa chỉ bên B - Gộp
+        # Ông (Bà)
         row += 1
-        ws.merge_cells(f'A{row}:E{row}')
-        addr_b = picking.company_id.partner_id._display_address(without_company=True).replace('\n', ', ') or ''
-        ws[f'A{row}'] = addr_b
+        ws[f'A{row}'] = 'Ông (Bà):'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
+        ws.merge_cells(f'B{row}:E{row}')
+
+        # Địa chỉ bên B
+        row += 1
+        ws[f'A{row}'] = 'Địa chỉ:'
+        ws[f'A{row}'].font = normal_font
+        ws[f'A{row}'].alignment = left_align
+        ws.merge_cells(f'B{row}:E{row}')
+        addr_b = picking.company_id.partner_id._display_address(without_company=True).replace('\n', ', ') or ''
+        ws[f'B{row}'] = addr_b
+        ws[f'B{row}'].font = normal_font
+        ws[f'B{row}'].alignment = left_align
 
         # Bên B đã bàn giao
         row += 2
