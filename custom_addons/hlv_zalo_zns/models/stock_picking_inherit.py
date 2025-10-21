@@ -83,23 +83,25 @@ class StockPicking(models.Model):
             return
 
         # price từ SO nếu có
-        price_value = float(so.amount_total) if so else 0.0
+        # price_value = float(so.amount_total) if so else 0.0
+        amount = float(so.amount_total) if so else 0.0
+        price_value = int(round(amount))   # <-- ép INT, bỏ .0
+
+
 
         # status theo loại
-        status_text = "Đã chuẩn bị hàng" if is_pick else "Đã lấy hàng"
-
+        status_text = "Đã chuẩn bị hàng" 
         date_str = fields.Date.context_today(self).strftime("%d/%m/%Y")
 
         params = {
             "name": ship_partner.name or "",
             "order_code": order_code,
             "phone_number": msisdn.replace("+84", "0") if msisdn.startswith("+84") else msisdn,
-            "price": price_value,
+            "price": price_value,          # <-- gửi số nguyên
             "status": status_text,
             "date": date_str,
-            # "address": shipping_street,  # mở nếu template có param address
+            # "address": shipping_street,
         }
-
         _logger.info("ZNS send try: %s (%s/%s) to=%s params=%s",
                      picking.name, picking.picking_type_code, seq_code, msisdn, params)
         try:

@@ -1,3 +1,4 @@
+# models/zns_config.py
 import logging
 from datetime import timedelta
 import requests
@@ -22,11 +23,11 @@ class ZaloZNSConfig(models.Model):
 
     authorize_url = fields.Char('Authorize URL', compute='_compute_authorize_url', readonly=True)
 
+    # -------------------- OAuth permission URL --------------------
     @api.depends('app_id', 'callback_url')
     def _compute_authorize_url(self):
         for rec in self:
             if rec.app_id and rec.callback_url:
-                # Common OA permission URL pattern (adjust if your app requires different scopes/params)
                 from urllib.parse import quote
                 rec.authorize_url = (
                     "https://oauth.zaloapp.com/v4/oa/permission"
@@ -40,31 +41,28 @@ class ZaloZNSConfig(models.Model):
         self.ensure_one()
         if not self.authorize_url:
             raise UserError(_("Missing app_id or callback_url"))
-        return {
-            "type": "ir.actions.act_url",
-            "target": "new",
-            "url": self.authorize_url,
-        }
+        return {"type": "ir.actions.act_url", "target": "new", "url": self.authorize_url}
 
-    # ---- Token helpers ----
+    # -------------------- Token helpers --------------------
     def _token_expired(self):
         return (not self.token_expires_at) or (fields.Datetime.now() >= self.token_expires_at)
 
     def request_access_token_with_code(self, code, code_verifier=None):
+        """Exchange code -> access_token (OAuth v4 for OA)."""
         self.ensure_one()
         endpoint = 'https://oauth.zaloapp.com/v4/oa/access_token'
         data = {
             'grant_type': 'authorization_code',
             'app_id': self.app_id,
             'code': code,
-            # 'redirect_uri': self.callback_url,  # Bật dòng này nếu Zalo yêu cầu so khớp redirect_uri
+            # 'redirect_uri': self.callback_url,  # mở nếu Zalo yêu cầu
         }
         if code_verifier:
             data['code_verifier'] = code_verifier
 
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'secret_key': self.app_secret,   # QUAN TRỌNG cho v4
+            'secret_key': self.app_secret,  # v4: dùng header này
         }
 
         r = requests.post(endpoint, data=data, headers=headers, timeout=15)
@@ -74,7 +72,6 @@ class ZaloZNSConfig(models.Model):
         access = j.get('access_token')
         refresh = j.get('refresh_token')
         if not access:
-            # Log để dễ debug nếu Zalo trả lỗi dạng khác
             _logger.error("Zalo token exchange response: %s", r.text)
             raise UserError(_("Failed to get access_token from Zalo."))
 
@@ -86,8 +83,8 @@ class ZaloZNSConfig(models.Model):
         _logger.info("Zalo access token stored (expires_in=%s)", j.get("expires_in"))
         return j
 
-
     def refresh_access_token(self):
+        """Refresh access token using refresh_token."""
         for rec in self:
             if not rec.refresh_token:
                 continue
@@ -100,7 +97,7 @@ class ZaloZNSConfig(models.Model):
                 }
                 headers = {
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'secret_key': rec.app_secret,  # QUAN TRỌNG
+                    'secret_key': rec.app_secret,
                 }
                 r = requests.post(endpoint, data=data, headers=headers, timeout=15)
                 r.raise_for_status()
@@ -118,68 +115,61 @@ class ZaloZNSConfig(models.Model):
             except Exception as e:
                 _logger.exception("Refresh Zalo token failed: %s", e)
 
-
-    # ---- Sending ZNS ----
+    # -------------------- Send ZNS --------------------
     def send_zns(self, msisdn, params):
+        """
+        Gửi ZNS theo template:
+        - Header dùng 'access_token'
+        - Body dùng 'phone' + 'template_data'
+        - Xử lý một số lỗi phổ biến: token invalid, price invalid format
+        """
         self.ensure_one()
+
+        def _call(body):
+            endpoint = "https://business.openapi.zalo.me/message/template"  # đổi nếu OA của anh yêu cầu endpoint khác
+            headers = {
+                "Content-Type": "application/json",
+                "access_token": self.access_token,  # ZNS: dùng header này
+            }
+            r = requests.post(endpoint, json=body, headers=headers, timeout=20)
+            txt = r.text
+            try:
+                j = r.json()
+            except Exception:
+                j = {"raw": txt}
+            _logger.info("ZNS call status=%s resp=%s", r.status_code, txt)
+            return r.status_code, j
+
+        # Refresh token nếu cần
         if (not self.access_token) or self._token_expired():
             self.refresh_access_token()
         if not self.access_token:
             raise UserError(_("No valid access token"))
 
-        # ❶ Endpoint ZNS – nếu anh đã có endpoint chính xác của ZNS thì thay ở đây
-        endpoint = "https://business.openapi.zalo.me/message/template"  # <- chỉnh theo tài liệu ZNS của OA anh
-
-        # ❷ Body ZNS: map params đúng template của anh
         body = {
             "template_id": self.template_id,
-            # "oa_id": self.oa_id,        # nhiều nơi ZNS cần kèm oa_id, nếu có hãy mở dòng này
-            "phone": msisdn,              # nhiều tài liệu ZNS dùng 'phone' (msisdn)
-            "template_data": params,      # name, order_code, phone_number, price, status, date
-            # "mode": "production",       # nếu Zalo yêu cầu
-            # "tracking_id": str(uuid.uuid4()),
+            "phone": msisdn,
+            "template_data": params,
+            # "oa_id": self.oa_id,  # mở nếu cần
         }
 
-        # ❸ Thử kiểu header 1: access_token (thường dùng với ZNS)
-        headers1 = {
-            "Content-Type": "application/json",
-            "access_token": self.access_token,
-        }
+        status, resp = _call(body)
 
-        # ❹ Thử kiểu header 2: Authorization: Bearer (fallback nếu ❸ trả -216)
-        headers2 = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.access_token}",
-        }
+        # Nếu token invalid (-124/-216), thử refresh rồi gọi lại 1 lần
+        if isinstance(resp, dict) and resp.get("error") in (-124, -216):
+            _logger.info("ZNS token invalid -> refresh and retry once")
+            self.refresh_access_token()
+            if not self.access_token:
+                raise UserError(_("Cannot refresh access token"))
+            status, resp = _call(body)
 
-        import requests, logging
-        _logger = logging.getLogger(__name__)
+        # Nếu price invalid format (-1124), ép về chuỗi số và retry 1 lần
+        if isinstance(resp, dict) and resp.get("error") == -1124:
+            td = body["template_data"].copy()
+            if "price" in td:
+                td["price"] = str(td["price"])  # ép chuỗi số
+                body["template_data"] = td
+                _logger.info("ZNS retry with price as string")
+                status, resp = _call(body)
 
-        # Try headers1
-        r = requests.post(endpoint, json=body, headers=headers1, timeout=20)
-        txt = r.text
-        try:
-            j = r.json()
-        except Exception:
-            j = {"raw": txt}
-
-        if r.status_code == 200 and not str(j.get("error", "")).startswith("-"):
-            _logger.info("ZNS sent OK (hdr1) to %s; resp=%s", msisdn, txt)
-            return j
-
-        _logger.info("ZNS retry with Bearer; status=%s, resp=%s", r.status_code, txt)
-
-        # Retry with headers2
-        r2 = requests.post(endpoint, json=body, headers=headers2, timeout=20)
-        txt2 = r2.text
-        try:
-            j2 = r2.json()
-        except Exception:
-            j2 = {"raw": txt2}
-
-        if r2.status_code >= 400:
-            _logger.error("ZNS send failed (hdr2) %s: %s", r2.status_code, txt2)
-            r2.raise_for_status()
-
-        _logger.info("ZNS sent (hdr2) to %s; resp=%s", msisdn, txt2)
-        return j2
+        return resp
