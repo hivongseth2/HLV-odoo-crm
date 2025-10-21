@@ -51,52 +51,73 @@ class ZaloZNSConfig(models.Model):
         return (not self.token_expires_at) or (fields.Datetime.now() >= self.token_expires_at)
 
     def request_access_token_with_code(self, code, code_verifier=None):
-        """Exchange OAuth code -> access token.
-        Adjust endpoint/params to your Zalo OA app type if needed.
-        """
         self.ensure_one()
         endpoint = 'https://oauth.zaloapp.com/v4/oa/access_token'
         data = {
+            'grant_type': 'authorization_code',
             'app_id': self.app_id,
-            'app_secret': self.app_secret,
             'code': code,
+            # 'redirect_uri': self.callback_url,  # Bật dòng này nếu Zalo yêu cầu so khớp redirect_uri
         }
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        if code_verifier:
+            data['code_verifier'] = code_verifier
+
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'secret_key': self.app_secret,   # QUAN TRỌNG cho v4
+        }
+
         r = requests.post(endpoint, data=data, headers=headers, timeout=15)
         r.raise_for_status()
         j = r.json()
+
+        access = j.get('access_token')
+        refresh = j.get('refresh_token')
+        if not access:
+            # Log để dễ debug nếu Zalo trả lỗi dạng khác
+            _logger.error("Zalo token exchange response: %s", r.text)
+            raise UserError(_("Failed to get access_token from Zalo."))
+
         self.write({
-            "access_token": j.get("access_token"),
-            "refresh_token": j.get("refresh_token"),
+            "access_token": access,
+            "refresh_token": refresh,
             "token_expires_at": fields.Datetime.now() + timedelta(seconds=int(j.get("expires_in", 3600)) - 60),
         })
-        _logger.info("Zalo access token stored, expires_in=%s", j.get("expires_in"))
+        _logger.info("Zalo access token stored (expires_in=%s)", j.get("expires_in"))
         return j
 
+
     def refresh_access_token(self):
-        """Use refresh_token to get a new access token."""
         for rec in self:
             if not rec.refresh_token:
                 continue
             try:
                 endpoint = 'https://oauth.zaloapp.com/v4/oa/access_token'
                 data = {
+                    'grant_type': 'refresh_token',
                     'app_id': rec.app_id,
-                    'app_secret': rec.app_secret,
                     'refresh_token': rec.refresh_token,
                 }
-                headers = {"Content-Type": "application/x-www-form-urlencoded"}
+                headers = {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'secret_key': rec.app_secret,  # QUAN TRỌNG
+                }
                 r = requests.post(endpoint, data=data, headers=headers, timeout=15)
                 r.raise_for_status()
                 j = r.json()
+                access = j.get('access_token')
+                if not access:
+                    _logger.error("Zalo refresh response: %s", r.text)
+                    continue
                 rec.write({
-                    "access_token": j.get("access_token"),
+                    "access_token": access,
                     "refresh_token": j.get("refresh_token", rec.refresh_token),
                     "token_expires_at": fields.Datetime.now() + timedelta(seconds=int(j.get("expires_in", 3600)) - 60),
                 })
                 _logger.info("Zalo access token refreshed")
             except Exception as e:
                 _logger.exception("Refresh Zalo token failed: %s", e)
+
 
     # ---- Sending ZNS ----
     def send_zns(self, msisdn, params):
