@@ -82,6 +82,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
         left_align = Alignment(horizontal='left', vertical='center', wrap_text=False)
         left_align_wrap = Alignment(horizontal='left', vertical='top', wrap_text=True)
+        left_align_no_wrap = Alignment(horizontal='left', vertical='center', wrap_text=False)
         right_align = Alignment(horizontal='right', vertical='center')
         
         thin_border = Border(
@@ -171,8 +172,8 @@ class BBBGExcelExportWizard(models.TransientModel):
                 # Scale logo để vừa với ô, giữ tỷ lệ aspect ratio
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0 and img.height > 0:
                     # Tính tỷ lệ scale theo cả chiều rộng và cao, lấy giá trị nhỏ hơn
-                    scale_height = (total_height_px * 0.85) / float(img.height)  # 85% để có padding
-                    scale_width = (total_width_px * 0.85) / float(img.width)
+                    scale_height = (total_height_px * 1) / float(img.height)
+                    scale_width = (total_width_px * 1) / float(img.width)
                     scale = min(scale_height, scale_width)
                     
                     new_height = int(img.height * scale)
@@ -181,11 +182,11 @@ class BBBGExcelExportWizard(models.TransientModel):
                     img.height = new_height
                     img.width = new_width
                     
-                    # Tính offset để căn giữa theo chiều dọc, bên trái cột B theo chiều ngang
-                    offset_x = 0  # Bên trái cột B
+                    # Tính offset để căn giữa theo chiều dọc và ngang trong vùng A:B
+                    offset_x = (total_width_px - new_width) / 2
                     offset_y = (total_height_px - new_height) / 2
                     
-                    # Đặt anchor tại B1 (bên trái cột B)
+                    # Đặt anchor tại B1 (góc trên bên trái)
                     img.anchor = 'B1'
                     ws.add_image(img)
                     
@@ -195,14 +196,14 @@ class BBBGExcelExportWizard(models.TransientModel):
                         img.anchor._from.rowOff = int(offset_y * 9525)
                 else:
                     # Fallback nếu không có dimension
-                    size = int(min(total_height_px, total_width_px) * 0.85)
+                    size = int(min(total_height_px, total_width_px) * 0.95)
                     img.height = size
                     img.width = size
                     
-                    offset_x = 0
+                    offset_x = (total_width_px - size) / 2
                     offset_y = (total_height_px - size) / 2
                     
-                    img.anchor = 'B1'
+                    img.anchor = 'A1'
                     ws.add_image(img)
                     
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
@@ -237,9 +238,9 @@ class BBBGExcelExportWizard(models.TransientModel):
         text_content = f'Đại diện bên nhận (A): {partner_name}'
         ws[f'A{row}'] = text_content
         ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].alignment = left_align_wrap
-        # Tính chiều cao tự động: A+B+C+D+E = 6+40+18+13+22 = 99 units
-        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
+        ws[f'A{row}'].alignment = left_align_no_wrap  # Sử dụng no_wrap để không bị tăng chiều cao
+        # Chiều cao cố định cho dòng 1 dòng
+        ws.row_dimensions[row].height = 18
 
         # Ông (Bà)
         row += 1
@@ -269,8 +270,9 @@ class BBBGExcelExportWizard(models.TransientModel):
         text_content = f'Đại diện bên giao (B): {company_name}'
         ws[f'A{row}'] = text_content
         ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].alignment = left_align_wrap
-        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
+        ws[f'A{row}'].alignment = left_align_no_wrap  # Sử dụng no_wrap để không bị tăng chiều cao
+        # Chiều cao cố định cho dòng 1 dòng
+        ws.row_dimensions[row].height = 18
 
         # Ông (Bà)
         row += 1
