@@ -101,21 +101,21 @@ class BBBGExcelExportWizard(models.TransientModel):
                     img.width = new_width
                     
                     # Tính offset X để căn giữa (chiều rộng ô A+B)
-                    # Cột A = 6 units, Cột B = 35 units
+                    # Cột A = 6 units, Cột B = 40 units
                     col_a_width_px = int(((256 * 6 + 18) / 256) * 7) + 5
-                    col_b_width_px = int(((256 * 35 + 18) / 256) * 7) + 5
+                    col_b_width_px = int(((256 * 40 + 18) / 256) * 7) + 5
                     total_width_px = col_a_width_px + col_b_width_px
                     
                     offset_x = (total_width_px - new_width) / 2
                     
                     # Đặt anchor tại A1 với offset để căn giữa
                     img.anchor = 'A1'
+                    ws.add_image(img)
                     
+                    # Set offset sau khi add image
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
                         img.anchor._from.colOff = int(offset_x * 9525)
                         img.anchor._from.rowOff = 0
-                    
-                    ws.add_image(img)
                 else:
                     # Fallback: logo vuông
                     size = int(total_height_px)
@@ -123,16 +123,16 @@ class BBBGExcelExportWizard(models.TransientModel):
                     img.width = size
                     
                     col_a_width_px = int(((256 * 6 + 18) / 256) * 7) + 5
-                    col_b_width_px = int(((256 * 35 + 18) / 256) * 7) + 5
+                    col_b_width_px = int(((256 * 40 + 18) / 256) * 7) + 5
                     total_width_px = col_a_width_px + col_b_width_px
                     offset_x = (total_width_px - size) / 2
                     
                     img.anchor = 'A1'
+                    ws.add_image(img)
+                    
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
                         img.anchor._from.colOff = int(offset_x * 9525)
                         img.anchor._from.rowOff = 0
-                    
-                    ws.add_image(img)
                     
             except Exception as e:
                 pass
@@ -185,18 +185,13 @@ class BBBGExcelExportWizard(models.TransientModel):
         # Thông tin hai bên - merge toàn bộ dòng để tránh mất nội dung
         row += 2
         
-        # Đại diện bên nhận (A)
+        # Đại diện bên nhận (A) + Tên công ty trong cùng 1 dòng
         ws.merge_cells(f'A{row}:E{row}')
-        ws[f'A{row}'] = 'Đại diện bên nhận (A)'
+        partner_name = picking.partner_id.commercial_partner_id.name if picking.partner_id else ''
+        ws[f'A{row}'] = f'Đại diện bên nhận (A): {partner_name}'
         ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].alignment = left_align
-
-        # Tên công ty bên nhận
-        row += 1
-        ws.merge_cells(f'A{row}:E{row}')
-        ws[f'A{row}'] = picking.partner_id.commercial_partner_id.name if picking.partner_id else ''
-        ws[f'A{row}'].font = header_font
         ws[f'A{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = 20  # Đủ cao cho nội dung
 
         # Ông (Bà)
         row += 1
@@ -204,6 +199,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'A{row}'] = 'Ông (Bà):'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
+        ws.row_dimensions[row].height = 18
 
         # Địa chỉ bên A
         row += 1
@@ -215,20 +211,16 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'A{row}'] = f'Địa chỉ: {p_addr}'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = 20
 
-        # Đại diện bên giao (B)
+        # Đại diện bên giao (B) + Tên công ty trong cùng 1 dòng
         row += 2
         ws.merge_cells(f'A{row}:E{row}')
-        ws[f'A{row}'] = 'Đại diện bên giao (B)'
+        company_name = picking.company_id.name or ''
+        ws[f'A{row}'] = f'Đại diện bên giao (B): {company_name}'
         ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].alignment = left_align
-
-        # Tên công ty bên giao
-        row += 1
-        ws.merge_cells(f'A{row}:E{row}')
-        ws[f'A{row}'] = picking.company_id.name or ''
-        ws[f'A{row}'].font = header_font
         ws[f'A{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = 20
 
         # Ông (Bà)
         row += 1
@@ -236,6 +228,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'A{row}'] = 'Ông (Bà):'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align
+        ws.row_dimensions[row].height = 18
 
         # Địa chỉ bên B
         row += 1
@@ -244,6 +237,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'A{row}'] = f'Địa chỉ: {addr_b}'
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = 20
 
         # Bên B đã bàn giao
         row += 2
@@ -274,7 +268,7 @@ class BBBGExcelExportWizard(models.TransientModel):
             is_child = line_data['is_combo_child']
             qty = line_data['qty'] or 0.0
             product_name = line_data.get('product_name', '')
-            uom_name = line_data.get('uom_name', '')
+            uom_name = line_data.get('uom', '')  # Helper trả về 'uom' chứ không phải 'uom_name'
 
             # Chỉ render khi có qty > 0
             if qty > 0:
@@ -338,6 +332,7 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'A{row}'] = 'ĐẠI DIỆN BÊN NHẬN\n(Ký, họ tên)'
         ws[f'A{row}'].font = bold_font
         ws[f'A{row}'].alignment = center_align
+        ws.row_dimensions[row].height = 30  # Đủ cao cho 2 dòng
 
         ws.merge_cells(f'C{row}:E{row}')
         ws[f'C{row}'] = 'ĐẠI DIỆN BÊN GIAO\n(Ký, họ tên)'
