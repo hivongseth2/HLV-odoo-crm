@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_zalo_zns_user,access_hlv_zalo_zns_user,model_hlv_zalo_zns,base.group_system,1,1,1,1
