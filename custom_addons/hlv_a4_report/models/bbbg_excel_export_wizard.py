@@ -151,7 +151,7 @@ class BBBGExcelExportWizard(models.TransientModel):
 
         # ====== LOGO (độc lập, overlay lên cột A:B) ======
         # Merge cells cho logo từ A1:B4 (không cố định chiều cao)
-        ws.merge_cells('A1:B4')
+        ws.merge_cells('A1:B5')
         
         # Thêm logo với kích thước tính theo tổng chiều cao thực tế của 4 dòng
         if picking.company_id.logo and XLImage:
@@ -238,9 +238,9 @@ class BBBGExcelExportWizard(models.TransientModel):
         text_content = f'Đại diện bên nhận (A): {partner_name}'
         ws[f'A{row}'] = text_content
         ws[f'A{row}'].font = bold_font
-        ws[f'A{row}'].alignment = left_align_no_wrap  # Sử dụng no_wrap để không bị tăng chiều cao
-        # Chiều cao cố định cho dòng 1 dòng
-        ws.row_dimensions[row].height = 18
+        ws[f'A{row}'].alignment = left_align_wrap
+        # Tính chiều cao tự động: A+B+C+D+E = 6+40+18+13+22 = 99 units
+        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
 
         # Ông (Bà)
         row += 1
