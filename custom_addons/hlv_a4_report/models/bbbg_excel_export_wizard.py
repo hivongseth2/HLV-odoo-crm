@@ -98,30 +98,72 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws.column_dimensions['D'].width = 13   # Số lượng
         ws.column_dimensions['E'].width = 22   # Ghi chú
 
-        # Header - Logo và thông tin công ty
+        # ============= HEADER - LOGO VÀ THÔNG TIN CÔNG TY =============
         row = 1
+        
+        # Tính toán số dòng cần thiết cho thông tin công ty
+        company_name_header = picking.company_id.name or 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
+        addr = picking.company_id.partner_id._display_address(without_company=True).replace('\n', ' ') or ''
+        tax_text = f'Mã số thuế: {picking.company_id.vat or ""}'
+        website_text = f'Website: {picking.company_id.website or ""}'
+        
+        # Tính chiều cao cho từng dòng thông tin công ty (C+D+E = 53 units)
+        height_company_name = self._calculate_row_height(company_name_header, 53, 14)
+        height_addr = self._calculate_row_height(addr, 53, 13)
+        height_tax = self._calculate_row_height(tax_text, 53, 13)
+        height_website = self._calculate_row_height(website_text, 53, 13)
+        
+        # Tổng chiều cao của 4 dòng thông tin
+        total_info_height = height_company_name + height_addr + height_tax + height_website
+        
+        # ====== THÔNG TIN CÔNG TY (tự động điều chỉnh chiều cao) ======
+        # Row 1: Tên công ty
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = company_name_header
+        ws[f'C{row}'].font = header_font
+        ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = height_company_name
 
-        # Merge cells cho logo
+        # Row 2: Địa chỉ
+        row += 1
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = addr
+        ws[f'C{row}'].font = normal_font
+        ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = height_addr
+
+        # Row 3: Mã số thuế
+        row += 1
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = tax_text
+        ws[f'C{row}'].font = normal_font
+        ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = height_tax
+
+        # Row 4: Website
+        row += 1
+        ws.merge_cells(f'C{row}:E{row}')
+        ws[f'C{row}'] = website_text
+        ws[f'C{row}'].font = normal_font
+        ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = height_website
+
+        # ====== LOGO (độc lập, overlay lên cột A:B) ======
+        # Merge cells cho logo từ A1:B4 (không cố định chiều cao)
         ws.merge_cells('A1:B4')
         
-        # CỐ ĐỊNH chiều cao các hàng header cho logo (KHÔNG tự động điều chỉnh)
-        logo_row_height_points = 28
-        for i in range(1, 5):
-            ws.row_dimensions[i].height = logo_row_height_points
-
-        # Thêm logo vào giữa ô merge A1:B4
+        # Thêm logo với kích thước tính theo tổng chiều cao thực tế của 4 dòng
         if picking.company_id.logo and XLImage:
             try:
                 logo_data = base64.b64decode(picking.company_id.logo)
                 logo_stream = BytesIO(logo_data)
                 img = XLImage(logo_stream)
                 
-                # Tính chiều cao CHUẨN XÁC của ô merge (4 hàng, mỗi hàng 28 points)
+                # Tính chiều cao THỰC TẾ của vùng logo (tổng 4 dòng đã tính)
                 # 1 point = 1.333 pixels tại 96 DPI
-                total_height_px = 4 * logo_row_height_points * 1.333
+                total_height_px = total_info_height * 1.333
                 
-                # Tính chiều rộng CHUẨN XÁC của ô merge A+B
-                # Excel column width formula: pixels = ((256 * width + {truncate(128/7)}) / 256) * 7 + 5
+                # Tính chiều rộng của vùng logo (A+B)
                 col_a_width_px = ((256 * 6 + 18) / 256) * 7 + 5
                 col_b_width_px = ((256 * 40 + 18) / 256) * 7 + 5
                 total_width_px = col_a_width_px + col_b_width_px
@@ -129,8 +171,8 @@ class BBBGExcelExportWizard(models.TransientModel):
                 # Scale logo để vừa với ô, giữ tỷ lệ aspect ratio
                 if getattr(img, "width", None) and getattr(img, "height", None) and img.width > 0 and img.height > 0:
                     # Tính tỷ lệ scale theo cả chiều rộng và cao, lấy giá trị nhỏ hơn
-                    scale_height = (total_height_px * 0.9) / float(img.height)  # 90% để có padding
-                    scale_width = (total_width_px * 0.9) / float(img.width)
+                    scale_height = (total_height_px * 0.85) / float(img.height)  # 85% để có padding
+                    scale_width = (total_width_px * 0.85) / float(img.width)
                     scale = min(scale_height, scale_width)
                     
                     new_height = int(img.height * scale)
@@ -140,28 +182,27 @@ class BBBGExcelExportWizard(models.TransientModel):
                     img.width = new_width
                     
                     # Tính offset để căn giữa theo chiều dọc, bên trái cột B theo chiều ngang
-                    # Chiều ngang: đặt ở bên trái cột B (không cần offset ngang)
-                    offset_x = 0
+                    offset_x = 0  # Bên trái cột B
                     offset_y = (total_height_px - new_height) / 2
                     
                     # Đặt anchor tại B1 (bên trái cột B)
                     img.anchor = 'B1'
                     ws.add_image(img)
                     
-                    # Set offset (1 EMU = 1/914400 inch, 1 pixel ≈ 9525 EMU at 96 DPI)
+                    # Set offset (1 pixel ≈ 9525 EMU at 96 DPI)
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
                         img.anchor._from.colOff = int(offset_x * 9525)
                         img.anchor._from.rowOff = int(offset_y * 9525)
                 else:
                     # Fallback nếu không có dimension
-                    size = int(min(total_height_px, total_width_px) * 0.9)
+                    size = int(min(total_height_px, total_width_px) * 0.85)
                     img.height = size
                     img.width = size
                     
-                    offset_x = 0  # Bên trái cột B
+                    offset_x = 0
                     offset_y = (total_height_px - size) / 2
                     
-                    img.anchor = 'B1'  # Neo tại cột B
+                    img.anchor = 'B1'
                     ws.add_image(img)
                     
                     if hasattr(img, 'anchor') and hasattr(img.anchor, '_from'):
@@ -170,42 +211,6 @@ class BBBGExcelExportWizard(models.TransientModel):
                     
             except Exception as e:
                 pass
-
-        # Thông tin công ty bên phải
-        # Row 1: Tên công ty
-        ws.merge_cells(f'C{row}:E{row}')
-        company_name_header = picking.company_id.name or 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
-        ws[f'C{row}'] = company_name_header
-        ws[f'C{row}'].font = header_font
-        ws[f'C{row}'].alignment = left_align_wrap
-        # KHÔNG điều chỉnh chiều cao - đã cố định ở trên cho logo
-
-        # Row 2: Địa chỉ
-        row += 1
-        ws.merge_cells(f'C{row}:E{row}')
-        addr = picking.company_id.partner_id._display_address(without_company=True).replace('\n', ' ') or ''
-        ws[f'C{row}'] = addr
-        ws[f'C{row}'].font = normal_font
-        ws[f'C{row}'].alignment = left_align_wrap
-        # KHÔNG điều chỉnh chiều cao - đã cố định ở trên cho logo
-
-        # Row 3: Mã số thuế
-        row += 1
-        ws.merge_cells(f'C{row}:E{row}')
-        tax_text = f'Mã số thuế: {picking.company_id.vat or ""}'
-        ws[f'C{row}'] = tax_text
-        ws[f'C{row}'].font = normal_font
-        ws[f'C{row}'].alignment = left_align_wrap
-        # KHÔNG điều chỉnh chiều cao - đã cố định ở trên cho logo
-
-        # Row 4: Website
-        row += 1
-        ws.merge_cells(f'C{row}:E{row}')
-        website_text = f'Website: {picking.company_id.website or ""}'
-        ws[f'C{row}'] = website_text
-        ws[f'C{row}'].font = normal_font
-        ws[f'C{row}'].alignment = left_align_wrap
-        # KHÔNG điều chỉnh chiều cao - đã cố định ở trên cho logo
 
         # Tiêu đề
         row += 2
