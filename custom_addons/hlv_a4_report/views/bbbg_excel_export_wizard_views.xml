@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Wizard view for BBBG Excel Export -->
+    <record id="view_bbbg_excel_export_wizard_form" model="ir.ui.view">
+        <field name="name">bbbg.excel.export.wizard.form</field>
+        <field name="model">bbbg.excel.export.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Xuất Excel Biên Bản Bàn Giao">
+                <group>
+                    <p>Xuất biên bản bàn giao ra file Excel</p>
+                </group>
+                <footer>
+                    <button string="Xuất Excel" name="action_export_excel" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Server action để xuất Excel trực tiếp -->
+    <record id="action_bbbg_excel_export_direct" model="ir.actions.server">
+        <field name="name">Excel - Phiếu bàn giao</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_type">report</field>
+        <field name="state">code</field>
+        <field name="code">wizard = env['bbbg.excel.export.wizard'].create({})
+action = wizard.with_context(active_id=record.id).action_export_excel()</field>
+    </record>
+</odoo>

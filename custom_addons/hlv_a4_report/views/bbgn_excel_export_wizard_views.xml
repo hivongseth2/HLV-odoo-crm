@@ -7,7 +7,7 @@
         <field name="arch" type="xml">
             <form string="Xuất Excel BBGN không giá">
                 <group>
-                    <p>Xuất biên bản giao nhận không giá ra file Excel (ngày hiện tại)</p>
+                    <p>Xuất biên bản giao nhận ra file Excel</p>
                 </group>
                 <footer>
                     <button string="Xuất Excel" name="action_export_excel" type="object" class="btn-primary"/>
@@ -19,7 +19,7 @@
 
     <!-- Server action để xuất Excel trực tiếp -->
     <record id="action_bbgn_excel_export_direct" model="ir.actions.server">
-        <field name="name">BBGN Excel không giá</field>
+        <field name="name">Excel - BBGN</field>
         <field name="model_id" ref="stock.model_stock_picking"/>
         <field name="binding_model_id" ref="stock.model_stock_picking"/>
         <field name="binding_type">report</field>
