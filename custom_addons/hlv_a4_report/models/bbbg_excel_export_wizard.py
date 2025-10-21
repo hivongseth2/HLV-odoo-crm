@@ -19,6 +19,35 @@ class BBBGExcelExportWizard(models.TransientModel):
     _name = 'bbbg.excel.export.wizard'
     _description = 'Xuất Excel Biên Bản Bàn Giao'
 
+    def _calculate_row_height(self, text, column_width, font_size=13):
+        """
+        Tính chiều cao dòng dựa trên độ dài text và chiều rộng cột
+        Args:
+            text: Nội dung text
+            column_width: Tổng chiều rộng các cột đã merge (Excel units)
+            font_size: Kích thước font
+        Returns:
+            Chiều cao dòng tính bằng points
+        """
+        if not text:
+            return 15  # Default height
+        
+        # Ước tính số ký tự trên 1 dòng (1 Excel unit ≈ 1 ký tự với Times New Roman)
+        chars_per_line = int(column_width * 0.9)  # 90% để tính padding
+        
+        # Tính số dòng cần thiết
+        text_length = len(str(text))
+        num_lines = max(1, (text_length + chars_per_line - 1) // chars_per_line)
+        
+        # Kiểm tra nếu có \n trong text
+        if '\n' in str(text):
+            num_lines = max(num_lines, str(text).count('\n') + 1)
+        
+        # Chiều cao = số dòng * font_size * 1.2 (line spacing)
+        row_height = num_lines * font_size * 1.2
+        
+        return max(15, row_height)  # Minimum 15 points
+
     def _get_active_picking(self):
         """Lấy picking từ context"""
         active_id = self._context.get('active_id') or self._context.get('active_ids', [False])[0]
@@ -140,9 +169,12 @@ class BBBGExcelExportWizard(models.TransientModel):
         # Thông tin công ty bên phải
         # Row 1: Tên công ty
         ws.merge_cells(f'C{row}:E{row}')
-        ws[f'C{row}'] = picking.company_id.name or 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
+        company_name_header = picking.company_id.name or 'CÔNG TY TNHH VI NA HOÀNG LONG VŨ'
+        ws[f'C{row}'] = company_name_header
         ws[f'C{row}'].font = header_font
         ws[f'C{row}'].alignment = left_align_wrap
+        # C+D+E = 18+13+22 = 53 units
+        ws.row_dimensions[row].height = self._calculate_row_height(company_name_header, 53, 14)
 
         # Row 2: Địa chỉ
         row += 1
@@ -151,20 +183,25 @@ class BBBGExcelExportWizard(models.TransientModel):
         ws[f'C{row}'] = addr
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = self._calculate_row_height(addr, 53, 13)
 
         # Row 3: Mã số thuế
         row += 1
         ws.merge_cells(f'C{row}:E{row}')
-        ws[f'C{row}'] = f'Mã số thuế: {picking.company_id.vat or ""}'
+        tax_text = f'Mã số thuế: {picking.company_id.vat or ""}'
+        ws[f'C{row}'] = tax_text
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = self._calculate_row_height(tax_text, 53, 13)
 
         # Row 4: Website
         row += 1
         ws.merge_cells(f'C{row}:E{row}')
-        ws[f'C{row}'] = f'Website: {picking.company_id.website or ""}'
+        website_text = f'Website: {picking.company_id.website or ""}'
+        ws[f'C{row}'] = website_text
         ws[f'C{row}'].font = normal_font
         ws[f'C{row}'].alignment = left_align_wrap
+        ws.row_dimensions[row].height = self._calculate_row_height(website_text, 53, 13)
 
         # Tiêu đề
         row += 2
@@ -188,10 +225,12 @@ class BBBGExcelExportWizard(models.TransientModel):
         # Đại diện bên nhận (A) + Tên công ty trong cùng 1 dòng
         ws.merge_cells(f'A{row}:E{row}')
         partner_name = picking.partner_id.commercial_partner_id.name if picking.partner_id else ''
-        ws[f'A{row}'] = f'Đại diện bên nhận (A): {partner_name}'
+        text_content = f'Đại diện bên nhận (A): {partner_name}'
+        ws[f'A{row}'] = text_content
         ws[f'A{row}'].font = bold_font
         ws[f'A{row}'].alignment = left_align_wrap
-        ws.row_dimensions[row].height = 20  # Đủ cao cho nội dung
+        # Tính chiều cao tự động: A+B+C+D+E = 6+40+18+13+22 = 99 units
+        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
 
         # Ông (Bà)
         row += 1
@@ -208,19 +247,21 @@ class BBBGExcelExportWizard(models.TransientModel):
         p_addr = ''
         if p:
             p_addr = (p.street or '') + (p.street2 and (', ' + p.street2) or '')
-        ws[f'A{row}'] = f'Địa chỉ: {p_addr}'
+        text_content = f'Địa chỉ: {p_addr}'
+        ws[f'A{row}'] = text_content
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align_wrap
-        ws.row_dimensions[row].height = 20
+        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
 
         # Đại diện bên giao (B) + Tên công ty trong cùng 1 dòng
         row += 2
         ws.merge_cells(f'A{row}:E{row}')
         company_name = picking.company_id.name or ''
-        ws[f'A{row}'] = f'Đại diện bên giao (B): {company_name}'
+        text_content = f'Đại diện bên giao (B): {company_name}'
+        ws[f'A{row}'] = text_content
         ws[f'A{row}'].font = bold_font
         ws[f'A{row}'].alignment = left_align_wrap
-        ws.row_dimensions[row].height = 20
+        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
 
         # Ông (Bà)
         row += 1
@@ -234,10 +275,11 @@ class BBBGExcelExportWizard(models.TransientModel):
         row += 1
         ws.merge_cells(f'A{row}:E{row}')
         addr_b = picking.company_id.partner_id._display_address(without_company=True).replace('\n', ', ') or ''
-        ws[f'A{row}'] = f'Địa chỉ: {addr_b}'
+        text_content = f'Địa chỉ: {addr_b}'
+        ws[f'A{row}'] = text_content
         ws[f'A{row}'].font = normal_font
         ws[f'A{row}'].alignment = left_align_wrap
-        ws.row_dimensions[row].height = 20
+        ws.row_dimensions[row].height = self._calculate_row_height(text_content, 99, 13)
 
         # Bên B đã bàn giao
         row += 2
@@ -329,10 +371,12 @@ class BBBGExcelExportWizard(models.TransientModel):
         # Chữ ký
         row += 3
         ws.merge_cells(f'A{row}:B{row}')
-        ws[f'A{row}'] = 'ĐẠI DIỆN BÊN NHẬN\n(Ký, họ tên)'
+        signature_text = 'ĐẠI DIỆN BÊN NHẬN\n(Ký, họ tên)'
+        ws[f'A{row}'] = signature_text
         ws[f'A{row}'].font = bold_font
         ws[f'A{row}'].alignment = center_align
-        ws.row_dimensions[row].height = 30  # Đủ cao cho 2 dòng
+        # A+B = 6+40 = 46 units, có 2 dòng
+        ws.row_dimensions[row].height = self._calculate_row_height(signature_text, 46, 13)
 
         ws.merge_cells(f'C{row}:E{row}')
         ws[f'C{row}'] = 'ĐẠI DIỆN BÊN GIAO\n(Ký, họ tên)'
