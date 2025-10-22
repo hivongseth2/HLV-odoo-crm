@@ -1,0 +1,653 @@
+/* ============================================
+   Public Order Lookup Page - Customer-Friendly Design
+   Responsive, Modern & Simple Interface
+   ============================================ */
+
+/* ============================================
+   Global Styles & Variables
+   ============================================ */
+:root {
+    --primary-color: #4a90e2;
+    --primary-hover: #357abd;
+    --success-color: #5cb85c;
+    --warning-color: #f0ad4e;
+    --danger-color: #d9534f;
+    --info-color: #5bc0de;
+    --light-bg: #f8f9fa;
+    --border-color: #e0e0e0;
+    --text-dark: #2c3e50;
+    --text-muted: #6c757d;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+}
+
+.o_order_lookup_page {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--text-dark);
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    padding-bottom: 3rem;
+}
+
+/* ============================================
+   Header Section
+   ============================================ */
+.o_order_lookup_page .o_page_header {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    padding: 2.5rem 0 3rem;
+    margin-bottom: 2rem;
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+}
+
+.o_order_lookup_page .o_page_header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.3;
+}
+
+.o_order_lookup_page .o_page_header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.o_order_lookup_page .o_page_header .lead {
+    font-size: 1.1rem;
+    font-weight: 400;
+    position: relative;
+    z-index: 1;
+}
+
+@media (max-width: 768px) {
+    .o_order_lookup_page .o_page_header {
+        padding: 1.5rem 0 2rem;
+    }
+    
+    .o_order_lookup_page .o_page_header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .o_order_lookup_page .o_page_header .lead {
+        font-size: 0.95rem;
+    }
+}
+
+/* ============================================
+   Cards & Containers
+   ============================================ */
+.o_order_lookup_page .card {
+    border: none;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+    background: white;
+    margin-bottom: 1.5rem;
+}
+
+.o_order_lookup_page .card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.o_order_lookup_page .card-header {
+    background: white;
+    border-bottom: 2px solid var(--light-bg);
+    padding: 1.25rem 1.5rem;
+    border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+}
+
+.o_order_lookup_page .card-header h5 {
+    color: var(--text-dark);
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.o_order_lookup_page .card-body {
+    padding: 1.5rem;
+}
+
+/* ============================================
+   Search Form
+   ============================================ */
+.o_order_lookup_page .form-label {
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.o_order_lookup_page .form-control {
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background-color: white;
+}
+
+.o_order_lookup_page .form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(74, 144, 226, 0.15);
+    outline: none;
+}
+
+.o_order_lookup_page .form-control::placeholder {
+    color: #adb5bd;
+    font-size: 0.95rem;
+}
+
+.o_order_lookup_page .form-text {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+/* ============================================
+   Buttons
+   ============================================ */
+.o_order_lookup_page .btn {
+    padding: 0.75rem 2rem;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    border: none;
+    box-shadow: var(--shadow-sm);
+}
+
+.o_order_lookup_page .btn-primary {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+    color: white;
+}
+
+.o_order_lookup_page .btn-primary:hover {
+    background: linear-gradient(135deg, var(--primary-hover) 0%, #2a5f8f 100%);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.o_order_lookup_page .btn-primary:active {
+    transform: translateY(0);
+}
+
+/* ============================================
+   Alerts
+   ============================================ */
+.o_order_lookup_page .alert {
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    box-shadow: var(--shadow-sm);
+    border-left: 4px solid;
+}
+
+.o_order_lookup_page .alert-danger {
+    background-color: #fef5f5;
+    color: #c53030;
+    border-left-color: var(--danger-color);
+}
+
+.o_order_lookup_page .alert-warning {
+    background-color: #fffbf0;
+    color: #9c6d1f;
+    border-left-color: var(--warning-color);
+}
+
+/* ============================================
+   Customer Information Section
+   ============================================ */
+.o_order_lookup_page .customer-info {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1.5rem;
+}
+
+.o_order_lookup_page .customer-info label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.o_order_lookup_page .customer-info p {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+/* ============================================
+   Table Styles
+   ============================================ */
+.o_order_lookup_page .table-responsive {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.o_order_lookup_page table {
+    margin-bottom: 0;
+    width: 100%;
+}
+
+.o_order_lookup_page table thead {
+    background: linear-gradient(135deg, var(--light-bg) 0%, #e9ecef 100%);
+}
+
+.o_order_lookup_page table thead th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dark);
+    padding: 1rem 0.75rem;
+    border: none;
+    white-space: nowrap;
+}
+
+.o_order_lookup_page table tbody td {
+    padding: 1rem 0.75rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-color);
+    background-color: white;
+    font-size: 0.9rem;
+}
+
+.o_order_lookup_page table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.o_order_lookup_page table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Remove hover effects for cleaner look */
+.o_order_lookup_page table tbody tr:hover {
+    background-color: white !important;
+}
+
+/* Product name styling */
+.o_order_lookup_page table tbody td strong {
+    color: var(--text-dark);
+    font-weight: 600;
+}
+
+.o_order_lookup_page table tbody td .text-muted {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 0.25rem;
+}
+
+/* ============================================
+   Badges
+   ============================================ */
+.o_order_lookup_page .badge {
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    letter-spacing: 0.3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.o_order_lookup_page .badge-primary {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    color: white;
+}
+
+.o_order_lookup_page .badge-success {
+    background: linear-gradient(135deg, var(--success-color), #449d44);
+    color: white;
+}
+
+.o_order_lookup_page .badge-warning {
+    background: linear-gradient(135deg, var(--warning-color), #ec971f);
+    color: white;
+}
+
+.o_order_lookup_page .badge-danger {
+    background: linear-gradient(135deg, var(--danger-color), #c9302c);
+    color: white;
+}
+
+.o_order_lookup_page .badge-info {
+    background: linear-gradient(135deg, var(--info-color), #31b0d5);
+    color: white;
+}
+
+.o_order_lookup_page .badge-secondary {
+    background: linear-gradient(135deg, #6c757d, #5a6268);
+    color: white;
+}
+
+.o_order_lookup_page .badge-light {
+    background: #e9ecef;
+    color: var(--text-dark);
+    border: 1px solid var(--border-color);
+}
+
+/* ============================================
+   Order Summary Cards
+   ============================================ */
+.o_order_lookup_page .summary-card {
+    background: white;
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    border: 2px solid var(--border-color);
+    transition: all 0.3s ease;
+    height: 100%;
+}
+
+.o_order_lookup_page .summary-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.o_order_lookup_page .summary-card .summary-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+}
+
+.o_order_lookup_page .summary-card .summary-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin-bottom: 0;
+}
+
+.o_order_lookup_page .summary-card .summary-value small {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+.o_order_lookup_page .o_nocontent_help {
+    padding: 4rem 2rem;
+    text-align: center;
+    background: white;
+    border-radius: var(--radius-md);
+}
+
+.o_order_lookup_page .o_nocontent_help i {
+    color: var(--border-color);
+    margin-bottom: 1rem;
+}
+
+.o_order_lookup_page .o_nocontent_help h4 {
+    color: var(--text-dark);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.o_order_lookup_page .o_nocontent_help p {
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+/* ============================================
+   Pagination
+   ============================================ */
+.o_order_lookup_page .card-footer {
+    background: var(--light-bg);
+    border-top: 2px solid var(--border-color);
+    padding: 1rem 1.5rem;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.o_order_lookup_page .pagination {
+    margin: 0;
+}
+
+.o_order_lookup_page .page-item {
+    margin: 0 0.15rem;
+}
+
+.o_order_lookup_page .page-link {
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-dark);
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.o_order_lookup_page .page-link:hover {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+.o_order_lookup_page .page-item.active .page-link {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    box-shadow: var(--shadow-sm);
+}
+
+.o_order_lookup_page .page-item.disabled .page-link {
+    background-color: var(--light-bg);
+    border-color: var(--border-color);
+    color: var(--text-muted);
+}
+
+/* ============================================
+   Responsive Design - Mobile First
+   ============================================ */
+
+/* Tablets and below */
+@media (max-width: 992px) {
+    .o_order_lookup_page .card-body {
+        padding: 1.25rem;
+    }
+    
+    .o_order_lookup_page table thead th,
+    .o_order_lookup_page table tbody td {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    .o_order_lookup_page .summary-card .summary-value {
+        font-size: 1.25rem;
+    }
+}
+
+/* Mobile phones */
+@media (max-width: 768px) {
+    .o_order_lookup_page {
+        padding-bottom: 2rem;
+    }
+    
+    .o_order_lookup_page .card {
+        margin-bottom: 1rem;
+    }
+    
+    .o_order_lookup_page .card-header {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .card-body {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .form-control {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.95rem;
+    }
+    
+    .o_order_lookup_page .btn {
+        padding: 0.625rem 1.5rem;
+        font-size: 0.95rem;
+        width: 100%;
+    }
+    
+    /* Stack table horizontally on mobile */
+    .o_order_lookup_page .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .o_order_lookup_page table {
+        min-width: 800px;
+    }
+    
+    .o_order_lookup_page table thead th,
+    .o_order_lookup_page table tbody td {
+        padding: 0.625rem 0.4rem;
+        font-size: 0.8rem;
+    }
+    
+    /* Mobile-friendly customer info */
+    .o_order_lookup_page .customer-info {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .customer-info p {
+        font-size: 0.9rem;
+    }
+    
+    /* Mobile summary cards */
+    .o_order_lookup_page .summary-card {
+        margin-bottom: 1rem;
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .summary-card .summary-value {
+        font-size: 1.1rem;
+    }
+    
+    /* Mobile pagination */
+    .o_order_lookup_page .card-footer {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .o_order_lookup_page .pagination {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .o_order_lookup_page .page-link {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.85rem;
+    }
+    
+    /* Mobile empty state */
+    .o_order_lookup_page .o_nocontent_help {
+        padding: 2rem 1rem;
+    }
+    
+    .o_order_lookup_page .o_nocontent_help i {
+        font-size: 3rem !important;
+    }
+}
+
+/* Small mobile phones */
+@media (max-width: 576px) {
+    .o_order_lookup_page .card-header h5 {
+        font-size: 0.95rem;
+    }
+    
+    .o_order_lookup_page .badge {
+        font-size: 0.7rem;
+        padding: 0.3rem 0.6rem;
+    }
+    
+    .o_order_lookup_page table {
+        min-width: 700px;
+    }
+    
+    .o_order_lookup_page table thead th,
+    .o_order_lookup_page table tbody td {
+        font-size: 0.75rem;
+        padding: 0.5rem 0.3rem;
+    }
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+@media print {
+    .o_order_lookup_page {
+        background: white;
+    }
+    
+    .o_order_lookup_page .o_page_header,
+    .o_order_lookup_page .card,
+    .o_order_lookup_page form {
+        box-shadow: none !important;
+        border: 1px solid #ddd;
+    }
+    
+    .o_order_lookup_page form,
+    .o_order_lookup_page .btn,
+    .o_order_lookup_page .alert {
+        display: none !important;
+    }
+}
+
+/* ============================================
+   Accessibility Improvements
+   ============================================ */
+.o_order_lookup_page *:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+.o_order_lookup_page .btn:focus,
+.o_order_lookup_page .form-control:focus,
+.o_order_lookup_page .page-link:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Loading state */
+.o_order_lookup_page .btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* ============================================
+   Custom Scrollbar
+   ============================================ */
+.o_order_lookup_page .table-responsive::-webkit-scrollbar {
+    height: 8px;
+}
+
+.o_order_lookup_page .table-responsive::-webkit-scrollbar-track {
+    background: var(--light-bg);
+    border-radius: 4px;
+}
+
+.o_order_lookup_page .table-responsive::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+.o_order_lookup_page .table-responsive::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
