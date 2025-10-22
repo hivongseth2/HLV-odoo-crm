@@ -343,20 +343,31 @@ def _get_order_lines(order):
         # Get product info
         product = line.product_id
         product_name = product.name if product else ""
+        is_combo = False
+        combo_components = []
         
         # Try to get combo product display if available
         if product and hasattr(product.product_tmpl_id, 'is_combo'):
             try:
                 if getattr(product.product_tmpl_id, 'is_combo', False):
+                    is_combo = True
+                    # Chỉ lấy tên combo chính, không thêm chi tiết trong ngoặc
+                    # product_name đã đủ rồi
+                    
+                    # Lấy danh sách component để hiển thị riêng
                     ComboLine = request.env['combo.product'].sudo()
                     combo_lines = ComboLine.search([
                         ('product_template_id', '=', product.product_tmpl_id.id)
                     ])
                     if combo_lines:
-                        component_names = [l.product_id.name for l in combo_lines if l.product_id]
-                        if component_names:
-                            components_str = ", ".join(component_names)
-                            product_name = f"{product.name} (Combo: {components_str})"
+                        for combo_line in combo_lines:
+                            if combo_line.product_id:
+                                qty = combo_line.quantity or 1
+                                combo_components.append({
+                                    'name': combo_line.product_id.name,
+                                    'qty': qty,
+                                    'uom': combo_line.product_id.uom_id.name if combo_line.product_id.uom_id else 'cái'
+                                })
             except Exception as e:
                 _logger.debug(f"Could not fetch combo components: {e}")
         
@@ -364,10 +375,12 @@ def _get_order_lines(order):
             'product_name': product_name,
             'description': line.name or "",
             'qty': line.product_uom_qty,
-            'delivered_qty': line.qty_delivered,
+            'qty_delivered': line.qty_delivered,  # Đổi tên cho nhất quán
             'uom': line.product_uom.name if line.product_uom else 'cái',
             'price_unit': line.price_unit,
             'price_subtotal': line.price_subtotal,
+            'is_combo': is_combo,
+            'combo_components': combo_components,
         })
     
     return order_lines
