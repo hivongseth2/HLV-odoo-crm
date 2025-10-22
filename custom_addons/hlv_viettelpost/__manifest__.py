@@ -11,6 +11,7 @@
         "security/ir.model.access.csv",
         "views/res_config_settings_view.xml",
         "views/delivery_carrier_view.xml",
+         'views/vtp_sync_wizard.xml',
         "views/vtp_geo_views.xml",
         'views/stock_picking_vtp_button.xml',
         "wizards/vtp_sync_wizard_views.xml",
