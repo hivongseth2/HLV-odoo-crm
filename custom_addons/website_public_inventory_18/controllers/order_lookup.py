@@ -526,6 +526,8 @@ class OrderLookupController(http.Controller):
                 'products_summary': products_summary,
                 'order_lines': order_lines,
                 'amount_total': order.amount_total,
+                'amount_untaxed': order.amount_untaxed,
+                'amount_tax': order.amount_tax,
                 'currency': order.currency_id.name if order.currency_id else 'VND',
                 'delivery_status': delivery_status,
                 'payment_status': payment_status,
