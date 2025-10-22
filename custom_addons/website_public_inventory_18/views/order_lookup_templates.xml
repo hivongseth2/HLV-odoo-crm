@@ -257,35 +257,45 @@
                         
                         <!-- Order Details (Initially Hidden) -->
                         <div class="order-card-body" style="display: none;">
-                          <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                              <thead>
-                                <tr>
-                                  <th style="width: 40%;">Sản Phẩm</th>
-                                  <th class="text-center" style="width: 12%;">SL</th>
-                                  <th class="text-center" style="width: 12%;">Đã Giao</th>
-                                  <th class="text-end" style="width: 18%;">Đơn Giá</th>
-                                  <th class="text-end" style="width: 18%;">Thành Tiền</th>
-                                </tr>
-                              </thead>
-                              <tbody>
+                          <!-- Invoice/Bill Style Layout -->
+                          <div class="invoice-container">
+                            
+                            <!-- Order Lines Table -->
+                            <div class="table-responsive">
+                              <table class="table invoice-table mb-0">
+                                <thead>
+                                  <tr>
+                                    <th style="width: 50%;">Sản Phẩm</th>
+                                    <th class="text-center" style="width: 10%;">SL</th>
+                                    <th class="text-end" style="width: 20%;">Đơn Giá</th>
+                                    <th class="text-end" style="width: 20%;">Thành Tiền</th>
+                                  </tr>
+                                </thead>
+                                  <tbody>
                                 <!-- Order lines -->
                                 <t t-set="line_count" t-value="len(result.get('order_lines', []))"/>
                                 <t t-if="line_count > 0">
                                   <t t-foreach="result.get('order_lines', [])" t-as="line">
                                     <!-- Main product row -->
                                     <tr>
-                                      <!-- Product Line Info -->
                                       <td>
                                         <div t-attf-class="{{line.get('is_combo') and 'combo-parent' or ''}}">
                                           <strong><t t-esc="line.get('product_name', 'N/A')"/></strong>
                                         </div>
+                                        <!-- Show delivered qty as subtext -->
+                                        <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                                        <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                                        <t t-if="delivered > 0">
+                                          <small class="text-muted d-block">
+                                            Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                            <t t-if="delivered >= total_qty">
+                                              <i class="fa fa-check-circle text-success ms-1"></i>
+                                            </t>
+                                          </small>
+                                        </t>
                                       </td>
                                       <td class="text-center">
-                                        <t t-esc="'{:.0f}'.format(line.get('qty', 0))"/>
-                                      </td>
-                                      <td class="text-center">
-                                        <t t-esc="'{:.0f}'.format(line.get('qty_delivered', 0))"/>
+                                        <strong><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></strong>
                                       </td>
                                       <td class="text-end">
                                         <t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/>
@@ -298,7 +308,7 @@
                                     <!-- Combo component rows -->
                                     <t t-if="line.get('is_combo') and line.get('combo_components')">
                                       <t t-foreach="line.get('combo_components', [])" t-as="component">
-                                        <tr>
+                                        <tr class="combo-row">
                                           <td>
                                             <div class="combo-component">
                                               <t t-esc="component.get('name', '')"/>
@@ -309,16 +319,14 @@
                                           </td>
                                           <td></td>
                                           <td></td>
-                                          <td></td>
                                         </tr>
                                       </t>
                                     </t>
                                   </t>
                                 </t>
                                 <t t-else="">
-                                  <!-- Order without lines -->
                                   <tr>
-                                    <td colspan="5" class="text-muted text-center">
+                                    <td colspan="4" class="text-muted text-center py-4">
                                       <em>Không có sản phẩm</em>
                                     </td>
                                   </tr>
@@ -327,52 +335,68 @@
                             </table>
                           </div>
                           
-                          <!-- Order Summary in Details -->
-                          <div class="order-summary mt-3 p-3 bg-light rounded">
-                            <div class="row g-3">
-                              <div class="col-md-4">
-                                <div class="d-flex justify-content-between align-items-center">
-                                  <span class="text-muted">Tổng đơn:</span>
-                                  <strong class="text-primary">
-                                    <t t-esc="'{:,.0f}'.format(result['amount_total'])"/>
-                                    <t t-esc="result['currency']"/>
-                                  </strong>
+                          <!-- Bill Summary Section -->
+                          <div class="bill-summary">
+                            <div class="row">
+                              <div class="col-md-6">
+                                <!-- Delivery & Payment Status -->
+                                <div class="status-info">
+                                  <div class="status-item mb-2">
+                                    <i class="fa fa-truck me-2"></i>
+                                    <strong>Giao hàng:</strong>
+                                    <t t-set="delivery" t-value="result['delivery_status']"/>
+                                    <t t-if="delivery == 'delivered'">
+                                      <span class="badge badge-success ms-2">Đã Giao</span>
+                                    </t>
+                                    <t t-elif="delivery == 'partial'">
+                                      <span class="badge badge-warning ms-2">Giao Một Phần</span>
+                                    </t>
+                                    <t t-elif="delivery == 'pending'">
+                                      <span class="badge badge-info ms-2">Chờ Giao</span>
+                                    </t>
+                                    <t t-else="">
+                                      <span class="badge badge-secondary ms-2">Chưa giao</span>
+                                    </t>
+                                  </div>
+                                  <div class="status-item">
+                                    <i class="fa fa-credit-card me-2"></i>
+                                    <strong>Thanh toán:</strong>
+                                    <t t-set="payment" t-value="result['payment_status']"/>
+                                    <t t-if="payment == 'paid'">
+                                      <span class="badge badge-success ms-2">Đã Thanh Toán</span>
+                                    </t>
+                                    <t t-elif="payment == 'partial'">
+                                      <span class="badge badge-warning ms-2">TT Một Phần</span>
+                                    </t>
+                                    <t t-else="">
+                                      <span class="badge badge-danger ms-2">Chưa Thanh Toán</span>
+                                    </t>
+                                  </div>
                                 </div>
                               </div>
-                              <div class="col-md-4">
-                                <div class="d-flex justify-content-between align-items-center">
-                                  <span class="text-muted">Giao hàng:</span>
-                                  <t t-set="delivery" t-value="result['delivery_status']"/>
-                                  <t t-if="delivery == 'delivered'">
-                                    <span class="badge badge-success">Đã Giao</span>
-                                  </t>
-                                  <t t-elif="delivery == 'partial'">
-                                    <span class="badge badge-warning">Một Phần</span>
-                                  </t>
-                                  <t t-elif="delivery == 'pending'">
-                                    <span class="badge badge-info">Chờ Giao</span>
-                                  </t>
-                                  <t t-else="">
-                                    <span class="badge badge-light">Chưa giao</span>
-                                  </t>
-                                </div>
-                              </div>
-                              <div class="col-md-4">
-                                <div class="d-flex justify-content-between align-items-center">
-                                  <span class="text-muted">Thanh toán:</span>
-                                  <t t-set="payment" t-value="result['payment_status']"/>
-                                  <t t-if="payment == 'paid'">
-                                    <span class="badge badge-success">Đã TT</span>
-                                  </t>
-                                  <t t-elif="payment == 'partial'">
-                                    <span class="badge badge-warning">Một Phần</span>
-                                  </t>
-                                  <t t-else="">
-                                    <span class="badge badge-danger">Chưa TT</span>
-                                  </t>
+                              <div class="col-md-6">
+                                <!-- Total Summary -->
+                                <div class="total-summary">
+                                  <div class="summary-row">
+                                    <span>Tạm tính:</span>
+                                    <span class="amount"><t t-esc="'{:,.0f}'.format(result.get('amount_untaxed', result['amount_total']))"/></span>
+                                  </div>
+                                  <div class="summary-row">
+                                    <span>VAT:</span>
+                                    <span class="amount"><t t-esc="'{:,.0f}'.format(result.get('amount_tax', 0))"/></span>
+                                  </div>
+                                  <div class="summary-row total-row">
+                                    <span>Tổng cộng:</span>
+                                    <span class="amount-total">
+                                      <t t-esc="'{:,.0f}'.format(result['amount_total'])"/>
+                                      <small class="currency"><t t-esc="result['currency']"/></small>
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
+                          </div>
+                          
                           </div>
                         </div>
                       </div>

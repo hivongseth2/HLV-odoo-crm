@@ -296,7 +296,8 @@
 /* Combo product styling */
 .o_order_lookup_page .combo-parent {
     font-weight: 600;
-    color: var(--primary-color);
+    color: var(--text-dark);
+    font-size: 0.95rem;
 }
 
 .o_order_lookup_page .combo-component {
@@ -304,13 +305,15 @@
     font-size: 0.85rem;
     color: var(--text-muted);
     position: relative;
+    font-style: italic;
 }
 
 .o_order_lookup_page .combo-component::before {
-    content: '└';
+    content: '└─';
     position: absolute;
-    left: 0.5rem;
-    color: var(--border-color);
+    left: 0.25rem;
+    color: #ccc;
+    font-style: normal;
 }
 
 @media (max-width: 768px) {
@@ -321,6 +324,142 @@
     
     .o_order_lookup_page .combo-component::before {
         left: 0.25rem;
+    }
+}
+
+/* ============================================
+   Invoice/Bill Style
+   ============================================ */
+.o_order_lookup_page .invoice-container {
+    background: white;
+    padding: 0;
+}
+
+.o_order_lookup_page .invoice-table {
+    margin-bottom: 0;
+}
+
+.o_order_lookup_page .invoice-table thead {
+    background: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.o_order_lookup_page .invoice-table thead th {
+    font-weight: 700;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dark);
+    padding: 0.875rem 1rem;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.o_order_lookup_page .invoice-table tbody td {
+    padding: 1rem;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: top;
+}
+
+.o_order_lookup_page .invoice-table tbody tr:last-child td {
+    border-bottom: 2px solid #dee2e6;
+}
+
+.o_order_lookup_page .invoice-table tbody tr.combo-row td {
+    padding: 0.5rem 1rem;
+    border-bottom: none;
+    background: #fafafa;
+}
+
+/* Bill Summary */
+.o_order_lookup_page .bill-summary {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-top: 3px solid var(--primary-color);
+    margin-top: 0;
+}
+
+.o_order_lookup_page .status-info {
+    padding: 1rem;
+    background: white;
+    border-radius: var(--radius-sm);
+    border: 1px solid #dee2e6;
+}
+
+.o_order_lookup_page .status-item {
+    font-size: 0.9rem;
+    color: var(--text-dark);
+}
+
+.o_order_lookup_page .total-summary {
+    background: white;
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--primary-color);
+}
+
+.o_order_lookup_page .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 0.95rem;
+    color: var(--text-dark);
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.o_order_lookup_page .summary-row:last-child {
+    border-bottom: none;
+}
+
+.o_order_lookup_page .summary-row .amount {
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+}
+
+.o_order_lookup_page .summary-row.total-row {
+    padding-top: 0.75rem;
+    margin-top: 0.5rem;
+    border-top: 2px solid var(--primary-color);
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.o_order_lookup_page .amount-total {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    font-family: 'Courier New', monospace;
+}
+
+.o_order_lookup_page .amount-total .currency {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Mobile Bill Style */
+@media (max-width: 768px) {
+    .o_order_lookup_page .invoice-table thead th,
+    .o_order_lookup_page .invoice-table tbody td {
+        padding: 0.625rem 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    .o_order_lookup_page .bill-summary {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .status-info,
+    .o_order_lookup_page .total-summary {
+        margin-bottom: 1rem;
+    }
+    
+    .o_order_lookup_page .amount-total {
+        font-size: 1.25rem;
+    }
+    
+    .o_order_lookup_page .summary-row {
+        font-size: 0.875rem;
     }
 }
 
@@ -754,16 +893,47 @@
     }
     
     .o_order_lookup_page .o_page_header,
-    .o_order_lookup_page .card,
-    .o_order_lookup_page form {
-        box-shadow: none !important;
-        border: 1px solid #ddd;
-    }
-    
     .o_order_lookup_page form,
     .o_order_lookup_page .btn,
-    .o_order_lookup_page .alert {
+    .o_order_lookup_page .alert,
+    .o_order_lookup_page .pagination,
+    .o_order_lookup_page .toggle-order-details {
         display: none !important;
+    }
+    
+    .o_order_lookup_page .order-card {
+        box-shadow: none !important;
+        border: 2px solid #000;
+        page-break-inside: avoid;
+        margin-bottom: 2cm;
+    }
+    
+    .o_order_lookup_page .order-card-body {
+        display: block !important;
+    }
+    
+    .o_order_lookup_page .order-card-header {
+        border-bottom: 2px solid #000 !important;
+        background: white !important;
+    }
+    
+    .o_order_lookup_page .invoice-table thead {
+        background: #f0f0f0 !important;
+        border-bottom: 2px solid #000 !important;
+    }
+    
+    .o_order_lookup_page .invoice-table tbody tr:last-child td {
+        border-bottom: 2px solid #000 !important;
+    }
+    
+    .o_order_lookup_page .bill-summary {
+        border-top: 3px solid #000 !important;
+        background: white !important;
+        page-break-inside: avoid;
+    }
+    
+    .o_order_lookup_page .total-summary {
+        border: 2px solid #000 !important;
     }
 }
 
