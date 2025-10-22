@@ -2,13 +2,14 @@
   <record id="res_config_settings_view_form_vtp" model="ir.ui.view">
     <field name="name">res.config.settings.view.form.vtp</field>
     <field name="model">res.config.settings</field>
-    <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+    <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
     <field name="arch" type="xml">
-      <!-- ✅ SỬA DÒNG XPATH NÀY -->
-      <xpath expr="//sheet" position="inside">
+      <!-- Chèn block cấu hình vào container chuẩn của Settings (Odoo 18) -->
+      <xpath expr="//div[contains(@class,'o_setting_container')]" position="inside">
         <div class="app_settings_block" string="Viettel Post">
           <h2>Viettel Post API</h2>
-          <group>
+
+          <group string="Kết nối API">
             <field name="vtp_api_base"/>
             <field name="vtp_username"/>
             <field name="vtp_password" password="True"/>
@@ -18,7 +19,8 @@
                     name="action_vtp_login"
                     class="btn-primary"/>
           </group>
-          <group string="Sender (Shop)">
+
+          <group string="Địa chỉ người gửi (Shop)">
             <field name="vtp_shop_province_code"/>
             <field name="vtp_shop_district_code"/>
             <field name="vtp_shop_ward_code"/>
