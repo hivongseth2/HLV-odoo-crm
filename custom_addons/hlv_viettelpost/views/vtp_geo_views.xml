@@ -1,7 +1,12 @@
 <odoo>
+  <!-- Menu gốc Viettel Post (dưới module Kho vận) -->
   <menuitem id="menu_vtp_root"
             name="Viettel Post"
-            sequence="95"/> <record id="view_vtp_province_list" model="ir.ui.view">
+            parent="stock.menu_stock_warehouse_mgmt"
+            sequence="95"/>
+
+  <!-- Provinces -->
+  <record id="view_vtp_province_list" model="ir.ui.view">
     <field name="name">vtp.province.list</field>
     <field name="model">vtp.province</field>
     <field name="arch" type="xml">
@@ -11,7 +16,13 @@
       </list>
     </field>
   </record>
+  <record id="action_vtp_province" model="ir.actions.act_window">
+    <field name="name">VTP Provinces</field>
+    <field name="res_model">vtp.province</field>
+    <field name="view_mode">list,form</field>
+  </record>
 
+  <!-- Districts -->
   <record id="view_vtp_district_list" model="ir.ui.view">
     <field name="name">vtp.district.list</field>
     <field name="model">vtp.district</field>
@@ -23,7 +34,13 @@
       </list>
     </field>
   </record>
+  <record id="action_vtp_district" model="ir.actions.act_window">
+    <field name="name">VTP Districts</field>
+    <field name="res_model">vtp.district</field>
+    <field name="view_mode">list,form</field>
+  </record>
 
+  <!-- Wards -->
   <record id="view_vtp_ward_list" model="ir.ui.view">
     <field name="name">vtp.ward.list</field>
     <field name="model">vtp.ward</field>
@@ -35,26 +52,14 @@
       </list>
     </field>
   </record>
-
-  <record id="action_vtp_province" model="ir.actions.act_window">
-    <field name="name">VTP Provinces</field>
-    <field name="res_model">vtp.province</field>
-    <field name="view_mode">list,form</field>
-  </record>
-
-  <record id="action_vtp_district" model="ir.actions.act_window">
-    <field name="name">VTP Districts</field>
-    <field name="res_model">vtp.district</field>
-    <field name="view_mode">list,form</field>
-  </record>
-
   <record id="action_vtp_ward" model="ir.actions.act_window">
     <field name="name">VTP Wards</field>
     <field name="res_model">vtp.ward</field>
     <field name="view_mode">list,form</field>
   </record>
 
-  <menuitem id="menu_vtp_province" name="Tỉnh/Thành" parent="menu_vtp_root" action="action_vtp_province"/>
-  <menuitem id="menu_vtp_district" name="Quận/Huyện" parent="menu_vtp_root" action="action_vtp_district"/>
-  <menuitem id="menu_vtp_ward" name="Phường/Xã" parent="menu_vtp_root" action="action_vtp_ward"/>
+  <!-- Menus -->
+  <menuitem id="menu_vtp_province" name="Tỉnh/Thành" parent="menu_vtp_root" action="action_vtp_province" sequence="1"/>
+  <menuitem id="menu_vtp_district" name="Quận/Huyện" parent="menu_vtp_root" action="action_vtp_district" sequence="2"/>
+  <menuitem id="menu_vtp_ward" name="Phường/Xã" parent="menu_vtp_root" action="action_vtp_ward" sequence="3"/>
 </odoo>
