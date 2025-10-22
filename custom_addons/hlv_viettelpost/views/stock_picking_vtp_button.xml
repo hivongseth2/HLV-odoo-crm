@@ -4,13 +4,12 @@
     <field name="model">stock.picking</field>
     <field name="inherit_id" ref="stock.view_picking_form"/>
     <field name="arch" type="xml">
-      <!-- Thêm nút sau nút “Validate” -->
       <xpath expr="//header" position="inside">
         <button name="action_vtp_create_order"
                 string="Tạo vận đơn Viettel Post"
                 type="object"
                 class="btn-primary"
-                attrs="{'invisible': [('carrier_id.delivery_type', '!=', 'vtp')]}"/>
+                invisible="carrier_id.delivery_type != 'vtp'"/>
       </xpath>
     </field>
   </record>
