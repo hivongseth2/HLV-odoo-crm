@@ -12,7 +12,7 @@
             <field name="vtp_username"/>
             <field name="vtp_password" password="True"/>
             <field name="vtp_token" readonly="1"/>
-            <button string="Login & Get Token" type="object" name="action_vtp_login" class="btn-primary"/>
+            <button string="Login  &amp; Get Token" type="object" name="action_vtp_login" class="btn-primary"/>
           </group>
           <group string="Sender (Shop)">
             <field name="vtp_shop_province_code"/>
