@@ -243,7 +243,7 @@
                                 <t t-else="">Chưa giao</t>
                               </small>
                             </div>
-                            <div class="col-auto">
+                            <!-- <div class="col-auto">
                               <small class="text-muted">
                                 <i class="fa fa-credit-card me-1"></i>
                                 <t t-set="payment" t-value="result['payment_status']"/>
@@ -251,7 +251,7 @@
                                 <t t-elif="payment == 'partial'">TT một phần</t>
                                 <t t-else="">Chưa thanh toán</t>
                               </small>
-                            </div>
+                            </div> -->
                           </div>
                         </div>
                         
@@ -370,7 +370,7 @@
                                       <span class="badge badge-secondary ms-2">Chưa giao</span>
                                     </t>
                                   </div>
-                                  <div class="status-item">
+                                  <!-- <div class="status-item">
                                     <i class="fa fa-credit-card me-2"></i>
                                     <strong>Thanh toán:</strong>
                                     <t t-set="payment" t-value="result['payment_status']"/>
@@ -383,7 +383,7 @@
                                     <t t-else="">
                                       <span class="badge badge-danger ms-2">Chưa Thanh Toán</span>
                                     </t>
-                                  </div>
+                                  </div> -->
                                 </div>
                               </div>
                               <div class="col-md-6">
