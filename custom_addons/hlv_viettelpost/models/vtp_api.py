@@ -28,29 +28,81 @@ class VTPAPI(models.AbstractModel):
 
     # ---- Auth
     def vtp_login(self, username=None, password=None):
+        """Lấy Token VTP (v2). Một số tài khoản yêu cầu 2 bước:
+        1) /user/ownerconnect
+        2) Nếu không có token, thử /user/login
+        Trả token và lưu vào ir.config_parameter.
+        """
+        import json
+        import requests
+
         username = username or self._conf("vtp.username")
         password = password or self._conf("vtp.password")
         if not username or not password:
             raise ValueError("Thiếu username/password Viettel Post trong Settings.")
-        url = f"{self._base()}/user/ownerconnect"
-        payload = {"USERNAME": username, "PASSWORD": password}
-        r = requests.post(url, json=payload, headers=self._headers(), timeout=TIMEOUT)
+
+        base = self._base()
+        headers = self._headers()
+
+        def _extract_token(resp_json, resp_headers):
+            """Cố gắng lấy token từ nhiều kiểu trả về khác nhau."""
+            if not resp_json:
+                return None
+            data = resp_json.get("data") if isinstance(resp_json, dict) else None
+            candidates = [
+                (data or {}).get("token"),
+                (data or {}).get("TOKEN"),
+                resp_json.get("token"),
+                resp_json.get("TOKEN"),
+            ]
+            for c in candidates:
+                if c:
+                    return c
+            # Một số triển khai trả token ở header
+            return resp_headers.get("Token") or resp_headers.get("TOKEN")
+
+        # --- Thử 1: ownerconnect
         try:
-            r.raise_for_status()
-        except Exception:
-            _logger.error("VTP login failed: %s %s", r.status_code, r.text)
-            raise
-        data = r.json() if r.content else {}
-        token = (
-            (data.get("data") or {}).get("token")
-            or data.get("token")
-            or data.get("TOKEN")
+            url1 = f"{base}/user/ownerconnect"
+            payload1 = {"USERNAME": username, "PASSWORD": password}
+            r1 = requests.post(url1, json=payload1, headers=headers, timeout=TIMEOUT)
+            r1.raise_for_status()
+            j1 = r1.json() if r1.content else {}
+            tok = _extract_token(j1, r1.headers)
+            if tok:
+                self.env["ir.config_parameter"].sudo().set_param("vtp.token", tok)
+                return tok
+            # nếu server trả lời nhưng không có token -> ghi log chi tiết
+            _logger.warning("VTP ownerconnect không trả token: %s", json.dumps(j1, ensure_ascii=False))
+        except Exception as e:
+            _logger.error("VTP ownerconnect lỗi: %s / body=%s", e, getattr(r1, "text", ""))
+
+        # --- Thử 2: login (một số tài khoản yêu cầu gọi login)
+        try:
+            url2 = f"{base}/user/login"
+            payload2 = {"USERNAME": username, "PASSWORD": password}
+            r2 = requests.post(url2, json=payload2, headers=headers, timeout=TIMEOUT)
+            r2.raise_for_status()
+            j2 = r2.json() if r2.content else {}
+            tok = _extract_token(j2, r2.headers)
+            if tok:
+                self.env["ir.config_parameter"].sudo().set_param("vtp.token", tok)
+                return tok
+            _logger.warning("VTP login không trả token: %s", json.dumps(j2, ensure_ascii=False))
+        except Exception as e:
+            _logger.error("VTP login lỗi: %s / body=%s", e, getattr(r2, "text", ""))
+
+        # Không lấy được token -> bắn thông báo chi tiết
+        msg = (
+            "Không lấy được token từ Viettel Post. Kiểm tra giúp:\n"
+            f"- vtp.api_base: {base}\n"
+            "- USERNAME/PASSWORD đúng chưa\n"
+            "- Tài khoản đã được bật quyền API trên cổng đối tác (partnerdev/partner) chưa\n"
+            "- Endpoint đúng phiên bản /v2 (VD: https://partnerdev.viettelpost.vn/v2)\n"
+            "Xem thêm log server (VTP ownerconnect/login trả về gì) trong odoo.log."
         )
-        if not token:
-            _logger.warning("VTP login response no token: %s", data)
-            raise ValueError("Không lấy được token từ Viettel Post")
-        self.env["ir.config_parameter"].sudo().set_param("vtp.token", token)
-        return token
+        raise ValueError(msg)
+
 
     # ---- Categories / Address master
     def vtp_list_provinces(self):
