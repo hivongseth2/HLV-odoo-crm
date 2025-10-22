@@ -5,12 +5,11 @@
     <field name="inherit_id" ref="delivery.view_delivery_carrier_form"/>
     <field name="arch" type="xml">
 
-      <!-- BÁM VÀO FIELD GỐC, KHỎE HƠN MỌI PHIÊN BẢN -->
       <xpath expr="//field[@name='delivery_type']" position="after">
         <field name="vtp_service_code"
-               attrs="{'invisible': [('delivery_type','!=','vtp')]}"/>
+               invisible="delivery_type != 'vtp'"/>
         <field name="vtp_cod"
-               attrs="{'invisible': [('delivery_type','!=','vtp')]}"/>
+               invisible="delivery_type != 'vtp'"/>
       </xpath>
 
     </field>
