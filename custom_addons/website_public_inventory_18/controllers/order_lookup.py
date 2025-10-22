@@ -361,22 +361,50 @@ def _get_order_lines(order):
                         ('product_template_id', '=', product.product_tmpl_id.id)
                     ])
                     if combo_lines:
+                        # Kiểm tra delivery status cho từng component
+                        all_components_delivered = True
+                        
                         for combo_line in combo_lines:
                             if combo_line.product_id:
                                 qty = combo_line.quantity or 1
+                                
+                                # Tìm delivery status của component này trong stock.move
+                                component_delivered = 0
+                                component_ordered = qty * line.product_uom_qty  # qty component * qty combo đặt
+                                
+                                # Tìm stock moves liên quan đến component này trong đơn hàng
+                                moves = request.env['stock.move'].sudo().search([
+                                    ('sale_line_id', '=', line.id),
+                                    ('product_id', '=', combo_line.product_id.id),
+                                    ('state', '=', 'done')
+                                ])
+                                
+                                if moves:
+                                    component_delivered = sum(moves.mapped('quantity_done'))
+                                
+                                # Kiểm tra component này đã giao đủ chưa
+                                if component_delivered < component_ordered:
+                                    all_components_delivered = False
+                                
                                 combo_components.append({
                                     'name': combo_line.product_id.name,
                                     'qty': qty,
-                                    'uom': combo_line.product_id.uom_id.name if combo_line.product_id.uom_id else 'cái'
+                                    'uom': combo_line.product_id.uom_id.name if combo_line.product_id.uom_id else 'cái',
+                                    'qty_delivered': component_delivered,
+                                    'qty_ordered': component_ordered,
                                 })
+                        
+                        # Combo được coi là fully delivered khi TẤT CẢ component đã giao đủ
+                        is_fully_delivered = all_components_delivered
+                        
             except Exception as e:
                 _logger.debug(f"Could not fetch combo components: {e}")
-        
-        # Check if fully delivered
-        qty_ordered = line.product_uom_qty or 0
-        qty_delivered = line.qty_delivered or 0
-        if qty_ordered > 0 and qty_delivered >= qty_ordered:
-            is_fully_delivered = True
+        else:
+            # Sản phẩm thường - check delivery theo qty_delivered
+            qty_ordered = line.product_uom_qty or 0
+            qty_delivered = line.qty_delivered or 0
+            if qty_ordered > 0 and qty_delivered >= qty_ordered:
+                is_fully_delivered = True
         
         order_lines.append({
             'product_name': product_name,
