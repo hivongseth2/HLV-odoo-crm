@@ -1,7 +1,7 @@
 <odoo>
-  <menuitem id="menu_vtp_root" name="Viettel Post" parent="stock.menu_stock_warehouse_mgmt" sequence="95"/>
-
-  <record id="view_vtp_province_list" model="ir.ui.view">
+  <menuitem id="menu_vtp_root"
+            name="Viettel Post"
+            sequence="95"/> <record id="view_vtp_province_list" model="ir.ui.view">
     <field name="name">vtp.province.list</field>
     <field name="model">vtp.province</field>
     <field name="arch" type="xml">
