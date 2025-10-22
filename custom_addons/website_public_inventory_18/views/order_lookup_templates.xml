@@ -314,7 +314,7 @@
                                       <t t-foreach="line.get('combo_components', [])" t-as="component">
                                         <tr class="combo-row">
                                           <td>
-                                            <div class="combo-component" style="padding-left: 30px;">
+                                            <div class="combo-component">
                                               <t t-esc="component.get('name', '')"/>
                                             </div>
                                           </td>

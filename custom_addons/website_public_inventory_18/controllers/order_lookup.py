@@ -365,7 +365,7 @@ def _get_order_lines(order):
                         
                         for combo_line in combo_lines:
                             if combo_line.product_id:
-                                qty = combo_line.quantity or 1
+                                qty = combo_line.product_quantity or 1
                                 
                                 # Tính tổng số lượng component cần giao
                                 component_ordered = qty * line.product_uom_qty
