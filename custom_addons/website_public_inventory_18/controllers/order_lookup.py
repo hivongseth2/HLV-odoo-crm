@@ -352,37 +352,82 @@ def _get_order_lines(order):
             try:
                 if getattr(product.product_tmpl_id, 'is_combo', False):
                     is_combo = True
-                    # Chỉ lấy tên combo chính, không thêm chi tiết trong ngoặc
-                    # product_name đã đủ rồi
                     
                     # Lấy danh sách component để hiển thị riêng
                     ComboLine = request.env['combo.product'].sudo()
                     combo_lines = ComboLine.search([
                         ('product_template_id', '=', product.product_tmpl_id.id)
                     ])
+                    
                     if combo_lines:
+                        # Kiểm tra delivery status cho từng component
+                        all_components_delivered = True
+                        
                         for combo_line in combo_lines:
                             if combo_line.product_id:
                                 qty = combo_line.quantity or 1
+                                
+                                # Tính tổng số lượng component cần giao
+                                component_ordered = qty * line.product_uom_qty
+                                
+                                # Tìm stock moves liên quan đến component này
+                                moves = request.env['stock.move'].sudo().search([
+                                    ('sale_line_id', '=', line.id),
+                                    ('product_id', '=', combo_line.product_id.id),
+                                    ('state', '=', 'done')
+                                ])
+                                
+                                component_delivered = sum(moves.mapped('quantity_done')) if moves else 0
+                                
+                                # DEBUG LOG
+                                _logger.info(
+                                    f"Component: {combo_line.product_id.name}, "
+                                    f"Ordered: {component_ordered}, "
+                                    f"Delivered: {component_delivered}"
+                                )
+                                
+                                # Kiểm tra component này đã giao đủ chưa
+                                if component_delivered < component_ordered:
+                                    all_components_delivered = False
+                                
                                 combo_components.append({
                                     'name': combo_line.product_id.name,
                                     'qty': qty,
-                                    'uom': combo_line.product_id.uom_id.name if combo_line.product_id.uom_id else 'cái'
+                                    'uom': combo_line.product_id.uom_id.name if combo_line.product_id.uom_id else 'cái',
+                                    'qty_delivered': component_delivered,
+                                    'qty_ordered': component_ordered,
                                 })
+                        
+                        # Combo được coi là fully delivered khi TẤT CẢ component đã giao đủ
+                        is_fully_delivered = all_components_delivered
+                        
+                        # DEBUG LOG
+                        _logger.info(
+                            f"Combo: {product_name}, "
+                            f"Is fully delivered: {is_fully_delivered}"
+                        )
+                        
             except Exception as e:
-                _logger.debug(f"Could not fetch combo components: {e}")
-        
-        # Check if fully delivered
-        qty_ordered = line.product_uom_qty or 0
-        qty_delivered = line.qty_delivered or 0
-        if qty_ordered > 0 and qty_delivered >= qty_ordered:
-            is_fully_delivered = True
+                _logger.error(f"Error fetching combo components: {e}", exc_info=True)
+        else:
+            # Sản phẩm thường - check delivery theo qty_delivered
+            qty_ordered = line.product_uom_qty or 0
+            qty_delivered = line.qty_delivered or 0
+            if qty_ordered > 0 and qty_delivered >= qty_ordered:
+                is_fully_delivered = True
+            
+            # DEBUG LOG
+            _logger.info(
+                f"Regular product: {product_name}, "
+                f"Ordered: {qty_ordered}, Delivered: {qty_delivered}, "
+                f"Is fully delivered: {is_fully_delivered}"
+            )
         
         order_lines.append({
             'product_name': product_name,
             'description': line.name or "",
             'qty': line.product_uom_qty,
-            'qty_delivered': line.qty_delivered,  # Đổi tên cho nhất quán
+            'qty_delivered': line.qty_delivered,
             'uom': line.product_uom.name if line.product_uom else 'cái',
             'price_unit': line.price_unit,
             'price_subtotal': line.price_subtotal,
@@ -392,7 +437,6 @@ def _get_order_lines(order):
         })
     
     return order_lines
-
 
 # ===== CONTROLLER =====
 class OrderLookupController(http.Controller):
