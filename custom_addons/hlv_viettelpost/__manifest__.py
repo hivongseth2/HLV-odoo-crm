@@ -15,6 +15,7 @@
         'views/stock_picking_vtp_button.xml',
         "wizards/vtp_sync_wizard_views.xml",
         "data/ir_config_parameter.xml",
+        'views/stock_picking_vtp_button.xml',
         "data/cron.xml"
     ],
     "assets": {},
