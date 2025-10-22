@@ -1,0 +1,6 @@
+<odoo>
+  <record id="vtp_defaults" model="ir.config_parameter">
+    <field name="key">vtp.api_base</field>
+    <field name="value">https://partnerdev.viettelpost.vn/v2</field>
+  </record>
+</odoo>
