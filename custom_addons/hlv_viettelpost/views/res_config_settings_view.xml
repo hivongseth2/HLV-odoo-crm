@@ -4,8 +4,8 @@
     <field name="model">res.config.settings</field>
     <field name="inherit_id" ref="base.res_config_settings_view_form"/>
     <field name="arch" type="xml">
-      <!-- SỬA DÒNG NÀY -->
-      <xpath expr="//div[@class='o_setting_container']" position="inside">
+      <!-- ✅ SỬA DÒNG XPATH NÀY -->
+      <xpath expr="//sheet" position="inside">
         <div class="app_settings_block" string="Viettel Post">
           <h2>Viettel Post API</h2>
           <group>
