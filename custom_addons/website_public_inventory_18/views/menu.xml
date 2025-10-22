@@ -8,4 +8,13 @@
     <field name="is_visible" eval="True"/>
     <field name="sequence" eval="40"/>
   </record>
+
+  <record id="menu_order_lookup" model="website.menu">
+    <field name="name">Tra cứu đơn hàng</field>
+    <field name="url">/saleorder-lookup</field>
+    <field name="website_id" ref="website.default_website"/>
+    <field name="parent_id" ref="website.main_menu"/>
+    <field name="is_visible" eval="True"/>
+    <field name="sequence" eval="50"/>
+  </record>
 </odoo>
