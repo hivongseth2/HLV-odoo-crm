@@ -339,13 +339,45 @@ def _get_order_lines(order):
     if not order.order_line:
         return order_lines
     
+    # Bước 1: Xây dựng mapping: product_id -> combo parent line id
+    # để biết line nào là component của combo nào
+    component_to_parent_map = {}  # {component_product_id: parent_line_id}
+    parent_combo_lines = {}  # {line_id: line} - lưu các combo parent line
+    
     for line in order.order_line:
-        # Get product info
+        product = line.product_id
+        if product and hasattr(product.product_tmpl_id, 'is_combo'):
+            if getattr(product.product_tmpl_id, 'is_combo', False):
+                # Đây là combo product parent
+                parent_combo_lines[line.id] = line
+                
+                # Lấy danh sách component
+                ComboLine = request.env['combo.product'].sudo()
+                combo_lines = ComboLine.search([
+                    ('product_template_id', '=', product.product_tmpl_id.id)
+                ])
+                for combo_line in combo_lines:
+                    if combo_line.product_id:
+                        # Map component product -> parent line
+                        component_to_parent_map[combo_line.product_id.id] = line.id
+    
+    # Bước 2: Build order lines với flag is_component và parent_combo_name
+    for line in order.order_line:
         product = line.product_id
         product_name = product.name if product else ""
         is_combo = False
-        combo_components = []
+        is_component = False
+        parent_combo_name = ""
         is_fully_delivered = False
+        
+        # Kiểm tra xem line này có phải là component của combo không
+        if product and product.id in component_to_parent_map:
+            # Đây là component line
+            is_component = True
+            parent_line_id = component_to_parent_map[product.id]
+            if parent_line_id in parent_combo_lines:
+                parent_line = parent_combo_lines[parent_line_id]
+                parent_combo_name = parent_line.product_id.name if parent_line.product_id else ""
         
         # Try to get combo product display if available
         if product and hasattr(product.product_tmpl_id, 'is_combo'):
@@ -353,64 +385,39 @@ def _get_order_lines(order):
                 if getattr(product.product_tmpl_id, 'is_combo', False):
                     is_combo = True
                     
-                    # Lấy danh sách component để hiển thị riêng
-                    ComboLine = request.env['combo.product'].sudo()
-                    combo_lines = ComboLine.search([
-                        ('product_template_id', '=', product.product_tmpl_id.id)
-                    ])
+                    # Kiểm tra tất cả component lines đã được giao đủ chưa
+                    # Tìm các order lines là component của combo này
+                    all_components_delivered = True
                     
-                    if combo_lines:
-                        # Kiểm tra delivery status cho từng component
-                        all_components_delivered = True
-                        
-                        for combo_line in combo_lines:
-                            if combo_line.product_id:
-                                qty = combo_line.product_quantity or 1
+                    for check_line in order.order_line:
+                        check_product = check_line.product_id
+                        # Nếu line này là component của combo hiện tại
+                        if check_product and check_product.id in component_to_parent_map:
+                            if component_to_parent_map[check_product.id] == line.id:
+                                # Đây là component của combo này
+                                qty_ordered = check_line.product_uom_qty or 0
+                                qty_delivered = check_line.qty_delivered or 0
                                 
-                                # Tính tổng số lượng component cần giao
-                                component_ordered = qty * line.product_uom_qty
-                                
-                                # Tìm stock moves liên quan đến component này
-                                moves = request.env['stock.move'].sudo().search([
-                                    ('sale_line_id', '=', line.id),
-                                    ('product_id', '=', combo_line.product_id.id),
-                                    ('state', '=', 'done')
-                                ])
-                                
-                                component_delivered = sum(moves.mapped('quantity_done')) if moves else 0
-                                
-                                # DEBUG LOG
                                 _logger.info(
-                                    f"Component: {combo_line.product_id.name}, "
-                                    f"Ordered: {component_ordered}, "
-                                    f"Delivered: {component_delivered}"
+                                    f"Checking component: {check_product.name}, "
+                                    f"Ordered: {qty_ordered}, Delivered: {qty_delivered}"
                                 )
                                 
-                                # Kiểm tra component này đã giao đủ chưa
-                                if component_delivered < component_ordered:
+                                if qty_delivered < qty_ordered:
                                     all_components_delivered = False
-                                
-                                combo_components.append({
-                                    'name': combo_line.product_id.name,
-                                    'qty': qty,
-                                    'uom': combo_line.product_id.uom_id.name if combo_line.product_id.uom_id else 'cái',
-                                    'qty_delivered': component_delivered,
-                                    'qty_ordered': component_ordered,
-                                })
-                        
-                        # Combo được coi là fully delivered khi TẤT CẢ component đã giao đủ
-                        is_fully_delivered = all_components_delivered
-                        
-                        # DEBUG LOG
-                        _logger.info(
-                            f"Combo: {product_name}, "
-                            f"Is fully delivered: {is_fully_delivered}"
-                        )
+                    
+                    is_fully_delivered = all_components_delivered
+                    
+                    # DEBUG LOG
+                    _logger.info(
+                        f"Combo: {product_name}, "
+                        f"Is fully delivered: {is_fully_delivered}"
+                    )
                         
             except Exception as e:
-                _logger.error(f"Error fetching combo components: {e}", exc_info=True)
+                _logger.error(f"Error checking combo delivery: {e}", exc_info=True)
         else:
-            # Sản phẩm thường - check delivery theo qty_delivered
+            # Sản phẩm thường hoặc component - check delivery theo qty_delivered
             qty_ordered = line.product_uom_qty or 0
             qty_delivered = line.qty_delivered or 0
             if qty_ordered > 0 and qty_delivered >= qty_ordered:
@@ -418,7 +425,7 @@ def _get_order_lines(order):
             
             # DEBUG LOG
             _logger.info(
-                f"Regular product: {product_name}, "
+                f"Regular/Component product: {product_name}, "
                 f"Ordered: {qty_ordered}, Delivered: {qty_delivered}, "
                 f"Is fully delivered: {is_fully_delivered}"
             )
@@ -432,7 +439,8 @@ def _get_order_lines(order):
             'price_unit': line.price_unit,
             'price_subtotal': line.price_subtotal,
             'is_combo': is_combo,
-            'combo_components': combo_components,
+            'is_component': is_component,
+            'parent_combo_name': parent_combo_name,
             'is_fully_delivered': is_fully_delivered,
         })
     

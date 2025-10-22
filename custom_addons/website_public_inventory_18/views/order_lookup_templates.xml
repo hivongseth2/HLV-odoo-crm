@@ -277,29 +277,55 @@
                                 <t t-if="line_count > 0">
                                   <t t-foreach="result.get('order_lines', [])" t-as="line">
                                     <!-- Main product row -->
-                                    <tr>
+                                    <tr t-attf-class="{{line.get('is_component') and 'combo-row' or ''}}">
                                       <td>
-                                        <div t-attf-class="{{line.get('is_combo') and 'combo-parent' or ''}}">
-                                          <strong><t t-esc="line.get('product_name', 'N/A')"/></strong>
-                                          <!-- Icon đã giao cho combo parent -->
-                                          <t t-if="line.get('is_combo') and line.get('is_fully_delivered')">
-                                            <i class="fa fa-check-circle text-success ms-2" title="Đã giao đủ"></i>
+                                        <!-- Component line - thụt vào -->
+                                        <t t-if="line.get('is_component')">
+                                          <div class="combo-component">
+                                            <t t-esc="line.get('product_name', 'N/A')"/>
+                                          </div>
+                                          <!-- Show delivered qty for component -->
+                                          <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                                          <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                                          <t t-if="delivered > 0">
+                                            <small class="text-muted d-block" style="padding-left: 2.5rem;">
+                                              Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                              <t t-if="delivered >= total_qty">
+                                                <i class="fa fa-check-circle text-success ms-1"></i>
+                                              </t>
+                                            </small>
                                           </t>
-                                        </div>
-                                        <!-- Show delivered qty as subtext -->
-                                        <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
-                                        <t t-set="total_qty" t-value="line.get('qty', 0)"/>
-                                        <t t-if="delivered > 0 and not line.get('is_combo')">
-                                          <small class="text-muted d-block mt-1">
-                                            Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
-                                            <t t-if="delivered >= total_qty">
-                                              <i class="fa fa-check-circle text-success ms-1"></i>
+                                        </t>
+                                        
+                                        <!-- Combo parent or regular product -->
+                                        <t t-else="">
+                                          <div t-attf-class="{{line.get('is_combo') and 'combo-parent' or ''}}">
+                                            <strong><t t-esc="line.get('product_name', 'N/A')"/></strong>
+                                            <!-- Icon đã giao cho combo parent -->
+                                            <t t-if="line.get('is_combo') and line.get('is_fully_delivered')">
+                                              <i class="fa fa-check-circle text-success ms-2" title="Đã giao đủ"></i>
                                             </t>
-                                          </small>
+                                          </div>
+                                          <!-- Show delivered qty as subtext for regular products only -->
+                                          <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                                          <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                                          <t t-if="delivered > 0 and not line.get('is_combo')">
+                                            <small class="text-muted d-block mt-1">
+                                              Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                              <t t-if="delivered >= total_qty">
+                                                <i class="fa fa-check-circle text-success ms-1"></i>
+                                              </t>
+                                            </small>
+                                          </t>
                                         </t>
                                       </td>
                                       <td class="text-center">
-                                        <strong><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></strong>
+                                        <t t-if="line.get('is_component')">
+                                          <small class="text-muted"><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></small>
+                                        </t>
+                                        <t t-else="">
+                                          <strong><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></strong>
+                                        </t>
                                       </td>
                                       <td class="text-end">
                                         <t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/>
@@ -308,24 +334,6 @@
                                         <strong><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></strong>
                                       </td>
                                     </tr>
-                                    
-                                    <!-- Combo component rows -->
-                                    <t t-if="line.get('is_combo') and line.get('combo_components')">
-                                      <t t-foreach="line.get('combo_components', [])" t-as="component">
-                                        <tr class="combo-row">
-                                          <td>
-                                            <div class="combo-component">
-                                              <t t-esc="component.get('name', '')"/>
-                                            </div>
-                                          </td>
-                                          <td class="text-center text-muted">
-                                            <small><t t-esc="'{:.0f}'.format(component.get('qty', 1))"/></small>
-                                          </td>
-                                          <td></td>
-                                          <td></td>
-                                        </tr>
-                                      </t>
-                                    </t>
                                   </t>
                                 </t>
                                 <t t-else="">

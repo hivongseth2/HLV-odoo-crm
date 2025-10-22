@@ -310,7 +310,7 @@
 }
 
 .o_order_lookup_page .combo-component::before {
-    content: '└── ';
+    content: ' ';
     position: absolute;
     left: 0.75rem;
     color: #adb5bd;
@@ -326,7 +326,7 @@
     
     .o_order_lookup_page .combo-component::before {
         left: 0.5rem;
-        content: '└ ';
+        content: ' ';
     }
 }
 
