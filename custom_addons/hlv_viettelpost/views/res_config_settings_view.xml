@@ -1,0 +1,28 @@
+<odoo>
+  <record id="res_config_settings_view_form_vtp" model="ir.ui.view">
+    <field name="name">res.config.settings.view.form.vtp</field>
+    <field name="model">res.config.settings</field>
+    <field name="inherit_id" ref="base.view_res_config_settings"/>
+    <field name="arch" type="xml">
+      <xpath expr="//div[@id='settings']" position="inside">
+        <div class="app_settings_block" data-string="Viettel Post" string="Viettel Post">
+          <h2>Viettel Post API</h2>
+          <group>
+            <field name="vtp_api_base"/>
+            <field name="vtp_username"/>
+            <field name="vtp_password" password="True"/>
+            <field name="vtp_token" readonly="1"/>
+            <button string="Login & Get Token" type="object" name="action_vtp_login" class="btn-primary"/>
+          </group>
+          <group string="Sender (Shop)">
+            <field name="vtp_shop_province_code"/>
+            <field name="vtp_shop_district_code"/>
+            <field name="vtp_shop_ward_code"/>
+            <field name="vtp_shop_address"/>
+            <field name="vtp_shop_phone"/>
+          </group>
+        </div>
+      </xpath>
+    </field>
+  </record>
+</odoo>
