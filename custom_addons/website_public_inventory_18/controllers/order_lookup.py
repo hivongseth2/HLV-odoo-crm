@@ -54,13 +54,28 @@ def _mask_ip_for_log(ip):
 # ===== PII MASKING HELPERS =====
 def _mask_name(name):
     """
-    Mask customer name: keep first letter of each word, mask rest with *.
-    Example: "Nguyen Van A" → "N***** V** A"
+    Mask individual names, keep company names as-is.
+    Company names are considered less sensitive PII.
     """
     if not name:
         return ""
     
-    words = name.strip().split()
+    name = name.strip()
+    
+    # Company indicators
+    company_indicators = [
+        'công ty', 'cty', 'company', 'co.', 'ltd', 'tnhh', 
+        'cổ phần', 'corporation', 'corp'
+    ]
+    
+    name_lower = name.lower()
+    is_company = any(indicator in name_lower for indicator in company_indicators)
+    
+    if is_company:
+        return name  # Keep company name fully visible
+    
+    # Mask individual names
+    words = name.split()
     masked_words = []
     
     for word in words:
@@ -71,7 +86,6 @@ def _mask_name(name):
             masked_words.append(masked)
     
     return ' '.join(masked_words)
-
 
 def _mask_phone(phone):
     """
@@ -605,4 +619,79 @@ class OrderLookupController(http.Controller):
             'page_count': page_count,
             'total': total,
             'search_warning': total > 1 and order_code,  # Warning if multiple results from order code search
+        })
+    
+    @http.route(['/saleorder-lookup/<int:order_id>'], type='http', auth='public', website=True, csrf=False)
+    def order_detail(self, order_id, **kw):
+        """
+        Public sales order detail page.
+        Shows detailed information for a specific order.
+        
+        Parameters:
+        - order_id: Sale order ID
+        """
+        # Get order
+        SaleOrder = request.env['sale.order'].sudo()
+        order = SaleOrder.browse(order_id)
+        
+        # Check if order exists
+        if not order.exists():
+            return request.render('website.404')
+        
+        partner = order.partner_id
+        
+        # Mask PII
+        masked_name = _mask_name(partner.name) if partner.name else ""
+        masked_phone = _mask_phone(partner.phone or partner.mobile or "")
+        masked_email = _mask_email(partner.email) if partner.email else ""
+        
+        # Build full address and mask it
+        full_address = ""
+        if partner.street and ',' in partner.street:
+            full_address = partner.street
+            if partner.street2 and partner.street2 not in partner.street:
+                full_address += f", {partner.street2}"
+            if partner.city and partner.city not in partner.street:
+                full_address += f", {partner.city}"
+        else:
+            address_parts = []
+            if partner.street:
+                address_parts.append(partner.street)
+            if partner.street2:
+                address_parts.append(partner.street2)
+            if partner.city:
+                address_parts.append(partner.city)
+            if partner.state_id:
+                address_parts.append(partner.state_id.name)
+            if partner.country_id:
+                address_parts.append(partner.country_id.name)
+            full_address = ", ".join(address_parts) if address_parts else ""
+        
+        masked_address = _mask_address(full_address) if full_address else ""
+        
+        # Get order info
+        delivery_status = _get_delivery_status(order)
+        payment_status = _get_payment_status(order)
+        order_lines = _get_order_lines(order)
+        
+        order_data = {
+            'id': order.id,
+            'name': order.name,
+            'date_order': order.date_order,
+            'state': order.state,
+            'customer_name': masked_name,
+            'customer_phone': masked_phone,
+            'customer_email': masked_email,
+            'customer_address': masked_address,
+            'order_lines': order_lines,
+            'amount_total': order.amount_total,
+            'amount_untaxed': order.amount_untaxed,
+            'amount_tax': order.amount_tax,
+            'currency': order.currency_id.name if order.currency_id else 'VND',
+            'delivery_status': delivery_status,
+            'payment_status': payment_status,
+        }
+        
+        return request.render('website_public_inventory_18.order_detail_page', {
+            'order': order_data,
         })
