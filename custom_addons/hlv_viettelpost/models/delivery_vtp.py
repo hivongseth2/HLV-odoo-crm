@@ -4,7 +4,7 @@ from odoo import models, fields, api
 class DeliveryCarrier(models.Model):
     _inherit = "delivery.carrier"
 
-    delivery_type = fields.Selection(selection_add=[("vtp", "Viettel Post")])
+    delivery_type = fields.Selection(selection_add=[("vtp", "Viettel Post")], ondelete={"vtp": "set default"}, )
     vtp_service_code = fields.Char("VTP Service Code")
     vtp_cod = fields.Boolean("Thu hộ COD", default=False)
 
