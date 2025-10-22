@@ -246,10 +246,11 @@
                             <div class="col-auto">
                               <small class="text-muted">
                                 <i class="fa fa-credit-card me-1"></i>
-                                <t t-set="payment" t-value="result['payment_status']"/>
-                                <t t-if="payment == 'paid'">Đã thanh toán</t>
-                                <t t-elif="payment == 'partial'">TT một phần</t>
-                                <t t-else="">Chưa thanh toán</t>
+                                  <!-- Tạm ẩn tình trạng thanh toán -->
+                                  <!-- <t t-set="payment" t-value="result['payment_status']"/>
+                                  <t t-if="payment == 'paid'">Đã thanh toán</t>
+                                  <t t-elif="payment == 'partial'">TT một phần</t>
+                                  <t t-else="">Chưa thanh toán</t> -->
                               </small>
                             </div>
                           </div>
@@ -372,17 +373,18 @@
                                   </div>
                                   <div class="status-item">
                                     <i class="fa fa-credit-card me-2"></i>
-                                    <strong>Thanh toán:</strong>
-                                    <t t-set="payment" t-value="result['payment_status']"/>
-                                    <t t-if="payment == 'paid'">
-                                      <span class="badge badge-success ms-2">Đã Thanh Toán</span>
-                                    </t>
-                                    <t t-elif="payment == 'partial'">
-                                      <span class="badge badge-warning ms-2">TT Một Phần</span>
-                                    </t>
-                                    <t t-else="">
-                                      <span class="badge badge-danger ms-2">Chưa Thanh Toán</span>
-                                    </t>
+                                      <!-- Tạm ẩn tình trạng thanh toán -->
+                                      <!-- <strong>Thanh toán:</strong>
+                                      <t t-set="payment" t-value="result['payment_status']"/>
+                                      <t t-if="payment == 'paid'">
+                                        <span class="badge badge-success ms-2">Đã Thanh Toán</span>
+                                      </t>
+                                      <t t-elif="payment == 'partial'">
+                                        <span class="badge badge-warning ms-2">TT Một Phần</span>
+                                      </t>
+                                      <t t-else="">
+                                        <span class="badge badge-danger ms-2">Chưa Thanh Toán</span>
+                                      </t> -->
                                   </div>
                                 </div>
                               </div>
