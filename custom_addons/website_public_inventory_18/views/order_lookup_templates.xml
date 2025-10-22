@@ -21,6 +21,28 @@
             font-size: 0.75rem;
             padding: 0.25rem 0.5rem;
           }
+          /* Remove hover effect and alternating colors for order lines */
+          .o_order_lookup_page .table.o_list_table tbody tr {
+            background-color: transparent !important;
+          }
+          .o_order_lookup_page .table.o_list_table tbody tr:hover {
+            background-color: #f5f5f5 !important;
+          }
+          /* Highlight first line of each order group */
+          .o_order_lookup_page .table.o_list_table tbody tr.order-header {
+            background-color: #f9f9f9 !important;
+            font-weight: 500;
+          }
+          .o_order_lookup_page .table.o_list_table tbody tr.order-header:hover {
+            background-color: #efefef !important;
+          }
+          /* Order line rows - no special hover */
+          .o_order_lookup_page .table.o_list_table tbody tr.order-line {
+            background-color: transparent !important;
+          }
+          .o_order_lookup_page .table.o_list_table tbody tr.order-line:hover {
+            background-color: #fafafa !important;
+          }
           @media (max-width: 768px) {
             .o_order_lookup_page .table-responsive {
               font-size: 0.8rem;
@@ -70,7 +92,7 @@
               <div class="card-body">
                 <form method="get" action="/saleorder-lookup" id="searchForm" class="o_website_form">
                   <div class="row">
-                    <div class="col-lg-4 mb-3">
+                    <div class="col-lg-3 mb-3">
                       <label for="order_code" class="form-label">
                         <i class="fa fa-file-text-o me-1"/>
                         Mã Đơn Hàng
@@ -86,25 +108,41 @@
                       <small class="form-text text-muted">Nhập mã đơn hàng</small>
                     </div>
                     
-                    <div class="col-lg-4 mb-3">
-                      <label for="phone_last4" class="form-label">
-                        <i class="fa fa-phone me-1"/>
-                        Số Điện Thoại (4 Số Cuối)
+                    <div class="col-lg-3 mb-3">
+                      <label for="order_code_last6" class="form-label">
+                        <i class="fa fa-hashtag me-1"/>
+                        Mã Đơn (6 Số Cuối)
                       </label>
                       <input 
                         type="text" 
                         class="form-control" 
-                        id="phone_last4" 
-                        name="phone_last4" 
-                        placeholder="Ví dụ: 4321"
-                        maxlength="4"
-                        pattern="\d{4}"
-                        t-att-value="query.get('phone_last4', '') if query else ''"
+                        id="order_code_last6" 
+                        name="order_code_last6" 
+                        placeholder="Ví dụ: 000012"
+                        maxlength="6"
+                        pattern="\d{0,6}"
+                        t-att-value="query.get('order_code_last6', '') if query else ''"
                       />
-                      <small class="form-text text-muted">4 chữ số cuối</small>
+                      <small class="form-text text-muted">6 chữ số cuối</small>
                     </div>
                     
-                    <div class="col-lg-4 mb-3">
+                    <div class="col-lg-3 mb-3">
+                      <label for="phone" class="form-label">
+                        <i class="fa fa-phone me-1"/>
+                        Số Điện Thoại
+                      </label>
+                      <input 
+                        type="tel" 
+                        class="form-control" 
+                        id="phone" 
+                        name="phone" 
+                        placeholder="Ví dụ: 0987654321"
+                        t-att-value="query.get('phone', '') if query else ''"
+                      />
+                      <small class="form-text text-muted">Nhập số điện thoại đầy đủ</small>
+                    </div>
+                    
+                    <div class="col-lg-3 mb-3">
                       <label for="email" class="form-label">
                         <i class="fa fa-envelope-o me-1"/>
                         Email
@@ -141,6 +179,18 @@
 
           <!-- Results Card -->
           <t t-if="masked_results">
+            
+            <!-- Warning if multiple results from order code search -->
+            <t t-if="search_warning">
+              <div class="alert alert-warning alert-dismissible fade show mb-3" role="alert">
+                <i class="fa fa-exclamation-circle me-2"/>
+                <strong>Cảnh báo!</strong>
+                Tìm thấy <strong><t t-esc="total"/></strong> đơn hàng có số 6 chữ số cuối này.
+                Vui lòng kiểm tra kỹ để chọn đơn hàng đúng.
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"/>
+              </div>
+            </t>
+            
             <div class="card shadow-sm">
               <div class="card-header bg-light d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
@@ -150,6 +200,36 @@
                 <span class="badge badge-primary badge-pill">
                   <t t-esc="total"/> đơn hàng
                 </span>
+              </div>
+              <div class="card-body">
+                
+                <!-- Customer Information Section -->
+                <t t-if="len(masked_results) > 0">
+                  <div class="row mb-4 pb-3 border-bottom">
+                    <t t-set="result" t-value="masked_results[0]"/>
+                    <div class="col-md-6">
+                      <div class="mb-2">
+                        <label class="text-muted small">Khách Hàng</label>
+                        <p class="mb-0"><strong><t t-esc="result.get('customer_name', 'N/A')"/></strong></p>
+                      </div>
+                      <div class="mb-2">
+                        <label class="text-muted small">Số Điện Thoại</label>
+                        <p class="mb-0"><strong><t t-esc="result.get('customer_phone', 'N/A')"/></strong></p>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-2">
+                        <label class="text-muted small">Email</label>
+                        <p class="mb-0"><strong><t t-esc="result.get('customer_email', 'N/A')"/></strong></p>
+                      </div>
+                      <div class="mb-2">
+                        <label class="text-muted small">Địa Chỉ</label>
+                        <p class="mb-0"><strong><t t-esc="result.get('customer_address', 'N/A')"/></strong></p>
+                      </div>
+                    </div>
+                  </div>
+                </t>
+                
               </div>
               <div class="card-body p-0">
                 
@@ -176,7 +256,7 @@
                           <t t-set="line_count" t-value="len(result.get('order_lines', []))"/>
                           <t t-if="line_count > 0">
                             <t t-foreach="result.get('order_lines', [])" t-as="line">
-                              <tr class="o_data_row">
+                              <tr t-att-class="'o_data_row order-header' if line_index == 0 else 'o_data_row order-line'">
                                 <!-- Show order info only on first line -->
                                 <t t-if="line_index == 0">
                                   <td class="o_data_cell">
@@ -450,30 +530,31 @@
             // Form validation
             form.addEventListener('submit', function(e) {
               var orderCode = document.getElementById('order_code').value.trim();
-              var phoneLast4 = document.getElementById('phone_last4').value.trim();
+              var orderCodeLast6 = document.getElementById('order_code_last6').value.trim();
+              var phone = document.getElementById('phone').value.trim();
               var email = document.getElementById('email').value.trim();
               
-              if (!orderCode &amp;&amp; !phoneLast4 &amp;&amp; !email) {
+              if (!orderCode &amp;&amp; !orderCodeLast6 &amp;&amp; !phone &amp;&amp; !email) {
                 e.preventDefault();
                 alert('Vui lòng nhập ít nhất một trường để tìm kiếm!');
                 return false;
               }
               
-              // Validate phone_last4 if provided
-              if (phoneLast4 &amp;&amp; !/^\d{4}$/.test(phoneLast4)) {
+              // Validate order_code_last6 if provided
+              if (orderCodeLast6 &amp;&amp; !/^\d{1,6}$/.test(orderCodeLast6)) {
                 e.preventDefault();
-                alert('Vui lòng nhập đúng 4 chữ số cuối số điện thoại!');
+                alert('Vui lòng nhập từ 1 đến 6 chữ số cho mã đơn!');
                 return false;
               }
               
               // Show loading state
               btnSearch.disabled = true;
-              btnSearch.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Đang tìm...';
+              btnSearch.innerHTML = '&lt;i class="fa fa-spinner fa-spin me-2"&gt;&lt;/i&gt;Đang tìm...';
             });
             
-            // Restrict phone input to digits only
-            var phoneInput = document.getElementById('phone_last4');
-            phoneInput.addEventListener('input', function(e) {
+            // Restrict order_code_last6 input to digits only
+            var orderCodeLast6Input = document.getElementById('order_code_last6');
+            orderCodeLast6Input.addEventListener('input', function(e) {
               this.value = this.value.replace(/\D/g, '');
             });
           });

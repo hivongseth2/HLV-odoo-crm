@@ -146,23 +146,72 @@ def _mask_address(address):
 
 
 # ===== SEARCH HELPERS =====
-def _build_search_domain(order_code, phone_last4, email):
+def _extract_order_code_last6(order_code):
+    """
+    Extract last 6 digits from order code.
+    If order_code is already numeric with <= 6 digits, use as-is.
+    Otherwise, extract the last 6 digits.
+    
+    Examples:
+    - "000123" → "000123"
+    - "S00123" → "00123"  (wait, S is 1 char, so "00123" is only 5, let me fix)
+    - "S000123" → "000123"
+    - "123456" → "123456"
+    """
+    if not order_code:
+        return None
+    
+    code_str = str(order_code).strip()
+    
+    # Extract only digits
+    digits_only = ''.join(c for c in code_str if c.isdigit())
+    
+    if not digits_only:
+        # No digits found, use original
+        return code_str
+    
+    # If less than or equal to 6 digits, use all
+    if len(digits_only) <= 6:
+        return digits_only
+    
+    # Otherwise, take last 6 digits
+    return digits_only[-6:]
+
+
+def _build_search_domain(order_code, order_code_last6, phone, email):
     """
     Build search domain for sale.order based on provided filters.
     Returns domain list.
+    
+    Supports:
+    - order_code: Full order code search (e.g., "S00012")
+    - order_code_last6: Last 6 digits of order code (e.g., "000123")
+    - phone: Full phone number
+    - email: Email search
     """
     domain = []
     
-    # Search by order code (name)
+    # Search by order code (name) - full search
     if order_code:
         domain.append(('name', 'ilike', order_code.strip()))
     
-    # Search by phone last 4 digits
-    if phone_last4:
+    # Search by order code last 6 digits
+    if order_code_last6:
+        code_last6 = _extract_order_code_last6(order_code_last6)
+        if code_last6:
+            # Search by last 6 digits using suffix search
+            order_code_domain = [('name', '=like', f'%{code_last6}')]
+            if domain:
+                domain = ['&'] + domain + order_code_domain
+            else:
+                domain = order_code_domain
+    
+    # Search by full phone number
+    if phone:
         phone_domain = [
             '|',
-            ('partner_id.phone', '=like', f'%{phone_last4}'),
-            ('partner_id.mobile', '=like', f'%{phone_last4}'),
+            ('partner_id.phone', 'ilike', phone.strip()),
+            ('partner_id.mobile', 'ilike', phone.strip()),
         ]
         if domain:
             domain = ['&'] + domain + phone_domain
@@ -330,11 +379,18 @@ def _get_order_lines(order):
 class OrderLookupController(http.Controller):
     
     @http.route(['/saleorder-lookup'], type='http', auth='public', website=True, csrf=False, sitemap=True)
-    def order_lookup(self, order_code="", phone_last4="", email="", page=1, **kw):
+    def order_lookup(self, order_code="", order_code_last6="", phone="", email="", page=1, **kw):
         """
         Public sales order lookup page.
         GET: Show search form
         POST/GET with params: Perform search and show results
+        
+        Parameters:
+        - order_code: Full order code (e.g., "S00012")
+        - order_code_last6: Last 6 digits of order code (e.g., "000012")
+        - phone: Full phone number (e.g., "0987654321")
+        - email: Customer email
+        - page: Page number
         """
         # Rate limiting
         # ip = request.httprequest.environ.get('REMOTE_ADDR', 'unknown')
@@ -346,7 +402,8 @@ class OrderLookupController(http.Controller):
         
         # Sanitize inputs
         order_code = (order_code or "").strip()
-        phone_last4 = (phone_last4 or "").strip()
+        order_code_last6 = (order_code_last6 or "").strip()
+        phone = (phone or "").strip()
         email = (email or "").strip()
         
         try:
@@ -357,21 +414,23 @@ class OrderLookupController(http.Controller):
             page = 1
         
         # Log search attempt (masked)
-        if order_code or phone_last4 or email:
+        if order_code or order_code_last6 or phone or email:
             _logger.info(
-                "Order lookup: order_code=%s, phone_last4=%s, email=%s",
+                "Order lookup: order_code=%s, order_code_last6=%s, phone=%s, email=%s",
                 "***" if order_code else "",
-                "***" if phone_last4 else "",
+                "***" if order_code_last6 else "",
+                "***" if phone else "",
                 "***" if email else ""
             )
         
         # Build search domain
-        if not (order_code or phone_last4 or email):
+        if not (order_code or order_code_last6 or phone or email):
             # No search criteria, just show form
             return request.render('website_public_inventory_18.order_lookup_page', {
                 'query': {
                     'order_code': order_code,
-                    'phone_last4': phone_last4,
+                    'order_code_last6': order_code_last6,
+                    'phone': phone,
                     'email': email,
                 },
                 'records': [],
@@ -381,7 +440,7 @@ class OrderLookupController(http.Controller):
                 'total': 0,
             })
         
-        domain = _build_search_domain(order_code, phone_last4, email)
+        domain = _build_search_domain(order_code, order_code_last6, phone, email)
         
         # Search orders
         SaleOrder = request.env['sale.order'].sudo()
@@ -468,7 +527,8 @@ class OrderLookupController(http.Controller):
         return request.render('website_public_inventory_18.order_lookup_page', {
             'query': {
                 'order_code': order_code,
-                'phone_last4': phone_last4,
+                'order_code_last6': order_code_last6,
+                'phone': phone,
                 'email': email,
             },
             'records': orders,
@@ -476,4 +536,5 @@ class OrderLookupController(http.Controller):
             'page': page,
             'page_count': page_count,
             'total': total,
+            'search_warning': total > 1 and (order_code_last6 or order_code),  # Warning if multiple results
         })
