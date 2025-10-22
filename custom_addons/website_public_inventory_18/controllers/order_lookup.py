@@ -345,6 +345,7 @@ def _get_order_lines(order):
         product_name = product.name if product else ""
         is_combo = False
         combo_components = []
+        is_fully_delivered = False
         
         # Try to get combo product display if available
         if product and hasattr(product.product_tmpl_id, 'is_combo'):
@@ -371,6 +372,12 @@ def _get_order_lines(order):
             except Exception as e:
                 _logger.debug(f"Could not fetch combo components: {e}")
         
+        # Check if fully delivered
+        qty_ordered = line.product_uom_qty or 0
+        qty_delivered = line.qty_delivered or 0
+        if qty_ordered > 0 and qty_delivered >= qty_ordered:
+            is_fully_delivered = True
+        
         order_lines.append({
             'product_name': product_name,
             'description': line.name or "",
@@ -381,6 +388,7 @@ def _get_order_lines(order):
             'price_subtotal': line.price_subtotal,
             'is_combo': is_combo,
             'combo_components': combo_components,
+            'is_fully_delivered': is_fully_delivered,
         })
     
     return order_lines

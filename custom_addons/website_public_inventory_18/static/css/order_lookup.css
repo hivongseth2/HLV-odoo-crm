@@ -301,29 +301,32 @@
 }
 
 .o_order_lookup_page .combo-component {
-    padding-left: 1.5rem;
-    font-size: 0.85rem;
-    color: var(--text-muted);
+    padding-left: 2.5rem;
+    font-size: 0.875rem;
+    color: #6c757d;
     position: relative;
     font-style: italic;
+    line-height: 1.4;
 }
 
 .o_order_lookup_page .combo-component::before {
-    content: '└─';
+    content: '└── ';
     position: absolute;
-    left: 0.25rem;
-    color: #ccc;
+    left: 0.75rem;
+    color: #adb5bd;
     font-style: normal;
+    font-weight: normal;
 }
 
 @media (max-width: 768px) {
     .o_order_lookup_page .combo-component {
-        padding-left: 1rem;
+        padding-left: 1.75rem;
         font-size: 0.8rem;
     }
     
     .o_order_lookup_page .combo-component::before {
-        left: 0.25rem;
+        left: 0.5rem;
+        content: '└ ';
     }
 }
 
@@ -374,7 +377,7 @@
 .o_order_lookup_page .bill-summary {
     background: #f8f9fa;
     padding: 1.5rem;
-    border-top: 3px solid var(--primary-color);
+    border-top: 2px solid #dee2e6;
     margin-top: 0;
 }
 
@@ -394,7 +397,7 @@
     background: white;
     padding: 1rem;
     border-radius: var(--radius-sm);
-    border: 2px solid var(--primary-color);
+    border: 1px solid #dee2e6;
 }
 
 .o_order_lookup_page .summary-row {
@@ -413,13 +416,14 @@
 
 .o_order_lookup_page .summary-row .amount {
     font-weight: 600;
-    font-family: 'Courier New', monospace;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    color: #2c3e50;
 }
 
 .o_order_lookup_page .summary-row.total-row {
     padding-top: 0.75rem;
     margin-top: 0.5rem;
-    border-top: 2px solid var(--primary-color);
+    border-top: 2px solid #2c3e50;
     font-size: 1.1rem;
     font-weight: 700;
 }
@@ -427,13 +431,13 @@
 .o_order_lookup_page .amount-total {
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--primary-color);
-    font-family: 'Courier New', monospace;
+    color: #2c3e50;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
 .o_order_lookup_page .amount-total .currency {
     font-size: 0.85rem;
-    color: var(--text-muted);
+    color: #6c757d;
     font-weight: 500;
 }
 
@@ -927,13 +931,21 @@
     }
     
     .o_order_lookup_page .bill-summary {
-        border-top: 3px solid #000 !important;
+        border-top: 2px solid #000 !important;
         background: white !important;
         page-break-inside: avoid;
     }
     
     .o_order_lookup_page .total-summary {
         border: 2px solid #000 !important;
+    }
+    
+    .o_order_lookup_page .summary-row.total-row {
+        border-top: 2px solid #000 !important;
+    }
+    
+    .o_order_lookup_page .amount-total {
+        color: #000 !important;
     }
 }
 

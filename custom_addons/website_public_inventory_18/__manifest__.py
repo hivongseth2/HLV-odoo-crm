@@ -14,7 +14,11 @@
         "views/menu.xml",
         "views/res_config_settings_views.xml",
     ],
-    "assets": {},
+    "assets": {
+        "web.assets_frontend": [
+            "website_public_inventory_18/static/css/order_lookup.css",
+        ],
+    },
     "installable": True,
     "application": False,
 }
