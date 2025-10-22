@@ -241,6 +241,7 @@
 .o_order_lookup_page table {
     margin-bottom: 0;
     width: 100%;
+    table-layout: fixed;
 }
 
 .o_order_lookup_page table thead {
@@ -248,12 +249,12 @@
 }
 
 .o_order_lookup_page table thead th {
-    font-weight: 600;
-    font-size: 0.85rem;
+    font-weight: 700;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     color: var(--text-dark);
-    padding: 1rem 0.75rem;
+    padding: 0.875rem 0.5rem;
     border: none;
     white-space: nowrap;
 }
@@ -290,6 +291,139 @@
     color: var(--text-muted);
     display: block;
     margin-top: 0.25rem;
+}
+
+/* Combo product styling */
+.o_order_lookup_page .combo-parent {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.o_order_lookup_page .combo-component {
+    padding-left: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    position: relative;
+}
+
+.o_order_lookup_page .combo-component::before {
+    content: '└';
+    position: absolute;
+    left: 0.5rem;
+    color: var(--border-color);
+}
+
+@media (max-width: 768px) {
+    .o_order_lookup_page .combo-component {
+        padding-left: 1rem;
+        font-size: 0.8rem;
+    }
+    
+    .o_order_lookup_page .combo-component::before {
+        left: 0.25rem;
+    }
+}
+
+/* ============================================
+   Order Cards (List View)
+   ============================================ */
+.o_order_lookup_page .orders-list {
+    background: transparent;
+}
+
+.o_order_lookup_page .order-card {
+    background: white;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-color);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.o_order_lookup_page .order-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-md);
+}
+
+.o_order_lookup_page .order-card.expanded {
+    border-color: var(--primary-color);
+}
+
+.o_order_lookup_page .order-card-header {
+    padding: 1.25rem 1.5rem;
+    background: white;
+    border-bottom: 1px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.o_order_lookup_page .order-card.expanded .order-card-header {
+    border-bottom-color: var(--border-color);
+    background: var(--light-bg);
+}
+
+.o_order_lookup_page .order-card-header h5 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.o_order_lookup_page .order-card-body {
+    padding: 1.5rem;
+    background: white;
+    border-top: 1px solid var(--border-color);
+}
+
+.o_order_lookup_page .order-summary {
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+}
+
+/* Toggle button */
+.o_order_lookup_page .toggle-order-details {
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    transition: all 0.3s ease;
+}
+
+.o_order_lookup_page .toggle-order-details:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Mobile order cards */
+@media (max-width: 768px) {
+    .o_order_lookup_page .orders-list {
+        padding: 1rem !important;
+    }
+    
+    .o_order_lookup_page .order-card {
+        margin-bottom: 1rem !important;
+    }
+    
+    .o_order_lookup_page .order-card-header {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .order-card-header h5 {
+        font-size: 0.95rem;
+    }
+    
+    .o_order_lookup_page .order-card-header h4 {
+        font-size: 1.25rem;
+    }
+    
+    .o_order_lookup_page .order-card-body {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .toggle-order-details {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.8rem;
+    }
+    
+    .o_order_lookup_page .order-summary {
+        padding: 0.75rem !important;
+    }
 }
 
 /* ============================================
@@ -345,23 +479,24 @@
 /* ============================================
    Order Summary Cards
    ============================================ */
+.o_order_lookup_page .order-summary-section {
+    background: white;
+    padding: 1.5rem;
+    border-top: 2px solid var(--border-color);
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
 .o_order_lookup_page .summary-card {
     background: white;
-    border-radius: var(--radius-md);
-    padding: 1.25rem;
-    border: 2px solid var(--border-color);
-    transition: all 0.3s ease;
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    text-align: center;
     height: 100%;
 }
 
-.o_order_lookup_page .summary-card:hover {
-    border-color: var(--primary-color);
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
-}
-
 .o_order_lookup_page .summary-card .summary-label {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     font-weight: 600;
@@ -370,14 +505,14 @@
 }
 
 .o_order_lookup_page .summary-card .summary-value {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: 700;
     color: var(--text-dark);
     margin-bottom: 0;
 }
 
 .o_order_lookup_page .summary-card .summary-value small {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 500;
     color: var(--text-muted);
 }
@@ -530,13 +665,30 @@
     }
     
     /* Mobile summary cards */
-    .o_order_lookup_page .summary-card {
-        margin-bottom: 1rem;
+    .o_order_lookup_page .order-summary-section {
         padding: 1rem;
     }
     
+    .o_order_lookup_page .order-summary-section > div {
+        justify-content: center !important;
+    }
+    
+    .o_order_lookup_page .summary-card {
+        margin-bottom: 0.5rem;
+        padding: 0.75rem;
+        min-width: 100px !important;
+    }
+    
+    .o_order_lookup_page .summary-card .summary-label {
+        font-size: 0.65rem;
+    }
+    
     .o_order_lookup_page .summary-card .summary-value {
-        font-size: 1.1rem;
+        font-size: 1rem;
+    }
+    
+    .o_order_lookup_page .summary-card .summary-value small {
+        font-size: 0.75rem;
     }
     
     /* Mobile pagination */
@@ -573,18 +725,23 @@
     }
     
     .o_order_lookup_page .badge {
-        font-size: 0.7rem;
-        padding: 0.3rem 0.6rem;
+        font-size: 0.65rem;
+        padding: 0.25rem 0.5rem;
     }
     
     .o_order_lookup_page table {
-        min-width: 700px;
+        min-width: 650px;
     }
     
     .o_order_lookup_page table thead th,
     .o_order_lookup_page table tbody td {
         font-size: 0.75rem;
-        padding: 0.5rem 0.3rem;
+        padding: 0.5rem 0.25rem;
+    }
+    
+    .o_order_lookup_page .combo-component {
+        font-size: 0.7rem;
+        padding-left: 0.75rem;
     }
 }
 
