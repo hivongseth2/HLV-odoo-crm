@@ -4,12 +4,14 @@
     <field name="model">delivery.carrier</field>
     <field name="inherit_id" ref="delivery.view_delivery_carrier_form"/>
     <field name="arch" type="xml">
-      <xpath expr="//group[@name='provider_configuration']" position="inside">
-        <group attrs="{'invisible': [('delivery_type','!=','vtp')]}">
-          <field name="vtp_service_code"/>
-          <field name="vtp_cod"/>
-        </group>
+
+      <xpath expr="//field[@name='delivery_type']" position="after">
+        <field name="vtp_service_code"
+               invisible="delivery_type != 'vtp'"/>
+        <field name="vtp_cod"
+               invisible="delivery_type != 'vtp'"/>
       </xpath>
+
     </field>
   </record>
 </odoo>
