@@ -281,12 +281,16 @@
                                       <td>
                                         <div t-attf-class="{{line.get('is_combo') and 'combo-parent' or ''}}">
                                           <strong><t t-esc="line.get('product_name', 'N/A')"/></strong>
+                                          <!-- Icon đã giao cho combo parent -->
+                                          <t t-if="line.get('is_combo') and line.get('is_fully_delivered')">
+                                            <i class="fa fa-check-circle text-success ms-2" title="Đã giao đủ"></i>
+                                          </t>
                                         </div>
                                         <!-- Show delivered qty as subtext -->
                                         <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
                                         <t t-set="total_qty" t-value="line.get('qty', 0)"/>
-                                        <t t-if="delivered > 0">
-                                          <small class="text-muted d-block">
+                                        <t t-if="delivered > 0 and not line.get('is_combo')">
+                                          <small class="text-muted d-block mt-1">
                                             Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
                                             <t t-if="delivered >= total_qty">
                                               <i class="fa fa-check-circle text-success ms-1"></i>
