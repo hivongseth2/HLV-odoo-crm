@@ -48,7 +48,7 @@ class WebsiteTrackingPublic(http.Controller):
                         data = (payload.get("data") or {})
                     else:
                         data = (rc.json().get("data") or {})
-                # Nếu có id -> lấy bản có lang=vi để hiển thị đẹp
+                # Nếu có id -> lấy bản có lang=vi để hiển thị đẹp pl
                 tid = data.get("id")
                 if not error and tid:
                     url = f"{AFTERSHIP_API_BASE}/trackings/{tid}?lang=vi"
