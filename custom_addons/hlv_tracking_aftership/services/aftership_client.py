@@ -49,8 +49,10 @@ class AfterShipClient:
             r.raise_for_status()
 
         return r.json()
-    def get_tracking_by_id(self, tracking_id: str):
+    def get_tracking_by_id(self, tracking_id: str, lang: str = None):        
         url = f"{AFTERSHIP_API_BASE}/trackings/{tracking_id}"
+        if lang:
+            url += f"?lang={lang}"
         r = requests.get(url, headers=self.headers, timeout=20)
         r.raise_for_status()
         return r.json()
