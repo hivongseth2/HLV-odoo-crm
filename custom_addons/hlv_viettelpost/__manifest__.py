@@ -17,6 +17,6 @@
     "views/stock_picking_vtp_button.xml"
   ],
   "assets": {},
-  "application": false,
-  "installable": true
+  "application": False,
+  "installable": True
 }
