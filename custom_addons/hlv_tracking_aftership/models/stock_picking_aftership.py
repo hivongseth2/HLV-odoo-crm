@@ -7,6 +7,7 @@ _logger = logging.getLogger(__name__)
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
+    tracking_timeline_html = fields.Html(string="Tracking Timeline", compute="_compute_tracking_timeline", sanitize=False, readonly=True)
 
     tracking_slug = fields.Char(string="Carrier Slug", default="jtexpress-vn")
     tracking_number = fields.Char(string="Tracking Number")
@@ -75,6 +76,22 @@ class StockPicking(models.Model):
                 cp_text = f"{(last.get('tag') or '')} - {(last.get('message') or '')}"
             pick.tracking_last_checkpoint = cp_text
 
+
+    def _compute_tracking_timeline(self):
+        for p in self:
+            tr = p.tracking_payload or {}
+            cps = tr.get("checkpoints") or []
+            if not cps:
+                p.tracking_timeline_html = "<em>Chưa có checkpoint.</em>"
+                continue
+            # newest -> oldest
+            lines = []
+            for cp in reversed(cps):
+                t  = cp.get("checkpoint_time") or ""
+                tg = cp.get("tag") or ""
+                msg = cp.get("message") or ""
+                lines.append(f"<li><b>{tg}</b> — {msg} <small style='opacity:.6'>({t})</small></li>")
+            p.tracking_timeline_html = "<ul style='margin-left:1rem'>" + "\n".join(lines) + "</ul>"
     @api.model
     def cron_aftership_refresh_all(self):
         picks = self.search([('aftership_id', '!=', False)])

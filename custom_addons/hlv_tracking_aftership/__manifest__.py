@@ -7,7 +7,8 @@
     "depends": ["stock"],
     "data": [
         "views/stock_picking_buttons.xml",
-        "data/ir_cron.xml"
+        "data/ir_cron.xml",
+        "views/website_tracking.xml" 
     ],
     "installable": True,
     "application": False

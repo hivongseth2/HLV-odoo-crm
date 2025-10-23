@@ -35,5 +35,7 @@
       </xpath>
 
     </field>
+    <field name="tracking_timeline_html" widget="html" nolabel="1"/>
+
   </record>
 </odoo>
