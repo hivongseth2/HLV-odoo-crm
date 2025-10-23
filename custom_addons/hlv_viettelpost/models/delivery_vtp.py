@@ -1,10 +1,13 @@
 import math
-from odoo import models, fields, api
+from odoo import models, fields
 
 class DeliveryCarrier(models.Model):
     _inherit = "delivery.carrier"
 
-    delivery_type = fields.Selection(selection_add=[("vtp", "Viettel Post")], ondelete={"vtp": "set default"}, )
+    delivery_type = fields.Selection(
+        selection_add=[("vtp", "Viettel Post")],
+        ondelete={"vtp": "set default"},
+    )
     vtp_service_code = fields.Char("VTP Service Code")
     vtp_cod = fields.Boolean("Thu hộ COD", default=False)
 
@@ -14,7 +17,6 @@ class DeliveryCarrier(models.Model):
             return super().rate_shipment(order)
 
         api = self.env["vtp.api"]
-        # Weight in grams, minimum 200g
         weight_grams = max(200, math.ceil((order._get_estimated_weight() or 0) * 1000))
         ICP = self.env["ir.config_parameter"].sudo()
         payload = {
@@ -30,23 +32,17 @@ class DeliveryCarrier(models.Model):
         }
         res = api.vtp_calculate_fee(payload)
         price = float((res.get("data") or {}).get("TOTAL_FEE", 0.0))
-        return {
-            "success": True,
-            "price": price,
-            "error_message": False,
-            "warning_message": False,
-        }
+        return {"success": True, "price": price, "error_message": False, "warning_message": False}
 
     def send_shipping(self, pickings):
+        if not isinstance(pickings, (list, tuple)):
+            pickings = pickings.exists()
         res = []
         api = self.env["vtp.api"]
         ICP = self.env["ir.config_parameter"].sudo()
         for picking in pickings:
             partner = picking.partner_id
-            weight_grams = max(
-                200,
-                int(sum(m.product_uom_qty * (m.product_id.weight or 0) * 1000 for m in picking.move_ids_without_package))
-            )
+            weight_grams = max(200, int(sum(m.product_uom_qty * (m.product_id.weight or 0) * 1000 for m in picking.move_ids_without_package)))
             payload = {
                 "SENDER_NAME": self.env.user.company_id.name,
                 "SENDER_PHONE": ICP.get_param("vtp.shop_phone") or "",

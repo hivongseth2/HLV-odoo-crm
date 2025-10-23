@@ -10,12 +10,10 @@ class VTPAPI(models.AbstractModel):
     _name = "vtp.api"
     _description = "Viettel Post API Helper"
 
-    # ---- Config helpers
     def _conf(self, key, default=""):
         return self.env["ir.config_parameter"].sudo().get_param(key, default)
 
     def _debug(self):
-        # Bật bằng cách đặt System Parameter: vtp.debug = 1
         return (self._conf("vtp.debug") or "").strip().lower() in ("1", "true", "yes")
 
     def _base(self):
@@ -26,23 +24,15 @@ class VTPAPI(models.AbstractModel):
         tok = token or self._conf("vtp.token")
         hdrs = {"Content-Type": "application/json"}
         if tok:
-            hdrs["Token"] = tok  # VTP expects 'Token' header
+            hdrs["Token"] = tok
         return hdrs
 
-    # ---- Auth
     def vtp_login(self, username=None, password=None):
-        """Lấy Token VTP (v2). Một số tài khoản yêu cầu 2 bước:
-        1) /user/ownerconnect
-        2) Nếu không có token, thử /user/login
-        Trả token và lưu vào ir.config_parameter.
-        """
         import json
-
         username = username or self._conf("vtp.username")
         password = password or self._conf("vtp.password")
         if not username or not password:
             raise ValueError("Thiếu username/password Viettel Post trong Settings.")
-
         base = self._base()
         headers = self._headers()
 
@@ -50,19 +40,12 @@ class VTPAPI(models.AbstractModel):
             if not isinstance(resp_json, dict):
                 return None
             data = resp_json.get("data") if isinstance(resp_json.get("data"), dict) else {}
-            candidates = [
-                data.get("token"),
-                data.get("TOKEN"),
-                resp_json.get("token"),
-                resp_json.get("TOKEN"),
-            ]
+            candidates = [data.get("token"), data.get("TOKEN"), resp_json.get("token"), resp_json.get("TOKEN")]
             for c in candidates:
                 if c:
                     return c
-            # Một số triển khai trả token ở header
             return resp_headers.get("Token") or resp_headers.get("TOKEN")
 
-        # --- Thử 1: ownerconnect
         try:
             url1 = f"{base}/user/ownerconnect"
             payload1 = {"USERNAME": username, "PASSWORD": password}
@@ -79,7 +62,6 @@ class VTPAPI(models.AbstractModel):
         except Exception as e:
             _logger.error("[VTP] ownerconnect lỗi: %s / body=%s", e, getattr(locals().get("r1", None), "text", ""))
 
-        # --- Thử 2: login
         try:
             url2 = f"{base}/user/login"
             payload2 = {"USERNAME": username, "PASSWORD": password}
@@ -106,7 +88,6 @@ class VTPAPI(models.AbstractModel):
         )
         raise ValueError(msg)
 
-    # ---- Categories / Address master
     def vtp_list_provinces(self):
         url = f"{self._base()}/categories/listProvince"
         if self._debug(): _logger.info("[VTP] GET %s", url)
@@ -133,7 +114,6 @@ class VTPAPI(models.AbstractModel):
         r.raise_for_status()
         return r.json()
 
-    # ---- Price calculation
     def vtp_calculate_fee(self, payload):
         url = f"{self._base()}/order/getPrice"
         if self._debug(): _logger.info("[VTP] POST %s payload=%s", url, payload)
@@ -146,7 +126,6 @@ class VTPAPI(models.AbstractModel):
         r.raise_for_status()
         return r.json()
 
-    # ---- Create order
     def vtp_create_order(self, payload):
         url = f"{self._base()}/order/createOrder"
         if self._debug(): _logger.info("[VTP] POST %s payload=%s", url, payload)
@@ -159,7 +138,6 @@ class VTPAPI(models.AbstractModel):
         r.raise_for_status()
         return r.json()
 
-    # ---- Cancel order
     def vtp_cancel_order(self, order_code, note="Odoo cancel"):
         url = f"{self._base()}/order/cancel"
         payload = {"ORDER_NUMBER": order_code, "NOTE": note}
@@ -173,7 +151,6 @@ class VTPAPI(models.AbstractModel):
         r.raise_for_status()
         return r.json()
 
-    # ---- Label (optional)
     def vtp_get_label(self, order_code):
         url = f"{self._base()}/order/label"
         payload = {"ORDER_NUMBER": order_code}

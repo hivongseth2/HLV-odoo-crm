@@ -47,4 +47,4 @@ class ResConfigSettings(models.TransientModel):
     def action_vtp_login(self):
         self.env['vtp.api'].vtp_login(self.vtp_username, self.vtp_password)
         self.vtp_token = self.env['ir.config_parameter'].sudo().get_param('vtp.token')
-        return {'type': 'ir.actions.client', 'tag': 'reload'}
+        return {'type': 'ir.actions.client', 'tag': 'display_notification', 'params': {'title': 'VTP', 'message': 'Đăng nhập thành công', 'type': 'success'}}

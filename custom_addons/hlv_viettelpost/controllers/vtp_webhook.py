@@ -14,6 +14,5 @@ class VTPWebhook(http.Controller):
         picking = request.env["stock.picking"].sudo().search([("carrier_tracking_ref", "=", order_no)], limit=1)
         if picking:
             picking.message_post(body=f"Webhook VTP: {status} / {payload.get('STATUS_NAME')}")
-        else:
-            _logger.info("VTP Webhook: not found %s", order_no)
+        _logger.info("VTP Webhook payload: %s", payload)
         return {"ok": True}

@@ -1,5 +1,8 @@
+import logging
 from odoo import models, _
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 class VTPSyncWizard(models.TransientModel):
     _name = "vtp.sync.wizard"
@@ -7,8 +10,6 @@ class VTPSyncWizard(models.TransientModel):
 
     def action_sync_geo(self):
         api = self.env["vtp.api"]
-
-        # Nếu chưa login VTP thì báo rõ
         token = self.env["ir.config_parameter"].sudo().get_param("vtp.token")
         if not token:
             raise UserError(_("Chưa có token VTP. Vào Settings → Viettel Post → bấm 'Login & Get Token' trước."))
@@ -51,21 +52,10 @@ class VTPSyncWizard(models.TransientModel):
                     else:
                         W.create(w_vals); c_w_new += 1
 
-        # Hiện thông báo thay vì reload im lặng
-        msg = _(
-            "Đồng bộ xong:\n"
-            "- Tỉnh/TP: +%d mới, %d cập nhật\n"
-            "- Quận/Huyện: +%d mới, %d cập nhật\n"
-            "- Phường/Xã: +%d mới, %d cập nhật"
-        ) % (c_p_new, c_p_upd, c_d_new, c_d_upd, c_w_new, c_w_upd)
-
         return {
-            "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": _("Viettel Post"),
-                "message": msg,
-                "type": "success",
-                "sticky": False,
-            },
+            "type": "ir.actions.act_window",
+            "name": "Viettel Post - Phường/Xã",
+            "res_model": "vtp.ward",
+            "view_mode": "list,form",
+            "target": "current",
         }

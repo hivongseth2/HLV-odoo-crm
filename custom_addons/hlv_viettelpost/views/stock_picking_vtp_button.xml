@@ -9,7 +9,8 @@
                 string="Tạo vận đơn Viettel Post"
                 type="object"
                 class="btn-primary"
-                invisible="carrier_id.delivery_type != 'vtp'"/>
+                groups="stock.group_stock_user"
+                invisible="(carrier_id == False) or (carrier_id.delivery_type != 'vtp')"/>
       </xpath>
     </field>
   </record>

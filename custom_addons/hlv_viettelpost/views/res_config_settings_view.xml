@@ -1,36 +1,28 @@
 <odoo>
   <record id="res_config_settings_view_form_vtp" model="ir.ui.view">
-          <field name="name">res.config.settings.view.form.vtp</field>
-          <field name="model">res.config.settings</field>
-          <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
-          <field name="arch" type="xml">
-          <!-- Chèn block cấu hình Viettel Post vào container chuẩn của Settings -->
-          <xpath expr="//form" position="inside">
-          <div class="app_settings_block" string="Viettel Post" data-string="Viettel Post" data-key="hlv_viettelpost">
+    <field name="name">res.config.settings.view.form.vtp</field>
+    <field name="model">res.config.settings</field>
+    <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//form" position="inside">
+        <div class="app_settings_block" string="Viettel Post">
           <h2>Viettel Post API</h2>
-
-                <group string="Kết nối API">
-                    <field name="vtp_api_base"/>
-                    <field name="vtp_username"/>
-                    <field name="vtp_password" password="True"/>
-                    <field name="vtp_token" readonly="1"/>
-                    <button string="Login &amp; Get Token"
-                            type="object"
-                            name="action_vtp_login"
-                            class="btn-primary"/>
-                </group>
-
-                <group string="Địa chỉ người gửi (Shop)">
-                    <field name="vtp_shop_province_code"/>
-                    <field name="vtp_shop_district_code"/>
-                    <field name="vtp_shop_ward_code"/>
-                    <field name="vtp_shop_address"/>
-                    <field name="vtp_shop_phone"/>
-                </group>
-            </div>
-        </xpath>
+          <group string="Kết nối API">
+            <field name="vtp_api_base"/>
+            <field name="vtp_username"/>
+            <field name="vtp_password" password="True"/>
+            <field name="vtp_token" readonly="1"/>
+            <button string="Login &amp; Get Token" type="object" name="action_vtp_login" class="btn-primary"/>
+          </group>
+          <group string="Địa chỉ người gửi (Shop)">
+            <field name="vtp_shop_province_code"/>
+            <field name="vtp_shop_district_code"/>
+            <field name="vtp_shop_ward_code"/>
+            <field name="vtp_shop_address"/>
+            <field name="vtp_shop_phone"/>
+          </group>
+        </div>
+      </xpath>
     </field>
-</record>
-
-
+  </record>
 </odoo>
