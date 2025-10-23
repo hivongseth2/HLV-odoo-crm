@@ -280,6 +280,16 @@ class InventoryReportWizard(models.TransientModel):
                 else:
                     cell.alignment = cell_alignment
 
+        # Wrap text for specific columns
+        for row_idx in range(DATA_START, len(data_rows) + DATA_START):
+            # Wrap text for 'product_name' column
+            product_name_cell = ws.cell(row=row_idx, column=3)  # Column 3 is 'product_name'
+            product_name_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+            # Wrap text for 'picking_names' column
+            picking_names_cell = ws.cell(row=row_idx, column=9)  # Column 9 is 'picking_names'
+            picking_names_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
         ws.row_dimensions[HEADER_ROW].height = 35
 
         return wb
