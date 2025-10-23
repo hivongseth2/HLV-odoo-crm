@@ -3,20 +3,16 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
-AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2025-07"
+AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2025-07"  # ✅ bản mới
 
 class AfterShipClient:
-    """
-    Lightweight client for AfterShip v2024-04 Tracking API.
-    Docs: https://docs.aftership.com
-    """
     def __init__(self, api_key: str):
-            if not api_key:
-                raise ValueError("AfterShip API key is required")
-            self.headers = {
-                "Content-Type": "application/json",
-                "as-api-key": api_key,                                  # ✅ ĐÚNG header
-            }
+        if not api_key:
+            raise ValueError("AfterShip API key is required")
+        self.headers = {
+            "Content-Type": "application/json",
+            "as-api-key": api_key,                                  # ✅ ĐÚNG header
+        }
 
     def create_tracking(self, slug: str, tracking_number: str, title: str = None):
         payload = {                                                # ✅ KHÔNG bọc "tracking"
@@ -28,6 +24,21 @@ class AfterShipClient:
 
         url = f"{AFTERSHIP_API_BASE}/trackings"
         r = requests.post(url, json=payload, headers=self.headers, timeout=20)
+        
+        if r.status_code in (200, 201):
+            return r.json()
+
+        # AfterShip 2025-07: tracking đã tồn tại => HTTP 400 + meta.code=4003
+        try:
+            data = r.json()
+        except Exception:
+            data = None
+
+        if r.status_code == 400 and isinstance(data, dict):
+            meta = (data.get("meta") or {})
+            if str(meta.get("code")) == "4003":
+                # coi như thành công, trả luôn response này
+                return data
 
         if r.status_code == 409:  # đã tồn tại
             _logger.info("AfterShip: tracking existed, using current one: %s", r.text)

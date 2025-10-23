@@ -39,10 +39,9 @@ class StockPicking(models.Model):
                     body = f"\nResponse: {e.response.text}"
                 _logger.exception("AfterShip create tracking failed: %s%s", e, body)
                 raise UserError(f"AfterShip lỗi khi tạo tracking: {e}{body}")
-            tracking = (res or {}).get("data", {}).get("tracking") or {}
+            tracking = (res or {}).get("data") or {}
             pick.aftership_id = tracking.get("id")
             pick.tracking_payload = tracking
-            # Optionally refresh status immediately
             pick.action_refresh_tracking_aftership()
 
     def action_refresh_tracking_aftership(self):
