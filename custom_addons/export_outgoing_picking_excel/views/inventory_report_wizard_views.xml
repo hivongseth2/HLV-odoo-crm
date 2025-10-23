@@ -30,6 +30,10 @@
           <p class="mt-2"><em>Công thức: Tồn đầu + Nhập - Xuất = Tồn cuối</em></p>
         </div>
 
+        <div class="alert alert-warning mt-2" role="alert">
+          <p><strong>Lưu ý:</strong> Các sản phẩm không có tồn kho và không có xuất nhập từ thời điểm được chọn sẽ không xuất hiện trong file Excel.</p>
+        </div>
+
         <footer>
           <button string="Xuất Excel" type="object" name="action_export" class="btn-primary"/>
           <button string="Đóng" special="cancel" class="btn-secondary"/>
