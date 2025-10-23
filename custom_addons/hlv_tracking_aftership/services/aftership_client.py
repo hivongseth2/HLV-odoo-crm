@@ -40,7 +40,7 @@ class AfterShipClient:
                 # coi như thành công, trả luôn response này
                 return data
 
-        if r.status_code == 409:  # đã tồn tại
+        if r.status_code == 409:  # đã 
             _logger.info("AfterShip: tracking existed, using current one: %s", r.text)
             return r.json()
 
