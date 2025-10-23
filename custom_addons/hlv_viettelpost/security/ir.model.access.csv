@@ -1,5 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_vtp_province,access_vtp_province,model_vtp_province,base.group_user,1,1,1,1
-access_vtp_district,access_vtp_district,model_vtp_district,base.group_user,1,1,1,1
-access_vtp_ward,access_vtp_ward,model_vtp_ward,base.group_user,1,1,1,1
-access_vtp_sync_wizard,access_vtp_sync_wizard,model_vtp_sync_wizard,base.group_user,1,1,1,1
