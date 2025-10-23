@@ -22,8 +22,7 @@ class AfterShipClient:
     def create_tracking(self, slug: str, tracking_number: str, title: str = None):
         payload = {
         "tracking_number": tracking_number,
-        "slug": slug,
-        "title": title or tracking_number,
+        "slug": slug
              }
 
         url = f"{AFTERSHIP_API_BASE}/trackings"
