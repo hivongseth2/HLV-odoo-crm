@@ -215,6 +215,36 @@ class InventoryReportWizard(models.TransientModel):
         
         return ', '.join(picking_names) if picking_names else ''
 
+    def _get_product_incoming_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
+        """
+        Lấy danh sách tên (mã) các picking nhập kho của sản phẩm trong khoảng thời gian
+        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124"
+        
+        Logic: Giống hệt _get_incoming_qty_between để đảm bảo consistency
+        """
+        # Tìm các stock.move nhập vào kho
+        moves = self.env['stock.move'].search([
+            ('product_id', '=', product_id),
+            ('state', '=', 'done'),
+            ('date', '>=', start_datetime),
+            ('date', '<=', end_datetime),
+            ('location_dest_id', 'in', location_ids),
+        ], order='date asc')
+        
+        # Lọc: chỉ lấy move nhập từ ngoài vào (source không trong location_ids)
+        incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
+        
+        # Lấy danh sách picking names (unique)
+        picking_names = []
+        seen_picking_ids = set()
+        
+        for move in incoming_moves:
+            if move.picking_id and move.picking_id.id not in seen_picking_ids:
+                picking_names.append(move.picking_id.name)
+                seen_picking_ids.add(move.picking_id.id)
+        
+        return ', '.join(picking_names) if picking_names else ''
+
     def _create_excel_workbook(self, data_rows):
         """Tạo workbook Excel với hyperlink đến picking"""
         wb = Workbook()
@@ -231,7 +261,8 @@ class InventoryReportWizard(models.TransientModel):
             {'key': 'qty_in', 'name': 'Số lượng nhập', 'width': 18},
             {'key': 'qty_out', 'name': 'Số lượng xuất', 'width': 18},
             {'key': 'qty_current', 'name': 'Tồn hiện tại', 'width': 18},
-            {'key': 'picking_names', 'name': 'Chi tiết đơn xuất', 'width': 50},
+            {'key': 'incoming_picking_names', 'name': 'Chi tiết đơn nhập', 'width': 50},
+            {'key': 'outgoing_picking_names', 'name': 'Chi tiết đơn xuất', 'width': 50},
         ]
 
         # Styles
@@ -286,9 +317,13 @@ class InventoryReportWizard(models.TransientModel):
             product_name_cell = ws.cell(row=row_idx, column=3)  # Column 3 is 'product_name'
             product_name_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
-            # Wrap text for 'picking_names' column
-            picking_names_cell = ws.cell(row=row_idx, column=9)  # Column 9 is 'picking_names'
-            picking_names_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            # Wrap text for 'incoming_picking_names' column
+            incoming_picking_names_cell = ws.cell(row=row_idx, column=9)  # Column 9 is 'incoming_picking_names'
+            incoming_picking_names_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+            # Wrap text for 'outgoing_picking_names' column
+            outgoing_picking_names_cell = ws.cell(row=row_idx, column=10)  # Column 10 is 'outgoing_picking_names'
+            outgoing_picking_names_cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
 
         ws.row_dimensions[HEADER_ROW].height = 35
 
@@ -336,8 +371,13 @@ class InventoryReportWizard(models.TransientModel):
             if qty_start == 0 and qty_in == 0 and qty_out == 0 and qty_current == 0:
                 continue
             
+            # Lấy danh sách mã đơn nhập kho
+            incoming_picking_names = self._get_product_incoming_picking_names(
+                product.id, location_ids, start_of_day, current_datetime
+            )
+            
             # Lấy danh sách mã đơn xuất kho
-            picking_names = self._get_product_outgoing_picking_names(
+            outgoing_picking_names = self._get_product_outgoing_picking_names(
                 product.id, location_ids, start_of_day, current_datetime
             )
             
@@ -350,7 +390,8 @@ class InventoryReportWizard(models.TransientModel):
                 'qty_in': qty_in,
                 'qty_out': qty_out,
                 'qty_current': qty_current,
-                'picking_names': picking_names,
+                'incoming_picking_names': incoming_picking_names,
+                'outgoing_picking_names': outgoing_picking_names,
             }
             data_rows.append(row)
             stt += 1
