@@ -8,6 +8,14 @@
       <field name="target">new</field>
     </record>
   
+    <!-- ✅ Action báo cáo tồn kho -->
+    <record id="action_inventory_report_wizard" model="ir.actions.act_window">
+      <field name="name">Báo cáo tồn kho (Excel)</field>
+      <field name="res_model">inventory.report.wizard</field>
+      <field name="view_mode">form</field>
+      <field name="view_id" ref="export_outgoing_picking_excel.view_inventory_report_wizard_form"/>
+      <field name="target">new</field>
+    </record>
   
     <!-- ✅ Menu mở wizard trực tiếp -->
     <menuitem id="menu_export_excel_root"
@@ -19,5 +27,10 @@
               parent="menu_export_excel_root"
               action="action_picking_export_wizard"
               sequence="1"/>
+    <menuitem id="menu_inventory_report_excel"
+              name="Báo cáo tồn kho (Excel)"
+              parent="menu_export_excel_root"
+              action="action_inventory_report_wizard"
+              sequence="2"/>
   </odoo>
   

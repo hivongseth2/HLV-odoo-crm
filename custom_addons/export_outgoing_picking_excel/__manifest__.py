@@ -11,6 +11,7 @@
         "security/ir.model.access.csv",
         "views/picking_export_wizard_views.xml", 
         "views/purchase_export_wizard_views.xml",
+        "views/inventory_report_wizard_views.xml",
         "views/stock_picking_views.xml",
     ],
     "assets": {},
