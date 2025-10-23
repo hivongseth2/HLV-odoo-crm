@@ -1,6 +1,7 @@
 # models/stock_picking_inherit.py
 import logging
 from odoo import models, fields
+from urllib.parse import quote
 
 _logger = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ class StockPicking(models.Model):
         amount = float(so.amount_total) if so else 0.0
         price_value = int(round(amount))
         date_str = fields.Date.context_today(self).strftime("%d/%m/%Y")
+        id_encoded = quote(str(so.id), safe="")  # encode UTF-8 theo yêu cầu Zalo
 
         params = {
             "name": ship_partner.name or "",
@@ -98,6 +100,7 @@ class StockPicking(models.Model):
             "price": price_value,
             "status": "Đã gửi hàng",
             "date": date_str,
+            "id": id_encoded,
         }
 
         _logger.info("ZNS send try (OUT): %s to=%s params=%s", picking.name, msisdn, params)
