@@ -1,6 +1,6 @@
 {
     "name": "HLV Tracking AfterShip",
-    "version": "18.0.1.0.1",
+    "version": "18.0.1.0.0",
     "summary": "Track J&T Express VN via AfterShip (slug: jtexpress-vn)",
     "author": "Hoang Long Vu + ChatGPT",
     "license": "LGPL-3",
