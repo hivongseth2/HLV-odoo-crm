@@ -21,11 +21,13 @@
         <div class="alert alert-info" role="alert">
           <p><strong>Báo cáo sẽ hiển thị:</strong></p>
           <ul>
-            <li>Tồn kho đầu ngày (0h của ngày đã chọn)</li>
-            <li>Số lượng xuất kho từ 0h đến thời điểm xuất file</li>
-            <li>Tồn kho hiện tại (tại thời điểm xuất file)</li>
-            <li>Chi tiết đơn hàng (có thể click để xem chi tiết)</li>
+            <li><strong>Tồn đầu ngày (0h)</strong> - Số lượng tồn kho lúc 0h của ngày đã chọn</li>
+            <li><strong>Số lượng nhập</strong> - Tổng nhập từ tất cả nguồn (nhập từ NCC, trả hàng, chuyển kho, v.v.)</li>
+            <li><strong>Số lượng xuất</strong> - Tổng xuất cho khách hàng trong ngày</li>
+            <li><strong>Tồn hiện tại</strong> - Số lượng tồn tại thời điểm xuất báo cáo</li>
+            <li><strong>Chi tiết đơn xuất</strong> - Danh sách mã đơn xuất kho</li>
           </ul>
+          <p class="mt-2"><em>Công thức: Tồn đầu + Nhập - Xuất = Tồn cuối</em></p>
         </div>
 
         <footer>
