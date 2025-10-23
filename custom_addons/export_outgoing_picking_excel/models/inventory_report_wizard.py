@@ -138,10 +138,68 @@ class InventoryReportWizard(models.TransientModel):
         
         return list(product_ids)
 
-    def _get_picking_url(self, picking_id):
-        """Tạo URL để mở form picking trong Odoo"""
+    def _get_filtered_picking_list_url(self, product_id, location_ids, start_datetime, end_datetime):
+        """
+        Tạo URL đến danh sách picking đã được lọc theo sản phẩm và khoảng thời gian.
+        
+        URL này sẽ mở list view của stock.picking với bộ lọc đã được thiết lập sẵn,
+        cho phép người dùng click vào Excel và xem tất cả các đơn picking liên quan
+        đến sản phẩm cụ thể trong khoảng thời gian đã chọn.
+        
+        Args:
+            product_id: ID của sản phẩm cần lọc
+            location_ids: Danh sách ID các location kho
+            start_datetime: Thời điểm bắt đầu (datetime object)
+            end_datetime: Thời điểm kết thúc (datetime object)
+            
+        Returns:
+            str: URL đầy đủ để mở Odoo với bộ lọc đã thiết lập
+        """
+        import json
+        import urllib.parse
+        
         base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        return f"{base_url}/web#id={picking_id}&model=stock.picking&view_type=form"
+        
+        # Format datetime cho Odoo (ISO format)
+        start_str = start_datetime.strftime('%Y-%m-%d %H:%M:%S')
+        end_str = end_datetime.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Tạo domain filter - lọc picking xuất kho có chứa sản phẩm này
+        domain = [
+            ('picking_type_code', '=', 'outgoing'),
+            ('state', '=', 'done'),
+            ('date_done', '>=', start_str),
+            ('date_done', '<=', end_str),
+            ('move_ids_without_package.product_id', '=', product_id),
+        ]
+        
+        # Nếu có location_ids cụ thể, thêm vào domain
+        if location_ids:
+            domain.append(('location_id', 'in', location_ids))
+        
+        # Tìm menu của stock picking để URL có context phù hợp
+        menu = self.env.ref('stock.stock_picking_type_menu', raise_if_not_found=False)
+        menu_id = menu.id if menu else ''
+        
+        # Encode domain thành JSON
+        domain_json = json.dumps(domain)
+        
+        # Tạo URL parameters
+        url_params = {
+            'model': 'stock.picking',
+            'view_type': 'list',
+        }
+        
+        if menu_id:
+            url_params['menu_id'] = menu_id
+        
+        # Build URL parameter string
+        params_str = '&'.join([f"{k}={v}" for k, v in url_params.items()])
+        
+        # URL cuối cùng - Odoo web client sẽ parse domain và hiển thị list đã lọc
+        url = f"{base_url}/web#{params_str}&cids=1&domain={urllib.parse.quote(domain_json)}"
+        
+        return url
 
     def _get_product_outgoing_pickings(self, product_id, location_ids, start_datetime, end_datetime):
         """
@@ -185,7 +243,7 @@ class InventoryReportWizard(models.TransientModel):
             {'key': 'qty_start', 'name': 'Tồn đầu ngày (0h)', 'width': 20},
             {'key': 'qty_out', 'name': 'Số lượng xuất', 'width': 18},
             {'key': 'qty_current', 'name': 'Tồn hiện tại', 'width': 18},
-            # {'key': 'pickings', 'name': 'Chi tiết đơn hàng', 'width': 50},
+            {'key': 'pickings', 'name': 'Chi tiết đơn hàng (Click để xem)', 'width': 35},
         ]
 
         # Styles
@@ -222,21 +280,28 @@ class InventoryReportWizard(models.TransientModel):
                 # Xử lý cột chi tiết đơn hàng với hyperlink
                 if col_def['key'] == 'pickings':
                     pickings_info = row_data.get('pickings_detail', [])
-                    if pickings_info:
-                        # Tạo text hiển thị với hyperlink
-                        picking_texts = []
-                        for p in pickings_info:
-                            picking_texts.append(f"{p['name']} ({p['qty']} {row_data.get('uom', '')})")
+                    picking_count = len(pickings_info)
+                    
+                    if picking_count > 0:
+                        # Hiển thị số lượng đơn hàng với text rõ ràng
+                        if picking_count == 1:
+                            cell.value = f"📋 Xem 1 đơn hàng"
+                        else:
+                            cell.value = f"📋 Xem {picking_count} đơn hàng"
                         
-                        cell.value = "; ".join(picking_texts)
-                        
-                        # Nếu chỉ có 1 picking, tạo hyperlink
-                        if len(pickings_info) == 1:
-                            url = self._get_picking_url(pickings_info[0]['id'])
+                        # Tạo hyperlink đến danh sách picking đã lọc
+                        url = row_data.get('pickings_url', '')
+                        if url:
                             cell.hyperlink = url
                             cell.font = link_font
+                            # Thêm tooltip/comment để hướng dẫn người dùng
+                            from openpyxl.comments import Comment
+                            cell.comment = Comment(
+                                f"Click để xem {picking_count} đơn xuất kho của sản phẩm này",
+                                "Báo cáo tồn kho"
+                            )
                     else:
-                        cell.value = ""
+                        cell.value = "Không có"
                 else:
                     value = row_data.get(col_def['key'], "")
                     if value is None:
@@ -302,6 +367,13 @@ class InventoryReportWizard(models.TransientModel):
                 product.id, location_ids, start_of_day, current_datetime
             )
             
+            # Tạo URL để xem danh sách picking đã lọc
+            pickings_url = ''
+            if pickings_detail:
+                pickings_url = self._get_filtered_picking_list_url(
+                    product.id, location_ids, start_of_day, current_datetime
+                )
+            
             row = {
                 'stt': stt,
                 'product_code': product.default_code or '',
@@ -311,6 +383,7 @@ class InventoryReportWizard(models.TransientModel):
                 'qty_out': qty_out,
                 'qty_current': qty_current,
                 'pickings_detail': pickings_detail,
+                'pickings_url': pickings_url,
             }
             data_rows.append(row)
             stt += 1
