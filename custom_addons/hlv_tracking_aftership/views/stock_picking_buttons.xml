@@ -1,22 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
   <record id="view_picking_form_aftership" model="ir.ui.view">
     <field name="name">stock.picking.form.aftership</field>
     <field name="model">stock.picking</field>
     <field name="inherit_id" ref="stock.view_picking_form"/>
     <field name="arch" type="xml">
-      <xpath expr="//header" position="inside">
-      <!-- Nút đăng ký tracking: ẩn khi đã có aftership_id hoặc chưa có tracking_number -->
-      <button name="action_register_tracking_aftership"
-              type="object" string="Register Tracking (AfterShip)"
-              class="oe_highlight"
-              invisible="aftership_id != False or tracking_number == False"/>
+      
+      <!-- 🟢 CHÈN SAU NHÓM NÚT GỬI/IN Ở HEADER -->
+      <xpath expr="//header//button[last()]" position="after">
+        <button name="action_register_tracking_aftership"
+                type="object"
+                string="Register Tracking (AfterShip)"
+                class="btn btn-primary"
+                invisible="aftership_id != False or tracking_number == False"/>
+        <button name="action_refresh_tracking_aftership"
+                type="object"
+                string="Refresh Tracking"
+                class="btn btn-secondary"
+                invisible="tracking_number == False"/>
+      </xpath>
 
-      <!-- Nút refresh: ẩn khi chưa có tracking_number -->
-      <button name="action_refresh_tracking_aftership"
-              type="object" string="Refresh Tracking"
-              invisible="tracking_number == False"/>
-    </xpath>
-
+      <!-- 🟢 TAB TRACKING -->
       <xpath expr="//sheet/notebook" position="inside">
         <page string="Tracking">
           <group>
@@ -29,6 +33,7 @@
           </group>
         </page>
       </xpath>
+
     </field>
   </record>
 </odoo>

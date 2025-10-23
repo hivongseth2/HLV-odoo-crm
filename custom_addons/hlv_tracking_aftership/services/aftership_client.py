@@ -16,7 +16,7 @@ class AfterShipClient:
         self.api_key = api_key
         self.headers = {
             "Content-Type": "application/json",
-            "aftership-api-key": api_key,
+            "as-api-key": api_key, 
         }
 
     def create_tracking(self, slug: str, tracking_number: str, title: str = None):
