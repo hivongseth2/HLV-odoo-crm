@@ -1,12 +1,13 @@
 <odoo>
   <record id="ir_cron_aftership_refresh" model="ir.cron">
-    <field name="name">AfterShip: Refresh Tracking</field>
-    <field name="model_id" ref="stock.model_stock_picking"/>
-    <field name="method">cron_aftership_refresh_all</field>
-
-    <field name="interval_number">1</field>
-    <field name="interval_type">hours</field>
-    <field name="numbercall">-1</field>
-    <field name="active">True</field>
+      <field name="name">AfterShip: Refresh Tracking</field>
+      <field name="model_id" ref="stock.model_stock_picking"/>
+      <field name="method">cron_aftership_refresh_all</field>
+      <field name="user_id" ref="base.user_root"/>  <!-- THÊM DÒNG NÀY -->
+      <field name="interval_number">1</field>
+      <field name="interval_type">hours</field>
+      <field name="numbercall">-1</field>
+      <field name="active">True</field>
   </record>
+
 </odoo>
