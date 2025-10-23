@@ -5,6 +5,9 @@ import base64
 import datetime
 from io import BytesIO
 from collections import defaultdict
+import logging
+
+_logger = logging.getLogger(__name__)
 
 try:
     from openpyxl import Workbook
@@ -101,18 +104,38 @@ class InventoryReportWizard(models.TransientModel):
     def _get_outgoing_qty_between(self, product_id, location_ids, start_datetime, end_datetime):
         """
         Tính tổng số lượng xuất kho từ start_datetime đến end_datetime
+        
+        Logic: Tìm tất cả move có source là location_ids NHƯNG destination KHÔNG phải location_ids
+        (tức là hàng đi từ kho này ra ngoài - bất kể đi đâu: customer, transit, scrap, v.v.)
         """
-        # Tìm các stock.move xuất kho (picking_type outgoing)
+        # Tìm các stock.move xuất khỏi kho
+        # Điều kiện: location_id IN location_ids AND location_dest_id NOT IN location_ids
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
             ('location_id', 'in', location_ids),
-            ('location_dest_id.usage', '=', 'customer'),  # Chỉ lấy xuất cho khách hàng
         ])
         
-        total_qty = sum(moves.mapped('product_uom_qty'))
+        # Lọc thủ công: chỉ lấy move có destination không nằm trong location_ids
+        # (tức là xuất ra ngoài kho, không phải di chuyển nội bộ trong cùng kho)
+        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
+        
+        total_qty = sum(outgoing_moves.mapped('product_uom_qty'))
+        
+        # Debug logging
+        if moves and not outgoing_moves:
+            _logger.warning(
+                f"Product {product_id}: Found {len(moves)} moves but 0 outgoing moves. "
+                f"All moves are internal transfers within location_ids {location_ids}"
+            )
+        elif outgoing_moves:
+            _logger.info(
+                f"Product {product_id}: Found {len(outgoing_moves)} outgoing moves, total qty: {total_qty}. "
+                f"Pickings: {', '.join(outgoing_moves.mapped('picking_id.name'))}"
+            )
+        
         return total_qty
 
     def _get_incoming_qty_between(self, product_id, location_ids, start_datetime, end_datetime):
@@ -166,21 +189,26 @@ class InventoryReportWizard(models.TransientModel):
         """
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/OUT/00123, WH/OUT/00124"
+        
+        Logic: Giống hệt _get_outgoing_qty_between để đảm bảo consistency
         """
+        # Tìm các stock.move xuất khỏi kho
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
             ('location_id', 'in', location_ids),
-            ('location_dest_id.usage', '=', 'customer'),
         ], order='date asc')
+        
+        # Lọc: chỉ lấy move xuất ra ngoài (destination không trong location_ids)
+        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
         
         # Lấy danh sách picking names (unique)
         picking_names = []
         seen_picking_ids = set()
         
-        for move in moves:
+        for move in outgoing_moves:
             if move.picking_id and move.picking_id.id not in seen_picking_ids:
                 picking_names.append(move.picking_id.name)
                 seen_picking_ids.add(move.picking_id.id)
