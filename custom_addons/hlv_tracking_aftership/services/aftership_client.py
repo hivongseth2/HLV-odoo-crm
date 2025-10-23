@@ -3,7 +3,7 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
-AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2024-04"
+AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2025-07"
 
 class AfterShipClient:
     """
