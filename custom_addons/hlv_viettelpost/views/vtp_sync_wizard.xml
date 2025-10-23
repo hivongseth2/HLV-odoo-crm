@@ -20,22 +20,22 @@
     <field name="name">vtp.sync.wizard.form</field>
     <field name="model">vtp.sync.wizard</field>
     <field name="arch" type="xml">
-      <form string="Đồng bộ địa giới Viettel Post">
+        <form string="Đồng bộ địa giới Viettel Post">
         <group>
-          <!-- Dùng class='o_form_label' vì không có 'for' -->
-          <label class="o_form_label"
-                 string="Thao tác này sẽ tải lại toàn bộ danh sách Tỉnh/Thành, Quận/Huyện, Phường/Xã từ API Viettel Post."/>
-          <label class="o_form_label"
-                 string="(Quá trình có thể mất vài phút)"/>
+            <separator string="Thông tin"/>
+            <p class="o_form_label">
+            Thao tác này sẽ tải lại toàn bộ danh sách Tỉnh/Thành, Quận/Huyện, Phường/Xã từ API Viettel Post.
+            </p>
+            <p class="o_form_label">
+            (Quá trình có thể mất vài phút)
+            </p>
         </group>
         <footer>
-          <button name="action_sync_geo"
-                  type="object"
-                  string="Đồng bộ ngay"
-                  class="btn-primary"/>
-          <button string="Hủy" class="btn-secondary" special="cancel"/>
+            <button name="action_sync_geo" type="object" string="Đồng bộ ngay" class="btn-primary"/>
+            <button string="Hủy" class="btn-secondary" special="cancel"/>
         </footer>
-      </form>
+        </form>
+
     </field>
   </record>
 </odoo>
