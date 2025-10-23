@@ -32,8 +32,13 @@ class StockPicking(models.Model):
             try:
                 res = client.create_tracking(slug, pick.tracking_number, title=pick.name)
             except Exception as e:
-                _logger.exception("AfterShip create tracking failed: %s", e)
-                raise UserError(f"AfterShip lỗi khi tạo tracking: {e}")
+    # Lấy body chi tiết nếu có
+                import requests
+                body = ""
+                if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
+                    body = f"\nResponse: {e.response.text}"
+                _logger.exception("AfterShip create tracking failed: %s%s", e, body)
+                raise UserError(f"AfterShip lỗi khi tạo tracking: {e}{body}")
             tracking = (res or {}).get("data", {}).get("tracking") or {}
             pick.aftership_id = tracking.get("id")
             pick.tracking_payload = tracking
