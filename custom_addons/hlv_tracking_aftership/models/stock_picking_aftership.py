@@ -59,7 +59,8 @@ class StockPicking(models.Model):
                 _logger.warning("AfterShip refresh failed for %s: %s", pick.name, e)
                 continue
 
-            tracking = (res or {}).get("data", {}).get("tracking") or {}
+            # tracking = (res or {}).get("data", {}).get("tracking") or {}
+            tracking = (res or {}).get("data") or {}
             pick.tracking_payload = tracking
 
             # Normalize status/tag/subtag
