@@ -115,6 +115,30 @@ class InventoryReportWizard(models.TransientModel):
         total_qty = sum(moves.mapped('product_uom_qty'))
         return total_qty
 
+    def _get_incoming_qty_between(self, product_id, location_ids, start_datetime, end_datetime):
+        """
+        Tính tổng số lượng nhập kho từ start_datetime đến end_datetime
+        Bao gồm tất cả nguồn: nhập từ supplier, trả hàng, inter-warehouse transit, v.v.
+        
+        Logic: Tìm tất cả move có destination là location_ids NHƯNG source KHÔNG phải location_ids
+        (tức là hàng đi từ nơi khác vào kho này)
+        """
+        # Tìm các stock.move nhập vào kho
+        # Điều kiện: location_dest_id IN location_ids AND location_id NOT IN location_ids
+        moves = self.env['stock.move'].search([
+            ('product_id', '=', product_id),
+            ('state', '=', 'done'),
+            ('date', '>=', start_datetime),
+            ('date', '<=', end_datetime),
+            ('location_dest_id', 'in', location_ids),
+        ])
+        
+        # Lọc thủ công: chỉ lấy move có source không nằm trong location_ids
+        incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
+        
+        total_qty = sum(incoming_moves.mapped('product_uom_qty'))
+        return total_qty
+
     def _get_all_products_with_movement(self, location_ids, start_datetime):
         """
         Lấy tất cả sản phẩm có tồn kho hoặc có phát sinh từ start_datetime
@@ -138,46 +162,10 @@ class InventoryReportWizard(models.TransientModel):
         
         return list(product_ids)
 
-    def _get_filtered_picking_list_url(self, product_id, location_ids, start_datetime, end_datetime):
+    def _get_product_outgoing_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
-        Tạo URL đến controller để hiển thị danh sách picking đã được lọc.
-        
-        Controller sẽ search các picking thỏa mãn điều kiện và tạo URL 
-        với danh sách ID cụ thể để mở trong Odoo web client.
-        
-        Args:
-            product_id: ID của sản phẩm cần lọc
-            location_ids: Danh sách ID các location kho
-            start_datetime: Thời điểm bắt đầu (datetime object)
-            end_datetime: Thời điểm kết thúc (datetime object)
-            
-        Returns:
-            str: URL đến controller để xử lý filter và redirect
-        """
-        import urllib.parse
-        
-        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        
-        # Format datetime cho URL parameter
-        start_str = start_datetime.strftime('%Y-%m-%d%%20%H:%M:%S')  # URL encode space
-        end_str = end_datetime.strftime('%Y-%m-%d%%20%H:%M:%S')
-        
-        # Tạo location_ids string (comma separated)
-        location_ids_str = ','.join(str(loc_id) for loc_id in location_ids) if location_ids else ''
-        
-        # Build URL với route pattern mới
-        url = f"{base_url}/inventory/report/pickings/{product_id}"
-        url += f"?start_date={start_str}&end_date={end_str}"
-        
-        if location_ids_str:
-            url += f"&location_ids={location_ids_str}"
-        
-        return url
-
-    def _get_product_outgoing_pickings(self, product_id, location_ids, start_datetime, end_datetime):
-        """
-        Lấy danh sách các picking xuất kho của sản phẩm trong khoảng thời gian
-        Trả về: [(picking_name, picking_id, qty, picking_date), ...]
+        Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
+        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/OUT/00123, WH/OUT/00124"
         """
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
@@ -188,18 +176,16 @@ class InventoryReportWizard(models.TransientModel):
             ('location_dest_id.usage', '=', 'customer'),
         ], order='date asc')
         
-        picking_data = []
-        for move in moves:
-            if move.picking_id:
-                picking_data.append({
-                    'name': move.picking_id.name,
-                    'id': move.picking_id.id,
-                    'qty': move.product_uom_qty,
-                    'date': move.date,
-                    'partner': move.picking_id.partner_id.name if move.picking_id.partner_id else '',
-                })
+        # Lấy danh sách picking names (unique)
+        picking_names = []
+        seen_picking_ids = set()
         
-        return picking_data
+        for move in moves:
+            if move.picking_id and move.picking_id.id not in seen_picking_ids:
+                picking_names.append(move.picking_id.name)
+                seen_picking_ids.add(move.picking_id.id)
+        
+        return ', '.join(picking_names) if picking_names else ''
 
     def _create_excel_workbook(self, data_rows):
         """Tạo workbook Excel với hyperlink đến picking"""
@@ -214,9 +200,10 @@ class InventoryReportWizard(models.TransientModel):
             {'key': 'product_name', 'name': 'Tên hàng', 'width': 40},
             {'key': 'uom', 'name': 'ĐVT', 'width': 12},
             {'key': 'qty_start', 'name': 'Tồn đầu ngày (0h)', 'width': 20},
+            {'key': 'qty_in', 'name': 'Số lượng nhập', 'width': 18},
             {'key': 'qty_out', 'name': 'Số lượng xuất', 'width': 18},
             {'key': 'qty_current', 'name': 'Tồn hiện tại', 'width': 18},
-            {'key': 'pickings', 'name': 'Chi tiết đơn hàng (Click để xem)', 'width': 35},
+            {'key': 'picking_names', 'name': 'Chi tiết đơn xuất', 'width': 50},
         ]
 
         # Styles
@@ -229,8 +216,6 @@ class InventoryReportWizard(models.TransientModel):
 
         cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
         number_alignment = Alignment(horizontal='right', vertical='center')
-        
-        link_font = Font(name='Arial', size=10, color='0000FF', underline='single')
 
         # Header row
         HEADER_ROW = 1
@@ -250,41 +235,16 @@ class InventoryReportWizard(models.TransientModel):
             for col_idx, col_def in enumerate(columns, start=1):
                 cell = ws.cell(row=row_idx, column=col_idx)
                 
-                # Xử lý cột chi tiết đơn hàng với hyperlink
-                if col_def['key'] == 'pickings':
-                    pickings_info = row_data.get('pickings_detail', [])
-                    picking_count = len(pickings_info)
-                    
-                    if picking_count > 0:
-                        # Hiển thị số lượng đơn hàng với text rõ ràng
-                        if picking_count == 1:
-                            cell.value = f"📋 Xem 1 đơn hàng"
-                        else:
-                            cell.value = f"📋 Xem {picking_count} đơn hàng"
-                        
-                        # Tạo hyperlink đến danh sách picking đã lọc
-                        url = row_data.get('pickings_url', '')
-                        if url:
-                            cell.hyperlink = url
-                            cell.font = link_font
-                            # Thêm tooltip/comment để hướng dẫn người dùng
-                            from openpyxl.comments import Comment
-                            cell.comment = Comment(
-                                f"Click để xem {picking_count} đơn xuất kho của sản phẩm này",
-                                "Báo cáo tồn kho"
-                            )
-                    else:
-                        cell.value = "Không có"
-                else:
-                    value = row_data.get(col_def['key'], "")
-                    if value is None:
-                        value = ""
-                    cell.value = value
+                # Lấy giá trị
+                value = row_data.get(col_def['key'], "")
+                if value is None:
+                    value = ""
+                cell.value = value
                 
                 cell.border = border
 
                 # Number formatting
-                if col_def['key'] in ['qty_start', 'qty_out', 'qty_current']:
+                if col_def['key'] in ['qty_start', 'qty_in', 'qty_out', 'qty_current']:
                     cell.alignment = number_alignment
                     cell.number_format = '#,##0.00'
                 elif col_def['key'] == 'stt':
@@ -325,27 +285,23 @@ class InventoryReportWizard(models.TransientModel):
             # Tính tồn đầu ngày
             qty_start = self._get_product_qty_at_datetime(product.id, location_ids, start_of_day)
             
+            # Tính số lượng nhập từ đầu ngày đến hiện tại
+            qty_in = self._get_incoming_qty_between(product.id, location_ids, start_of_day, current_datetime)
+            
             # Tính số lượng xuất từ đầu ngày đến hiện tại
             qty_out = self._get_outgoing_qty_between(product.id, location_ids, start_of_day, current_datetime)
             
             # Tính tồn hiện tại
             qty_current = self._get_product_qty_at_datetime(product.id, location_ids, current_datetime)
             
-            # Bỏ qua sản phẩm không có tồn và không có xuất
-            if qty_start == 0 and qty_out == 0 and qty_current == 0:
+            # Bỏ qua sản phẩm không có tồn và không có xuất nhập
+            if qty_start == 0 and qty_in == 0 and qty_out == 0 and qty_current == 0:
                 continue
             
-            # Lấy chi tiết đơn hàng
-            pickings_detail = self._get_product_outgoing_pickings(
+            # Lấy danh sách mã đơn xuất kho
+            picking_names = self._get_product_outgoing_picking_names(
                 product.id, location_ids, start_of_day, current_datetime
             )
-            
-            # Tạo URL để xem danh sách picking đã lọc
-            pickings_url = ''
-            if pickings_detail:
-                pickings_url = self._get_filtered_picking_list_url(
-                    product.id, location_ids, start_of_day, current_datetime
-                )
             
             row = {
                 'stt': stt,
@@ -353,10 +309,10 @@ class InventoryReportWizard(models.TransientModel):
                 'product_name': product.name or '',
                 'uom': product.uom_id.name if product.uom_id else '',
                 'qty_start': qty_start,
+                'qty_in': qty_in,
                 'qty_out': qty_out,
                 'qty_current': qty_current,
-                'pickings_detail': pickings_detail,
-                'pickings_url': pickings_url,
+                'picking_names': picking_names,
             }
             data_rows.append(row)
             stt += 1
