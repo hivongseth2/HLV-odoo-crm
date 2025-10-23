@@ -39,9 +39,25 @@ class InventoryReportWizard(models.TransientModel):
         """Lấy thời điểm bắt đầu ngày (0h)"""
         return datetime.datetime.combine(date_val, datetime.time.min)
     
+    def _get_end_of_day(self, date_val):
+        """Lấy thời điểm cuối ngày (23h59:59)"""
+        return datetime.datetime.combine(date_val, datetime.time.max)
+    
     def _get_current_datetime(self):
         """Lấy thời điểm hiện tại"""
         return fields.Datetime.now()
+    
+    def _get_report_end_datetime(self):
+        """
+        Lấy thời điểm kết thúc cho báo cáo:
+        - Nếu ngày báo cáo = hôm nay: lấy thời điểm hiện tại
+        - Nếu ngày báo cáo < hôm nay: lấy 23h59:59 của ngày đó
+        """
+        today = fields.Date.context_today(self)
+        if self.report_date >= today:
+            return self._get_current_datetime()
+        else:
+            return self._get_end_of_day(self.report_date)
 
     def _get_warehouse_locations(self):
         """Lấy danh sách location của các kho được chọn"""
@@ -105,11 +121,11 @@ class InventoryReportWizard(models.TransientModel):
         """
         Tính tổng số lượng xuất kho từ start_datetime đến end_datetime
         
-        Logic: Tìm tất cả move có source là location_ids NHƯNG destination KHÔNG phải location_ids
-        (tức là hàng đi từ kho này ra ngoài - bất kể đi đâu: customer, transit, scrap, v.v.)
+        Logic: CHỈ tính các move xuất ra khách hàng (customer location)
+        để tránh tính trùng các lệnh chuyển kho nội bộ
         """
-        # Tìm các stock.move xuất khỏi kho
-        # Điều kiện: location_id IN location_ids AND location_dest_id NOT IN location_ids
+        # Tìm các stock.move xuất khỏi kho ĐẾN KHÁCH HÀNG
+        # Điều kiện: location_id IN location_ids AND location_dest_id.usage = 'customer'
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
@@ -118,21 +134,20 @@ class InventoryReportWizard(models.TransientModel):
             ('location_id', 'in', location_ids),
         ])
         
-        # Lọc thủ công: chỉ lấy move có destination không nằm trong location_ids
-        # (tức là xuất ra ngoài kho, không phải di chuyển nội bộ trong cùng kho)
-        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
+        # Lọc: CHỈ lấy move xuất đến customer (bỏ qua internal transfers)
+        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.usage == 'customer')
         
         total_qty = sum(outgoing_moves.mapped('product_uom_qty'))
         
         # Debug logging
         if moves and not outgoing_moves:
             _logger.warning(
-                f"Product {product_id}: Found {len(moves)} moves but 0 outgoing moves. "
-                f"All moves are internal transfers within location_ids {location_ids}"
+                f"Product {product_id}: Found {len(moves)} moves but 0 customer deliveries. "
+                f"All moves are internal transfers or to other location types."
             )
         elif outgoing_moves:
             _logger.info(
-                f"Product {product_id}: Found {len(outgoing_moves)} outgoing moves, total qty: {total_qty}. "
+                f"Product {product_id}: Found {len(outgoing_moves)} customer deliveries, total qty: {total_qty}. "
                 f"Pickings: {', '.join(outgoing_moves.mapped('picking_id.name'))}"
             )
         
@@ -141,13 +156,12 @@ class InventoryReportWizard(models.TransientModel):
     def _get_incoming_qty_between(self, product_id, location_ids, start_datetime, end_datetime):
         """
         Tính tổng số lượng nhập kho từ start_datetime đến end_datetime
-        Bao gồm tất cả nguồn: nhập từ supplier, trả hàng, inter-warehouse transit, v.v.
         
-        Logic: Tìm tất cả move có destination là location_ids NHƯNG source KHÔNG phải location_ids
-        (tức là hàng đi từ nơi khác vào kho này)
+        Logic: CHỈ tính các move nhập từ supplier (vendor location)
+        để tránh tính trùng các lệnh chuyển kho nội bộ
         """
-        # Tìm các stock.move nhập vào kho
-        # Điều kiện: location_dest_id IN location_ids AND location_id NOT IN location_ids
+        # Tìm các stock.move nhập vào kho TỪ NHÀ CUNG CẤP
+        # Điều kiện: location_dest_id IN location_ids AND location_id.usage = 'supplier'
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
@@ -156,8 +170,8 @@ class InventoryReportWizard(models.TransientModel):
             ('location_dest_id', 'in', location_ids),
         ])
         
-        # Lọc thủ công: chỉ lấy move có source không nằm trong location_ids
-        incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
+        # Lọc: CHỈ lấy move nhập từ supplier (bỏ qua internal transfers)
+        incoming_moves = moves.filtered(lambda m: m.location_id.usage == 'supplier')
         
         total_qty = sum(incoming_moves.mapped('product_uom_qty'))
         return total_qty
@@ -190,9 +204,10 @@ class InventoryReportWizard(models.TransientModel):
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/OUT/00123, WH/OUT/00124"
         
-        Logic: Giống hệt _get_outgoing_qty_between để đảm bảo consistency
+        Logic: CHỈ lấy đơn giao hàng đến khách hàng (customer location)
+        để tránh hiển thị các lệnh chuyển kho nội bộ như SPXVN...
         """
-        # Tìm các stock.move xuất khỏi kho
+        # Tìm các stock.move xuất khỏi kho ĐẾN KHÁCH HÀNG
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
@@ -201,8 +216,8 @@ class InventoryReportWizard(models.TransientModel):
             ('location_id', 'in', location_ids),
         ], order='date asc')
         
-        # Lọc: chỉ lấy move xuất ra ngoài (destination không trong location_ids)
-        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
+        # Lọc: CHỈ lấy move xuất đến customer (bỏ qua internal transfers)
+        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.usage == 'customer')
         
         # Lấy danh sách picking names (unique)
         picking_names = []
@@ -220,9 +235,10 @@ class InventoryReportWizard(models.TransientModel):
         Lấy danh sách tên (mã) các picking nhập kho của sản phẩm trong khoảng thời gian
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124"
         
-        Logic: Giống hệt _get_incoming_qty_between để đảm bảo consistency
+        Logic: CHỈ lấy đơn nhập hàng từ nhà cung cấp (supplier location)
+        để tránh hiển thị các lệnh chuyển kho nội bộ
         """
-        # Tìm các stock.move nhập vào kho
+        # Tìm các stock.move nhập vào kho TỪ NHÀ CUNG CẤP
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
@@ -231,8 +247,8 @@ class InventoryReportWizard(models.TransientModel):
             ('location_dest_id', 'in', location_ids),
         ], order='date asc')
         
-        # Lọc: chỉ lấy move nhập từ ngoài vào (source không trong location_ids)
-        incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
+        # Lọc: CHỈ lấy move nhập từ supplier (bỏ qua internal transfers)
+        incoming_moves = moves.filtered(lambda m: m.location_id.usage == 'supplier')
         
         # Lấy danh sách picking names (unique)
         picking_names = []
@@ -336,7 +352,7 @@ class InventoryReportWizard(models.TransientModel):
 
         # Lấy thông tin thời gian
         start_of_day = self._get_start_of_day(self.report_date)
-        current_datetime = self._get_current_datetime()
+        end_of_period = self._get_report_end_datetime()  # Thay đổi: dùng logic thông minh
         
         # Lấy danh sách location
         location_ids = self._get_warehouse_locations()
@@ -358,14 +374,14 @@ class InventoryReportWizard(models.TransientModel):
             # Tính tồn đầu ngày
             qty_start = self._get_product_qty_at_datetime(product.id, location_ids, start_of_day)
             
-            # Tính số lượng nhập từ đầu ngày đến hiện tại
-            qty_in = self._get_incoming_qty_between(product.id, location_ids, start_of_day, current_datetime)
+            # Tính số lượng nhập từ đầu ngày đến end_of_period
+            qty_in = self._get_incoming_qty_between(product.id, location_ids, start_of_day, end_of_period)
             
-            # Tính số lượng xuất từ đầu ngày đến hiện tại
-            qty_out = self._get_outgoing_qty_between(product.id, location_ids, start_of_day, current_datetime)
+            # Tính số lượng xuất từ đầu ngày đến end_of_period
+            qty_out = self._get_outgoing_qty_between(product.id, location_ids, start_of_day, end_of_period)
             
-            # Tính tồn hiện tại
-            qty_current = self._get_product_qty_at_datetime(product.id, location_ids, current_datetime)
+            # Tính tồn tại end_of_period
+            qty_current = self._get_product_qty_at_datetime(product.id, location_ids, end_of_period)
             
             # Bỏ qua sản phẩm không có tồn và không có xuất nhập
             if qty_start == 0 and qty_in == 0 and qty_out == 0 and qty_current == 0:
@@ -373,12 +389,12 @@ class InventoryReportWizard(models.TransientModel):
             
             # Lấy danh sách mã đơn nhập kho
             incoming_picking_names = self._get_product_incoming_picking_names(
-                product.id, location_ids, start_of_day, current_datetime
+                product.id, location_ids, start_of_day, end_of_period
             )
             
             # Lấy danh sách mã đơn xuất kho
             outgoing_picking_names = self._get_product_outgoing_picking_names(
-                product.id, location_ids, start_of_day, current_datetime
+                product.id, location_ids, start_of_day, end_of_period
             )
             
             row = {
