@@ -5,14 +5,18 @@
     <field name="inherit_id" ref="stock.view_picking_form"/>
     <field name="arch" type="xml">
       <xpath expr="//header" position="inside">
-        <button name="action_register_tracking_aftership"
-                type="object" string="Register Tracking (AfterShip)"
-                class="oe_highlight"
-                attrs="{'invisible': ['|', ('aftership_id','!=',False), ('tracking_number','=',False)]}"/>
-        <button name="action_refresh_tracking_aftership"
-                type="object" string="Refresh Tracking"
-                attrs="{'invisible': [('tracking_number','=',False)]}"/>
-      </xpath>
+      <!-- Nút đăng ký tracking: ẩn khi đã có aftership_id hoặc chưa có tracking_number -->
+      <button name="action_register_tracking_aftership"
+              type="object" string="Register Tracking (AfterShip)"
+              class="oe_highlight"
+              invisible="aftership_id != False or tracking_number == False"/>
+
+      <!-- Nút refresh: ẩn khi chưa có tracking_number -->
+      <button name="action_refresh_tracking_aftership"
+              type="object" string="Refresh Tracking"
+              invisible="tracking_number == False"/>
+    </xpath>
+
       <xpath expr="//sheet/notebook" position="inside">
         <page string="Tracking">
           <group>
