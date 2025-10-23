@@ -202,7 +202,10 @@ class InventoryReportWizard(models.TransientModel):
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/OUT/00123, WH/OUT/00124"
         
-        Logic: Lấy TẤT CẢ picking xuất khỏi kho, sau đó lọc bỏ picking nội bộ
+        Logic mới: 
+        1. Tìm move xuất RA KHỎI kho (location_id in location_ids, location_dest_id not in)
+        2. Nếu picking có backorder_id hoặc move có move_dest_ids, tìm picking cuối cùng trong chain
+        3. Hiển thị picking cuối cùng (TSN/OUT/...) thay vì picking đầu tiên (SPXVN...)
         """
         # Tìm các stock.move xuất khỏi kho
         moves = self.env['stock.move'].search([
@@ -216,27 +219,75 @@ class InventoryReportWizard(models.TransientModel):
         # Lọc: lấy move xuất ra ngoài kho
         outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
         
-        # Lấy danh sách picking names
+        # Lấy danh sách picking cuối cùng trong chain
         picking_names = []
         seen_picking_ids = set()
         
         for move in outgoing_moves:
-            if move.picking_id and move.picking_id.id not in seen_picking_ids:
-                picking = move.picking_id
-                # Bỏ qua picking type = internal (chuyển kho nội bộ)
-                # Lấy tất cả picking type khác: outgoing, incoming, mrp, etc.
-                if picking.picking_type_id and picking.picking_type_id.code != 'internal':
-                    picking_names.append(picking.name)
-                    seen_picking_ids.add(picking.id)
+            if not move.picking_id:
+                continue
+            
+            # Tìm picking cuối cùng trong chain
+            final_picking = self._get_final_picking_in_chain(move.picking_id)
+            
+            if final_picking and final_picking.id not in seen_picking_ids:
+                # Bỏ qua picking type = internal
+                if final_picking.picking_type_id and final_picking.picking_type_id.code != 'internal':
+                    picking_names.append(final_picking.name)
+                    seen_picking_ids.add(final_picking.id)
                     
-                    # Debug: Log thông tin picking
+                    # Debug logging
                     _logger.info(
-                        f"Product {product_id} - Picking: {picking.name}, "
-                        f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}, "
-                        f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name}"
+                        f"Product {product_id} - Original: {move.picking_id.name}, "
+                        f"Final: {final_picking.name}, Type: {final_picking.picking_type_id.code if final_picking.picking_type_id else 'N/A'}"
                     )
         
         return ', '.join(picking_names) if picking_names else ''
+    
+    def _get_final_picking_in_chain(self, picking):
+        """
+        Tìm picking cuối cùng trong chain thông qua backorder hoặc move chain
+        
+        Ví dụ chain: SPXVN... → TSN/PACK/... → TSN/OUT/...
+        Trả về: TSN/OUT/...
+        """
+        current = picking
+        visited = set()
+        
+        # Duyệt theo backorder chain (picking.backorder_id)
+        while current:
+            if current.id in visited:
+                break
+            visited.add(current.id)
+            
+            # Tìm picking được tạo từ picking hiện tại
+            next_pickings = self.env['stock.picking'].search([
+                ('backorder_id', '=', current.id),
+                ('state', '=', 'done')
+            ], limit=1)
+            
+            if next_pickings:
+                current = next_pickings
+            else:
+                # Nếu không có backorder, thử tìm qua move chain
+                next_picking = self._get_next_picking_via_moves(current)
+                if next_picking and next_picking.id not in visited:
+                    current = next_picking
+                else:
+                    break
+        
+        return current
+    
+    def _get_next_picking_via_moves(self, picking):
+        """
+        Tìm picking tiếp theo thông qua move_dest_ids
+        """
+        for move in picking.move_ids_without_package:
+            if move.move_dest_ids:
+                for dest_move in move.move_dest_ids:
+                    if dest_move.picking_id and dest_move.state == 'done':
+                        return dest_move.picking_id
+        return None
 
     def _get_product_incoming_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
