@@ -140,11 +140,10 @@ class InventoryReportWizard(models.TransientModel):
 
     def _get_filtered_picking_list_url(self, product_id, location_ids, start_datetime, end_datetime):
         """
-        Tạo URL đến danh sách picking đã được lọc theo sản phẩm và khoảng thời gian.
+        Tạo URL đến controller để hiển thị danh sách picking đã được lọc.
         
-        URL này sẽ mở list view của stock.picking với bộ lọc đã được thiết lập sẵn,
-        cho phép người dùng click vào Excel và xem tất cả các đơn picking liên quan
-        đến sản phẩm cụ thể trong khoảng thời gian đã chọn.
+        Controller sẽ search các picking thỏa mãn điều kiện và tạo URL 
+        với danh sách ID cụ thể để mở trong Odoo web client.
         
         Args:
             product_id: ID của sản phẩm cần lọc
@@ -153,51 +152,25 @@ class InventoryReportWizard(models.TransientModel):
             end_datetime: Thời điểm kết thúc (datetime object)
             
         Returns:
-            str: URL đầy đủ để mở Odoo với bộ lọc đã thiết lập
+            str: URL đến controller để xử lý filter và redirect
         """
-        import json
         import urllib.parse
         
         base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
         
-        # Format datetime cho Odoo (ISO format)
-        start_str = start_datetime.strftime('%Y-%m-%d %H:%M:%S')
-        end_str = end_datetime.strftime('%Y-%m-%d %H:%M:%S')
+        # Format datetime cho URL parameter
+        start_str = start_datetime.strftime('%Y-%m-%d%%20%H:%M:%S')  # URL encode space
+        end_str = end_datetime.strftime('%Y-%m-%d%%20%H:%M:%S')
         
-        # Tạo domain filter - lọc picking xuất kho có chứa sản phẩm này
-        domain = [
-            ('picking_type_code', '=', 'outgoing'),
-            ('state', '=', 'done'),
-            ('date_done', '>=', start_str),
-            ('date_done', '<=', end_str),
-            ('move_ids_without_package.product_id', '=', product_id),
-        ]
+        # Tạo location_ids string (comma separated)
+        location_ids_str = ','.join(str(loc_id) for loc_id in location_ids) if location_ids else ''
         
-        # Nếu có location_ids cụ thể, thêm vào domain
-        if location_ids:
-            domain.append(('location_id', 'in', location_ids))
+        # Build URL với route pattern mới
+        url = f"{base_url}/inventory/report/pickings/{product_id}"
+        url += f"?start_date={start_str}&end_date={end_str}"
         
-        # Tìm menu của stock picking để URL có context phù hợp
-        menu = self.env.ref('stock.stock_picking_type_menu', raise_if_not_found=False)
-        menu_id = menu.id if menu else ''
-        
-        # Encode domain thành JSON
-        domain_json = json.dumps(domain)
-        
-        # Tạo URL parameters
-        url_params = {
-            'model': 'stock.picking',
-            'view_type': 'list',
-        }
-        
-        if menu_id:
-            url_params['menu_id'] = menu_id
-        
-        # Build URL parameter string
-        params_str = '&'.join([f"{k}={v}" for k, v in url_params.items()])
-        
-        # URL cuối cùng - Odoo web client sẽ parse domain và hiển thị list đã lọc
-        url = f"{base_url}/web#{params_str}&cids=1&domain={urllib.parse.quote(domain_json)}"
+        if location_ids_str:
+            url += f"&location_ids={location_ids_str}"
         
         return url
 
