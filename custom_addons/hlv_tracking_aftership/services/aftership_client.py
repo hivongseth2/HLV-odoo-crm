@@ -21,12 +21,11 @@ class AfterShipClient:
 
     def create_tracking(self, slug: str, tracking_number: str, title: str = None):
         payload = {
-            "tracking": {
-                "tracking_number": tracking_number,
-                "slug": slug,
-                "title": title or tracking_number,
-            }
-        }
+        "tracking_number": tracking_number,
+        "slug": slug,
+        "title": title or tracking_number,
+             }
+
         url = f"{AFTERSHIP_API_BASE}/trackings"
         r = requests.post(url, json=payload, headers=self.headers, timeout=20)
         r.raise_for_status()
