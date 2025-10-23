@@ -202,8 +202,7 @@ class InventoryReportWizard(models.TransientModel):
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/OUT/00123, WH/OUT/00124"
         
-        Logic: Lấy picking type = 'outgoing' (delivery orders) thay vì lọc theo destination
-        Điều này đảm bảo lấy được tất cả đơn xuất kho bao gồm cả đơn có transit
+        Logic: Lấy TẤT CẢ picking xuất khỏi kho, sau đó lọc bỏ picking nội bộ
         """
         # Tìm các stock.move xuất khỏi kho
         moves = self.env['stock.move'].search([
@@ -217,16 +216,25 @@ class InventoryReportWizard(models.TransientModel):
         # Lọc: lấy move xuất ra ngoài kho
         outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
         
-        # Lấy danh sách picking names, CHỈ lấy picking có type = outgoing (đơn giao hàng)
+        # Lấy danh sách picking names
         picking_names = []
         seen_picking_ids = set()
         
         for move in outgoing_moves:
             if move.picking_id and move.picking_id.id not in seen_picking_ids:
-                # CHỈ lấy picking type = outgoing (bỏ qua internal transfer)
-                if move.picking_id.picking_type_id.code == 'outgoing':
-                    picking_names.append(move.picking_id.name)
-                    seen_picking_ids.add(move.picking_id.id)
+                picking = move.picking_id
+                # Bỏ qua picking type = internal (chuyển kho nội bộ)
+                # Lấy tất cả picking type khác: outgoing, incoming, mrp, etc.
+                if picking.picking_type_id and picking.picking_type_id.code != 'internal':
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
+                    
+                    # Debug: Log thông tin picking
+                    _logger.info(
+                        f"Product {product_id} - Picking: {picking.name}, "
+                        f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}, "
+                        f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name}"
+                    )
         
         return ', '.join(picking_names) if picking_names else ''
 
@@ -235,8 +243,7 @@ class InventoryReportWizard(models.TransientModel):
         Lấy danh sách tên (mã) các picking nhập kho của sản phẩm trong khoảng thời gian
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124"
         
-        Logic: Lấy picking type = 'incoming' (receipts) thay vì lọc theo source
-        Điều này đảm bảo lấy được tất cả đơn nhập kho
+        Logic: Lấy TẤT CẢ picking nhập vào kho, sau đó lọc bỏ picking nội bộ
         """
         # Tìm các stock.move nhập vào kho
         moves = self.env['stock.move'].search([
@@ -250,16 +257,25 @@ class InventoryReportWizard(models.TransientModel):
         # Lọc: lấy move nhập từ bên ngoài vào kho
         incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
         
-        # Lấy danh sách picking names, CHỈ lấy picking có type = incoming (đơn nhập hàng)
+        # Lấy danh sách picking names
         picking_names = []
         seen_picking_ids = set()
         
         for move in incoming_moves:
             if move.picking_id and move.picking_id.id not in seen_picking_ids:
-                # CHỈ lấy picking type = incoming (bỏ qua internal transfer)
-                if move.picking_id.picking_type_id.code == 'incoming':
-                    picking_names.append(move.picking_id.name)
-                    seen_picking_ids.add(move.picking_id.id)
+                picking = move.picking_id
+                # Bỏ qua picking type = internal (chuyển kho nội bộ)
+                # Lấy tất cả picking type khác: incoming, outgoing, mrp, etc.
+                if picking.picking_type_id and picking.picking_type_id.code != 'internal':
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
+                    
+                    # Debug: Log thông tin picking
+                    _logger.info(
+                        f"Product {product_id} - Picking: {picking.name}, "
+                        f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}, "
+                        f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name}"
+                    )
         
         return ', '.join(picking_names) if picking_names else ''
 
