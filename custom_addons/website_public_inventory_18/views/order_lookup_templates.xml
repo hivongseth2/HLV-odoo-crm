@@ -1,0 +1,672 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <!-- Order Lookup Page Template -->
+  <template id="order_lookup_page" name="Public Order Lookup Page">
+    <t t-call="website.layout">
+      
+      <!-- Link to External CSS -->
+      <xpath expr="//head" position="inside">
+        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/css/order_lookup.css"/>
+      </xpath>
+      
+      <div id="wrap" class="oe_structure">
+        <div class="o_order_lookup_page">
+          
+          <!-- Page Header -->
+          <section class="o_page_header">
+            <div class="container">
+              <div class="row">
+                <div class="col-12">
+                  <h1 class="text-white mb-0">
+                    <i class="fa fa-shopping-cart me-2"></i>
+                    Tra Cứu Đơn Hàng
+                  </h1>
+                  <p class="lead text-white-50 mb-0 mt-2">
+                    Tìm kiếm đơn hàng của bạn bằng mã đơn, số điện thoại hoặc email
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="container mt-4 mb-5">
+            
+            <!-- Error Messages -->
+            <t t-if="error">
+              <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fa fa-exclamation-triangle me-2"/>
+                <strong>Lỗi!</strong>
+                <t t-esc="error_message or 'Đã xảy ra lỗi. Vui lòng thử lại.'"/>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"/>
+              </div>
+            </t>
+
+            
+            <!-- Search Form Card -->
+            <div class="card shadow-sm mb-4">
+              <div class="card-header">
+                <h5 class="mb-0">
+                  <i class="fa fa-search me-2"></i>
+                  Tìm Kiếm Đơn Hàng
+                </h5>
+              </div>
+              <div class="card-body">
+                <form method="get" action="/saleorder-lookup" id="searchForm" class="o_website_form">
+                  <div class="row g-3">
+                    <div class="col-lg-4 col-md-6">
+                      <label for="order_code" class="form-label">
+                        <i class="fa fa-file-text-o me-1"></i>
+                        Mã Đơn Hàng
+                      </label>
+                      <input 
+                        type="text" 
+                        class="form-control" 
+                        id="order_code" 
+                        name="order_code" 
+                        placeholder="Ví dụ: S00012 hoặc 000012"
+                        t-att-value="query.get('order_code', '') if query else ''"
+                      />
+                      <small class="form-text text-muted d-block mt-1">Nhập mã đơn đầy đủ hoặc 6 chữ số cuối</small>
+                    </div>
+                    
+                    <div class="col-lg-4 col-md-6">
+                      <label for="phone" class="form-label">
+                        <i class="fa fa-phone me-1"></i>
+                        Số Điện Thoại
+                      </label>
+                      <input 
+                        type="tel" 
+                        class="form-control" 
+                        id="phone" 
+                        name="phone" 
+                        placeholder="Ví dụ: 0987654321"
+                        t-att-value="query.get('phone', '') if query else ''"
+                      />
+                      <small class="form-text text-muted d-block mt-1">Nhập số điện thoại đầy đủ</small>
+                    </div>
+                    
+                    <div class="col-lg-4 col-md-6">
+                      <label for="email" class="form-label">
+                        <i class="fa fa-envelope-o me-1"></i>
+                        Email
+                      </label>
+                      <input 
+                        type="email" 
+                        class="form-control" 
+                        id="email" 
+                        name="email" 
+                        placeholder="email@example.com"
+                        t-att-value="query.get('email', '') if query else ''"
+                      />
+                      <small class="form-text text-muted d-block mt-1">Email đã đặt hàng</small>
+                    </div>
+                  </div>
+                  
+                  <div class="row mt-4">
+                    <div class="col-12">
+                      <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+                        <small class="text-muted">
+                          <i class="fa fa-info-circle me-1"></i>
+                          Vui lòng điền ít nhất một trường
+                        </small>
+                        <button type="submit" class="btn btn-primary" id="btnSearch">
+                          <i class="fa fa-search me-2"></i>
+                          Tìm Kiếm
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>          <!-- Results Card -->
+          <t t-if="masked_results">
+            
+            <!-- Warning if multiple results from order code search -->
+            <t t-if="search_warning">
+              <div class="alert alert-warning alert-dismissible fade show mb-3" role="alert">
+                <i class="fa fa-exclamation-circle me-2"/>
+                <strong>Cảnh báo!</strong>
+                Tìm thấy <strong><t t-esc="total"/></strong> đơn hàng có số 6 chữ số cuối này.
+                Vui lòng kiểm tra kỹ để chọn đơn hàng đúng.
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"/>
+              </div>
+            </t>
+            
+            <div class="card shadow-sm">
+              <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
+                <h5 class="mb-0">
+                  <i class="fa fa-list-alt me-2"></i>
+                  Kết Quả Tìm Kiếm
+                </h5>
+                <span class="badge badge-primary">
+                  <t t-esc="total"/> đơn hàng
+                </span>
+              </div>
+              <div class="card-body">
+                
+                <!-- Customer Information Section -->
+                <t t-if="len(masked_results) > 0">
+                  <div class="customer-info">
+                    <div class="row g-3">
+                      <t t-set="result" t-value="masked_results[0]"/>
+                      <div class="col-md-6 col-lg-3">
+                        <label class="d-block">Khách Hàng</label>
+                        <p class="mb-0"><strong><t t-esc="result.get('customer_name', 'N/A')"/></strong></p>
+                      </div>
+                      <div class="col-md-6 col-lg-3">
+                        <label class="d-block">Số Điện Thoại</label>
+                        <p class="mb-0"><strong><t t-esc="result.get('customer_phone', 'N/A')"/></strong></p>
+                      </div>
+                      <div class="col-md-6 col-lg-3">
+                        <label class="d-block">Email</label>
+                        <p class="mb-0"><strong><t t-esc="result.get('customer_email', 'N/A')"/></strong></p>
+                      </div>
+                      <div class="col-md-6 col-lg-3">
+                        <label class="d-block">Địa Chỉ</label>
+                        <p class="mb-0"><strong><t t-esc="result.get('customer_address', 'N/A')"/></strong></p>
+                      </div>
+                    </div>
+                  </div>
+                </t>
+                
+              </div>
+              <div class="p-0">
+                
+                <t t-if="len(masked_results) > 0">
+                  <!-- Orders List View -->
+                  <div class="orders-list p-3">
+                    <t t-foreach="masked_results" t-as="result">
+                      <div class="order-card mb-3">
+                        <div class="order-card-header" t-att-data-order-id="result.get('id')">
+                          <div class="row align-items-center">
+                            <div class="col-md-8">
+                              <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <div>
+                                  <h5 class="mb-0">
+                                    <i class="fa fa-file-text-o me-2"></i>
+                                    <strong><t t-esc="result['name']"/></strong>
+                                  </h5>
+                                  <small class="text-muted">
+                                    <i class="fa fa-calendar me-1"></i>
+                                    <t t-esc="result['date_order'].strftime('%d/%m/%Y %H:%M') if result.get('date_order') else ''"/>
+                                  </small>
+                                </div>
+                                <div>
+                                  <t t-set="state" t-value="result['state']"/>
+                                  <t t-if="state == 'draft'">
+                                    <span class="badge badge-secondary">Nháp</span>
+                                  </t>
+                                  <t t-elif="state == 'sent'">
+                                    <span class="badge badge-info">Đã Gửi</span>
+                                  </t>
+                                  <t t-elif="state == 'sale'">
+                                    <span class="badge badge-primary">Đơn Hàng</span>
+                                  </t>
+                                  <t t-elif="state == 'done'">
+                                    <span class="badge badge-success">Hoàn Thành</span>
+                                  </t>
+                                  <t t-elif="state == 'cancel'">
+                                    <span class="badge badge-danger">Đã Hủy</span>
+                                  </t>
+                                </div>
+                              </div>
+                            </div>
+                            <div class="col-md-4 text-md-end mt-2 mt-md-0">
+                              <div class="d-flex flex-column align-items-md-end gap-2">
+                                <h4 class="mb-0 text-primary">
+                                  <t t-esc="'{:,.0f}'.format(result['amount_total'])"/>
+                                  <small class="text-muted fs-6"><t t-esc="result['currency']"/></small>
+                                </h4>
+                                <a t-attf-href="/saleorder-lookup/{{result.get('id')}}" class="btn btn-primary btn-sm">
+                                  <i class="fa fa-eye me-1"></i>
+                                  Xem Chi Tiết
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <!-- Quick Summary -->
+                          <div class="row mt-3">
+                            <div class="col-auto">
+                              <small class="text-muted">
+                                <i class="fa fa-cubes me-1"></i>
+                                <t t-esc="len(result.get('order_lines', []))"/> sản phẩm
+                              </small>
+                            </div>
+                            <div class="col-auto">
+                              <small class="text-muted">
+                                <i class="fa fa-truck me-1"></i>
+                                <t t-set="delivery" t-value="result['delivery_status']"/>
+                                <t t-if="delivery == 'delivered'">Đã giao</t>
+                                <t t-elif="delivery == 'partial'">Giao một phần</t>
+                                <t t-elif="delivery == 'pending'">Chờ giao</t>
+                                <t t-else="">Chưa giao</t>
+                              </small>
+                            </div>
+                            <!-- <div class="col-auto">
+                              <small class="text-muted">
+                                <i class="fa fa-credit-card me-1"></i>
+                                <t t-set="payment" t-value="result['payment_status']"/>
+                                <t t-if="payment == 'paid'">Đã thanh toán</t>
+                                <t t-elif="payment == 'partial'">TT một phần</t>
+                                <t t-else="">Chưa thanh toán</t>
+                              </small>
+                            </div> -->
+                          </div>
+                        </div>
+                      </div>
+                    </t>
+                  </div>
+                  
+                  <!-- Pagination -->
+                  <t t-if="page_count > 1">
+                    <div class="card-footer d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                      <div class="text-muted text-center text-md-start">
+                        Hiển thị <strong><t t-esc="(page - 1) * 20 + 1"/></strong> 
+                        đến <strong><t t-esc="min(page * 20, total)"/></strong> 
+                        trong tổng số <strong><t t-esc="total"/></strong> đơn hàng
+                      </div>
+                      <ul class="pagination mb-0">
+                        <!-- Previous -->
+                        <li t-attf-class="page-item {{page &lt;= 1 and 'disabled' or ''}}">
+                          <a class="page-link" 
+                             t-attf-href="/saleorder-lookup?order_code={{query.get('order_code', '')}}&amp;phone_last4={{query.get('phone_last4', '')}}&amp;email={{query.get('email', '')}}&amp;page={{page - 1}}"
+                             aria-label="Previous">
+                            <i class="fa fa-chevron-left"></i>
+                          </a>
+                        </li>
+                        
+                        <!-- Page numbers -->
+                        <t t-set="start_page" t-value="max(1, page - 2)"/>
+                        <t t-set="end_page" t-value="min(page_count, page + 2)"/>
+                        
+                        <t t-if="start_page > 1">
+                          <li class="page-item">
+                            <a class="page-link" 
+                               t-attf-href="/saleorder-lookup?order_code={{query.get('order_code', '')}}&amp;phone_last4={{query.get('phone_last4', '')}}&amp;email={{query.get('email', '')}}&amp;page=1">
+                              1
+                            </a>
+                          </li>
+                          <t t-if="start_page > 2">
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                          </t>
+                        </t>
+                        
+                        <t t-foreach="range(start_page, end_page + 1)" t-as="p">
+                          <li t-attf-class="page-item {{p == page and 'active' or ''}}">
+                            <a class="page-link" 
+                               t-attf-href="/saleorder-lookup?order_code={{query.get('order_code', '')}}&amp;phone_last4={{query.get('phone_last4', '')}}&amp;email={{query.get('email', '')}}&amp;page={{p}}">
+                              <t t-esc="p"/>
+                            </a>
+                          </li>
+                        </t>
+                        
+                        <t t-if="end_page &lt; page_count">
+                          <t t-if="end_page &lt; page_count - 1">
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                          </t>
+                          <li class="page-item">
+                            <a class="page-link" 
+                               t-attf-href="/saleorder-lookup?order_code={{query.get('order_code', '')}}&amp;phone_last4={{query.get('phone_last4', '')}}&amp;email={{query.get('email', '')}}&amp;page={{page_count}}">
+                              <t t-esc="page_count"/>
+                            </a>
+                          </li>
+                        </t>
+                        
+                        <!-- Next -->
+                        <li t-attf-class="page-item {{page &gt;= page_count and 'disabled' or ''}}">
+                          <a class="page-link" 
+                             t-attf-href="/saleorder-lookup?order_code={{query.get('order_code', '')}}&amp;phone_last4={{query.get('phone_last4', '')}}&amp;email={{query.get('email', '')}}&amp;page={{page + 1}}"
+                             aria-label="Next">
+                            <i class="fa fa-chevron-right"></i>
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
+                  </t>
+                  
+                </t>
+                <t t-else="">
+                  <div class="o_nocontent_help p-5 text-center">
+                    <p class="o_view_nocontent_smiling_face">
+                      <i class="fa fa-clock-o fa-5x text-muted"/>
+                    </p>
+                    <h4>Không Tìm Thấy Đơn Hàng</h4>
+                    <p class="text-muted">Không tìm thấy đơn hàng nào phù hợp với tiêu chí tìm kiếm của bạn.<br/>Vui lòng kiểm tra lại thông tin và thử lại.</p>
+                  </div>
+                </t>
+                
+              </div>
+            </div>
+          </t>
+          
+          <!-- Initial Empty State (no search yet) -->
+          <t t-if="not masked_results and not error and (not query or (not query.get('order_code') and not query.get('phone_last4') and not query.get('email')))">
+            <div class="o_nocontent_help">
+              <p class="o_view_nocontent_smiling_face">
+                <i class="fa fa-search fa-5x"></i>
+              </p>
+              <h4>Bắt Đầu Tìm Kiếm</h4>
+              <p class="text-muted">Nhập mã đơn hàng, số điện thoại hoặc email để tìm kiếm đơn hàng của bạn.</p>
+            </div>
+          </t>
+
+        </div>
+      </div>
+
+        <!-- Client-side validation and loading state -->
+        <script>
+          document.addEventListener('DOMContentLoaded', function() {
+            var form = document.getElementById('searchForm');
+            var btnSearch = document.getElementById('btnSearch');
+            
+            // Form validation
+            if (form) {
+              form.addEventListener('submit', function(e) {
+                var orderCode = document.getElementById('order_code').value.trim();
+                var phone = document.getElementById('phone').value.trim();
+                var email = document.getElementById('email').value.trim();
+                
+                if (!orderCode &amp;&amp; !phone &amp;&amp; !email) {
+                  e.preventDefault();
+                  alert('Vui lòng nhập ít nhất một trường để tìm kiếm!');
+                  return false;
+                }
+                
+                // Show loading state
+                btnSearch.disabled = true;
+                btnSearch.innerHTML = '&lt;i class="fa fa-spinner fa-spin me-2"&gt;&lt;/i&gt;Đang tìm...';
+              });
+            }
+          });
+        </script>
+
+      </div>
+    </t>
+  </template>
+
+  <!-- Order Detail Page Template -->
+  <template id="order_detail_page" name="Public Order Detail Page">
+    <t t-call="website.layout">
+      
+      <!-- Link to External CSS -->
+      <xpath expr="//head" position="inside">
+        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/css/order_lookup.css"/>
+      </xpath>
+      
+      <div id="wrap" class="oe_structure">
+        <div class="o_order_lookup_page">
+          
+          <!-- Page Header -->
+          <section class="o_page_header">
+            <div class="container">
+              <div class="row">
+                <div class="col-12">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <h1 class="text-white mb-0">
+                        <i class="fa fa-file-text-o me-2"></i>
+                        Chi Tiết Đơn Hàng
+                      </h1>
+                      <p class="lead text-white-50 mb-0 mt-2">
+                        Thông tin chi tiết về đơn hàng <strong><t t-esc="order.get('name', '')"/></strong>
+                      </p>
+                    </div>
+                    <div>
+                      <a href="/saleorder-lookup" class="btn btn-light">
+                        <i class="fa fa-arrow-left me-2"></i>
+                        Quay lại
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div class="container mt-4 mb-5">
+            
+            <!-- Order Information Card -->
+            <div class="card shadow-sm mb-4">
+              <div class="card-header">
+                <div class="row align-items-center">
+                  <div class="col-md-8">
+                    <h5 class="mb-0">
+                      <i class="fa fa-info-circle me-2"></i>
+                      Thông Tin Đơn Hàng
+                    </h5>
+                  </div>
+                  <div class="col-md-4 text-md-end mt-2 mt-md-0">
+                    <t t-set="state" t-value="order['state']"/>
+                    <t t-if="state == 'draft'">
+                      <span class="badge badge-secondary">Nháp</span>
+                    </t>
+                    <t t-elif="state == 'sent'">
+                      <span class="badge badge-info">Đã Gửi</span>
+                    </t>
+                    <t t-elif="state == 'sale'">
+                      <span class="badge badge-primary">Đơn Hàng</span>
+                    </t>
+                    <t t-elif="state == 'done'">
+                      <span class="badge badge-success">Hoàn Thành</span>
+                    </t>
+                    <t t-elif="state == 'cancel'">
+                      <span class="badge badge-danger">Đã Hủy</span>
+                    </t>
+                  </div>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="row g-3">
+                  <div class="col-md-3">
+                    <label class="text-muted d-block mb-1">Mã Đơn Hàng</label>
+                    <h5 class="mb-0"><t t-esc="order.get('name', 'N/A')"/></h5>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="text-muted d-block mb-1">Ngày Đặt</label>
+                    <p class="mb-0">
+                      <i class="fa fa-calendar me-1"></i>
+                      <t t-esc="order['date_order'].strftime('%d/%m/%Y %H:%M') if order.get('date_order') else 'N/A'"/>
+                    </p>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="text-muted d-block mb-1">Trạng Thái Giao Hàng</label>
+                    <p class="mb-0">
+                      <t t-set="delivery" t-value="order['delivery_status']"/>
+                      <t t-if="delivery == 'delivered'">
+                        <span class="badge badge-success">Đã Giao</span>
+                      </t>
+                      <t t-elif="delivery == 'partial'">
+                        <span class="badge badge-warning">Giao Một Phần</span>
+                      </t>
+                      <t t-elif="delivery == 'pending'">
+                        <span class="badge badge-info">Chờ Giao</span>
+                      </t>
+                      <t t-else="">
+                        <span class="badge badge-secondary">Chưa giao</span>
+                      </t>
+                    </p>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="text-muted d-block mb-1">Tổng Giá Trị</label>
+                    <h4 class="mb-0 text-primary">
+                      <t t-esc="'{:,.0f}'.format(order['amount_total'])"/>
+                      <small class="text-muted fs-6"><t t-esc="order['currency']"/></small>
+                    </h4>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Customer Information Card -->
+            <div class="card shadow-sm mb-4">
+              <div class="card-header">
+                <h5 class="mb-0">
+                  <i class="fa fa-user me-2"></i>
+                  Thông Tin Khách Hàng
+                </h5>
+              </div>
+              <div class="card-body">
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="text-muted d-block mb-1">Tên Khách Hàng</label>
+                    <p class="mb-0"><strong><t t-esc="order.get('customer_name', 'N/A')"/></strong></p>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="text-muted d-block mb-1">Số Điện Thoại</label>
+                    <p class="mb-0">
+                      <i class="fa fa-phone me-1"></i>
+                      <t t-esc="order.get('customer_phone', 'N/A')"/>
+                    </p>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="text-muted d-block mb-1">Email</label>
+                    <p class="mb-0">
+                      <i class="fa fa-envelope me-1"></i>
+                      <t t-esc="order.get('customer_email', 'N/A')"/>
+                    </p>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="text-muted d-block mb-1">Địa Chỉ</label>
+                    <p class="mb-0">
+                      <i class="fa fa-map-marker me-1"></i>
+                      <t t-esc="order.get('customer_address', 'N/A')"/>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Order Lines Card -->
+            <div class="card shadow-sm mb-4">
+              <div class="card-header">
+                <h5 class="mb-0">
+                  <i class="fa fa-list-alt me-2"></i>
+                  Danh Sách Sản Phẩm
+                </h5>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table invoice-table mb-0">
+                    <thead>
+                      <tr>
+                        <th style="width: 50%;">Sản Phẩm</th>
+                        <th class="text-center" style="width: 10%;">SL</th>
+                        <th class="text-end" style="width: 20%;">Đơn Giá</th>
+                        <th class="text-end" style="width: 20%;">Thành Tiền</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <t t-set="line_count" t-value="len(order.get('order_lines', []))"/>
+                      <t t-if="line_count > 0">
+                        <t t-foreach="order.get('order_lines', [])" t-as="line">
+                          <tr t-attf-class="{{line.get('is_component') and 'combo-row' or ''}}">
+                            <td>
+                              <!-- Component line - thụt vào -->
+                              <t t-if="line.get('is_component')">
+                                <div class="combo-component">
+                                  <t t-esc="line.get('product_name', 'N/A')"/>
+                                </div>
+                                <!-- Show delivered qty for component -->
+                                <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                                <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                                <t t-if="delivered > 0">
+                                  <small class="text-muted d-block" style="padding-left: 2.5rem;">
+                                    Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                    <t t-if="delivered >= total_qty">
+                                      <i class="fa fa-check-circle text-success ms-1"></i>
+                                    </t>
+                                  </small>
+                                </t>
+                              </t>
+                              
+                              <!-- Combo parent or regular product -->
+                              <t t-else="">
+                                <div t-attf-class="{{line.get('is_combo') and 'combo-parent' or ''}}">
+                                  <strong><t t-esc="line.get('product_name', 'N/A')"/></strong>
+                                  <!-- Icon đã giao cho combo parent -->
+                                  <t t-if="line.get('is_combo') and line.get('is_fully_delivered')">
+                                    <i class="fa fa-check-circle text-success ms-2" title="Đã giao đủ"></i>
+                                  </t>
+                                </div>
+                                <!-- Show delivered qty as subtext for regular products only -->
+                                <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                                <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                                <t t-if="delivered > 0 and not line.get('is_combo')">
+                                  <small class="text-muted d-block mt-1">
+                                    Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                    <t t-if="delivered >= total_qty">
+                                      <i class="fa fa-check-circle text-success ms-1"></i>
+                                    </t>
+                                  </small>
+                                </t>
+                              </t>
+                            </td>
+                            <td class="text-center">
+                              <t t-if="line.get('is_component')">
+                                <small class="text-muted"><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></small>
+                              </t>
+                              <t t-else="">
+                                <strong><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></strong>
+                              </t>
+                            </td>
+                            <td class="text-end">
+                              <t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/>
+                            </td>
+                            <td class="text-end">
+                              <strong><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></strong>
+                            </td>
+                          </tr>
+                        </t>
+                      </t>
+                      <t t-else="">
+                        <tr>
+                          <td colspan="4" class="text-muted text-center py-4">
+                            <em>Không có sản phẩm</em>
+                          </td>
+                        </tr>
+                      </t>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="card-footer">
+                <div class="row">
+                  <div class="col-md-6 offset-md-6">
+                    <!-- Total Summary -->
+                    <div class="total-summary">
+                      <div class="summary-row">
+                        <span>Tạm tính:</span>
+                        <span class="amount"><t t-esc="'{:,.0f}'.format(order.get('amount_untaxed', order['amount_total']))"/></span>
+                      </div>
+                      <div class="summary-row">
+                        <span>VAT:</span>
+                        <span class="amount"><t t-esc="'{:,.0f}'.format(order.get('amount_tax', 0))"/></span>
+                      </div>
+                      <div class="summary-row total-row">
+                        <span>Tổng cộng:</span>
+                        <span class="amount-total">
+                          <t t-esc="'{:,.0f}'.format(order['amount_total'])"/>
+                          <small class="currency"><t t-esc="order['currency']"/></small>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Back Button -->
+            <div class="text-center mt-4">
+              <a href="/saleorder-lookup" class="btn btn-primary btn-lg">
+                <i class="fa fa-arrow-left me-2"></i>
+                Quay Lại Trang Tìm Kiếm
+              </a>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </t>
+  </template>
+</odoo>
