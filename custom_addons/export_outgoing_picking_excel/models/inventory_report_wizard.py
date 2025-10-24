@@ -171,8 +171,10 @@ class InventoryReportWizard(models.TransientModel):
         """
         Tính tổng số lượng xuất kho từ start_datetime đến end_datetime
         
-        Logic: Tính các move xuất RA KHỎI kho (destination không trong location_ids)
-        Bao gồm: xuất đến customer, transit, packing zone bên ngoài kho, etc.
+        🔧 LOGIC MỚI: Dựa trên stock.move.line (CHÍNH XÁC hơn stock.move)
+        - Xuất = move line từ internal location (trong location_ids) → location khác (ngoài location_ids)
+        - Loại bỏ: move line có location_id = location_dest_id (same location)
+        - GIỮ LẠI: move line có location_id khác location_dest_id dù cả 2 đều trong location_ids
         """
         # Log location_ids để debug (chỉ log 1 lần khi được yêu cầu)
         if log_locations:
@@ -182,67 +184,83 @@ class InventoryReportWizard(models.TransientModel):
                 f"{', '.join([f'{loc.complete_name} (ID:{loc.id}, Usage:{loc.usage})' for loc in location_objs])}"
             )
         
-        # Tìm các stock.move xuất khỏi kho
+        # Tìm các stock.move có move_line_ids
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
-            ('location_id', 'in', location_ids),
         ])
         
-        # Lọc: lấy move xuất ra ngoài kho (destination không trong location_ids)
-        # 🔧 FIX: Bao gồm cả move có location_dest_id = location_id (bug dữ liệu)
-        # NHƯNG có move_dest_ids link sang kho khác (inter-warehouse transfer)
-        outgoing_moves = moves.filtered(
-            lambda m: m.location_dest_id.id not in location_ids or
-            (m.move_dest_ids and any(
-                dest_move.location_dest_id.id not in location_ids 
-                for dest_move in m.move_dest_ids
-            ))
-        )
+        total_qty = 0
+        outgoing_moves_info = []
+        internal_moves_info = []
         
-        total_qty = sum(outgoing_moves.mapped('product_uom_qty'))
+        for move in moves:
+            if not move.move_line_ids:
+                continue
+            
+            # Duyệt qua TỪNG move.line để lấy location chính xác
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
+                qty = line.qty_done
+                
+                # Loại bỏ: location_id = location_dest_id (move trong cùng 1 location)
+                if location_id == location_dest_id:
+                    continue
+                
+                # ✅ Xuất: từ location_ids → ngoài location_ids
+                if location_id in location_ids and location_dest_id not in location_ids:
+                    total_qty += qty
+                    outgoing_moves_info.append({
+                        'move': move,
+                        'line': line,
+                        'qty': qty
+                    })
+                # ⚠️ Internal: move giữa các location trong location_ids (bỏ qua)
+                elif location_id in location_ids and location_dest_id in location_ids:
+                    internal_moves_info.append({
+                        'move': move,
+                        'line': line,
+                        'qty': qty
+                    })
         
         # Debug logging - ENHANCED
-        if moves:
-            internal_moves = moves - outgoing_moves
+        if outgoing_moves_info or internal_moves_info:
             _logger.info(
-                f"📤 Product {product_id}: Total {len(moves)} moves from warehouse, "
-                f"{len(outgoing_moves)} are OUTGOING (qty: {total_qty}), "
-                f"{len(internal_moves)} are INTERNAL transfers (ignored)"
+                f"📤 Product {product_id}: {len(outgoing_moves_info)} OUTGOING move lines (qty: {total_qty}), "
+                f"{len(internal_moves_info)} INTERNAL move lines (ignored)"
             )
             
-            if outgoing_moves:
-                for move in outgoing_moves:
+            if outgoing_moves_info:
+                for info in outgoing_moves_info:
+                    move = info['move']
+                    line = info['line']
                     _logger.info(
                         f"  ✓ Outgoing: {move.picking_id.name if move.picking_id else 'N/A'}, "
-                        f"Qty: {move.product_uom_qty}, "
-                        f"From: {move.location_id.complete_name} (ID:{move.location_id.id}) → "
-                        f"To: {move.location_dest_id.complete_name} (ID:{move.location_dest_id.id}, "
-                        f"Usage:{move.location_dest_id.usage})"
+                        f"Qty: {info['qty']}, "
+                        f"From: {line.location_id.complete_name} (ID:{line.location_id.id}) → "
+                        f"To: {line.location_dest_id.complete_name} (ID:{line.location_dest_id.id}, "
+                        f"Usage:{line.location_dest_id.usage})"
                     )
             
-            if internal_moves:
+            if internal_moves_info:
                 _logger.warning(
-                    f"  ⚠️ Ignored {len(internal_moves)} internal moves (both source & dest in location_ids):"
+                    f"  ⚠️ Ignored {len(internal_moves_info)} internal move lines (both locations in location_ids):"
                 )
-                for move in internal_moves:
-                    # Kiểm tra xem có phải move_dest_ids có picking khác không (inter-warehouse)
-                    has_dest_picking = bool(move.move_dest_ids and move.move_dest_ids.filtered(lambda m: m.picking_id))
-                    dest_picking_info = ""
-                    if has_dest_picking:
-                        dest_pickings = move.move_dest_ids.mapped('picking_id')
-                        dest_picking_info = f", Linked to: {', '.join(dest_pickings.mapped('name'))}"
-                    
+                # Chỉ log 5 đầu tiên để tránh spam
+                for info in internal_moves_info[:5]:
+                    move = info['move']
+                    line = info['line']
                     _logger.warning(
-                        f"    → Picking: {move.picking_id.name if move.picking_id else 'N/A'} "
-                        f"(Move ID: {move.id}, Type: {move.picking_id.picking_type_id.code if move.picking_id and move.picking_id.picking_type_id else 'N/A'}), "
-                        f"Qty: {move.product_uom_qty}, "
-                        f"From: {move.location_id.complete_name} (ID:{move.location_id.id}, In list: {move.location_id.id in location_ids}) → "
-                        f"To: {move.location_dest_id.complete_name} (ID:{move.location_dest_id.id}, Usage:{move.location_dest_id.usage}, "
-                        f"In list: {move.location_dest_id.id in location_ids}){dest_picking_info}"
+                        f"    → Picking: {move.picking_id.name if move.picking_id else 'N/A'}, "
+                        f"Qty: {info['qty']}, "
+                        f"From: {line.location_id.complete_name} (ID:{line.location_id.id}) → "
+                        f"To: {line.location_dest_id.complete_name} (ID:{line.location_dest_id.id})"
                     )
+                if len(internal_moves_info) > 5:
+                    _logger.warning(f"    ... and {len(internal_moves_info) - 5} more")
         
         return total_qty
 
@@ -250,63 +268,88 @@ class InventoryReportWizard(models.TransientModel):
         """
         Tính tổng số lượng nhập kho từ start_datetime đến end_datetime
         
-        Logic: Tính TẤT CẢ move nhập VÀO kho (source không trong location_ids)
-        Bao gồm: nhập từ supplier, trả hàng từ customer, nhận từ kho khác (transit), etc.
+        🔧 LOGIC MỚI: Dựa trên stock.move.line (CHÍNH XÁC hơn stock.move)
+        - Nhập = move line từ location khác (ngoài location_ids) → internal location (trong location_ids)
+        - Loại bỏ: move line có location_id = location_dest_id (same location)
+        - GIỮ LẠI: move line có location_id khác location_dest_id dù cả 2 đều trong location_ids
         """
-        # Tìm các stock.move nhập vào kho
+        # Tìm các stock.move có move_line_ids
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
-            ('location_dest_id', 'in', location_ids),
         ])
         
-        # Lọc: lấy TẤT CẢ move nhập từ bên ngoài vào kho (source không trong location_ids)
-        # Bao gồm cả nhập từ transit/inter-warehouse transfer
-        incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
+        total_qty = 0
+        incoming_moves_info = []
+        internal_moves_info = []
         
-        total_qty = sum(incoming_moves.mapped('product_uom_qty'))
+        for move in moves:
+            if not move.move_line_ids:
+                continue
+            
+            # Duyệt qua TỪNG move.line để lấy location chính xác
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
+                qty = line.qty_done
+                
+                # Loại bỏ: location_id = location_dest_id (move trong cùng 1 location)
+                if location_id == location_dest_id:
+                    continue
+                
+                # ✅ Nhập: từ ngoài location_ids → vào location_ids
+                if location_id not in location_ids and location_dest_id in location_ids:
+                    total_qty += qty
+                    incoming_moves_info.append({
+                        'move': move,
+                        'line': line,
+                        'qty': qty
+                    })
+                # ⚠️ Internal: move giữa các location trong location_ids (bỏ qua)
+                elif location_id in location_ids and location_dest_id in location_ids:
+                    internal_moves_info.append({
+                        'move': move,
+                        'line': line,
+                        'qty': qty
+                    })
         
         # Debug logging - ENHANCED
-        if moves:
-            internal_moves = moves - incoming_moves
+        if incoming_moves_info or internal_moves_info:
             _logger.info(
-                f"📥 Product {product_id}: Total {len(moves)} moves to warehouse, "
-                f"{len(incoming_moves)} are INCOMING (qty: {total_qty}), "
-                f"{len(internal_moves)} are INTERNAL transfers (ignored)"
+                f"📥 Product {product_id}: {len(incoming_moves_info)} INCOMING move lines (qty: {total_qty}), "
+                f"{len(internal_moves_info)} INTERNAL move lines (ignored)"
             )
             
-            if incoming_moves:
-                for move in incoming_moves:
+            if incoming_moves_info:
+                for info in incoming_moves_info:
+                    move = info['move']
+                    line = info['line']
                     _logger.info(
                         f"  ✓ Incoming: {move.picking_id.name if move.picking_id else 'N/A'}, "
-                        f"Qty: {move.product_uom_qty}, "
-                        f"From: {move.location_id.complete_name} (ID:{move.location_id.id}, "
-                        f"Usage:{move.location_id.usage}) → "
-                        f"To: {move.location_dest_id.complete_name} (ID:{move.location_dest_id.id})"
+                        f"Qty: {info['qty']}, "
+                        f"From: {line.location_id.complete_name} (ID:{line.location_id.id}, "
+                        f"Usage:{line.location_id.usage}) → "
+                        f"To: {line.location_dest_id.complete_name} (ID:{line.location_dest_id.id})"
                     )
             
-            if internal_moves:
+            if internal_moves_info:
                 _logger.warning(
-                    f"  ⚠️ Ignored {len(internal_moves)} internal moves (both source & dest in location_ids):"
+                    f"  ⚠️ Ignored {len(internal_moves_info)} internal move lines (both locations in location_ids):"
                 )
-                for move in internal_moves:
-                    # Kiểm tra xem có phải move_orig_ids có picking khác không (inter-warehouse source)
-                    has_orig_picking = bool(move.move_orig_ids and move.move_orig_ids.filtered(lambda m: m.picking_id))
-                    orig_picking_info = ""
-                    if has_orig_picking:
-                        orig_pickings = move.move_orig_ids.mapped('picking_id')
-                        orig_picking_info = f", Linked from: {', '.join(orig_pickings.mapped('name'))}"
-                    
+                # Chỉ log 5 đầu tiên để tránh spam
+                for info in internal_moves_info[:5]:
+                    move = info['move']
+                    line = info['line']
                     _logger.warning(
-                        f"    → Picking: {move.picking_id.name if move.picking_id else 'N/A'} "
-                        f"(Move ID: {move.id}, Type: {move.picking_id.picking_type_id.code if move.picking_id and move.picking_id.picking_type_id else 'N/A'}), "
-                        f"Qty: {move.product_uom_qty}, "
-                        f"From: {move.location_id.complete_name} (ID:{move.location_id.id}, In list: {move.location_id.id in location_ids}) → "
-                        f"To: {move.location_dest_id.complete_name} (ID:{move.location_dest_id.id}, Usage:{move.location_dest_id.usage}, "
-                        f"In list: {move.location_dest_id.id in location_ids}){orig_picking_info}"
+                        f"    → Picking: {move.picking_id.name if move.picking_id else 'N/A'}, "
+                        f"Qty: {info['qty']}, "
+                        f"From: {line.location_id.complete_name} (ID:{line.location_id.id}) → "
+                        f"To: {line.location_dest_id.complete_name} (ID:{line.location_dest_id.id})"
                     )
+                if len(internal_moves_info) > 5:
+                    _logger.warning(f"    ... and {len(internal_moves_info) - 5} more")
         
         return total_qty
 
@@ -338,71 +381,71 @@ class InventoryReportWizard(models.TransientModel):
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy
         
-        Logic: 
-        - Lấy TẤT CẢ picking xuất ra khỏi location_ids (bao gồm cả xuất sang transit)
+        🔧 LOGIC MỚI: Dựa trên stock.move.line
+        - Lấy TẤT CẢ picking có move line xuất ra khỏi location_ids
         - Nếu xuất sang inter-warehouse transit, tìm thêm picking nhận ở kho đích
         """
-        # Tìm TẤT CẢ các stock.move xuất khỏi kho (bao gồm location_id trong location_ids)
+        # Tìm TẤT CẢ các stock.move
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
-            ('location_id', 'in', location_ids),
         ], order='date asc')
-        
-        # 🔧 FIX: Lấy TẤT CẢ move xuất từ kho (destination không trong location_ids)
-        # Bao gồm CẢ move xuất sang transit location
-        # VÀ cả move có bug dữ liệu (location_dest = location_id) nhưng có link đến kho khác
-        outgoing_moves = moves.filtered(
-            lambda m: m.location_dest_id.id not in location_ids or
-            (m.move_dest_ids and any(
-                dest_move.location_dest_id.id not in location_ids 
-                for dest_move in m.move_dest_ids
-            ))
-        )
         
         picking_names = []
         seen_picking_ids = set()
         
-        for move in outgoing_moves:
-            if not move.picking_id:
+        for move in moves:
+            if not move.picking_id or not move.move_line_ids:
                 continue
             
-            picking = move.picking_id
+            # Kiểm tra xem move có line nào là outgoing không
+            has_outgoing = False
+            is_inter_warehouse = False
             
-            # Thêm picking xuất
-            if picking.id not in seen_picking_ids:
-                picking_names.append(picking.name)
-                seen_picking_ids.add(picking.id)
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
                 
-                dest_location = move.location_dest_id
-                dest_usage = dest_location.usage
+                # Bỏ qua same location
+                if location_id == location_dest_id:
+                    continue
                 
-                _logger.info(
-                    f"Product {product_id} - Outgoing Move in Picking {picking.name}: "
-                    f"From: {move.location_id.complete_name} (ID: {move.location_id.id}) -> "
-                    f"To: {dest_location.complete_name} (ID: {dest_location.id}, Usage: {dest_usage})"
-                )
+                # Xuất: từ location_ids → ngoài location_ids
+                if location_id in location_ids and location_dest_id not in location_ids:
+                    has_outgoing = True
+                    
+                    # Check inter-warehouse transfer
+                    dest_usage = line.location_dest_id.usage
+                    if (dest_usage == 'transit' or 
+                        'transit' in line.location_dest_id.complete_name.lower() or
+                        'inter-warehouse' in line.location_dest_id.complete_name.lower()):
+                        is_inter_warehouse = True
+                    
+                    break
+            
+            if has_outgoing:
+                picking = move.picking_id
                 
-                # Kiểm tra xem có phải là inter-warehouse transfer không
-                # 🔧 FIX: Bao gồm cả trường hợp move có bug (dest = source) nhưng có move_dest_ids
-                is_transit = (
-                    dest_usage == 'transit' or 
-                    'transit' in dest_location.complete_name.lower() or
-                    'inter-warehouse' in dest_location.complete_name.lower() or
-                    (move.location_dest_id.id == move.location_id.id and move.move_dest_ids)  # Bug data case
-                )
-                
-                if is_transit or move.move_dest_ids:
-                    # Tìm picking nhận ở kho đích qua move_dest_ids
-                    dest_picking = self._find_destination_picking_from_move(move)
-                    if dest_picking and dest_picking.id not in seen_picking_ids:
-                        picking_names.append(dest_picking.name)
-                        seen_picking_ids.add(dest_picking.id)
-                        _logger.info(
-                            f"Product {product_id} - Found destination picking: {dest_picking.name}"
-                        )
+                # Thêm picking xuất
+                if picking.id not in seen_picking_ids:
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
+                    
+                    _logger.info(
+                        f"Product {product_id} - Outgoing Picking: {picking.name}"
+                    )
+                    
+                    # Nếu là inter-warehouse, tìm picking nhận ở kho đích
+                    if is_inter_warehouse or move.move_dest_ids:
+                        dest_picking = self._find_destination_picking_from_move(move)
+                        if dest_picking and dest_picking.id not in seen_picking_ids:
+                            picking_names.append(dest_picking.name)
+                            seen_picking_ids.add(dest_picking.id)
+                            _logger.info(
+                                f"Product {product_id} - Found destination picking: {dest_picking.name}"
+                            )
         
         return ', '.join(picking_names) if picking_names else ''
 
@@ -453,40 +496,53 @@ class InventoryReportWizard(models.TransientModel):
         Lấy danh sách tên (mã) các picking nhập kho của sản phẩm trong khoảng thời gian
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124, KBC/INT/00456"
         
-        Logic: Lấy TẤT CẢ picking nhập vào kho, bao gồm cả inter-warehouse transfer
+        🔧 LOGIC MỚI: Dựa trên stock.move.line
+        - Lấy TẤT CẢ picking có move line nhập vào location_ids
         """
-        # Tìm các stock.move nhập vào kho
+        # Tìm TẤT CẢ các stock.move
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
-            ('location_dest_id', 'in', location_ids),
         ], order='date asc')
-        
-        # Lọc: lấy TẤT CẢ move nhập từ bên ngoài vào kho
-        incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
         
         # Lấy danh sách picking names
         picking_names = []
         seen_picking_ids = set()
         
-        for move in incoming_moves:
-            if not move.picking_id:
+        for move in moves:
+            if not move.picking_id or not move.move_line_ids:
                 continue
-                
-            picking = move.picking_id
             
-            if picking.id not in seen_picking_ids:
-                picking_names.append(picking.name)
-                seen_picking_ids.add(picking.id)
+            # Kiểm tra xem move có line nào là incoming không
+            has_incoming = False
+            
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
                 
-                # Debug logging
-                _logger.info(
-                    f"Product {product_id} - Incoming Picking: {picking.name}, "
-                    f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}, "
-                    f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name}"
-                )
+                # Bỏ qua same location
+                if location_id == location_dest_id:
+                    continue
+                
+                # Nhập: từ ngoài location_ids → vào location_ids
+                if location_id not in location_ids and location_dest_id in location_ids:
+                    has_incoming = True
+                    break
+            
+            if has_incoming:
+                picking = move.picking_id
+                
+                if picking.id not in seen_picking_ids:
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
+                    
+                    # Debug logging
+                    _logger.info(
+                        f"Product {product_id} - Incoming Picking: {picking.name}, "
+                        f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}"
+                    )
         
         return ', '.join(picking_names) if picking_names else ''
 
