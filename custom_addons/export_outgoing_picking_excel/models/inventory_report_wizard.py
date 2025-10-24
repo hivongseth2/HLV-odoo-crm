@@ -60,7 +60,10 @@ class InventoryReportWizard(models.TransientModel):
             return self._get_end_of_day(self.report_date)
 
     def _get_warehouse_locations(self):
-        """Lấy danh sách location của các kho được chọn, bao gồm TẤT CẢ child locations"""
+        """
+        Lấy danh sách location của các kho được chọn, bao gồm TẤT CẢ child locations
+        NHƯNG loại trừ transit locations để tính xuất/nhập đúng
+        """
         if self.warehouse_ids:
             warehouses = self.warehouse_ids
         else:
@@ -76,11 +79,19 @@ class InventoryReportWizard(models.TransientModel):
                     ('id', 'child_of', wh.view_location_id.id),
                     ('usage', '=', 'internal')
                 ])
-                location_ids.extend(child_locs.ids)
+                
+                # Loại bỏ các location có tên chứa 'transit', 'inter-warehouse', etc.
+                # hoặc các location được đánh dấu rõ ràng là transit
+                filtered_locs = child_locs.filtered(
+                    lambda loc: 'transit' not in loc.complete_name.lower() 
+                    and 'inter-warehouse' not in loc.complete_name.lower()
+                )
+                
+                location_ids.extend(filtered_locs.ids)
                 
                 _logger.info(
-                    f"Warehouse {wh.name}: Found {len(child_locs)} internal locations: "
-                    f"{', '.join(child_locs.mapped('complete_name'))}"
+                    f"Warehouse {wh.name}: Found {len(filtered_locs)}/{len(child_locs)} internal locations "
+                    f"(excluded transit): {', '.join(filtered_locs.mapped('complete_name'))}"
                 )
         
         return list(set(location_ids))
@@ -242,8 +253,6 @@ class InventoryReportWizard(models.TransientModel):
             
             if picking.id not in seen_picking_ids:
                 # LẤY TẤT CẢ picking (bao gồm cả internal transfer giữa các warehouse)
-                # Vì move đã được lọc: source IN location_ids, dest NOT IN location_ids
-                # => Đây là xuất ra ngoài kho, bất kể picking type
                 picking_names.append(picking.name)
                 seen_picking_ids.add(picking.id)
                 
@@ -263,7 +272,7 @@ class InventoryReportWizard(models.TransientModel):
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124, TSN/INT/00456"
         
         Logic: Lấy TẤT CẢ picking nhập vào kho, bao gồm cả inter-warehouse transfer
-        Chỉ bỏ qua picking type = internal trong cùng warehouse
+        Và tìm cả picking NGUỒN nếu nhập qua inter-warehouse transit
         """
         # Tìm các stock.move nhập vào kho
         moves = self.env['stock.move'].search([
@@ -288,8 +297,7 @@ class InventoryReportWizard(models.TransientModel):
             picking = move.picking_id
             
             if picking.id not in seen_picking_ids:
-                # LẤY TẤT CẢ picking nhập vào (incoming, internal from other warehouse, etc.)
-                # Không filter theo picking type nữa vì cần lấy cả inter-warehouse transfer
+                # LẤY TẤT CẢ picking nhập vào
                 picking_names.append(picking.name)
                 seen_picking_ids.add(picking.id)
                 
@@ -299,8 +307,46 @@ class InventoryReportWizard(models.TransientModel):
                     f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}, "
                     f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name}"
                 )
+                
+                # Nếu nhập từ inter-warehouse transit, tìm picking nguồn (xuất từ kho khác)
+                if move.location_id.usage == 'transit':
+                    source_picking = self._find_source_picking_from_transit(move, start_datetime, end_datetime)
+                    if source_picking and source_picking.id not in seen_picking_ids:
+                        picking_names.append(f"{source_picking.name}")
+                        seen_picking_ids.add(source_picking.id)
+                        _logger.info(
+                            f"Product {product_id} - Source Picking from transit: {source_picking.name}"
+                        )
         
         return ', '.join(picking_names) if picking_names else ''
+    
+    def _find_source_picking_from_transit(self, incoming_move, start_datetime, end_datetime):
+        """
+        Tìm picking nguồn (xuất từ warehouse khác) cho move nhập qua transit
+        
+        Logic: Tìm move_orig_ids hoặc tìm move có cùng product và destination = transit location
+        """
+        # Phương pháp 1: Qua move_orig_ids (linked moves)
+        if incoming_move.move_orig_ids:
+            for orig_move in incoming_move.move_orig_ids:
+                if orig_move.picking_id and orig_move.state == 'done':
+                    return orig_move.picking_id
+        
+        # Phương pháp 2: Tìm move có destination = transit location của incoming_move
+        transit_location_id = incoming_move.location_id.id
+        
+        source_moves = self.env['stock.move'].search([
+            ('product_id', '=', incoming_move.product_id.id),
+            ('state', '=', 'done'),
+            ('location_dest_id', '=', transit_location_id),
+            ('date', '>=', start_datetime),
+            ('date', '<=', end_datetime),
+        ], order='date desc', limit=1)
+        
+        if source_moves and source_moves.picking_id:
+            return source_moves.picking_id
+        
+        return None
 
     def _create_excel_workbook(self, data_rows):
         """Tạo workbook Excel với hyperlink đến picking"""
