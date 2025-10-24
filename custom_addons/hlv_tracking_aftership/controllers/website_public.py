@@ -10,7 +10,7 @@ class WebsiteTrackingPublic(http.Controller):
     def track_form(self, **kw):
         return request.render("hlv_tracking_aftership.website_track_form", {})
 
-    @http.route(['/track/search'], type='http', auth='public', methods=['POST'], website=True, csrf=True)
+    @http.route(['/track/search'], type='http', auth='public', methods=['POST'], website=True, csrf=False)
     def track_search(self, **post):
         number = (post.get('tracking_number') or '').strip()
         slug   = (post.get('slug') or '').strip()  # có thể để trống để auto-detect
