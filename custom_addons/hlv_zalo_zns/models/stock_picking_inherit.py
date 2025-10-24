@@ -33,8 +33,14 @@ class StockPicking(models.Model):
         if not so and self.origin:
             so = self.env['sale.order'].sudo().search([('name', '=', self.origin)], limit=1)
         if not so:
-            so = self.mapped('move_lines.sale_line_id.order_id')[:1] or False
+            so_rs = self.mapped('move_ids_without_package.sale_line_id.order_id')
+            so = so_rs[:1] if so_rs else False
         return so
+
+    def _zns_resolve_purchase_order(self):
+        self.ensure_one()
+        po_rs = self.mapped('move_ids_without_package.purchase_line_id.order_id')
+        return po_rs[:1] if po_rs else False
 
     # ---- Lấy partner giao hàng (từ SO nếu có) ----
     def _zns_get_shipping_partner(self):
