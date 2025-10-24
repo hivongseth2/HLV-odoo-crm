@@ -167,21 +167,20 @@ class InventoryReportWizard(models.TransientModel):
         
         return current_qty + adjustment
 
-    def _get_outgoing_qty_between(self, product_id, location_ids, start_datetime, end_datetime):
+    def _get_outgoing_qty_between(self, product_id, location_ids, start_datetime, end_datetime, log_locations=False):
         """
         Tính tổng số lượng xuất kho từ start_datetime đến end_datetime
         
         Logic: Tính các move xuất RA KHỎI kho (destination không trong location_ids)
         Bao gồm: xuất đến customer, transit, packing zone bên ngoài kho, etc.
         """
-        # Log location_ids để debug (chỉ log 1 lần cho product đầu tiên)
-        if not hasattr(self, '_logged_location_ids'):
+        # Log location_ids để debug (chỉ log 1 lần khi được yêu cầu)
+        if log_locations:
             location_objs = self.env['stock.location'].browse(location_ids)
             _logger.info(
                 f"🗂️ Location IDs in scope ({len(location_ids)} locations): "
                 f"{', '.join([f'{loc.complete_name} (ID:{loc.id}, Usage:{loc.usage})' for loc in location_objs])}"
             )
-            self._logged_location_ids = True
         
         # Tìm các stock.move xuất khỏi kho
         moves = self.env['stock.move'].search([
@@ -583,6 +582,7 @@ class InventoryReportWizard(models.TransientModel):
         # Tạo dữ liệu báo cáo
         data_rows = []
         stt = 1
+        is_first_product = True
         
         for product in products.sorted(key=lambda p: p.default_code or p.name):
             # Tính tồn đầu ngày
@@ -592,7 +592,8 @@ class InventoryReportWizard(models.TransientModel):
             qty_in = self._get_incoming_qty_between(product.id, location_ids, start_of_day, end_of_period)
             
             # Tính số lượng xuất từ đầu ngày đến end_of_period
-            qty_out = self._get_outgoing_qty_between(product.id, location_ids, start_of_day, end_of_period)
+            qty_out = self._get_outgoing_qty_between(product.id, location_ids, start_of_day, end_of_period, log_locations=is_first_product)
+            is_first_product = False
             
             # Tính tồn tại end_of_period
             qty_current = self._get_product_qty_at_datetime(product.id, location_ids, end_of_period)
