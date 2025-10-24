@@ -167,6 +167,96 @@ class InventoryReportWizard(models.TransientModel):
         
         return current_qty + adjustment
 
+    def _is_virtual_location(self, location_id):
+        """
+        Kiểm tra xem location có phải là virtual location hay không
+        Virtual location là location được sử dụng cho inventory adjustment
+        Bao gồm: loss, inventory, scrap, production, etc. (usage != 'internal' và != 'transit')
+        """
+        location = self.env['stock.location'].browse(location_id)
+        # Virtual locations có usage là: loss, inventory, scrap, production, etc.
+        # Không phải internal hoặc transit
+        return location.usage not in ['internal', 'transit']
+
+    def _get_product_adjustment_details(self, product_id, location_ids, start_datetime, end_datetime):
+        """
+        Lấy danh sách điều chỉnh tồn kho (Inventory Adjustment) của sản phẩm
+        
+        🔧 LOGIC: 
+        - Tìm các stock.move có source_location là virtual location (loss, inventory, scrap, etc.)
+        - destination_location trong location_ids
+        - Hoặc ngược lại: source trong location_ids, dest là virtual location (cho trường hợp xuất hàng hỏng)
+        
+        Trả về: {
+            'incoming': [{'qty': ..., 'from_location': ..., 'move': ..., 'picking': ...}, ...],
+            'outgoing': [{'qty': ..., 'to_location': ..., 'move': ..., 'picking': ...}, ...],
+            'total_qty': số lượng net điều chỉnh
+        }
+        """
+        moves = self.env['stock.move'].search([
+            ('product_id', '=', product_id),
+            ('state', '=', 'done'),
+            ('date', '>=', start_datetime),
+            ('date', '<=', end_datetime),
+            '|',
+            ('location_id', 'in', location_ids),
+            ('location_dest_id', 'in', location_ids),
+        ])
+        
+        adjustments = {
+            'incoming': [],  # Điều chỉnh tăng (từ virtual location vào kho)
+            'outgoing': [],  # Điều chỉnh giảm (từ kho ra virtual location)
+            'total_qty': 0
+        }
+        
+        for move in moves:
+            # Bỏ qua moves không có picking_id hoặc moves nội bộ
+            if not move.move_line_ids:
+                continue
+            
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
+                qty = line.qty_done
+                
+                # Bỏ qua: location_id = location_dest_id
+                if location_id == location_dest_id:
+                    continue
+                
+                # 🔧 ĐIỀU CHỈNH TĂNG: Virtual location → Kho thực
+                # Ví dụ: Inventory / Stock Adjustment → Internal Location
+                if (self._is_virtual_location(location_id) and 
+                    location_dest_id in location_ids):
+                    
+                    from_location = self.env['stock.location'].browse(location_id)
+                    adjustments['incoming'].append({
+                        'qty': qty,
+                        'from_location': from_location.name,
+                        'from_location_usage': from_location.usage,
+                        'move': move,
+                        'picking': move.picking_id,
+                        'date': move.date
+                    })
+                    adjustments['total_qty'] += qty
+                
+                # 🔧 ĐIỀU CHỈNH GIẢM: Kho thực → Virtual location
+                # Ví dụ: Internal Location → Loss / Scrap
+                elif (location_id in location_ids and 
+                      self._is_virtual_location(location_dest_id)):
+                    
+                    to_location = self.env['stock.location'].browse(location_dest_id)
+                    adjustments['outgoing'].append({
+                        'qty': qty,
+                        'to_location': to_location.name,
+                        'to_location_usage': to_location.usage,
+                        'move': move,
+                        'picking': move.picking_id,
+                        'date': move.date
+                    })
+                    adjustments['total_qty'] -= qty
+        
+        return adjustments
+
     def _get_outgoing_qty_between(self, product_id, location_ids, start_datetime, end_datetime, log_locations=False):
         """
         Tính tổng số lượng xuất kho từ start_datetime đến end_datetime
@@ -379,11 +469,16 @@ class InventoryReportWizard(models.TransientModel):
     def _get_product_outgoing_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
+        Bao gồm:
+        - Picking xuất thường (xuất bán, xuất kho khác, etc.)
+        - Điều chỉnh tồn kho (Inventory Adjustment) nếu có giảm tồn
+        
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy
         
         🔧 LOGIC MỚI: Dựa trên stock.move.line
         - Lấy TẤT CẢ picking có move line xuất ra khỏi location_ids
         - Nếu xuất sang inter-warehouse transit, tìm thêm picking nhận ở kho đích
+        - Thêm thông tin adjustment (tồn kho bị điều chỉnh giảm sang virtual location)
         """
         # Tìm TẤT CẢ các stock.move
         moves = self.env['stock.move'].search([
@@ -447,6 +542,38 @@ class InventoryReportWizard(models.TransientModel):
                                 f"Product {product_id} - Found destination picking: {dest_picking.name}"
                             )
         
+        # 🆕 Thêm thông tin Inventory Adjustment (điều chỉnh giảm)
+        adjustments = self._get_product_adjustment_details(product_id, location_ids, start_datetime, end_datetime)
+        
+        if adjustments['outgoing']:
+            _logger.info(
+                f"Product {product_id} - Found {len(adjustments['outgoing'])} inventory adjustments (outgoing)"
+            )
+            
+            for adj in adjustments['outgoing']:
+                # Tạo mô tả điều chỉnh
+                move = adj['move']
+                picking = adj['picking']
+                
+                # Lấy picking reference nếu có, hoặc tạo string mô tả
+                if picking and picking.id not in seen_picking_ids:
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
+                    _logger.info(
+                        f"  ✓ Inventory Adjustment: {picking.name}, "
+                        f"To: {adj['to_location']} ({adj['to_location_usage']}), "
+                        f"Qty: {adj['qty']}"
+                    )
+                elif not picking:
+                    # Nếu không có picking, tạo mô tả trực tiếp từ move
+                    adjustment_desc = f"Điều chỉnh sang {adj['to_location']} - {adj['qty']} cái"
+                    picking_names.append(adjustment_desc)
+                    _logger.info(
+                        f"  ✓ Inventory Adjustment (no picking): {adjustment_desc}, "
+                        f"To: {adj['to_location']} ({adj['to_location_usage']}), "
+                        f"Date: {adj['date']}"
+                    )
+        
         return ', '.join(picking_names) if picking_names else ''
 
     def _find_destination_picking_from_move(self, outgoing_move):
@@ -494,10 +621,15 @@ class InventoryReportWizard(models.TransientModel):
     def _get_product_incoming_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
         Lấy danh sách tên (mã) các picking nhập kho của sản phẩm trong khoảng thời gian
+        Bao gồm: 
+        - Picking nhập thường (từ nhà cung cấp, kho khác, etc.)
+        - Điều chỉnh tồn kho (Inventory Adjustment) nếu có tăng tồn
+        
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124, KBC/INT/00456"
         
         🔧 LOGIC MỚI: Dựa trên stock.move.line
         - Lấy TẤT CẢ picking có move line nhập vào location_ids
+        - Thêm thông tin adjustment (tồn kho được điều chỉnh từ virtual location)
         """
         # Tìm TẤT CẢ các stock.move
         moves = self.env['stock.move'].search([
@@ -542,6 +674,39 @@ class InventoryReportWizard(models.TransientModel):
                     _logger.info(
                         f"Product {product_id} - Incoming Picking: {picking.name}, "
                         f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}"
+                    )
+        
+        # 🆕 Thêm thông tin Inventory Adjustment
+        adjustments = self._get_product_adjustment_details(product_id, location_ids, start_datetime, end_datetime)
+        
+        if adjustments['incoming']:
+            _logger.info(
+                f"Product {product_id} - Found {len(adjustments['incoming'])} inventory adjustments (incoming)"
+            )
+            
+            for adj in adjustments['incoming']:
+                # Tạo mô tả điều chỉnh
+                # Format: "Điều chỉnh từ {from_location} - {qty} {uom}"
+                move = adj['move']
+                picking = adj['picking']
+                
+                # Lấy picking reference nếu có, hoặc tạo string mô tả
+                if picking and picking.id not in seen_picking_ids:
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
+                    _logger.info(
+                        f"  ✓ Inventory Adjustment: {picking.name}, "
+                        f"From: {adj['from_location']} ({adj['from_location_usage']}), "
+                        f"Qty: {adj['qty']}"
+                    )
+                elif not picking:
+                    # Nếu không có picking, tạo mô tả trực tiếp từ move
+                    adjustment_desc = f"Điều chỉnh từ {adj['from_location']} - {adj['qty']} cái"
+                    picking_names.append(adjustment_desc)
+                    _logger.info(
+                        f"  ✓ Inventory Adjustment (no picking): {adjustment_desc}, "
+                        f"From: {adj['from_location']} ({adj['from_location_usage']}), "
+                        f"Date: {adj['date']}"
                     )
         
         return ', '.join(picking_names) if picking_names else ''
