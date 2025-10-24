@@ -192,7 +192,15 @@ class InventoryReportWizard(models.TransientModel):
         ])
         
         # Lọc: lấy move xuất ra ngoài kho (destination không trong location_ids)
-        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
+        # 🔧 FIX: Bao gồm cả move có location_dest_id = location_id (bug dữ liệu)
+        # NHƯNG có move_dest_ids link sang kho khác (inter-warehouse transfer)
+        outgoing_moves = moves.filtered(
+            lambda m: m.location_dest_id.id not in location_ids or
+            (m.move_dest_ids and any(
+                dest_move.location_dest_id.id not in location_ids 
+                for dest_move in m.move_dest_ids
+            ))
+        )
         
         total_qty = sum(outgoing_moves.mapped('product_uom_qty'))
         
@@ -345,7 +353,14 @@ class InventoryReportWizard(models.TransientModel):
         
         # 🔧 FIX: Lấy TẤT CẢ move xuất từ kho (destination không trong location_ids)
         # Bao gồm CẢ move xuất sang transit location
-        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
+        # VÀ cả move có bug dữ liệu (location_dest = location_id) nhưng có link đến kho khác
+        outgoing_moves = moves.filtered(
+            lambda m: m.location_dest_id.id not in location_ids or
+            (m.move_dest_ids and any(
+                dest_move.location_dest_id.id not in location_ids 
+                for dest_move in m.move_dest_ids
+            ))
+        )
         
         picking_names = []
         seen_picking_ids = set()
@@ -371,14 +386,15 @@ class InventoryReportWizard(models.TransientModel):
                 )
                 
                 # Kiểm tra xem có phải là inter-warehouse transfer không
-                # Bằng cách check usage hoặc tên location có chứa 'transit' hoặc 'inter-warehouse'
+                # 🔧 FIX: Bao gồm cả trường hợp move có bug (dest = source) nhưng có move_dest_ids
                 is_transit = (
                     dest_usage == 'transit' or 
                     'transit' in dest_location.complete_name.lower() or
-                    'inter-warehouse' in dest_location.complete_name.lower()
+                    'inter-warehouse' in dest_location.complete_name.lower() or
+                    (move.location_dest_id.id == move.location_id.id and move.move_dest_ids)  # Bug data case
                 )
                 
-                if is_transit:
+                if is_transit or move.move_dest_ids:
                     # Tìm picking nhận ở kho đích qua move_dest_ids
                     dest_picking = self._find_destination_picking_from_move(move)
                     if dest_picking and dest_picking.id not in seen_picking_ids:
