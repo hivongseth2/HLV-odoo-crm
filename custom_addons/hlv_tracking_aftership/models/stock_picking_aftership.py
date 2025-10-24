@@ -84,14 +84,30 @@ class StockPicking(models.Model):
             if not cps:
                 p.tracking_timeline_html = "<em>Chưa có checkpoint.</em>"
                 continue
-            # newest -> oldest
-            lines = []
-            for cp in reversed(cps):
+            items = []
+            for cp in reversed(cps):  # mới nhất lên đầu
                 t  = cp.get("checkpoint_time") or ""
-                tg = cp.get("tag") or ""
+                tag = cp.get("tag") or ""
                 msg = cp.get("message") or ""
-                lines.append(f"<li><b>{tg}</b> — {msg} <small style='opacity:.6'>({t})</small></li>")
-            p.tracking_timeline_html = "<ul style='margin-left:1rem'>" + "\n".join(lines) + "</ul>"
+                items.append(f"""
+                <div class='tl-item'>
+                    <div class='tl-dot'></div>
+                    <div class='tl-content'>
+                    <div class='tl-title'><b>{tag}</b> <small style='opacity:.6'>({t})</small></div>
+                    <div class='tl-msg'>{msg}</div>
+                    </div>
+                </div>
+                """)
+            p.tracking_timeline_html = """
+            <div class='timeline'>%s</div>
+            <style>
+                .timeline{position:relative;margin:.5rem 0;padding-left:1.25rem;border-left:2px solid #e5e7eb}
+                .tl-item{position:relative;margin:0 0 .75rem 0}
+                .tl-dot{position:absolute;left:-8px;top:.45rem;width:.75rem;height:.75rem;border-radius:999px;background:#3b82f6}
+                .tl-title{margin-bottom:.25rem}
+                .tl-msg{color:#374151}
+            </style>
+            """ % ("\n".join(items))
     @api.model
     def cron_aftership_refresh_all(self):
         picks = self.search([('aftership_id', '!=', False)])

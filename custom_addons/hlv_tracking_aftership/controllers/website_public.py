@@ -51,7 +51,7 @@ class WebsiteTrackingPublic(http.Controller):
                 # Nếu có id -> lấy bản có lang=vi để hiển thị đẹp pl
                 tid = data.get("id")
                 if not error and tid:
-                    url = f"{AFTERSHIP_API_BASE}/trackings/{tid}?lang=vi"
+                    url = f"{AFTERSHIP_API_BASE}/trackings/{tid}?lang=vi"   # ✅ VI
                     r2 = requests.get(url, headers=headers, timeout=20)
                     if r2.ok:
                         data = r2.json().get("data", {}) or data

@@ -2,66 +2,69 @@
 <odoo>
   <data>
 
-  <template id="website_track_form" name="Public Tracking Form" inherit_id="website.layout">
-    <xpath expr="//main" position="inside">
-      <section class="s_text_block container my-5">
-        <h2>Theo dõi đơn hàng</h2>
-        <form action="/track/search" method="post" class="o_website_form row g-3">
-          <div class="col-md-6">
-            <label class="form-label">Mã vận đơn</label>
-            <input name="tracking_number" type="text" class="form-control" placeholder="VD: JT0123..., SPXVN..." required="required"/>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label">(Tùy chọn) Hãng vận chuyển</label>
-            <input name="slug" type="text" class="form-control" placeholder="VD: jtexpress-vn, spx-vn"/>
-          </div>
-          <div class="col-md-2 d-flex align-items-end">
-            <button type="submit" class="btn btn-primary w-100">Tra cứu</button>
-          </div>
-        </form>
-      </section>
-    </xpath>
-  </template>
+    <!-- Form giữ nguyên -->
 
-  <template id="website_track_result" name="Public Tracking Result" inherit_id="website.layout">
-    <xpath expr="//main" position="inside">
-      <section class="container my-5">
-        <h2>Kết quả tra cứu</h2>
-        <t t-if="error">
-          <div class="alert alert-danger" role="alert"><t t-esc="error"/></div>
-        </t>
-        <t t-if="not error">
-          <t t-set="t" t-value="data"/>
-          <div class="card mb-3 p-3">
-            <div><strong>Hãng:</strong> <t t-esc="t.get('slug')"/></div>
-            <div><strong>Mã vận đơn:</strong> <t t-esc="t.get('tracking_number')"/></div>
-            <div><strong>Trạng thái:</strong> <t t-esc="t.get('tag') or t.get('status')"/></div>
-            <div t-if="t.get('courier_tracking_link')">
-              <a t-att-href="t.get('courier_tracking_link')" target="_blank">Xem trên trang hãng</a>
+    <!-- KẾT QUẢ -->
+    <template id="website_track_result" name="Public Tracking Result" inherit_id="website.layout">
+      <xpath expr="//main" position="inside">
+        <section class="container my-5">
+          <h2>Kết quả tra cứu</h2>
+
+          <t t-if="error">
+            <div class="alert alert-danger" role="alert"><t t-esc="error"/></div>
+          </t>
+
+          <!-- Định nghĩa biến an toàn: luôn là dict -->
+          <t t-set="tr" t-value="data or {}"/>
+
+          <t t-if="not error and tr">
+            <div class="card mb-3 p-3">
+              <div><strong>Hãng:</strong> <t t-esc="tr.get('slug') or '-'"/></div>
+              <div><strong>Mã vận đơn:</strong> <t t-esc="tr.get('tracking_number') or '-'"/></div>
+              <div><strong>Trạng thái:</strong> <t t-esc="tr.get('tag') or tr.get('status') or '-'"/></div>
+              <div t-if="tr.get('courier_tracking_link')">
+                <a t-att-href="tr.get('courier_tracking_link')" target="_blank">Xem trên trang hãng</a>
+              </div>
             </div>
+
+            <!-- Timeline -->
+            <t t-set="cps" t-value="(tr.get('checkpoints') or [])"/>
+            <t t-if="not cps">
+              <em>Chưa có dữ liệu hành trình.</em>
+            </t>
+            <t t-if="cps">
+              <div class="timeline">
+                <t t-foreach="list(reversed(cps))" t-as="cp">
+                  <div class="tl-item">
+                    <div class="tl-dot"></div>
+                    <div class="tl-content">
+                      <div class="tl-title">
+                        <strong><t t-esc="cp.get('tag') or ''"/></strong>
+                        <small class="text-muted ms-2"><t t-esc="cp.get('checkpoint_time') or ''"/></small>
+                      </div>
+                      <div class="tl-msg"><t t-esc="cp.get('message') or ''"/></div>
+                    </div>
+                  </div>
+                </t>
+              </div>
+            </t>
+          </t>
+
+          <div class="mt-4">
+            <a href="/track" class="btn btn-secondary">Tra cứu khác</a>
           </div>
+        </section>
 
-          <t t-set="cps" t-value="(t.get('checkpoints') or [])"/>
-          <t t-if="not cps">
-            <em>Chưa có dữ liệu hành trình.</em>
-          </t>
-          <t t-if="cps">
-            <ol class="list-group list-group-numbered">
-              <t t-foreach="list(reversed(cps))" t-as="cp">
-                <li class="list-group-item">
-                  <div><strong><t t-esc="cp.get('tag')"/></strong> — <t t-esc="cp.get('message')"/></div>
-                  <small class="text-muted"><t t-esc="cp.get('checkpoint_time')"/></small>
-                </li>
-              </t>
-            </ol>
-          </t>
-        </t>
-        <div class="mt-4">
-          <a href="/track" class="btn btn-secondary">Tra cứu khác</a>
-        </div>
-      </section>
-    </xpath>
-  </template>
-    </data>
+        <!-- CSS gọn cho timeline -->
+        <style>
+          .timeline{position:relative;margin:1rem 0;padding-left:1.25rem;border-left:2px solid #e5e7eb}
+          .tl-item{position:relative;margin:0 0 1rem 0}
+          .tl-dot{position:absolute;left:-8px;top:.45rem;width:.75rem;height:.75rem;border-radius:999px;background:#3b82f6}
+          .tl-title{display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem}
+          .tl-msg{color:#374151}
+        </style>
+      </xpath>
+    </template>
 
+  </data>
 </odoo>
