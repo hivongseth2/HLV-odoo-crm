@@ -8,9 +8,13 @@
         <section class="s_text_block container my-5">
           <h2>Theo dõi đơn hàng</h2>
           <form action="/track/search" method="post" class="o_website_form row g-3">
+            <!-- CSRF token -->
+            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+
             <div class="col-md-6">
-              <label class="form-label">Mã vận đơn</label>
-              <input name="tracking_number" type="text" class="form-control" placeholder="VD: JT..., SPXVN..." required="required"/>
+              <label class="form-label">Mã đơn hoặc mã vận đơn</label>
+              <input name="tracking_number" type="text" class="form-control"
+                     placeholder="VD: KBC/OUT/01931 hoặc SPXVN..." required="required"/>
             </div>
             <div class="col-md-4">
               <label class="form-label">(Tuỳ chọn) Hãng vận chuyển</label>
@@ -34,7 +38,17 @@
             <div class="alert alert-danger" role="alert"><t t-esc="error"/></div>
           </t>
 
-          <!-- Luôn có dict để tránh NoneType -->
+          <!-- Map VN cho tag -->
+          <t t-set="VI_TAG" t-value="{
+            'InfoReceived':'Đã tạo đơn',
+            'InTransit':'Đang vận chuyển',
+            'OutForDelivery':'Đang giao',
+            'Delivered':'Đã giao',
+            'Exception':'Ngoại lệ',
+            'FailedAttempt':'Giao thất bại',
+            'ReturnToSender':'Hoàn hàng'
+          }"/>
+
           <t t-set="tr" t-value="data or {}"/>
 
           <t t-if="not error and tr">
@@ -42,7 +56,7 @@
               <div><strong>Hãng:</strong> <t t-esc="tr.get('slug') or '-'"/></div>
               <div><strong>Mã vận đơn:</strong> <t t-esc="tr.get('tracking_number') or '-'"/></div>
               <div><strong>Trạng thái:</strong>
-                <t t-esc="tr.get('subtag_message') or tr.get('tag') or tr.get('status') or '-'"/>
+                <t t-esc="VI_TAG.get(tr.get('tag')) or tr.get('subtag_message') or tr.get('tag') or tr.get('status') or '-'"/>
               </div>
               <div t-if="tr.get('courier_tracking_link')">
                 <a t-att-href="tr.get('courier_tracking_link')" target="_blank">Xem trên trang hãng</a>
@@ -62,12 +76,13 @@
                     <div class="tl-content">
                       <div class="tl-title">
                         <strong>
-                          <t t-esc="cp.get('subtag_message') or cp.get('tag') or ''"/>
+                          <t t-esc="cp.get('subtag_message') or VI_TAG.get(cp.get('tag')) or cp.get('tag') or ''"/>
                         </strong>
                         <small class="text-muted ms-2">
                           <t t-esc="cp.get('checkpoint_time') or ''"/>
                         </small>
                       </div>
+                      <!-- Ưu tiên message (đa phần đã là tiếng Việt từ carrier) -->
                       <div class="tl-msg"><t t-esc="cp.get('message') or ''"/></div>
                     </div>
                   </div>
