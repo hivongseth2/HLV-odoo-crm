@@ -60,24 +60,28 @@ class InventoryReportWizard(models.TransientModel):
             return self._get_end_of_day(self.report_date)
 
     def _get_warehouse_locations(self):
-        """Lấy danh sách location của các kho được chọn"""
+        """Lấy danh sách location của các kho được chọn, bao gồm TẤT CẢ child locations"""
         if self.warehouse_ids:
             warehouses = self.warehouse_ids
         else:
             warehouses = self.env['stock.warehouse'].search([])
         
-        # Lấy tất cả location thuộc kho (internal type)
+        # Lấy tất cả location thuộc kho (internal type), bao gồm cả sub-locations
         location_ids = []
         for wh in warehouses:
-            # Lấy view_location_id và tất cả location con
-            if wh.lot_stock_id:
-                location_ids.append(wh.lot_stock_id.id)
-                # Tìm tất cả location con
+            # Lấy view_location_id để tìm tất cả location con
+            if wh.view_location_id:
+                # Tìm TẤT CẢ location con có usage = internal
                 child_locs = self.env['stock.location'].search([
-                    ('id', 'child_of', wh.lot_stock_id.id),
+                    ('id', 'child_of', wh.view_location_id.id),
                     ('usage', '=', 'internal')
                 ])
                 location_ids.extend(child_locs.ids)
+                
+                _logger.info(
+                    f"Warehouse {wh.name}: Found {len(child_locs)} internal locations: "
+                    f"{', '.join(child_locs.mapped('complete_name'))}"
+                )
         
         return list(set(location_ids))
 
@@ -202,12 +206,9 @@ class InventoryReportWizard(models.TransientModel):
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/OUT/00123, WH/OUT/00124"
         
-        Logic mới: 
-        1. Tìm move xuất RA KHỎI kho (location_id in location_ids, location_dest_id not in)
-        2. Nếu picking có backorder_id hoặc move có move_dest_ids, tìm picking cuối cùng trong chain
-        3. Hiển thị picking cuối cùng (TSN/OUT/...) thay vì picking đầu tiên (SPXVN...)
+        Logic đơn giản: Lấy TẤT CẢ picking có move xuất ra khỏi location_ids
         """
-        # Tìm các stock.move xuất khỏi kho
+        # Tìm các stock.move xuất khỏi kho (bao gồm cả sub-locations)
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
@@ -216,10 +217,10 @@ class InventoryReportWizard(models.TransientModel):
             ('location_id', 'in', location_ids),
         ], order='date asc')
         
-        # Lọc: lấy move xuất ra ngoài kho
+        # Lọc: lấy move xuất ra ngoài kho (destination không trong location_ids)
         outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
         
-        # Lấy danh sách picking cuối cùng trong chain
+        # Lấy danh sách TẤT CẢ picking (không dùng chain logic nữa)
         picking_names = []
         seen_picking_ids = set()
         
@@ -227,67 +228,23 @@ class InventoryReportWizard(models.TransientModel):
             if not move.picking_id:
                 continue
             
-            # Tìm picking cuối cùng trong chain
-            final_picking = self._get_final_picking_in_chain(move.picking_id)
+            picking = move.picking_id
             
-            if final_picking and final_picking.id not in seen_picking_ids:
+            if picking.id not in seen_picking_ids:
                 # Bỏ qua picking type = internal
-                if final_picking.picking_type_id and final_picking.picking_type_id.code != 'internal':
-                    picking_names.append(final_picking.name)
-                    seen_picking_ids.add(final_picking.id)
+                if picking.picking_type_id and picking.picking_type_id.code != 'internal':
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
                     
                     # Debug logging
                     _logger.info(
-                        f"Product {product_id} - Original: {move.picking_id.name}, "
-                        f"Final: {final_picking.name}, Type: {final_picking.picking_type_id.code if final_picking.picking_type_id else 'N/A'}"
+                        f"Product {product_id} - Outgoing Picking: {picking.name}, "
+                        f"Type: {picking.picking_type_id.code}, "
+                        f"Qty: {move.product_uom_qty}, "
+                        f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name}"
                     )
         
         return ', '.join(picking_names) if picking_names else ''
-    
-    def _get_final_picking_in_chain(self, picking):
-        """
-        Tìm picking cuối cùng trong chain thông qua backorder hoặc move chain
-        
-        Ví dụ chain: SPXVN... → TSN/PACK/... → TSN/OUT/...
-        Trả về: TSN/OUT/...
-        """
-        current = picking
-        visited = set()
-        
-        # Duyệt theo backorder chain (picking.backorder_id)
-        while current:
-            if current.id in visited:
-                break
-            visited.add(current.id)
-            
-            # Tìm picking được tạo từ picking hiện tại
-            next_pickings = self.env['stock.picking'].search([
-                ('backorder_id', '=', current.id),
-                ('state', '=', 'done')
-            ], limit=1)
-            
-            if next_pickings:
-                current = next_pickings
-            else:
-                # Nếu không có backorder, thử tìm qua move chain
-                next_picking = self._get_next_picking_via_moves(current)
-                if next_picking and next_picking.id not in visited:
-                    current = next_picking
-                else:
-                    break
-        
-        return current
-    
-    def _get_next_picking_via_moves(self, picking):
-        """
-        Tìm picking tiếp theo thông qua move_dest_ids
-        """
-        for move in picking.move_ids_without_package:
-            if move.move_dest_ids:
-                for dest_move in move.move_dest_ids:
-                    if dest_move.picking_id and dest_move.state == 'done':
-                        return dest_move.picking_id
-        return None
 
     def _get_product_incoming_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
