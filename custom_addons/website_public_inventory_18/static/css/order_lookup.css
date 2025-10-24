@@ -1003,3 +1003,23 @@
 .o_order_lookup_page .table-responsive::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
 }
+
+/* ===== Delivery status: tối giản, không màu mè ===== */
+.o_order_lookup_page .delivery-status{
+  display:inline-block;      /* để đứng ngang hàng như các giá trị khác */
+  font-weight:600;
+  font-size:1rem;            /* = cỡ chữ các ô khác ở desktop */
+  line-height:1.25;
+  color: var(--text-dark);
+  vertical-align:middle;
+  white-space:nowrap;        /* tránh xuống dòng lẻ */
+  margin:0;                  /* khớp line-height */
+}
+
+/* Mobile: cho to hơn chút để dễ đọc */
+@media (max-width: 768px){
+  .o_order_lookup_page .delivery-status{ font-size:1.15rem; }
+}
+@media (max-width: 576px){
+  .o_order_lookup_page .delivery-status{ font-size:1.25rem; }
+}

@@ -448,22 +448,13 @@
                     </p>
                   </div>
                   <div class="col-12 col-sm-6 col-md-3">
-                    <label class="text-muted d-block mb-2">Trạng Thái Giao Hàng</label>
-                    <p class="mb-0 fs-4">
-                      <t t-set="delivery" t-value="order['delivery_status']"/>
-                      <t t-if="delivery == 'delivered'">
-                        <span class="badge badge-success badge-lg">Đã Giao</span>
-                      </t>
-                      <t t-elif="delivery == 'partial'">
-                        <span class="badge badge-warning badge-lg">Giao Một Phần</span>
-                      </t>
-                      <t t-elif="delivery == 'pending'">
-                        <span class="badge badge-info badge-lg">Chờ Giao</span>
-                      </t>
-                      <t t-else="">
-                        <span class="badge badge-secondary badge-lg">Chưa giao</span>
-                      </t>
-                    </p>
+                    <label class="text-muted d-block mb-1">Trạng Thái Giao Hàng</label>
+                      <span class="delivery-status"
+                            t-esc="{
+                              'delivered': 'Đã giao',
+                              'partial': 'Giao một phần',
+                              'pending': 'Chờ giao'
+                            }.get(order['delivery_status'], 'Chưa giao')"/>
                   </div>
                   <div class="col-12 col-sm-6 col-md-3">
                     <label class="text-muted d-block mb-1">Tổng Giá Trị</label>
