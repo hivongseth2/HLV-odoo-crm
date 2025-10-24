@@ -66,7 +66,12 @@ class StockPicking(models.Model):
 
             # Normalize status/tag/subtag
             tag = tracking.get("tag") or tracking.get("subtag") or tracking.get("status")
-            pick.tracking_status = tag
+            # pick.tracking_status = tag
+            
+            
+            vi_status = self._vi_label(tracking.get("tag"), tracking.get("subtag_message"), tracking.get("message"))
+            pick.tracking_status = vi_status or tracking.get("tag") or tracking.get("status")
+
 
             # Last checkpoint summary
             checkpoints = tracking.get("checkpoints") or []
