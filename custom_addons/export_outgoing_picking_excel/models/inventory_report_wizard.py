@@ -488,7 +488,7 @@ class InventoryReportWizard(models.TransientModel):
 
         # Lấy thông tin thời gian
         start_of_day = self._get_start_of_day(self.report_date)
-        end_of_period = self._get_report_end_datetime()  # Thay đổi: dùng logic thông minh
+        end_of_period = self._get_report_end_datetime()
         
         # Lấy danh sách location
         location_ids = self._get_warehouse_locations()
@@ -523,15 +523,24 @@ class InventoryReportWizard(models.TransientModel):
             if qty_start == 0 and qty_in == 0 and qty_out == 0 and qty_current == 0:
                 continue
             
-            # Lấy danh sách mã đơn nhập kho
-            incoming_picking_names = self._get_product_incoming_picking_names(
+            # Lấy danh sách mã đơn nhập kho và picking xuất từ kho nguồn (nếu có)
+            incoming_result = self._get_product_incoming_picking_names_and_sources(
                 product.id, location_ids, start_of_day, end_of_period
             )
+            incoming_picking_names = incoming_result['incoming_names']
+            source_outgoing_names = incoming_result['source_outgoing_names']
             
             # Lấy danh sách mã đơn xuất kho
             outgoing_picking_names = self._get_product_outgoing_picking_names(
                 product.id, location_ids, start_of_day, end_of_period
             )
+            
+            # Kết hợp: Phiếu xuất từ kho nguồn (qua transit) + Phiếu xuất trực tiếp từ kho hiện tại
+            all_outgoing_names = []
+            if source_outgoing_names:
+                all_outgoing_names.append(source_outgoing_names)
+            if outgoing_picking_names:
+                all_outgoing_names.append(outgoing_picking_names)
             
             row = {
                 'stt': stt,
@@ -543,7 +552,7 @@ class InventoryReportWizard(models.TransientModel):
                 'qty_out': qty_out,
                 'qty_current': qty_current,
                 'incoming_picking_names': incoming_picking_names,
-                'outgoing_picking_names': outgoing_picking_names,
+                'outgoing_picking_names': ', '.join(all_outgoing_names),
             }
             data_rows.append(row)
             stt += 1
@@ -576,3 +585,93 @@ class InventoryReportWizard(models.TransientModel):
             "url": f"/web/content/{attachment.id}?download=true",
             "target": "self",
         }
+
+    def _get_product_incoming_picking_names_and_sources(self, product_id, location_ids, start_datetime, end_datetime):
+        """
+        Lấy danh sách picking nhập kho và picking xuất từ kho nguồn (nếu nhập qua transit)
+        
+        Trả về dict:
+        {
+            'incoming_names': 'KBC/INT/00165, ...',
+            'source_outgoing_names': 'CK03745, ...'  # Picking xuất từ kho khác
+        }
+        """
+        # Tìm các stock.move nhập vào kho
+        moves = self.env['stock.move'].search([
+            ('product_id', '=', product_id),
+            ('state', '=', 'done'),
+            ('date', '>=', start_datetime),
+            ('date', '<=', end_datetime),
+            ('location_dest_id', 'in', location_ids),
+        ], order='date asc')
+        
+        # Lọc: lấy TẤT CẢ move nhập từ bên ngoài vào kho
+        incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
+        
+        incoming_names = []
+        source_outgoing_names = []
+        seen_incoming_ids = set()
+        seen_source_ids = set()
+        
+        for move in incoming_moves:
+            if not move.picking_id:
+                continue
+                
+            picking = move.picking_id
+            source_location = move.location_id
+            
+            # Thêm picking nhập hiện tại
+            if picking.id not in seen_incoming_ids:
+                incoming_names.append(picking.name)
+                seen_incoming_ids.add(picking.id)
+                
+                _logger.info(
+                    f"Product {product_id} - Incoming Picking: {picking.name}, "
+                    f"From: {source_location.complete_name} (Usage: {source_location.usage})"
+                )
+                
+                # Nếu nhập từ transit, tìm picking XUẤT từ kho nguồn
+                if source_location.usage == 'transit' or 'transit' in source_location.complete_name.lower():
+                    source_picking = self._find_source_picking_from_move(move)
+                    if source_picking and source_picking.id not in seen_source_ids:
+                        source_outgoing_names.append(source_picking.name)
+                        seen_source_ids.add(source_picking.id)
+                        _logger.info(
+                            f"Product {product_id} - Source outgoing picking: {source_picking.name}"
+                        )
+        
+        return {
+            'incoming_names': ', '.join(incoming_names),
+            'source_outgoing_names': ', '.join(source_outgoing_names)
+        }
+
+    def _find_source_picking_from_move(self, incoming_move):
+        """
+        Tìm picking xuất từ kho nguồn cho move nhập qua transit
+        """
+        # Phương pháp 1: Qua move_orig_ids (linked moves)
+        if incoming_move.move_orig_ids:
+            for orig_move in incoming_move.move_orig_ids:
+                if orig_move.picking_id and orig_move.state == 'done':
+                    _logger.info(
+                        f"Found source picking via move_orig_ids: {orig_move.picking_id.name}"
+                    )
+                    return orig_move.picking_id
+        
+        # Phương pháp 2: Tìm move có destination = transit location
+        transit_location_id = incoming_move.location_id.id
+        
+        source_moves = self.env['stock.move'].search([
+            ('product_id', '=', incoming_move.product_id.id),
+            ('state', '=', 'done'),
+            ('location_dest_id', '=', transit_location_id),
+            ('date', '<=', incoming_move.date),
+        ], order='date desc', limit=1)
+        
+        if source_moves and source_moves.picking_id:
+            _logger.info(
+                f"Found source picking via search: {source_moves.picking_id.name}"
+            )
+            return source_moves.picking_id
+        
+        return None
