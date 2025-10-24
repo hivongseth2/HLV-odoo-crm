@@ -1023,3 +1023,33 @@
 @media (max-width: 576px){
   .o_order_lookup_page .delivery-status{ font-size:1.25rem; }
 }
+/* Nút theo dõi vận chuyển: rõ nghĩa, tap target lớn trên mobile */
+.o_order_lookup_page .btn-track,
+.o_order_lookup_page .btn-back{
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+/* Desktop giữ kích thước cân đối với các nút khác */
+@media (min-width: 768px){
+  .o_order_lookup_page .btn-track{ min-width: 180px; }
+  .o_order_lookup_page .btn-back { min-width: 120px; }
+}
+
+/* Mobile: full-width đã set bằng w-100 trong HTML.
+   Tăng chiều cao chạm + hiển thị 2 dòng rõ nghĩa */
+@media (max-width: 768px){
+  .o_order_lookup_page .btn-track{
+    padding-top: .9rem;
+    padding-bottom: .9rem;
+    font-size: 1rem;
+  }
+  .o_order_lookup_page .btn-track .text{
+    display: flex; flex-direction: column; line-height: 1.1;
+  }
+  .o_order_lookup_page .btn-track .line-1{ font-weight: 700; }
+  .o_order_lookup_page .btn-track .line-2{
+    font-size: .85rem; opacity: .85; margin-top: .15rem;
+  }
+}
