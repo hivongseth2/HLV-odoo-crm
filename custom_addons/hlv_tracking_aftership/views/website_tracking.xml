@@ -70,7 +70,9 @@
             </t>
             <t t-if="cps">
               <div class="timeline">
-                <t t-foreach="list(reversed(cps))" t-as="cp">
+                <!-- <t t-foreach="list(reversed(cps))" t-as="cp"> -->
+                <t t-foreach="(cps or [])[::-1]" t-as="cp">
+
                   <div class="tl-item">
                     <div class="tl-dot"></div>
                     <div class="tl-content">
