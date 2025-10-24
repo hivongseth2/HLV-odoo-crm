@@ -68,38 +68,6 @@
                       />
                       <small class="form-text text-muted d-block mt-1">Nhập mã đơn đầy đủ hoặc 6 chữ số cuối</small>
                     </div>
-                    
-                    <div class="col-lg-4 col-md-6">
-                      <label for="phone" class="form-label">
-                        <i class="fa fa-phone me-1"></i>
-                        Số Điện Thoại
-                      </label>
-                      <input 
-                        type="tel" 
-                        class="form-control" 
-                        id="phone" 
-                        name="phone" 
-                        placeholder="Ví dụ: 0987654321"
-                        t-att-value="query.get('phone', '') if query else ''"
-                      />
-                      <small class="form-text text-muted d-block mt-1">Nhập số điện thoại đầy đủ</small>
-                    </div>
-                    
-                    <div class="col-lg-4 col-md-6">
-                      <label for="email" class="form-label">
-                        <i class="fa fa-envelope-o me-1"></i>
-                        Email
-                      </label>
-                      <input 
-                        type="email" 
-                        class="form-control" 
-                        id="email" 
-                        name="email" 
-                        placeholder="email@example.com"
-                        t-att-value="query.get('email', '') if query else ''"
-                      />
-                      <small class="form-text text-muted d-block mt-1">Email đã đặt hàng</small>
-                    </div>
                   </div>
                   
                   <div class="row mt-4">
