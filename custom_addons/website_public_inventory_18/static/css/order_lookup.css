@@ -583,6 +583,14 @@
     gap: 0.25rem;
 }
 
+.o_order_lookup_page .badge-lg {
+    padding: 0.6rem 1.2rem;
+    border-radius: 25px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 0.4px;
+}
+
 .o_order_lookup_page .badge-primary {
     background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
     color: white;
@@ -832,6 +840,11 @@
     
     .o_order_lookup_page .summary-card .summary-value small {
         font-size: 0.75rem;
+    }
+    
+    .o_order_lookup_page .badge-lg {
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
     }
     
     /* Mobile pagination */
