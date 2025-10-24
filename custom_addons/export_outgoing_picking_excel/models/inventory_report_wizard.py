@@ -649,29 +649,57 @@ class InventoryReportWizard(models.TransientModel):
         """
         Tìm picking xuất từ kho nguồn cho move nhập qua transit
         """
+        _logger.info(
+            f"=== DEBUG: Finding source picking for incoming move ==="
+            f"\n  Move ID: {incoming_move.id}"
+            f"\n  Picking: {incoming_move.picking_id.name if incoming_move.picking_id else 'N/A'}"
+            f"\n  Product: {incoming_move.product_id.display_name}"
+            f"\n  From: {incoming_move.location_id.complete_name} (ID: {incoming_move.location_id.id})"
+            f"\n  To: {incoming_move.location_dest_id.complete_name} (ID: {incoming_move.location_dest_id.id})"
+            f"\n  Date: {incoming_move.date}"
+        )
+        
         # Phương pháp 1: Qua move_orig_ids (linked moves)
+        _logger.info(f"  move_orig_ids count: {len(incoming_move.move_orig_ids)}")
+        
         if incoming_move.move_orig_ids:
             for orig_move in incoming_move.move_orig_ids:
+                _logger.info(
+                    f"    - Orig Move ID: {orig_move.id}, State: {orig_move.state}, "
+                    f"Picking: {orig_move.picking_id.name if orig_move.picking_id else 'N/A'}, "
+                    f"From: {orig_move.location_id.complete_name} -> To: {orig_move.location_dest_id.complete_name}"
+                )
                 if orig_move.picking_id and orig_move.state == 'done':
                     _logger.info(
-                        f"Found source picking via move_orig_ids: {orig_move.picking_id.name}"
+                        f"✓ Found source picking via move_orig_ids: {orig_move.picking_id.name}"
                     )
                     return orig_move.picking_id
         
         # Phương pháp 2: Tìm move có destination = transit location
         transit_location_id = incoming_move.location_id.id
         
+        _logger.info(f"  Searching for moves with dest = transit location ID: {transit_location_id}")
+        
         source_moves = self.env['stock.move'].search([
             ('product_id', '=', incoming_move.product_id.id),
             ('state', '=', 'done'),
             ('location_dest_id', '=', transit_location_id),
             ('date', '<=', incoming_move.date),
-        ], order='date desc', limit=1)
+        ], order='date desc')
         
-        if source_moves and source_moves.picking_id:
+        _logger.info(f"  Found {len(source_moves)} potential source moves")
+        
+        for sm in source_moves:
             _logger.info(
-                f"Found source picking via search: {source_moves.picking_id.name}"
+                f"    - Move ID: {sm.id}, Picking: {sm.picking_id.name if sm.picking_id else 'N/A'}, "
+                f"Date: {sm.date}, From: {sm.location_id.complete_name} -> To: {sm.location_dest_id.complete_name}"
             )
-            return source_moves.picking_id
         
+        if source_moves and source_moves[0].picking_id:
+            _logger.info(
+                f"✓ Found source picking via search: {source_moves[0].picking_id.name}"
+            )
+            return source_moves[0].picking_id
+        
+        _logger.warning(f"✗ Could not find source picking for incoming move {incoming_move.id}")
         return None
