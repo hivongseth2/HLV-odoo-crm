@@ -1023,33 +1023,75 @@
 @media (max-width: 576px){
   .o_order_lookup_page .delivery-status{ font-size:1.25rem; }
 }
-/* Nút theo dõi vận chuyển: rõ nghĩa, tap target lớn trên mobile */
+
+
+/* ===== Nút theo dõi & quay lại ===== */
 .o_order_lookup_page .btn-track,
 .o_order_lookup_page .btn-back{
-  display: inline-flex;
-  align-items: center;
-  gap: .5rem;
+  display:inline-flex;
+  align-items:center;
+  gap:.5rem;
 }
 
-/* Desktop giữ kích thước cân đối với các nút khác */
-@media (min-width: 768px){
-  .o_order_lookup_page .btn-track{ min-width: 180px; }
-  .o_order_lookup_page .btn-back { min-width: 120px; }
+/* Desktop: giữ kích thước cân đối với nút khác */
+@media (min-width:768px){
+  .o_order_lookup_page .btn-track{ min-width:180px; }
+  .o_order_lookup_page .btn-back { min-width:120px; }
+  .o_order_lookup_page .btn-track:hover{
+    box-shadow:var(--shadow-md);
+    transform:translateY(-1px);
+  }
+  .o_order_lookup_page .btn-back:hover{
+    background:#f8f9fa;
+    box-shadow:var(--shadow-sm);
+  }
 }
 
-/* Mobile: full-width đã set bằng w-100 trong HTML.
-   Tăng chiều cao chạm + hiển thị 2 dòng rõ nghĩa */
-@media (max-width: 768px){
+/* Mobile: full width, tap target lớn, 2 dòng rõ nghĩa */
+@media (max-width:768px){
   .o_order_lookup_page .btn-track{
-    padding-top: .9rem;
-    padding-bottom: .9rem;
-    font-size: 1rem;
+    padding:.9rem 1rem;
+    font-size:1rem;
+    font-weight:600;
+    width:100%;
+    border-radius:var(--radius-sm);
+    background:linear-gradient(135deg,var(--primary-hover),var(--primary-color));
+    box-shadow:0 3px 8px rgba(0,0,0,0.15);
+    border:none;
+    transition:all .2s ease-in-out;
   }
+  .o_order_lookup_page .btn-track:active{
+    transform:scale(0.97);
+    box-shadow:0 1px 4px rgba(0,0,0,0.2);
+    background:linear-gradient(135deg,var(--primary-color),var(--primary-hover));
+  }
+
   .o_order_lookup_page .btn-track .text{
-    display: flex; flex-direction: column; line-height: 1.1;
+    display:flex;
+    flex-direction:column;
+    line-height:1.1;
   }
-  .o_order_lookup_page .btn-track .line-1{ font-weight: 700; }
+  .o_order_lookup_page .btn-track .line-1{ font-weight:700; }
   .o_order_lookup_page .btn-track .line-2{
-    font-size: .85rem; opacity: .85; margin-top: .15rem;
+    font-size:.85rem;
+    opacity:.85;
+    margin-top:.15rem;
+  }
+
+  .o_order_lookup_page .btn-back{
+    background:#fff;
+    border:2px solid var(--border-color);
+    color:var(--text-dark);
+    font-weight:600;
+    width:100%;
+    padding:.9rem 1rem;
+    border-radius:var(--radius-sm);
+    box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    transition:all .2s ease-in-out;
+  }
+  .o_order_lookup_page .btn-back:active{
+    transform:scale(0.97);
+    background:#f8f9fa;
+    box-shadow:0 1px 3px rgba(0,0,0,0.2);
   }
 }
