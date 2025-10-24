@@ -165,13 +165,21 @@
                   <t t-foreach="lines" t-as="l">
                     <!-- qty_show -->
                     <t t-set="qty_show" t-value="0.0"/>
+                    
+                    <!-- Nếu là stock.move -->
                     <t t-if="l._name == 'stock.move'">
+                      <!-- Lấy số lượng giữ (reserved) -->
                       <t t-set="qty_show" t-value="l.quantity or 0.0"/>
                     </t>
+                    
+                    <!-- Nếu là stock.move.line -->
                     <t t-elif="l._name == 'stock.move.line'">
-                      <t t-set="qty_show" t-value="(l.move_id and l.move_id.quantity) or 0.0"/>
-                      <t t-if="l.product_uom_id and l.move_id and l.move_id.product_uom">
-                        <t t-set="qty_show" t-value="l.move_id.product_uom._compute_quantity(l.move_id.quantity or 0.0, l.product_uom_id)"/>
+                      <!-- Nếu move_id có quantity thì dùng -->
+                      <t t-if="l.move_id and 'quantity' in l.move_id">
+                        <t t-set="qty_show" t-value="l.move_id.quantity or 0.0"/>
+                      </t>
+                      <t t-else="">
+                        <t t-set="qty_show" t-value="l.qty_done or 0.0"/>
                       </t>
                     </t>
 
