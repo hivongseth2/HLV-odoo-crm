@@ -408,14 +408,24 @@
                         Mã đơn: <strong><t t-esc="order.get('name', '')"/></strong>
                       </p>
                     </div>
-                    <div>
+                    <div class="d-flex align-items-center justify-content-center justify-content-md-end gap-2">
+                      <!-- Mobile: small back button + small icon-only tracking button -->
                       <a href="/saleorder-lookup" class="btn btn-light btn-sm d-md-none">
                         <i class="fa fa-arrow-left me-1"></i>
                         Quay lại
                       </a>
+                      <a href="/track" class="btn btn-outline-secondary btn-sm d-md-none" title="Theo dõi vận chuyển">
+                        <i class="fa fa-truck"></i>
+                      </a>
+
+                      <!-- Desktop: full back + full tracking button -->
                       <a href="/saleorder-lookup" class="btn btn-light d-none d-md-inline-block">
                         <i class="fa fa-arrow-left me-2"></i>
                         Quay lại
+                      </a>
+                      <a href="/track" class="btn btn-outline-secondary d-none d-md-inline-block">
+                        <i class="fa fa-truck me-1"></i>
+                        Theo dõi vận chuyển
                       </a>
                     </div>
                   </div>
