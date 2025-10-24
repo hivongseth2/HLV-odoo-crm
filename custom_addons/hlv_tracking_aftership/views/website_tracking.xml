@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+  <data>
+
   <template id="website_track_form" name="Public Tracking Form" inherit_id="website.layout">
     <xpath expr="//main" position="inside">
       <section class="s_text_block container my-5">
@@ -60,4 +62,6 @@
       </section>
     </xpath>
   </template>
+    </data>
+
 </odoo>
