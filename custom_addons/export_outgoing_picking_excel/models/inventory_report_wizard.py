@@ -224,12 +224,13 @@ class InventoryReportWizard(models.TransientModel):
     def _get_product_outgoing_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
-        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/OUT/00123, WH/OUT/00124"
+        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy
         
-        Logic: Lấy TẤT CẢ picking có move xuất ra khỏi location_ids
-        Bao gồm: xuất đến customer, chuyển sang warehouse khác, etc.
+        Logic: 
+        - Lấy TẤT CẢ picking xuất ra khỏi location_ids
+        - Nếu xuất sang inter-warehouse transit, tìm thêm picking nhận ở kho đích
         """
-        # Tìm các stock.move xuất khỏi kho (bao gồm cả sub-locations)
+        # Tìm các stock.move xuất khỏi kho
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
@@ -238,10 +239,9 @@ class InventoryReportWizard(models.TransientModel):
             ('location_id', 'in', location_ids),
         ], order='date asc')
         
-        # Lọc: lấy move xuất ra ngoài kho (destination không trong location_ids)
+        # Lọc: lấy move xuất ra ngoài kho
         outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
         
-        # Lấy danh sách TẤT CẢ picking
         picking_names = []
         seen_picking_ids = set()
         
@@ -252,19 +252,65 @@ class InventoryReportWizard(models.TransientModel):
             picking = move.picking_id
             
             if picking.id not in seen_picking_ids:
-                # LẤY TẤT CẢ picking (bao gồm cả internal transfer giữa các warehouse)
                 picking_names.append(picking.name)
                 seen_picking_ids.add(picking.id)
                 
-                # Debug logging
+                dest_usage = move.location_dest_id.usage
                 _logger.info(
                     f"Product {product_id} - Outgoing Picking: {picking.name}, "
-                    f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}, "
-                    f"Qty: {move.product_uom_qty}, "
-                    f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name}"
+                    f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name} ({dest_usage})"
                 )
+                
+                # Nếu xuất sang transit, tìm picking nhận ở kho đích
+                if dest_usage == 'transit':
+                    dest_picking = self._find_destination_picking_from_transit(move, start_datetime, end_datetime)
+                    if dest_picking and dest_picking.id not in seen_picking_ids:
+                        picking_names.append(dest_picking.name)
+                        seen_picking_ids.add(dest_picking.id)
+                        _logger.info(
+                            f"Product {product_id} - Destination Picking at receiving warehouse: {dest_picking.name}"
+                        )
         
         return ', '.join(picking_names) if picking_names else ''
+
+    def _find_destination_picking_from_transit(self, outgoing_move, start_datetime, end_datetime):
+        """
+        Tìm picking nhận ở kho đích (receiving picking) cho move xuất qua transit
+        
+        Logic: Tìm move có:
+        - Cùng product
+        - Source = transit location của outgoing_move
+        - Destination = internal location (kho đích)
+        - Thời gian gần với outgoing_move
+        """
+        transit_location_id = outgoing_move.location_dest_id.id
+        
+        # Phương pháp 1: Qua move_dest_ids (linked moves) - CHÍNH XÁC NHẤT
+        if outgoing_move.move_dest_ids:
+            for dest_move in outgoing_move.move_dest_ids:
+                if dest_move.picking_id and dest_move.state == 'done':
+                    _logger.info(
+                        f"Found destination picking via move_dest_ids: {dest_move.picking_id.name}"
+                    )
+                    return dest_move.picking_id
+        
+        # Phương pháp 2: Tìm move nhận từ transit location
+        dest_moves = self.env['stock.move'].search([
+            ('product_id', '=', outgoing_move.product_id.id),
+            ('state', '=', 'done'),
+            ('location_id', '=', transit_location_id),
+            ('location_dest_id.usage', '=', 'internal'),
+            ('date', '>=', start_datetime),
+            ('date', '<=', end_datetime),
+        ], order='date asc', limit=1)
+        
+        if dest_moves and dest_moves.picking_id:
+            _logger.info(
+                f"Found destination picking via search: {dest_moves.picking_id.name}"
+            )
+            return dest_moves.picking_id
+        
+        return None
 
     def _get_product_incoming_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
