@@ -648,58 +648,42 @@ class InventoryReportWizard(models.TransientModel):
     def _find_source_picking_from_move(self, incoming_move):
         """
         Tìm picking xuất từ kho nguồn cho move nhập qua transit
+        (Fix: mở rộng điều kiện tìm kiếm để bắt được các phiếu CKxxxx)
         """
-        _logger.info(
-            f"=== DEBUG: Finding source picking for incoming move ==="
-            f"\n  Move ID: {incoming_move.id}"
-            f"\n  Picking: {incoming_move.picking_id.name if incoming_move.picking_id else 'N/A'}"
-            f"\n  Product: {incoming_move.product_id.display_name}"
-            f"\n  From: {incoming_move.location_id.complete_name} (ID: {incoming_move.location_id.id})"
-            f"\n  To: {incoming_move.location_dest_id.complete_name} (ID: {incoming_move.location_dest_id.id})"
-            f"\n  Date: {incoming_move.date}"
-        )
-        
-        # Phương pháp 1: Qua move_orig_ids (linked moves)
-        _logger.info(f"  move_orig_ids count: {len(incoming_move.move_orig_ids)}")
-        
+        _logger.info(f"[FIX] Tìm source picking cho {incoming_move.picking_id.name}")
+
+        # Ưu tiên tìm qua move_orig_ids (đường link gốc)
         if incoming_move.move_orig_ids:
             for orig_move in incoming_move.move_orig_ids:
-                _logger.info(
-                    f"    - Orig Move ID: {orig_move.id}, State: {orig_move.state}, "
-                    f"Picking: {orig_move.picking_id.name if orig_move.picking_id else 'N/A'}, "
-                    f"From: {orig_move.location_id.complete_name} -> To: {orig_move.location_dest_id.complete_name}"
-                )
                 if orig_move.picking_id and orig_move.state == 'done':
-                    _logger.info(
-                        f"✓ Found source picking via move_orig_ids: {orig_move.picking_id.name}"
-                    )
+                    _logger.info(f"✓ Found via move_orig_ids: {orig_move.picking_id.name}")
                     return orig_move.picking_id
-        
-        # Phương pháp 2: Tìm move có destination = transit location
+
+        # Nếu không có link, tìm move xuất tới cùng transit location
         transit_location_id = incoming_move.location_id.id
-        
-        _logger.info(f"  Searching for moves with dest = transit location ID: {transit_location_id}")
-        
-        source_moves = self.env['stock.move'].search([
-            ('product_id', '=', incoming_move.product_id.id),
+
+        # 🔧 Nới điều kiện ngày và bỏ giới hạn product_id nếu cần
+        domain = [
             ('state', '=', 'done'),
             ('location_dest_id', '=', transit_location_id),
-            ('date', '<=', incoming_move.date),
-        ], order='date desc')
-        
-        _logger.info(f"  Found {len(source_moves)} potential source moves")
-        
-        for sm in source_moves:
-            _logger.info(
-                f"    - Move ID: {sm.id}, Picking: {sm.picking_id.name if sm.picking_id else 'N/A'}, "
-                f"Date: {sm.date}, From: {sm.location_id.complete_name} -> To: {sm.location_dest_id.complete_name}"
-            )
-        
-        if source_moves and source_moves[0].picking_id:
-            _logger.info(
-                f"✓ Found source picking via search: {source_moves[0].picking_id.name}"
-            )
-            return source_moves[0].picking_id
-        
-        _logger.warning(f"✗ Could not find source picking for incoming move {incoming_move.id}")
+            ('date', '<=', incoming_move.date + datetime.timedelta(hours=2)),  # nới khoảng thời gian
+            ('date', '>=', incoming_move.date - datetime.timedelta(days=1)),    # lấy trong 1 ngày gần nhất
+        ]
+        # Nếu có product_id rõ ràng thì thêm, để tránh lẫn hàng
+        if incoming_move.product_id:
+            domain.append(('product_id', '=', incoming_move.product_id.id))
+
+        source_moves = self.env['stock.move'].search(domain, order='date desc', limit=3)
+
+        if source_moves:
+            for sm in source_moves:
+                _logger.info(
+                    f"✓ Found source picking: {sm.picking_id.name if sm.picking_id else 'N/A'} "
+                    f"(From {sm.location_id.complete_name} -> {sm.location_dest_id.complete_name})"
+                )
+                if sm.picking_id:
+                    return sm.picking_id
+
+        _logger.warning(f"✗ Không tìm thấy phiếu xuất nguồn cho {incoming_move.picking_id.name}")
         return None
+
