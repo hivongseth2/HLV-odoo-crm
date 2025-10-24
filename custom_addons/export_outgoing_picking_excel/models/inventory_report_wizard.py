@@ -174,6 +174,15 @@ class InventoryReportWizard(models.TransientModel):
         Logic: Tính các move xuất RA KHỎI kho (destination không trong location_ids)
         Bao gồm: xuất đến customer, transit, packing zone bên ngoài kho, etc.
         """
+        # Log location_ids để debug (chỉ log 1 lần cho product đầu tiên)
+        if not hasattr(self, '_logged_location_ids'):
+            location_objs = self.env['stock.location'].browse(location_ids)
+            _logger.info(
+                f"🗂️ Location IDs in scope ({len(location_ids)} locations): "
+                f"{', '.join([f'{loc.complete_name} (ID:{loc.id}, Usage:{loc.usage})' for loc in location_objs])}"
+            )
+            self._logged_location_ids = True
+        
         # Tìm các stock.move xuất khỏi kho
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
@@ -212,9 +221,20 @@ class InventoryReportWizard(models.TransientModel):
                     f"  ⚠️ Ignored {len(internal_moves)} internal moves (both source & dest in location_ids):"
                 )
                 for move in internal_moves:
+                    # Kiểm tra xem có phải move_dest_ids có picking khác không (inter-warehouse)
+                    has_dest_picking = bool(move.move_dest_ids and move.move_dest_ids.filtered(lambda m: m.picking_id))
+                    dest_picking_info = ""
+                    if has_dest_picking:
+                        dest_pickings = move.move_dest_ids.mapped('picking_id')
+                        dest_picking_info = f", Linked to: {', '.join(dest_pickings.mapped('name'))}"
+                    
                     _logger.warning(
-                        f"    → {move.picking_id.name if move.picking_id else 'N/A'}, "
-                        f"From: {move.location_id.complete_name} → To: {move.location_dest_id.complete_name}"
+                        f"    → Picking: {move.picking_id.name if move.picking_id else 'N/A'} "
+                        f"(Move ID: {move.id}, Type: {move.picking_id.picking_type_id.code if move.picking_id and move.picking_id.picking_type_id else 'N/A'}), "
+                        f"Qty: {move.product_uom_qty}, "
+                        f"From: {move.location_id.complete_name} (ID:{move.location_id.id}, In list: {move.location_id.id in location_ids}) → "
+                        f"To: {move.location_dest_id.complete_name} (ID:{move.location_dest_id.id}, Usage:{move.location_dest_id.usage}, "
+                        f"In list: {move.location_dest_id.id in location_ids}){dest_picking_info}"
                     )
         
         return total_qty
@@ -265,9 +285,20 @@ class InventoryReportWizard(models.TransientModel):
                     f"  ⚠️ Ignored {len(internal_moves)} internal moves (both source & dest in location_ids):"
                 )
                 for move in internal_moves:
+                    # Kiểm tra xem có phải move_orig_ids có picking khác không (inter-warehouse source)
+                    has_orig_picking = bool(move.move_orig_ids and move.move_orig_ids.filtered(lambda m: m.picking_id))
+                    orig_picking_info = ""
+                    if has_orig_picking:
+                        orig_pickings = move.move_orig_ids.mapped('picking_id')
+                        orig_picking_info = f", Linked from: {', '.join(orig_pickings.mapped('name'))}"
+                    
                     _logger.warning(
-                        f"    → {move.picking_id.name if move.picking_id else 'N/A'}, "
-                        f"From: {move.location_id.complete_name} → To: {move.location_dest_id.complete_name}"
+                        f"    → Picking: {move.picking_id.name if move.picking_id else 'N/A'} "
+                        f"(Move ID: {move.id}, Type: {move.picking_id.picking_type_id.code if move.picking_id and move.picking_id.picking_type_id else 'N/A'}), "
+                        f"Qty: {move.product_uom_qty}, "
+                        f"From: {move.location_id.complete_name} (ID:{move.location_id.id}, In list: {move.location_id.id in location_ids}) → "
+                        f"To: {move.location_dest_id.complete_name} (ID:{move.location_dest_id.id}, Usage:{move.location_dest_id.usage}, "
+                        f"In list: {move.location_dest_id.id in location_ids}){orig_picking_info}"
                     )
         
         return total_qty
