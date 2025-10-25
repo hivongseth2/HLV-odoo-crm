@@ -282,11 +282,26 @@ class MisaReturnFetch(models.TransientModel):
         payload_json = json.dumps(detail_payload)
         payload_b64 = base64.b64encode(payload_json.encode('utf-8')).decode('utf-8')
         
-        # Gọi API
-        detail_url = f"https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full?req={payload_b64}"
+        # Gọi API - sử dụng POST thay vì GET để tránh URL quá dài
+        detail_url = "https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full"
         
         try:
-            response = requests.get(detail_url, headers=headers, timeout=30)
+            # Thử POST với payload trong body trước
+            response = requests.post(
+                detail_url, 
+                headers=headers, 
+                json={"req": payload_b64},
+                timeout=60
+            )
+            
+            # Nếu POST không work, thử GET với query param nhưng tăng timeout
+            if response.status_code not in (200, 201):
+                _logger.warning("POST failed with %s, trying GET...", response.status_code)
+                response = requests.get(
+                    f"{detail_url}?req={payload_b64}",
+                    headers=headers,
+                    timeout=60
+                )
             
             if response.status_code != 200:
                 _logger.error("❌ Không lấy được chi tiết đơn trả %s: HTTP %s", 
@@ -300,6 +315,9 @@ class MisaReturnFetch(models.TransientModel):
                 _logger.error("❌ API trả về Success=False cho đơn %s", refid)
                 return None
                 
+        except requests.exceptions.Timeout:
+            _logger.error("❌ Timeout khi gọi API chi tiết đơn trả %s (60s)", refid)
+            return None
         except Exception as e:
             _logger.exception("❌ Lỗi khi gọi API chi tiết đơn trả %s: %s", refid, e)
             return None
