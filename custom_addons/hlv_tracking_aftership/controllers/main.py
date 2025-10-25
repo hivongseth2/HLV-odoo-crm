@@ -1,9 +1,47 @@
 # -*- coding: utf-8 -*-
 from odoo import http
 from odoo.http import request
-import logging
+import requests
+import re
 
-_logger = logging.getLogger(__name__)
+AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2025-07"
+
+
+VI_STATUS_LABELS = {
+    "INFORECEIVED": "Đơn hàng đã được tạo trên hệ thống",
+    "INTRANSIT": "Đang trung chuyển",
+    "OUTFORDELIVERY": "Nhân viên đang giao hàng",
+    "DELIVERED": "Đã giao thành công",
+    "AVAILABLEFORPICKUP": "Sẵn sàng để lấy hàng",
+    "FAILEDATTEMPT": "Giao hàng chưa thành công",
+    "EXCEPTION": "Phát sinh sự cố trong quá trình giao",
+    "PENDING": "Đang chờ hãng vận chuyển xử lý",
+    "READYFORPICKUP": "Sẵn sàng để lấy hàng",
+    "RETURNEDTOSELLER": "Đơn hàng đã được hoàn về",
+}
+
+
+REPLACEMENTS = (
+    ("Thứ tự", "Đơn hàng"),
+    ("Bưu kiện của bạn", "Kiện hàng của bạn"),
+    ("đang được chuyển phát nhanh", "đang trên đường giao"),
+    ("đã được nhận", "đã được tiếp nhận"),
+)
+
+
+def _polish_message(message: str) -> str:
+    msg = (message or "").strip()
+    for old, new in REPLACEMENTS:
+        msg = msg.replace(old, new)
+    return msg
+
+
+def _vi_status(tag: str, fallback: str = "") -> str:
+    key = (tag or "").replace(" ", "").upper()
+    if key in VI_STATUS_LABELS:
+        return VI_STATUS_LABELS[key]
+    return fallback or tag or ""
+
 
 def _looks_like_tracking(number: str) -> bool:
     if not number:
@@ -115,8 +153,8 @@ class WebsiteTrackingPublic(http.Controller):
             error = f"Lỗi kết nối: {e}"
 
         tracking = (data or {}).get('tracking') or data or {}
-        checkpoints = (tracking.get('checkpoints') or [])
-        for cp in checkpoints or []:
+        checkpoints = list(reversed(tracking.get('checkpoints') or []))
+        for cp in checkpoints:
             cp['message'] = _polish_message(cp.get('message'))
             cp['status_vn'] = _vi_status(cp.get('status'), _polish_message(cp.get('message')))
         tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))

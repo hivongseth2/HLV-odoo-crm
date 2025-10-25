@@ -15,7 +15,7 @@
                         <field name="tracking_payload" readonly="1" widget="json"/>
                     </group>
                     <field name="tracking_timeline_html" readonly="1" widget="html"/>
-                </page> 
+                </page>
             </xpath>
         </field>
     </record>

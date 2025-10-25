@@ -1,23 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <template id="website_track_form" name="AfterShip Tracking Form">
+    <template id="website_track_form" name="AfterShip Tracking Form" page="True">
         <t t-call="website.layout">
-            <div class="hlv-track-wrapper">
-                <div class="hlv-track-card">
-                    <h1>Theo dõi đơn hàng</h1>
-                    <p class="hlv-track-desc">Nhập mã vận đơn hoặc mã đơn nội bộ để kiểm tra trạng thái giao hàng.</p>
-                    <form action="/track/search" method="post" class="hlv-track-form">
-                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                        <div class="form-group">
-                            <label for="tracking_number">Mã vận đơn hoặc mã đơn</label>
-                            <input type="text" id="tracking_number" name="tracking_number" placeholder="VD: SPXVN05508643516A" required="required"/>
-                        </div>
-                        <div class="form-group">
-                            <label for="slug">Hãng vận chuyển (nếu biết)</label>
-                            <input type="text" id="slug" name="slug" placeholder="VD: spx-vn"/>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Tra cứu</button>
-                    </form>
+            <div id="wrap" class="oe_structure">
+                <div class="hlv-track-wrapper">
+                    <div class="hlv-track-card">
+                        <h1>Theo dõi đơn hàng</h1>
+                        <p class="hlv-track-desc">Nhập mã vận đơn hoặc mã đơn nội bộ để kiểm tra trạng thái giao hàng.</p>
+                        <form action="/track/search" method="post" class="hlv-track-form">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <div class="form-group">
+                                <label for="tracking_number">Mã vận đơn hoặc mã đơn</label>
+                                <input type="text" id="tracking_number" name="tracking_number" placeholder="VD: SPXVN05508643516A" required="required"/>
+                            </div>
+                            <div class="form-group">
+                                <label for="slug">Hãng vận chuyển (nếu biết)</label>
+                                <input type="text" id="slug" name="slug" placeholder="VD: spx-vn"/>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Tra cứu</button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </t>
@@ -25,51 +27,53 @@
 
     <template id="website_track_result" name="AfterShip Tracking Result">
         <t t-call="website.layout">
-            <div class="hlv-track-wrapper">
-                <div class="hlv-track-card">
-                    <a href="/track" class="hlv-track-back">&#8592; Quay lại tra cứu khác</a>
-                    <t t-if="error">
-                        <div class="hlv-track-alert hlv-track-alert--error" role="alert">
-                            <span t-esc="error"/>
-                        </div>
-                    </t>
-                    <t t-if="not error">
-                        <div class="hlv-track-summary">
-                            <div>
-                                <h2>Mã vận đơn</h2>
-                                <p class="hlv-track-number" t-esc="number"/>
+            <div id="wrap" class="oe_structure">
+                <div class="hlv-track-wrapper">
+                    <div class="hlv-track-card">
+                        <a href="/track" class="hlv-track-back">&#8592; Quay lại tra cứu khác</a>
+                        <t t-if="error">
+                            <div class="hlv-track-alert hlv-track-alert--error" role="alert">
+                                <span t-esc="error"/>
                             </div>
-                            <div>
-                                <h2>Hãng vận chuyển</h2>
-                                <p class="hlv-track-number" t-esc="slug"/>
+                        </t>
+                        <t t-if="not error">
+                            <div class="hlv-track-summary">
+                                <div>
+                                    <h2>Mã vận đơn</h2>
+                                    <p class="hlv-track-number" t-esc="number"/>
+                                </div>
+                                <div>
+                                    <h2>Hãng vận chuyển</h2>
+                                    <p class="hlv-track-number" t-esc="slug"/>
+                                </div>
+                                <div>
+                                    <h2>Trạng thái hiện tại</h2>
+                                    <p class="hlv-track-status" t-esc="data.get('tag_vn') or data.get('status') or 'Đang cập nhật'"/>
+                                </div>
                             </div>
-                            <div>
-                                <h2>Trạng thái hiện tại</h2>
-                                <p class="hlv-track-status" t-esc="data.get('tag_vn') or data.get('status') or 'Đang cập nhật'"/>
+                            <div class="hlv-track-timeline">
+                                <h3>Hành trình giao hàng</h3>
+                                <t t-if="checkpoints">
+                                    <ul class="hlv-timeline-list">
+                                        <t t-foreach="checkpoints" t-as="cp" t-foreach-index="idx">
+                                            <li class="hlv-timeline-item" t-attf-class="hlv-timeline-item {{ 'is-latest' if idx == 0 else '' }}">
+                                                <div class="hlv-timeline-item__time">
+                                                    <span t-esc="cp.get('date_time') or cp.get('checkpoint_time')"/>
+                                                </div>
+                                                <div class="hlv-timeline-item__body">
+                                                    <h4 t-esc="cp.get('status_vn') or cp.get('status')"/>
+                                                    <p t-esc="cp.get('message')"/>
+                                                </div>
+                                            </li>
+                                        </t>
+                                    </ul>
+                                </t>
+                                <t t-else="">
+                                    <p class="hlv-track-empty">Chưa có dữ liệu hành trình từ hãng vận chuyển.</p>
+                                </t>
                             </div>
-                        </div>
-                        <div class="hlv-track-timeline">
-                            <h3>Hành trình giao hàng</h3>
-                            <t t-if="checkpoints">
-                                <ul class="hlv-timeline-list">
-                                    <t t-foreach="checkpoints" t-as="cp" t-foreach-index="idx">
-                                        <li class="hlv-timeline-item" t-attf-class="hlv-timeline-item {{ 'is-latest' if idx == 0 else '' }}">
-                                            <div class="hlv-timeline-item__time">
-                                                <span t-esc="cp.get('date_time') or cp.get('checkpoint_time')"/>
-                                            </div>
-                                            <div class="hlv-timeline-item__body">
-                                                <h4 t-esc="cp.get('status_vn')"/>
-                                                <p t-esc="cp.get('message')"/>
-                                            </div>
-                                        </li>
-                                    </t>
-                                </ul>
-                            </t>
-                            <t t-else="">
-                                <p class="hlv-track-empty">Chưa có dữ liệu hành trình từ hãng vận chuyển.</p>
-                            </t>
-                        </div>
-                    </t>
+                        </t>
+                    </div>
                 </div>
             </div>
         </t>
