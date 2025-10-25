@@ -1,8 +1,6 @@
 from odoo import models, fields, _
 import logging
-import json
 from datetime import datetime, timedelta, timezone
-import base64
 import requests
 
 _logger = logging.getLogger(__name__)
@@ -145,15 +143,13 @@ class MisaReturnFetch(models.TransientModel):
             _logger.warning("❌ Không lấy được chi tiết đơn trả %s", refno)
             return False
         
-        # Lấy thông tin chi tiết
-        sa_return_detail = detail_data.get("sa_return_detail", [])
-        if not sa_return_detail:
+        # detail_data bây giờ là PageData - một list các dòng sản phẩm
+        if not detail_data or not isinstance(detail_data, list):
             _logger.warning("❌ Đơn trả %s không có chi tiết sản phẩm", refno)
             return False
         
-        # Lấy mã đơn bán hàng tham chiếu
-        order_code = sa_return_detail[0].get("order_code", "")
-        stock_code = sa_return_detail[0].get("stock_code", "").strip().replace(" ", "").upper()
+        # Lấy mã kho từ dòng đầu tiên
+        stock_code = detail_data[0].get("stock_code", "").strip().replace(" ", "").upper()
         
         # Kiểm tra kho
         if stock_code not in stock_mapping:
@@ -213,14 +209,12 @@ class MisaReturnFetch(models.TransientModel):
         
         # Thêm ghi chú nếu có
         if journal_memo:
-            picking_vals['note'] = f"Lý do trả: {journal_memo}\nĐơn bán hàng tham chiếu: {order_code}"
-        elif order_code:
-            picking_vals['note'] = f"Đơn bán hàng tham chiếu: {order_code}"
+            picking_vals['note'] = f"Lý do trả: {journal_memo}"
         
         picking = self.env["stock.picking"].create(picking_vals)
         
-        # Tạo các dòng move
-        for line in sa_return_detail:
+        # Tạo các dòng move từ detail_data (PageData)
+        for line in detail_data:
             self._create_stock_move(picking, line, location, odoo_utils)
         
         # Xác nhận phiếu nhập kho
@@ -236,72 +230,32 @@ class MisaReturnFetch(models.TransientModel):
     def _fetch_return_detail(self, refid, headers, misa_utils):
         """Lấy chi tiết đơn hàng trả về"""
         
-        # Tạo payload cho API detail_full
-        detail_payload = [{
-            "Type": "sa_return",
-            "Key": refid,
-            "RefType": 3040,
-            "RefTypeCategory": 354,
-            "Details": [
+        # Tạo payload cho API get_paging_detail
+        detail_payload = {
+            "columns": [2157, 2818, 1355, 4670, 1195, 5274, 3870, 1065, 5683, 5279, 308, 5364, 5350, 5347, 4405, 3404, 5476, 5575, 2358],
+            "sort": '[{"property":4555,"desc":false,"data_type":4,"operand":1}]',
+            "filter": [
                 {
-                    "Type": "sa_return_detail",
-                    "Alias": "detail",
-                    "View": "view_sa_return_detail"
-                },
-                {
-                    "Type": "wesign_document",
-                    "Alias": "wesign_document",
-                    "ForeignKey": "refid",
-                    "Mode": "View"
+                    "property": 3993,
+                    "operator": 7,
+                    "operand": 1,
+                    "value": refid,
+                    "data_type": 10
                 }
             ],
-            "Links": [
-                {
-                    "Type": "pu_invoice",
-                    "RefType": 3403,
-                    "RefTypeCategory": 0,
-                    "UseSameKeyWithMaster": False,
-                    "KeyColumnInMaster": "pu_invoice_refid"
-                },
-                {
-                    "Type": "in_inward",
-                    "RefType": 2013,
-                    "RefTypeCategory": 201,
-                    "UseSameKeyWithMaster": False,
-                    "KeyColumnInMaster": "in_inward_refid"
-                },
-                {
-                    "Type": "inv_bot_reference",
-                    "RefType": 0,
-                    "RefTypeCategory": 0
-                }
-            ]
-        }]
+            "pageIndex": 1,
+            "pageSize": 20,
+            "useSp": False,
+            "view": 54,
+            "summaryColumns": [3870, 3488, 308, 5350],
+            "loadMode": 2
+        }
         
-        # Encode payload thành base64
-        payload_json = json.dumps(detail_payload)
-        payload_b64 = base64.b64encode(payload_json.encode('utf-8')).decode('utf-8')
-        
-        # Gọi API - sử dụng POST thay vì GET để tránh URL quá dài
-        detail_url = "https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full"
+        # Gọi API get_paging_detail
+        detail_url = "https://actapp.misa.vn/g2/api/sa/v1/sa_return/get_paging_detail"
         
         try:
-            # Thử POST với payload trong body trước
-            response = requests.post(
-                detail_url, 
-                headers=headers, 
-                json={"req": payload_b64},
-                timeout=60
-            )
-            
-            # Nếu POST không work, thử GET với query param nhưng tăng timeout
-            if response.status_code not in (200, 201):
-                _logger.warning("POST failed with %s, trying GET...", response.status_code)
-                response = requests.get(
-                    f"{detail_url}?req={payload_b64}",
-                    headers=headers,
-                    timeout=60
-                )
+            response = misa_utils._fetch_with_retry(detail_url, headers, detail_payload)
             
             if response.status_code != 200:
                 _logger.error("❌ Không lấy được chi tiết đơn trả %s: HTTP %s", 
@@ -310,13 +264,14 @@ class MisaReturnFetch(models.TransientModel):
             
             result = response.json()
             if result.get("Success"):
-                return result.get("Data", {})
+                # Trả về PageData thay vì toàn bộ Data
+                return result.get("Data", {}).get("PageData", [])
             else:
                 _logger.error("❌ API trả về Success=False cho đơn %s", refid)
                 return None
                 
         except requests.exceptions.Timeout:
-            _logger.error("❌ Timeout khi gọi API chi tiết đơn trả %s (60s)", refid)
+            _logger.error("❌ Timeout khi gọi API chi tiết đơn trả %s", refid)
             return None
         except Exception as e:
             _logger.exception("❌ Lỗi khi gọi API chi tiết đơn trả %s: %s", refid, e)
