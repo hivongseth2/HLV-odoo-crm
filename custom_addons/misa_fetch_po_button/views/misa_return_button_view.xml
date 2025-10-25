@@ -1,0 +1,37 @@
+<odoo>
+    <!-- Action mở form dạng dialog -->
+    <record id="action_misa_return_fetch_main" model="ir.actions.act_window">
+        <field name="name">Lấy đơn hàng trả về từ MISA</field>
+        <field name="res_model">misa.return.fetch</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Giao diện form chứa nút gọi -->
+    <record id="view_misa_return_fetch_form" model="ir.ui.view">
+        <field name="name">misa.return.fetch.form</field>
+        <field name="model">misa.return.fetch</field>
+        <field name="arch" type="xml">
+            <form string="Lấy đơn hàng trả về từ MISA">
+                <group>
+                    <field name="date_from" required="1"/>
+                    <field name="date_to" required="1"/>
+                </group>
+                <footer>
+                    <button name="action_fetch_return_orders"
+                            string="Lấy đơn trả về từ MISA"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Menu trong Kho (Inventory) -->
+    <menuitem id="menu_import_misa_return"
+              name="Lấy đơn trả về theo ngày"
+              parent="stock.menu_stock_root"
+              action="action_misa_return_fetch_main"
+              sequence="98"/>
+</odoo>

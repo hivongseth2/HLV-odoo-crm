@@ -1,0 +1,346 @@
+from odoo import models, fields, _
+import logging
+import json
+from datetime import datetime, timedelta, timezone
+import base64
+import requests
+
+_logger = logging.getLogger(__name__)
+
+class MisaReturnFetch(models.TransientModel):
+    _name = "misa.return.fetch"
+    _description = "MISA Return Order Fetch"
+    
+    date_from = fields.Date(string="Từ ngày", required=True)
+    date_to = fields.Date(string="Đến ngày", required=True)
+
+    def _to_naive_utc(self, dt_str):
+        """Chuyển đổi '2025-10-16T00:00:00.000+07:00' -> naive UTC datetime"""
+        if not dt_str:
+            return False
+        try:
+            aware = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            return aware.astimezone(timezone.utc).replace(tzinfo=None)
+        except Exception as e:
+            _logger.warning("Không thể parse datetime '%s': %s", dt_str, e)
+            return False
+
+    def action_fetch_return_orders(self):
+        """Hàm chính để fetch đơn hàng trả về từ MISA và tạo phiếu nhập kho"""
+        
+        # Khởi tạo các utils
+        misa_utils = self.env['misa.api.utils']
+        odoo_utils = self.env['odoo.utils']
+        misa_config = self.env['misa.config']
+        
+        # Lấy token
+        access_token = misa_utils._get_misa_token()
+        headers = misa_config.get_default_headers(access_token)
+        
+        # Chuyển đổi ngày sang UTC
+        date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
+        date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
+        
+        # Payload cho API paging_filter_v2
+        payload = {
+            "sort": '[{"property":3654,"desc":true,"data_type":3,"operand":1},{"property":4018,"desc":true,"data_type":1,"operand":1}]',
+            "filter": [
+                {
+                    "property": 3972,
+                    "value": date_from_utc.isoformat() + "Z",
+                    "operator": 10,
+                    "operand": 1,
+                    "data_type": 3
+                },
+                {
+                    "property": 3972,
+                    "value": date_to_utc.isoformat() + "Z",
+                    "operator": 12,
+                    "operand": 1,
+                    "data_type": 3
+                }
+            ],
+            "pageIndex": 1,
+            "pageSize": 20,
+            "useSp": False,
+            "view": 64,
+            "summaryColumns": [5126, 5068, 5141, 5039],
+            "loadMode": 2
+        }
+        
+        # Mapping kho
+        stock_mapping = {
+            "HCM": "TSN/Stock",
+            "BENCAM": "KBC/Tồn kho",
+            "HIENDUC": "KHD/Tồn kho",
+            "HCM_SHOWROOM": "TSNSR/Stock"
+        }
+        
+        page_index = 1
+        total_created = 0
+        
+        while True:
+            payload["pageIndex"] = page_index
+            _logger.info("📄 Đang fetch trang %s đơn hàng trả về...", page_index)
+            
+            # Gọi API lấy danh sách đơn trả về
+            response = misa_utils._fetch_with_retry(
+                "https://actapp.misa.vn/g2/api/sa/v1/sa_return/paging_filter_v2",
+                headers, payload
+            )
+            
+            if response.status_code != 200:
+                _logger.warning("❌ Gọi API thất bại ở trang %s", page_index)
+                break
+            
+            page_data = response.json().get("Data", {}).get("PageData", [])
+            if not page_data:
+                _logger.info("✅ Hết dữ liệu, dừng ở trang %s", page_index)
+                break
+            
+            # Xử lý từng đơn hàng trả về
+            for return_order in page_data:
+                try:
+                    if self._process_return_order(return_order, headers, misa_utils, odoo_utils, stock_mapping):
+                        total_created += 1
+                except Exception as e:
+                    _logger.exception("❌ Lỗi khi xử lý đơn trả về %s: %s", 
+                                    return_order.get("refno_finance"), e)
+                    continue
+            
+            page_index += 1
+        
+        # Thông báo kết quả
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Hoàn thành'),
+                'message': _('Đã tạo %s phiếu nhập kho từ đơn hàng trả về') % total_created,
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+
+    def _process_return_order(self, return_order, headers, misa_utils, odoo_utils, stock_mapping):
+        """Xử lý một đơn hàng trả về"""
+        
+        refid = return_order.get("refid")
+        refno = return_order.get("refno_finance", "BTL-UNKNOWN")
+        journal_memo = return_order.get("journal_memo", "")
+        supplier_name = return_order.get("account_object_name", "Unknown Customer")
+        
+        # Kiểm tra xem đã tạo phiếu nhập kho chưa
+        existing_picking = self.env["stock.picking"].search([
+            ("origin", "=", refno)
+        ], limit=1)
+        
+        if existing_picking:
+            _logger.info("⏭️  Bỏ qua đơn trả %s vì đã tồn tại phiếu nhập kho", refno)
+            return False
+        
+        # Lấy chi tiết đơn hàng trả về
+        detail_data = self._fetch_return_detail(refid, headers, misa_utils)
+        if not detail_data:
+            _logger.warning("❌ Không lấy được chi tiết đơn trả %s", refno)
+            return False
+        
+        # Lấy thông tin chi tiết
+        sa_return_detail = detail_data.get("sa_return_detail", [])
+        if not sa_return_detail:
+            _logger.warning("❌ Đơn trả %s không có chi tiết sản phẩm", refno)
+            return False
+        
+        # Lấy mã đơn bán hàng tham chiếu
+        order_code = sa_return_detail[0].get("order_code", "")
+        stock_code = sa_return_detail[0].get("stock_code", "").strip().replace(" ", "").upper()
+        
+        # Kiểm tra kho
+        if stock_code not in stock_mapping:
+            _logger.warning("📛 Kho %s không nằm trong mapping, bỏ đơn trả %s", stock_code, refno)
+            return False
+        
+        location_name = stock_mapping[stock_code]
+        location = self.env['stock.location'].search([
+            ('complete_name', '=', location_name)
+        ], limit=1)
+        
+        if not location:
+            _logger.warning("❌ Không tìm thấy stock.location cho kho %s (%s)", stock_code, location_name)
+            return False
+        
+        # Tìm warehouse
+        warehouse = self.env['stock.warehouse'].search([
+            ('view_location_id', '=', location.location_id.id)
+        ], limit=1)
+        
+        if not warehouse:
+            _logger.warning("❌ Không tìm thấy warehouse cho kho %s", stock_code)
+            return False
+        
+        picking_type = warehouse.in_type_id
+        
+        # Tạo/cập nhật partner
+        partner = odoo_utils._get_or_create_partner(supplier_name)
+        
+        # Cập nhật thông tin đối tác
+        partner_update_vals = {}
+        account_object_code = return_order.get("account_object_code", "")
+        account_object_address = return_order.get("account_object_address", "")
+        
+        if account_object_code and not partner.ref:
+            partner_update_vals['ref'] = account_object_code
+        if account_object_address and not partner.street:
+            partner_update_vals['street'] = account_object_address
+        
+        if partner_update_vals:
+            partner.write(partner_update_vals)
+        
+        # Lấy ngày trả hàng
+        refdate_str = return_order.get("refdate") or return_order.get("posted_date")
+        scheduled_date = self._to_naive_utc(refdate_str) or fields.Datetime.now()
+        
+        # Tạo phiếu nhập kho
+        picking_vals = {
+            "partner_id": partner.id,
+            "picking_type_id": picking_type.id,
+            "location_id": self.env.ref('stock.stock_location_customers').id,  # Từ khách hàng
+            "location_dest_id": location.id,  # Đến kho
+            "origin": refno,  # Mã đơn trả hàng
+            "scheduled_date": scheduled_date,
+            "move_type": "direct",
+        }
+        
+        # Thêm ghi chú nếu có
+        if journal_memo:
+            picking_vals['note'] = f"Lý do trả: {journal_memo}\nĐơn bán hàng tham chiếu: {order_code}"
+        elif order_code:
+            picking_vals['note'] = f"Đơn bán hàng tham chiếu: {order_code}"
+        
+        picking = self.env["stock.picking"].create(picking_vals)
+        
+        # Tạo các dòng move
+        for line in sa_return_detail:
+            self._create_stock_move(picking, line, location, odoo_utils)
+        
+        # Xác nhận phiếu nhập kho
+        if picking.move_ids_without_package:
+            picking.action_confirm()
+            _logger.info("✅ Đã tạo phiếu nhập kho %s cho đơn trả %s", picking.name, refno)
+            return True
+        else:
+            picking.unlink()
+            _logger.warning("⚠️ Không có sản phẩm hợp lệ, đã xóa phiếu nhập kho cho đơn %s", refno)
+            return False
+
+    def _fetch_return_detail(self, refid, headers, misa_utils):
+        """Lấy chi tiết đơn hàng trả về"""
+        
+        # Tạo payload cho API detail_full
+        detail_payload = [{
+            "Type": "sa_return",
+            "Key": refid,
+            "RefType": 3040,
+            "RefTypeCategory": 354,
+            "Details": [
+                {
+                    "Type": "sa_return_detail",
+                    "Alias": "detail",
+                    "View": "view_sa_return_detail"
+                },
+                {
+                    "Type": "wesign_document",
+                    "Alias": "wesign_document",
+                    "ForeignKey": "refid",
+                    "Mode": "View"
+                }
+            ],
+            "Links": [
+                {
+                    "Type": "pu_invoice",
+                    "RefType": 3403,
+                    "RefTypeCategory": 0,
+                    "UseSameKeyWithMaster": False,
+                    "KeyColumnInMaster": "pu_invoice_refid"
+                },
+                {
+                    "Type": "in_inward",
+                    "RefType": 2013,
+                    "RefTypeCategory": 201,
+                    "UseSameKeyWithMaster": False,
+                    "KeyColumnInMaster": "in_inward_refid"
+                },
+                {
+                    "Type": "inv_bot_reference",
+                    "RefType": 0,
+                    "RefTypeCategory": 0
+                }
+            ]
+        }]
+        
+        # Encode payload thành base64
+        payload_json = json.dumps(detail_payload)
+        payload_b64 = base64.b64encode(payload_json.encode('utf-8')).decode('utf-8')
+        
+        # Gọi API
+        detail_url = f"https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full?req={payload_b64}"
+        
+        try:
+            response = requests.get(detail_url, headers=headers, timeout=30)
+            
+            if response.status_code != 200:
+                _logger.error("❌ Không lấy được chi tiết đơn trả %s: HTTP %s", 
+                            refid, response.status_code)
+                return None
+            
+            result = response.json()
+            if result.get("Success"):
+                return result.get("Data", {})
+            else:
+                _logger.error("❌ API trả về Success=False cho đơn %s", refid)
+                return None
+                
+        except Exception as e:
+            _logger.exception("❌ Lỗi khi gọi API chi tiết đơn trả %s: %s", refid, e)
+            return None
+
+    def _create_stock_move(self, picking, line, location, odoo_utils):
+        """Tạo stock move từ dòng chi tiết đơn trả"""
+        
+        product_code = line.get("inventory_item_code", "").strip()
+        product_name = line.get("description", "").strip()
+        qty = float(line.get("quantity", 0))
+        unit_name = line.get("unit_name", "Cái").strip()
+        price = float(line.get("unit_price", 0))
+        
+        if not product_code or qty <= 0:
+            _logger.warning("⏭️ Bỏ qua dòng không hợp lệ: code=%s, qty=%s", product_code, qty)
+            return
+        
+        # Tạo hoặc lấy sản phẩm
+        product = odoo_utils._get_or_create_product(
+            code=product_code,
+            name=product_name,
+            unit_name=unit_name,
+            cost=price,
+            purchase_ok=True,
+            sale_ok=True
+        )
+        
+        if not product:
+            _logger.warning("❌ Không tạo được sản phẩm %s", product_code)
+            return
+        
+        # Tạo stock move
+        move_vals = {
+            "name": product_name or product_code,
+            "product_id": product.id,
+            "product_uom_qty": qty,
+            "product_uom": product.uom_id.id,
+            "picking_id": picking.id,
+            "location_id": picking.location_id.id,
+            "location_dest_id": location.id,
+        }
+        
+        self.env["stock.move"].create(move_vals)
+        _logger.info("✅ Đã tạo move cho sản phẩm %s (qty=%s)", product_code, qty)
