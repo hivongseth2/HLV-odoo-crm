@@ -420,7 +420,8 @@
                 </h5>
               </div>
               <div class="card-body p-0">
-                <div class="table-responsive">
+                <!-- Desktop: Table View -->
+                <div class="table-responsive d-none d-md-block">
                   <table class="table invoice-table mb-0">
                     <thead>
                       <tr>
@@ -502,6 +503,71 @@
                       </t>
                     </tbody>
                   </table>
+                </div>
+                
+                <!-- Mobile: Card View -->
+                <div class="d-md-none mobile-product-list">
+                  <t t-set="line_count" t-value="len(order.get('order_lines', []))"/>
+                  <t t-if="line_count > 0">
+                    <t t-foreach="order.get('order_lines', [])" t-as="line">
+                      <div t-attf-class="mobile-product-card {{line.get('is_component') and 'is-component' or ''}}">
+                        <!-- Product Info -->
+                        <div class="mobile-product-info">
+                          <div class="product-name-wrapper">
+                            <t t-if="line.get('is_component')">
+                              <div class="product-name component-name">
+                                <i class="fa fa-arrow-circle-right me-2 text-muted"></i>
+                                <t t-esc="line.get('product_name', 'N/A')"/>
+                              </div>
+                            </t>
+                            <t t-else="">
+                              <div t-attf-class="product-name {{line.get('is_combo') and 'combo-name' or ''}}">
+                                <t t-esc="line.get('product_name', 'N/A')"/>
+                                <t t-if="line.get('is_combo') and line.get('is_fully_delivered')">
+                                  <i class="fa fa-check-circle text-success ms-2" title="Đã giao đủ"></i>
+                                </t>
+                              </div>
+                            </t>
+                          </div>
+                          
+                          <!-- Delivery Info -->
+                          <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                          <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                          <t t-if="delivered > 0">
+                            <div class="delivery-info mt-1">
+                              <small class="text-muted">
+                                Đã giao: <strong><t t-esc="'{:.0f}'.format(delivered)"/></strong>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                <t t-if="delivered >= total_qty">
+                                  <i class="fa fa-check-circle text-success ms-1"></i>
+                                </t>
+                              </small>
+                            </div>
+                          </t>
+                        </div>
+                        
+                        <!-- Product Details Row -->
+                        <div class="mobile-product-details">
+                          <div class="detail-item">
+                            <span class="detail-label">SL:</span>
+                            <span class="detail-value"><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></span>
+                          </div>
+                          <div class="detail-item">
+                            <span class="detail-label">Đơn Giá:</span>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/></span>
+                          </div>
+                          <div class="detail-item total">
+                            <span class="detail-label">Thành Tiền:</span>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></span>
+                          </div>
+                        </div>
+                      </div>
+                    </t>
+                  </t>
+                  <t t-else="">
+                    <div class="text-muted text-center py-4">
+                      <em>Không có sản phẩm</em>
+                    </div>
+                  </t>
                 </div>
               </div>
               <div class="card-footer">
