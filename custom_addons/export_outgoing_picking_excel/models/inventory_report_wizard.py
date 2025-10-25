@@ -108,26 +108,6 @@ class InventoryReportWizard(models.TransientModel):
                 excluded_count += len(excluded_locs)
                 
                 location_ids.extend(filtered_locs.ids)
-                
-                _logger.info(
-                    f"✓ Warehouse {wh.name}: Included {len(filtered_locs)} locations, "
-                    f"Excluded {len(excluded_locs)} transit locations"
-                )
-                if excluded_locs:
-                    _logger.info(
-                        f"  ✗ Excluded transit locations: "
-                        f"{', '.join([f'{loc.complete_name} (usage:{loc.usage})' for loc in excluded_locs])}"
-                    )
-                if filtered_locs:
-                    _logger.info(
-                        f"  ✓ Included locations: "
-                        f"{', '.join([f'{loc.complete_name} (usage:{loc.usage})' for loc in filtered_locs])}"
-                    )
-        
-        location_ids = list(set(location_ids))
-        _logger.info(
-            f"📦 Total warehouse locations: {len(location_ids)} (excluded {excluded_count} transit locations)"
-        )
         
         return location_ids
 
@@ -267,12 +247,7 @@ class InventoryReportWizard(models.TransientModel):
         - GIỮ LẠI: move line có location_id khác location_dest_id dù cả 2 đều trong location_ids
         """
         # Log location_ids để debug (chỉ log 1 lần khi được yêu cầu)
-        if log_locations:
-            location_objs = self.env['stock.location'].browse(location_ids)
-            _logger.info(
-                f"🗂️ Location IDs in scope ({len(location_ids)} locations): "
-                f"{', '.join([f'{loc.complete_name} (ID:{loc.id}, Usage:{loc.usage})' for loc in location_objs])}"
-            )
+        # Location IDs logged at debug level only if needed
         
         # Tìm các stock.move có move_line_ids
         moves = self.env['stock.move'].search([
@@ -318,39 +293,10 @@ class InventoryReportWizard(models.TransientModel):
         
         # Debug logging - ENHANCED
         if outgoing_moves_info or internal_moves_info:
-            _logger.info(
-                f"📤 Product {product_id}: {len(outgoing_moves_info)} OUTGOING move lines (qty: {total_qty}), "
-                f"{len(internal_moves_info)} INTERNAL move lines (ignored)"
+            _logger.warning(
+                f"📤 Product {product_id}: {len(outgoing_moves_info)} OUTGOING, "
+                f"{len(internal_moves_info)} INTERNAL (ignored)"
             )
-            
-            if outgoing_moves_info:
-                for info in outgoing_moves_info:
-                    move = info['move']
-                    line = info['line']
-                    _logger.info(
-                        f"  ✓ Outgoing: {move.picking_id.name if move.picking_id else 'N/A'}, "
-                        f"Qty: {info['qty']}, "
-                        f"From: {line.location_id.complete_name} (ID:{line.location_id.id}) → "
-                        f"To: {line.location_dest_id.complete_name} (ID:{line.location_dest_id.id}, "
-                        f"Usage:{line.location_dest_id.usage})"
-                    )
-            
-            if internal_moves_info:
-                _logger.warning(
-                    f"  ⚠️ Ignored {len(internal_moves_info)} internal move lines (both locations in location_ids):"
-                )
-                # Chỉ log 5 đầu tiên để tránh spam
-                for info in internal_moves_info[:5]:
-                    move = info['move']
-                    line = info['line']
-                    _logger.warning(
-                        f"    → Picking: {move.picking_id.name if move.picking_id else 'N/A'}, "
-                        f"Qty: {info['qty']}, "
-                        f"From: {line.location_id.complete_name} (ID:{line.location_id.id}) → "
-                        f"To: {line.location_dest_id.complete_name} (ID:{line.location_dest_id.id})"
-                    )
-                if len(internal_moves_info) > 5:
-                    _logger.warning(f"    ... and {len(internal_moves_info) - 5} more")
         
         return total_qty
 
@@ -407,39 +353,10 @@ class InventoryReportWizard(models.TransientModel):
         
         # Debug logging - ENHANCED
         if incoming_moves_info or internal_moves_info:
-            _logger.info(
-                f"📥 Product {product_id}: {len(incoming_moves_info)} INCOMING move lines (qty: {total_qty}), "
-                f"{len(internal_moves_info)} INTERNAL move lines (ignored)"
+            _logger.warning(
+                f"📥 Product {product_id}: {len(incoming_moves_info)} INCOMING, "
+                f"{len(internal_moves_info)} INTERNAL (ignored)"
             )
-            
-            if incoming_moves_info:
-                for info in incoming_moves_info:
-                    move = info['move']
-                    line = info['line']
-                    _logger.info(
-                        f"  ✓ Incoming: {move.picking_id.name if move.picking_id else 'N/A'}, "
-                        f"Qty: {info['qty']}, "
-                        f"From: {line.location_id.complete_name} (ID:{line.location_id.id}, "
-                        f"Usage:{line.location_id.usage}) → "
-                        f"To: {line.location_dest_id.complete_name} (ID:{line.location_dest_id.id})"
-                    )
-            
-            if internal_moves_info:
-                _logger.warning(
-                    f"  ⚠️ Ignored {len(internal_moves_info)} internal move lines (both locations in location_ids):"
-                )
-                # Chỉ log 5 đầu tiên để tránh spam
-                for info in internal_moves_info[:5]:
-                    move = info['move']
-                    line = info['line']
-                    _logger.warning(
-                        f"    → Picking: {move.picking_id.name if move.picking_id else 'N/A'}, "
-                        f"Qty: {info['qty']}, "
-                        f"From: {line.location_id.complete_name} (ID:{line.location_id.id}) → "
-                        f"To: {line.location_dest_id.complete_name} (ID:{line.location_dest_id.id})"
-                    )
-                if len(internal_moves_info) > 5:
-                    _logger.warning(f"    ... and {len(internal_moves_info) - 5} more")
         
         return total_qty
 
@@ -524,9 +441,6 @@ class InventoryReportWizard(models.TransientModel):
             # 🔧 LOẠI BỎ: Return Order từ danh sách xuất
             if self._is_return_picking(picking):
                 return_picking_ids.add(picking.id)
-                _logger.info(
-                    f"Product {product_id} - Skipping Return Picking (incoming): {picking.name}"
-                )
                 continue
             
             # Kiểm tra xem move có line nào là outgoing không
@@ -560,10 +474,6 @@ class InventoryReportWizard(models.TransientModel):
                     picking_names.append(picking.name)
                     seen_picking_ids.add(picking.id)
                     
-                    _logger.info(
-                        f"Product {product_id} - Outgoing Picking: {picking.name}"
-                    )
-                    
                     # Nếu là inter-warehouse, tìm picking nhận ở kho đích
                     if is_inter_warehouse or move.move_dest_ids:
                         dest_picking = self._find_destination_picking_from_move(move)
@@ -572,21 +482,15 @@ class InventoryReportWizard(models.TransientModel):
                             not self._is_return_picking(dest_picking)):
                             picking_names.append(dest_picking.name)
                             seen_picking_ids.add(dest_picking.id)
-                            _logger.info(
-                                f"Product {product_id} - Found destination picking: {dest_picking.name}"
-                            )
                         elif dest_picking and self._is_return_picking(dest_picking):
-                            _logger.info(
-                                f"Product {product_id} - Skipping return picking as destination: {dest_picking.name}"
-                            )
                             return_picking_ids.add(dest_picking.id)
         
         # 🆕 Thêm thông tin Inventory Adjustment (điều chỉnh giảm)
         adjustments = self._get_product_adjustment_details(product_id, location_ids, start_datetime, end_datetime)
         
         if adjustments['outgoing']:
-            _logger.info(
-                f"Product {product_id} - Found {len(adjustments['outgoing'])} inventory adjustments (outgoing)"
+            _logger.warning(
+                f"Product {product_id}: {len(adjustments['outgoing'])} adjustments (outgoing)"
             )
             
             for adj in adjustments['outgoing']:
@@ -598,20 +502,10 @@ class InventoryReportWizard(models.TransientModel):
                 if picking and picking.id not in seen_picking_ids:
                     picking_names.append(picking.name)
                     seen_picking_ids.add(picking.id)
-                    _logger.info(
-                        f"  ✓ Inventory Adjustment: {picking.name}, "
-                        f"To: {adj['to_location']} ({adj['to_location_usage']}), "
-                        f"Qty: {adj['qty']}"
-                    )
                 elif not picking:
                     # Nếu không có picking, tạo mô tả trực tiếp từ move
                     adjustment_desc = f"Điều chỉnh sang {adj['to_location']} - {adj['qty']} cái"
                     picking_names.append(adjustment_desc)
-                    _logger.info(
-                        f"  ✓ Inventory Adjustment (no picking): {adjustment_desc}, "
-                        f"To: {adj['to_location']} ({adj['to_location_usage']}), "
-                        f"Date: {adj['date']}"
-                    )
         
         return ', '.join(picking_names) if picking_names else ''
 
@@ -624,11 +518,6 @@ class InventoryReportWizard(models.TransientModel):
         if outgoing_move.move_dest_ids:
             for dest_move in outgoing_move.move_dest_ids:
                 if dest_move.picking_id and dest_move.state == 'done':
-                    _logger.info(
-                        f"✓ Found linked destination move via move_dest_ids: {dest_move.picking_id.name}, "
-                        f"From: {dest_move.location_id.complete_name} -> "
-                        f"To: {dest_move.location_dest_id.complete_name}"
-                    )
                     return dest_move.picking_id
         
         # Phương pháp 2: Tìm qua location_dest_id của outgoing_move
@@ -645,10 +534,6 @@ class InventoryReportWizard(models.TransientModel):
         ], order='date asc', limit=1)
         
         if dest_moves and dest_moves.picking_id:
-            _logger.info(
-                f"✓ Found destination move via transit search: {dest_moves.picking_id.name}, "
-                f"From: {dest_moves.location_id.complete_name} -> To: {dest_moves.location_dest_id.complete_name}"
-            )
             return dest_moves.picking_id
         
         _logger.warning(
@@ -719,29 +604,16 @@ class InventoryReportWizard(models.TransientModel):
                 # Nếu là non-return outgoing, bỏ qua
                 if has_outgoing and not is_return:
                     outgoing_non_return_ids.add(picking.id)
-                    _logger.info(
-                        f"Product {product_id} - Skipping non-return outgoing picking: {picking.name}"
-                    )
                     continue
                 
                 if picking.id not in seen_picking_ids:
                     picking_names.append(picking.name)
                     seen_picking_ids.add(picking.id)
-                    
-                    # Debug logging
-                    picking_type = "Return Order" if is_return else "Regular Incoming"
-                    _logger.info(
-                        f"Product {product_id} - Incoming Picking: {picking.name} ({picking_type}), "
-                        f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}"
-                    )
         
-        # 🆕 Thêm thông tin Inventory Adjustment
+        # Add inventory adjustments if any
         adjustments = self._get_product_adjustment_details(product_id, location_ids, start_datetime, end_datetime)
         
         if adjustments['incoming']:
-            _logger.info(
-                f"Product {product_id} - Found {len(adjustments['incoming'])} inventory adjustments (incoming)"
-            )
             
             for adj in adjustments['incoming']:
                 # Tạo mô tả điều chỉnh
@@ -753,20 +625,10 @@ class InventoryReportWizard(models.TransientModel):
                 if picking and picking.id not in seen_picking_ids:
                     picking_names.append(picking.name)
                     seen_picking_ids.add(picking.id)
-                    _logger.info(
-                        f"  ✓ Inventory Adjustment: {picking.name}, "
-                        f"From: {adj['from_location']} ({adj['from_location_usage']}), "
-                        f"Qty: {adj['qty']}"
-                    )
                 elif not picking:
                     # Nếu không có picking, tạo mô tả trực tiếp từ move
-                    adjustment_desc = f"Điều chỉnh từ {adj['from_location']} - {adj['qty']} cái"
+                    adjustment_desc = f"Điều chỉnh tồn kho - {adj['qty']} cái"
                     picking_names.append(adjustment_desc)
-                    _logger.info(
-                        f"  ✓ Inventory Adjustment (no picking): {adjustment_desc}, "
-                        f"From: {adj['from_location']} ({adj['from_location_usage']}), "
-                        f"Date: {adj['date']}"
-                    )
         
         return ', '.join(picking_names) if picking_names else ''
 
