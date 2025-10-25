@@ -1,15 +1,19 @@
 {
-    "name": "HLV Tracking AfterShip",
-    "version": "18.0.1.0.0",
-    "summary": "Track J&T Express VN via AfterShip (slug: jtexpress-vn)",
-    "author": "Hoang Long Vu + ChatGPT",
-    "license": "LGPL-3",
-    "depends": ["stock","website"],
-    "data": [
-        "views/stock_picking_buttons.xml",
-        "data/ir_cron.xml",
-        "views/website_tracking.xml" 
+    'name': 'HLV Tracking AfterShip',
+    'version': '1.0.0',
+    'summary': 'Tra cứu vận đơn AfterShip cho khách hàng HLV',
+    'category': 'Website',
+    'depends': ['website', 'stock'],
+    'data': [
+        'views/website_tracking_templates.xml',
+        'views/stock_picking_views.xml',
     ],
-    "installable": True,
-    "application": False
+    'assets': {
+        'web.assets_frontend': [
+            'hlv_tracking_aftership/static/src/scss/tracking.scss',
+        ],
+    },
+    'installable': True,
+    'application': False,
+    'license': 'LGPL-3',
 }
