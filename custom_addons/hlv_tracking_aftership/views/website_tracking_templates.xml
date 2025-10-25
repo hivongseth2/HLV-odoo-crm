@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-        <template id="website_track_form" name="AfterShip Tracking Form">
-            <t t-call="website.layout">
-                <div id="wrap" class="oe_structure">
+        <template id="website_track_form" name="AfterShip Tracking Form" inherit_id="website.layout" page="True">
+            <xpath expr="//main" position="replace">
+                <main id="wrap" class="oe_structure">
                     <div class="hlv-track-wrapper">
                         <div class="hlv-track-card">
                             <h1>Theo dõi đơn hàng</h1>
@@ -22,14 +22,14 @@
                             </form>
                         </div>
                     </div>
-                </div>
-            </t>
+                </main>
+            </xpath>
         </template>
 
-        <template id="website_track_result" name="AfterShip Tracking Result">
-            <t t-call="website.layout">
-                <t t-set="checkpoints" t-value="checkpoints or []"/>
-                <div id="wrap" class="oe_structure">
+        <template id="website_track_result" name="AfterShip Tracking Result" inherit_id="website.layout" page="True">
+            <xpath expr="//main" position="replace">
+                <main id="wrap" class="oe_structure">
+                    <t t-set="checkpoints" t-value="checkpoints or []"/>
                     <div class="hlv-track-wrapper">
                         <div class="hlv-track-card">
                             <a href="/track" class="hlv-track-back">&#8592; Quay lại tra cứu khác</a>
@@ -77,8 +77,8 @@
                             </t>
                         </div>
                     </div>
-                </div>
-            </t>
+                </main>
+            </xpath>
         </template>
     </data>
 </odoo>
