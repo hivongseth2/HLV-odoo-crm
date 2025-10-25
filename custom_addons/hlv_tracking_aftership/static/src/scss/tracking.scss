@@ -1,0 +1,222 @@
+.hlv-track-wrapper {
+    min-height: 70vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 4rem 1.5rem;
+    background: linear-gradient(135deg, #f0f4ff 0%, #f9fafb 100%);
+}
+
+.hlv-track-card {
+    width: 100%;
+    max-width: 960px;
+    background: #ffffff;
+    border-radius: 1.25rem;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+    padding: 2.5rem 3rem;
+}
+
+.h1, h1, h2, h3, h4 {
+    color: #0f172a;
+}
+
+.hlv-track-card h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.hlv-track-desc {
+    color: #475569;
+    margin-bottom: 2rem;
+}
+
+.hlv-track-form {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.hlv-track-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.hlv-track-form label {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.hlv-track-form input {
+    border: 1px solid #cbd5f5;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hlv-track-form input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.hlv-track-form .btn {
+    width: fit-content;
+    border-radius: 999px;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    border: none;
+}
+
+.hlv-track-form .btn:hover {
+    background: linear-gradient(135deg, #1d4ed8, #4338ca);
+}
+
+.hlv-track-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #1d4ed8;
+    text-decoration: none;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+}
+
+.hlv-track-alert {
+    border-radius: 1rem;
+    padding: 1rem 1.25rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+}
+
+.hlv-track-alert--error {
+    background: rgba(248, 113, 113, 0.12);
+    color: #b91c1c;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.hlv-track-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+}
+
+.hlv-track-summary h2 {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    margin-bottom: 0.25rem;
+}
+
+.hlv-track-number {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.hlv-track-status {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #059669;
+}
+
+.hlv-track-timeline h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+}
+
+.hlv-timeline-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    position: relative;
+}
+
+.hlv-timeline-list:before {
+    content: "";
+    position: absolute;
+    left: 0.75rem;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    width: 2px;
+    background: linear-gradient(180deg, rgba(37, 99, 235, 0.15), rgba(79, 70, 229, 0.45));
+}
+
+.hlv-timeline-item {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 1.5rem;
+    position: relative;
+    padding-left: 1.5rem;
+}
+
+.hlv-timeline-item:before {
+    content: "";
+    position: absolute;
+    left: 0.5rem;
+    top: 0.5rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 999px;
+    background: #94a3b8;
+    box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.25);
+}
+
+.hlv-timeline-item.is-latest:before {
+    background: #2563eb;
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.2);
+}
+
+.hlv-timeline-item__time {
+    font-weight: 600;
+    color: #1d4ed8;
+}
+
+.hlv-timeline-item__body {
+    background: #f8fafc;
+    border-radius: 1rem;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
+}
+
+.hlv-timeline-item__body h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.05rem;
+    color: #0f172a;
+}
+
+.hlv-timeline-item__body p {
+    margin: 0;
+    color: #334155;
+    line-height: 1.5;
+}
+
+.hlv-track-empty {
+    color: #64748b;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .hlv-track-card {
+        padding: 2rem;
+    }
+
+    .hlv-timeline-item {
+        grid-template-columns: 1fr;
+        padding-left: 2rem;
+    }
+
+    .hlv-timeline-item__time {
+        order: 2;
+    }
+}

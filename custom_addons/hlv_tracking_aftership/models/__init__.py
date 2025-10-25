@@ -1,1 +1,2 @@
-from . import stock_picking_aftership
+# -*- coding: utf-8 -*-
+from . import stock_picking
