@@ -141,15 +141,17 @@
     gap: 1rem;
 }
 
-/* Input row - centered and responsive */
+/* Input row - responsive, wraps on mobile */
 .o_order_lookup_page .search-input-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
-    gap: 1rem;
+    gap: 0.75rem;
+    width: 100%;
 }
 
 .o_order_lookup_page .search-input-group {
-    flex: 1;
+    flex: 1 1 100%;
     min-width: 0;
 }
 
@@ -158,20 +160,25 @@
     margin-bottom: 0.5rem;
 }
 
-/* Search button on mobile (inline with input) */
+/* Search button on mobile (below input on small screens) */
 .o_order_lookup_page .btn-search-mobile {
-    flex-shrink: 0;
-    padding: 0.75rem 1.5rem;
+    flex: 1 1 auto;
+    min-width: 80px;
+    padding: 0.625rem 1rem;
     align-self: flex-end;
-    height: 2.75rem;
+    height: auto;
+    min-height: 2.5rem;
+    white-space: nowrap;
 }
 
 /* Action row - desktop layout */
 .o_order_lookup_page .search-action-row {
+    display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 1rem;
     padding-top: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .o_order_lookup_page .search-action-row .btn {
@@ -193,6 +200,7 @@
     font-size: 1rem;
     transition: all 0.3s ease;
     background-color: white;
+    width: 100%;
 }
 
 .o_order_lookup_page .form-control:focus {
@@ -213,7 +221,7 @@
 }
 
 /* ============================================
-   Mobile Search Form Optimization
+   Mobile Search Form Optimization (<768px)
    ============================================ */
 @media (max-width: 768px) {
     .o_order_lookup_page .search-card .card-body {
@@ -221,16 +229,27 @@
     }
     
     .o_order_lookup_page .search-form-container {
-        gap: 0.75rem;
+        gap: 0.5rem;
     }
     
+    /* Mobile: Input full-width, button below */
     .o_order_lookup_page .search-input-row {
-        gap: 0.75rem;
-        align-items: flex-end;
+        gap: 0.5rem;
+        align-items: stretch;
     }
     
     .o_order_lookup_page .search-input-group {
-        flex: 1;
+        flex: 1 1 100%;
+    }
+    
+    /* Button full-width on mobile */
+    .o_order_lookup_page .btn-search-mobile {
+        flex: 0 1 auto;
+        width: 100%;
+        min-width: auto;
+        height: 2.5rem;
+        padding: 0.5rem 1rem;
+        white-space: nowrap;
     }
     
     .o_order_lookup_page .form-label {
@@ -241,17 +260,52 @@
     .o_order_lookup_page .form-control {
         padding: 0.625rem 0.875rem;
         font-size: 0.95rem;
-    }
-    
-    .o_order_lookup_page .btn-search-mobile {
-        padding: 0.625rem 1rem;
-        font-size: 0.9rem;
         height: 2.5rem;
     }
     
     .o_order_lookup_page .form-text {
         font-size: 0.75rem;
         margin-top: 0.2rem;
+    }
+}
+
+/* ============================================
+   Extra Small Mobile (<576px)
+   ============================================ */
+@media (max-width: 576px) {
+    .o_order_lookup_page .search-card .card-body {
+        padding: 0.75rem;
+    }
+    
+    .o_order_lookup_page .search-form-container {
+        gap: 0.5rem;
+    }
+    
+    .o_order_lookup_page .search-input-row {
+        gap: 0.5rem;
+    }
+    
+    .o_order_lookup_page .btn-search-mobile {
+        width: 100%;
+        height: 2.25rem;
+        padding: 0.4rem 0.75rem;
+        font-size: 0.85rem;
+    }
+    
+    .o_order_lookup_page .form-control {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+        height: 2.25rem;
+    }
+    
+    .o_order_lookup_page .form-label {
+        font-size: 0.8rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .o_order_lookup_page .form-text {
+        font-size: 0.7rem;
+        margin-top: 0.15rem;
     }
 }
 
