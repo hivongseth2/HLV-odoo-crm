@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_misa_return_import,access_misa_return_import,model_misa_return_import,base.group_user,1,1,1,1

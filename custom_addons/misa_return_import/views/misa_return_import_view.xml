@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form view cho wizard import phiếu trả hàng -->
+    <record id="view_misa_return_import_form" model="ir.ui.view">
+        <field name="name">misa.return.import.form</field>
+        <field name="model">misa.return.import</field>
+        <field name="arch" type="xml">
+            <form string="Import Phiếu Trả Hàng MISA">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="date_from" string="Từ ngày"/>
+                        </group>
+                        <group>
+                            <field name="date_to" string="Đến ngày"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="auto_validate" string="Tự động xác nhận phiếu"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_import_returns" 
+                            string="Import Phiếu Trả Hàng" 
+                            type="object" 
+                            class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action để mở wizard -->
+    <record id="action_misa_return_import" model="ir.actions.act_window">
+        <field name="name">Import Phiếu Trả Hàng MISA</field>
+        <field name="res_model">misa.return.import</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Menu item - đặt trong menu Inventory -->
+    <menuitem id="menu_misa_import_root"
+              name="Nhập dữ liệu từ MISA"
+              parent="stock.menu_stock_root"
+                action="action_misa_return_import"
+              sequence="99"/>
+</odoo>
