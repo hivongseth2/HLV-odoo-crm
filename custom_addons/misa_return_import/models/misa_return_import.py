@@ -2,6 +2,7 @@ from odoo import models, fields, _
 import logging
 import json
 import base64
+import time
 from datetime import datetime, timedelta, timezone
 import requests
 
@@ -126,6 +127,7 @@ class MisaReturnImport(models.TransientModel):
         """
         Tạo request parameter cho API detail_full.
         Encode base64 theo format MISA yêu cầu.
+        OPTIMIZED: Chỉ lấy sa_return và sa_return_detail, bỏ Links để tăng tốc độ.
         """
         request_obj = [{
             "Type": "sa_return",
@@ -137,35 +139,9 @@ class MisaReturnImport(models.TransientModel):
                     "Type": "sa_return_detail",
                     "Alias": "detail",
                     "View": "view_sa_return_detail"
-                },
-                {
-                    "Type": "wesign_document",
-                    "Alias": "wesign_document",
-                    "ForeignKey": "refid",
-                    "Mode": "View"
-                }
-            ],
-            "Links": [
-                {
-                    "Type": "pu_invoice",
-                    "RefType": 3403,
-                    "RefTypeCategory": 0,
-                    "UseSameKeyWithMaster": False,
-                    "KeyColumnInMaster": "pu_invoice_refid"
-                },
-                {
-                    "Type": "in_inward",
-                    "RefType": 2013,
-                    "RefTypeCategory": 201,
-                    "UseSameKeyWithMaster": False,
-                    "KeyColumnInMaster": "in_inward_refid"
-                },
-                {
-                    "Type": "inv_bot_reference",
-                    "RefType": 0,
-                    "RefTypeCategory": 0
                 }
             ]
+            # Bỏ Links và wesign_document để giảm tải API
         }]
         
         json_str = json.dumps(request_obj, separators=(',', ':'))
@@ -231,8 +207,6 @@ class MisaReturnImport(models.TransientModel):
         page_index = 1
         total_created = 0
         total_skipped = 0
-        
-        _logger.info("🔍 Payload để lấy phiếu trả hàng: %s", json.dumps(payload, indent=2))
         
         while True:
             payload["pageIndex"] = page_index
@@ -317,16 +291,21 @@ class MisaReturnImport(models.TransientModel):
                             # Tăng timeout lên 60s và thêm retry
                             detail_response = requests.get(detail_url, headers=headers, timeout=60)
                             break  # Thành công thì thoát loop
-                        except requests.exceptions.Timeout:
+                        except (requests.exceptions.Timeout, 
+                                requests.exceptions.ConnectionError,
+                                requests.exceptions.ChunkedEncodingError) as e:
                             if retry < max_retries - 1:
-                                _logger.warning("⏱️ Timeout lần %d/%d, thử lại...", retry + 1, max_retries)
+                                _logger.warning("⏱️ Lỗi kết nối lần %d/%d (%s), thử lại sau 2s...", 
+                                              retry + 1, max_retries, type(e).__name__)
+                                time.sleep(2)  # Đợi 2 giây trước khi retry
                                 continue
                             else:
-                                _logger.error("❌ Timeout sau %d lần thử cho phiếu %s", max_retries, refno)
+                                _logger.error("❌ Lỗi kết nối sau %d lần thử cho phiếu %s: %s", 
+                                            max_retries, refno, str(e))
                                 detail_response = None
                                 break
                         except Exception as e:
-                            _logger.error("❌ Lỗi kết nối API detail: %s", str(e))
+                            _logger.error("❌ Lỗi không xác định API detail: %s", str(e))
                             detail_response = None
                             break
                     
@@ -344,6 +323,9 @@ class MisaReturnImport(models.TransientModel):
                     
                     detail_data = detail_json.get("Data", {})
                     
+                    # Debug: Log các key có trong response để kiểm tra
+                    _logger.debug("🔍 Keys trong detail_data: %s", list(detail_data.keys()))
+                    
                     # Lấy thông tin master từ sa_return
                     sa_return_master = detail_data.get("sa_return", [])
                     master_info = sa_return_master[0] if sa_return_master else {}
@@ -355,24 +337,16 @@ class MisaReturnImport(models.TransientModel):
                     total_amount = master_info.get("total_amount", 0.0)
                     total_vat_amount = master_info.get("total_vat_amount", 0.0)
                     
-                    # Lấy thông tin phiếu nhập kho liên quan (nếu có)
-                    in_inward_list = detail_data.get("in_inward", [])
-                    in_inward_info = in_inward_list[0] if in_inward_list else {}
-                    in_inward_refno = in_inward_info.get("refno_finance", "")
-                    
-                    # Lấy thông tin hóa đơn mua (nếu có)
-                    pu_invoice_list = detail_data.get("pu_invoice", [])
-                    pu_invoice_info = pu_invoice_list[0] if pu_invoice_list else {}
-                    pu_invoice_refno = pu_invoice_info.get("refno_finance", "") if pu_invoice_info else ""
-                    
                     # Log thông tin bổ sung
                     _logger.info("📝 Lý do trả hàng: %s", journal_memo)
                     _logger.info("👤 Nhân viên: %s (%s)", employee_name, employee_code)
-                    if in_inward_refno:
-                        _logger.info("📦 Phiếu nhập kho liên quan: %s", in_inward_refno)
                     
                     # Lấy chi tiết sản phẩm
                     lines = detail_data.get("sa_return_detail", [])
+                    
+                    # Debug: Log keys trong dòng đầu tiên để verify order_code có tồn tại
+                    if lines:
+                        _logger.debug("🔍 Keys trong sa_return_detail[0]: %s", list(lines[0].keys()))
                     
                     if not lines:
                         _logger.warning("⚠️ Phiếu %s không có dòng chi tiết", refno)
@@ -419,10 +393,6 @@ class MisaReturnImport(models.TransientModel):
                         note_parts.append(f"Lý do: {journal_memo}")
                     if employee_name:
                         note_parts.append(f"NV xử lý: {employee_name} ({employee_code})")
-                    if in_inward_refno:
-                        note_parts.append(f"Phiếu nhập kho MISA: {in_inward_refno}")
-                    if pu_invoice_refno:
-                        note_parts.append(f"Hóa đơn mua: {pu_invoice_refno}")
                     
                     note = "\n".join(note_parts) if note_parts else ""
                     
