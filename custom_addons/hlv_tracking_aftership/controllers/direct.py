@@ -3,6 +3,9 @@ from odoo import http
 from odoo.http import request
 import requests
 import re
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 def _looks_like_tracking(number: str) -> bool:
@@ -31,15 +34,15 @@ def _guess_slug(number: str) -> str:
 
 class WebsiteTrackingPublicDirect(http.Controller):
 
-    @http.route(['/track'], type='http', auth='public', website=True)
+    @http.route(["/track"], type="http", auth="public", website=True)
     def track_form(self, **kw):
         return request.render("hlv_tracking_aftership.website_track_form", {})
 
-    @http.route(['/track/search'], type='http', auth='public', methods=['GET', 'POST'], website=True, csrf=False)
+    @http.route(["/track/search"], type="http", auth="public", methods=["GET", "POST"], website=True, csrf=False)
     def track_search(self, **post):
         params = request.params or {}
-        query = (post.get('tracking_number') or params.get('tracking_number') or '').strip()
-        slug_input = (post.get('slug') or params.get('slug') or '').strip()
+        query = (post.get("tracking_number") or params.get("tracking_number") or "").strip()
+        slug_input = (post.get("slug") or params.get("slug") or "").strip()
         error = None
 
         number = None
@@ -94,7 +97,11 @@ class WebsiteTrackingPublicDirect(http.Controller):
                 "Referer": "https://www.aftership.com/",
             }
             r = requests.post(url, json=payload, headers=headers_direct, timeout=25)
+            # Debug raw response when ?debug=1
+            if (request.params or {}).get("debug") in ("1", "true", "yes"):
+                return request.make_response(r.text, [("Content-Type", "application/json")])
             if not r.ok:
+                _logger.warning("AfterShip direct error %s: %s", r.status_code, r.text)
                 error = f"Không lấy được tracking: {r.status_code} {r.text}"
                 return request.render("hlv_tracking_aftership.website_track_result", {
                     "error": error, "data": {}, "number": number, "slug": slug or "",
@@ -102,6 +109,7 @@ class WebsiteTrackingPublicDirect(http.Controller):
             j = r.json() or {}
             items = ((j.get("data") or {}).get("direct_trackings") or [])
             if not items:
+                _logger.info("AfterShip direct empty for %s/%s: %s", slug, number, r.text)
                 error = "Không có dữ liệu từ AfterShip."
                 return request.render("hlv_tracking_aftership.website_track_result", {
                     "error": error, "data": {}, "number": number, "slug": slug or "",
