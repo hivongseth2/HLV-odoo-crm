@@ -38,10 +38,10 @@
         <field name="target">new</field>
     </record>
 
-    <!-- Menu item - đặt trong menu Inventory -->
-    <menuitem id="menu_misa_import_root"
-              name="Nhập dữ liệu từ MISA"
-              parent="stock.menu_stock_root"
-                action="action_misa_return_import"
-              sequence="99"/>
+    <!-- Menu item - đặt vào menu con của "Nhập dữ liệu từ MISA" -->
+    <menuitem id="menu_import_misa_return"
+              name="Lấy Phiếu Trả Hàng từ MISA"
+              parent="misa_fetch_po_button.menu_misa_import_root"
+              action="action_misa_return_import"
+              sequence="103"/>
 </odoo>
