@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-        <template id="website_track_form" name="AfterShip Tracking Form" page="True">
+        <template id="website_track_form" name="AfterShip Tracking Form" >
             <t t-call="website.layout">
                 <div id="wrap" class="oe_structure">
                     <div class="hlv-track-wrapper">
