@@ -70,9 +70,9 @@
                         />
                         <small class="form-text text-muted d-block mt-1">Nhập mã đơn đầy đủ hoặc 6 chữ số cuối</small>
                       </div>
-                      <button type="submit" class="btn btn-primary btn-search-mobile d-md-none" id="btnSearch">
-                        <i class="fa fa-search me-2"></i>
-                        Tìm
+                      <button type="submit" class="btn btn-primary btn-search-mobile d-md-none" id="btnSearchMobile">
+                        <i class="fa fa-search"></i>
+                        <span class="ms-1">Tìm</span>
                       </button>
                     </div>
                     
@@ -110,9 +110,6 @@
                   <i class="fa fa-list-alt me-2"></i>
                   Kết Quả Tìm Kiếm
                 </h5>
-                <span class="badge badge-primary">
-                  <t t-esc="total"/> đơn hàng
-                </span>
               </div>
               <div class="card-body">
                 
