@@ -26,6 +26,7 @@ REPLACEMENTS = (
 )
 
 
+
 def _polish_message(message: str) -> str:
     msg = (message or "").strip()
     for old, new in REPLACEMENTS:
