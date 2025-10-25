@@ -194,17 +194,18 @@ class MisaReturnImport(models.TransientModel):
         }
         
         # Payload để lấy danh sách phiếu trả hàng
+        # Sử dụng format chính xác từ MISA
         payload = {
             "filter": [
                 {
-                    "property": 5512,  # refdate
+                    "property": 3972,  # refdate (giống như PO)
                     "value": date_from_utc.isoformat() + "Z",
                     "operator": 10,  # >=
                     "operand": 1,
                     "data_type": 3
                 },
                 {
-                    "property": 5512,  # refdate
+                    "property": 3972,  # refdate
                     "value": date_to_utc.isoformat() + "Z",
                     "operator": 12,  # <=
                     "operand": 1,
@@ -214,15 +215,17 @@ class MisaReturnImport(models.TransientModel):
             "loadMode": 2,
             "pageIndex": 1,
             "pageSize": 20,
-            "sort": "[{\"property\":5512,\"desc\":true,\"data_type\":3,\"operand\":1}]",
-            "summaryColumns": [],
+            "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+            "summaryColumns": [5126, 5068, 5141, 5039],
             "useSp": False,
-            "view": 2
+            "view": 64  # View ID cho sa_return
         }
         
         page_index = 1
         total_created = 0
         total_skipped = 0
+        
+        _logger.info("🔍 Payload để lấy phiếu trả hàng: %s", json.dumps(payload, indent=2))
         
         while True:
             payload["pageIndex"] = page_index
@@ -233,11 +236,32 @@ class MisaReturnImport(models.TransientModel):
                 headers, payload
             )
             
+            _logger.info("📥 Response status: %s", response.status_code)
             if response.status_code != 200:
+                try:
+                    error_data = response.json()
+                    _logger.error("❌ API Error: %s", json.dumps(error_data, indent=2))
+                except:
+                    _logger.error("❌ Response text: %s", response.text[:500])
                 _logger.warning("❌ Gọi API thất bại ở trang %s", page_index)
                 break
             
-            page_data = response.json().get("Data", {}).get("PageData", [])
+            # Parse response
+            try:
+                response_data = response.json()
+            except Exception as json_err:
+                _logger.error("❌ Lỗi parse JSON response: %s", json_err)
+                break
+            
+            # Kiểm tra Success flag
+            if not response_data.get("Success", True):
+                _logger.error("❌ MISA API trả về lỗi: %s", response_data.get("SystemMessage"))
+                _logger.error("   Error Code: %s, SubCode: %s", 
+                            response_data.get("Code"), response_data.get("SubCode"))
+                _logger.error("   Exception ID: %s", response_data.get("ExceptionID"))
+                break
+            
+            page_data = response_data.get("Data", {}).get("PageData", [])
             if not page_data:
                 _logger.info("✅ Hết dữ liệu, dừng ở trang %s", page_index)
                 break
