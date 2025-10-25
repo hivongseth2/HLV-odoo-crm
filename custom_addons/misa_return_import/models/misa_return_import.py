@@ -181,9 +181,15 @@ class MisaReturnImport(models.TransientModel):
         access_token = misa_utils._get_misa_token()
         headers = misa_config.get_default_headers(access_token)
         
-        # Chuyển đổi ngày sang UTC
-        date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
-        date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
+        # Chuyển đổi ngày sang UTC (MISA dùng timezone +07:00 cho VN)
+        # date_from: 00:00:00 VN+7 -> UTC-7
+        # date_to: 23:59:59 VN+7 -> UTC-7, nhưng dùng ngày hôm sau 00:00:00 để tránh microseconds
+        vn_tz = timezone(timedelta(hours=7))
+        date_from_vn = datetime.combine(self.date_from, datetime.min.time()).replace(tzinfo=vn_tz)
+        date_to_vn = datetime.combine(self.date_to + timedelta(days=1), datetime.min.time()).replace(tzinfo=vn_tz)
+        
+        date_from_utc = date_from_vn.astimezone(timezone.utc).replace(tzinfo=None)
+        date_to_utc = date_to_vn.astimezone(timezone.utc).replace(tzinfo=None)
         
         # Mapping kho
         stock_mapping = {
@@ -195,18 +201,19 @@ class MisaReturnImport(models.TransientModel):
         
         # Payload để lấy danh sách phiếu trả hàng
         # Sử dụng format chính xác từ MISA
+        # Format datetime: YYYY-MM-DDTHH:MM:SSZ (không có microseconds)
         payload = {
             "filter": [
                 {
                     "property": 3972,  # refdate (giống như PO)
-                    "value": date_from_utc.isoformat() + "Z",
+                    "value": date_from_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "operator": 10,  # >=
                     "operand": 1,
                     "data_type": 3
                 },
                 {
                     "property": 3972,  # refdate
-                    "value": date_to_utc.isoformat() + "Z",
+                    "value": date_to_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
                     "operator": 12,  # <=
                     "operand": 1,
                     "data_type": 3
@@ -301,12 +308,30 @@ class MisaReturnImport(models.TransientModel):
                     
                     _logger.info("🔍 Đang lấy chi tiết phiếu %s (refid: %s)", refno, refid)
                     
-                    # Sử dụng GET request cho detail_full
-                    detail_response = requests.get(detail_url, headers=headers, timeout=30)
+                    # Retry logic cho detail API với timeout tăng lên
+                    max_retries = 3
+                    detail_response = None
                     
-                    if detail_response.status_code != 200:
-                        _logger.warning("❌ Không lấy được chi tiết phiếu %s (HTTP %s)", 
-                                      refno, detail_response.status_code)
+                    for retry in range(max_retries):
+                        try:
+                            # Tăng timeout lên 60s và thêm retry
+                            detail_response = requests.get(detail_url, headers=headers, timeout=60)
+                            break  # Thành công thì thoát loop
+                        except requests.exceptions.Timeout:
+                            if retry < max_retries - 1:
+                                _logger.warning("⏱️ Timeout lần %d/%d, thử lại...", retry + 1, max_retries)
+                                continue
+                            else:
+                                _logger.error("❌ Timeout sau %d lần thử cho phiếu %s", max_retries, refno)
+                                detail_response = None
+                                break
+                        except Exception as e:
+                            _logger.error("❌ Lỗi kết nối API detail: %s", str(e))
+                            detail_response = None
+                            break
+                    
+                    if not detail_response or detail_response.status_code != 200:
+                        _logger.warning("❌ Không lấy được chi tiết phiếu %s", refno)
                         total_skipped += 1
                         continue
                     
