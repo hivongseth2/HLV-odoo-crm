@@ -110,6 +110,9 @@
                   <i class="fa fa-list-alt me-2"></i>
                   Kết Quả Tìm Kiếm
                 </h5>
+                <span class="badge badge-primary">
+                  <t t-esc="total"/> đơn hàng
+                </span>
               </div>
               <div class="card-body">
                 
