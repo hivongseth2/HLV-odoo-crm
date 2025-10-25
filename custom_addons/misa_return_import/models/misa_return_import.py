@@ -195,9 +195,9 @@ class MisaReturnImport(models.TransientModel):
                     "data_type": 3
                 }
             ],
-            "loadMode": 2,
+            "loadMode": 2,  # Mode 2: chỉ lấy master, detail phải call riêng
             "pageIndex": 1,
-            "pageSize": 20,
+            "pageSize": 20,  # Tăng lên 20 vì get_paging_detail nhanh hơn detail_full
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
             "summaryColumns": [5126, 5068, 5141, 5039],
             "useSp": False,
@@ -276,77 +276,52 @@ class MisaReturnImport(models.TransientModel):
                         customer_address
                     )
                     
-                    # Lấy chi tiết phiếu trả hàng
-                    req_param = self._decode_detail_request(refid)
-                    detail_url = f"https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full?req={req_param}"
+                    # Lấy chi tiết phiếu trả hàng qua API get_paging_detail (NHANH HƠN detail_full)
+                    # API này trả về chi tiết dòng sản phẩm nhưng KHÔNG có order_code
+                    # TODO: Sẽ tìm cách lấy order_code sau
+                    detail_url = "https://actapp.misa.vn/g2/api/sa/v1/sa_return/get_paging_detail"
                     
-                    _logger.info("🔍 Đang lấy chi tiết phiếu %s (refid: %s)", refno, refid)
+                    detail_payload = {
+                        "refID": refid,
+                        "refType": 3540,
+                        "pageIndex": 1,
+                        "pageSize": 100  # Lấy hết detail trong 1 lần
+                    }
                     
-                    # Retry logic cho detail API với timeout tăng lên
-                    max_retries = 3
-                    detail_response = None
-                    
-                    for retry in range(max_retries):
-                        try:
-                            # Tăng timeout lên 60s và thêm retry
-                            detail_response = requests.get(detail_url, headers=headers, timeout=60)
-                            break  # Thành công thì thoát loop
-                        except (requests.exceptions.Timeout, 
-                                requests.exceptions.ConnectionError,
-                                requests.exceptions.ChunkedEncodingError) as e:
-                            if retry < max_retries - 1:
-                                _logger.warning("⏱️ Lỗi kết nối lần %d/%d (%s), thử lại sau 2s...", 
-                                              retry + 1, max_retries, type(e).__name__)
-                                time.sleep(2)  # Đợi 2 giây trước khi retry
-                                continue
-                            else:
-                                _logger.error("❌ Lỗi kết nối sau %d lần thử cho phiếu %s: %s", 
-                                            max_retries, refno, str(e))
-                                detail_response = None
-                                break
-                        except Exception as e:
-                            _logger.error("❌ Lỗi không xác định API detail: %s", str(e))
-                            detail_response = None
-                            break
-                    
-                    if not detail_response or detail_response.status_code != 200:
-                        _logger.warning("❌ Không lấy được chi tiết phiếu %s", refno)
-                        total_skipped += 1
-                        continue
+                    _logger.info("🔍 Đang lấy chi tiết phiếu %s (get_paging_detail)", refno)
                     
                     try:
+                        detail_response = misa_utils._fetch_with_retry(detail_url, headers, detail_payload)
+                        
+                        if detail_response.status_code != 200:
+                            _logger.warning("❌ Không lấy được chi tiết phiếu %s, bỏ qua", refno)
+                            total_skipped += 1
+                            continue
+                        
                         detail_json = detail_response.json()
-                    except Exception as json_err:
-                        _logger.error("❌ Lỗi parse JSON chi tiết phiếu %s: %s", refno, json_err)
+                        detail_data = detail_json.get("Data", {})
+                        
+                        # Lấy PageData chứa danh sách dòng chi tiết
+                        lines = detail_data.get("PageData", [])
+                        
+                    except Exception as e:
+                        _logger.error("❌ Lỗi lấy chi tiết phiếu %s: %s", refno, str(e))
                         total_skipped += 1
                         continue
                     
-                    detail_data = detail_json.get("Data", {})
-                    
-                    # Debug: Log các key có trong response để kiểm tra
-                    _logger.debug("🔍 Keys trong detail_data: %s", list(detail_data.keys()))
-                    
-                    # Lấy thông tin master từ sa_return
-                    sa_return_master = detail_data.get("sa_return", [])
-                    master_info = sa_return_master[0] if sa_return_master else {}
-                    
-                    # Lấy thông tin bổ sung
-                    journal_memo = master_info.get("journal_memo", "")  # Lý do trả hàng
-                    employee_name = master_info.get("employee_name", "")
-                    employee_code = master_info.get("employee_code", "")
-                    total_amount = master_info.get("total_amount", 0.0)
-                    total_vat_amount = master_info.get("total_vat_amount", 0.0)
+                    # Lấy thông tin bổ sung từ return_doc (PageData của paging_filter_v2)
+                    # API get_paging_detail chỉ trả về detail lines, không có master info
+                    journal_memo = return_doc.get("journal_memo", "")
+                    employee_name = return_doc.get("employee_name", "")
+                    employee_code = return_doc.get("employee_code", "")
+                    total_amount = return_doc.get("total_amount", 0.0)
+                    total_vat_amount = return_doc.get("total_vat_amount", 0.0)
                     
                     # Log thông tin bổ sung
                     _logger.info("📝 Lý do trả hàng: %s", journal_memo)
                     _logger.info("👤 Nhân viên: %s (%s)", employee_name, employee_code)
                     
-                    # Lấy chi tiết sản phẩm
-                    lines = detail_data.get("sa_return_detail", [])
-                    
-                    # Debug: Log keys trong dòng đầu tiên để verify order_code có tồn tại
-                    if lines:
-                        _logger.debug("🔍 Keys trong sa_return_detail[0]: %s", list(lines[0].keys()))
+                    # lines đã được lấy từ PageData ở trên
                     
                     if not lines:
                         _logger.warning("⚠️ Phiếu %s không có dòng chi tiết", refno)
@@ -418,11 +393,11 @@ class MisaReturnImport(models.TransientModel):
                         price = float(line.get("unit_price", 0))
                         
                         # Lấy thông tin bổ sung từ dòng
-                        order_code = line.get("order_code", "")  # Mã đơn hàng gốc
+                        # NOTE: get_paging_detail KHÔNG có order_code, outward_refno_finance
+                        # Chỉ có sa_voucher_no (mã phiếu bán hàng)
                         sa_voucher_no = line.get("sa_voucher_no", "")  # Mã phiếu bán hàng
-                        outward_refno = line.get("outward_refno_finance", "")  # Mã phiếu xuất kho
                         vat_rate = line.get("vat_rate", 0.0)
-                        stock_name = line.get("stock_name", "")
+                        stock_code_line = line.get("stock_code", "")
                         
                         if qty <= 0:
                             _logger.warning("⚠️ Bỏ qua dòng với số lượng <= 0: %s", product_code)
@@ -430,14 +405,11 @@ class MisaReturnImport(models.TransientModel):
                         
                         product = self._get_or_create_product(product_code, product_name, unit_name, price)
                         
-                        # Tạo description cho move
+                        # Tạo description cho move (chỉ có PBH, chưa có ĐH và PXK)
                         move_description = product_name
-                        if order_code:
-                            move_description += f" | ĐH: {order_code}"
                         if sa_voucher_no:
                             move_description += f" | PBH: {sa_voucher_no}"
-                        if outward_refno:
-                            move_description += f" | PXK: {outward_refno}"
+                        # TODO: Thêm order_code từ detail_full sau
                         
                         # Tạo stock.move
                         self.env["stock.move"].create({
@@ -450,8 +422,8 @@ class MisaReturnImport(models.TransientModel):
                             "location_dest_id": picking.location_dest_id.id,
                         })
                         
-                        _logger.info("  ✓ %s x%.2f (ĐH: %s, VAT: %.1f%%)", 
-                                   product_code, qty, order_code or "N/A", vat_rate)
+                        _logger.info("  ✓ %s x%.2f (PBH: %s, VAT: %.1f%%)", 
+                                   product_code, qty, sa_voucher_no or "N/A", vat_rate)
                     
                     # Log thông tin tổng hợp
                     _logger.info("✅ Đã tạo phiếu nhập kho trả hàng: %s (ID: %s)", refno, picking.id)
