@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <template id="website_track_form" name="AfterShip Tracking Form">
         <t t-call="website.layout">
@@ -27,7 +27,7 @@
         <t t-call="website.layout">
             <div class="hlv-track-wrapper">
                 <div class="hlv-track-card">
-                    <a href="/track" class="hlv-track-back">&larr; Quay lại tra cứu khác</a>
+                    <a href="/track" class="hlv-track-back">&#8592; Quay lại tra cứu khác</a>
                     <t t-if="error">
                         <div class="hlv-track-alert hlv-track-alert--error" role="alert">
                             <span t-esc="error"/>
