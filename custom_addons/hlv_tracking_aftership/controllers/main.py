@@ -73,10 +73,12 @@ class WebsiteTrackingPublic(http.Controller):
     def track_form(self, **kw):
         return request.render("hlv_tracking_aftership.website_track_form", {})
 
-    @http.route(['/track/search'], type='http', auth='public', methods=['POST'], website=True, csrf=False)
+    @http.route(['/track/search'], type='http', auth='public', methods=['GET', 'POST'], website=True, csrf=False)
     def track_search(self, **post):
-        query = (post.get('tracking_number') or '').strip()
-        slug_input = (post.get('slug') or '').strip()
+        # Support both GET and POST submissions
+        params = request.params or {}
+        query = (post.get('tracking_number') or params.get('tracking_number') or '').strip()
+        slug_input = (post.get('slug') or params.get('slug') or '').strip()
         api_key = request.env['ir.config_parameter'].sudo().get_param('aftership.api_key') or ''
         error = None
         data = {}
@@ -184,4 +186,3 @@ class WebsiteTrackingPublic(http.Controller):
             "slug": slug or slug_input,
             "checkpoints": checkpoints,
         })
-
