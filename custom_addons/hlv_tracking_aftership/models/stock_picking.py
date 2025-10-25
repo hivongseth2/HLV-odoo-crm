@@ -141,7 +141,7 @@ class StockPicking(models.Model):
                 .hlv-timeline:before{content:"";position:absolute;left:0.5rem;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#60a5fa,#2563eb)}
                 .tl-item{display:flex;gap:1rem;position:relative}
                 .tl-marker{position:relative;width:1rem;flex:0 0 1rem;display:flex;justify-content:center}
-                .tl-dot{width:0.75rem;height:0.75rem;border-radius:50%;background:#2563eb;box-shadow:0 0 0 4px rgba(37,99,235,0.15)}
+                .tl-dot{width:0.75rem;height:0.75rem;border-radius:50%%;background:#2563eb;box-shadow:0 0 0 4px rgba(37,99,235,0.15)}
                 .tl-content{flex:1;background:#f9fafb;border-radius:0.75rem;padding:0.75rem 1rem;box-shadow:0 2px 6px rgba(15,23,42,0.08)}
                 .tl-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;font-weight:600;color:#1f2937}
                 .tl-time{font-size:0.8rem;color:#6b7280;font-weight:500}
