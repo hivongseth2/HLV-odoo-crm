@@ -3,6 +3,9 @@ from odoo import http
 from odoo.http import request
 import requests
 import re
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 def _looks_like_tracking(number: str) -> bool:
@@ -31,15 +34,15 @@ def _guess_slug(number: str) -> str:
 
 class WebsiteTrackingPublicDirect(http.Controller):
 
-    @http.route(['/track'], type='http', auth='public', website=True)
+    @http.route(["/track"], type="http", auth="public", website=True)
     def track_form(self, **kw):
         return request.render("hlv_tracking_aftership.website_track_form", {})
 
-    @http.route(['/track/search'], type='http', auth='public', methods=['GET', 'POST'], website=True, csrf=False)
+    @http.route(["/track/search"], type="http", auth="public", methods=["GET", "POST"], website=True, csrf=False)
     def track_search(self, **post):
         params = request.params or {}
-        query = (post.get('tracking_number') or params.get('tracking_number') or '').strip()
-        slug_input = (post.get('slug') or params.get('slug') or '').strip()
+        query = (post.get("tracking_number") or params.get("tracking_number") or "").strip()
+        slug_input = (post.get("slug") or params.get("slug") or "").strip()
         error = None
 
         number = None
@@ -94,7 +97,81 @@ class WebsiteTrackingPublicDirect(http.Controller):
                 "Referer": "https://www.aftership.com/",
             }
             r = requests.post(url, json=payload, headers=headers_direct, timeout=25)
+            # Debug raw response when ?debug=1
+            if (request.params or {}).get("debug") in ("1", "true", "yes"):
+                return request.make_response(r.text, [("Content-Type", "application/json")])
             if not r.ok:
+                # Try official API fallback when API key is configured
+                api_key = request.env['ir.config_parameter'].sudo().get_param('aftership.api_key') or ''
+                if api_key:
+                    headers = {"Content-Type": "application/json", "as-api-key": api_key}
+                    try:
+                        data = None
+                        if slug:
+                            rr = requests.get(f"https://api.aftership.com/tracking/2025-07/trackings/{slug}/{number}?lang=vi", headers=headers, timeout=20)
+                            if not rr.ok:
+                                rc = requests.post(
+                                    "https://api.aftership.com/tracking/2025-07/trackings",
+                                    json={"tracking_number": number, "slug": slug},
+                                    headers=headers,
+                                    timeout=20,
+                                )
+                                ok = rc.status_code in (200, 201)
+                                code = str(((rc.json().get("meta") if rc.content else {}) or {}).get("code")) if rc.content else ""
+                                if not (ok or (rc.status_code == 400 and code == "4003")):
+                                    _logger.warning("AfterShip official create failed %s: %s", rc.status_code, rc.text)
+                                    error = f"Không lấy được tracking (direct {r.status_code}). Official: {rc.status_code} {rc.text}"
+                                    return request.render("hlv_tracking_aftership.website_track_result", {
+                                        "error": error, "data": {}, "number": number, "slug": slug or "",
+                                    })
+                                data = (rc.json().get("data") if rc.content else {}) or {}
+                                tid = data.get("id")
+                                if tid:
+                                    r2 = requests.get(f"https://api.aftership.com/tracking/2025-07/trackings/{tid}?lang=vi", headers=headers, timeout=20)
+                                    if r2.ok:
+                                        data = r2.json().get("data") or data
+                            else:
+                                data = rr.json().get("data") or {}
+                        else:
+                            rc = requests.post(
+                                "https://api.aftership.com/tracking/2025-07/trackings",
+                                json={"tracking_number": number},
+                                headers=headers,
+                                timeout=20,
+                            )
+                            ok = rc.status_code in (200, 201)
+                            code = str(((rc.json().get("meta") if rc.content else {}) or {}).get("code")) if rc.content else ""
+                            if not (ok or (rc.status_code == 400 and code == "4003")):
+                                _logger.warning("AfterShip official create failed %s: %s", rc.status_code, rc.text)
+                                error = f"Không tạo được tracking (direct {r.status_code}): {rc.status_code} {rc.text}"
+                                return request.render("hlv_tracking_aftership.website_track_result", {
+                                    "error": error, "data": {}, "number": number, "slug": slug or "",
+                                })
+                            data = (rc.json().get("data") if rc.content else {}) or {}
+                            tid = data.get("id")
+                            if tid:
+                                r2 = requests.get(f"https://api.aftership.com/tracking/2025-07/trackings/{tid}?lang=vi", headers=headers, timeout=20)
+                                if r2.ok:
+                                    data = r2.json().get("data") or data
+
+                        # Normalize and render
+                        tracking = (data or {}).get('tracking') or data or {}
+                        checkpoints = list(reversed(tracking.get('checkpoints') or []))
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": None,
+                            "data": tracking or {},
+                            "number": number,
+                            "slug": slug or "",
+                            "checkpoints": checkpoints,
+                        })
+                    except Exception as e:
+                        _logger.warning("AfterShip official fallback failed: %s", e)
+                        error = f"Không lấy được tracking (direct {r.status_code}). Lỗi official: {e}"
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": error, "data": {}, "number": number, "slug": slug or "",
+                        })
+                # No API key or fallback failed
+                _logger.warning("AfterShip direct error %s: %s", r.status_code, r.text)
                 error = f"Không lấy được tracking: {r.status_code} {r.text}"
                 return request.render("hlv_tracking_aftership.website_track_result", {
                     "error": error, "data": {}, "number": number, "slug": slug or "",
@@ -102,6 +179,7 @@ class WebsiteTrackingPublicDirect(http.Controller):
             j = r.json() or {}
             items = ((j.get("data") or {}).get("direct_trackings") or [])
             if not items:
+                _logger.info("AfterShip direct empty for %s/%s: %s", slug, number, r.text)
                 error = "Không có dữ liệu từ AfterShip."
                 return request.render("hlv_tracking_aftership.website_track_result", {
                     "error": error, "data": {}, "number": number, "slug": slug or "",
@@ -126,4 +204,3 @@ class WebsiteTrackingPublicDirect(http.Controller):
             "slug": slug or slug_input,
             "checkpoints": checkpoints,
         })
-
