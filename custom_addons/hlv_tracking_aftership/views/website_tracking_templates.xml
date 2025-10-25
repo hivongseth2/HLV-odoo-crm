@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <data>
         <template id="website_track_form" name="AfterShip Tracking Form" inherit_id="website.layout" page="True">
             <xpath expr="//main" position="replace">
                 <main id="wrap" class="oe_structure">
@@ -79,4 +80,5 @@
                 </main>
             </xpath>
         </template>
+    </data>
 </odoo>
