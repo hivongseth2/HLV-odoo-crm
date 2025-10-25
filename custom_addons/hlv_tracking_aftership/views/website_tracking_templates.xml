@@ -11,9 +11,7 @@
               <h1>Theo dõi đơn hàng</h1>
               <p class="hlv-track-desc">Nhập mã vận đơn hoặc mã đơn nội bộ để kiểm tra trạng thái giao hàng.</p>
 
-              <form action="/track/search" method="post" class="hlv-track-form">
-                <!-- CSRF token -->
-                <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+              <form action="/track/search" method="get" class="hlv-track-form">
 
                 <div class="form-group">
                   <label for="tracking_number">Mã vận đơn hoặc mã đơn</label>

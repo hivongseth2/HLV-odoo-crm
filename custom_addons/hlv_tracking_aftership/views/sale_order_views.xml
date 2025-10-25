@@ -15,7 +15,7 @@
                         <field name="tracking_payload" readonly="1" widget="json"/>
                     </group>
                     <group>
-                        <button name="action_register_tracking_aftership" type="object" string="Đăng ký trên AfterShip" class="oe_highlight" attrs="{'invisible': [('tracking_number','=',False)]}"/>
+                        <button name="action_register_tracking_aftership" type="object" string="Đăng ký trên AfterShip" class="oe_highlight" invisible="not tracking_number"/>
                         <button name="action_refresh_tracking_aftership" type="object" string="Làm mới trạng thái"/>
                     </group>
                     <field name="tracking_timeline_html" readonly="1" widget="html"/>
@@ -24,4 +24,3 @@
         </field>
     </record>
 </odoo>
-
