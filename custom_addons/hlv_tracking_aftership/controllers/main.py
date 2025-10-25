@@ -1,4 +1,9 @@
+# -*- coding: utf-8 -*-
+from odoo import http
+from odoo.http import request
+import logging
 
+_logger = logging.getLogger(__name__)
 
 def _looks_like_tracking(number: str) -> bool:
     if not number:
