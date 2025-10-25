@@ -22,7 +22,7 @@ VI_STATUS_LABELS = {
 
 
 REPLACEMENTS = (
-    ("Thứ tự", "Đơn hàng"),
+    ("Thực tệ", "Đơn hàng"),
     ("Bưu kiện của bạn", "Kiện hàng của bạn"),
     ("đang được chuyển phát nhanh", "đang trên đường giao"),
     ("đã được nhận", "đã được tiếp nhận"),
@@ -97,17 +97,29 @@ class WebsiteTrackingPublic(http.Controller):
                 Picking = request.env["stock.picking"].sudo()
                 pick = Picking.search(["|", ("name", "=", query), ("origin", "=", query)], limit=1)
                 if not pick:
-                    error = f"Không tìm thấy phiếu giao hàng cho mã: {query}"
-                    return request.render("hlv_tracking_aftership.website_track_result", {
-                        "error": error, "data": {}, "number": query, "slug": slug_input,
-                    })
-                number = (pick.tracking_number or "").strip()
-                slug = (pick.tracking_slug or slug or _guess_slug(number) or "").strip()
-                if not number:
-                    error = f"Đơn {query} chưa có mã vận đơn."
-                    return request.render("hlv_tracking_aftership.website_track_result", {
-                        "error": error, "data": {}, "number": query, "slug": slug,
-                    })
+                    # Fallback: tìm theo Đơn bán hàng
+                    SaleOrder = request.env["sale.order"].sudo()
+                    order = SaleOrder.search(["|", ("name", "=", query), ("client_order_ref", "=", query)], limit=1)
+                    if not order:
+                        error = f"Không tìm thấy phiếu giao hàng hoặc đơn hàng cho mã: {query}"
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": error, "data": {}, "number": query, "slug": slug_input,
+                        })
+                    number = (order.tracking_number or "").strip()
+                    slug = (order.tracking_slug or slug or _guess_slug(number) or "").strip()
+                    if not number:
+                        error = f"Đơn {query} chưa có mã vận đơn."
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": error, "data": {}, "number": query, "slug": slug,
+                        })
+                else:
+                    number = (pick.tracking_number or "").strip()
+                    slug = (pick.tracking_slug or slug or _guess_slug(number) or "").strip()
+                    if not number:
+                        error = f"Đơn {query} chưa có mã vận đơn."
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": error, "data": {}, "number": query, "slug": slug,
+                        })
             else:
                 number = query
                 if not slug:
@@ -117,9 +129,12 @@ class WebsiteTrackingPublic(http.Controller):
                 url = f"{AFTERSHIP_API_BASE}/trackings/{slug}/{number}?lang=vi"
                 r = requests.get(url, headers=headers, timeout=20)
                 if not r.ok:
-                    rc = requests.post(f"{AFTERSHIP_API_BASE}/trackings",
-                                       json={"tracking_number": number, "slug": slug},
-                                       headers=headers, timeout=20)
+                    rc = requests.post(
+                        f"{AFTERSHIP_API_BASE}/trackings",
+                        json={"tracking_number": number, "slug": slug},
+                        headers=headers,
+                        timeout=20,
+                    )
                     if not (rc.status_code in (200, 201) or (rc.status_code == 400 and str((rc.json().get("meta") or {}).get("code")) == "4003")):
                         error = f"Lỗi truy vấn: {r.status_code} {r.text}"
                         return request.render("hlv_tracking_aftership.website_track_result", {
@@ -134,9 +149,12 @@ class WebsiteTrackingPublic(http.Controller):
                 else:
                     data = r.json().get("data") or {}
             else:
-                rc = requests.post(f"{AFTERSHIP_API_BASE}/trackings",
-                                   json={"tracking_number": number},
-                                   headers=headers, timeout=20)
+                rc = requests.post(
+                    f"{AFTERSHIP_API_BASE}/trackings",
+                    json={"tracking_number": number},
+                    headers=headers,
+                    timeout=20,
+                )
                 if not (rc.status_code in (200, 201) or (rc.status_code == 400 and str((rc.json().get("meta") or {}).get("code")) == "4003")):
                     error = f"Không tạo được tracking: {rc.status_code} {rc.text}"
                     return request.render("hlv_tracking_aftership.website_track_result", {
@@ -166,3 +184,4 @@ class WebsiteTrackingPublic(http.Controller):
             "slug": slug or slug_input,
             "checkpoints": checkpoints,
         })
+

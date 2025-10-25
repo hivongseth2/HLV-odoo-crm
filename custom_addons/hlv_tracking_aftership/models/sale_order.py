@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 from odoo.exceptions import UserError
-import logging
 
-_logger = logging.getLogger(__name__)
 
 VI_STATUS_LABELS = {
     "INFORECEIVED": "Đơn hàng đã được tạo trên hệ thống",
@@ -19,12 +17,11 @@ VI_STATUS_LABELS = {
 }
 
 REPLACEMENTS = (
-    ("Thứ tự", "Đơn hàng"),
+    ("Thực tệ", "Đơn hàng"),
     ("Bưu kiện của bạn", "Kiện hàng của bạn"),
     ("đang được chuyển phát nhanh", "đang trên đường giao"),
     ("đã được nhận", "đã được tiếp nhận"),
 )
-
 
 
 def _polish_message(message: str) -> str:
@@ -41,8 +38,8 @@ def _vi_status(tag: str, fallback: str = "") -> str:
     return fallback or tag or ""
 
 
-class StockPicking(models.Model):
-    _inherit = "stock.picking"
+class SaleOrder(models.Model):
+    _inherit = "sale.order"
 
     tracking_timeline_html = fields.Html(string="Tracking Timeline", compute="_compute_tracking_timeline", sanitize=False, readonly=True)
 
@@ -61,58 +58,56 @@ class StockPicking(models.Model):
         return AfterShipClient(api_key)
 
     def action_register_tracking_aftership(self):
-        for pick in self:
-            if not pick.tracking_number:
+        for order in self:
+            if not order.tracking_number:
                 raise UserError("Chưa có Tracking Number.")
-            slug = pick.tracking_slug or "jtexpress-vn"
-            client = pick._aftership_client()
+            slug = order.tracking_slug or "jtexpress-vn"
+            client = order._aftership_client()
             try:
-                res = client.create_tracking(slug, pick.tracking_number, title=pick.name)
+                res = client.create_tracking(slug, order.tracking_number, title=order.name)
             except Exception as e:
                 import requests
                 body = ""
                 if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
                     body = f"\nResponse: {e.response.text}"
-                _logger.exception("AfterShip create tracking failed: %s%s", e, body)
                 raise UserError(f"AfterShip lỗi khi tạo tracking: {e}{body}")
             tracking = (res or {}).get("data") or {}
-            pick.aftership_id = tracking.get("id")
-            pick.tracking_payload = tracking
-            pick.action_refresh_tracking_aftership()
+            order.aftership_id = tracking.get("id")
+            order.tracking_payload = tracking
+            order.action_refresh_tracking_aftership()
 
     def action_refresh_tracking_aftership(self):
-        for pick in self:
-            client = pick._aftership_client()
+        for order in self:
+            client = order._aftership_client()
             try:
-                if pick.aftership_id:
-                    res = client.get_tracking_by_id(pick.aftership_id)
+                if order.aftership_id:
+                    res = client.get_tracking_by_id(order.aftership_id)
                 else:
-                    if not (pick.tracking_slug and pick.tracking_number):
+                    if not (order.tracking_slug and order.tracking_number):
                         continue
-                    res = client.get_tracking_by_number(pick.tracking_slug, pick.tracking_number)
-            except Exception as e:
-                _logger.warning("AfterShip refresh failed for %s: %s", pick.name, e)
+                    res = client.get_tracking_by_number(order.tracking_slug, order.tracking_number)
+            except Exception:
                 continue
 
             tracking = (res or {}).get("data") or {}
-            pick.tracking_payload = tracking
+            order.tracking_payload = tracking
 
             tag = tracking.get("tag") or tracking.get("subtag") or tracking.get("status")
-            pick.tracking_status = _vi_status(tag, tag)
+            order.tracking_status = _vi_status(tag, tag)
 
             checkpoints = tracking.get("checkpoints") or []
             cp_text = False
             if checkpoints:
                 last = checkpoints[-1]
                 cp_text = f"{_vi_status(last.get('tag') or last.get('status'), last.get('message'))} - {_polish_message(last.get('message'))}"
-            pick.tracking_last_checkpoint = cp_text
+            order.tracking_last_checkpoint = cp_text
 
     def _compute_tracking_timeline(self):
-        for p in self:
-            tr = p.tracking_payload or {}
+        for o in self:
+            tr = o.tracking_payload or {}
             cps = tr.get("checkpoints") or []
             if not cps:
-                p.tracking_timeline_html = "<em>Chưa có thông tin giao hàng.</em>"
+                o.tracking_timeline_html = "<em>Chưa có thông tin giao hàng.</em>"
                 continue
             items = []
             for cp in reversed(cps):
@@ -135,7 +130,7 @@ class StockPicking(models.Model):
                     </div>
                 </div>
                 """)
-            p.tracking_timeline_html = """
+            o.tracking_timeline_html = """
             <div class='hlv-timeline'>%s</div>
             <style>
                 .hlv-timeline{position:relative;padding-left:1.5rem;display:flex;flex-direction:column;gap:1rem}
@@ -157,7 +152,3 @@ class StockPicking(models.Model):
             </style>
             """ % ("\n".join(items))
 
-    @api.model
-    def cron_aftership_refresh_all(self):
-        picks = self.search([('aftership_id', '!=', False)])
-        picks.action_refresh_tracking_aftership()
