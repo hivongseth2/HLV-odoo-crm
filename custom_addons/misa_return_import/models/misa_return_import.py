@@ -281,31 +281,46 @@ class MisaReturnImport(models.TransientModel):
                     # TODO: Sẽ tìm cách lấy order_code sau
                     detail_url = "https://actapp.misa.vn/g2/api/sa/v1/sa_return/get_paging_detail"
                     
+                    # Payload sử dụng PascalCase giống như paging_filter_v2
                     detail_payload = {
-                        "refID": refid,
-                        "refType": 3540,
-                        "pageIndex": 1,
-                        "pageSize": 100  # Lấy hết detail trong 1 lần
+                        "RefID": refid,
+                        "RefType": 3540,
+                        "RefTypeCategory": 354,
+                        "PageIndex": 1,
+                        "PageSize": 100,
+                        "LoadMode": 2
                     }
                     
                     _logger.info("🔍 Đang lấy chi tiết phiếu %s (get_paging_detail)", refno)
+                    _logger.info("📤 Payload detail: %s", json.dumps(detail_payload, indent=2))
                     
                     try:
                         detail_response = misa_utils._fetch_with_retry(detail_url, headers, detail_payload)
                         
                         if detail_response.status_code != 200:
-                            _logger.warning("❌ Không lấy được chi tiết phiếu %s, bỏ qua", refno)
+                            _logger.warning("❌ API trả về status %s cho phiếu %s", 
+                                          detail_response.status_code, refno)
                             total_skipped += 1
                             continue
                         
                         detail_json = detail_response.json()
+                        
+                        # Kiểm tra response có success không
+                        if not detail_json.get("Success", False):
+                            _logger.warning("❌ API trả về lỗi cho phiếu %s: Code=%s, Msg=%s", 
+                                          refno, 
+                                          detail_json.get("Code"), 
+                                          detail_json.get("SystemMessage", ""))
+                            total_skipped += 1
+                            continue
+                        
                         detail_data = detail_json.get("Data", {})
                         
                         # Lấy PageData chứa danh sách dòng chi tiết
                         lines = detail_data.get("PageData", [])
                         
                     except Exception as e:
-                        _logger.error("❌ Lỗi lấy chi tiết phiếu %s: %s", refno, str(e))
+                        _logger.error("❌ Exception khi lấy chi tiết phiếu %s: %s", refno, str(e))
                         total_skipped += 1
                         continue
                     
