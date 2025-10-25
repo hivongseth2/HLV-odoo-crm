@@ -121,6 +121,64 @@
 /* ============================================
    Search Form
    ============================================ */
+
+/* Search card container */
+.o_order_lookup_page .search-card {
+    border: none;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    background: white;
+}
+
+.o_order_lookup_page .search-card .card-body {
+    padding: 1.5rem;
+}
+
+/* Search form container - optimized layout */
+.o_order_lookup_page .search-form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Input row - centered and responsive */
+.o_order_lookup_page .search-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+}
+
+.o_order_lookup_page .search-input-group {
+    flex: 1;
+    min-width: 0;
+}
+
+.o_order_lookup_page .search-input-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+/* Search button on mobile (inline with input) */
+.o_order_lookup_page .btn-search-mobile {
+    flex-shrink: 0;
+    padding: 0.75rem 1.5rem;
+    align-self: flex-end;
+    height: 2.75rem;
+}
+
+/* Action row - desktop layout */
+.o_order_lookup_page .search-action-row {
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 0.5rem;
+}
+
+.o_order_lookup_page .search-action-row .btn {
+    flex-shrink: 0;
+}
+
+/* Form label */
 .o_order_lookup_page .form-label {
     font-weight: 600;
     color: var(--text-dark);
@@ -152,6 +210,49 @@
     font-size: 0.8rem;
     color: var(--text-muted);
     margin-top: 0.25rem;
+}
+
+/* ============================================
+   Mobile Search Form Optimization
+   ============================================ */
+@media (max-width: 768px) {
+    .o_order_lookup_page .search-card .card-body {
+        padding: 1rem;
+    }
+    
+    .o_order_lookup_page .search-form-container {
+        gap: 0.75rem;
+    }
+    
+    .o_order_lookup_page .search-input-row {
+        gap: 0.75rem;
+        align-items: flex-end;
+    }
+    
+    .o_order_lookup_page .search-input-group {
+        flex: 1;
+    }
+    
+    .o_order_lookup_page .form-label {
+        font-size: 0.85rem;
+        margin-bottom: 0.35rem;
+    }
+    
+    .o_order_lookup_page .form-control {
+        padding: 0.625rem 0.875rem;
+        font-size: 0.95rem;
+    }
+    
+    .o_order_lookup_page .btn-search-mobile {
+        padding: 0.625rem 1rem;
+        font-size: 0.9rem;
+        height: 2.5rem;
+    }
+    
+    .o_order_lookup_page .form-text {
+        font-size: 0.75rem;
+        margin-top: 0.2rem;
+    }
 }
 
 /* ============================================
