@@ -466,6 +466,26 @@ class InventoryReportWizard(models.TransientModel):
         
         return list(product_ids)
 
+    def _is_return_picking(self, picking):
+        """
+        Kiểm tra xem picking có phải là return order không
+        Return picking: picking_type_id.code = 'crm_return' hoặc 'incoming_crm' (tùy cấu hình)
+        hoặc picking có tên chứa 'Return', 'RMA', 'Credit Note', etc.
+        """
+        if not picking:
+            return False
+        
+        # Kiểm tra picking type code
+        if picking.picking_type_id:
+            code = picking.picking_type_id.code
+            if code in ['crm_return', 'incoming_crm', 'incoming_return', 'return']:
+                return True
+        
+        # Kiểm tra tên picking
+        picking_name = picking.name.upper()
+        return_keywords = ['RETURN', 'RMA', 'CREDIT', 'RETOUR']
+        return any(keyword in picking_name for keyword in return_keywords)
+
     def _get_product_outgoing_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
@@ -473,10 +493,13 @@ class InventoryReportWizard(models.TransientModel):
         - Picking xuất thường (xuất bán, xuất kho khác, etc.)
         - Điều chỉnh tồn kho (Inventory Adjustment) nếu có giảm tồn
         
+        ⚠️ LOẠI BỎ: Return Order (trả hàng) - vì chúng là incoming, không phải outgoing
+        
         Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy
         
         🔧 LOGIC MỚI: Dựa trên stock.move.line
         - Lấy TẤT CẢ picking có move line xuất ra khỏi location_ids
+        - NHƯNG loại bỏ return picking (là incoming, không phải outgoing)
         - Nếu xuất sang inter-warehouse transit, tìm thêm picking nhận ở kho đích
         - Thêm thông tin adjustment (tồn kho bị điều chỉnh giảm sang virtual location)
         """
@@ -490,9 +513,20 @@ class InventoryReportWizard(models.TransientModel):
         
         picking_names = []
         seen_picking_ids = set()
+        return_picking_ids = set()  # Để loại bỏ return orders
         
         for move in moves:
             if not move.picking_id or not move.move_line_ids:
+                continue
+            
+            picking = move.picking_id
+            
+            # 🔧 LOẠI BỎ: Return Order từ danh sách xuất
+            if self._is_return_picking(picking):
+                return_picking_ids.add(picking.id)
+                _logger.info(
+                    f"Product {product_id} - Skipping Return Picking (incoming): {picking.name}"
+                )
                 continue
             
             # Kiểm tra xem move có line nào là outgoing không
@@ -521,8 +555,6 @@ class InventoryReportWizard(models.TransientModel):
                     break
             
             if has_outgoing:
-                picking = move.picking_id
-                
                 # Thêm picking xuất
                 if picking.id not in seen_picking_ids:
                     picking_names.append(picking.name)
@@ -535,12 +567,19 @@ class InventoryReportWizard(models.TransientModel):
                     # Nếu là inter-warehouse, tìm picking nhận ở kho đích
                     if is_inter_warehouse or move.move_dest_ids:
                         dest_picking = self._find_destination_picking_from_move(move)
-                        if dest_picking and dest_picking.id not in seen_picking_ids:
+                        # 🔧 Kiểm tra return picking trước khi thêm
+                        if (dest_picking and dest_picking.id not in seen_picking_ids and 
+                            not self._is_return_picking(dest_picking)):
                             picking_names.append(dest_picking.name)
                             seen_picking_ids.add(dest_picking.id)
                             _logger.info(
                                 f"Product {product_id} - Found destination picking: {dest_picking.name}"
                             )
+                        elif dest_picking and self._is_return_picking(dest_picking):
+                            _logger.info(
+                                f"Product {product_id} - Skipping return picking as destination: {dest_picking.name}"
+                            )
+                            return_picking_ids.add(dest_picking.id)
         
         # 🆕 Thêm thông tin Inventory Adjustment (điều chỉnh giảm)
         adjustments = self._get_product_adjustment_details(product_id, location_ids, start_datetime, end_datetime)
@@ -623,12 +662,15 @@ class InventoryReportWizard(models.TransientModel):
         Lấy danh sách tên (mã) các picking nhập kho của sản phẩm trong khoảng thời gian
         Bao gồm: 
         - Picking nhập thường (từ nhà cung cấp, kho khác, etc.)
+        - Return Order (trả hàng) - nếu có hàng nhập về từ khách hàng
         - Điều chỉnh tồn kho (Inventory Adjustment) nếu có tăng tồn
         
-        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124, KBC/INT/00456"
+        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124, RMA/00001"
         
         🔧 LOGIC MỚI: Dựa trên stock.move.line
         - Lấy TẤT CẢ picking có move line nhập vào location_ids
+        - BỎ QUA: Non-return moves xuất ra khỏi kho (đó là outgoing)
+        - GIỮ LẠI: Return Order (là incoming, hàng về từ khách hàng)
         - Thêm thông tin adjustment (tồn kho được điều chỉnh từ virtual location)
         """
         # Tìm TẤT CẢ các stock.move
@@ -642,13 +684,18 @@ class InventoryReportWizard(models.TransientModel):
         # Lấy danh sách picking names
         picking_names = []
         seen_picking_ids = set()
+        outgoing_non_return_ids = set()  # Để loại bỏ non-return outgoing
         
         for move in moves:
             if not move.picking_id or not move.move_line_ids:
                 continue
             
+            picking = move.picking_id
+            is_return = self._is_return_picking(picking)
+            
             # Kiểm tra xem move có line nào là incoming không
             has_incoming = False
+            has_outgoing = False
             
             for line in move.move_line_ids:
                 location_id = line.location_id.id
@@ -662,17 +709,29 @@ class InventoryReportWizard(models.TransientModel):
                 if location_id not in location_ids and location_dest_id in location_ids:
                     has_incoming = True
                     break
+                
+                # Xuất: từ location_ids → ngoài location_ids (chỉ cho non-return)
+                if not is_return and location_id in location_ids and location_dest_id not in location_ids:
+                    has_outgoing = True
             
-            if has_incoming:
-                picking = move.picking_id
+            # 🔧 LOGIC: Chỉ thêm nếu có incoming HOẶC là return picking
+            if has_incoming or is_return:
+                # Nếu là non-return outgoing, bỏ qua
+                if has_outgoing and not is_return:
+                    outgoing_non_return_ids.add(picking.id)
+                    _logger.info(
+                        f"Product {product_id} - Skipping non-return outgoing picking: {picking.name}"
+                    )
+                    continue
                 
                 if picking.id not in seen_picking_ids:
                     picking_names.append(picking.name)
                     seen_picking_ids.add(picking.id)
                     
                     # Debug logging
+                    picking_type = "Return Order" if is_return else "Regular Incoming"
                     _logger.info(
-                        f"Product {product_id} - Incoming Picking: {picking.name}, "
+                        f"Product {product_id} - Incoming Picking: {picking.name} ({picking_type}), "
                         f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}"
                     )
         
