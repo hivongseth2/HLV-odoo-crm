@@ -4,6 +4,30 @@ from odoo.http import request
 import requests
 import re
 import logging
+from datetime import datetime, timezone, timedelta
+
+_WD_VI = ["Th 2", "Th 3", "Th 4", "Th 5", "Th 6", "Th 7", "CN"]
+_TZ_VN = timezone(timedelta(hours=7))
+
+def _parse_iso8601(s: str):
+    """Parse ISO 8601 như '2025-10-21T09:58:09+07:00' hoặc '...Z' → datetime aware."""
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+def _format_absolute_vi(dt: datetime) -> str:
+    """Trả 'HH:MM DD/MM/YYYY (Th x)' ở múi giờ Việt Nam."""
+    if not dt:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_TZ_VN)
+    dt_vn = dt.astimezone(_TZ_VN)
+    wd = _WD_VI[dt_vn.weekday()]  # Monday=0 → Th 2
+    return f"{dt_vn:%H:%M %d/%m/%Y} ({wd})"
+
 
 _logger = logging.getLogger(__name__)
 
@@ -114,7 +138,8 @@ class WebsiteTrackingPublic(http.Controller):
 
         headers = {"Content-Type": "application/json", "as-api-key": api_key}
         number = None
-        slug = slug_input or None
+        # Chuẩn hóa slug_input: chỉ chấp nhận nếu không rỗng
+        slug = slug_input.strip() if slug_input and slug_input.strip() else None
 
         try:
             if not _looks_like_tracking(query):
@@ -133,26 +158,30 @@ class WebsiteTrackingPublic(http.Controller):
                             "checkpoints": [],
                         })
                     number = (order.tracking_number or "").strip()
-                    slug = (order.tracking_slug or slug or _guess_slug(number) or "").strip()
+                    # Ưu tiên: tracking_slug từ DB -> slug_input -> guess từ number
+                    db_slug = (order.tracking_slug or "").strip()
+                    slug = db_slug if db_slug else (slug if slug else _guess_slug(number))
                     if not number:
                         error = f"Đơn {query} chưa có mã vận đơn."
                         return request.render("hlv_tracking_aftership.website_track_page", {
                             "error": error,
                             "data": {},
                             "number": query,
-                            "slug": slug,
+                            "slug": slug or "",
                             "checkpoints": [],
                         })
                 else:
                     number = (pick.tracking_number or "").strip()
-                    slug = (pick.tracking_slug or slug or _guess_slug(number) or "").strip()
+                    # Ưu tiên: tracking_slug từ DB -> slug_input -> guess từ number
+                    db_slug = (pick.tracking_slug or "").strip()
+                    slug = db_slug if db_slug else (slug if slug else _guess_slug(number))
                     if not number:
                         error = f"Đơn {query} chưa có mã vận đơn."
                         return request.render("hlv_tracking_aftership.website_track_page", {
                             "error": error,
                             "data": {},
                             "number": query,
-                            "slug": slug,
+                            "slug": slug or "",
                             "checkpoints": [],
                         })
             else:
@@ -174,12 +203,12 @@ class WebsiteTrackingPublic(http.Controller):
                         timeout=20,
                     )
                     if not (rc.status_code in (200, 201) or (rc.status_code == 400 and str((rc.json().get("meta") or {}).get("code")) == "4003")):
-                        error = f"Lỗi truy vấn: {r.status_code} {r.text}"
+                        error = f"Lỗi truy vấn: {rc.status_code} {rc.text}"
                         return request.render("hlv_tracking_aftership.website_track_page", {
                             "error": error,
                             "data": {},
                             "number": number,
-                            "slug": slug,
+                            "slug": slug or "",
                             "checkpoints": [],
                         })
                     data = (rc.json().get("data") or {})
@@ -191,6 +220,8 @@ class WebsiteTrackingPublic(http.Controller):
                 else:
                     data = r.json().get("data") or {}
             else:
+                # Không có slug, tạo tracking mà không chỉ định slug để AfterShip tự detect
+                _logger.info(f"No slug provided, creating tracking without slug for number: {number}")
                 rc = requests.post(
                     f"{AFTERSHIP_API_BASE}/trackings",
                     json={"tracking_number": number},
@@ -222,6 +253,9 @@ class WebsiteTrackingPublic(http.Controller):
         for cp in checkpoints:
             cp['message'] = _polish_message(cp.get('message'))
             cp['status_vn'] = _vi_status(cp.get('status'), _polish_message(cp.get('message')))
+            ts = cp.get('checkpoint_time') or cp.get('created_at') or cp.get('time')
+            dt = _parse_iso8601(ts)
+            cp['time_display'] = _format_absolute_vi(dt)
         tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))
 
         _logger.info(f"=== TRACK SEARCH RESULT ===")
@@ -229,10 +263,13 @@ class WebsiteTrackingPublic(http.Controller):
         _logger.info(f"Tracking data: {tracking}")
         _logger.info(f"Checkpoints count: {len(checkpoints)}")
 
+        # Lấy slug từ tracking data nếu có, fallback về slug đã xác định hoặc slug_input
+        final_slug = tracking.get('slug') or slug or slug_input or ""
+
         return request.render("hlv_tracking_aftership.website_track_page", {
             "error": error,
             "data": tracking or {},
             "number": number or query,
-            "slug": slug or slug_input,
+            "slug": final_slug,
             "checkpoints": checkpoints,
         })

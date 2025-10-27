@@ -107,7 +107,7 @@
                               <t t-foreach="cp_list" t-as="cp">
                                 <li t-attf-class="hlv-timeline-item {{ 'is-latest' if cp_index == 0 else '' }}">
                                   <div class="hlv-timeline-item__time">
-                                    <span t-esc="cp.get('checkpoint_time')"/>
+                                    <span t-esc="cp.get('time_display')"/>
                                   </div>
                                   <div class="hlv-timeline-item__body">
                                     <h5>
