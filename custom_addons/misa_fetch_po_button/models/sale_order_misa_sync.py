@@ -277,6 +277,11 @@ class SaleOrder(models.Model):
             vals_upd['x_studio_misa_saler_code'] = owner_date['owner_code']
         if owner_date.get('sale_order_date'):
             vals_upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+        # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
+        delivery_order_number = (data.get('DeliveryOrderNumber') or '').strip()
+        if delivery_order_number and not self.tracking_number:
+            vals_upd['tracking_number'] = delivery_order_number
+            _logger.info(f"📦 Updating tracking_number: {delivery_order_number} for order {self.name}")
         # Gán lại địa chỉ giao nếu bạn có helper build contact giao hàng
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(

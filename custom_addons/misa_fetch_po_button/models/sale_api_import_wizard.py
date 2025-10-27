@@ -934,17 +934,22 @@ class SaleApiImportWizard(models.TransientModel):
                         self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
                         # >>> TẠO MỚI CÁC DÒNG THIẾU (trang 2+) <<<
                         self._add_missing_lines_to_existing_so(existing_order, grouped_lines, sale_headers)
-                        # Update MISA fields (owner code and order date)
+                        # Update MISA fields (owner code, order date, and tracking number)
                         upd = {}
                         if owner_date.get('owner_code'):
                             upd['x_studio_misa_saler_code'] = owner_date['owner_code']
                         if owner_date.get('sale_order_date'):
                             upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+                        # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
+                        delivery_order_number = (order.get('DeliveryOrderNumber') or '').strip()
+                        if delivery_order_number and not existing_order.tracking_number:
+                            upd['tracking_number'] = delivery_order_number
+                            _logger.info(f"📦 Updating tracking_number: {delivery_order_number} for existing order {order_ref}")
                         if upd:
                             existing_order.write(upd)
 
                         # (giữ nguyên các xử lý khác; KHÔNG thêm dòng con)
-                        _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật combo (parent-only)/thuế", order_ref)
+                        _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật combo (parent-only)/thuế/tracking", order_ref)
                         continue
 
                     group_total = sum(line_subtotal(l) for l in grouped_lines)
@@ -1288,9 +1293,14 @@ class SaleApiImportWizard(models.TransientModel):
                                 upd['x_studio_misa_saler_code'] = owner_date['owner_code']
                             if owner_date.get('sale_order_date'):
                                 upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+                            # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
+                            delivery_order_number = (order.get('DeliveryOrderNumber') or '').strip()
+                            if delivery_order_number and not existing_order.tracking_number:
+                                upd['tracking_number'] = delivery_order_number
+                                _logger.info(f"📦 Updating tracking_number: {delivery_order_number} for existing order {order_ref}")
                             if upd:
                                 existing_order.write(upd)
-                            _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật thuế", order_ref)
+                            _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật thuế/tracking", order_ref)
                             continue
 
                         group_total = sum(line_subtotal(l) for l in grouped_lines)
