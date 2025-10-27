@@ -27,6 +27,28 @@
               </form>
             </div>
           </div>
+
+          <!-- CSS tối giản -->
+          <style>
+            .hlv-track-wrapper{max-width:960px;margin:2rem auto;padding:0 1rem}
+            .hlv-track-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px}
+            .hlv-track-back{display:inline-block;margin-bottom:12px;text-decoration:none}
+            .hlv-track-desc{color:#6b7280}
+            .hlv-track-form .form-group{margin-bottom:12px}
+            .hlv-track-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:16px 0}
+            .hlv-track-number{font-weight:600}
+            .hlv-track-status{font-weight:600}
+            .hlv-track-alert{padding:12px;border-radius:8px;margin-bottom:12px}
+            .hlv-track-alert--error{background:#fee2e2;color:#991b1b}
+            .hlv-track-timeline{margin-top:16px}
+            .hlv-timeline-list{list-style:none;margin:0;padding:0;border-left:2px solid #e5e7eb}
+            .hlv-timeline-item{position:relative;padding:12px 12px 12px 20px}
+            .hlv-timeline-item.is-latest h4{color:#2563eb}
+            .hlv-timeline-item::before{content:"";position:absolute;left:-6px;top:18px;width:10px;height:10px;border-radius:999px;background:#3b82f6}
+            .hlv-timeline-item__time{font-size:.85rem;color:#6b7280;margin-bottom:2px}
+            .hlv-timeline-item__body h4{margin:0 0 2px 0;font-size:1rem}
+            .hlv-timeline-item__body p{margin:0;color:#374151}
+          </style>
         </main>
       </xpath>
     </template>
@@ -78,9 +100,8 @@
                   </div>
                 </div>
 
-                <!-- Lấy checkpoints và đảo thứ tự (mới nhất trước) -->
-                <t t-set="checkpoints" t-value="tr.get('checkpoints') or []"/>
-                <t t-set="cp_list" t-value="(checkpoints or [])[::-1]"/>
+                <!-- Lấy checkpoints (đã được sắp xếp từ controller) -->
+                <t t-set="cp_list" t-value="checkpoints or []"/>
 
                 <div class="hlv-track-timeline">
                   <h3>Hành trình giao hàng</h3>
@@ -110,28 +131,6 @@
 
             </div>
           </div>
-
-          <!-- CSS tối giản -->
-          <style>
-            .hlv-track-wrapper{max-width:960px;margin:2rem auto;padding:0 1rem}
-            .hlv-track-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px}
-            .hlv-track-back{display:inline-block;margin-bottom:12px;text-decoration:none}
-            .hlv-track-desc{color:#6b7280}
-            .hlv-track-form .form-group{margin-bottom:12px}
-            .hlv-track-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:16px 0}
-            .hlv-track-number{font-weight:600}
-            .hlv-track-status{font-weight:600}
-            .hlv-track-alert{padding:12px;border-radius:8px;margin-bottom:12px}
-            .hlv-track-alert--error{background:#fee2e2;color:#991b1b}
-            .hlv-track-timeline{margin-top:16px}
-            .hlv-timeline-list{list-style:none;margin:0;padding:0;border-left:2px solid #e5e7eb}
-            .hlv-timeline-item{position:relative;padding:12px 12px 12px 20px}
-            .hlv-timeline-item.is-latest h4{color:#2563eb}
-            .hlv-timeline-item::before{content:"";position:absolute;left:-6px;top:18px;width:10px;height:10px;border-radius:999px;background:#3b82f6}
-            .hlv-timeline-item__time{font-size:.85rem;color:#6b7280;margin-bottom:2px}
-            .hlv-timeline-item__body h4{margin:0 0 2px 0;font-size:1rem}
-            .hlv-timeline-item__body p{margin:0;color:#374151}
-          </style>
         </main>
       </xpath>
     </template>

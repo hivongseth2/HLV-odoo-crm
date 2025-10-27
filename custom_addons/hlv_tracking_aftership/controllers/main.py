@@ -3,6 +3,9 @@ from odoo import http
 from odoo.http import request
 import requests
 import re
+import logging
+
+_logger = logging.getLogger(__name__)
 
 AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2025-07"
 
@@ -79,14 +82,29 @@ class WebsiteTrackingPublic(http.Controller):
         params = request.params or {}
         query = (post.get('tracking_number') or params.get('tracking_number') or '').strip()
         slug_input = (post.get('slug') or params.get('slug') or '').strip()
+        
+        _logger.info(f"=== TRACK SEARCH START ===")
+        _logger.info(f"Query: {query}")
+        _logger.info(f"Slug input: {slug_input}")
+        _logger.info(f"POST data: {post}")
+        _logger.info(f"GET params: {params}")
+        
         api_key = request.env['ir.config_parameter'].sudo().get_param('aftership.api_key') or ''
         error = None
         data = {}
 
         if not api_key:
             error = "Hệ thống chưa cấu hình API key."
+            _logger.error(f"Missing API key!")
             return request.render("hlv_tracking_aftership.website_track_result", {
                 "error": error, "data": {}, "number": query, "slug": slug_input,
+            })
+        
+        if not query:
+            error = "Vui lòng nhập mã vận đơn hoặc mã đơn hàng."
+            _logger.warning(f"Empty query!")
+            return request.render("hlv_tracking_aftership.website_track_result", {
+                "error": error, "data": {}, "number": "", "slug": slug_input,
             })
 
         headers = {"Content-Type": "application/json", "as-api-key": api_key}
@@ -129,8 +147,11 @@ class WebsiteTrackingPublic(http.Controller):
 
             if slug:
                 url = f"{AFTERSHIP_API_BASE}/trackings/{slug}/{number}?lang=vi"
+                _logger.info(f"Calling AfterShip API: {url}")
                 r = requests.get(url, headers=headers, timeout=20)
+                _logger.info(f"Response status: {r.status_code}")
                 if not r.ok:
+                    _logger.warning(f"Failed to get tracking, trying to create: {r.text}")
                     rc = requests.post(
                         f"{AFTERSHIP_API_BASE}/trackings",
                         json={"tracking_number": number, "slug": slug},
@@ -171,6 +192,7 @@ class WebsiteTrackingPublic(http.Controller):
 
         except Exception as e:
             error = f"Lỗi kết nối: {e}"
+            _logger.exception(f"Exception in track_search: {e}")
 
         tracking = (data or {}).get('tracking') or data or {}
         checkpoints = list(reversed(tracking.get('checkpoints') or []))
@@ -178,6 +200,11 @@ class WebsiteTrackingPublic(http.Controller):
             cp['message'] = _polish_message(cp.get('message'))
             cp['status_vn'] = _vi_status(cp.get('status'), _polish_message(cp.get('message')))
         tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))
+
+        _logger.info(f"=== TRACK SEARCH RESULT ===")
+        _logger.info(f"Error: {error}")
+        _logger.info(f"Tracking data: {tracking}")
+        _logger.info(f"Checkpoints count: {len(checkpoints)}")
 
         return request.render("hlv_tracking_aftership.website_track_result", {
             "error": error,
