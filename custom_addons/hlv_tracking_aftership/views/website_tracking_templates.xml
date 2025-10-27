@@ -81,7 +81,17 @@
 
               <!-- data là dict truyền từ controller -->
               <t t-set="tr" t-value="data or {}"/>
-              
+
+              <!-- DEBUG: Hiển thị thông tin debug -->
+              <div style="background: yellow; padding: 10px; margin: 10px 0;">
+                <p>DEBUG INFO:</p>
+                <p>Error: <t t-esc="error or 'None'"/></p>
+                <p>Has data: <t t-esc="bool(data)"/></p>
+                <p>Has tracking_number: <t t-esc="bool(tr.get('tracking_number'))"/></p>
+                <p>Checkpoints count: <t t-esc="len(checkpoints or [])"/></p>
+                <p>Tracking number value: <t t-esc="tr.get('tracking_number')"/></p>
+              </div>
+
               <!-- Hiển thị kết quả nếu không có lỗi và có tracking_number hoặc checkpoints -->
               <t t-if="not error and (tr.get('tracking_number') or checkpoints)">
 
