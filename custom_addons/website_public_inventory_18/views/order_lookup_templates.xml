@@ -387,7 +387,7 @@
                         <i class="fa fa-arrow-left me-2"></i> Quay lại
                       </a>
 
-                      <a href="/track"
+                      <a t-attf-href="/track/search?tracking_number={{order.get('name', '')}}"
                         class="btn btn-primary btn-sm d-md-none btn-track w-100"
                         aria-label="Theo dõi vận chuyển" title="Theo dõi vận chuyển">
                         <i class="fa fa-truck me-2"></i>
@@ -401,7 +401,7 @@
                       <a href="/saleorder-lookup" class="btn btn-light d-none d-md-inline-flex btn-back" aria-label="Quay lại">
                         <i class="fa fa-arrow-left me-2"></i> Quay lại
                       </a>
-                      <a href="/track"
+                      <a t-attf-href="/track/search?tracking_number={{order.get('name', '')}}"
                         class="btn btn-primary d-none d-md-inline-flex btn-track"
                         aria-label="Theo dõi vận chuyển" title="Theo dõi vận chuyển">
                         <i class="fa fa-truck me-2"></i> Theo dõi vận chuyển
