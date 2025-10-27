@@ -836,6 +836,8 @@ class SaleOrder(models.Model):
             
         zns = bool(data.get("CustomField23", False))
 
+        # Get DeliveryOrderNumber for tracking
+        delivery_order_number = (data.get('DeliveryOrderNumber') or '').strip()
 
         vals_create = {
             'name': order_no,
@@ -847,6 +849,12 @@ class SaleOrder(models.Model):
             'x_studio_zns': zns
 
         }
+        
+        # Add tracking number from MISA if available
+        if delivery_order_number:
+            vals_create['tracking_number'] = delivery_order_number
+            _logger.info(f"📦 Setting tracking_number: {delivery_order_number} for recreated order {order_no}")
+        
         if book_date:
             from dateutil.parser import parse as dtparse
             try:

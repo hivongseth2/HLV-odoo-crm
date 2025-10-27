@@ -2,6 +2,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 import logging
+from .tracking_utils import guess_carrier_slug, is_valid_tracking_number, should_auto_register_tracking
 
 _logger = logging.getLogger(__name__)
 
@@ -46,12 +47,78 @@ class StockPicking(models.Model):
 
     tracking_timeline_html = fields.Html(string="Tracking Timeline", compute="_compute_tracking_timeline", sanitize=False, readonly=True)
 
-    tracking_slug = fields.Char(string="Carrier Slug", default="jtexpress-vn")
+    tracking_slug = fields.Char(string="Carrier Slug")
     tracking_number = fields.Char(string="Tracking Number")
     aftership_id = fields.Char(string="AfterShip Tracking ID", copy=False, readonly=True)
     tracking_status = fields.Char(string="Tracking Status", copy=False, readonly=True)
     tracking_last_checkpoint = fields.Char(string="Last Checkpoint", copy=False, readonly=True)
     tracking_payload = fields.Json(string="Tracking JSON", copy=False, readonly=True)
+    
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Auto-detect carrier slug when creating picking with tracking number."""
+        for vals in vals_list:
+            tracking_number = vals.get('tracking_number')
+            if tracking_number and not vals.get('tracking_slug'):
+                # Try to detect carrier from context
+                customer_name = None
+                order_ref = vals.get('origin')
+                
+                # If we have sale_id, get customer name
+                if vals.get('sale_id'):
+                    sale = self.env['sale.order'].browse(vals['sale_id'])
+                    if sale.exists():
+                        customer_name = sale.partner_id.name
+                        order_ref = sale.name
+                
+                slug = guess_carrier_slug(tracking_number, customer_name, order_ref)
+                if slug:
+                    vals['tracking_slug'] = slug
+                    _logger.info(f"Auto-detected carrier slug '{slug}' for picking with tracking {tracking_number}")
+        
+        records = super().create(vals_list)
+        
+        # Auto-register with AfterShip if enabled
+        auto_register_param = self.env['ir.config_parameter'].sudo().get_param('aftership.auto_register', 'false')
+        if auto_register_param.lower() == 'true':
+            for record in records:
+                if should_auto_register_tracking(record.tracking_number, record.tracking_slug):
+                    try:
+                        record.action_register_tracking_aftership()
+                        _logger.info(f"Auto-registered tracking {record.tracking_number} with AfterShip")
+                    except Exception as e:
+                        _logger.warning(f"Failed to auto-register tracking for {record.name}: {e}")
+        
+        return records
+    
+    def write(self, vals):
+        """Auto-detect carrier slug when updating tracking number."""
+        if 'tracking_number' in vals and vals.get('tracking_number'):
+            for record in self:
+                if not vals.get('tracking_slug') and not record.tracking_slug:
+                    customer_name = record.sale_id.partner_id.name if record.sale_id else None
+                    order_ref = record.origin or record.name
+                    
+                    slug = guess_carrier_slug(vals['tracking_number'], customer_name, order_ref)
+                    if slug:
+                        vals['tracking_slug'] = slug
+                        _logger.info(f"Auto-detected carrier slug '{slug}' for picking {record.name}")
+        
+        result = super().write(vals)
+        
+        # Auto-register if tracking number is newly set
+        if 'tracking_number' in vals and vals.get('tracking_number'):
+            auto_register_param = self.env['ir.config_parameter'].sudo().get_param('aftership.auto_register', 'false')
+            if auto_register_param.lower() == 'true':
+                for record in self:
+                    if not record.aftership_id and should_auto_register_tracking(record.tracking_number, record.tracking_slug):
+                        try:
+                            record.action_register_tracking_aftership()
+                            _logger.info(f"Auto-registered tracking {record.tracking_number} with AfterShip")
+                        except Exception as e:
+                            _logger.warning(f"Failed to auto-register tracking for {record.name}: {e}")
+        
+        return result
 
     def _aftership_client(self):
         api_key = self.env['ir.config_parameter'].sudo().get_param('aftership.api_key')

@@ -948,6 +948,10 @@ class SaleApiImportWizard(models.TransientModel):
                         continue
 
                     group_total = sum(line_subtotal(l) for l in grouped_lines)
+                    
+                    # Get DeliveryOrderNumber for tracking
+                    delivery_order_number = (order.get('DeliveryOrderNumber') or '').strip()
+                    
                     sale_vals = {
                         'name': order_ref,
                         'partner_id': partner.id,
@@ -959,6 +963,12 @@ class SaleApiImportWizard(models.TransientModel):
                         'misa_id': misa_id_str,
                         'x_studio_zns': zns      
                     }
+                    
+                    # Add tracking number from MISA if available
+                    if delivery_order_number:
+                        sale_vals['tracking_number'] = delivery_order_number
+                        _logger.info(f"📦 Setting tracking_number: {delivery_order_number} for order {order_ref}")
+                    
                     # If we have owner code/date, set the Studio fields
                     if owner_date.get('owner_code'):
                         sale_vals['x_studio_misa_saler_code'] = owner_date['owner_code']
@@ -1284,6 +1294,10 @@ class SaleApiImportWizard(models.TransientModel):
                             continue
 
                         group_total = sum(line_subtotal(l) for l in grouped_lines)
+                        
+                        # Get DeliveryOrderNumber for tracking
+                        delivery_order_number = (order.get('DeliveryOrderNumber') or '').strip()
+                        
                         sale_vals = {
                             'name': order_ref,
                             'partner_id': partner.id,
@@ -1294,6 +1308,12 @@ class SaleApiImportWizard(models.TransientModel):
                             'origin': origin,
                             'misa_id': misa_id_str,
                         }
+                        
+                        # Add tracking number from MISA if available
+                        if delivery_order_number:
+                            sale_vals['tracking_number'] = delivery_order_number
+                            _logger.info(f"📦 Setting tracking_number: {delivery_order_number} for order {order_ref}")
+                        
                         if owner_date.get('owner_code'):
                             sale_vals['x_studio_misa_saler_code'] = owner_date['owner_code']
                         if owner_date.get('sale_order_date'):
