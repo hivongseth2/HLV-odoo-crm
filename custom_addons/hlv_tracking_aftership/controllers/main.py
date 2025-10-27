@@ -74,7 +74,13 @@ class WebsiteTrackingPublic(http.Controller):
 
     @http.route(['/track'], type='http', auth='public', website=True)
     def track_form(self, **kw):
-        return request.render("hlv_tracking_aftership.website_track_form", {})
+        return request.render("hlv_tracking_aftership.website_track_page", {
+            "error": None,
+            "data": None,
+            "number": "",
+            "slug": "",
+            "checkpoints": [],
+        })
 
     @http.route(['/track/search'], type='http', auth='public', methods=['GET', 'POST'], website=True, csrf=False)
     def track_search(self, **post):
@@ -210,10 +216,10 @@ class WebsiteTrackingPublic(http.Controller):
         _logger.info(f"Has tracking_number: {bool((tracking or {}).get('tracking_number'))}")
         _logger.info(f"Checkpoints passed to template: {len(checkpoints)}")
 
-        return request.render("hlv_tracking_aftership.website_track_result", {
-            "error": error,
-            "data": tracking or {},
-            "number": number or query,
-            "slug": slug or slug_input,
-            "checkpoints": checkpoints,
+        return request.render("hlv_tracking_aftership.website_track_page", {
+        "error": error,
+        "data": tracking or {},
+        "number": number or query,
+        "slug": slug or slug_input,
+        "checkpoints": checkpoints,
         })
