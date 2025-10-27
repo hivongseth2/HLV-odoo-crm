@@ -81,7 +81,9 @@
 
               <!-- data là dict truyền từ controller -->
               <t t-set="tr" t-value="data or {}"/>
-              <t t-if="not error and tr">
+              
+              <!-- Hiển thị kết quả nếu không có lỗi và có tracking_number hoặc checkpoints -->
+              <t t-if="not error and (tr.get('tracking_number') or checkpoints)">
 
                 <div class="hlv-track-summary">
                   <div>
