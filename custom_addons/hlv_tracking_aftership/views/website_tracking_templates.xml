@@ -4,7 +4,6 @@
     <!-- FORM /track -->
     <template id="website_track_form" name="AfterShip Tracking Form">
       <t t-call="website.layout">
-        <t t-set="pageName" t-value="'tracking_form'"/>
         <div id="wrap" class="oe_structure">
           <div class="hlv-track-wrapper">
             <div class="hlv-track-card">
@@ -41,7 +40,6 @@
     <!-- KẾT QUẢ /track/search -->
     <template id="website_track_result" name="AfterShip Tracking Result">
       <t t-call="website.layout">
-        <t t-set="pageName" t-value="'tracking_result'"/>
         <div id="wrap" class="oe_structure">
           <div class="hlv-track-wrapper">
             <div class="hlv-track-card">
