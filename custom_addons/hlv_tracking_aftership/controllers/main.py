@@ -95,41 +95,38 @@ class WebsiteTrackingPublic(http.Controller):
         slug = slug_input or None
 
         try:
-            # Kiểm tra xem input có phải mã vận đơn trực tiếp không
-            if _looks_like_tracking(query):
+            # Bước 1: Ưu tiên tìm kiếm trong database theo mã đơn hàng
+            # Tìm trong stock.picking
+            Picking = request.env["stock.picking"].sudo()
+            pick = Picking.search(["|", ("name", "=", query), ("origin", "=", query)], limit=1)
+            if pick and pick.tracking_number:
+                number = pick.tracking_number.strip()
+                slug = (pick.tracking_slug or "").strip()
+            
+            # Nếu picking không có, tìm trong sale.order
+            if not number:
+                SaleOrder = request.env["sale.order"].sudo()
+                order = SaleOrder.search(["|", ("name", "=", query), ("client_order_ref", "=", query)], limit=1)
+                if order and order.tracking_number:
+                    number = order.tracking_number.strip()
+                    slug = (order.tracking_slug or "").strip()
+            
+            # Bước 2: Nếu không tìm thấy trong database, kiểm tra xem input có phải mã vận đơn trực tiếp không
+            if not number and _looks_like_tracking(query):
                 # Input là mã vận đơn → dùng trực tiếp
                 number = query
                 slug = slug_input or _guess_slug(number)
-            else:
-                # Input là mã đơn hàng → tìm kiếm để lấy tracking_number
-                number = None
-                slug = None
-                
-                # Tìm trong stock.picking
-                Picking = request.env["stock.picking"].sudo()
-                pick = Picking.search(["|", ("name", "=", query), ("origin", "=", query)], limit=1)
-                if pick:
-                    number = (pick.tracking_number or "").strip()
-                    slug = (pick.tracking_slug or "").strip()
-                
-                # Nếu picking không có, tìm trong sale.order
-                if not number:
-                    SaleOrder = request.env["sale.order"].sudo()
-                    order = SaleOrder.search(["|", ("name", "=", query), ("client_order_ref", "=", query)], limit=1)
-                    if order:
-                        number = (order.tracking_number or "").strip()
-                        slug = (order.tracking_slug or "").strip()
-                
-                # Nếu vẫn không có mã vận, báo lỗi
-                if not number:
-                    error = f"Không tìm thấy mã vận đơn cho: {query}"
-                    return request.render("hlv_tracking_aftership.website_track_result", {
-                        "error": error, "data": {}, "number": query, "slug": slug_input,
-                    })
-                
-                # Nếu có mã vận nhưng không có slug, tự động đoán
-                if not slug:
-                    slug = _guess_slug(number)
+            
+            # Bước 3: Nếu vẫn không có mã vận đơn, báo lỗi
+            if not number:
+                error = f"Không tìm thấy mã vận đơn cho: {query}"
+                return request.render("hlv_tracking_aftership.website_track_result", {
+                    "error": error, "data": {}, "number": query, "slug": slug_input,
+                })
+            
+            # Nếu có mã vận nhưng không có slug, tự động đoán
+            if not slug:
+                slug = _guess_slug(number)
 
             if slug:
                 url = f"{AFTERSHIP_API_BASE}/trackings/{slug}/{number}?lang=vi"
