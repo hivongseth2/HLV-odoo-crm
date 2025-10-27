@@ -159,7 +159,18 @@ class WebsiteTrackingPublic(http.Controller):
                         })
                     number = (order.tracking_number or "").strip()
                     # Ưu tiên: tracking_slug từ DB -> slug_input -> guess từ number
-                    db_slug = (order.tracking_slug or "").strip()
+                    try:
+                        db_slug_raw = order.tracking_slug
+                        _logger.info(f"Order tracking_slug raw value: {db_slug_raw} (type: {type(db_slug_raw)})")
+                        # Chỉ chấp nhận nếu là string hợp lệ
+                        if isinstance(db_slug_raw, str):
+                            db_slug = db_slug_raw.strip()
+                        else:
+                            _logger.warning(f"Invalid tracking_slug type from order: {type(db_slug_raw)}")
+                            db_slug = ""
+                    except Exception as e:
+                        _logger.error(f"Error getting tracking_slug from order: {e}")
+                        db_slug = ""
                     slug = db_slug if db_slug else (slug if slug else _guess_slug(number))
                     if not number:
                         error = f"Đơn {query} chưa có mã vận đơn."
@@ -173,7 +184,18 @@ class WebsiteTrackingPublic(http.Controller):
                 else:
                     number = (pick.tracking_number or "").strip()
                     # Ưu tiên: tracking_slug từ DB -> slug_input -> guess từ number
-                    db_slug = (pick.tracking_slug or "").strip()
+                    try:
+                        db_slug_raw = pick.tracking_slug
+                        _logger.info(f"Picking tracking_slug raw value: {db_slug_raw} (type: {type(db_slug_raw)})")
+                        # Chỉ chấp nhận nếu là string hợp lệ
+                        if isinstance(db_slug_raw, str):
+                            db_slug = db_slug_raw.strip()
+                        else:
+                            _logger.warning(f"Invalid tracking_slug type from picking: {type(db_slug_raw)}")
+                            db_slug = ""
+                    except Exception as e:
+                        _logger.error(f"Error getting tracking_slug from picking: {e}")
+                        db_slug = ""
                     slug = db_slug if db_slug else (slug if slug else _guess_slug(number))
                     if not number:
                         error = f"Đơn {query} chưa có mã vận đơn."
@@ -188,6 +210,11 @@ class WebsiteTrackingPublic(http.Controller):
                 number = query
                 if not slug:
                     slug = _guess_slug(number)
+
+            # Đảm bảo slug là string hoặc None - KHÔNG BAO GIỜ là object hoặc method
+            if slug and not isinstance(slug, str):
+                _logger.error(f"Invalid slug type before API call: {type(slug)}, value: {slug}")
+                slug = None
 
             if slug:
                 url = f"{AFTERSHIP_API_BASE}/trackings/{slug}/{number}?lang=vi"
