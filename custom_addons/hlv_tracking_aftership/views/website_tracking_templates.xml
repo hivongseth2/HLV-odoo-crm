@@ -32,7 +32,7 @@
                       <div class="mb-3">
                         <label for="slug" class="form-label">Hãng vận chuyển (nếu biết)</label>
                         <input type="text" class="form-control" id="slug" name="slug" 
-                               t-att-value="slug or ''"
+                               t-att-value="slug if slug and isinstance(slug, str) else ''"
                                placeholder="VD: spx-vn, jtexpress-vn"/>
                       </div>
 
@@ -86,7 +86,8 @@
                             </div>
                             <div class="col-md-4 mb-3">
                               <h5>Hãng vận chuyển</h5>
-                              <p class="hlv-track-number fs-5"><t t-esc="tr.get('slug') or slug or '-'"/></p>
+                              <t t-set="final_slug_display" t-value="tr.get('slug') or (slug if slug and isinstance(slug, str) else '') or '-'"/>
+                              <p class="hlv-track-number fs-5"><t t-esc="final_slug_display"/></p>
                             </div>
                             <div class="col-md-4 mb-3">
                               <h5>Trạng thái hiện tại</h5>

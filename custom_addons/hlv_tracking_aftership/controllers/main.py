@@ -4,30 +4,6 @@ from odoo.http import request
 import requests
 import re
 import logging
-from datetime import datetime, timezone, timedelta
-
-_WD_VI = ["Th 2", "Th 3", "Th 4", "Th 5", "Th 6", "Th 7", "CN"]
-_TZ_VN = timezone(timedelta(hours=7))
-
-def _parse_iso8601(s: str):
-    """Parse ISO 8601 như '2025-10-21T09:58:09+07:00' hoặc '...Z' → datetime aware."""
-    if not s:
-        return None
-    try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
-    except Exception:
-        return None
-
-def _format_absolute_vi(dt: datetime) -> str:
-    """Trả 'HH:MM DD/MM/YYYY (Th x)' ở múi giờ Việt Nam."""
-    if not dt:
-        return ""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_TZ_VN)
-    dt_vn = dt.astimezone(_TZ_VN)
-    wd = _WD_VI[dt_vn.weekday()]  # Monday=0 → Th 2
-    return f"{dt_vn:%H:%M %d/%m/%Y} ({wd})"
-
 
 _logger = logging.getLogger(__name__)
 
@@ -105,10 +81,6 @@ class WebsiteTrackingPublic(http.Controller):
         params = request.params or {}
         query = (post.get('tracking_number') or params.get('tracking_number') or '').strip()
         slug_input = (post.get('slug') or params.get('slug') or '').strip()
-        
-        _logger.info(f"=== TRACK SEARCH START ===")
-        _logger.info(f"Query: {query}")
-        _logger.info(f"Slug input: {slug_input}")
         
         api_key = request.env['ir.config_parameter'].sudo().get_param('aftership.api_key') or ''
         error = None
@@ -280,18 +252,16 @@ class WebsiteTrackingPublic(http.Controller):
         for cp in checkpoints:
             cp['message'] = _polish_message(cp.get('message'))
             cp['status_vn'] = _vi_status(cp.get('status'), _polish_message(cp.get('message')))
-            ts = cp.get('checkpoint_time') or cp.get('created_at') or cp.get('time')
-            dt = _parse_iso8601(ts)
-            cp['time_display'] = _format_absolute_vi(dt)
         tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))
 
-        _logger.info(f"=== TRACK SEARCH RESULT ===")
-        _logger.info(f"Error: {error}")
-        _logger.info(f"Tracking data: {tracking}")
-        _logger.info(f"Checkpoints count: {len(checkpoints)}")
-
         # Lấy slug từ tracking data nếu có, fallback về slug đã xác định hoặc slug_input
-        final_slug = tracking.get('slug') or slug or slug_input or ""
+        # Đảm bảo final_slug luôn là string, không bao giờ là method/object
+        tracking_slug = tracking.get('slug')
+        if tracking_slug and not isinstance(tracking_slug, str):
+            _logger.warning(f"Invalid slug type in tracking data: {type(tracking_slug)}, value: {tracking_slug}")
+            tracking_slug = None
+        
+        final_slug = tracking_slug or (slug if slug and isinstance(slug, str) else None) or (slug_input if slug_input and isinstance(slug_input, str) else None) or ""
 
         return request.render("hlv_tracking_aftership.website_track_page", {
             "error": error,
