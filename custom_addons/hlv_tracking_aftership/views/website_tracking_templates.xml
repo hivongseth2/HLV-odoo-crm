@@ -2,10 +2,36 @@
 <odoo>
   <data>
 
-    <!-- FORM /track -->
-    <template id="website_track_form" name="AfterShip Tracking Form" inherit_id="website.layout">
-      <xpath expr="//main" position="replace">
-        <main id="wrap" class="oe_structure">
+    <!-- CSS chung cho cả 2 trang -->
+    <template id="hlv_tracking_assets" name="HLV Tracking Assets" inherit_id="website.layout">
+      <xpath expr="//head" position="inside">
+        <style>
+          .hlv-track-wrapper{max-width:960px;margin:2rem auto;padding:0 1rem}
+          .hlv-track-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px}
+          .hlv-track-back{display:inline-block;margin-bottom:12px;text-decoration:none}
+          .hlv-track-desc{color:#6b7280}
+          .hlv-track-form .form-group{margin-bottom:12px}
+          .hlv-track-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:16px 0}
+          .hlv-track-number{font-weight:600}
+          .hlv-track-status{font-weight:600}
+          .hlv-track-alert{padding:12px;border-radius:8px;margin-bottom:12px}
+          .hlv-track-alert--error{background:#fee2e2;color:#991b1b}
+          .hlv-track-timeline{margin-top:16px}
+          .hlv-timeline-list{list-style:none;margin:0;padding:0;border-left:2px solid #e5e7eb}
+          .hlv-timeline-item{position:relative;padding:12px 12px 12px 20px}
+          .hlv-timeline-item.is-latest h4{color:#2563eb}
+          .hlv-timeline-item::before{content:"";position:absolute;left:-6px;top:18px;width:10px;height:10px;border-radius:999px;background:#3b82f6}
+          .hlv-timeline-item__time{font-size:.85rem;color:#6b7280;margin-bottom:2px}
+          .hlv-timeline-item__body h4{margin:0 0 2px 0;font-size:1rem}
+          .hlv-timeline-item__body p{margin:0;color:#374151}
+        </style>
+      </xpath>
+    </template>
+
+    <!-- FORM /track - Template độc lập -->
+    <template id="website_track_form" name="AfterShip Tracking Form">
+      <t t-call="website.layout">
+        <div id="wrap" class="oe_structure">
           <div class="hlv-track-wrapper">
             <div class="hlv-track-card">
               <h1>Theo dõi đơn hàng</h1>
@@ -27,36 +53,14 @@
               </form>
             </div>
           </div>
-
-          <!-- CSS tối giản -->
-          <style>
-            .hlv-track-wrapper{max-width:960px;margin:2rem auto;padding:0 1rem}
-            .hlv-track-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px}
-            .hlv-track-back{display:inline-block;margin-bottom:12px;text-decoration:none}
-            .hlv-track-desc{color:#6b7280}
-            .hlv-track-form .form-group{margin-bottom:12px}
-            .hlv-track-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:16px 0}
-            .hlv-track-number{font-weight:600}
-            .hlv-track-status{font-weight:600}
-            .hlv-track-alert{padding:12px;border-radius:8px;margin-bottom:12px}
-            .hlv-track-alert--error{background:#fee2e2;color:#991b1b}
-            .hlv-track-timeline{margin-top:16px}
-            .hlv-timeline-list{list-style:none;margin:0;padding:0;border-left:2px solid #e5e7eb}
-            .hlv-timeline-item{position:relative;padding:12px 12px 12px 20px}
-            .hlv-timeline-item.is-latest h4{color:#2563eb}
-            .hlv-timeline-item::before{content:"";position:absolute;left:-6px;top:18px;width:10px;height:10px;border-radius:999px;background:#3b82f6}
-            .hlv-timeline-item__time{font-size:.85rem;color:#6b7280;margin-bottom:2px}
-            .hlv-timeline-item__body h4{margin:0 0 2px 0;font-size:1rem}
-            .hlv-timeline-item__body p{margin:0;color:#374151}
-          </style>
-        </main>
-      </xpath>
+        </div>
+      </t>
     </template>
 
-    <!-- KẾT QUẢ /track/search -->
-    <template id="website_track_result" name="AfterShip Tracking Result" inherit_id="website.layout">
-      <xpath expr="//main" position="replace">
-        <main id="wrap" class="oe_structure">
+    <!-- KẾT QUẢ /track/search - Template độc lập -->
+    <template id="website_track_result" name="AfterShip Tracking Result">
+      <t t-call="website.layout">
+        <div id="wrap" class="oe_structure">
           <div class="hlv-track-wrapper">
             <div class="hlv-track-card">
 
@@ -81,16 +85,6 @@
 
               <!-- data là dict truyền từ controller -->
               <t t-set="tr" t-value="data or {}"/>
-
-              <!-- DEBUG: Hiển thị thông tin debug -->
-              <div style="background: yellow; padding: 10px; margin: 10px 0;">
-                <p>DEBUG INFO:</p>
-                <p>Error: <t t-esc="error or 'None'"/></p>
-                <p>Has data: <t t-esc="bool(data)"/></p>
-                <p>Has tracking_number: <t t-esc="bool(tr.get('tracking_number'))"/></p>
-                <p>Checkpoints count: <t t-esc="len(checkpoints or [])"/></p>
-                <p>Tracking number value: <t t-esc="tr.get('tracking_number')"/></p>
-              </div>
 
               <!-- Hiển thị kết quả nếu không có lỗi và có tracking_number hoặc checkpoints -->
               <t t-if="not error and (tr.get('tracking_number') or checkpoints)">
@@ -143,8 +137,8 @@
 
             </div>
           </div>
-        </main>
-      </xpath>
+        </div>
+      </t>
     </template>
 
   </data>
