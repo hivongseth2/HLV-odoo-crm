@@ -20,6 +20,14 @@ VI_STATUS_LABELS = {
     "PENDING": "Đang chờ hãng vận chuyển xử lý",
     "READYFORPICKUP": "Sẵn sàng để lấy hàng",
     "RETURNEDTOSELLER": "Đơn hàng đã được hoàn về",
+    # Các biến thể khác của cùng status
+    "RETURN_TO_SENDER": "Đơn hàng đã được hoàn về",
+    "RETURNED_TO_SENDER": "Đơn hàng đã được hoàn về",
+    # Các status khác phổ biến
+    "ARRIVALSCAN": "Kiện hàng đã được tiếp nhận",
+    "ARRIVAL": "Kiện hàng đã được tiếp nhận",
+    "PICKED_UP": "Kiện hàng đã được lấy",
+    "PICKEDUP": "Kiện hàng đã được lấy",
 }
 
 REPLACEMENTS = (
@@ -36,7 +44,11 @@ def _polish_message(message: str) -> str:
     return msg
 
 def _vi_status(tag: str, fallback: str = "") -> str:
-    key = (tag or "").replace(" ", "").upper()
+    """Convert status tag to Vietnamese. Handles various case formats."""
+    if not tag:
+        return fallback or ""
+    # Chuẩn hóa: xóa space, convert thành uppercase, thay dash/dot bằng underscore
+    key = (tag or "").strip().replace(" ", "").replace("-", "_").replace(".", "_").upper()
     if key in VI_STATUS_LABELS:
         return VI_STATUS_LABELS[key]
     return fallback or tag or ""
@@ -251,7 +263,9 @@ class WebsiteTrackingPublic(http.Controller):
         checkpoints = list(reversed(tracking.get('checkpoints') or []))
         for cp in checkpoints:
             cp['message'] = _polish_message(cp.get('message'))
-            cp['status_vn'] = _vi_status(cp.get('status'), _polish_message(cp.get('message')))
+            # Sử dụng tag nếu có, fallback sang status
+            checkpoint_tag = cp.get('tag') or cp.get('status') or ""
+            cp['status_vn'] = _vi_status(checkpoint_tag, _polish_message(cp.get('message')))
         tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))
 
         # Lấy slug từ tracking data nếu có, fallback về slug đã xác định hoặc slug_input

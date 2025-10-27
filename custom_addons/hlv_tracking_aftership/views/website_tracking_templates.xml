@@ -68,7 +68,19 @@
                         'Delivered':'Đã giao',
                         'Exception':'Ngoại lệ',
                         'FailedAttempt':'Giao thất bại',
-                        'ReturnToSender':'Hoàn hàng'
+                        'ReturnToSender':'Hoàn hàng',
+                        'INFORECEIVED':'Đã tạo đơn',
+                        'INTRANSIT':'Đang vận chuyển',
+                        'OUTFORDELIVERY':'Đang giao',
+                        'DELIVERED':'Đã giao',
+                        'EXCEPTION':'Ngoại lệ',
+                        'FAILEDATTEMPT':'Giao thất bại',
+                        'RETURNTOSENDER':'Hoàn hàng',
+                        'AVAILABLEFORPICKUP':'Sẵn sàng để lấy hàng',
+                        'PENDING':'Đang chờ xử lý',
+                        'ARRIVALSCAN':'Kiện hàng đã được tiếp nhận',
+                        'ARRIVAL':'Kiện hàng đã được tiếp nhận',
+                        'PICKEDUP':'Kiện hàng đã được lấy',
                       }"/>
 
                       <t t-set="tr" t-value="data or {}"/>
@@ -92,7 +104,7 @@
                             <div class="col-md-4 mb-3">
                               <h5>Trạng thái hiện tại</h5>
                               <p class="hlv-track-status fs-5 text-success">
-                                <t t-esc="VI_TAG.get(tr.get('tag')) or tr.get('subtag_message') or tr.get('tag') or 'Đang cập nhật'"/>
+                                <t t-esc="VI_TAG.get(tr.get('tag')) or tr.get('tag_vn') or tr.get('subtag_message') or tr.get('tag') or 'Đang cập nhật'"/>
                               </p>
                             </div>
                           </div>
@@ -112,7 +124,7 @@
                                   </div>
                                   <div class="hlv-timeline-item__body">
                                     <h5>
-                                      <t t-esc="cp.get('subtag_message') or VI_TAG.get(cp.get('tag')) or cp.get('tag') or ''"/>
+                                      <t t-esc="cp.get('status_vn') or VI_TAG.get(cp.get('tag')) or cp.get('subtag_message') or cp.get('tag') or ''"/>
                                     </h5>
                                     <p t-esc="cp.get('message')"/>
                                   </div>
