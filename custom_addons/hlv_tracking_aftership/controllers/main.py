@@ -102,16 +102,16 @@ class WebsiteTrackingPublic(http.Controller):
             
             # Tìm trong stock.picking
             pick = Picking.search([
-                '|', ('name', '=', query),
-                '|', ('origin', '=', query),
+                '|', '|', ('name', '=', query),
+                ('origin', '=', query),
                 ('tracking_number', '=', query)
             ], limit=1)
             
             # Nếu picking không có, tìm trong sale.order
             if not pick:
                 order = SaleOrder.search([
-                    '|', ('name', '=', query),
-                    '|', ('client_order_ref', '=', query),
+                    '|', '|', ('name', '=', query),
+                    ('client_order_ref', '=', query),
                     ('tracking_number', '=', query)
                 ], limit=1)
                 
