@@ -8,14 +8,14 @@
           <div class="hlv-track-wrapper">
             <div class="hlv-track-card">
               <h1>Theo dõi đơn hàng</h1>
-              <p class="hlv-track-desc">Nhập mã vận đơn hoặc mã đơn nội bộ để kiểm tra trạng thái giao hàng.</p>
+              <p class="hlv-track-desc">Nhập mã đơn hàng (VD: S00123, WH/OUT/00001) để kiểm tra trạng thái giao hàng.</p>
               <form action="/track/search" method="get" class="hlv-track-form">
                 <div class="form-group">
-                  <label for="tracking_number">Mã vận đơn hoặc mã đơn</label>
-                  <input type="text" id="tracking_number" name="tracking_number" placeholder="VD: SPXVN05508643516A hoặc KBC/OUT/01931" required="required"/>
+                  <label for="tracking_number">Mã đơn hàng</label>
+                  <input type="text" id="tracking_number" name="tracking_number" placeholder="VD: S00123 hoặc WH/OUT/00001" required="required"/>
                 </div>
                 <div class="form-group">
-                  <label for="slug">Hãng vận chuyển (nếu biết)</label>
+                  <label for="slug">Hãng vận chuyển (tùy chọn)</label>
                   <input type="text" id="slug" name="slug" placeholder="VD: spx-vn, jtexpress-vn"/>
                 </div>
                 <button type="submit" class="btn btn-primary">Tra cứu</button>
@@ -44,11 +44,47 @@
           <div class="hlv-track-wrapper">
             <div class="hlv-track-card">
               <a href="/track" class="hlv-track-back">&#8592; Quay lại tra cứu khác</a>
+              
+              <!-- THÔNG BÁO LỖI -->
               <t t-if="error">
                 <div class="hlv-track-alert hlv-track-alert--error" role="alert">
+                  <i class="fa fa-exclamation-circle"></i>
                   <span t-esc="error"/>
                 </div>
               </t>
+              
+              <!-- THÔNG BÁO ĐƠN MỚI ĐĂNG KÝ (OPTION 1) -->
+              <t t-if="is_first_time and no_data_yet and not error">
+                <div class="hlv-track-alert hlv-track-alert--info" role="alert">
+                  <div class="hlv-alert-icon">
+                    <i class="fa fa-clock-o fa-2x"></i>
+                  </div>
+                  <div class="hlv-alert-content">
+                    <h3>
+                      <i class="fa fa-check-circle"></i> Đơn hàng đã được đăng ký theo dõi!
+                    </h3>
+                    <p><strong>Thông tin chi tiết đang được cập nhật tự động từ hãng vận chuyển.</strong></p>
+                    <ul class="hlv-alert-list">
+                      <li><i class="fa fa-info-circle"></i> Hệ thống sẽ tự động cập nhật qua webhook (không cần làm gì thêm)</li>
+                      <li><i class="fa fa-hourglass-half"></i> Thời gian cập nhật: <strong>15-30 phút</strong></li>
+                      <li><i class="fa fa-refresh"></i> Bạn có thể quay lại trang này sau hoặc nhấn <strong>F5</strong> để tải lại</li>
+                    </ul>
+                    <div class="hlv-alert-note">
+                      <i class="fa fa-lightbulb-o"></i>
+                      <small><strong>Lưu ý:</strong> Nếu đơn hàng vừa mới được tạo, hãng vận chuyển có thể cần thêm thời gian để cập nhật thông tin lên hệ thống của họ.</small>
+                    </div>
+                  </div>
+                </div>
+              </t>
+              
+              <!-- THÔNG BÁO ĐƠN MỚI ĐĂNG KÝ NHƯNG ĐÃ CÓ DATA (OPTION 2 THÀNH CÔNG) -->
+              <t t-if="is_first_time and not no_data_yet and not error">
+                <div class="hlv-track-alert hlv-track-alert--success" role="alert">
+                  <i class="fa fa-check-circle"></i>
+                  <strong>Tuyệt vời!</strong> Đơn hàng vừa được đăng ký và đã có thông tin từ hãng vận chuyển.
+                </div>
+              </t>
+              
               <!-- Map tiếng Việt cho tag -->
               <t t-set="VI_TAG" t-value="{
                 'InfoReceived':'Đã tạo đơn',
@@ -57,8 +93,10 @@
                 'Delivered':'Đã giao',
                 'Exception':'Ngoại lệ',
                 'FailedAttempt':'Giao thất bại',
-                'ReturnToSender':'Hoàn hàng'
+                'ReturnToSender':'Hoàn hàng',
+                'Pending':'Đang chờ xử lý'
               }"/>
+              
               <!-- data là dict truyền từ controller -->
               <t t-set="tr" t-value="data or {}"/>
               <t t-if="not error and tr">
@@ -84,25 +122,28 @@
                   <div class="hlv-track-update-info">
                     <t t-if="last_update">
                       <span class="hlv-track-update-label">
-                        <i class="fa fa-database"></i> Dữ liệu từ hệ thống (tự động cập nhật qua webhook)
+                        <i class="fa fa-database"></i> Dữ liệu từ hệ thống
                       </span>
                       <span class="hlv-track-update-time">
                         Cập nhật lúc: <t t-esc="last_update.strftime('%d/%m/%Y %H:%M') if last_update else 'N/A'"/>
                       </span>
+                      <span class="hlv-track-update-note">
+                        <i class="fa fa-check-circle text-success"></i> Tự động qua webhook
+                      </span>
                     </t>
                     <t t-else="">
                       <span class="hlv-track-update-label">
-                        <i class="fa fa-info-circle"></i> Vừa được đăng ký với AfterShip
+                        <i class="fa fa-hourglass-half"></i> Vừa đăng ký với AfterShip
                       </span>
                       <span class="hlv-track-update-time">
-                        Dữ liệu sẽ được cập nhật tự động qua webhook
+                        Đang chờ dữ liệu từ hãng vận chuyển
                       </span>
                     </t>
                   </div>
                   <div class="hlv-track-refresh">
                     <!-- Nút refresh chỉ để reload trang, KHÔNG gọi API -->
                     <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.reload()">
-                      <i class="fa fa-refresh"></i> Tải lại trang
+                      <i class="fa fa-refresh"></i> Tải lại
                     </button>
                   </div>
                 </div>
@@ -110,60 +151,111 @@
                 <!-- Lấy checkpoints từ controller (đã đảo thứ tự) -->
                 <t t-set="cp_list" t-value="checkpoints or []"/>
                 <div class="hlv-track-timeline">
-                  <h3>Hành trình giao hàng</h3>
+                  <h3>
+                    <i class="fa fa-map-marker"></i> Hành trình giao hàng
+                    <t t-if="cp_list">
+                      <span class="hlv-timeline-count">(<t t-esc="len(cp_list)"/> điểm)</span>
+                    </t>
+                  </h3>
 
                   <t t-if="cp_list">
                     <ul class="hlv-timeline-list">
                       <t t-foreach="cp_list" t-as="cp">
                         <li t-attf-class="hlv-timeline-item {{ 'is-latest' if cp_index == 0 else '' }}">
                           <div class="hlv-timeline-item__time">
+                            <i class="fa fa-clock-o"></i>
                             <span t-esc="cp.get('checkpoint_time') or cp.get('date_time')"/>
                           </div>
                           <div class="hlv-timeline-item__body">
                             <h4>
                               <t t-esc="cp.get('status_vn') or cp.get('subtag_message') or VI_TAG.get(cp.get('tag')) or cp.get('tag') or ''"/>
                             </h4>
-                            <p t-esc="cp.get('message')"/>
+                            <p t-if="cp.get('message')" t-esc="cp.get('message')"/>
+                            <p t-if="cp.get('location')" class="hlv-timeline-location">
+                              <i class="fa fa-map-marker"></i>
+                              <small t-esc="cp.get('location')"/>
+                            </p>
                           </div>
                         </li>
                       </t>
                     </ul>
                   </t>
                   <t t-else="">
-                    <p class="hlv-track-empty">Chưa có dữ liệu hành trình từ hãng vận chuyển.</p>
+                    <div class="hlv-track-empty">
+                      <i class="fa fa-inbox fa-3x"></i>
+                      <p>Chưa có dữ liệu hành trình từ hãng vận chuyển.</p>
+                      <t t-if="is_first_time and no_data_yet">
+                        <p class="text-muted">
+                          <small>Vui lòng quay lại sau 15-30 phút để xem thông tin chi tiết.</small>
+                        </p>
+                      </t>
+                    </div>
                   </t>
                 </div>
               </t>
             </div>
           </div>
-          <!-- CSS tối giản -->
+          
+          <!-- CSS tối ưu -->
           <style>
             .hlv-track-wrapper{max-width:960px;margin:2rem auto;padding:0 1rem}
             .hlv-track-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px}
-            .hlv-track-back{display:inline-block;margin-bottom:12px;text-decoration:none}
-            .hlv-track-desc{color:#6b7280}
-            .hlv-track-form .form-group{margin-bottom:12px}
+            .hlv-track-back{display:inline-block;margin-bottom:12px;text-decoration:none;color:#3b82f6}
+            .hlv-track-back:hover{text-decoration:underline}
+            
+            /* ALERTS */
+            .hlv-track-alert{padding:16px;border-radius:8px;margin-bottom:20px;display:flex;align-items:flex-start;gap:12px}
+            .hlv-track-alert--error{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+            .hlv-track-alert--info{background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;flex-direction:row}
+            .hlv-track-alert--success{background:#d1fae5;color:#065f46;border:1px solid #a7f3d0}
+            .hlv-alert-icon{flex-shrink:0;color:#3b82f6}
+            .hlv-alert-content{flex:1}
+            .hlv-alert-content h3{margin:0 0 8px 0;font-size:1.1rem;color:#1e40af}
+            .hlv-alert-content p{margin:0 0 12px 0}
+            .hlv-alert-list{margin:12px 0;padding-left:20px;list-style:none}
+            .hlv-alert-list li{margin:8px 0;display:flex;align-items:flex-start;gap:8px}
+            .hlv-alert-list li i{margin-top:3px;flex-shrink:0}
+            .hlv-alert-note{margin-top:12px;padding:8px 12px;background:#fff;border-radius:6px;border-left:3px solid #3b82f6}
+            .hlv-alert-note small{display:block;line-height:1.5}
+            
+            /* SUMMARY */
             .hlv-track-summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:16px 0}
-            .hlv-track-number{font-weight:600}
-            .hlv-track-status{font-weight:600}
-            .hlv-track-alert{padding:12px;border-radius:8px;margin-bottom:12px}
-            .hlv-track-alert--error{background:#fee2e2;color:#991b1b}
+            .hlv-track-summary h2{font-size:0.9rem;color:#6b7280;margin:0 0 4px 0;font-weight:500}
+            .hlv-track-number{font-weight:600;margin:0;color:#111827;word-break:break-all}
+            .hlv-track-status{font-weight:600;margin:0;color:#059669}
+            
+            /* META INFO */
             .hlv-track-meta{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f9fafb;border-radius:8px;margin:16px 0;flex-wrap:wrap;gap:12px}
             .hlv-track-update-info{display:flex;flex-direction:column;gap:4px}
-            .hlv-track-update-label{font-weight:600;color:#2563eb;font-size:0.9rem}
+            .hlv-track-update-label{font-weight:600;color:#2563eb;font-size:0.9rem;display:flex;align-items:center;gap:6px}
             .hlv-track-update-time{color:#6b7280;font-size:0.85rem}
+            .hlv-track-update-note{color:#059669;font-size:0.8rem;display:flex;align-items:center;gap:4px}
             .hlv-track-refresh{}
-            .hlv-track-timeline{margin-top:16px}
-            .hlv-timeline-list{list-style:none;margin:0;padding:0;border-left:2px solid #e5e7eb}
-            .hlv-timeline-item{position:relative;padding:12px 12px 12px 20px}
+            
+            /* TIMELINE */
+            .hlv-track-timeline{margin-top:24px}
+            .hlv-track-timeline h3{font-size:1.2rem;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+            .hlv-timeline-count{font-size:0.9rem;color:#6b7280;font-weight:400}
+            .hlv-timeline-list{list-style:none;margin:0;padding:0;border-left:2px solid #e5e7eb;position:relative}
+            .hlv-timeline-item{position:relative;padding:12px 12px 20px 24px}
+            .hlv-timeline-item.is-latest{background:#f0f9ff;margin-left:-2px;padding-left:26px;border-left:2px solid #3b82f6}
             .hlv-timeline-item.is-latest h4{color:#2563eb}
-            .hlv-timeline-item::before{content:"";position:absolute;left:-6px;top:18px;width:10px;height:10px;border-radius:999px;background:#3b82f6}
-            .hlv-timeline-item__time{font-size:.85rem;color:#6b7280;margin-bottom:2px}
-            .hlv-timeline-item__body h4{margin:0 0 2px 0;font-size:1rem}
-            .hlv-timeline-item__body p{margin:0;color:#374151}
+            .hlv-timeline-item::before{content:"";position:absolute;left:-6px;top:18px;width:10px;height:10px;border-radius:999px;background:#3b82f6;border:2px solid #fff}
+            .hlv-timeline-item.is-latest::before{background:#2563eb;width:14px;height:14px;left:-8px;animation:pulse 2s infinite}
+            @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+            .hlv-timeline-item__time{font-size:0.85rem;color:#6b7280;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+            .hlv-timeline-item__body h4{margin:0 0 4px 0;font-size:1rem;font-weight:600}
+            .hlv-timeline-item__body p{margin:0;color:#374151;line-height:1.5}
+            .hlv-timeline-location{color:#6b7280!important;font-size:0.9rem;margin-top:4px!important;display:flex;align-items:center;gap:4px}
+            .hlv-track-empty{text-align:center;padding:40px 20px;color:#9ca3af}
+            .hlv-track-empty i{color:#d1d5db;margin-bottom:12px}
+            .hlv-track-empty p{margin:8px 0}
+            
+            /* RESPONSIVE */
             @media (max-width:768px){
               .hlv-track-summary{grid-template-columns:1fr}
               .hlv-track-meta{flex-direction:column;align-items:flex-start}
+              .hlv-alert-icon{display:none}
             }
           </style>
         </div>
