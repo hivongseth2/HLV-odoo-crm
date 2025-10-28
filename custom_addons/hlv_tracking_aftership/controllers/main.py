@@ -110,7 +110,7 @@ class WebsiteTrackingPublic(http.Controller):
             
             if pick:
                 found_record = pick
-                _logger.info(f"✅ FOUND_PICKING: {pick.name}")
+                _logger.info(f"✅ FOUND_PICKING: {pick.name} | tracking_number={pick.tracking_number} | has_payload={bool(pick.tracking_payload)}")
             else:
                 # Nếu picking không có, tìm trong sale.order
                 order = SaleOrder.search([
@@ -120,12 +120,12 @@ class WebsiteTrackingPublic(http.Controller):
                 ], limit=1)
                 
                 if order:
-                    _logger.info(f"✅ FOUND_ORDER: {order.name}")
+                    _logger.info(f"✅ FOUND_ORDER: {order.name} | tracking_number={order.tracking_number} | has_payload={bool(order.tracking_payload)}")
                     # Ưu tiên lấy picking từ order nếu có
                     pick_from_order = order.picking_ids.filtered(lambda p: p.tracking_number)[:1]
                     if pick_from_order:
                         found_record = pick_from_order
-                        _logger.info(f"✅ FOUND_PICKING_FROM_ORDER: {pick_from_order.name}")
+                        _logger.info(f"✅ FOUND_PICKING_FROM_ORDER: {pick_from_order.name} | tracking_number={pick_from_order.tracking_number}")
                     else:
                         # Nếu không có picking, dùng order
                         found_record = order
@@ -160,6 +160,8 @@ class WebsiteTrackingPublic(http.Controller):
             # CHỈ đăng ký AfterShip lần đầu, SAU ĐÓ dữ liệu sẽ được cập nhật qua WEBHOOK
             if found_record:
                 record = found_record
+                
+                _logger.info(f"🔍 CHECK_RECORD: {record._name} {record.name} | tracking_number={record.tracking_number} | aftership_id={record.aftership_id}")
                 
                 # Lấy tracking number từ record
                 number = record.tracking_number
