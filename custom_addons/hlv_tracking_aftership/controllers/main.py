@@ -141,6 +141,8 @@ class WebsiteTrackingPublic(http.Controller):
                 last_update = found_record.tracking_last_update
                 
                 checkpoints = list(reversed(tracking.get('checkpoints') or []))
+                _logger.info(f"📊 CHECKPOINTS_COUNT: {len(checkpoints)} checkpoints | tag={tracking.get('tag')} | status={tracking.get('status')}")
+                
                 for cp in checkpoints:
                     cp['message'] = _polish_message(cp.get('message'))
                     cp['status_vn'] = _vi_status(cp.get('tag') or cp.get('status'), _polish_message(cp.get('message')))
@@ -163,28 +165,17 @@ class WebsiteTrackingPublic(http.Controller):
                 
                 _logger.info(f"🔍 CHECK_RECORD: {record._name} {record.name} | tracking_number={record.tracking_number} | aftership_id={record.aftership_id}")
                 
-                # Lấy tracking number từ record
+                # Lấy tracking number từ record (ĐÃ CÓ SẴN TỪ MISA)
                 number = record.tracking_number
                 slug = record.tracking_slug or slug_input
                 
-                # Nếu record không có tracking_number
+                # Nếu record không có tracking_number → Báo lỗi
                 if not number:
-                    # Nếu query trông giống mã tracking, dùng luôn query làm tracking number
-                    if _looks_like_tracking(query):
-                        _logger.info(f"🔧 USE_QUERY_AS_TRACKING: Record {record.name} chưa có tracking_number, dùng query={query} làm tracking")
-                        number = query
-                        slug = slug_input or _guess_slug(query)
-                        # Tự động gán vào record để lần sau không cần query lại
-                        record.tracking_number = number
-                        if slug:
-                            record.tracking_slug = slug
-                    else:
-                        # Query không giống mã tracking → thực sự chưa có mã vận đơn
-                        error = f"Đơn {query} chưa có mã vận đơn."
-                        _logger.warning(f"⚠️  NO_TRACKING: {record.name} chưa có tracking_number và query không giống mã tracking")
-                        return request.render("hlv_tracking_aftership.website_track_result", {
-                            "error": error, "data": {}, "number": query, "slug": "",
-                        })
+                    error = f"Đơn {query} chưa có mã vận đơn."
+                    _logger.warning(f"⚠️  NO_TRACKING: {record.name} chưa có tracking_number")
+                    return request.render("hlv_tracking_aftership.website_track_result", {
+                        "error": error, "data": {}, "number": query, "slug": "",
+                    })
                 
                 # Nếu chưa đăng ký AfterShip, đăng ký ngay (CHỈ 1 LẦN)
                 if not record.aftership_id:
