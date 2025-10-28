@@ -161,16 +161,28 @@ class WebsiteTrackingPublic(http.Controller):
             if found_record:
                 record = found_record
                 
-                # Kiểm tra có tracking number không
-                if not record.tracking_number:
-                    error = f"Đơn {query} chưa có mã vận đơn."
-                    _logger.warning(f"⚠️  NO_TRACKING: {query} chưa có tracking_number")
-                    return request.render("hlv_tracking_aftership.website_track_result", {
-                        "error": error, "data": {}, "number": query, "slug": "",
-                    })
-                
+                # Lấy tracking number từ record
                 number = record.tracking_number
                 slug = record.tracking_slug or slug_input
+                
+                # Nếu record không có tracking_number
+                if not number:
+                    # Nếu query trông giống mã tracking, dùng luôn query làm tracking number
+                    if _looks_like_tracking(query):
+                        _logger.info(f"🔧 USE_QUERY_AS_TRACKING: Record {record.name} chưa có tracking_number, dùng query={query} làm tracking")
+                        number = query
+                        slug = slug_input or _guess_slug(query)
+                        # Tự động gán vào record để lần sau không cần query lại
+                        record.tracking_number = number
+                        if slug:
+                            record.tracking_slug = slug
+                    else:
+                        # Query không giống mã tracking → thực sự chưa có mã vận đơn
+                        error = f"Đơn {query} chưa có mã vận đơn."
+                        _logger.warning(f"⚠️  NO_TRACKING: {record.name} chưa có tracking_number và query không giống mã tracking")
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": error, "data": {}, "number": query, "slug": "",
+                        })
                 
                 # Nếu chưa đăng ký AfterShip, đăng ký ngay (CHỈ 1 LẦN)
                 if not record.aftership_id:
