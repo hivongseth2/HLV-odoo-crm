@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo import http
 from odoo.http import request
-import requests
 import re
 import logging
 
 _logger = logging.getLogger(__name__)
-
-AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2024-07"
 
 
 VI_STATUS_LABELS = {
@@ -86,20 +83,16 @@ class WebsiteTrackingPublic(http.Controller):
         _logger.info(f"🔍 TRACK_SEARCH: Input={query}, Slug={slug_input}")
         
         error = None
-        data = {}
         number = None
         slug = slug_input or None
         last_update = None
-        api_call_count = 0  # Đếm số lần gọi API
 
         try:
             # Bước 1: Ưu tiên tìm kiếm trong database theo mã đơn hàng hoặc mã vận đơn
             Picking = request.env["stock.picking"].sudo()
             SaleOrder = request.env["sale.order"].sudo()
             
-            pick = None
-            order = None
-            found_record = None  # Record được tìm thấy (có thể là pick hoặc order)
+            found_record = None
             
             # Tìm trong stock.picking
             pick = Picking.search([
@@ -110,9 +103,8 @@ class WebsiteTrackingPublic(http.Controller):
             
             if pick:
                 found_record = pick
-                # Refresh để lấy dữ liệu mới nhất từ database
                 pick.invalidate_recordset(['aftership_id', 'tracking_payload', 'tracking_last_update', 'tracking_status', 'tracking_slug'])
-                _logger.info(f"✅ FOUND_PICKING: {pick.name} | tracking_number={pick.tracking_number} | has_payload={bool(pick.tracking_payload)} | aftership_id={pick.aftership_id[:8] if pick.aftership_id else 'None'}")
+                _logger.info(f"✅ FOUND_PICKING: {pick.name} | tracking_number={pick.tracking_number} | has_payload={bool(pick.tracking_payload)}")
             else:
                 # Nếu picking không có, tìm trong sale.order
                 order = SaleOrder.search([
@@ -122,24 +114,20 @@ class WebsiteTrackingPublic(http.Controller):
                 ], limit=1)
                 
                 if order:
-                    # Refresh để lấy dữ liệu mới nhất từ database
                     order.invalidate_recordset(['aftership_id', 'tracking_payload', 'tracking_last_update', 'tracking_status', 'tracking_slug'])
-                    _logger.info(f"✅ FOUND_ORDER: {order.name} | tracking_number={order.tracking_number} | has_payload={bool(order.tracking_payload)} | aftership_id={order.aftership_id[:8] if order.aftership_id else 'None'}")
+                    _logger.info(f"✅ FOUND_ORDER: {order.name} | tracking_number={order.tracking_number}")
                     # Ưu tiên lấy picking từ order nếu có
                     pick_from_order = order.picking_ids.filtered(lambda p: p.tracking_number)[:1]
                     if pick_from_order:
-                        # Refresh để lấy dữ liệu mới nhất từ database
                         pick_from_order.invalidate_recordset(['aftership_id', 'tracking_payload', 'tracking_last_update', 'tracking_status', 'tracking_slug'])
                         found_record = pick_from_order
-                        _logger.info(f"✅ FOUND_PICKING_FROM_ORDER: {pick_from_order.name} | tracking_number={pick_from_order.tracking_number}")
+                        _logger.info(f"✅ FOUND_PICKING_FROM_ORDER: {pick_from_order.name}")
                     else:
-                        # Nếu không có picking, dùng order
                         found_record = order
             
             # Bước 2: Nếu tìm thấy record và có tracking_payload
             # LUÔN lấy từ database, KHÔNG bao giờ gọi API từ website
             if found_record and found_record.tracking_payload:
-                # Sử dụng dữ liệu từ database (KHÔNG GỌI API)
                 _logger.info(f"✅ DB_HIT: Lấy từ database cho {found_record._name} {found_record.name}")
                 tracking = found_record.tracking_payload
                 number = found_record.tracking_number
@@ -147,7 +135,7 @@ class WebsiteTrackingPublic(http.Controller):
                 last_update = found_record.tracking_last_update
                 
                 checkpoints = list(reversed(tracking.get('checkpoints') or []))
-                _logger.info(f"📊 CHECKPOINTS_COUNT: {len(checkpoints)} checkpoints | tag={tracking.get('tag')} | status={tracking.get('status')}")
+                _logger.info(f"📊 CHECKPOINTS: {len(checkpoints)} checkpoints | tag={tracking.get('tag')}")
                 
                 for cp in checkpoints:
                     cp['message'] = _polish_message(cp.get('message'))
@@ -162,6 +150,7 @@ class WebsiteTrackingPublic(http.Controller):
                     "checkpoints": checkpoints,
                     "last_update": last_update,
                     "from_cache": True,
+                    "is_first_time": False,
                 })
             
             # Bước 3: Nếu tìm thấy record nhưng CHƯA có payload
@@ -169,7 +158,7 @@ class WebsiteTrackingPublic(http.Controller):
             if found_record:
                 record = found_record
                 
-                _logger.info(f"🔍 CHECK_RECORD: {record._name} {record.name} | tracking_number={record.tracking_number} | aftership_id={record.aftership_id}")
+                _logger.info(f"🔍 CHECK_RECORD: {record._name} {record.name} | tracking_number={record.tracking_number}")
                 
                 # Lấy tracking number từ record (ĐÃ CÓ SẴN TỪ MISA)
                 number = record.tracking_number
@@ -181,35 +170,53 @@ class WebsiteTrackingPublic(http.Controller):
                     _logger.warning(f"⚠️  NO_TRACKING: {record.name} chưa có tracking_number")
                     return request.render("hlv_tracking_aftership.website_track_result", {
                         "error": error, "data": {}, "number": query, "slug": "",
+                        "is_first_time": False,
                     })
                 
                 # Nếu chưa đăng ký AfterShip, đăng ký ngay (CHỈ 1 LẦN)
                 if not record.aftership_id:
                     try:
-                        _logger.info(f"📝 API_CALL: Đăng ký tracking {number} với AfterShip (LẦN ĐẦU)")
+                        _logger.info(f"📝 API_CALL_1: Đăng ký tracking {number} với AfterShip")
                         record.action_register_tracking_aftership()
-                        api_call_count += 1  # GỌI API 1 LẦN
                         
                         # FLUSH transaction để lưu dữ liệu vào database ngay
-                        self.env.cr.commit()
-                        _logger.info(f"💾 COMMITTED: Đã lưu dữ liệu AfterShip vào database")
+                        request.env.cr.commit()
+                        _logger.info(f"💾 COMMITTED: Đã lưu aftership_id vào database")
                         
                         # Refresh record để lấy dữ liệu mới nhất sau khi đăng ký
                         record.invalidate_recordset(['aftership_id', 'tracking_payload', 'tracking_last_update', 'tracking_status'])
-                        _logger.info(f"🔄 REFRESHED: aftership_id={record.aftership_id[:8] if record.aftership_id else 'None'}, has_payload={bool(record.tracking_payload)}")
+                        
+                        # ============================================================
+                        # OPTION 2: Thử làm mới NGAY SAU khi đăng ký (CHỈ 1 LẦN)
+                        # Mục đích: Có cơ hội hiển thị dữ liệu ngay lập tức nếu AfterShip đã có
+                        # ============================================================
+                        try:
+                            import time
+                            time.sleep(2)  # Đợi 2 giây để AfterShip xử lý
+                            
+                            _logger.info(f"📝 API_CALL_2: Thử làm mới tracking {number} (optional)")
+                            record.action_refresh_tracking_aftership()
+                            request.env.cr.commit()
+                            record.invalidate_recordset(['tracking_payload'])
+                            _logger.info(f"🔄 REFRESHED: has_payload={bool(record.tracking_payload)}")
+                        except Exception as refresh_error:
+                            # Nếu làm mới thất bại thì không sao, webhook sẽ lo
+                            _logger.warning(f"⚠️  REFRESH_FAILED: {refresh_error} (webhook sẽ cập nhật sau)")
+                        
                     except Exception as e:
                         error = f"Lỗi đăng ký tracking: {e}"
                         _logger.error(f"❌ REGISTER_ERROR: {e}")
                         return request.render("hlv_tracking_aftership.website_track_result", {
                             "error": error, "data": {}, "number": number, "slug": slug or "",
+                            "is_first_time": False,
                         })
                 
-                # SAU KHI ĐĂNG KÝ, hiển thị dữ liệu từ database
-                # Webhook sẽ tự động cập nhật tracking_payload khi có thay đổi
+                # SAU KHI ĐĂNG KÝ (và có thể đã làm mới), hiển thị dữ liệu
                 if record.tracking_payload:
+                    # Trường hợp may mắn: Đã có dữ liệu ngay (từ refresh hoặc webhook nhanh)
                     tracking = record.tracking_payload
                     checkpoints = list(reversed(tracking.get('checkpoints') or []))
-                    _logger.info(f"📊 CHECKPOINTS_COUNT: {len(checkpoints)} checkpoints | tag={tracking.get('tag')} | status={tracking.get('status')}")
+                    _logger.info(f"📊 CHECKPOINTS: {len(checkpoints)} checkpoints")
                     
                     for cp in checkpoints:
                         cp['message'] = _polish_message(cp.get('message'))
@@ -223,26 +230,35 @@ class WebsiteTrackingPublic(http.Controller):
                         "slug": slug or "",
                         "checkpoints": checkpoints,
                         "last_update": record.tracking_last_update,
-                        "from_cache": False,  # Vừa đăng ký lần đầu
+                        "from_cache": False,
+                        "is_first_time": True,  # Vừa đăng ký lần đầu nhưng đã có data
                     })
                 else:
-                    # Vừa đăng ký nhưng chưa có payload (có thể AfterShip chưa trả về data hoặc hãng vận chuyển chưa có thông tin)
-                    _logger.warning(f"⚠️  NO_PAYLOAD: Đã đăng ký nhưng chưa có payload cho {number}")
-                    # Vẫn hiển thị thông tin cơ bản
+                    # ============================================================
+                    # OPTION 1: Vừa đăng ký nhưng chưa có payload
+                    # Hiển thị thông báo thân thiện cho user
+                    # ============================================================
+                    _logger.info(f"⏳ FIRST_TIME_NO_DATA: Đã đăng ký nhưng chưa có payload cho {number}")
+                    
                     return request.render("hlv_tracking_aftership.website_track_result", {
                         "error": None,
-                        "data": {"tracking_number": number, "slug": slug, "tag": "Pending"},
+                        "data": {
+                            "tracking_number": number,
+                            "slug": slug,
+                            "tag": "InfoReceived",
+                            "tag_vn": "Đã đăng ký theo dõi",
+                        },
                         "number": number,
                         "slug": slug or "",
                         "checkpoints": [],
                         "last_update": record.tracking_last_update,
                         "from_cache": False,
+                        "is_first_time": True,  # FLAG quan trọng để hiển thị thông báo
+                        "no_data_yet": True,    # FLAG để hiển thị hướng dẫn
                     })
             
             # Bước 4: Nếu KHÔNG tìm thấy record nào trong database
-            # Kiểm tra xem input có phải mã vận đơn trực tiếp không
             if not found_record and _looks_like_tracking(query):
-                # Input là mã vận đơn trực tiếp
                 number = query
                 slug = slug_input or _guess_slug(number)
                 
@@ -251,7 +267,6 @@ class WebsiteTrackingPublic(http.Controller):
                 # Tìm xem có picking/order nào với tracking number này không
                 existing_pick = Picking.search([('tracking_number', '=', number)], limit=1)
                 if existing_pick:
-                    # Đã có trong hệ thống, redirect lại để xử lý
                     _logger.info(f"✅ FOUND: Tìm thấy picking {existing_pick.name} với tracking {number}")
                     if existing_pick.tracking_payload:
                         tracking = existing_pick.tracking_payload
@@ -269,6 +284,7 @@ class WebsiteTrackingPublic(http.Controller):
                             "checkpoints": checkpoints,
                             "last_update": existing_pick.tracking_last_update,
                             "from_cache": True,
+                            "is_first_time": False,
                         })
                 
                 # Nếu chưa có trong hệ thống, báo lỗi yêu cầu nhập mã đơn hàng
@@ -276,6 +292,7 @@ class WebsiteTrackingPublic(http.Controller):
                 _logger.warning(f"⚠️  DIRECT_TRACKING_NOT_FOUND: {number} chưa có trong hệ thống")
                 return request.render("hlv_tracking_aftership.website_track_result", {
                     "error": error, "data": {}, "number": number, "slug": slug or "",
+                    "is_first_time": False,
                 })
             
             # Bước 5: Không tìm thấy gì cả
@@ -283,6 +300,7 @@ class WebsiteTrackingPublic(http.Controller):
             _logger.warning(f"⚠️  NOT_FOUND: Không tìm thấy gì cho {query}")
             return request.render("hlv_tracking_aftership.website_track_result", {
                 "error": error, "data": {}, "number": query, "slug": slug_input,
+                "is_first_time": False,
             })
 
         except Exception as e:
@@ -290,4 +308,5 @@ class WebsiteTrackingPublic(http.Controller):
             _logger.error(f"❌ ERROR: {error}", exc_info=True)
             return request.render("hlv_tracking_aftership.website_track_result", {
                 "error": error, "data": {}, "number": query, "slug": slug_input,
+                "is_first_time": False,
             })
