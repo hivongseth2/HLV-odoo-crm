@@ -183,6 +183,10 @@ class WebsiteTrackingPublic(http.Controller):
                         _logger.info(f"📝 API_CALL: Đăng ký tracking {number} với AfterShip (LẦN ĐẦU)")
                         record.action_register_tracking_aftership()
                         api_call_count += 1  # GỌI API 1 LẦN
+                        
+                        # Refresh record để lấy dữ liệu mới sau khi đăng ký
+                        record.invalidate_recordset(['aftership_id', 'tracking_payload', 'tracking_last_update', 'tracking_status'])
+                        _logger.info(f"🔄 REFRESHED: aftership_id={record.aftership_id}, has_payload={bool(record.tracking_payload)}")
                     except Exception as e:
                         error = f"Lỗi đăng ký tracking: {e}"
                         _logger.error(f"❌ REGISTER_ERROR: {e}")
@@ -195,6 +199,8 @@ class WebsiteTrackingPublic(http.Controller):
                 if record.tracking_payload:
                     tracking = record.tracking_payload
                     checkpoints = list(reversed(tracking.get('checkpoints') or []))
+                    _logger.info(f"📊 CHECKPOINTS_COUNT: {len(checkpoints)} checkpoints | tag={tracking.get('tag')} | status={tracking.get('status')}")
+                    
                     for cp in checkpoints:
                         cp['message'] = _polish_message(cp.get('message'))
                         cp['status_vn'] = _vi_status(cp.get('tag') or cp.get('status'), _polish_message(cp.get('message')))
@@ -210,11 +216,17 @@ class WebsiteTrackingPublic(http.Controller):
                         "from_cache": False,  # Vừa đăng ký lần đầu
                     })
                 else:
-                    # Vừa đăng ký nhưng chưa có payload (có thể AfterShip chưa trả về data)
-                    error = f"Đã đăng ký tracking {number}, vui lòng đợi vài giây và thử lại."
+                    # Vừa đăng ký nhưng chưa có payload (có thể AfterShip chưa trả về data hoặc hãng vận chuyển chưa có thông tin)
                     _logger.warning(f"⚠️  NO_PAYLOAD: Đã đăng ký nhưng chưa có payload cho {number}")
+                    # Vẫn hiển thị thông tin cơ bản
                     return request.render("hlv_tracking_aftership.website_track_result", {
-                        "error": error, "data": {}, "number": number, "slug": slug or "",
+                        "error": None,
+                        "data": {"tracking_number": number, "slug": slug, "tag": "Pending"},
+                        "number": number,
+                        "slug": slug or "",
+                        "checkpoints": [],
+                        "last_update": record.tracking_last_update,
+                        "from_cache": False,
                     })
             
             # Bước 4: Nếu KHÔNG tìm thấy record nào trong database
