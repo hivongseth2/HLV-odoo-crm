@@ -53,6 +53,8 @@ class StockPicking(models.Model):
     tracking_status = fields.Char(string="Tracking Status", copy=False, readonly=True)
     tracking_last_checkpoint = fields.Char(string="Last Checkpoint", copy=False, readonly=True)
     tracking_payload = fields.Json(string="Tracking JSON", copy=False, readonly=True)
+    tracking_last_update = fields.Datetime(string="Last Tracking Update", copy=False, readonly=True)
+    webhook_registered = fields.Boolean(string="Webhook Registered", default=False, copy=False)
     
     @api.model_create_multi
     def create(self, vals_list):
@@ -145,7 +147,11 @@ class StockPicking(models.Model):
             tracking = (res or {}).get("data") or {}
             pick.aftership_id = tracking.get("id")
             pick.tracking_payload = tracking
+            pick.tracking_last_update = fields.Datetime.now()
             pick.action_refresh_tracking_aftership()
+            
+            # Đăng ký webhook (chỉ cần 1 lần cho toàn hệ thống)
+            pick._ensure_webhook_registered()
 
     def action_refresh_tracking_aftership(self):
         for pick in self:
@@ -163,6 +169,7 @@ class StockPicking(models.Model):
 
             tracking = (res or {}).get("data") or {}
             pick.tracking_payload = tracking
+            pick.tracking_last_update = fields.Datetime.now()
 
             tag = tracking.get("tag") or tracking.get("subtag") or tracking.get("status")
             pick.tracking_status = _vi_status(tag, tag)
@@ -228,3 +235,48 @@ class StockPicking(models.Model):
     def cron_aftership_refresh_all(self):
         picks = self.search([('aftership_id', '!=', False)])
         picks.action_refresh_tracking_aftership()
+
+    def _ensure_webhook_registered(self):
+        """
+        Đảm bảo webhook đã được đăng ký với AfterShip.
+        Chỉ cần đăng ký 1 lần cho toàn hệ thống.
+        
+        Để kích hoạt:
+        1. Cấu hình 'aftership.api_key' trong System Parameters
+        2. Cấu hình 'aftership.webhook_enabled' = 'true' (optional, mặc định là false)
+        3. Cấu hình 'aftership.webhook_secret' (optional, để verify webhook)
+        """
+        self.ensure_one()
+        
+        # Kiểm tra xem webhook đã được đăng ký chưa
+        webhook_enabled = self.env['ir.config_parameter'].sudo().get_param('aftership.webhook_enabled', 'false')
+        if webhook_enabled.lower() != 'true':
+            _logger.info("AfterShip webhook is disabled. Set 'aftership.webhook_enabled' = 'true' to enable.")
+            return
+        
+        # Kiểm tra xem đã đăng ký webhook chưa (dùng ir.config_parameter làm flag)
+        webhook_registered = self.env['ir.config_parameter'].sudo().get_param('aftership.webhook_registered', 'false')
+        if webhook_registered.lower() == 'true':
+            _logger.debug("AfterShip webhook already registered")
+            return
+        
+        try:
+            # Lấy base URL của hệ thống
+            base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+            if not base_url:
+                _logger.warning("Cannot register webhook: 'web.base.url' not configured")
+                return
+            
+            webhook_url = f"{base_url}/aftership/webhook"
+            
+            # Đăng ký webhook
+            client = self._aftership_client()
+            result = client.register_webhook(webhook_url)
+            
+            # Đánh dấu đã đăng ký
+            self.env['ir.config_parameter'].sudo().set_param('aftership.webhook_registered', 'true')
+            _logger.info(f"AfterShip webhook registered successfully: {webhook_url}")
+            
+        except Exception as e:
+            _logger.warning(f"Failed to register AfterShip webhook: {e}")
+            # Không raise error vì webhook không phải là critical

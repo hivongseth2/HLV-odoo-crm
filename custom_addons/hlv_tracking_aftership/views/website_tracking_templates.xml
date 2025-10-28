@@ -79,6 +79,40 @@
                   </div>
                 </div>
 
+                <!-- Hiển thị thời gian cập nhật cuối và nút refresh -->
+                <div class="hlv-track-meta">
+                  <div class="hlv-track-update-info">
+                    <t t-if="last_update">
+                      <span class="hlv-track-update-label">
+                        <t t-if="from_cache">
+                          <i class="fa fa-database"></i> Dữ liệu từ hệ thống
+                        </t>
+                        <t t-else="">
+                          <i class="fa fa-refresh"></i> Vừa cập nhật
+                        </t>
+                      </span>
+                      <span class="hlv-track-update-time">
+                        Cập nhật lúc: <t t-esc="last_update.strftime('%d/%m/%Y %H:%M') if last_update else 'N/A'"/>
+                      </span>
+                    </t>
+                    <t t-else="">
+                      <span class="hlv-track-update-label">
+                        <i class="fa fa-refresh"></i> Dữ liệu mới nhất
+                      </span>
+                    </t>
+                  </div>
+                  <div class="hlv-track-refresh">
+                    <form action="/track/search" method="get" style="margin: 0;">
+                      <input type="hidden" name="tracking_number" t-att-value="number"/>
+                      <input type="hidden" name="slug" t-att-value="slug"/>
+                      <input type="hidden" name="force_refresh" value="1"/>
+                      <button type="submit" class="btn btn-sm btn-secondary">
+                        <i class="fa fa-refresh"></i> Làm mới trạng thái
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
                 <!-- Lấy checkpoints từ controller (đã đảo thứ tự) -->
                 <t t-set="cp_list" t-value="checkpoints or []"/>
                 <div class="hlv-track-timeline">
@@ -120,6 +154,11 @@
             .hlv-track-status{font-weight:600}
             .hlv-track-alert{padding:12px;border-radius:8px;margin-bottom:12px}
             .hlv-track-alert--error{background:#fee2e2;color:#991b1b}
+            .hlv-track-meta{display:flex;justify-content:space-between;align-items:center;padding:12px;background:#f9fafb;border-radius:8px;margin:16px 0;flex-wrap:wrap;gap:12px}
+            .hlv-track-update-info{display:flex;flex-direction:column;gap:4px}
+            .hlv-track-update-label{font-weight:600;color:#2563eb;font-size:0.9rem}
+            .hlv-track-update-time{color:#6b7280;font-size:0.85rem}
+            .hlv-track-refresh{}
             .hlv-track-timeline{margin-top:16px}
             .hlv-timeline-list{list-style:none;margin:0;padding:0;border-left:2px solid #e5e7eb}
             .hlv-timeline-item{position:relative;padding:12px 12px 12px 20px}
@@ -128,6 +167,10 @@
             .hlv-timeline-item__time{font-size:.85rem;color:#6b7280;margin-bottom:2px}
             .hlv-timeline-item__body h4{margin:0 0 2px 0;font-size:1rem}
             .hlv-timeline-item__body p{margin:0;color:#374151}
+            @media (max-width:768px){
+              .hlv-track-summary{grid-template-columns:1fr}
+              .hlv-track-meta{flex-direction:column;align-items:flex-start}
+            }
           </style>
         </div>
       </t>
