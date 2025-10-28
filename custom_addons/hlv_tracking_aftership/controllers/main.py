@@ -79,7 +79,6 @@ class WebsiteTrackingPublic(http.Controller):
         params = request.params or {}
         query = (post.get('tracking_number') or params.get('tracking_number') or '').strip()
         slug_input = (post.get('slug') or params.get('slug') or '').strip()
-        force_refresh = (post.get('force_refresh') or params.get('force_refresh') or '').strip() == '1'
         
         error = None
         data = {}
@@ -115,7 +114,8 @@ class WebsiteTrackingPublic(http.Controller):
                     pick = order.picking_ids.filtered(lambda p: p.tracking_number)[:1]
             
             # Bước 2: Nếu tìm thấy picking/order và có tracking_payload
-            if pick and pick.tracking_payload and not force_refresh:
+            # LUÔN lấy từ database, KHÔNG bao giờ gọi API từ website
+            if pick and pick.tracking_payload:
                 # Sử dụng dữ liệu từ database (KHÔNG GỌI API)
                 tracking = pick.tracking_payload
                 number = pick.tracking_number
@@ -138,8 +138,8 @@ class WebsiteTrackingPublic(http.Controller):
                     "from_cache": True,
                 })
             
-            # Bước 2b: Nếu có order nhưng chưa có tracking_payload và không force refresh
-            if order and order.tracking_payload and not force_refresh:
+            # Bước 2b: Nếu có order nhưng chưa có tracking_payload
+            if order and order.tracking_payload:
                 tracking = order.tracking_payload
                 number = order.tracking_number
                 slug = order.tracking_slug
@@ -161,14 +161,15 @@ class WebsiteTrackingPublic(http.Controller):
                     "from_cache": True,
                 })
             
-            # Bước 3: Nếu có picking/order nhưng chưa có payload HOẶC force_refresh
+            # Bước 3: Nếu có picking/order nhưng CHƯA có payload
+            # CHỈ đăng ký AfterShip lần đầu, SAU ĐÓ dữ liệu sẽ được cập nhật qua WEBHOOK
             if pick or order:
                 record = pick or order
                 if record.tracking_number:
                     number = record.tracking_number
                     slug = record.tracking_slug or slug_input
                     
-                    # Nếu chưa đăng ký AfterShip, đăng ký ngay
+                    # Nếu chưa đăng ký AfterShip, đăng ký ngay (CHỈ 1 LẦN)
                     if not record.aftership_id:
                         try:
                             record.action_register_tracking_aftership()
@@ -177,14 +178,9 @@ class WebsiteTrackingPublic(http.Controller):
                             return request.render("hlv_tracking_aftership.website_track_result", {
                                 "error": error, "data": {}, "number": number, "slug": slug or "",
                             })
-                    else:
-                        # Refresh data từ AfterShip
-                        try:
-                            record.action_refresh_tracking_aftership()
-                        except Exception as e:
-                            error = f"Lỗi làm mới tracking: {e}"
                     
-                    # Lấy dữ liệu sau khi refresh
+                    # SAU KHI ĐĂNG KÝ, hiển thị dữ liệu từ database
+                    # Webhook sẽ tự động cập nhật tracking_payload khi có thay đổi
                     if record.tracking_payload:
                         tracking = record.tracking_payload
                         checkpoints = list(reversed(tracking.get('checkpoints') or []))
@@ -200,7 +196,7 @@ class WebsiteTrackingPublic(http.Controller):
                             "slug": slug or "",
                             "checkpoints": checkpoints,
                             "last_update": record.tracking_last_update,
-                            "from_cache": False,
+                            "from_cache": False,  # Vừa đăng ký lần đầu
                         })
                 else:
                     error = f"Đơn {query} chưa có mã vận đơn."

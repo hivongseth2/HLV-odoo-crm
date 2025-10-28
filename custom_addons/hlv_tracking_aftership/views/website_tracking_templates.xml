@@ -79,17 +79,12 @@
                   </div>
                 </div>
 
-                <!-- Hiển thị thời gian cập nhật cuối và nút refresh -->
+                <!-- Hiển thị thời gian cập nhật cuối -->
                 <div class="hlv-track-meta">
                   <div class="hlv-track-update-info">
                     <t t-if="last_update">
                       <span class="hlv-track-update-label">
-                        <t t-if="from_cache">
-                          <i class="fa fa-database"></i> Dữ liệu từ hệ thống
-                        </t>
-                        <t t-else="">
-                          <i class="fa fa-refresh"></i> Vừa cập nhật
-                        </t>
+                        <i class="fa fa-database"></i> Dữ liệu từ hệ thống (tự động cập nhật qua webhook)
                       </span>
                       <span class="hlv-track-update-time">
                         Cập nhật lúc: <t t-esc="last_update.strftime('%d/%m/%Y %H:%M') if last_update else 'N/A'"/>
@@ -97,19 +92,18 @@
                     </t>
                     <t t-else="">
                       <span class="hlv-track-update-label">
-                        <i class="fa fa-refresh"></i> Dữ liệu mới nhất
+                        <i class="fa fa-info-circle"></i> Vừa được đăng ký với AfterShip
+                      </span>
+                      <span class="hlv-track-update-time">
+                        Dữ liệu sẽ được cập nhật tự động qua webhook
                       </span>
                     </t>
                   </div>
                   <div class="hlv-track-refresh">
-                    <form action="/track/search" method="get" style="margin: 0;">
-                      <input type="hidden" name="tracking_number" t-att-value="number"/>
-                      <input type="hidden" name="slug" t-att-value="slug"/>
-                      <input type="hidden" name="force_refresh" value="1"/>
-                      <button type="submit" class="btn btn-sm btn-secondary">
-                        <i class="fa fa-refresh"></i> Làm mới trạng thái
-                      </button>
-                    </form>
+                    <!-- Nút refresh chỉ để reload trang, KHÔNG gọi API -->
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.reload()">
+                      <i class="fa fa-refresh"></i> Tải lại trang
+                    </button>
                   </div>
                 </div>
 
