@@ -99,6 +99,7 @@ class WebsiteTrackingPublic(http.Controller):
             
             pick = None
             order = None
+            found_record = None  # Record được tìm thấy (có thể là pick hoặc order)
             
             # Tìm trong stock.picking
             pick = Picking.search([
@@ -107,27 +108,37 @@ class WebsiteTrackingPublic(http.Controller):
                 ('tracking_number', '=', query)
             ], limit=1)
             
-            # Nếu picking không có, tìm trong sale.order
-            if not pick:
+            if pick:
+                found_record = pick
+                _logger.info(f"✅ FOUND_PICKING: {pick.name}")
+            else:
+                # Nếu picking không có, tìm trong sale.order
                 order = SaleOrder.search([
                     '|', '|', ('name', '=', query),
                     ('client_order_ref', '=', query),
                     ('tracking_number', '=', query)
                 ], limit=1)
                 
-                # Nếu tìm thấy order, lấy picking từ order
                 if order:
-                    pick = order.picking_ids.filtered(lambda p: p.tracking_number)[:1]
+                    _logger.info(f"✅ FOUND_ORDER: {order.name}")
+                    # Ưu tiên lấy picking từ order nếu có
+                    pick_from_order = order.picking_ids.filtered(lambda p: p.tracking_number)[:1]
+                    if pick_from_order:
+                        found_record = pick_from_order
+                        _logger.info(f"✅ FOUND_PICKING_FROM_ORDER: {pick_from_order.name}")
+                    else:
+                        # Nếu không có picking, dùng order
+                        found_record = order
             
-            # Bước 2: Nếu tìm thấy picking/order và có tracking_payload
+            # Bước 2: Nếu tìm thấy record và có tracking_payload
             # LUÔN lấy từ database, KHÔNG bao giờ gọi API từ website
-            if pick and pick.tracking_payload:
+            if found_record and found_record.tracking_payload:
                 # Sử dụng dữ liệu từ database (KHÔNG GỌI API)
-                _logger.info(f"✅ DB_HIT: Lấy từ database cho picking {pick.name}")
-                tracking = pick.tracking_payload
-                number = pick.tracking_number
-                slug = pick.tracking_slug
-                last_update = pick.tracking_last_update
+                _logger.info(f"✅ DB_HIT: Lấy từ database cho {found_record._name} {found_record.name}")
+                tracking = found_record.tracking_payload
+                number = found_record.tracking_number
+                slug = found_record.tracking_slug
+                last_update = found_record.tracking_last_update
                 
                 checkpoints = list(reversed(tracking.get('checkpoints') or []))
                 for cp in checkpoints:
@@ -145,33 +156,10 @@ class WebsiteTrackingPublic(http.Controller):
                     "from_cache": True,
                 })
             
-            # Bước 2b: Nếu có order nhưng chưa có tracking_payload
-            if order and order.tracking_payload:
-                tracking = order.tracking_payload
-                number = order.tracking_number
-                slug = order.tracking_slug
-                last_update = order.tracking_last_update
-                
-                checkpoints = list(reversed(tracking.get('checkpoints') or []))
-                for cp in checkpoints:
-                    cp['message'] = _polish_message(cp.get('message'))
-                    cp['status_vn'] = _vi_status(cp.get('tag') or cp.get('status'), _polish_message(cp.get('message')))
-                tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))
-                
-                return request.render("hlv_tracking_aftership.website_track_result", {
-                    "error": None,
-                    "data": tracking or {},
-                    "number": number,
-                    "slug": slug or "",
-                    "checkpoints": checkpoints,
-                    "last_update": last_update,
-                    "from_cache": True,
-                })
-            
-            # Bước 3: Nếu có picking/order nhưng CHƯA có payload
+            # Bước 3: Nếu tìm thấy record nhưng CHƯA có payload
             # CHỈ đăng ký AfterShip lần đầu, SAU ĐÓ dữ liệu sẽ được cập nhật qua WEBHOOK
-            if pick or order:
-                record = pick or order
+            if found_record:
+                record = found_record
                 
                 # Kiểm tra có tracking number không
                 if not record.tracking_number:
@@ -224,8 +212,9 @@ class WebsiteTrackingPublic(http.Controller):
                         "error": error, "data": {}, "number": number, "slug": slug or "",
                     })
             
-            # Bước 4: Nếu không tìm thấy trong database, kiểm tra xem input có phải mã vận đơn trực tiếp không
-            if _looks_like_tracking(query):
+            # Bước 4: Nếu KHÔNG tìm thấy record nào trong database
+            # Kiểm tra xem input có phải mã vận đơn trực tiếp không
+            if not found_record and _looks_like_tracking(query):
                 # Input là mã vận đơn trực tiếp
                 number = query
                 slug = slug_input or _guess_slug(number)
