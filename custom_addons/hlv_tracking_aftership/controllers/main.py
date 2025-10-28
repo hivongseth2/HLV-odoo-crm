@@ -190,9 +190,13 @@ class WebsiteTrackingPublic(http.Controller):
                         record.action_register_tracking_aftership()
                         api_call_count += 1  # GỌI API 1 LẦN
                         
-                        # Refresh record để lấy dữ liệu mới sau khi đăng ký
+                        # FLUSH transaction để lưu dữ liệu vào database ngay
+                        self.env.cr.commit()
+                        _logger.info(f"💾 COMMITTED: Đã lưu dữ liệu AfterShip vào database")
+                        
+                        # Refresh record để lấy dữ liệu mới nhất sau khi đăng ký
                         record.invalidate_recordset(['aftership_id', 'tracking_payload', 'tracking_last_update', 'tracking_status'])
-                        _logger.info(f"🔄 REFRESHED: aftership_id={record.aftership_id}, has_payload={bool(record.tracking_payload)}")
+                        _logger.info(f"🔄 REFRESHED: aftership_id={record.aftership_id[:8] if record.aftership_id else 'None'}, has_payload={bool(record.tracking_payload)}")
                     except Exception as e:
                         error = f"Lỗi đăng ký tracking: {e}"
                         _logger.error(f"❌ REGISTER_ERROR: {e}")
