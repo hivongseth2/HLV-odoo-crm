@@ -110,7 +110,9 @@ class WebsiteTrackingPublic(http.Controller):
             
             if pick:
                 found_record = pick
-                _logger.info(f"✅ FOUND_PICKING: {pick.name} | tracking_number={pick.tracking_number} | has_payload={bool(pick.tracking_payload)}")
+                # Refresh để lấy dữ liệu mới nhất từ database
+                pick.invalidate_recordset(['aftership_id', 'tracking_payload', 'tracking_last_update', 'tracking_status', 'tracking_slug'])
+                _logger.info(f"✅ FOUND_PICKING: {pick.name} | tracking_number={pick.tracking_number} | has_payload={bool(pick.tracking_payload)} | aftership_id={pick.aftership_id[:8] if pick.aftership_id else 'None'}")
             else:
                 # Nếu picking không có, tìm trong sale.order
                 order = SaleOrder.search([
@@ -120,10 +122,14 @@ class WebsiteTrackingPublic(http.Controller):
                 ], limit=1)
                 
                 if order:
-                    _logger.info(f"✅ FOUND_ORDER: {order.name} | tracking_number={order.tracking_number} | has_payload={bool(order.tracking_payload)}")
+                    # Refresh để lấy dữ liệu mới nhất từ database
+                    order.invalidate_recordset(['aftership_id', 'tracking_payload', 'tracking_last_update', 'tracking_status', 'tracking_slug'])
+                    _logger.info(f"✅ FOUND_ORDER: {order.name} | tracking_number={order.tracking_number} | has_payload={bool(order.tracking_payload)} | aftership_id={order.aftership_id[:8] if order.aftership_id else 'None'}")
                     # Ưu tiên lấy picking từ order nếu có
                     pick_from_order = order.picking_ids.filtered(lambda p: p.tracking_number)[:1]
                     if pick_from_order:
+                        # Refresh để lấy dữ liệu mới nhất từ database
+                        pick_from_order.invalidate_recordset(['aftership_id', 'tracking_payload', 'tracking_last_update', 'tracking_status', 'tracking_slug'])
                         found_record = pick_from_order
                         _logger.info(f"✅ FOUND_PICKING_FROM_ORDER: {pick_from_order.name} | tracking_number={pick_from_order.tracking_number}")
                     else:
