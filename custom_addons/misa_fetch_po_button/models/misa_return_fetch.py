@@ -128,6 +128,15 @@ class MisaReturnFetch(models.TransientModel):
         journal_memo = return_order.get("journal_memo", "")
         supplier_name = return_order.get("account_object_name", "Unknown Customer")
         
+        # Lấy thông tin chi tiết đầy đủ để có order_code
+        detail_full = self._fetch_return_detail_full(refid, headers, misa_utils)
+        order_code = ""
+        
+        if detail_full and detail_full.get("sa_return_detail"):
+            # Lấy order_code từ dòng chi tiết đầu tiên
+            order_code = detail_full["sa_return_detail"][0].get("order_code", "")
+            _logger.info("📋 Lấy được order_code: %s cho đơn trả %s", order_code, refno)
+        
         # Kiểm tra xem đã tạo phiếu nhập kho chưa
         existing_picking = self.env["stock.picking"].search([
             ("origin", "=", refno)
@@ -211,6 +220,10 @@ class MisaReturnFetch(models.TransientModel):
         if journal_memo:
             picking_vals['note'] = f"Lý do trả: {journal_memo}"
         
+        # Thêm order_code nếu có
+        if order_code:
+            picking_vals['note'] = f"{picking_vals.get('note', '')}\nMã đơn hàng: {order_code}".strip()
+        
         picking = self.env["stock.picking"].create(picking_vals)
         
         # Tạo các dòng move từ detail_data (PageData)
@@ -275,6 +288,90 @@ class MisaReturnFetch(models.TransientModel):
             return None
         except Exception as e:
             _logger.exception("❌ Lỗi khi gọi API chi tiết đơn trả %s: %s", refid, e)
+            return None
+
+    def _fetch_return_detail_full(self, refid, headers, misa_utils):
+        """Lấy thông tin chi tiết đầy đủ đơn hàng trả về (bao gồm order_code)"""
+        
+        import base64
+        import json
+        
+        # Xây dựng request data
+        request_data = [
+            {
+                "Type": "sa_return",
+                "Key": refid,
+                "RefType": 3040,
+                "RefTypeCategory": 354,
+                "Details": [
+                    {
+                        "Type": "sa_return_detail",
+                        "Alias": "detail",
+                        "View": "view_sa_return_detail"
+                    },
+                    {
+                        "Type": "wesign_document",
+                        "Alias": "wesign_document",
+                        "ForeignKey": "refid",
+                        "Mode": "View"
+                    }
+                ],
+                "Links": [
+                    {
+                        "Type": "pu_invoice",
+                        "RefType": 3403,
+                        "RefTypeCategory": 0,
+                        "UseSameKeyWithMaster": False,
+                        "KeyColumnInMaster": "pu_invoice_refid"
+                    },
+                    {
+                        "Type": "in_inward",
+                        "RefType": 2013,
+                        "RefTypeCategory": 201,
+                        "UseSameKeyWithMaster": False,
+                        "KeyColumnInMaster": "in_inward_refid"
+                    },
+                    {
+                        "Type": "inv_bot_reference",
+                        "RefType": 0,
+                        "RefTypeCategory": 0
+                    }
+                ]
+            }
+        ]
+        
+        # Encode thành base64
+        req_json = json.dumps(request_data, separators=(',', ':'))
+        req_encoded = base64.b64encode(req_json.encode()).decode()
+        
+        detail_full_url = f"https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full?req={req_encoded}"
+        
+        try:
+            response = misa_utils._fetch_with_retry(detail_full_url, headers, method='GET')
+            
+            if response.status_code != 200:
+                _logger.error("❌ Không lấy được thông tin chi tiết đầy đủ đơn trả %s: HTTP %s", 
+                            refid, response.status_code)
+                return None
+            
+            result = response.json()
+            if result.get("Success"):
+                data = result.get("Data", {})
+                return {
+                    "sa_return": data.get("sa_return", [{}])[0] if data.get("sa_return") else {},
+                    "sa_return_detail": data.get("sa_return_detail", []),
+                    "pu_invoice": data.get("pu_invoice", [{}])[0] if data.get("pu_invoice") else {},
+                    "in_inward": data.get("in_inward", [{}])[0] if data.get("in_inward") else {}
+                }
+            else:
+                _logger.error("❌ API detail_full trả về Success=False cho đơn %s", refid)
+                return None
+                
+        except requests.exceptions.Timeout:
+            _logger.error("❌ Timeout khi gọi API detail_full cho đơn trả %s", refid)
+            return None
+        except Exception as e:
+            _logger.exception("❌ Lỗi khi gọi API detail_full cho đơn trả %s: %s", refid, e)
             return None
 
     def _create_stock_move(self, picking, line, location, odoo_utils):
