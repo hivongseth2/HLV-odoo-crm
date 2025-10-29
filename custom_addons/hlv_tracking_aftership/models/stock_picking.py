@@ -2,6 +2,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 import logging
+from datetime import datetime
 from .tracking_utils import guess_carrier_slug, is_valid_tracking_number, should_auto_register_tracking
 
 _logger = logging.getLogger(__name__)
@@ -33,6 +34,36 @@ def _polish_message(message: str) -> str:
     for old, new in REPLACEMENTS:
         msg = msg.replace(old, new)
     return msg
+
+
+def _format_datetime(dt_str: str) -> str:
+    """
+    Format datetime string từ ISO format sang định dạng thân thiện
+    Input: 2025-10-28T03:07:40+07:00
+    Output: 28/10/2025 03:07
+    """
+    if not dt_str:
+        return ""
+    
+    try:
+        # Parse ISO format datetime
+        # Xử lý timezone như +07:00
+        if '+' in dt_str:
+            dt_part = dt_str.split('+')[0]
+        elif dt_str.endswith('Z'):
+            dt_part = dt_str[:-1]
+        else:
+            dt_part = dt_str
+        
+        # Parse datetime
+        dt = datetime.fromisoformat(dt_part)
+        
+        # Format thân thiện: DD/MM/YYYY HH:MM
+        return dt.strftime("%d/%m/%Y %H:%M")
+    except Exception as e:
+        _logger.warning(f"⚠️  FORMAT_DATETIME_ERROR: {dt_str} - {e}")
+        # Nếu lỗi, trả về nguyên bản
+        return dt_str
 
 
 def _vi_status(tag: str, fallback: str = "") -> str:
@@ -191,6 +222,9 @@ class StockPicking(models.Model):
             items = []
             for cp in reversed(cps):
                 t = cp.get("checkpoint_time") or cp.get("date_time") or ""
+                # Format thời gian sang DD/MM/YYYY HH:MM
+                if t:
+                    t = _format_datetime(t)
                 tag = _vi_status(cp.get("tag") or cp.get("status"), cp.get("status"))
                 msg = _polish_message(cp.get("message"))
                 location = cp.get("location") or cp.get("city") or ""
