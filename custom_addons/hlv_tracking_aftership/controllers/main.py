@@ -208,16 +208,29 @@ class WebsiteTrackingPublic(http.Controller):
                     if sale_order and sale_order.tracking_number:
                         number = sale_order.tracking_number
                         slug = sale_order.tracking_slug or _guess_slug(number)
-                        _logger.info(f"💡 COPY_FROM_SALE_ORDER: Lấy tracking_number={number} từ sale.order {sale_order.name}")
+                        _logger.info(f"💡 COPY_FROM_SALE_ORDER: Lấy tracking_number={number} từ sale.order {sale_order.name} | aftership_id={sale_order.aftership_id[:8] if sale_order.aftership_id else 'None'}")
                         
-                        # Copy sang picking để lần sau không cần tìm lại
+                        # Copy cả tracking_number, slug VÀ aftership_id sang picking để lần sau không cần tìm lại
                         try:
-                            record.write({
+                            update_vals = {
                                 'tracking_number': number,
                                 'tracking_slug': slug,
-                            })
+                            }
+                            # Nếu sale.order đã có aftership_id, copy luôn để không phải đăng ký lại
+                            if sale_order.aftership_id:
+                                update_vals['aftership_id'] = sale_order.aftership_id
+                                _logger.info(f"📋 COPY_AFTERSHIP_ID: Copy aftership_id={sale_order.aftership_id[:8]} từ sale.order")
+                            
+                            record.write(update_vals)
                             request.env.cr.commit()
-                            _logger.info(f"💾 SYNCED_TO_PICKING: Đã đồng bộ tracking_number vào picking {record.name}")
+                            # Refresh lại record để lấy giá trị mới
+                            record.invalidate_recordset(['tracking_number', 'tracking_slug', 'aftership_id'])
+                            
+                            # Cập nhật lại các biến local sau khi đồng bộ
+                            number = record.tracking_number
+                            slug = record.tracking_slug
+                            
+                            _logger.info(f"💾 SYNCED_TO_PICKING: Đã đồng bộ tracking vào picking {record.name} | aftership_id={record.aftership_id[:8] if record.aftership_id else 'None'}")
                         except Exception as sync_error:
                             _logger.warning(f"⚠️  SYNC_FAILED: {sync_error}")
                 
