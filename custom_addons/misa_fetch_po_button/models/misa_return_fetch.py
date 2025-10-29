@@ -347,7 +347,9 @@ class MisaReturnFetch(models.TransientModel):
         detail_full_url = f"https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full?req={req_encoded}"
         
         try:
-            response = misa_utils._fetch_with_retry(detail_full_url, headers, method='GET')
+            # Sử dụng requests.get() trực tiếp vì _fetch_with_retry() chỉ hỗ trợ POST
+            response = requests.get(detail_full_url, headers=headers, timeout=30)
+            _logger.info("📡 Gọi API detail_full cho đơn trả %s: HTTP %s", refid, response.status_code)
             
             if response.status_code != 200:
                 _logger.error("❌ Không lấy được thông tin chi tiết đầy đủ đơn trả %s: HTTP %s", 
