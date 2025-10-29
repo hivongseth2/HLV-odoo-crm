@@ -1,13 +1,10 @@
 # -*- coding: utf-8 -*-
 from odoo import http
 from odoo.http import request
-import requests
 import re
 import logging
 
 _logger = logging.getLogger(__name__)
-
-AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2025-07"
 
 
 VI_STATUS_LABELS = {
@@ -76,25 +73,24 @@ def _call_aftership_api(aftership_id: str, api_key: str) -> dict:
     Returns: dict hoặc None nếu lỗi
     """
     try:
-        headers = {
-            'as-api-key': api_key,
-            'Content-Type': 'application/json',
-        }
-        url = f"{AFTERSHIP_API_BASE}/trackings/{aftership_id}?lang=vi"
+        # Import AfterShipClient từ services
+        from odoo.addons.hlv_tracking_aftership.services.aftership_client import AfterShipClient
         
-        _logger.info(f"🌐 API_CALL: GET {url}")
-        response = requests.get(url, headers=headers, timeout=10)
+        client = AfterShipClient(api_key)
+        _logger.info(f"🌐 API_CALL: Getting tracking for aftership_id={aftership_id[:8]}...")
         
-        if response.status_code == 200:
-            data = response.json()
-            tracking = data.get('data', {}).get('tracking', {})
-            _logger.info(f"✅ API_SUCCESS: Got {len(tracking.get('checkpoints', []))} checkpoints")
-            return tracking
-        else:
-            _logger.error(f"❌ API_ERROR: {response.status_code} - {response.text}")
-            return None
+        # Gọi API giống như backend
+        res = client.get_tracking_by_id(aftership_id, lang="vi")
+        
+        # Parse response giống như backend
+        tracking = (res or {}).get("data") or {}
+        checkpoints = tracking.get('checkpoints', [])
+        
+        _logger.info(f"✅ API_SUCCESS: Got {len(checkpoints)} checkpoints | tag={tracking.get('tag')}")
+        return tracking
+        
     except Exception as e:
-        _logger.error(f"❌ API_EXCEPTION: {e}")
+        _logger.error(f"❌ API_EXCEPTION: {e}", exc_info=True)
         return None
 
 
