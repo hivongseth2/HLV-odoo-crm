@@ -116,38 +116,6 @@
                     </p>
                   </div>
                 </div>
-
-                <!-- Hiển thị thời gian cập nhật cuối -->
-                <div class="hlv-track-meta">
-                  <div class="hlv-track-update-info">
-                    <t t-if="last_update">
-                      <span class="hlv-track-update-label">
-                        <i class="fa fa-database"></i> Dữ liệu từ hệ thống
-                      </span>
-                      <span class="hlv-track-update-time">
-                        Cập nhật lúc: <t t-esc="last_update.strftime('%d/%m/%Y %H:%M') if last_update else 'N/A'"/>
-                      </span>
-                      <span class="hlv-track-update-note">
-                        <i class="fa fa-check-circle text-success"></i> Tự động qua webhook
-                      </span>
-                    </t>
-                    <t t-else="">
-                      <span class="hlv-track-update-label">
-                        <i class="fa fa-hourglass-half"></i> Vừa đăng ký với AfterShip
-                      </span>
-                      <span class="hlv-track-update-time">
-                        Đang chờ dữ liệu từ hãng vận chuyển
-                      </span>
-                    </t>
-                  </div>
-                  <div class="hlv-track-refresh">
-                    <!-- Nút refresh chỉ để reload trang, KHÔNG gọi API -->
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="window.location.reload()">
-                      <i class="fa fa-refresh"></i> Tải lại
-                    </button>
-                  </div>
-                </div>
-
                 <!-- Lấy checkpoints từ controller (đã đảo thứ tự) -->
                 <t t-set="cp_list" t-value="checkpoints or []"/>
                 <div class="hlv-track-timeline">
