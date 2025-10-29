@@ -7,7 +7,7 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
-AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2025-07"
+AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2024-07"
 
 
 VI_STATUS_LABELS = {
@@ -133,6 +133,9 @@ class WebsiteTrackingPublic(http.Controller):
             
             found_record = None
             
+            # DEBUG: Tìm tất cả các picking và order để kiểm tra
+            _logger.info(f"🔍 SEARCHING: query='{query}'")
+            
             # Tìm trong stock.picking
             pick = Picking.search([
                 '|', '|', ('name', '=', query),
@@ -140,9 +143,20 @@ class WebsiteTrackingPublic(http.Controller):
                 ('tracking_number', '=', query)
             ], limit=1)
             
+            # DEBUG: Nếu không tìm thấy, thử search ilike
+            if not pick:
+                _logger.warning(f"⚠️  NO_EXACT_MATCH: Trying ilike search...")
+                pick = Picking.search([
+                    '|', '|', ('name', 'ilike', query),
+                    ('origin', 'ilike', query),
+                    ('tracking_number', 'ilike', query)
+                ], limit=1)
+                if pick:
+                    _logger.info(f"✅ FOUND_WITH_ILIKE: {pick.name}")
+            
             if pick:
                 found_record = pick
-                _logger.info(f"✅ FOUND_PICKING: {pick.name} | tracking_number={pick.tracking_number} | aftership_id={pick.aftership_id[:8] if pick.aftership_id else 'None'}")
+                _logger.info(f"✅ FOUND_PICKING: name={pick.name} | origin={pick.origin} | tracking_number={pick.tracking_number or 'EMPTY'} | aftership_id={pick.aftership_id[:8] if pick.aftership_id else 'None'}")
             else:
                 # Nếu picking không có, tìm trong sale.order
                 order = SaleOrder.search([
@@ -151,33 +165,71 @@ class WebsiteTrackingPublic(http.Controller):
                     ('tracking_number', '=', query)
                 ], limit=1)
                 
+                # DEBUG: Nếu không tìm thấy, thử search ilike
+                if not order:
+                    _logger.warning(f"⚠️  NO_EXACT_MATCH_ORDER: Trying ilike search...")
+                    order = SaleOrder.search([
+                        '|', '|', ('name', 'ilike', query),
+                        ('client_order_ref', 'ilike', query),
+                        ('tracking_number', 'ilike', query)
+                    ], limit=1)
+                    if order:
+                        _logger.info(f"✅ FOUND_ORDER_WITH_ILIKE: {order.name}")
+                
                 if order:
-                    _logger.info(f"✅ FOUND_ORDER: {order.name} | tracking_number={order.tracking_number}")
+                    _logger.info(f"✅ FOUND_ORDER: name={order.name} | client_order_ref={order.client_order_ref or 'EMPTY'} | tracking_number={order.tracking_number or 'EMPTY'}")
                     # Ưu tiên lấy picking từ order nếu có
-                    pick_from_order = order.picking_ids.filtered(lambda p: p.tracking_number)[:1]
+                    pick_from_order = order.picking_ids[:1]  # Lấy picking đầu tiên, không filter theo tracking_number
                     if pick_from_order:
                         found_record = pick_from_order
-                        _logger.info(f"✅ FOUND_PICKING_FROM_ORDER: {pick_from_order.name}")
+                        _logger.info(f"✅ FOUND_PICKING_FROM_ORDER: {pick_from_order.name} | tracking_number={pick_from_order.tracking_number or 'EMPTY'}")
                     else:
                         found_record = order
+                else:
+                    _logger.warning(f"⚠️  NOT_FOUND_IN_DB: No picking or order found for query='{query}'")
             
             # Bước 2: Nếu tìm thấy record
             if found_record:
                 record = found_record
                 
-                _logger.info(f"🔍 CHECK_RECORD: {record._name} {record.name} | tracking_number={record.tracking_number}")
+                _logger.info(f"🔍 CHECK_RECORD: model={record._name} | name={record.name} | tracking_number={record.tracking_number or 'EMPTY'} | aftership_id={record.aftership_id[:8] if record.aftership_id else 'None'}")
                 
                 # Lấy tracking number từ record
                 number = record.tracking_number
                 slug = record.tracking_slug or slug_input
                 
-                # Nếu record không có tracking_number → Báo lỗi
+                # DEBUG: Kiểm tra giá trị thực tế
+                _logger.info(f"📊 VALUES: number={number} | type={type(number)} | bool={bool(number)}")
+                
+                # Nếu record không có tracking_number
                 if not number:
-                    error = f"Đơn {query} chưa có mã vận đơn."
-                    _logger.warning(f"⚠️  NO_TRACKING: {record.name} chưa có tracking_number")
-                    return request.render("hlv_tracking_aftership.website_track_result", {
-                        "error": error, "data": {}, "number": query, "slug": "",
-                    })
+                    # Thử lấy từ slug_input (user có thể nhập tracking number vào ô "Hãng vận chuyển")
+                    if slug_input and _looks_like_tracking(slug_input):
+                        number = slug_input
+                        slug = _guess_slug(number)
+                        _logger.info(f"💡 USING_INPUT_AS_TRACKING: Dùng input '{slug_input}' làm tracking number")
+                        
+                        # Cập nhật vào record để lần sau không cần nhập lại
+                        try:
+                            record.write({
+                                'tracking_number': number,
+                                'tracking_slug': slug,
+                            })
+                            request.env.cr.commit()
+                            _logger.info(f"💾 SAVED_TRACKING: Đã lưu tracking_number={number} vào {record.name}")
+                        except Exception as save_error:
+                            _logger.warning(f"⚠️  SAVE_FAILED: {save_error}")
+                    else:
+                        # Thực sự không có tracking number
+                        error = f"Đơn '{record.name}' chưa có mã vận đơn. Vui lòng cập nhật mã vận đơn trong Odoo hoặc nhập mã vận đơn vào ô tìm kiếm."
+                        _logger.warning(f"⚠️  NO_TRACKING: {record.name} (model={record._name}) tracking_number is empty/false")
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": error, 
+                            "data": {}, 
+                            "number": query, 
+                            "slug": "",
+                            "order_name": record.name,  # Hiển thị tên đơn tìm thấy
+                        })
                 
                 # Nếu chưa đăng ký AfterShip, đăng ký ngay
                 if not record.aftership_id:
