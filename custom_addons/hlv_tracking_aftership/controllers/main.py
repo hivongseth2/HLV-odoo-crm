@@ -7,7 +7,7 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
-AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2024-07"
+AFTERSHIP_API_BASE = "https://api.aftership.com/tracking/2025-07"
 
 
 VI_STATUS_LABELS = {
@@ -77,10 +77,10 @@ def _call_aftership_api(aftership_id: str, api_key: str) -> dict:
     """
     try:
         headers = {
-            'aftership-api-key': api_key,
+            'as-api-key': api_key,
             'Content-Type': 'application/json',
         }
-        url = f"{AFTERSHIP_API_BASE}/trackings/{aftership_id}"
+        url = f"{AFTERSHIP_API_BASE}/trackings/{aftership_id}?lang=vi"
         
         _logger.info(f"🌐 API_CALL: GET {url}")
         response = requests.get(url, headers=headers, timeout=10)
