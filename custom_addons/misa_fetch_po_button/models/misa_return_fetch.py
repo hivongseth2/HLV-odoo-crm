@@ -137,13 +137,6 @@ class MisaReturnFetch(models.TransientModel):
             _logger.info("⏭️  Bỏ qua đơn trả %s vì đã tồn tại phiếu nhập kho", refno)
             return False
         
-        # Lấy order_code từ API detail_full (timeout=60s để chắc chắn)
-        order_code = self._fetch_return_order_code(refid, headers)
-        if order_code:
-            _logger.info("📋 Lấy được order_code: %s cho đơn trả %s", order_code, refno)
-        else:
-            _logger.info("⏭️  Không lấy được order_code cho đơn %s", refno)
-        
         # Lấy chi tiết đơn hàng trả về
         detail_data = self._fetch_return_detail(refid, headers, misa_utils)
         if not detail_data:
@@ -218,10 +211,6 @@ class MisaReturnFetch(models.TransientModel):
         if journal_memo:
             picking_vals['note'] = f"Lý do trả: {journal_memo}"
         
-        # Thêm order_code nếu có
-        if order_code:
-            picking_vals['note'] = f"{picking_vals.get('note', '')}\nMã đơn hàng: {order_code}".strip()
-        
         picking = self.env["stock.picking"].create(picking_vals)
         
         # Tạo các dòng move từ detail_data (PageData)
@@ -237,60 +226,6 @@ class MisaReturnFetch(models.TransientModel):
             picking.unlink()
             _logger.warning("⚠️ Không có sản phẩm hợp lệ, đã xóa phiếu nhập kho cho đơn %s", refno)
             return False
-
-    def _fetch_return_order_code(self, refid, headers):
-        """Lấy order_code từ API detail_full - timeout 60s"""
-        
-        import base64
-        import json
-        
-        try:
-            # Xây dựng request data
-            request_data = [
-                {
-                    "Type": "sa_return",
-                    "Key": refid,
-                    "RefType": 3040,
-                    "RefTypeCategory": 354,
-                    "Details": [
-                        {
-                            "Type": "sa_return_detail",
-                            "Alias": "detail",
-                            "View": "view_sa_return_detail"
-                        }
-                    ],
-                    "Links": []
-                }
-            ]
-            
-            # Encode thành base64
-            req_json = json.dumps(request_data, separators=(',', ':'))
-            req_encoded = base64.b64encode(req_json.encode()).decode()
-            
-            detail_full_url = f"https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full?req={req_encoded}"
-            
-            # Gọi API với timeout 60 giây
-            response = requests.get(detail_full_url, headers=headers, timeout=60)
-            
-            if response.status_code != 200:
-                _logger.warning("❌ API detail_full HTTP %s cho đơn %s", response.status_code, refid)
-                return ""
-            
-            result = response.json()
-            if result.get("Success"):
-                details = result.get("Data", {}).get("sa_return_detail", [])
-                if details and isinstance(details, list) and len(details) > 0:
-                    order_code = details[0].get("order_code", "")
-                    return order_code
-            
-            return ""
-                
-        except requests.exceptions.Timeout:
-            _logger.warning("⏱️  API detail_full timeout (60s) cho đơn %s, bỏ qua order_code", refid)
-            return ""
-        except Exception as e:
-            _logger.warning("⚠️  Lỗi lấy order_code từ API detail_full: %s", str(e)[:100])
-            return ""
 
     def _fetch_return_detail(self, refid, headers, misa_utils):
         """Lấy chi tiết đơn hàng trả về"""
