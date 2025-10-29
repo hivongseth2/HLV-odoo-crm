@@ -3,6 +3,7 @@ from odoo import http
 from odoo.http import request
 import re
 import logging
+from datetime import datetime
 
 _logger = logging.getLogger(__name__)
 
@@ -34,6 +35,36 @@ def _polish_message(message: str) -> str:
     for old, new in REPLACEMENTS:
         msg = msg.replace(old, new)
     return msg
+
+
+def _format_datetime(dt_str: str) -> str:
+    """
+    Format datetime string từ ISO format sang định dạng thân thiện
+    Input: 2025-10-28T03:07:40+07:00
+    Output: 28/10/2025 03:07
+    """
+    if not dt_str:
+        return ""
+    
+    try:
+        # Parse ISO format datetime
+        # Xử lý timezone như +07:00
+        if '+' in dt_str:
+            dt_part = dt_str.split('+')[0]
+        elif dt_str.endswith('Z'):
+            dt_part = dt_str[:-1]
+        else:
+            dt_part = dt_str
+        
+        # Parse datetime
+        dt = datetime.fromisoformat(dt_part)
+        
+        # Format thân thiện: DD/MM/YYYY HH:MM
+        return dt.strftime("%d/%m/%Y %H:%M")
+    except Exception as e:
+        _logger.warning(f"⚠️  FORMAT_DATETIME_ERROR: {dt_str} - {e}")
+        # Nếu lỗi, trả về nguyên bản
+        return dt_str
 
 
 def _vi_status(tag: str, fallback: str = "") -> str:
@@ -305,6 +336,10 @@ class WebsiteTrackingPublic(http.Controller):
                         for cp in checkpoints:
                             cp['message'] = _polish_message(cp.get('message'))
                             cp['status_vn'] = _vi_status(cp.get('tag') or cp.get('status'), _polish_message(cp.get('message')))
+                            # Format thời gian
+                            checkpoint_time = cp.get('checkpoint_time') or cp.get('date_time')
+                            if checkpoint_time:
+                                cp['formatted_time'] = _format_datetime(checkpoint_time)
                         tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))
                         
                         return request.render("hlv_tracking_aftership.website_track_result", {
@@ -361,6 +396,10 @@ class WebsiteTrackingPublic(http.Controller):
                         for cp in checkpoints:
                             cp['message'] = _polish_message(cp.get('message'))
                             cp['status_vn'] = _vi_status(cp.get('tag') or cp.get('status'), _polish_message(cp.get('message')))
+                            # Format thời gian
+                            checkpoint_time = cp.get('checkpoint_time') or cp.get('date_time')
+                            if checkpoint_time:
+                                cp['formatted_time'] = _format_datetime(checkpoint_time)
                         tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))
                         
                         return request.render("hlv_tracking_aftership.website_track_result", {

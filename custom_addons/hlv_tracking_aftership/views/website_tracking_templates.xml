@@ -132,7 +132,7 @@
                         <li t-attf-class="hlv-timeline-item {{ 'is-latest' if cp_index == 0 else '' }}">
                           <div class="hlv-timeline-item__time">
                             <i class="fa fa-clock-o"></i>
-                            <span t-esc="cp.get('checkpoint_time') or cp.get('date_time')"/>
+                            <span t-esc="cp.get('formatted_time') or cp.get('checkpoint_time') or cp.get('date_time')"/>
                           </div>
                           <div class="hlv-timeline-item__body">
                             <h4>
