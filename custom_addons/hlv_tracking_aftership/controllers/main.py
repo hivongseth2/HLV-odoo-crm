@@ -201,10 +201,46 @@ class WebsiteTrackingPublic(http.Controller):
                 # DEBUG: Kiểm tra giá trị thực tế
                 _logger.info(f"📊 VALUES: number={number} | type={type(number)} | bool={bool(number)}")
                 
-                # Nếu record không có tracking_number
+                # Nếu record không có tracking_number và là picking
+                # Thử lấy tracking_number từ sale_order liên quan
+                if not number and record._name == 'stock.picking' and record.origin:
+                    sale_order = SaleOrder.search([('name', '=', record.origin)], limit=1)
+                    if sale_order and sale_order.tracking_number:
+                        number = sale_order.tracking_number
+                        slug = sale_order.tracking_slug or _guess_slug(number)
+                        _logger.info(f"💡 COPY_FROM_SALE_ORDER: Lấy tracking_number={number} từ sale.order {sale_order.name}")
+                        
+                        # Copy sang picking để lần sau không cần tìm lại
+                        try:
+                            record.write({
+                                'tracking_number': number,
+                                'tracking_slug': slug,
+                            })
+                            request.env.cr.commit()
+                            _logger.info(f"💾 SYNCED_TO_PICKING: Đã đồng bộ tracking_number vào picking {record.name}")
+                        except Exception as sync_error:
+                            _logger.warning(f"⚠️  SYNC_FAILED: {sync_error}")
+                
+                # Nếu vẫn không có tracking_number
                 if not number:
+                    # Kiểm tra xem query có phải là mã vận đơn không (ví dụ: SPXVN05314648703A)
+                    if _looks_like_tracking(query):
+                        number = query
+                        slug = _guess_slug(number)
+                        _logger.info(f"💡 USING_QUERY_AS_TRACKING: Query '{query}' có vẻ là mã vận đơn, sẽ dùng làm tracking number")
+                        
+                        # Cập nhật vào record để lần sau không cần nhập lại
+                        try:
+                            record.write({
+                                'tracking_number': number,
+                                'tracking_slug': slug,
+                            })
+                            request.env.cr.commit()
+                            _logger.info(f"💾 SAVED_TRACKING: Đã lưu tracking_number={number} vào {record.name}")
+                        except Exception as save_error:
+                            _logger.warning(f"⚠️  SAVE_FAILED: {save_error}")
                     # Thử lấy từ slug_input (user có thể nhập tracking number vào ô "Hãng vận chuyển")
-                    if slug_input and _looks_like_tracking(slug_input):
+                    elif slug_input and _looks_like_tracking(slug_input):
                         number = slug_input
                         slug = _guess_slug(number)
                         _logger.info(f"💡 USING_INPUT_AS_TRACKING: Dùng input '{slug_input}' làm tracking number")
