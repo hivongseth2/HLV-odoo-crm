@@ -274,11 +274,12 @@ class MisaReturnFetch(models.TransientModel):
         
         # Tạo picking
         picking_vals = {
+            "name": refno,  # ← Tên phiếu = mã phiếu trả từ MISA (BTL00992)
             "partner_id": partner.id,
             "picking_type_id": warehouse.in_type_id.id,
             "location_id": self.env.ref('stock.stock_location_customers').id,
             "location_dest_id": location.id,
-            "origin": origin_code,  # ← Mã đơn gốc (thay vì refno)
+            "origin": origin_code,  # ← Mã đơn gốc (chứng từ gốc)
             "scheduled_date": scheduled_date,
             "move_type": "direct",
         }
