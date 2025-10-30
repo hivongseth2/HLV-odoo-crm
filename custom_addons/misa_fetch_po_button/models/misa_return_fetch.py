@@ -408,6 +408,7 @@ class MisaReturnFetch(models.TransientModel):
             "picking_id": picking.id,
             "location_id": picking.location_id.id,
             "location_dest_id": location.id,
+            "state": "draft",  # ← Đặt state để tránh error weight computation
         }
         
         self.env["stock.move"].create(move_vals)
