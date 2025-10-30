@@ -11,20 +11,50 @@ class MisaConfig(models.AbstractModel):
         return  {"TenantId":"47ab503b-99d5-4eb8-aa11-24927abb3585","TenantCode":"3R2PY2F4","DatabaseId":"f4b18d63-6c99-4a53-b974-f6208e84fced","BranchId":"53a073a0-5381-4493-820f-51ea32ebe990","WorkingBook":0,"Language":"vi","IncludeDependentBranch":"False","SessionId":"ss1547cc69a995421e91347736dabe6cb9.693017cdc24074e96e4756afbf2b6ab6.f4b18d636c994a53b974f6208e84fced.638877626393411146","DBType":1,"AuthType":0,"AmisSessionId":"NAA3AGEAYgA1ADAAMwBiADkAOQBkADUANABlAGIAOABhAGEAMQAxADIANAA5ADIANwBhAGIAYgAzADUAOAA1ADkAMgBiADgANABhADYAZgBiADYAZQBiADQANwBhADgAYQA0AGUAMgBhAGUAYgAzAGEAZQA2ADMAYgA0ADYAYwA=","HasAgent":False,"UserType":1,"art":1,"UserId":"1547cc69-a995-421e-9134-7736dabe6cb9","isc":False}
     
     def get_default_headers(self, access_token):
-        """Trả về headers mặc định cho MISA API."""
+        """Trả về headers mặc định cho MISA API với ĐẦY ĐỦ context và cookies.
+        
+        ⚠️ QUAN TRỌNG: API detail_full CẦN đủ headers này mới không timeout:
+        - Authorization: Bearer token
+        - X-MISA-Context: Context đầy đủ (TenantId, BranchId, DatabaseId, SessionId, UserId...)
+        - X-Device: Device ID
+        - Cookie: Session cookies (tid, x-sessionid, dbid, env, cf_clearance)
+        - Referer/Origin: Để backend biết request từ UI chính thức
+        """
         context = self.get_misa_context()
+        
+        # Build cookie string từ session hiện tại
+        # Note: Các giá trị này cần lấy từ browser hoặc login flow thực tế
+        cookie_parts = [
+            "cf_clearance=NnbIOcmJJX9cPSPMbP5wqaJ0d5N.6A_3p5pZRovrMFQ-1759224861-1.2.1.1-mkusGtWxAuLs4JRlxmV2YH1vRhP0HQWs5tESq958fx0lsCN3eF8sXpcmOedgMjsVyQCLvAm9T7jrH48r_FJw1aMpcjT0hLrln5xWqvcXBqTWh3N3QqIfNIX2LBTZp3T114YoGskvEAnWbJwHSvQErcIYAHvE7Hci8c9taXdPraO3bo2raQfMRp.pcIorYWIBM76nsEKGypx.9SuqRvQO8BevnN.gfSXOiM54MS5RhY8",
+            "tid=47ab503b-99d5-4eb8-aa11-24927abb3585",
+            "x-sessionid=47ab503b99d54eb8aa1124927abb358545649b79e2874e33b2d395ddb553ccfc",
+            "dbid=f4b18d63-6c99-4a53-b974-f6208e84fced",
+            "env=g2",
+            f"env_f4b18d63_6c99_4a53_b974_f6208e84fced_10_30_2025=g2",
+        ]
+        
         return {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
-            "X-MISA-Context": json.dumps(self.get_misa_context()),  # Chuyển sang string nếu cần
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Accept-Language": "en-US,en;q=0.9",
+            "X-MISA-Context": json.dumps(context),  # Context đầy đủ
             "X-MISA-BranchID": context['BranchId'],
             "X-MISA-Language": "vi",
             "X-MISA-WorkingBook": "0",
-            "X-Device": "04aadfced5b04995ecfacb0a7da5c50c",
-            "Host":"actapp.misa.vn",
-            "Content-Length":"574",
-            "Connection":"keep-alive"
-            
+            "X-Device": "f32be43d99071befa62cab0562947494",  # Device ID từ browser
+            "Cookie": "; ".join(cookie_parts),  # ← QUAN TRỌNG: Cookies session
+            "Referer": "https://actapp.misa.vn/app/SA/Return",
+            "Origin": "https://actapp.misa.vn",
+            "Host": "actapp.misa.vn",
+            "Connection": "keep-alive",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0"
         }
     def get_purchase_header(self, access_token):
         """Alias để tương thích ngược với code cũ gọi purchase header."""

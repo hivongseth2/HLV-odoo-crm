@@ -269,25 +269,29 @@ class MisaReturnFetch(models.TransientModel):
         
         detail_url = f"https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full?req={req_base64}"
         
-        # Bổ sung headers để API không bị "kẹt" do thiếu context
-        enhanced_headers = headers.copy()
-        enhanced_headers.update({
-            'Referer': 'https://actapp.misa.vn/app/SA/Return',
-            'Origin': 'https://actapp.misa.vn',
-            'Accept': 'application/json, text/plain, */*',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-        })
-        
         try:
-            _logger.info("🔄 Đang gọi detail_full (optimized) cho đơn %s...", refid)
+            _logger.info("🔄 Đang gọi detail_full (với full context + cookies) cho đơn %s...", refid)
+            _logger.debug("📋 Headers gửi đi: %s", {k: v[:50] + '...' if len(str(v)) > 50 else v 
+                                                     for k, v in headers.items()})
             
-            # Sử dụng GET request với timeout dài và headers đầy đủ
+            # headers đã có ĐẦY ĐỦ từ get_default_headers():
+            # - Authorization Bearer token
+            # - X-MISA-Context (TenantId, BranchId, DatabaseId, SessionId, UserId...)
+            # - Cookie (tid, x-sessionid, dbid, env, cf_clearance)
+            # - Referer, Origin, X-Device
+            # → Backend MISA sẽ KHÔNG bị "kẹt" như trước
+            
+            import time
+            start_time = time.time()
+            
             response = requests.get(
                 detail_url,
-                headers=enhanced_headers,
-                timeout=90  # Tăng timeout lên 90s
+                headers=headers,  # Dùng trực tiếp headers từ get_default_headers
+                timeout=90  # Timeout 90s (thực tế sẽ nhanh hơn nhiều khi có đủ context)
             )
+            
+            elapsed = time.time() - start_time
+            _logger.info("⏱️ detail_full API phản hồi sau %.2f giây", elapsed)
             
             if response.status_code != 200:
                 _logger.error("❌ detail_full API trả về HTTP %s cho đơn %s", 
