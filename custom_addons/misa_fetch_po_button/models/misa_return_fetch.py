@@ -169,6 +169,82 @@ class MisaReturnFetch(models.TransientModel):
         
         return True if picking else False
 
+    def _validate_and_get_location(self, stock_code, stock_mapping, refno):
+        """Validate stock code và lấy location
+        
+        Args:
+            stock_code: Mã kho từ MISA (HCM, BENCAM, HIENDUC, HCM_SHOWROOM)
+            stock_mapping: Dict mapping stock_code → Odoo location path
+            refno: Mã phiếu (để log)
+            
+        Returns:
+            stock.location record or None
+        """
+        
+        if stock_code not in stock_mapping:
+            _logger.error("❌ %s: stock_code '%s' không hỗ trợ", refno, stock_code)
+            return None
+        
+        location_path = stock_mapping[stock_code]
+        location = self.env["stock.location"].search(
+            [("complete_name", "=", location_path)], limit=1
+        )
+        
+        if not location:
+            _logger.error("❌ %s: Không tìm location '%s'", refno, location_path)
+            return None
+        
+        _logger.info("✅ %s: Location '%s' (%s)", refno, location_path, location.id)
+        return location
+
+    def _get_warehouse_for_location(self, location, stock_code):
+        """Lấy warehouse từ location
+        
+        Args:
+            location: stock.location record
+            stock_code: Mã kho (để log)
+            
+        Returns:
+            stock.warehouse record or None
+        """
+        
+        # location.warehouse_id có thể null, cần trace về kho
+        warehouse = self.env["stock.warehouse"].search(
+            [("view_location_id", "=", location.parent_path.split("/")[-2] if "/" in location.parent_path else location.parent_path)],
+            limit=1
+        )
+        
+        # Fallback: lấy warehouse đầu tiên (thường là mặc định)
+        if not warehouse:
+            warehouse = self.env["stock.warehouse"].search([], limit=1)
+        
+        if not warehouse:
+            _logger.error("❌ Không tìm warehouse cho %s", stock_code)
+            return None
+        
+        _logger.info("✅ Warehouse: %s", warehouse.name)
+        return warehouse
+
+    def _update_partner_info(self, partner, return_order):
+        """Update thông tin khách hàng từ dữ liệu MISA
+        
+        Args:
+            partner: res.partner record
+            return_order: Dict từ MISA API
+        """
+        
+        update_vals = {}
+        
+        if return_order.get("account_object_address"):
+            update_vals['street'] = return_order.get("account_object_address", "")
+        
+        if return_order.get("tel"):
+            update_vals['phone'] = return_order.get("tel", "")
+        
+        if update_vals:
+            partner.write(update_vals)
+            _logger.info("✅ Updated partner: %s", partner.name)
+
     def _create_picking(self, partner, warehouse, refno, location, return_order, detail_data):
         """Tạo picking + moves + collect order_codes
         
