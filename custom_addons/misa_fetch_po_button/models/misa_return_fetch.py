@@ -208,20 +208,40 @@ class MisaReturnFetch(models.TransientModel):
         }
         
         # Thêm ghi chú với journal_memo
+        note_parts = []
         if journal_memo:
-            picking_vals['note'] = f"Lý do trả: {journal_memo}"
+            note_parts.append(f"Lý do trả: {journal_memo}")
+        
+        if note_parts:
+            picking_vals['note'] = " | ".join(note_parts)
         
         picking = self.env["stock.picking"].create(picking_vals)
+        
+        # Lưu order_code từng dòng vào picking note để track
+        # (Mỗi sản phẩm có thể từ đơn gốc khác nhau)
+        order_codes_in_detail = []
         
         # Tạo các dòng move từ detail_data (sa_return_detail từ detail_full API)
         # Mỗi line có order_code riêng
         for line in detail_data:
+            order_code = line.get("order_code", "").strip()
+            if order_code and order_code not in order_codes_in_detail:
+                order_codes_in_detail.append(order_code)
             self._create_stock_move(picking, line, location, odoo_utils)
         
         # Xác nhận phiếu nhập kho
         if picking.move_ids_without_package:
+            # Cập nhật note với danh sách order_code trước khi confirm
+            if order_codes_in_detail:
+                order_codes_str = ", ".join(order_codes_in_detail)
+                if picking.note:
+                    picking.note += f"\nĐơn gốc: {order_codes_str}"
+                else:
+                    picking.note = f"Đơn gốc: {order_codes_str}"
+            
             picking.action_confirm()
-            _logger.info("✅ Đã tạo phiếu nhập kho %s cho đơn trả %s", picking.name, refno)
+            _logger.info("✅ Đã tạo phiếu nhập kho %s cho đơn trả %s | order_codes: %s", 
+                        picking.name, refno, ", ".join(order_codes_in_detail) or "N/A")
             return True
         else:
             picking.unlink()
@@ -365,13 +385,10 @@ class MisaReturnFetch(models.TransientModel):
             _logger.warning("❌ Không tạo được sản phẩm %s", product_code)
             return
         
-        # Tạo stock move với order_code trong name
-        move_name = product_name or product_code
-        if order_code:
-            move_name = f"[{order_code}] {move_name}"
-        
+        # Tạo stock move - chỉ có thông tin sản phẩm
+        # (order_code đã lưu ở picking.note)
         move_vals = {
-            "name": move_name,  # ← order_code lưu tại đây
+            "name": product_name or product_code,
             "product_id": product.id,
             "product_uom_qty": qty,
             "product_uom": product.uom_id.id,
@@ -381,5 +398,4 @@ class MisaReturnFetch(models.TransientModel):
         }
         
         self.env["stock.move"].create(move_vals)
-        _logger.info("✅ Đã tạo move cho sản phẩm %s (qty=%s) từ đơn %s", 
-                    product_code, qty, order_code or "N/A")
+        _logger.info("✅ Đã tạo move cho sản phẩm %s (qty=%s)", product_code, qty)
