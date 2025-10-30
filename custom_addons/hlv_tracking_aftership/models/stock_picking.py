@@ -196,12 +196,13 @@ class StockPicking(models.Model):
         
         # Nếu chưa có data, phải refresh
         if not self.tracking_payload or not self.tracking_last_update:
+            _logger.info(f"🔄 NO_CACHE: {self.name} - no cached data, need to fetch from API")
             return True
         
         # Nếu đã delivered, không cần refresh nữa
         delivered_statuses = ['Đã giao thành công', 'Đơn hàng đã được hoàn về']
         if self.tracking_status in delivered_statuses:
-            _logger.debug(f"🚫 CACHE: {self.name} already in final state, no refresh needed")
+            _logger.info(f"🚫 FINAL_STATE: {self.name} already delivered, no refresh needed")
             return False
         
         # Lấy cache duration từ system parameter (mặc định 30 phút)
@@ -215,11 +216,16 @@ class StockPicking(models.Model):
         now = fields.Datetime.now()
         
         if now < cache_until:
-            remaining = (cache_until - now).total_seconds() / 60
-            _logger.debug(f"✅ CACHE_VALID: {self.name} cache valid for {remaining:.1f} more minutes")
+            remaining_seconds = (cache_until - now).total_seconds()
+            remaining_minutes = remaining_seconds / 60
+            # Format thời gian cache hết hạn
+            cache_expiry_time = cache_until.strftime('%d/%m/%Y %H:%M:%S') if hasattr(cache_until, 'strftime') else str(cache_until)
+            _logger.info(f"📦 CACHE_VALID: {self.name} | Last updated: {self.tracking_last_update} | Cache expires at: {cache_expiry_time} | Remaining: {remaining_minutes:.1f} minutes")
             return False
         
-        _logger.info(f"⏰ CACHE_EXPIRED: {self.name} cache expired, need refresh")
+        # Format thời gian
+        last_update_time = self.tracking_last_update.strftime('%d/%m/%Y %H:%M:%S') if hasattr(self.tracking_last_update, 'strftime') else str(self.tracking_last_update)
+        _logger.info(f"⏰ CACHE_EXPIRED: {self.name} | Last updated: {last_update_time} | Needs refresh")
         return True
 
     def action_refresh_tracking_aftership(self, force=False):
@@ -262,7 +268,13 @@ class StockPicking(models.Model):
                 cp_text = f"{_vi_status(last.get('tag') or last.get('status'), last.get('message'))} - {_polish_message(last.get('message'))}"
             pick.tracking_last_checkpoint = cp_text
             
-            _logger.info(f"✅ REFRESHED: {pick.name} - Status: {pick.tracking_status}")
+            # Log chi tiết thời gian lưu cache
+            update_time = pick.tracking_last_update.strftime('%d/%m/%Y %H:%M:%S') if hasattr(pick.tracking_last_update, 'strftime') else str(pick.tracking_last_update)
+            cache_minutes = int(self.env['ir.config_parameter'].sudo().get_param('aftership.cache_duration', '30'))
+            cache_until = pick.tracking_last_update + timedelta(minutes=cache_minutes)
+            cache_until_time = cache_until.strftime('%d/%m/%Y %H:%M:%S') if hasattr(cache_until, 'strftime') else str(cache_until)
+            
+            _logger.info(f"✅ CACHE_SAVED: {pick.name} | Time: {update_time} | Duration: {cache_minutes}min | Expires: {cache_until_time} | Status: {pick.tracking_status}")
 
     def _compute_tracking_timeline(self):
         for p in self:

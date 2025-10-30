@@ -329,25 +329,40 @@ class WebsiteTrackingPublic(http.Controller):
                     
                     if not should_refresh and record.tracking_payload:
                         # Cache còn valid, dùng data cũ
-                        _logger.info(f"📦 USING_CACHE: Dữ liệu còn fresh cho {number}, không gọi API")
+                        cache_time = record.tracking_last_update.strftime('%d/%m/%Y %H:%M:%S') if hasattr(record.tracking_last_update, 'strftime') else str(record.tracking_last_update)
+                        _logger.info(f"📦 USING_CACHE: {number} | Cached at: {cache_time} | No API call needed")
                         tracking = record.tracking_payload
                     else:
                         # Cache expired hoặc chưa có data, gọi API
-                        _logger.info(f"🌐 CALLING_API: Cache expired/không có, lấy dữ liệu từ AfterShip cho {number}")
+                        if record.tracking_last_update:
+                            cache_time = record.tracking_last_update.strftime('%d/%m/%Y %H:%M:%S') if hasattr(record.tracking_last_update, 'strftime') else str(record.tracking_last_update)
+                            _logger.info(f"🌐 CALLING_API: {number} | Previous cache: {cache_time} | Fetching fresh data from AfterShip")
+                        else:
+                            _logger.info(f"🌐 CALLING_API: {number} | No cache exist | Fetching data from AfterShip")
+                        
                         tracking = _call_aftership_api(record.aftership_id, api_key)
                         
                         # Lưu vào cache nếu có data
                         if tracking:
                             try:
                                 from odoo import fields
+                                current_time = fields.Datetime.now()
                                 record.write({
                                     'tracking_payload': tracking,
-                                    'tracking_last_update': fields.Datetime.now(),
+                                    'tracking_last_update': current_time,
                                 })
                                 request.env.cr.commit()
-                                _logger.info(f"💾 SAVED_CACHE: Lưu tracking data vào cache")
+                                
+                                # Log chi tiết thời gian cache
+                                save_time = current_time.strftime('%d/%m/%Y %H:%M:%S') if hasattr(current_time, 'strftime') else str(current_time)
+                                cache_duration = int(request.env['ir.config_parameter'].sudo().get_param('aftership.cache_duration', '30'))
+                                from datetime import timedelta
+                                cache_until = current_time + timedelta(minutes=cache_duration)
+                                until_time = cache_until.strftime('%d/%m/%Y %H:%M:%S') if hasattr(cache_until, 'strftime') else str(cache_until)
+                                
+                                _logger.info(f"💾 CACHE_SAVED: {number} | Saved at: {save_time} | Expires at: {until_time} ({cache_duration}min)")
                             except Exception as e:
-                                _logger.warning(f"⚠️  CACHE_SAVE_FAILED: {e}")
+                                _logger.warning(f"⚠️  CACHE_SAVE_FAILED: {number} | Error: {e}")
                     
                     if tracking:
                         # Có dữ liệu từ API
