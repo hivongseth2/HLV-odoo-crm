@@ -378,11 +378,8 @@ class MisaReturnFetch(models.TransientModel):
             "picking_id": picking.id,
             "location_id": picking.location_id.id,
             "location_dest_id": location.id,
+            "description": move_name,  # description thay vì note
         }
-        
-        # Thêm order_code vào note nếu có
-        if order_code:
-            move_vals['note'] = f"Đơn hàng gốc: {order_code}"
         
         self.env["stock.move"].create(move_vals)
         _logger.info("✅ Đã tạo move cho sản phẩm %s (qty=%s) từ đơn %s", 
