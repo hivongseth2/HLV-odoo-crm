@@ -365,20 +365,19 @@ class MisaReturnFetch(models.TransientModel):
             _logger.warning("❌ Không tạo được sản phẩm %s", product_code)
             return
         
-        # Tạo stock move với order_code trong description
+        # Tạo stock move với order_code trong name
         move_name = product_name or product_code
         if order_code:
             move_name = f"[{order_code}] {move_name}"
         
         move_vals = {
-            "name": move_name,
+            "name": move_name,  # ← order_code lưu tại đây
             "product_id": product.id,
             "product_uom_qty": qty,
             "product_uom": product.uom_id.id,
             "picking_id": picking.id,
             "location_id": picking.location_id.id,
             "location_dest_id": location.id,
-            "description": move_name,  # description thay vì note
         }
         
         self.env["stock.move"].create(move_vals)
