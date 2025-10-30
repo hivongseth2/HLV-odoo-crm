@@ -2,10 +2,29 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from pytz import timezone as tz
 from .tracking_utils import guess_carrier_slug, is_valid_tracking_number, should_auto_register_tracking
 
 _logger = logging.getLogger(__name__)
+
+# Timezone Việt Nam (UTC+7)
+VN_TZ = tz('Asia/Ho_Chi_Minh')
+
+def _format_datetime_vn(dt):
+    """Format datetime theo timezone Việt Nam"""
+    if not dt:
+        return ""
+    try:
+        # Nếu dt là naive datetime (không có timezone info), coi nó là UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        # Convert to Vietnam timezone
+        dt_vn = dt.astimezone(VN_TZ)
+        return dt_vn.strftime('%d/%m/%Y %H:%M:%S')
+    except Exception as e:
+        _logger.warning(f"Error formatting datetime: {e}")
+        return str(dt)
 
 VI_STATUS_LABELS = {
     "INFORECEIVED": "Đơn hàng đã được tạo trên hệ thống",
@@ -218,14 +237,15 @@ class StockPicking(models.Model):
         if now < cache_until:
             remaining_seconds = (cache_until - now).total_seconds()
             remaining_minutes = remaining_seconds / 60
-            # Format thời gian cache hết hạn
-            cache_expiry_time = cache_until.strftime('%d/%m/%Y %H:%M:%S') if hasattr(cache_until, 'strftime') else str(cache_until)
-            _logger.info(f"📦 CACHE_VALID: {self.name} | Last updated: {self.tracking_last_update} | Cache expires at: {cache_expiry_time} | Remaining: {remaining_minutes:.1f} minutes")
+            # Format thời gian cache hết hạn theo VN timezone
+            last_update_vn = _format_datetime_vn(self.tracking_last_update)
+            cache_until_vn = _format_datetime_vn(cache_until)
+            _logger.info(f"📦 CACHE_VALID: {self.name} | Last updated: {last_update_vn} | Cache expires at: {cache_until_vn} | Remaining: {remaining_minutes:.1f} minutes")
             return False
         
-        # Format thời gian
-        last_update_time = self.tracking_last_update.strftime('%d/%m/%Y %H:%M:%S') if hasattr(self.tracking_last_update, 'strftime') else str(self.tracking_last_update)
-        _logger.info(f"⏰ CACHE_EXPIRED: {self.name} | Last updated: {last_update_time} | Needs refresh")
+        # Format thời gian theo VN timezone
+        last_update_vn = _format_datetime_vn(self.tracking_last_update)
+        _logger.info(f"⏰ CACHE_EXPIRED: {self.name} | Last updated: {last_update_vn} | Needs refresh")
         return True
 
     def action_refresh_tracking_aftership(self, force=False):
@@ -268,13 +288,13 @@ class StockPicking(models.Model):
                 cp_text = f"{_vi_status(last.get('tag') or last.get('status'), last.get('message'))} - {_polish_message(last.get('message'))}"
             pick.tracking_last_checkpoint = cp_text
             
-            # Log chi tiết thời gian lưu cache
-            update_time = pick.tracking_last_update.strftime('%d/%m/%Y %H:%M:%S') if hasattr(pick.tracking_last_update, 'strftime') else str(pick.tracking_last_update)
+            # Log chi tiết thời gian lưu cache theo VN timezone
+            update_time_vn = _format_datetime_vn(pick.tracking_last_update)
             cache_minutes = int(self.env['ir.config_parameter'].sudo().get_param('aftership.cache_duration', '30'))
             cache_until = pick.tracking_last_update + timedelta(minutes=cache_minutes)
-            cache_until_time = cache_until.strftime('%d/%m/%Y %H:%M:%S') if hasattr(cache_until, 'strftime') else str(cache_until)
+            cache_until_vn = _format_datetime_vn(cache_until)
             
-            _logger.info(f"✅ CACHE_SAVED: {pick.name} | Time: {update_time} | Duration: {cache_minutes}min | Expires: {cache_until_time} | Status: {pick.tracking_status}")
+            _logger.info(f"✅ CACHE_SAVED: {pick.name} | Time: {update_time_vn} | Duration: {cache_minutes}min | Expires: {cache_until_vn} | Status: {pick.tracking_status}")
 
     def _compute_tracking_timeline(self):
         for p in self:

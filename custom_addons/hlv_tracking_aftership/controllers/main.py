@@ -3,9 +3,28 @@ from odoo import http
 from odoo.http import request
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from pytz import timezone as tz
 
 _logger = logging.getLogger(__name__)
+
+# Timezone Việt Nam (UTC+7)
+VN_TZ = tz('Asia/Ho_Chi_Minh')
+
+def _format_datetime_vn(dt):
+    """Format datetime theo timezone Việt Nam"""
+    if not dt:
+        return ""
+    try:
+        # Nếu dt là naive datetime (không có timezone info), coi nó là UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        # Convert to Vietnam timezone
+        dt_vn = dt.astimezone(VN_TZ)
+        return dt_vn.strftime('%d/%m/%Y %H:%M:%S')
+    except Exception as e:
+        _logger.warning(f"Error formatting datetime: {e}")
+        return str(dt)
 
 
 VI_STATUS_LABELS = {
@@ -329,13 +348,13 @@ class WebsiteTrackingPublic(http.Controller):
                     
                     if not should_refresh and record.tracking_payload:
                         # Cache còn valid, dùng data cũ
-                        cache_time = record.tracking_last_update.strftime('%d/%m/%Y %H:%M:%S') if hasattr(record.tracking_last_update, 'strftime') else str(record.tracking_last_update)
+                        cache_time = _format_datetime_vn(record.tracking_last_update)
                         _logger.info(f"📦 USING_CACHE: {number} | Cached at: {cache_time} | No API call needed")
                         tracking = record.tracking_payload
                     else:
                         # Cache expired hoặc chưa có data, gọi API
                         if record.tracking_last_update:
-                            cache_time = record.tracking_last_update.strftime('%d/%m/%Y %H:%M:%S') if hasattr(record.tracking_last_update, 'strftime') else str(record.tracking_last_update)
+                            cache_time = _format_datetime_vn(record.tracking_last_update)
                             _logger.info(f"🌐 CALLING_API: {number} | Previous cache: {cache_time} | Fetching fresh data from AfterShip")
                         else:
                             _logger.info(f"🌐 CALLING_API: {number} | No cache exist | Fetching data from AfterShip")
@@ -354,11 +373,10 @@ class WebsiteTrackingPublic(http.Controller):
                                 request.env.cr.commit()
                                 
                                 # Log chi tiết thời gian cache
-                                save_time = current_time.strftime('%d/%m/%Y %H:%M:%S') if hasattr(current_time, 'strftime') else str(current_time)
+                                save_time = _format_datetime_vn(current_time)
                                 cache_duration = int(request.env['ir.config_parameter'].sudo().get_param('aftership.cache_duration', '30'))
-                                from datetime import timedelta
                                 cache_until = current_time + timedelta(minutes=cache_duration)
-                                until_time = cache_until.strftime('%d/%m/%Y %H:%M:%S') if hasattr(cache_until, 'strftime') else str(cache_until)
+                                until_time = _format_datetime_vn(cache_until)
                                 
                                 _logger.info(f"💾 CACHE_SAVED: {number} | Saved at: {save_time} | Expires at: {until_time} ({cache_duration}min)")
                             except Exception as e:

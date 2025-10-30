@@ -1,11 +1,30 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 from odoo.exceptions import UserError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from pytz import timezone as tz
 from .tracking_utils import guess_carrier_slug, is_valid_tracking_number, should_auto_register_tracking
 import logging
 
 _logger = logging.getLogger(__name__)
+
+# Timezone Việt Nam (UTC+7)
+VN_TZ = tz('Asia/Ho_Chi_Minh')
+
+def _format_datetime_vn(dt):
+    """Format datetime theo timezone Việt Nam"""
+    if not dt:
+        return ""
+    try:
+        # Nếu dt là naive datetime (không có timezone info), coi nó là UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        # Convert to Vietnam timezone
+        dt_vn = dt.astimezone(VN_TZ)
+        return dt_vn.strftime('%d/%m/%Y %H:%M:%S')
+    except Exception as e:
+        _logger.warning(f"Error formatting datetime: {e}")
+        return str(dt)
 
 
 VI_STATUS_LABELS = {
@@ -243,7 +262,9 @@ class SaleOrder(models.Model):
         
         if now < cache_until:
             remaining = (cache_until - now).total_seconds() / 60
-            _logger.debug(f"✅ CACHE_VALID: {self.name} cache valid for {remaining:.1f} more minutes")
+            last_update_time = _format_datetime_vn(self.tracking_last_update)
+            cache_expiry_time = _format_datetime_vn(cache_until)
+            _logger.debug(f"✅ CACHE_VALID: {self.name} cache valid for {remaining:.1f} more minutes | Cached at: {last_update_time} | Cache expires at: {cache_expiry_time}")
             return False
         
         _logger.info(f"⏰ CACHE_EXPIRED: {self.name} cache expired, need refresh")
@@ -289,7 +310,13 @@ class SaleOrder(models.Model):
                 cp_text = f"{_vi_status(last.get('tag') or last.get('status'), last.get('message'))} - {_polish_message(last.get('message'))}"
             order.tracking_last_checkpoint = cp_text
             
-            _logger.info(f"✅ REFRESHED: {order.name} - Status: {order.tracking_status}")
+            save_time = _format_datetime_vn(order.tracking_last_update)
+            cache_minutes = int(
+                order.env['ir.config_parameter'].sudo()
+                .get_param('aftership.cache_duration', '30')
+            )
+            until_time = _format_datetime_vn(order.tracking_last_update + timedelta(minutes=cache_minutes))
+            _logger.info(f"💾 CACHE_SAVED: {order.name} - Status: {order.tracking_status} | Cached at: {save_time} | Cache expires at: {until_time}")
 
     def _compute_tracking_timeline(self):
         for o in self:
