@@ -322,10 +322,32 @@ class WebsiteTrackingPublic(http.Controller):
                             "error": error, "data": {}, "number": number, "slug": slug or "",
                         })
                 
-                # GỌI API AFTERSHIP ĐỂ LẤY DỮ LIỆU MỚI NHẤT
+                # KIỂM TRA CACHE - CHỈ GỌI API NẾU CẦN
                 if record.aftership_id:
-                    _logger.info(f"🌐 CALLING_API: Lấy dữ liệu từ AfterShip cho {number}")
-                    tracking = _call_aftership_api(record.aftership_id, api_key)
+                    # Kiểm tra xem có nên refresh từ API không
+                    should_refresh = record._should_refresh_tracking()
+                    
+                    if not should_refresh and record.tracking_payload:
+                        # Cache còn valid, dùng data cũ
+                        _logger.info(f"📦 USING_CACHE: Dữ liệu còn fresh cho {number}, không gọi API")
+                        tracking = record.tracking_payload
+                    else:
+                        # Cache expired hoặc chưa có data, gọi API
+                        _logger.info(f"🌐 CALLING_API: Cache expired/không có, lấy dữ liệu từ AfterShip cho {number}")
+                        tracking = _call_aftership_api(record.aftership_id, api_key)
+                        
+                        # Lưu vào cache nếu có data
+                        if tracking:
+                            try:
+                                from odoo import fields
+                                record.write({
+                                    'tracking_payload': tracking,
+                                    'tracking_last_update': fields.Datetime.now(),
+                                })
+                                request.env.cr.commit()
+                                _logger.info(f"💾 SAVED_CACHE: Lưu tracking data vào cache")
+                            except Exception as e:
+                                _logger.warning(f"⚠️  CACHE_SAVE_FAILED: {e}")
                     
                     if tracking:
                         # Có dữ liệu từ API
@@ -348,8 +370,6 @@ class WebsiteTrackingPublic(http.Controller):
                             "number": number,
                             "slug": slug or "",
                             "checkpoints": checkpoints,
-                            "last_update": None,  # API data là real-time
-                            "from_api": True,  # Flag để biết data từ API
                         })
                     else:
                         # API lỗi hoặc chưa có dữ liệu
@@ -365,8 +385,6 @@ class WebsiteTrackingPublic(http.Controller):
                             "number": number,
                             "slug": slug or "",
                             "checkpoints": [],
-                            "last_update": None,
-                            "from_api": True,
                             "no_data_yet": True,
                         })
                 else:

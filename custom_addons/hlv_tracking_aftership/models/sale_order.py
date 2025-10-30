@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 from odoo.exceptions import UserError
-from datetime import datetime
+from datetime import datetime, timedelta
 from .tracking_utils import guess_carrier_slug, is_valid_tracking_number, should_auto_register_tracking
 import logging
 
@@ -211,17 +211,68 @@ class SaleOrder(models.Model):
             # Đăng ký webhook (chỉ cần 1 lần cho toàn hệ thống)
             order._ensure_webhook_registered()
 
-    def action_refresh_tracking_aftership(self):
+    def _should_refresh_tracking(self):
+        """
+        Kiểm tra xem có cần refresh tracking từ API hay không.
+        Sử dụng cache để giảm số lượng API calls.
+        
+        Returns:
+            bool: True nếu cần refresh, False nếu cache còn valid
+        """
+        self.ensure_one()
+        
+        # Nếu chưa có data, phải refresh
+        if not self.tracking_payload or not self.tracking_last_update:
+            return True
+        
+        # Nếu đã delivered, không cần refresh nữa
+        delivered_statuses = ['Đã giao thành công', 'Đơn hàng đã được hoàn về']
+        if self.tracking_status in delivered_statuses:
+            _logger.debug(f"🚫 CACHE: {self.name} already in final state, no refresh needed")
+            return False
+        
+        # Lấy cache duration từ system parameter (mặc định 30 phút)
+        cache_minutes = int(
+            self.env['ir.config_parameter'].sudo()
+            .get_param('aftership.cache_duration', '30')
+        )
+        
+        # Tính thời gian cache hết hạn
+        cache_until = self.tracking_last_update + timedelta(minutes=cache_minutes)
+        now = fields.Datetime.now()
+        
+        if now < cache_until:
+            remaining = (cache_until - now).total_seconds() / 60
+            _logger.debug(f"✅ CACHE_VALID: {self.name} cache valid for {remaining:.1f} more minutes")
+            return False
+        
+        _logger.info(f"⏰ CACHE_EXPIRED: {self.name} cache expired, need refresh")
+        return True
+
+    def action_refresh_tracking_aftership(self, force=False):
+        """
+        Refresh tracking từ AfterShip API.
+        
+        Args:
+            force (bool): Nếu True, bỏ qua cache và luôn refresh
+        """
         for order in self:
+            # Kiểm tra cache trước khi gọi API (trừ khi force=True)
+            if not force and not order._should_refresh_tracking():
+                _logger.info(f"📦 USING_CACHE: Skipping API call for {order.name} (cache still valid)")
+                continue
+            
             client = order._aftership_client()
             try:
+                _logger.info(f"🌐 API_CALL: Refreshing tracking for {order.name}")
                 if order.aftership_id:
                     res = client.get_tracking_by_id(order.aftership_id)
                 else:
                     if not (order.tracking_slug and order.tracking_number):
                         continue
                     res = client.get_tracking_by_number(order.tracking_slug, order.tracking_number)
-            except Exception:
+            except Exception as e:
+                _logger.warning(f"AfterShip refresh failed for {order.name}: {e}")
                 continue
 
             tracking = (res or {}).get("data") or {}
@@ -237,6 +288,8 @@ class SaleOrder(models.Model):
                 last = checkpoints[-1]
                 cp_text = f"{_vi_status(last.get('tag') or last.get('status'), last.get('message'))} - {_polish_message(last.get('message'))}"
             order.tracking_last_checkpoint = cp_text
+            
+            _logger.info(f"✅ REFRESHED: {order.name} - Status: {order.tracking_status}")
 
     def _compute_tracking_timeline(self):
         for o in self:
