@@ -169,54 +169,32 @@ class MisaReturnFetch(models.TransientModel):
         
         return True if picking else False
 
-    def _validate_and_get_location(self, stock_code, stock_mapping, refno):
-        """Validate kho code và lấy location"""
-        if stock_code not in stock_mapping:
-            _logger.warning("📛 Kho %s không mapping, bỏ %s", stock_code, refno)
-            return None
-        
-        location_name = stock_mapping[stock_code]
-        location = self.env['stock.location'].search([
-            ('complete_name', '=', location_name)
-        ], limit=1)
-        
-        if not location:
-            _logger.warning("❌ Không tìm location %s (%s)", stock_code, location_name)
-        
-        return location
-
-    def _get_warehouse_for_location(self, location, stock_code):
-        """Lấy warehouse từ location"""
-        warehouse = self.env['stock.warehouse'].search([
-            ('view_location_id', '=', location.location_id.id)
-        ], limit=1)
-        
-        if not warehouse:
-            _logger.warning("❌ Không tìm warehouse cho kho %s", stock_code)
-        
-        return warehouse
-
-    def _update_partner_info(self, partner, return_order):
-        """Cập nhật thông tin partner nếu cần"""
-        update_vals = {}
-        
-        account_code = return_order.get("account_object_code", "")
-        if account_code and not partner.ref:
-            update_vals['ref'] = account_code
-        
-        account_addr = return_order.get("account_object_address", "")
-        if account_addr and not partner.street:
-            update_vals['street'] = account_addr
-        
-        if update_vals:
-            partner.write(update_vals)
-
     def _create_picking(self, partner, warehouse, refno, location, return_order, detail_data):
-        """Tạo picking + moves + collect order_codes"""
+        """Tạo picking + moves + collect order_codes
+        
+        Cấu trúc:
+        - Picking name: Tự động sinh (Odoo)
+        - Origin: Mã đơn gốc (đơn hàng đầu tiên) - đưa lên chứng từ gốc
+        - Note: Lý do trả hàng + danh sách order_codes
+        """
         
         refdate_str = return_order.get("refdate") or return_order.get("posted_date")
         scheduled_date = self._to_naive_utc(refdate_str) or fields.Datetime.now()
         journal_memo = return_order.get("journal_memo", "")
+        
+        # Tạo moves trước để collect order_codes
+        picking_tmp = self.env["stock.picking"].new({
+            "picking_type_id": warehouse.in_type_id.id,
+        })
+        
+        order_codes = []
+        for line in detail_data:
+            order_code = line.get("order_code", "").strip()
+            if order_code and order_code not in order_codes:
+                order_codes.append(order_code)
+        
+        # Lấy order_code đầu tiên làm origin (chứng từ gốc)
+        origin_code = order_codes[0] if order_codes else refno
         
         # Tạo picking
         picking_vals = {
@@ -224,48 +202,42 @@ class MisaReturnFetch(models.TransientModel):
             "picking_type_id": warehouse.in_type_id.id,
             "location_id": self.env.ref('stock.stock_location_customers').id,
             "location_dest_id": location.id,
-            "origin": refno,
+            "origin": origin_code,  # ← Mã đơn gốc (thay vì refno)
             "scheduled_date": scheduled_date,
             "move_type": "direct",
         }
         
+        # Build note: lý do trả + danh sách order_codes + refno
+        note_parts = []
         if journal_memo:
-            picking_vals['note'] = f"Lý do trả: {journal_memo}"
+            note_parts.append(f"Lý do trả: {journal_memo}")
+        
+        if order_codes:
+            order_codes_str = ", ".join(order_codes)
+            note_parts.append(f"Đơn gốc: {order_codes_str}")
+        
+        note_parts.append(f"Phiếu trả: {refno}")  # Thêm mã phiếu trả
+        
+        if note_parts:
+            picking_vals['note'] = "\n".join(note_parts)
         
         picking = self.env["stock.picking"].create(picking_vals)
         
-        # Tạo moves và collect order_codes
-        order_codes = self._create_moves_and_collect_codes(picking, location, detail_data)
+        # Tạo moves
+        for line in detail_data:
+            self._create_stock_move(picking, line, location, self.env['odoo.utils'])
         
-        # Confirm + update note
+        # Confirm
         if not picking.move_ids_without_package:
             picking.unlink()
             _logger.warning("⚠️ Không có move hợp lệ, xóa %s", refno)
             return None
         
-        if order_codes:
-            order_codes_str = ", ".join(order_codes)
-            note_suffix = f"\nĐơn gốc: {order_codes_str}"
-            picking.note = (picking.note or "") + note_suffix
-        
         picking.action_confirm()
-        _logger.info("✅ Phiếu %s cho đơn trả %s | order_codes: %s", 
-                    picking.name, refno, ", ".join(order_codes) or "N/A")
+        _logger.info("✅ Phiếu %s | origin=%s | refno=%s | order_codes=%s", 
+                    picking.name, origin_code, refno, ", ".join(order_codes) or "N/A")
         
         return picking
-
-    def _create_moves_and_collect_codes(self, picking, location, detail_data):
-        """Tạo stock moves và collect unique order_codes"""
-        order_codes = []
-        
-        for line in detail_data:
-            order_code = line.get("order_code", "").strip()
-            if order_code and order_code not in order_codes:
-                order_codes.append(order_code)
-            
-            self._create_stock_move(picking, line, location, self.env['odoo.utils'])
-        
-        return order_codes
 
     def _fetch_return_detail(self, refid, headers, misa_utils):
         """Fetch chi tiết đơn trả từ API detail_full (với optimized payload + headers)
