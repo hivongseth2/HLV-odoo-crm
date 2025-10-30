@@ -128,14 +128,6 @@ class MisaReturnFetch(models.TransientModel):
         journal_memo = return_order.get("journal_memo", "")
         supplier_name = return_order.get("account_object_name", "Unknown Customer")
         
-        # Lấy order_code từ master record (other_sys_order_code)
-        # Đây là mã đơn hàng gốc từ Shopee/Lazada/... (vd: 251016812V51GS)
-        order_code = return_order.get("other_sys_order_code", "").strip()
-        if order_code:
-            _logger.info("📦 order_code từ master: %s cho đơn trả %s", order_code, refno)
-        else:
-            _logger.warning("⚠️ Không có other_sys_order_code cho đơn trả %s", refno)
-        
         # Kiểm tra xem đã tạo phiếu nhập kho chưa
         existing_picking = self.env["stock.picking"].search([
             ("origin", "=", refno)
@@ -215,21 +207,16 @@ class MisaReturnFetch(models.TransientModel):
             "move_type": "direct",
         }
         
-        # Thêm ghi chú với order_code và journal_memo
-        note_parts = []
-        if order_code:
-            note_parts.append(f"Mã đơn gốc: {order_code}")
+        # Thêm ghi chú với journal_memo
         if journal_memo:
-            note_parts.append(f"Lý do trả: {journal_memo}")
-        
-        if note_parts:
-            picking_vals['note'] = " | ".join(note_parts)
+            picking_vals['note'] = f"Lý do trả: {journal_memo}"
         
         picking = self.env["stock.picking"].create(picking_vals)
         
-        # Tạo các dòng move từ detail_data (PageData)
+        # Tạo các dòng move từ detail_data (sa_return_detail từ detail_full API)
+        # Mỗi line có order_code riêng
         for line in detail_data:
-            self._create_stock_move(picking, line, location, odoo_utils, order_code)
+            self._create_stock_move(picking, line, location, odoo_utils)
         
         # Xác nhận phiếu nhập kho
         if picking.move_ids_without_package:
@@ -242,93 +229,103 @@ class MisaReturnFetch(models.TransientModel):
             return False
 
     def _fetch_return_detail(self, refid, headers, misa_utils):
-        """Lấy chi tiết đơn hàng trả về - Hybrid approach với fallback
+        """Lấy chi tiết đơn hàng trả về từ API detail_full với optimization
         
-        Strategy:
-        1. Thử get_paging_detail trước (API nhẹ, ổn định)
-        2. Sau đó gọi riêng API để lấy order_code nếu cần
+        ⚠️ QUAN TRỌNG: Phải dùng detail_full để lấy order_code chính xác
+        - order_code trong sa_return_detail là mã đơn gốc CHÍNH XÁC cho từng sản phẩm
+        - other_sys_order_code ở master record có thể khác (là mã marketplace)
+        - Mỗi sản phẩm trong đơn trả có thể đến từ các đơn gốc khác nhau
         
-        Tránh dùng detail_full vì:
-        - API orchestrator nội bộ, cần full auth context
-        - Payload nặng, dễ timeout khi gọi từ ngoài
-        - Không được thiết kế cho integration
+        Tối ưu để tránh timeout:
+        1. Chỉ lấy Details minimal (sa_return_detail), bỏ hết Links
+        2. Tăng timeout lên 90s
+        3. Bổ sung headers đầy đủ để tránh backend "kẹt"
+        4. Bỏ wesign_document, pu_invoice, in_inward, inv_bot_reference
         """
         
-        # 1. Gọi API get_paging_detail để lấy thông tin sản phẩm cơ bản
-        detail_payload = {
-            "columns": [
-                2157,  # inventory_item_code
-                2818,  # description
-                1355,  # quantity
-                4670,  # unit_name
-                3870,  # unit_price
-                1195,  # stock_code
-                5274,  # amount
-                1065,  # discount_rate
-                5683,  # vat_rate
-                308,   # vat_amount
-            ],
-            "sort": '[{"property":4555,"desc":false,"data_type":4,"operand":1}]',
-            "filter": [
-                {
-                    "property": 3993,  # refid
-                    "operator": 7,
-                    "operand": 1,
-                    "value": refid,
-                    "data_type": 10
-                }
-            ],
-            "pageIndex": 1,
-            "pageSize": 50,
-            "useSp": False,
-            "view": 54,
-            "summaryColumns": [3870, 308],
-            "loadMode": 2
-        }
+        import json
+        import base64
         
-        detail_url = "https://actapp.misa.vn/g2/api/sa/v1/sa_return/get_paging_detail"
+        # Tạo request payload TỐI THIỂU - chỉ lấy detail, bỏ hết Links
+        req_payload = [{
+            "Type": "sa_return",
+            "Key": refid,
+            "RefType": 3040,
+            "RefTypeCategory": 354,
+            "Details": [
+                {
+                    "Type": "sa_return_detail",
+                    "Alias": "detail",
+                    "View": "view_sa_return_detail"
+                }
+                # Bỏ wesign_document để giảm tải
+            ],
+            "Links": []  # Bỏ hết pu_invoice, in_inward, inv_bot_reference
+        }]
+        
+        # Encode request thành base64
+        req_json = json.dumps(req_payload, separators=(',', ':'))
+        req_base64 = base64.b64encode(req_json.encode('utf-8')).decode('utf-8')
+        
+        detail_url = f"https://actapp.misa.vn/g2/api/sa/v1/sa_return/detail_full?req={req_base64}"
+        
+        # Bổ sung headers để API không bị "kẹt" do thiếu context
+        enhanced_headers = headers.copy()
+        enhanced_headers.update({
+            'Referer': 'https://actapp.misa.vn/app/SA/Return',
+            'Origin': 'https://actapp.misa.vn',
+            'Accept': 'application/json, text/plain, */*',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+        })
         
         try:
-            response = misa_utils._fetch_with_retry(detail_url, headers, detail_payload)
+            _logger.info("🔄 Đang gọi detail_full (optimized) cho đơn %s...", refid)
+            
+            # Sử dụng GET request với timeout dài và headers đầy đủ
+            response = requests.get(
+                detail_url,
+                headers=enhanced_headers,
+                timeout=90  # Tăng timeout lên 90s
+            )
             
             if response.status_code != 200:
-                _logger.error("❌ Không lấy được chi tiết đơn trả %s: HTTP %s", 
-                            refid, response.status_code)
+                _logger.error("❌ detail_full API trả về HTTP %s cho đơn %s", 
+                            response.status_code, refid)
                 return None
             
             result = response.json()
             if not result.get("Success"):
-                _logger.error("❌ API trả về Success=False cho đơn %s", refid)
+                _logger.error("❌ detail_full API Success=False cho đơn %s", refid)
                 return None
             
-            detail_data = result.get("Data", {}).get("PageData", [])
+            # Lấy sa_return_detail array (có order_code)
+            detail_data = result.get("Data", {}).get("sa_return_detail", [])
             if not detail_data:
-                _logger.warning("⚠️ Không có chi tiết sản phẩm cho đơn %s", refid)
+                _logger.warning("⚠️ Không có sa_return_detail cho đơn %s", refid)
                 return None
             
-            _logger.info("✅ Lấy được %s dòng chi tiết (basic) cho đơn %s", len(detail_data), refid)
+            _logger.info("✅ Lấy được %s dòng chi tiết (với order_code) cho đơn %s", 
+                        len(detail_data), refid)
             
-            # 2. Thử lấy order_code từ API nhẹ hơn (nếu có endpoint riêng)
-            # Hoặc parse từ journal_memo/other_sys_order_code ở master record
-            # Tạm thời return detail_data, sẽ lấy order_code từ master record
             return detail_data
                 
         except requests.exceptions.Timeout:
-            _logger.error("❌ Timeout khi gọi API get_paging_detail cho đơn %s", refid)
+            _logger.error("❌ Timeout (>90s) khi gọi detail_full cho đơn %s", refid)
+            _logger.warning("💡 Gợi ý: API detail_full quá nặng, có thể backend MISA đang chậm")
             return None
         except Exception as e:
-            _logger.exception("❌ Lỗi khi gọi API get_paging_detail cho đơn %s: %s", refid, e)
+            _logger.exception("❌ Lỗi khi gọi detail_full cho đơn %s: %s", refid, e)
             return None
 
-    def _create_stock_move(self, picking, line, location, odoo_utils, order_code=None):
+    def _create_stock_move(self, picking, line, location, odoo_utils):
         """Tạo stock move từ dòng chi tiết đơn trả
         
         Args:
             picking: stock.picking record
-            line: dict - dòng chi tiết từ API get_paging_detail
+            line: dict - dòng chi tiết từ API detail_full (sa_return_detail)
             location: stock.location record
             odoo_utils: helper class
-            order_code: str - mã đơn hàng gốc từ master record (other_sys_order_code)
         """
         
         product_code = line.get("inventory_item_code", "").strip()
@@ -337,9 +334,14 @@ class MisaReturnFetch(models.TransientModel):
         unit_name = line.get("unit_name", "Cái").strip()
         price = float(line.get("unit_price", 0))
         
-        # Log order_code (từ master record, không phải từ detail)
+        # Lấy order_code từ detail line (MỖI SẢN PHẨM có thể từ đơn gốc khác nhau)
+        order_code = line.get("order_code", "").strip()
+        
+        # Log order_code cho từng sản phẩm
         if order_code:
             _logger.info("📦 order_code=%s | sản phẩm=%s | qty=%s", order_code, product_code, qty)
+        else:
+            _logger.warning("⚠️ Thiếu order_code | sản phẩm=%s | qty=%s", product_code, qty)
         
         if not product_code or qty <= 0:
             _logger.warning("⏭️ Bỏ qua dòng không hợp lệ: code=%s, qty=%s", product_code, qty)
@@ -359,9 +361,13 @@ class MisaReturnFetch(models.TransientModel):
             _logger.warning("❌ Không tạo được sản phẩm %s", product_code)
             return
         
-        # Tạo stock move
+        # Tạo stock move với order_code trong description
+        move_name = product_name or product_code
+        if order_code:
+            move_name = f"[{order_code}] {move_name}"
+        
         move_vals = {
-            "name": product_name or product_code,
+            "name": move_name,
             "product_id": product.id,
             "product_uom_qty": qty,
             "product_uom": product.uom_id.id,
@@ -370,5 +376,10 @@ class MisaReturnFetch(models.TransientModel):
             "location_dest_id": location.id,
         }
         
+        # Thêm order_code vào note nếu có
+        if order_code:
+            move_vals['note'] = f"Đơn hàng gốc: {order_code}"
+        
         self.env["stock.move"].create(move_vals)
-        _logger.info("✅ Đã tạo move cho sản phẩm %s (qty=%s)", product_code, qty)
+        _logger.info("✅ Đã tạo move cho sản phẩm %s (qty=%s) từ đơn %s", 
+                    product_code, qty, order_code or "N/A")
