@@ -284,19 +284,9 @@ class MisaReturnFetch(models.TransientModel):
             "move_type": "direct",
         }
         
-        # Build note: lý do trả + danh sách order_codes + refno
-        note_parts = []
+        # Build note: chỉ lý do trả hàng
         if journal_memo:
-            note_parts.append(f"Lý do trả: {journal_memo}")
-        
-        if order_codes:
-            order_codes_str = ", ".join(order_codes)
-            note_parts.append(f"Đơn gốc: {order_codes_str}")
-        
-        note_parts.append(f"Phiếu trả: {refno}")  # Thêm mã phiếu trả
-        
-        if note_parts:
-            picking_vals['note'] = "\n".join(note_parts)
+            picking_vals['note'] = journal_memo
         
         picking = self.env["stock.picking"].create(picking_vals)
         
