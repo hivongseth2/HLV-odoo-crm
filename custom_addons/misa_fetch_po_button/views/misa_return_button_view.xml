@@ -27,11 +27,4 @@
             </form>
         </field>
     </record>
-
-    <!-- Menu trong Kho (Inventory) -->
-    <menuitem id="menu_import_misa_return"
-              name="Lấy đơn trả về theo ngày"
-              parent="stock.menu_stock_root"
-              action="action_misa_return_fetch_main"
-              sequence="98"/>
 </odoo>
