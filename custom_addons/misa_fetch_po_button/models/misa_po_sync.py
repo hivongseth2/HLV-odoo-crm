@@ -608,19 +608,9 @@ class MisaPOSync(models.TransientModel):
         if not lines:
             raise models.UserError(f"⚠️ Đơn {refno} không có chi tiết sản phẩm")
 
-        stock_code = lines[0].get("stock_code", "").strip().replace(" ", "").upper()
-        
-        stock_mapping = {
-            "HCM": "TSN/Stock",
-            "BENCAM": "KBC/Tồn kho",
-            "HIENDUC": "KHD/Tồn kho",
-            "HCM_SHOWROOM": "TSNSR/Stock"
-        }
-
-        if stock_code not in stock_mapping:
-            raise models.UserError(f"📛 Kho {stock_code} không được hỗ trợ")
-
-        location_name = stock_mapping[stock_code]
+        # ===== LOGIC MAPPING MỚI: PO luôn vào KBC/Tồn kho =====
+        # Purchase Order là nhập hàng từ nhà cung cấp → tất cả vào KBC
+        location_name = "KBC/Tồn kho"
         location = self.env['stock.location'].search([('complete_name', '=', location_name)], limit=1)
 
         if not location:
@@ -631,7 +621,9 @@ class MisaPOSync(models.TransientModel):
         ], limit=1)
 
         if not warehouse:
-            raise models.UserError(f"❌ Không tìm thấy warehouse cho {stock_code}")
+            raise models.UserError(f"❌ Không tìm thấy warehouse cho {location_name}")
+        
+        _logger.info("✅ PO %s → Location '%s' (Warehouse: %s)", refno, location_name, warehouse.name)
 
         picking_type = warehouse.in_type_id
 

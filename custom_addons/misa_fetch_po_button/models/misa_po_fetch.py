@@ -322,13 +322,10 @@ class MisaPOFetch(models.TransientModel):
             "useSp": False,
             "view": 2
         }
-        stock_mapping = {
-                "HCM": "TSN/Stock",
-                "BENCAM": "KBC/Tồn kho",
-                "HIENDUC": "KHD/Tồn kho",
-                "HCM_SHOWROOM":"TSNSR/Stock"
-            }
-
+        
+        # ===== LOGIC MAPPING MỚI: PO luôn vào KBC/Tồn kho =====
+        # Purchase Order là nhập hàng từ nhà cung cấp → tất cả vào KBC
+        location_name = "KBC/Tồn kho"
 
         page_index = 1
         while True:
@@ -437,23 +434,15 @@ class MisaPOFetch(models.TransientModel):
 
                 # Sau khi loop hết các trang thì gán lại cho lines để xử lý như cũ
                 lines = all_detail_lines
-                stock_code = (
-                    lines[0].get("stock_code", "").strip().replace(" ", "").upper()
-                    if lines else None
-)
-                if stock_code not in stock_mapping:
-                    _logger.warning("📛 Kho %s không nằm trong mapping, bỏ PO %s", stock_code, refno)
-                    continue
-
-                location_name = stock_mapping[stock_code]
+                
+                # ===== XÁC ĐỊNH KHO: PO luôn vào KBC/Tồn kho =====
                 location = self.env['stock.location'].search([
                     ('complete_name', '=', location_name)
                 ], limit=1)
 
                 if not location:
-                    _logger.warning("❌ Không tìm thấy stock.location cho kho %s (%s)", stock_code, location_name)
+                    _logger.warning("❌ Không tìm thấy stock.location '%s' cho PO %s", location_name, refno)
                     continue
-                
                 
                 existing_po = self.env["purchase.order"].search([("name", "=", refno)], limit=1)
                 if existing_po:
@@ -465,8 +454,10 @@ class MisaPOFetch(models.TransientModel):
                 ], limit=1)
 
                 if not warehouse:
-                    _logger.warning("❌ Không tìm thấy warehouse cho kho %s", stock_code)
+                    _logger.warning("❌ Không tìm thấy warehouse cho location '%s'", location_name)
                     continue
+                
+                _logger.info("✅ PO %s → Location '%s' (Warehouse: %s)", refno, location_name, warehouse.name)
                 picking_type = warehouse.in_type_id
                 
                 po_vals = {
