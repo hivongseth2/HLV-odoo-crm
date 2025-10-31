@@ -156,7 +156,7 @@
 
     <!-- Menu con cho Return Order -->
     <menuitem id="menu_import_misa_return"
-              name="Lấy đơn trả về theo ngày"
+              name="Lấy đơn trả về từ MISA"
               parent="menu_misa_import_root"
               action="action_misa_return_fetch_main"
               sequence="102"/>
