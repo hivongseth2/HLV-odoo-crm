@@ -32,13 +32,29 @@ class MisaReturnFetch(models.TransientModel):
         headers = self.env['misa.config'].get_default_headers(misa_utils._get_misa_token())
         date_from_utc = datetime.combine(self.date_from, datetime.min.time()) - timedelta(hours=7)
         date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
-        stock_mapping = {
-            "HCM": "TSN/Stock", "BENCAM": "KBC/Tồn kho",
-            "HIENDUC": "KHD/Tồn kho", "HCM_SHOWROOM": "TSNSR/Stock"
+        
+        # ===== LOGIC MAPPING MỚI: e_accounts → TSN, còn lại → KBC =====
+        e_accounts = {
+            "TIKTOK HOÀNG LONG VŨ",
+            "SHOPEE TRANG MILWAUKEE",
+            "SHOPEE TRANG TBCN HLV",
+            "SHOPEE TRANG DEWALT STANLEY",
+            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE STANLEY",
+            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE",
+            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
+            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+            "TOOL DEWALT",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY"
         }
+        
         total_created = self._fetch_and_process_returns(
             misa_utils, headers, date_from_utc, date_to_utc, 
-            self.env['odoo.utils'], stock_mapping
+            self.env['odoo.utils'], e_accounts
         )
         return {
             'type': 'ir.actions.client', 'tag': 'display_notification',
@@ -50,7 +66,7 @@ class MisaReturnFetch(models.TransientModel):
         }
 
     def _fetch_and_process_returns(self, misa_utils, headers, date_from_utc, date_to_utc, 
-                                    odoo_utils, stock_mapping):
+                                    odoo_utils, e_accounts):
         """Fetch paginated returns và xử lý từng đơn"""
         api_url = "https://actapp.misa.vn/g2/api/sa/v1/sa_return/paging_filter_v2"
         total_created, page_index = 0, 1
@@ -67,7 +83,7 @@ class MisaReturnFetch(models.TransientModel):
                 break
             for return_order in page_data:
                 try:
-                    if self._process_return_order(return_order, headers, misa_utils, odoo_utils, stock_mapping):
+                    if self._process_return_order(return_order, headers, misa_utils, odoo_utils, e_accounts):
                         total_created += 1
                 except Exception as e:
                     _logger.exception("❌ Lỗi xử lý đơn %s: %s", return_order.get("refno_finance", "UNKNOWN"), e)
@@ -87,7 +103,7 @@ class MisaReturnFetch(models.TransientModel):
             "summaryColumns": [5126, 5068, 5141, 5039], "loadMode": 2
         }
 
-    def _process_return_order(self, return_order, headers, misa_utils, odoo_utils, stock_mapping):
+    def _process_return_order(self, return_order, headers, misa_utils, odoo_utils, e_accounts):
         """Xử lý một đơn hàng trả về: validate → lấy detail → tạo picking + moves"""
         refno, refid = return_order.get("refno_finance", "BTL-UNKNOWN"), return_order.get("refid")
         
@@ -102,43 +118,38 @@ class MisaReturnFetch(models.TransientModel):
             _logger.warning("❌ Không lấy được chi tiết %s", refno)
             return False
         
-        # Validate kho
-        stock_code = detail_data[0].get("stock_code", "").strip().replace(" ", "").upper()
-        location = self._validate_and_get_location(stock_code, stock_mapping, refno)
-        warehouse = location and self._get_warehouse_for_location(location, stock_code)
-        if not warehouse:
+        # Setup partner (cần lấy trước để xác định kho)
+        customer_name = return_order.get("account_object_name", "")
+        partner = odoo_utils._get_or_create_partner(customer_name)
+        self._update_partner_info(partner, return_order)
+        
+        # ===== XÁC ĐỊNH KHO DỰA TRÊN e_accounts =====
+        # Khách hàng thuộc e_accounts → TSN/Stock
+        # Còn lại → KBC/Tồn kho
+        if customer_name in e_accounts:
+            location_name = "TSN/Stock"
+        else:
+            location_name = "KBC/Tồn kho"
+        
+        location = self.env["stock.location"].search([("complete_name", "=", location_name)], limit=1)
+        if not location:
+            _logger.error("❌ %s: Không tìm thấy location '%s' cho khách hàng '%s'", 
+                         refno, location_name, customer_name)
             return False
         
-        # Setup picking
-        partner = odoo_utils._get_or_create_partner(return_order.get("account_object_name", ""))
-        self._update_partner_info(partner, return_order)
+        warehouse = self.env["stock.warehouse"].search([
+            ("view_location_id", "=", location.location_id.id)
+        ], limit=1)
+        if not warehouse:
+            _logger.error("❌ %s: Không tìm thấy warehouse cho location '%s'", refno, location_name)
+            return False
+        
+        _logger.info("✅ %s: Khách hàng '%s' → Location '%s' (Warehouse: %s)", 
+                    refno, customer_name, location_name, warehouse.name)
+        
+        # Tạo picking
         picking = self._create_picking(partner, warehouse, refno, location, return_order, detail_data)
         return bool(picking)
-
-    def _validate_and_get_location(self, stock_code, stock_mapping, refno):
-        """Validate stock code và lấy location"""
-        if stock_code not in stock_mapping:
-            _logger.error("❌ %s: stock_code '%s' không hỗ trợ", refno, stock_code)
-            return None
-        location_path = stock_mapping[stock_code]
-        location = self.env["stock.location"].search([("complete_name", "=", location_path)], limit=1)
-        if not location:
-            _logger.error("❌ %s: Không tìm location '%s'", refno, location_path)
-            return None
-        _logger.info("✅ %s: Location '%s' (%s)", refno, location_path, location.id)
-        return location
-
-    def _get_warehouse_for_location(self, location, stock_code):
-        """Lấy warehouse từ location"""
-        warehouse = self.env["stock.warehouse"].search(
-            [("view_location_id", "=", location.parent_path.split("/")[-2] if "/" in location.parent_path else location.parent_path)],
-            limit=1
-        ) or self.env["stock.warehouse"].search([], limit=1)
-        if not warehouse:
-            _logger.error("❌ Không tìm warehouse cho %s", stock_code)
-            return None
-        _logger.info("✅ Warehouse: %s", warehouse.name)
-        return warehouse
 
     def _update_partner_info(self, partner, return_order):
         """Update thông tin khách hàng từ dữ liệu MISA"""
