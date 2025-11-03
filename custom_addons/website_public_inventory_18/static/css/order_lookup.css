@@ -596,6 +596,12 @@
     font-weight: 500;
 }
 
+.order-code .badge {
+    font-size: 0.95rem;
+    border: 1px solid #e3e6ea;
+    border-radius: 8px;
+}
+
 /* Mobile Bill Style */
 @media (max-width: 768px) {
     .o_order_lookup_page .invoice-table thead th,
@@ -1451,5 +1457,41 @@
     background: #f8f9fa;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   }
+
+
+        .mobile-product-details {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            column-gap: 16px;
+            /* ngang */
+            row-gap: 8px;
+            /* dọc */
+            align-items: center;
+        }
+    
+        .mobile-product-details .detail-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            border-radius: 8px;
+            background: #f7f8fa;
+        }
+    
+        /* Nhãn có bề rộng tối thiểu để không dí sát giá trị */
+        .mobile-product-details .detail-label {
+            min-width: 56px;
+            font-weight: 600;
+        }
+    
+        /* Thành tiền chiếm trọn hàng, xuống dòng riêng */
+        .mobile-product-details .detail-item.total {
+            grid-column: 1 / -1;
+            background: #eef4ff;
+        }
+
+        .order-code {
+                      justify-content: center;
+                  }
 }
 
