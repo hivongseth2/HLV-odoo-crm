@@ -1400,7 +1400,7 @@
 
 .o_order_lookup_page .detail-item {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
@@ -1414,10 +1414,10 @@
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-muted);
-    /* text-transform: uppercase; */
     letter-spacing: 0.3px;
     flex-shrink: 0;
     white-space: nowrap;
+    min-width: 56px;
 }
 
 .o_order_lookup_page .detail-value {
@@ -1425,7 +1425,7 @@
     font-weight: 600;
     color: var(--text-dark);
     text-align: right;
-    flex-shrink: 1;
+    flex-grow: 1;
     min-width: 0;
     word-break: break-word;
 }
@@ -1520,30 +1520,18 @@
 
   /* Mobile product details improvements */
   .o_order_lookup_page .mobile-product-details {
-    display: flex;
-    flex-wrap: wrap;
+    grid-template-columns: 1fr 1fr;
     gap: 0.5rem;
   }
 
   .o_order_lookup_page .mobile-product-details .detail-item {
-    flex: 1 1 auto;
-    min-width: 140px;
     padding: 0.4rem 0.6rem;
     min-height: 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .o_order_lookup_page .mobile-product-details .detail-item.total {
-    flex: 1 1 100%;
-    min-width: auto;
   }
 
   .o_order_lookup_page .mobile-product-details .detail-label {
     font-size: 0.7rem;
     min-width: 48px;
-    flex-shrink: 0;
   }
 
   .o_order_lookup_page .mobile-product-details .detail-value {
@@ -1554,25 +1542,18 @@
 /* Tablets (768px to 992px) - optimize product details */
 @media (min-width: 576px) and (max-width: 992px) {
   .o_order_lookup_page .mobile-product-details {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 0.6rem;
   }
 
   .o_order_lookup_page .mobile-product-details .detail-item {
-    flex: 1 1 auto;
-    min-width: 150px;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     padding: 0.5rem 0.7rem;
     min-height: 2rem;
-    flex-wrap: wrap;
-  }
-
-  .o_order_lookup_page .mobile-product-details .detail-item.total {
-    flex: 1 1 100%;
-    min-width: auto;
+    gap: 0.5rem;
   }
 
   .o_order_lookup_page .mobile-product-details .detail-label {
@@ -1587,6 +1568,15 @@
     flex-grow: 1;
   }
 
+  .o_order_lookup_page .mobile-product-details .detail-item.total {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
+    margin-top: 0.5rem;
+  }
+
   .o_order_lookup_page .mobile-product-details .detail-item.total .detail-value {
     font-size: 0.95rem;
   }
@@ -1595,19 +1585,17 @@
 /* Extra small mobile (<576px) - mobile product details */
 @media (max-width: 576px) {
   .o_order_lookup_page .mobile-product-details {
-    display: flex;
-    flex-wrap: wrap;
+    grid-template-columns: 1fr;
     gap: 0.4rem;
   }
 
   .o_order_lookup_page .mobile-product-details .detail-item {
-    flex: 1 1 auto;
-    min-width: 130px;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     padding: 0.5rem 0.75rem;
     min-height: auto;
+    gap: 0.5rem;
   }
 
   .o_order_lookup_page .mobile-product-details .detail-label {
@@ -1619,11 +1607,11 @@
   .o_order_lookup_page .mobile-product-details .detail-value {
     font-size: 0.85rem;
     text-align: right;
+    flex-grow: 1;
   }
 
   .o_order_lookup_page .mobile-product-details .detail-item.total {
-    flex: 1 1 100%;
-    min-width: auto;
+    grid-column: 1 / -1;
     display: flex;
     justify-content: space-between;
     align-items: center;
