@@ -38,13 +38,10 @@
    ============================================ */
 .o_order_lookup_page .o_page_header {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
-    /* padding: 2.5rem 0 3rem; */
-    /* margin-bottom: 2rem; */
+    padding: 2.5rem 0;
     box-shadow: var(--shadow-md);
     position: relative;
     overflow: hidden;
-    display: flex;
-    align-items: center;
 }
 
 .o_order_lookup_page .o_page_header::before {
@@ -73,11 +70,16 @@
     z-index: 1;
 }
 
+.o_order_lookup_page .o_page_header .row {
+    display: flex;
+    align-items: center;
+    min-height: 100px;
+}
+
 .o_order_lookup_page .o_page_header .order-code {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100%;
 }
 
 @media (max-width: 768px) {
