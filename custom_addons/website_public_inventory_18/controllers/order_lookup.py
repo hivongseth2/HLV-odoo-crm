@@ -345,37 +345,33 @@ def _get_payment_status(order):
 
 def _get_order_lines(order):
     """
-    Get order lines for display in table.
-    Returns: list of dicts with all product info details.
+    Build order lines payload with VAT-included amounts.
+    Returns: list of dicts for rendering.
     """
     order_lines = []
-    
     if not order.order_line:
         return order_lines
-    
-    # Bước 1: Xây dựng mapping: product_id -> combo parent line id
-    # để biết line nào là component của combo nào
-    component_to_parent_map = {}  # {component_product_id: parent_line_id}
-    parent_combo_lines = {}  # {line_id: line} - lưu các combo parent line
-    
+
+    # ---- Chuẩn bị mapping combo (như code cũ) ----
+    component_to_parent_map = {}
+    parent_combo_lines = {}
+
     for line in order.order_line:
         product = line.product_id
         if product and hasattr(product.product_tmpl_id, 'is_combo'):
             if getattr(product.product_tmpl_id, 'is_combo', False):
-                # Đây là combo product parent
                 parent_combo_lines[line.id] = line
-                
-                # Lấy danh sách component
                 ComboLine = request.env['combo.product'].sudo()
                 combo_lines = ComboLine.search([
                     ('product_template_id', '=', product.product_tmpl_id.id)
                 ])
                 for combo_line in combo_lines:
                     if combo_line.product_id:
-                        # Map component product -> parent line
                         component_to_parent_map[combo_line.product_id.id] = line.id
-    
-    # Bước 2: Build order lines với flag is_component và parent_combo_name
+
+    currency = order.currency_id
+    partner = order.partner_id
+
     for line in order.order_line:
         product = line.product_id
         product_name = product.name if product else ""
@@ -383,82 +379,94 @@ def _get_order_lines(order):
         is_component = False
         parent_combo_name = ""
         is_fully_delivered = False
-        
-        # Kiểm tra xem line này có phải là component của combo không
+
+        # component?
         if product and product.id in component_to_parent_map:
-            # Đây là component line
             is_component = True
             parent_line_id = component_to_parent_map[product.id]
             if parent_line_id in parent_combo_lines:
                 parent_line = parent_combo_lines[parent_line_id]
                 parent_combo_name = parent_line.product_id.name if parent_line.product_id else ""
-        
-        # Try to get combo product display if available
-        if product and hasattr(product.product_tmpl_id, 'is_combo'):
-            try:
-                if getattr(product.product_tmpl_id, 'is_combo', False):
-                    is_combo = True
-                    
-                    # Kiểm tra tất cả component lines đã được giao đủ chưa
-                    # Tìm các order lines là component của combo này
-                    all_components_delivered = True
-                    
-                    for check_line in order.order_line:
-                        check_product = check_line.product_id
-                        # Nếu line này là component của combo hiện tại
-                        if check_product and check_product.id in component_to_parent_map:
-                            if component_to_parent_map[check_product.id] == line.id:
-                                # Đây là component của combo này
-                                qty_ordered = check_line.product_uom_qty or 0
-                                qty_delivered = check_line.qty_delivered or 0
-                                
-                                _logger.info(
-                                    f"Checking component: {check_product.name}, "
-                                    f"Ordered: {qty_ordered}, Delivered: {qty_delivered}"
-                                )
-                                
-                                if qty_delivered < qty_ordered:
-                                    all_components_delivered = False
-                    
-                    is_fully_delivered = all_components_delivered
-                    
-                    # DEBUG LOG
-                    _logger.info(
-                        f"Combo: {product_name}, "
-                        f"Is fully delivered: {is_fully_delivered}"
-                    )
-                        
-            except Exception as e:
-                _logger.error(f"Error checking combo delivery: {e}", exc_info=True)
+
+        # combo parent?
+        if product and hasattr(product.product_tmpl_id, 'is_combo') and getattr(product.product_tmpl_id, 'is_combo', False):
+            is_combo = True
+            # check all components delivered
+            all_components_delivered = True
+            for check_line in order.order_line:
+                check_product = check_line.product_id
+                if check_product and check_product.id in component_to_parent_map:
+                    if component_to_parent_map[check_product.id] == line.id:
+                        qty_ordered = check_line.product_uom_qty or 0
+                        qty_delivered = check_line.qty_delivered or 0
+                        if qty_delivered < qty_ordered:
+                            all_components_delivered = False
+            is_fully_delivered = all_components_delivered
         else:
-            # Sản phẩm thường hoặc component - check delivery theo qty_delivered
             qty_ordered = line.product_uom_qty or 0
             qty_delivered = line.qty_delivered or 0
             if qty_ordered > 0 and qty_delivered >= qty_ordered:
                 is_fully_delivered = True
-            
-            # DEBUG LOG
-            _logger.info(
-                f"Regular/Component product: {product_name}, "
-                f"Ordered: {qty_ordered}, Delivered: {qty_delivered}, "
-                f"Is fully delivered: {is_fully_delivered}"
-            )
-        
+
+        # ====== TÍNH TIỀN ĐÃ GỒM VAT (per-line) ======
+        qty = float(line.product_uom_qty or 0.0)
+        # 1) ưu tiên field có sẵn trên line
+        ltotal_inc = (getattr(line, 'price_total', None))
+        ltax = getattr(line, 'price_tax', None)
+
+        if ltotal_inc is None or ltotal_inc == 0.0:
+            # 2) tính qua compute_all để chính xác (kể cả thuế price_include/khác %)
+            try:
+                tax_res = line.tax_id._origin.compute_all(
+                    line.price_unit,
+                    currency=currency,
+                    quantity=qty or 1.0,  # quantity=0 thì total_included=0
+                    product=product,
+                    partner=partner
+                ) if line.tax_id else None
+            except Exception:
+                tax_res = None
+
+            if tax_res and isinstance(tax_res, dict):
+                ltotal_inc = float(tax_res.get('total_included', 0.0))
+                total_excl = float(tax_res.get('total_excluded', 0.0))
+                ltax = ltotal_inc - total_excl
+
+        # 3) fallback cộng tay
+        if not ltotal_inc:
+            ltotal_inc = float(line.price_subtotal or 0.0) + float(ltax or 0.0)
+
+        # 4) fallback cuối cùng (không có thuế)
+        if not ltotal_inc:
+            ltotal_inc = float(line.price_subtotal or 0.0)
+
+        # Đơn giá đã VAT (an toàn khi qty=0)
+        unit_inc = (ltotal_inc / qty) if qty else float(line.price_unit or 0.0)
+
         order_lines.append({
             'product_name': product_name,
             'description': line.name or "",
             'qty': line.product_uom_qty,
             'qty_delivered': line.qty_delivered,
             'uom': line.product_uom.name if line.product_uom else 'cái',
+
+            # Giá/thuế gốc để tham khảo
             'price_unit': line.price_unit,
             'price_subtotal': line.price_subtotal,
+
+            # ===== Giá đã gồm VAT trả ra để template dùng =====
+            'price_total': ltotal_inc,     # THÀNH TIỀN đã VAT
+            'price_tax': ltax or (ltotal_inc - float(line.price_subtotal or 0.0)),
+            'unit_price_inc': unit_inc,    # ĐƠN GIÁ đã VAT
+
             'is_combo': is_combo,
             'is_component': is_component,
             'parent_combo_name': parent_combo_name,
             'is_fully_delivered': is_fully_delivered,
         })
-    
+
     return order_lines
+
 
 # ===== CONTROLLER =====
 class OrderLookupController(http.Controller):

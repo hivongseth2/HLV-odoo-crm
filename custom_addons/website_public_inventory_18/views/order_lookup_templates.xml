@@ -492,21 +492,10 @@
                 
                                                       <!-- ĐƠN GIÁ (đã gồm VAT) -->
                             <td class="text-end">
-                              <t t-set="qty" t-value="line.get('qty', 0) or 1"/>
-                              <t t-set="ltotal"
-                                t-value="(line.get('price_total') 
-                                          or (line.get('price_subtotal', 0) + line.get('price_tax', 0))
-                                          or line.get('price_subtotal', 0))"/>
-                              <t t-esc="'{:,.0f}'.format(ltotal / qty)"/>
+                              <t t-esc="'{:,.0f}'.format(line.get('unit_price_inc', 0))"/>
                             </td>
-
-                            <!-- THÀNH TIỀN (đã gồm VAT) -->
                             <td class="text-end">
-                              <t t-set="ltotal"
-                                t-value="(line.get('price_total') 
-                                          or (line.get('price_subtotal', 0) + line.get('price_tax', 0))
-                                          or line.get('price_subtotal', 0))"/>
-                              <strong><t t-esc="'{:,.0f}'.format(ltotal)"/></strong>
+                              <strong><t t-esc="'{:,.0f}'.format(line.get('price_total', 0))"/></strong>
                             </td>
 
 
@@ -566,32 +555,23 @@
                         
                         <!-- Product Details Row -->
                         <div class="mobile-product-details">
-                         <!-- SL -->
+                          <!-- SL -->
                             <div class="detail-item">
                               <span class="detail-label">SL:</span>
                               <span class="detail-value"><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></span>
                             </div>
 
                             <!-- ĐƠN GIÁ (đã gồm VAT) -->
-                            <div class="detail-item">
-                              <span class="detail-label">Đơn Giá:</span>
-                              <t t-set="qty" t-value="line.get('qty', 0) or 1"/>
-                              <t t-set="ltotal"
-                                t-value="(line.get('price_total') 
-                                          or (line.get('price_subtotal', 0) + line.get('price_tax', 0))
-                                          or line.get('price_subtotal', 0))"/>
-                              <span class="detail-value"><t t-esc="'{:,.0f}'.format(ltotal / qty)"/></span>
-                            </div>
+                          <div class="detail-item">
+                            <span class="detail-label">Đơn Giá:</span>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('unit_price_inc', 0))"/></span>
+                          </div>
 
                             <!-- THÀNH TIỀN (đã gồm VAT) -->
-                            <div class="detail-item total">
-                              <span class="detail-label">Thành Tiền:</span>
-                              <t t-set="ltotal"
-                                t-value="(line.get('price_total') 
-                                          or (line.get('price_subtotal', 0) + line.get('price_tax', 0))
-                                          or line.get('price_subtotal', 0))"/>
-                              <span class="detail-value"><t t-esc="'{:,.0f}'.format(ltotal)"/></span>
-                            </div>
+                          <div class="detail-item total">
+                            <span class="detail-label">Thành Tiền:</span>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_total', 0))"/></span>
+                          </div>
 
                                                     </div>
                       </div>
