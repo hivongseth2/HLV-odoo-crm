@@ -92,38 +92,15 @@
 
 @media (max-width: 768px) {
     .o_order_lookup_page .o_page_header {
-        padding: 0.75rem 0 1rem;
+         /* padding: 1.5rem 0 2rem; */
     }
     
     .o_order_lookup_page .o_page_header h1 {
-        font-size: 0.85rem;
+        font-size: 1rem;
     }
     
     .o_order_lookup_page .o_page_header .lead {
-        font-size: 0.8rem;
-        display: none;
-    }
-    
-    /* Reduce container margin after header */
-    .o_order_lookup_page .container {
-        margin-top: 1rem !important;
-        margin-bottom: 2rem !important;
-    }
-}
-
-@media (max-width: 576px) {
-    .o_order_lookup_page .o_page_header {
-        padding: 0.6rem 0 0.8rem;
-    }
-    
-    .o_order_lookup_page .o_page_header h1 {
-        font-size: 0.75rem;
-    }
-    
-    /* Extra small mobile: even tighter spacing */
-    .o_order_lookup_page .container {
-        margin-top: 0.75rem !important;
-        margin-bottom: 1.5rem !important;
+        font-size: 0.95rem;
     }
 }
 
@@ -1019,37 +996,18 @@
     }
 }
 
-/* Mobile phones */
-@media (max-width: 768px) {
-    .o_order_lookup_page {
-        padding-bottom: 2rem;
-    }
-    
-    /* Tight header spacing on mobile */
-    .o_order_lookup_page .o_page_header .container {
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-    
-    .o_order_lookup_page .o_page_header .row {
-        margin: 0;
-        gap: 0.5rem;
-    }
+
     
     .o_order_lookup_page .card {
-        margin-bottom: 0.75rem;
+        margin-bottom: 1rem;
     }
     
     .o_order_lookup_page .card-header {
-        padding: 0.8rem;
-    }
-    
-    .o_order_lookup_page .card-header h5 {
-        font-size: 0.9rem;
+        padding: 1rem;
     }
     
     .o_order_lookup_page .card-body {
-        padding: 0.8rem;
+        padding: 1rem;
     }
     
     .o_order_lookup_page .form-control {
@@ -1673,4 +1631,3 @@
   }
 }
 
-}
