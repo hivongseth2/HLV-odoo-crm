@@ -38,8 +38,8 @@
    ============================================ */
 .o_order_lookup_page .o_page_header {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
-    padding: 2.5rem 0 3rem;
-    margin-bottom: 2rem;
+    /* padding: 2.5rem 0 3rem; */
+    /* margin-bottom: 2rem; */
     box-shadow: var(--shadow-md);
     position: relative;
     overflow: hidden;
@@ -59,7 +59,7 @@
 .o_order_lookup_page .o_page_header h1 {
     font-size: 2rem;
     font-weight: 700;
-    margin-bottom: 0.5rem;
+    /* margin-bottom: 0.5rem; */
     position: relative;
     z-index: 1;
 }
@@ -73,11 +73,11 @@
 
 @media (max-width: 768px) {
     .o_order_lookup_page .o_page_header {
-        padding: 1.5rem 0 2rem;
+        /* padding: 1.5rem 0 2rem; */
     }
     
     .o_order_lookup_page .o_page_header h1 {
-        font-size: 1.5rem;
+        font-size: 1rem;
     }
     
     .o_order_lookup_page .o_page_header .lead {
