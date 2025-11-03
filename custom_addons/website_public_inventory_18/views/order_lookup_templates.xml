@@ -376,12 +376,12 @@
                 <div class="col-12">
                   <div class="d-flex justify-content-between align-items-center flex-column flex-md-row gap-3">
                   <div class="order-code d-flex flex-wrap align-items-center gap-2">
-                          <span class="text-white-50">Mã đơn:</span>
-                          <code id="orderCode" class="badge bg-light text-dark px-2 py-1"
-                                style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">
-                            <t t-esc="order.get('name', '')"/>
-                          </code>
-                         
+                       <div class="text-center mt-3 mb-3">
+                        <h2 class="fw-bold text-white" style="font-size: 2rem; letter-spacing: 1px;">
+                          <t t-esc="order.get('name', '')"/>
+                        </h2>
+                      </div>
+
                         </div>
 
                     <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-end gap-2">
