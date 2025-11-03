@@ -450,17 +450,6 @@
                                 <div class="combo-component">
                                   <t t-esc="line.get('product_name', 'N/A')"/>
                                 </div>
-                                <!-- Show delivered qty for component -->
-                                <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
-                                <t t-set="total_qty" t-value="line.get('qty', 0)"/>
-                                <t t-if="delivered > 0">
-                                  <small class="text-muted d-block" style="padding-left: 2.5rem;">
-                                    Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
-                                    <t t-if="delivered >= total_qty">
-                                      <i class="fa fa-check-circle text-success ms-1"></i>
-                                    </t>
-                                  </small>
-                                </t>
                               </t>
                               
                               <!-- Combo parent or regular product -->
@@ -472,17 +461,7 @@
                                     <i class="fa fa-check-circle text-success ms-2" title="Đã giao đủ"></i>
                                   </t>
                                 </div>
-                                <!-- Show delivered qty as subtext for regular products only -->
-                                <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
-                                <t t-set="total_qty" t-value="line.get('qty', 0)"/>
-                                <t t-if="delivered > 0 and not line.get('is_combo')">
-                                  <small class="text-muted d-block mt-1">
-                                    Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
-                                    <t t-if="delivered >= total_qty">
-                                      <i class="fa fa-check-circle text-success ms-1"></i>
-                                    </t>
-                                  </small>
-                                </t>
+                                <!-- Đã giao: ĐÃ BỎ -->
                               </t>
                             </td>
                             <td class="text-center">
@@ -541,20 +520,7 @@
                               </div>
                             </t>
                           </div>
-                          
-                          <!-- Delivery Info -->
-                          <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
-                          <t t-set="total_qty" t-value="line.get('qty', 0)"/>
-                          <t t-if="delivered > 0">
-                            <div class="delivery-info mt-1">
-                              <small class="text-muted">
-                                Đã giao: <strong><t t-esc="'{:.0f}'.format(delivered)"/></strong>/<t t-esc="'{:.0f}'.format(total_qty)"/>
-                                <t t-if="delivered >= total_qty">
-                                  <i class="fa fa-check-circle text-success ms-1"></i>
-                                </t>
-                              </small>
-                            </div>
-                          </t>
+                          <!-- Delivery Info: ĐÃ BỎ -->
                         </div>
                         
                         <!-- Product Details Row -->
