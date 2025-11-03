@@ -60,30 +60,56 @@ class InventoryReportWizard(models.TransientModel):
             return self._get_end_of_day(self.report_date)
 
     def _get_warehouse_locations(self):
-        """Lấy danh sách location của các kho được chọn, bao gồm TẤT CẢ child locations"""
+        """
+        Lấy danh sách location của các kho được chọn, bao gồm TẤT CẢ child locations
+        NHƯNG PHẢI loại trừ transit locations để tính xuất/nhập đúng
+        
+        ⚠️ QUAN TRỌNG: Nếu transit location nằm trong location_ids:
+        - Move KHD → Transit: cả source và dest đều trong location_ids → KHÔNG tính xuất
+        - Move Transit → KBC: cả source và dest đều trong location_ids → KHÔNG tính nhập
+        → KẾT QUẢ: Mất hết dữ liệu inter-warehouse transfer!
+        """
         if self.warehouse_ids:
             warehouses = self.warehouse_ids
         else:
             warehouses = self.env['stock.warehouse'].search([])
         
-        # Lấy tất cả location thuộc kho (internal type), bao gồm cả sub-locations
+        # Lấy tất cả location thuộc kho, bao gồm cả sub-locations
         location_ids = []
+        excluded_count = 0
+        
         for wh in warehouses:
             # Lấy view_location_id để tìm tất cả location con
             if wh.view_location_id:
-                # Tìm TẤT CẢ location con có usage = internal
+                # Tìm TẤT CẢ location con có usage = internal HOẶC transit
+                # (Vì một số hệ thống đặt transit usage = 'internal')
                 child_locs = self.env['stock.location'].search([
                     ('id', 'child_of', wh.view_location_id.id),
-                    ('usage', '=', 'internal')
+                    '|',
+                    ('usage', '=', 'internal'),
+                    ('usage', '=', 'transit')
                 ])
-                location_ids.extend(child_locs.ids)
                 
-                _logger.info(
-                    f"Warehouse {wh.name}: Found {len(child_locs)} internal locations: "
-                    f"{', '.join(child_locs.mapped('complete_name'))}"
+                # 🔧 LOẠI BỎ TRANSIT: Kiểm tra nhiều điều kiện
+                # Bao gồm: usage='transit' HOẶC tên chứa 'transit', 'inter-warehouse', etc.
+                filtered_locs = child_locs.filtered(
+                    lambda loc: (
+                        loc.usage != 'transit'  # ✓ Loại bỏ usage = transit
+                        and 'transit' not in loc.complete_name.lower() 
+                        and 'inter-warehouse' not in loc.complete_name.lower()
+                        and 'inter warehouse' not in loc.complete_name.lower()
+                        and not loc.name.lower().startswith('inter')
+                        # Thêm điều kiện: location có parent là warehouse transit
+                        and (not loc.location_id or 'transit' not in loc.location_id.complete_name.lower())
+                    )
                 )
+                
+                excluded_locs = child_locs - filtered_locs
+                excluded_count += len(excluded_locs)
+                
+                location_ids.extend(filtered_locs.ids)
         
-        return list(set(location_ids))
+        return location_ids
 
     def _get_product_qty_at_datetime(self, product_id, location_ids, target_datetime):
         """
@@ -121,37 +147,155 @@ class InventoryReportWizard(models.TransientModel):
         
         return current_qty + adjustment
 
-    def _get_outgoing_qty_between(self, product_id, location_ids, start_datetime, end_datetime):
+    def _is_virtual_location(self, location_id):
         """
-        Tính tổng số lượng xuất kho từ start_datetime đến end_datetime
+        Kiểm tra xem location có phải là virtual location hay không
+        Virtual location là location được sử dụng cho inventory adjustment
+        Bao gồm: loss, inventory, scrap, production, etc. (usage != 'internal' và != 'transit')
+        """
+        location = self.env['stock.location'].browse(location_id)
+        # Virtual locations có usage là: loss, inventory, scrap, production, etc.
+        # Không phải internal hoặc transit
+        return location.usage not in ['internal', 'transit']
+
+    def _get_product_adjustment_details(self, product_id, location_ids, start_datetime, end_datetime):
+        """
+        Lấy danh sách điều chỉnh tồn kho (Inventory Adjustment) của sản phẩm
         
-        Logic: Tính các move xuất RA KHỎI kho (destination không trong location_ids)
-        Bao gồm: xuất đến customer, transit, packing zone bên ngoài kho, etc.
+        🔧 LOGIC: 
+        - Tìm các stock.move có source_location là virtual location (loss, inventory, scrap, etc.)
+        - destination_location trong location_ids
+        - Hoặc ngược lại: source trong location_ids, dest là virtual location (cho trường hợp xuất hàng hỏng)
+        
+        Trả về: {
+            'incoming': [{'qty': ..., 'from_location': ..., 'move': ..., 'picking': ...}, ...],
+            'outgoing': [{'qty': ..., 'to_location': ..., 'move': ..., 'picking': ...}, ...],
+            'total_qty': số lượng net điều chỉnh
+        }
         """
-        # Tìm các stock.move xuất khỏi kho
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
+            '|',
             ('location_id', 'in', location_ids),
+            ('location_dest_id', 'in', location_ids),
         ])
         
-        # Lọc: lấy move xuất ra ngoài kho (destination không trong location_ids)
-        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
+        adjustments = {
+            'incoming': [],  # Điều chỉnh tăng (từ virtual location vào kho)
+            'outgoing': [],  # Điều chỉnh giảm (từ kho ra virtual location)
+            'total_qty': 0
+        }
         
-        total_qty = sum(outgoing_moves.mapped('product_uom_qty'))
+        for move in moves:
+            # Bỏ qua moves không có picking_id hoặc moves nội bộ
+            if not move.move_line_ids:
+                continue
+            
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
+                qty = line.qty_done
+                
+                # Bỏ qua: location_id = location_dest_id
+                if location_id == location_dest_id:
+                    continue
+                
+                # 🔧 ĐIỀU CHỈNH TĂNG: Virtual location → Kho thực
+                # Ví dụ: Inventory / Stock Adjustment → Internal Location
+                if (self._is_virtual_location(location_id) and 
+                    location_dest_id in location_ids):
+                    
+                    from_location = self.env['stock.location'].browse(location_id)
+                    adjustments['incoming'].append({
+                        'qty': qty,
+                        'from_location': from_location.name,
+                        'from_location_usage': from_location.usage,
+                        'move': move,
+                        'picking': move.picking_id,
+                        'date': move.date
+                    })
+                    adjustments['total_qty'] += qty
+                
+                # 🔧 ĐIỀU CHỈNH GIẢM: Kho thực → Virtual location
+                # Ví dụ: Internal Location → Loss / Scrap
+                elif (location_id in location_ids and 
+                      self._is_virtual_location(location_dest_id)):
+                    
+                    to_location = self.env['stock.location'].browse(location_dest_id)
+                    adjustments['outgoing'].append({
+                        'qty': qty,
+                        'to_location': to_location.name,
+                        'to_location_usage': to_location.usage,
+                        'move': move,
+                        'picking': move.picking_id,
+                        'date': move.date
+                    })
+                    adjustments['total_qty'] -= qty
         
-        # Debug logging
-        if moves and not outgoing_moves:
+        return adjustments
+
+    def _get_outgoing_qty_between(self, product_id, location_ids, start_datetime, end_datetime, log_locations=False):
+        """
+        Tính tổng số lượng xuất kho từ start_datetime đến end_datetime
+        
+        🔧 LOGIC MỚI: Dựa trên stock.move.line (CHÍNH XÁC hơn stock.move)
+        - Xuất = move line từ internal location (trong location_ids) → location khác (ngoài location_ids)
+        - Loại bỏ: move line có location_id = location_dest_id (same location)
+        - GIỮ LẠI: move line có location_id khác location_dest_id dù cả 2 đều trong location_ids
+        """
+        # Log location_ids để debug (chỉ log 1 lần khi được yêu cầu)
+        # Location IDs logged at debug level only if needed
+        
+        # Tìm các stock.move có move_line_ids
+        moves = self.env['stock.move'].search([
+            ('product_id', '=', product_id),
+            ('state', '=', 'done'),
+            ('date', '>=', start_datetime),
+            ('date', '<=', end_datetime),
+        ])
+        
+        total_qty = 0
+        outgoing_moves_info = []
+        internal_moves_info = []
+        
+        for move in moves:
+            if not move.move_line_ids:
+                continue
+            
+            # Duyệt qua TỪNG move.line để lấy location chính xác
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
+                qty = line.qty_done
+                
+                # Loại bỏ: location_id = location_dest_id (move trong cùng 1 location)
+                if location_id == location_dest_id:
+                    continue
+                
+                # ✅ Xuất: từ location_ids → ngoài location_ids
+                if location_id in location_ids and location_dest_id not in location_ids:
+                    total_qty += qty
+                    outgoing_moves_info.append({
+                        'move': move,
+                        'line': line,
+                        'qty': qty
+                    })
+                # ⚠️ Internal: move giữa các location trong location_ids (bỏ qua)
+                elif location_id in location_ids and location_dest_id in location_ids:
+                    internal_moves_info.append({
+                        'move': move,
+                        'line': line,
+                        'qty': qty
+                    })
+        
+        # Debug logging - ENHANCED
+        if outgoing_moves_info or internal_moves_info:
             _logger.warning(
-                f"Product {product_id}: Found {len(moves)} moves but 0 outgoing moves. "
-                f"All moves are internal transfers within location_ids {location_ids}"
-            )
-        elif outgoing_moves:
-            _logger.info(
-                f"Product {product_id}: Found {len(outgoing_moves)} outgoing moves, total qty: {total_qty}. "
-                f"Pickings: {', '.join(outgoing_moves.mapped('picking_id.name'))}"
+                f"📤 Product {product_id}: {len(outgoing_moves_info)} OUTGOING, "
+                f"{len(internal_moves_info)} INTERNAL (ignored)"
             )
         
         return total_qty
@@ -160,23 +304,60 @@ class InventoryReportWizard(models.TransientModel):
         """
         Tính tổng số lượng nhập kho từ start_datetime đến end_datetime
         
-        Logic: Tính TẤT CẢ move nhập VÀO kho (source không trong location_ids)
-        Bao gồm: nhập từ supplier, trả hàng từ customer, nhận từ kho khác (transit), etc.
+        🔧 LOGIC MỚI: Dựa trên stock.move.line (CHÍNH XÁC hơn stock.move)
+        - Nhập = move line từ location khác (ngoài location_ids) → internal location (trong location_ids)
+        - Loại bỏ: move line có location_id = location_dest_id (same location)
+        - GIỮ LẠI: move line có location_id khác location_dest_id dù cả 2 đều trong location_ids
         """
-        # Tìm các stock.move nhập vào kho
+        # Tìm các stock.move có move_line_ids
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
-            ('location_dest_id', 'in', location_ids),
         ])
         
-        # Lọc: lấy TẤT CẢ move nhập từ bên ngoài vào kho (source không trong location_ids)
-        # Bao gồm cả nhập từ transit/inter-warehouse transfer
-        incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
+        total_qty = 0
+        incoming_moves_info = []
+        internal_moves_info = []
         
-        total_qty = sum(incoming_moves.mapped('product_uom_qty'))
+        for move in moves:
+            if not move.move_line_ids:
+                continue
+            
+            # Duyệt qua TỪNG move.line để lấy location chính xác
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
+                qty = line.qty_done
+                
+                # Loại bỏ: location_id = location_dest_id (move trong cùng 1 location)
+                if location_id == location_dest_id:
+                    continue
+                
+                # ✅ Nhập: từ ngoài location_ids → vào location_ids
+                if location_id not in location_ids and location_dest_id in location_ids:
+                    total_qty += qty
+                    incoming_moves_info.append({
+                        'move': move,
+                        'line': line,
+                        'qty': qty
+                    })
+                # ⚠️ Internal: move giữa các location trong location_ids (bỏ qua)
+                elif location_id in location_ids and location_dest_id in location_ids:
+                    internal_moves_info.append({
+                        'move': move,
+                        'line': line,
+                        'qty': qty
+                    })
+        
+        # Debug logging - ENHANCED
+        if incoming_moves_info or internal_moves_info:
+            _logger.warning(
+                f"📥 Product {product_id}: {len(incoming_moves_info)} INCOMING, "
+                f"{len(internal_moves_info)} INTERNAL (ignored)"
+            )
+        
         return total_qty
 
     def _get_all_products_with_movement(self, location_ids, start_datetime):
@@ -202,93 +383,252 @@ class InventoryReportWizard(models.TransientModel):
         
         return list(product_ids)
 
+    def _is_return_picking(self, picking):
+        """
+        Kiểm tra xem picking có phải là return order không
+        Return picking: picking_type_id.code = 'crm_return' hoặc 'incoming_crm' (tùy cấu hình)
+        hoặc picking có tên chứa 'Return', 'RMA', 'Credit Note', etc.
+        """
+        if not picking:
+            return False
+        
+        # Kiểm tra picking type code
+        if picking.picking_type_id:
+            code = picking.picking_type_id.code
+            if code in ['crm_return', 'incoming_crm', 'incoming_return', 'return']:
+                return True
+        
+        # Kiểm tra tên picking
+        picking_name = picking.name.upper()
+        return_keywords = ['RETURN', 'RMA', 'CREDIT', 'RETOUR']
+        return any(keyword in picking_name for keyword in return_keywords)
+
     def _get_product_outgoing_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
         Lấy danh sách tên (mã) các picking xuất kho của sản phẩm trong khoảng thời gian
-        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/OUT/00123, WH/OUT/00124"
+        Bao gồm:
+        - Picking xuất thường (xuất bán, xuất kho khác, etc.)
+        - Điều chỉnh tồn kho (Inventory Adjustment) nếu có giảm tồn
         
-        Logic đơn giản: Lấy TẤT CẢ picking có move xuất ra khỏi location_ids
+        ⚠️ LOẠI BỎ: Return Order (trả hàng) - vì chúng là incoming, không phải outgoing
+        
+        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy
+        
+        🔧 LOGIC MỚI: Dựa trên stock.move.line
+        - Lấy TẤT CẢ picking có move line xuất ra khỏi location_ids
+        - NHƯNG loại bỏ return picking (là incoming, không phải outgoing)
+        - Nếu xuất sang inter-warehouse transit, tìm thêm picking nhận ở kho đích
+        - Thêm thông tin adjustment (tồn kho bị điều chỉnh giảm sang virtual location)
         """
-        # Tìm các stock.move xuất khỏi kho (bao gồm cả sub-locations)
+        # Tìm TẤT CẢ các stock.move
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
-            ('location_id', 'in', location_ids),
         ], order='date asc')
         
-        # Lọc: lấy move xuất ra ngoài kho (destination không trong location_ids)
-        outgoing_moves = moves.filtered(lambda m: m.location_dest_id.id not in location_ids)
-        
-        # Lấy danh sách TẤT CẢ picking (không dùng chain logic nữa)
         picking_names = []
         seen_picking_ids = set()
+        return_picking_ids = set()  # Để loại bỏ return orders
         
-        for move in outgoing_moves:
-            if not move.picking_id:
+        for move in moves:
+            if not move.picking_id or not move.move_line_ids:
                 continue
             
             picking = move.picking_id
             
-            if picking.id not in seen_picking_ids:
-                # Bỏ qua picking type = internal
-                if picking.picking_type_id and picking.picking_type_id.code != 'internal':
+            # 🔧 LOẠI BỎ: Return Order từ danh sách xuất
+            if self._is_return_picking(picking):
+                return_picking_ids.add(picking.id)
+                continue
+            
+            # Kiểm tra xem move có line nào là outgoing không
+            has_outgoing = False
+            is_inter_warehouse = False
+            
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
+                
+                # Bỏ qua same location
+                if location_id == location_dest_id:
+                    continue
+                
+                # Xuất: từ location_ids → ngoài location_ids
+                if location_id in location_ids and location_dest_id not in location_ids:
+                    has_outgoing = True
+                    
+                    # Check inter-warehouse transfer
+                    dest_usage = line.location_dest_id.usage
+                    if (dest_usage == 'transit' or 
+                        'transit' in line.location_dest_id.complete_name.lower() or
+                        'inter-warehouse' in line.location_dest_id.complete_name.lower()):
+                        is_inter_warehouse = True
+                    
+                    break
+            
+            if has_outgoing:
+                # Thêm picking xuất
+                if picking.id not in seen_picking_ids:
                     picking_names.append(picking.name)
                     seen_picking_ids.add(picking.id)
                     
-                    # Debug logging
-                    _logger.info(
-                        f"Product {product_id} - Outgoing Picking: {picking.name}, "
-                        f"Type: {picking.picking_type_id.code}, "
-                        f"Qty: {move.product_uom_qty}, "
-                        f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name}"
-                    )
+                    # Nếu là inter-warehouse, tìm picking nhận ở kho đích
+                    if is_inter_warehouse or move.move_dest_ids:
+                        dest_picking = self._find_destination_picking_from_move(move)
+                        # 🔧 Kiểm tra return picking trước khi thêm
+                        if (dest_picking and dest_picking.id not in seen_picking_ids and 
+                            not self._is_return_picking(dest_picking)):
+                            picking_names.append(dest_picking.name)
+                            seen_picking_ids.add(dest_picking.id)
+                        elif dest_picking and self._is_return_picking(dest_picking):
+                            return_picking_ids.add(dest_picking.id)
+        
+        # 🆕 Thêm thông tin Inventory Adjustment (điều chỉnh giảm)
+        adjustments = self._get_product_adjustment_details(product_id, location_ids, start_datetime, end_datetime)
+        
+        if adjustments['outgoing']:
+            _logger.warning(
+                f"Product {product_id}: {len(adjustments['outgoing'])} adjustments (outgoing)"
+            )
+            
+            for adj in adjustments['outgoing']:
+                # Tạo mô tả điều chỉnh
+                move = adj['move']
+                picking = adj['picking']
+                
+                # Lấy picking reference nếu có, hoặc tạo string mô tả
+                if picking and picking.id not in seen_picking_ids:
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
+                elif not picking:
+                    # Nếu không có picking, tạo mô tả trực tiếp từ move
+                    adjustment_desc = f"Điều chỉnh sang {adj['to_location']} - {adj['qty']} cái"
+                    picking_names.append(adjustment_desc)
         
         return ', '.join(picking_names) if picking_names else ''
+
+    def _find_destination_picking_from_move(self, outgoing_move):
+        """
+        Tìm picking nhận ở kho đích cho move xuất qua transit
+        Sử dụng move_dest_ids để tìm chính xác
+        """
+        # Phương pháp 1: Qua move_dest_ids (linked moves) - ĐÁNG TIN CẬY NHẤT
+        if outgoing_move.move_dest_ids:
+            for dest_move in outgoing_move.move_dest_ids:
+                if dest_move.picking_id and dest_move.state == 'done':
+                    return dest_move.picking_id
+        
+        # Phương pháp 2: Tìm qua location_dest_id của outgoing_move
+        # Nếu outgoing_move đi đến transit, tìm move tiếp theo từ transit
+        transit_location_id = outgoing_move.location_dest_id.id
+        
+        # 🔧 Nới rộng điều kiện tìm kiếm để bắt được các move nhận từ transit
+        dest_moves = self.env['stock.move'].search([
+            ('product_id', '=', outgoing_move.product_id.id),
+            ('state', '=', 'done'),
+            ('location_id', '=', transit_location_id),
+            ('date', '>=', outgoing_move.date),  # Phải sau hoặc cùng lúc với move xuất
+            ('date', '<=', outgoing_move.date + datetime.timedelta(days=2)),  # Trong vòng 2 ngày
+        ], order='date asc', limit=1)
+        
+        if dest_moves and dest_moves.picking_id:
+            return dest_moves.picking_id
+        
+        _logger.warning(
+            f"✗ Could not find destination picking for outgoing move {outgoing_move.picking_id.name} "
+            f"to transit location {outgoing_move.location_dest_id.complete_name}"
+        )
+        return None
 
     def _get_product_incoming_picking_names(self, product_id, location_ids, start_datetime, end_datetime):
         """
         Lấy danh sách tên (mã) các picking nhập kho của sản phẩm trong khoảng thời gian
-        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124, TSN/INT/00456"
+        Bao gồm: 
+        - Picking nhập thường (từ nhà cung cấp, kho khác, etc.)
+        - Return Order (trả hàng) - nếu có hàng nhập về từ khách hàng
+        - Điều chỉnh tồn kho (Inventory Adjustment) nếu có tăng tồn
         
-        Logic: Lấy TẤT CẢ picking nhập vào kho, bao gồm cả inter-warehouse transfer
-        Chỉ bỏ qua picking type = internal trong cùng warehouse
+        Trả về: string danh sách mã đơn cách nhau bởi dấu phẩy, ví dụ: "WH/IN/00123, WH/IN/00124, RMA/00001"
+        
+        🔧 LOGIC MỚI: Dựa trên stock.move.line
+        - Lấy TẤT CẢ picking có move line nhập vào location_ids
+        - BỎ QUA: Non-return moves xuất ra khỏi kho (đó là outgoing)
+        - GIỮ LẠI: Return Order (là incoming, hàng về từ khách hàng)
+        - Thêm thông tin adjustment (tồn kho được điều chỉnh từ virtual location)
         """
-        # Tìm các stock.move nhập vào kho
+        # Tìm TẤT CẢ các stock.move
         moves = self.env['stock.move'].search([
             ('product_id', '=', product_id),
             ('state', '=', 'done'),
             ('date', '>=', start_datetime),
             ('date', '<=', end_datetime),
-            ('location_dest_id', 'in', location_ids),
         ], order='date asc')
         
-        # Lọc: lấy TẤT CẢ move nhập từ bên ngoài vào kho
-        incoming_moves = moves.filtered(lambda m: m.location_id.id not in location_ids)
-        
-        # Lấy danh sách picking names - LẤY TẤT CẢ kể cả internal transfer giữa các kho
+        # Lấy danh sách picking names
         picking_names = []
         seen_picking_ids = set()
+        outgoing_non_return_ids = set()  # Để loại bỏ non-return outgoing
         
-        for move in incoming_moves:
-            if not move.picking_id:
+        for move in moves:
+            if not move.picking_id or not move.move_line_ids:
                 continue
-                
-            picking = move.picking_id
             
-            if picking.id not in seen_picking_ids:
-                # LẤY TẤT CẢ picking nhập vào (incoming, internal from other warehouse, etc.)
-                # Không filter theo picking type nữa vì cần lấy cả inter-warehouse transfer
-                picking_names.append(picking.name)
-                seen_picking_ids.add(picking.id)
+            picking = move.picking_id
+            is_return = self._is_return_picking(picking)
+            
+            # Kiểm tra xem move có line nào là incoming không
+            has_incoming = False
+            has_outgoing = False
+            
+            for line in move.move_line_ids:
+                location_id = line.location_id.id
+                location_dest_id = line.location_dest_id.id
                 
-                # Debug logging
-                _logger.info(
-                    f"Product {product_id} - Incoming Picking: {picking.name}, "
-                    f"Type: {picking.picking_type_id.code if picking.picking_type_id else 'N/A'}, "
-                    f"From: {move.location_id.complete_name} -> To: {move.location_dest_id.complete_name}"
-                )
+                # Bỏ qua same location
+                if location_id == location_dest_id:
+                    continue
+                
+                # Nhập: từ ngoài location_ids → vào location_ids
+                if location_id not in location_ids and location_dest_id in location_ids:
+                    has_incoming = True
+                    break
+                
+                # Xuất: từ location_ids → ngoài location_ids (chỉ cho non-return)
+                if not is_return and location_id in location_ids and location_dest_id not in location_ids:
+                    has_outgoing = True
+            
+            # 🔧 LOGIC: Chỉ thêm nếu có incoming HOẶC là return picking
+            if has_incoming or is_return:
+                # Nếu là non-return outgoing, bỏ qua
+                if has_outgoing and not is_return:
+                    outgoing_non_return_ids.add(picking.id)
+                    continue
+                
+                if picking.id not in seen_picking_ids:
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
+        
+        # Add inventory adjustments if any
+        adjustments = self._get_product_adjustment_details(product_id, location_ids, start_datetime, end_datetime)
+        
+        if adjustments['incoming']:
+            
+            for adj in adjustments['incoming']:
+                # Tạo mô tả điều chỉnh
+                # Format: "Điều chỉnh từ {from_location} - {qty} {uom}"
+                move = adj['move']
+                picking = adj['picking']
+                
+                # Lấy picking reference nếu có, hoặc tạo string mô tả
+                if picking and picking.id not in seen_picking_ids:
+                    picking_names.append(picking.name)
+                    seen_picking_ids.add(picking.id)
+                elif not picking:
+                    # Nếu không có picking, tạo mô tả trực tiếp từ move
+                    adjustment_desc = f"Điều chỉnh tồn kho - {adj['qty']} cái"
+                    picking_names.append(adjustment_desc)
         
         return ', '.join(picking_names) if picking_names else ''
 
@@ -383,7 +723,7 @@ class InventoryReportWizard(models.TransientModel):
 
         # Lấy thông tin thời gian
         start_of_day = self._get_start_of_day(self.report_date)
-        end_of_period = self._get_report_end_datetime()  # Thay đổi: dùng logic thông minh
+        end_of_period = self._get_report_end_datetime()
         
         # Lấy danh sách location
         location_ids = self._get_warehouse_locations()
@@ -400,6 +740,7 @@ class InventoryReportWizard(models.TransientModel):
         # Tạo dữ liệu báo cáo
         data_rows = []
         stt = 1
+        is_first_product = True
         
         for product in products.sorted(key=lambda p: p.default_code or p.name):
             # Tính tồn đầu ngày
@@ -409,7 +750,8 @@ class InventoryReportWizard(models.TransientModel):
             qty_in = self._get_incoming_qty_between(product.id, location_ids, start_of_day, end_of_period)
             
             # Tính số lượng xuất từ đầu ngày đến end_of_period
-            qty_out = self._get_outgoing_qty_between(product.id, location_ids, start_of_day, end_of_period)
+            qty_out = self._get_outgoing_qty_between(product.id, location_ids, start_of_day, end_of_period, log_locations=is_first_product)
+            is_first_product = False
             
             # Tính tồn tại end_of_period
             qty_current = self._get_product_qty_at_datetime(product.id, location_ids, end_of_period)
@@ -418,12 +760,12 @@ class InventoryReportWizard(models.TransientModel):
             if qty_start == 0 and qty_in == 0 and qty_out == 0 and qty_current == 0:
                 continue
             
-            # Lấy danh sách mã đơn nhập kho
+            # Lấy danh sách mã đơn nhập kho (chỉ picking nhập vào kho hiện tại)
             incoming_picking_names = self._get_product_incoming_picking_names(
                 product.id, location_ids, start_of_day, end_of_period
             )
             
-            # Lấy danh sách mã đơn xuất kho
+            # Lấy danh sách mã đơn xuất kho (bao gồm cả xuất sang transit/kho khác)
             outgoing_picking_names = self._get_product_outgoing_picking_names(
                 product.id, location_ids, start_of_day, end_of_period
             )
@@ -471,3 +813,4 @@ class InventoryReportWizard(models.TransientModel):
             "url": f"/web/content/{attachment.id}?download=true",
             "target": "self",
         }
+

@@ -22,7 +22,7 @@
                     Tra Cứu Đơn Hàng
                   </h1>
                   <p class="lead text-white-50 mb-0 mt-2">
-                    Tìm kiếm đơn hàng của bạn bằng mã đơn, số điện thoại hoặc email
+                    Tìm kiếm đơn hàng của bạn bằng mã đơn hàng
                   </p>
                 </div>
               </div>
@@ -43,7 +43,7 @@
 
             
             <!-- Search Form Card -->
-            <div class="card shadow-sm mb-4">
+            <div class="card shadow-sm mb-4 search-card">
               <div class="card-header">
                 <h5 class="mb-0">
                   <i class="fa fa-search me-2"></i>
@@ -52,68 +52,40 @@
               </div>
               <div class="card-body">
                 <form method="get" action="/saleorder-lookup" id="searchForm" class="o_website_form">
-                  <div class="row g-3">
-                    <div class="col-lg-4 col-md-6">
-                      <label for="order_code" class="form-label">
-                        <i class="fa fa-file-text-o me-1"></i>
-                        Mã Đơn Hàng
-                      </label>
-                      <input 
-                        type="text" 
-                        class="form-control" 
-                        id="order_code" 
-                        name="order_code" 
-                        placeholder="Ví dụ: S00012 hoặc 000012"
-                        t-att-value="query.get('order_code', '') if query else ''"
-                      />
-                      <small class="form-text text-muted d-block mt-1">Nhập mã đơn đầy đủ hoặc 6 chữ số cuối</small>
-                    </div>
-                    
-                    <div class="col-lg-4 col-md-6">
-                      <label for="phone" class="form-label">
-                        <i class="fa fa-phone me-1"></i>
-                        Số Điện Thoại
-                      </label>
-                      <input 
-                        type="tel" 
-                        class="form-control" 
-                        id="phone" 
-                        name="phone" 
-                        placeholder="Ví dụ: 0987654321"
-                        t-att-value="query.get('phone', '') if query else ''"
-                      />
-                      <small class="form-text text-muted d-block mt-1">Nhập số điện thoại đầy đủ</small>
-                    </div>
-                    
-                    <div class="col-lg-4 col-md-6">
-                      <label for="email" class="form-label">
-                        <i class="fa fa-envelope-o me-1"></i>
-                        Email
-                      </label>
-                      <input 
-                        type="email" 
-                        class="form-control" 
-                        id="email" 
-                        name="email" 
-                        placeholder="email@example.com"
-                        t-att-value="query.get('email', '') if query else ''"
-                      />
-                      <small class="form-text text-muted d-block mt-1">Email đã đặt hàng</small>
-                    </div>
-                  </div>
-                  
-                  <div class="row mt-4">
-                    <div class="col-12">
-                      <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
-                        <small class="text-muted">
-                          <i class="fa fa-info-circle me-1"></i>
-                          Vui lòng điền ít nhất một trường
-                        </small>
-                        <button type="submit" class="btn btn-primary" id="btnSearch">
-                          <i class="fa fa-search me-2"></i>
-                          Tìm Kiếm
-                        </button>
+                  <div class="search-form-container">
+                    <!-- Main Input Row -->
+                    <div class="search-input-row">
+                      <div class="search-input-group">
+                        <label for="order_code" class="form-label">
+                          <i class="fa fa-file-text-o me-1"></i>
+                          Mã Đơn Hàng
+                        </label>
+                        <input 
+                          type="text" 
+                          class="form-control" 
+                          id="order_code" 
+                          name="order_code" 
+                          placeholder="Ví dụ: S00012 hoặc 000012"
+                          t-att-value="query.get('order_code', '') if query else ''"
+                        />
+                        <small class="form-text text-muted d-block mt-1">Nhập mã đơn đầy đủ hoặc 6 chữ số cuối</small>
                       </div>
+                      <button type="submit" class="btn btn-primary btn-search-mobile d-md-none" id="btnSearchMobile">
+                        <i class="fa fa-search"></i>
+                        <span class="ms-1">Tìm</span>
+                      </button>
+                    </div>
+                    
+                    <!-- Button Row (Desktop only) -->
+                    <div class="search-action-row d-none d-md-flex">
+                      <small class="text-muted align-self-center">
+                        <i class="fa fa-info-circle me-1"></i>
+                        Nhập mã đơn hàng để tìm kiếm
+                      </small>
+                      <button type="submit" class="btn btn-primary" id="btnSearch">
+                        <i class="fa fa-search me-2"></i>
+                        Tìm Kiếm
+                      </button>
                     </div>
                   </div>
                 </form>
@@ -402,20 +374,37 @@
             <div class="container">
               <div class="row">
                 <div class="col-12">
-                  <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                      <h1 class="text-white mb-0">
-                        <i class="fa fa-file-text-o me-2"></i>
-                        Chi Tiết Đơn Hàng
-                      </h1>
-                      <p class="lead text-white-50 mb-0 mt-2">
-                        Thông tin chi tiết về đơn hàng <strong><t t-esc="order.get('name', '')"/></strong>
+                  <div class="d-flex justify-content-between align-items-center flex-column flex-md-row gap-3">
+                    <div class="text-center text-md-start flex-grow-1">
+                      <p class="lead text-white-50 mb-0">
+                        Mã đơn: <strong><t t-esc="order.get('name', '')"/></strong>
                       </p>
                     </div>
-                    <div>
-                      <a href="/saleorder-lookup" class="btn btn-light">
-                        <i class="fa fa-arrow-left me-2"></i>
-                        Quay lại
+                    <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-end gap-2">
+                      <!-- Mobile: full-width, rõ nghĩa -->
+                      <a href="/saleorder-lookup"
+                        class="btn btn-light btn-sm d-md-none btn-back w-100" aria-label="Quay lại">
+                        <i class="fa fa-arrow-left me-2"></i> Quay lại
+                      </a>
+
+                      <a href="/track"
+                        class="btn btn-primary btn-sm d-md-none btn-track w-100"
+                        aria-label="Theo dõi vận chuyển" title="Theo dõi vận chuyển">
+                        <i class="fa fa-truck me-2"></i>
+                        <span class="text">
+                          <span class="line-1">Theo dõi vận chuyển</span>
+                          <span class="line-2">Xem tình trạng giao hàng</span>
+                        </span>
+                      </a>
+
+                      <!-- Desktop: inline, cùng hàng với nút Quay lại -->
+                      <a href="/saleorder-lookup" class="btn btn-light d-none d-md-inline-flex btn-back" aria-label="Quay lại">
+                        <i class="fa fa-arrow-left me-2"></i> Quay lại
+                      </a>
+                      <a href="/track"
+                        class="btn btn-primary d-none d-md-inline-flex btn-track"
+                        aria-label="Theo dõi vận chuyển" title="Theo dõi vận chuyển">
+                        <i class="fa fa-truck me-2"></i> Theo dõi vận chuyển
                       </a>
                     </div>
                   </div>
@@ -426,117 +415,6 @@
 
           <div class="container mt-4 mb-5">
             
-            <!-- Order Information Card -->
-            <div class="card shadow-sm mb-4">
-              <div class="card-header">
-                <div class="row align-items-center">
-                  <div class="col-md-8">
-                    <h5 class="mb-0">
-                      <i class="fa fa-info-circle me-2"></i>
-                      Thông Tin Đơn Hàng
-                    </h5>
-                  </div>
-                  <div class="col-md-4 text-md-end mt-2 mt-md-0">
-                    <t t-set="state" t-value="order['state']"/>
-                    <t t-if="state == 'draft'">
-                      <span class="badge badge-secondary">Nháp</span>
-                    </t>
-                    <t t-elif="state == 'sent'">
-                      <span class="badge badge-info">Đã Gửi</span>
-                    </t>
-                    <t t-elif="state == 'sale'">
-                      <span class="badge badge-primary">Đơn Hàng</span>
-                    </t>
-                    <t t-elif="state == 'done'">
-                      <span class="badge badge-success">Hoàn Thành</span>
-                    </t>
-                    <t t-elif="state == 'cancel'">
-                      <span class="badge badge-danger">Đã Hủy</span>
-                    </t>
-                  </div>
-                </div>
-              </div>
-              <div class="card-body">
-                <div class="row g-3">
-                  <div class="col-md-3">
-                    <label class="text-muted d-block mb-1">Mã Đơn Hàng</label>
-                    <h5 class="mb-0"><t t-esc="order.get('name', 'N/A')"/></h5>
-                  </div>
-                  <div class="col-md-3">
-                    <label class="text-muted d-block mb-1">Ngày Đặt</label>
-                    <p class="mb-0">
-                      <i class="fa fa-calendar me-1"></i>
-                      <t t-esc="order['date_order'].strftime('%d/%m/%Y %H:%M') if order.get('date_order') else 'N/A'"/>
-                    </p>
-                  </div>
-                  <div class="col-md-3">
-                    <label class="text-muted d-block mb-1">Trạng Thái Giao Hàng</label>
-                    <p class="mb-0">
-                      <t t-set="delivery" t-value="order['delivery_status']"/>
-                      <t t-if="delivery == 'delivered'">
-                        <span class="badge badge-success">Đã Giao</span>
-                      </t>
-                      <t t-elif="delivery == 'partial'">
-                        <span class="badge badge-warning">Giao Một Phần</span>
-                      </t>
-                      <t t-elif="delivery == 'pending'">
-                        <span class="badge badge-info">Chờ Giao</span>
-                      </t>
-                      <t t-else="">
-                        <span class="badge badge-secondary">Chưa giao</span>
-                      </t>
-                    </p>
-                  </div>
-                  <div class="col-md-3">
-                    <label class="text-muted d-block mb-1">Tổng Giá Trị</label>
-                    <h4 class="mb-0 text-primary">
-                      <t t-esc="'{:,.0f}'.format(order['amount_total'])"/>
-                      <small class="text-muted fs-6"><t t-esc="order['currency']"/></small>
-                    </h4>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Customer Information Card -->
-            <div class="card shadow-sm mb-4">
-              <div class="card-header">
-                <h5 class="mb-0">
-                  <i class="fa fa-user me-2"></i>
-                  Thông Tin Khách Hàng
-                </h5>
-              </div>
-              <div class="card-body">
-                <div class="row g-3">
-                  <div class="col-md-6">
-                    <label class="text-muted d-block mb-1">Tên Khách Hàng</label>
-                    <p class="mb-0"><strong><t t-esc="order.get('customer_name', 'N/A')"/></strong></p>
-                  </div>
-                  <div class="col-md-6">
-                    <label class="text-muted d-block mb-1">Số Điện Thoại</label>
-                    <p class="mb-0">
-                      <i class="fa fa-phone me-1"></i>
-                      <t t-esc="order.get('customer_phone', 'N/A')"/>
-                    </p>
-                  </div>
-                  <div class="col-md-6">
-                    <label class="text-muted d-block mb-1">Email</label>
-                    <p class="mb-0">
-                      <i class="fa fa-envelope me-1"></i>
-                      <t t-esc="order.get('customer_email', 'N/A')"/>
-                    </p>
-                  </div>
-                  <div class="col-md-6">
-                    <label class="text-muted d-block mb-1">Địa Chỉ</label>
-                    <p class="mb-0">
-                      <i class="fa fa-map-marker me-1"></i>
-                      <t t-esc="order.get('customer_address', 'N/A')"/>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <!-- Order Lines Card -->
             <div class="card shadow-sm mb-4">
               <div class="card-header">
@@ -546,7 +424,8 @@
                 </h5>
               </div>
               <div class="card-body p-0">
-                <div class="table-responsive">
+                <!-- Desktop: Table View -->
+                <div class="table-responsive d-none d-md-block">
                   <table class="table invoice-table mb-0">
                     <thead>
                       <tr>
@@ -629,6 +508,71 @@
                     </tbody>
                   </table>
                 </div>
+                
+                <!-- Mobile: Card View -->
+                <div class="d-md-none mobile-product-list">
+                  <t t-set="line_count" t-value="len(order.get('order_lines', []))"/>
+                  <t t-if="line_count > 0">
+                    <t t-foreach="order.get('order_lines', [])" t-as="line">
+                      <div t-attf-class="mobile-product-card {{line.get('is_component') and 'is-component' or ''}}">
+                        <!-- Product Info -->
+                        <div class="mobile-product-info">
+                          <div class="product-name-wrapper">
+                            <t t-if="line.get('is_component')">
+                              <div class="product-name component-name">
+                                <i class="fa fa-arrow-circle-right me-2 text-muted"></i>
+                                <t t-esc="line.get('product_name', 'N/A')"/>
+                              </div>
+                            </t>
+                            <t t-else="">
+                              <div t-attf-class="product-name {{line.get('is_combo') and 'combo-name' or ''}}">
+                                <t t-esc="line.get('product_name', 'N/A')"/>
+                                <t t-if="line.get('is_combo') and line.get('is_fully_delivered')">
+                                  <i class="fa fa-check-circle text-success ms-2" title="Đã giao đủ"></i>
+                                </t>
+                              </div>
+                            </t>
+                          </div>
+                          
+                          <!-- Delivery Info -->
+                          <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                          <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                          <t t-if="delivered > 0">
+                            <div class="delivery-info mt-1">
+                              <small class="text-muted">
+                                Đã giao: <strong><t t-esc="'{:.0f}'.format(delivered)"/></strong>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                <t t-if="delivered >= total_qty">
+                                  <i class="fa fa-check-circle text-success ms-1"></i>
+                                </t>
+                              </small>
+                            </div>
+                          </t>
+                        </div>
+                        
+                        <!-- Product Details Row -->
+                        <div class="mobile-product-details">
+                          <div class="detail-item">
+                            <span class="detail-label">SL:</span>
+                            <span class="detail-value"><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></span>
+                          </div>
+                          <div class="detail-item">
+                            <span class="detail-label">Đơn Giá:</span>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/></span>
+                          </div>
+                          <div class="detail-item total">
+                            <span class="detail-label">Thành Tiền:</span>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></span>
+                          </div>
+                        </div>
+                      </div>
+                    </t>
+                  </t>
+                  <t t-else="">
+                    <div class="text-muted text-center py-4">
+                      <em>Không có sản phẩm</em>
+                    </div>
+                  </t>
+                </div>
               </div>
               <div class="card-footer">
                 <div class="row">
@@ -657,10 +601,14 @@
             </div>
 
             <!-- Back Button -->
-            <div class="text-center mt-4">
-              <a href="/saleorder-lookup" class="btn btn-primary btn-lg">
+            <div class="text-center mt-4 mb-3">
+              <a href="/saleorder-lookup" class="btn btn-primary btn-lg d-none d-md-inline-block">
                 <i class="fa fa-arrow-left me-2"></i>
                 Quay Lại Trang Tìm Kiếm
+              </a>
+              <a href="/saleorder-lookup" class="btn btn-primary w-100 d-md-none">
+                <i class="fa fa-arrow-left me-2"></i>
+                Quay Lại
               </a>
             </div>
 

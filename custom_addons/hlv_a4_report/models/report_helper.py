@@ -96,10 +96,19 @@ class HlvReportHelper(models.AbstractModel):
             return []
 
         # Tổng qty theo sale_line_id trong picking này
+        # Logic: ưu tiên quantity (reserved), fallback qty_done nếu không có
         sol_qty_in_picking = {}
         for move in picking.move_ids:
             if move.sale_line_id:
-                sol_qty_in_picking[move.sale_line_id.id] = sol_qty_in_picking.get(move.sale_line_id.id, 0.0) + (move.product_uom_qty or 0.0)
+                # Lấy quantity (reserved qty), nếu không có thì dùng qty_done
+                qty_to_add = 0.0
+                if hasattr(move, 'quantity') and move.quantity:
+                    qty_to_add = move.quantity
+                else:
+                    # Fallback: tổng qty_done từ move_line_ids
+                    qty_to_add = sum(ml.qty_done or 0.0 for ml in move.move_line_ids)
+                
+                sol_qty_in_picking[move.sale_line_id.id] = sol_qty_in_picking.get(move.sale_line_id.id, 0.0) + qty_to_add
 
         # Gom nhóm children theo parent_code
         children_by_parent_code = {}  # {parent_code: [child_sol, ...]}
