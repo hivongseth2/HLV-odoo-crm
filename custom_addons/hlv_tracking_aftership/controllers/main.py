@@ -251,34 +251,41 @@ class WebsiteTrackingPublic(http.Controller):
                 # Thử lấy tracking_number từ sale_order liên quan
                 if not number and record._name == 'stock.picking' and record.origin:
                     sale_order = SaleOrder.search([('name', '=', record.origin)], limit=1)
-                    if sale_order and sale_order.tracking_number:
+                    if sale_order and sale_order.tracking_number and sale_order.aftership_id:
+                        # Chỉ copy nếu sale_order đã có tracking_number VÀ aftership_id
+                        # (tức là đã được đăng ký từ backend)
                         number = sale_order.tracking_number
                         slug = sale_order.tracking_slug or _guess_slug(number)
-                        _logger.info(f"💡 COPY_FROM_SALE_ORDER: Lấy tracking_number={number} từ sale.order {sale_order.name} | aftership_id={sale_order.aftership_id[:8] if sale_order.aftership_id else 'None'}")
+                        _logger.info(f"💡 FOUND_FROM_SALE_ORDER: Lấy tracking_number={number} từ sale.order {sale_order.name} | aftership_id={sale_order.aftership_id[:8]}")
                         
-                        # Copy cả tracking_number, slug VÀ aftership_id sang picking để lần sau không cần tìm lại
+                        # Copy sang picking để lần sau không cần tìm lại
                         try:
-                            update_vals = {
+                            record.write({
                                 'tracking_number': number,
                                 'tracking_slug': slug,
-                            }
-                            # Nếu sale.order đã có aftership_id, copy luôn để không phải đăng ký lại
-                            if sale_order.aftership_id:
-                                update_vals['aftership_id'] = sale_order.aftership_id
-                                _logger.info(f"📋 COPY_AFTERSHIP_ID: Copy aftership_id={sale_order.aftership_id[:8]} từ sale.order")
-                            
-                            record.write(update_vals)
+                                'aftership_id': sale_order.aftership_id,
+                            })
                             request.env.cr.commit()
-                            # Refresh lại record để lấy giá trị mới
                             record.invalidate_recordset(['tracking_number', 'tracking_slug', 'aftership_id'])
-                            
-                            # Cập nhật lại các biến local sau khi đồng bộ
                             number = record.tracking_number
                             slug = record.tracking_slug
-                            
-                            _logger.info(f"💾 SYNCED_TO_PICKING: Đã đồng bộ tracking vào picking {record.name} | aftership_id={record.aftership_id[:8] if record.aftership_id else 'None'}")
+                            _logger.info(f"� SYNCED_TO_PICKING: Đã đồng bộ tracking vào picking {record.name}")
                         except Exception as sync_error:
                             _logger.warning(f"⚠️  SYNC_FAILED: {sync_error}")
+                    else:
+                        # Sale order không có tracking hoặc không được đăng ký - báo lỗi
+                        if sale_order and not sale_order.tracking_number:
+                            error = f"Đơn '{record.name}' chưa có mã vận đơn. Vui lòng cập nhật mã vận đơn trong Odoo."
+                        else:
+                            error = f"Đơn '{record.name}' chưa có mã vận đơn. Vui lòng cập nhật mã vận đơn trong Odoo."
+                        _logger.warning(f"⚠️  NO_TRACKING_FROM_ORDER: {record.name} hoặc sale order không có tracking")
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": error, 
+                            "data": {}, 
+                            "number": query, 
+                            "slug": "",
+                            "order_name": record.name,
+                        })
                 
                 # Nếu vẫn không có tracking_number
                 if not number:
@@ -288,32 +295,31 @@ class WebsiteTrackingPublic(http.Controller):
                         slug = _guess_slug(number)
                         _logger.info(f"💡 USING_QUERY_AS_TRACKING: Query '{query}' có vẻ là mã vận đơn, sẽ dùng làm tracking number")
                         
-                        # Cập nhật vào record để lần sau không cần nhập lại
-                        try:
-                            record.write({
-                                'tracking_number': number,
-                                'tracking_slug': slug,
-                            })
-                            request.env.cr.commit()
-                            _logger.info(f"💾 SAVED_TRACKING: Đã lưu tracking_number={number} vào {record.name}")
-                        except Exception as save_error:
-                            _logger.warning(f"⚠️  SAVE_FAILED: {save_error}")
+                        # KHÔNG đăng ký tự động - chỉ báo lỗi nếu chưa đăng ký
+                        # (Tránh spam đạt limit API)
+                        error = f"Mã vận đơn '{number}' chưa được đăng ký trên hệ thống. Vui lòng liên hệ quản trị viên để cập nhật."
+                        _logger.warning(f"⚠️  TRACKING_NOT_REGISTERED: {number} chưa có trong hệ thống")
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": error, 
+                            "data": {}, 
+                            "number": number, 
+                            "slug": slug or "",
+                        })
                     # Thử lấy từ slug_input (user có thể nhập tracking number vào ô "Hãng vận chuyển")
                     elif slug_input and _looks_like_tracking(slug_input):
                         number = slug_input
                         slug = _guess_slug(number)
                         _logger.info(f"💡 USING_INPUT_AS_TRACKING: Dùng input '{slug_input}' làm tracking number")
                         
-                        # Cập nhật vào record để lần sau không cần nhập lại
-                        try:
-                            record.write({
-                                'tracking_number': number,
-                                'tracking_slug': slug,
-                            })
-                            request.env.cr.commit()
-                            _logger.info(f"💾 SAVED_TRACKING: Đã lưu tracking_number={number} vào {record.name}")
-                        except Exception as save_error:
-                            _logger.warning(f"⚠️  SAVE_FAILED: {save_error}")
+                        # KHÔNG đăng ký tự động - chỉ báo lỗi nếu chưa đăng ký
+                        error = f"Mã vận đơn '{number}' chưa được đăng ký trên hệ thống. Vui lòng liên hệ quản trị viên để cập nhật."
+                        _logger.warning(f"⚠️  TRACKING_NOT_REGISTERED: {number} chưa có trong hệ thống")
+                        return request.render("hlv_tracking_aftership.website_track_result", {
+                            "error": error, 
+                            "data": {}, 
+                            "number": number, 
+                            "slug": slug or "",
+                        })
                     else:
                         # Thực sự không có tracking number
                         error = f"Đơn '{record.name}' chưa có mã vận đơn. Vui lòng cập nhật mã vận đơn trong Odoo hoặc nhập mã vận đơn vào ô tìm kiếm."
@@ -326,20 +332,15 @@ class WebsiteTrackingPublic(http.Controller):
                             "order_name": record.name,  # Hiển thị tên đơn tìm thấy
                         })
                 
-                # Nếu chưa đăng ký AfterShip, đăng ký ngay
+                # Nếu chưa đăng ký AfterShip, báo lỗi
+                # (Chỉ đăng ký thông qua Odoo, không đăng ký trên web để tránh spam)
                 if not record.aftership_id:
-                    try:
-                        _logger.info(f"📝 REGISTERING: Đăng ký tracking {number} với AfterShip")
-                        record.action_register_tracking_aftership()
-                        request.env.cr.commit()
-                        record.invalidate_recordset(['aftership_id'])
-                        _logger.info(f"✅ REGISTERED: aftership_id={record.aftership_id[:8] if record.aftership_id else 'None'}")
-                    except Exception as e:
-                        error = f"Lỗi đăng ký tracking: {e}"
-                        _logger.error(f"❌ REGISTER_ERROR: {e}")
-                        return request.render("hlv_tracking_aftership.website_track_result", {
-                            "error": error, "data": {}, "number": number, "slug": slug or "",
-                        })
+                    _logger.warning(f"⚠️  NOT_REGISTERED: {record.name} chưa được đăng ký với AfterShip")
+                    error = f"Đơn '{record.name}' chưa được đăng ký theo dõi trên hệ thống. Vui lòng liên hệ quản trị viên để cập nhật mã vận đơn."
+                    return request.render("hlv_tracking_aftership.website_track_result", {
+                        "error": error, "data": {}, "number": number, "slug": slug or "",
+                        "order_name": record.name,
+                    })
                 
                 # KIỂM TRA CACHE - CHỈ GỌI API NẾU CẦN
                 if record.aftership_id:
@@ -485,18 +486,19 @@ class WebsiteTrackingPublic(http.Controller):
                         })
                 
                 # Nếu chưa có trong hệ thống, báo lỗi
-                error = f"Vui lòng nhập mã đơn hàng (ví dụ: S00123 hoặc WH/OUT/00001) thay vì mã vận đơn."
+                error = f"Mã vận đơn '{number}' chưa được đăng ký trên hệ thống. Vui lòng liên hệ quản trị viên để cập nhật."
                 _logger.warning(f"⚠️  DIRECT_TRACKING_NOT_FOUND: {number} chưa có trong hệ thống")
                 return request.render("hlv_tracking_aftership.website_track_result", {
                     "error": error, "data": {}, "number": number, "slug": slug or "",
                 })
             
             # Bước 4: Không tìm thấy gì cả
-            error = f"Không tìm thấy đơn hàng hoặc mã vận đơn cho: {query}"
-            _logger.warning(f"⚠️  NOT_FOUND: Không tìm thấy gì cho {query}")
-            return request.render("hlv_tracking_aftership.website_track_result", {
-                "error": error, "data": {}, "number": query, "slug": slug_input,
-            })
+            if not found_record:
+                error = f"Không tìm thấy đơn hàng cho: {query}. Vui lòng nhập mã đơn hàng hoặc mã vận đơn."
+                _logger.warning(f"⚠️  NOT_FOUND: Không tìm thấy gì cho {query}")
+                return request.render("hlv_tracking_aftership.website_track_result", {
+                    "error": error, "data": {}, "number": query, "slug": slug_input,
+                })
 
         except Exception as e:
             error = f"Lỗi kết nối: {e}"
