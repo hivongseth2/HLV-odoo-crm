@@ -43,6 +43,8 @@
     box-shadow: var(--shadow-md);
     position: relative;
     overflow: hidden;
+    display: flex;
+    align-items: center;
 }
 
 .o_order_lookup_page .o_page_header::before {
@@ -69,6 +71,13 @@
     font-weight: 400;
     position: relative;
     z-index: 1;
+}
+
+.o_order_lookup_page .o_page_header .order-code {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
 }
 
 @media (max-width: 768px) {
