@@ -201,7 +201,7 @@ class StockPicking(models.Model):
             pick.action_refresh_tracking_aftership()
             
             # Đăng ký webhook (chỉ cần 1 lần cho toàn hệ thống)
-            pick._ensure_webhook_registered()
+            # pick._ensure_webhook_registered()
 
     def _should_refresh_tracking(self):
         """
