@@ -578,7 +578,7 @@
 .o_order_lookup_page .summary-row.total-row {
     padding-top: 0.75rem;
     margin-top: 0.5rem;
-    border-top: 2px solid #2c3e50;
+    /* border-top: 2px solid #2c3e50; */
     font-size: 1.1rem;
     font-weight: 700;
 }
@@ -638,7 +638,7 @@
     .o_order_lookup_page .summary-row.total-row {
         padding-top: 0.5rem;
         margin-top: 0.35rem;
-        border-top: 2px solid var(--text-dark);
+        /* border-top: 2px solid var(--text-dark); */
         font-size: 1rem;
         display: flex;
         justify-content: space-between;
@@ -883,7 +883,7 @@
    ============================================ */
 .o_order_lookup_page .card-footer {
     background: var(--light-bg);
-    border-top: 2px solid var(--border-color);
+    /* border-top: 2px solid var(--border-color); */
     padding: 1rem 1.5rem;
     border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
@@ -1179,7 +1179,7 @@
     }
     
     .o_order_lookup_page .bill-summary {
-        border-top: 2px solid #000 !important;
+        /* border-top: 2px solid #000 !important; */
         background: white !important;
         page-break-inside: avoid;
     }
@@ -1189,7 +1189,7 @@
     } */
     
     .o_order_lookup_page .summary-row.total-row {
-        border-top: 2px solid #000 !important;
+        /* border-top: 2px solid #000 !important; */
     }
     
     .o_order_lookup_page .amount-total {

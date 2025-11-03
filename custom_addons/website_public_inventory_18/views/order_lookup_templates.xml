@@ -376,8 +376,8 @@
                 <div class="col-12">
                   <div class="d-flex justify-content-between align-items-center flex-column flex-md-row gap-3">
                   <div class="order-code d-flex flex-wrap align-items-center gap-2">
-                       <div class="text-center mt-3 mb-3">
-                        <h2 class="fw-bold text-white" style="font-size: 2rem; letter-spacing: 1px;">
+                       <div class="text-center align-items-center justify-content-center ">
+                        <h2 class="fw-bold text-white" style="font-size: 1rem; letter-spacing: 1px;">
                           <t t-esc="order.get('name', '')"/>
                         </h2>
                       </div>
