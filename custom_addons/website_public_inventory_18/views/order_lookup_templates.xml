@@ -489,23 +489,24 @@
                                 <strong><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></strong>
                               </t>
                             </td>
-                            <!-- <td class="text-end">
-                              <t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/>
-                            </td>
-                            <td class="text-end">
-                              <strong><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></strong>
-                            </td> -->
-                            <!-- ĐƠN GIÁ: đã gồm VAT = price_total / qty (fallback về price_subtotal nếu thiếu) -->
-                           <!-- ĐƠN GIÁ (đã gồm VAT): thay toàn bộ <td class="text-end"> của cột Đơn Giá -->
+                
+                                                      <!-- ĐƠN GIÁ (đã gồm VAT) -->
                             <td class="text-end">
                               <t t-set="qty" t-value="line.get('qty', 0) or 1"/>
-                              <t t-set="ltotal" t-value="line.get('price_total', line.get('price_subtotal', 0))"/>
+                              <t t-set="ltotal"
+                                t-value="(line.get('price_total') 
+                                          or (line.get('price_subtotal', 0) + line.get('price_tax', 0))
+                                          or line.get('price_subtotal', 0))"/>
                               <t t-esc="'{:,.0f}'.format(ltotal / qty)"/>
                             </td>
 
-                            <!-- THÀNH TIỀN: thay toàn bộ <td class="text-end"> của cột Thành Tiền -->
+                            <!-- THÀNH TIỀN (đã gồm VAT) -->
                             <td class="text-end">
-                              <strong><t t-esc="'{:,.0f}'.format(line.get('price_total', 0))"/></strong>
+                              <t t-set="ltotal"
+                                t-value="(line.get('price_total') 
+                                          or (line.get('price_subtotal', 0) + line.get('price_tax', 0))
+                                          or line.get('price_subtotal', 0))"/>
+                              <strong><t t-esc="'{:,.0f}'.format(ltotal)"/></strong>
                             </td>
 
 
@@ -565,7 +566,8 @@
                         
                         <!-- Product Details Row -->
                         <div class="mobile-product-details">
-                          <div class="detail-item">
+                         <!-- SL -->
+                            <div class="detail-item">
                               <span class="detail-label">SL:</span>
                               <span class="detail-value"><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></span>
                             </div>
@@ -574,17 +576,24 @@
                             <div class="detail-item">
                               <span class="detail-label">Đơn Giá:</span>
                               <t t-set="qty" t-value="line.get('qty', 0) or 1"/>
-                              <t t-set="ltotal" t-value="line.get('price_total', line.get('price_subtotal', 0))"/>
+                              <t t-set="ltotal"
+                                t-value="(line.get('price_total') 
+                                          or (line.get('price_subtotal', 0) + line.get('price_tax', 0))
+                                          or line.get('price_subtotal', 0))"/>
                               <span class="detail-value"><t t-esc="'{:,.0f}'.format(ltotal / qty)"/></span>
                             </div>
 
-                            <!-- THÀNH TIỀN -->
+                            <!-- THÀNH TIỀN (đã gồm VAT) -->
                             <div class="detail-item total">
                               <span class="detail-label">Thành Tiền:</span>
-                              <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_total', 0))"/></span>
+                              <t t-set="ltotal"
+                                t-value="(line.get('price_total') 
+                                          or (line.get('price_subtotal', 0) + line.get('price_tax', 0))
+                                          or line.get('price_subtotal', 0))"/>
+                              <span class="detail-value"><t t-esc="'{:,.0f}'.format(ltotal)"/></span>
                             </div>
 
-                        </div>
+                                                    </div>
                       </div>
                     </t>
                   </t>
