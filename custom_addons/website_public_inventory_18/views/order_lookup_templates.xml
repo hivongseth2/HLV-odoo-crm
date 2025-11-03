@@ -374,7 +374,7 @@
             <div class="container">
               <div class="row">
                 <div class="col-12">
-                  <div class="d-flex justify-content-between align-items-center flex-column flex-md-row gap-3">
+                  <div class="d-flex justify-content-between align-items-center flex-column flex-md-row mt-2">
                   <div class="order-code d-flex flex-wrap align-items-center justify-content-center justify-content-md-start gap-2">
                        <div class="d-flex text-center text-md-left align-items-center justify-content-center justify-content-md-start">
                         <h2 class="fw-bold text-white" style="font-size: 1rem; letter-spacing: 1px;">
