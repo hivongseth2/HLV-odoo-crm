@@ -577,21 +577,23 @@
                             <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></span>
                           </div> -->
 
-                        <div class="detail-item">
-                          <span class="detail-label">Đơn Giá:</span>
-                          <t t-set="qty" t-value="line.get('qty', 0) or 1"/>
-                          <t t-set="price_total" t-value="line.get('price_total', 0)"/>
-                          <span class="detail-value">
-                            <t t-esc="'{:,.0f}'.format(price_total / qty)"/>
-                          </span>
-                        </div>
+                         <div class="detail-item">
+                            <span class="detail-label">Đơn Giá:</span>
+                            <!-- Tính đơn giá gồm VAT -->
+                            <t t-set="qty" t-value="line.get('qty', 0) or 1"/>
+                            <t t-set="ltotal" t-value="line.get('price_total', line.get('price_subtotal', 0))"/>
+                            <span class="detail-value">
+                              <t t-esc="'{:,.0f}'.format(ltotal / qty)"/>
+                            </span>
+                            <small class="text-muted d-block" style="font-size: 12px;">(đã gồm VAT)</small>
+                          </div>
 
-                        <div class="detail-item total">
-                          <span class="detail-label">Thành Tiền:</span>
-                          <span class="detail-value">
-                            <t t-esc="'{:,.0f}'.format(price_total)"/>
-                          </span>
-                        </div>
+                          <div class="detail-item total">
+                            <span class="detail-label">Thành Tiền:</span>
+                            <span class="detail-value">
+                              <t t-esc="'{:,.0f}'.format(ltotal)"/>
+                            </span>
+                          </div>
 
                         </div>
                       </div>
