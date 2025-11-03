@@ -85,6 +85,12 @@
     min-height: 0;
 }
 
+.o_order_lookup_page .o_page_header .order-code h2,
+.o_order_lookup_page .o_page_header .order-code h1,
+.o_order_lookup_page .o_page_header .order-code p {
+    margin: 0;
+}
+
 @media (max-width: 768px) {
     .o_order_lookup_page .o_page_header {
         /* padding: 1.5rem 0 2rem; */
