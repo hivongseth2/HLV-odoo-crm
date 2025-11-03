@@ -1350,7 +1350,7 @@
 
 .o_order_lookup_page .detail-item {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     gap: 0.5rem;
 }
@@ -1471,7 +1471,7 @@
     
         .mobile-product-details .detail-item {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-start;
             align-items: center;
             padding: 6px 10px;
             border-radius: 8px;
