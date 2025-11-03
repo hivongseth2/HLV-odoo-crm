@@ -489,12 +489,25 @@
                                 <strong><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></strong>
                               </t>
                             </td>
-                            <td class="text-end">
+                            <!-- <td class="text-end">
                               <t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/>
                             </td>
                             <td class="text-end">
                               <strong><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></strong>
+                            </td> -->
+                            <!-- ĐƠN GIÁ: đã gồm VAT = price_total / qty (fallback về price_subtotal nếu thiếu) -->
+                            <td class="text-end">
+                              <t t-set="qty" t-value="line.get('qty', 0) or 1"/>
+                              <t t-set="ltotal" t-value="line.get('price_total', line.get('price_subtotal', 0))"/>
+                              <t t-esc="'{:,.0f}'.format(ltotal / qty)"/>
+                              <small class="text-muted d-block">đã gồm VAT</small>
                             </td>
+
+                            <!-- THÀNH TIỀN: đã gồm VAT -->
+                            <td class="text-end">
+                              <strong><t t-esc="'{:,.0f}'.format(line.get('price_total', line.get('price_subtotal', 0)))"/></strong>
+                            </td>
+
                           </tr>
                         </t>
                       </t>
@@ -555,14 +568,26 @@
                             <span class="detail-label">SL:</span>
                             <span class="detail-value"><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></span>
                           </div>
-                          <div class="detail-item">
+                          <!-- <div class="detail-item">
                             <span class="detail-label">Đơn Giá:</span>
                             <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/></span>
                           </div>
                           <div class="detail-item total">
                             <span class="detail-label">Thành Tiền:</span>
                             <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></span>
+                          </div> -->
+
+                          <div class="detail-item">
+                            <span class="detail-label">Đơn Giá:</span>
+                            <t t-set="qty" t-value="line.get('qty', 0) or 1"/>
+                            <t t-set="ltotal" t-value="line.get('price_total', line.get('price_subtotal', 0))"/>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(ltotal / qty)"/></span>
                           </div>
+                          <div class="detail-item total">
+                            <span class="detail-label">Thành Tiền:</span>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(ltotal)"/></span>
+                          </div>
+
                         </div>
                       </div>
                     </t>
@@ -578,7 +603,7 @@
                 <div class="row">
                   <div class="col-md-6 offset-md-6">
                     <!-- Total Summary -->
-                    <div class="total-summary">
+                    <!-- <div class="total-summary">
                       <div class="summary-row">
                         <span>Tạm tính:</span>
                         <span class="amount"><t t-esc="'{:,.0f}'.format(order.get('amount_untaxed', order['amount_total']))"/></span>
@@ -594,7 +619,18 @@
                           <small class="currency"><t t-esc="order['currency']"/></small>
                         </span>
                       </div>
+                    </div> -->
+                    <div class="total-summary">
+                      <div class="summary-row total-row">
+                        <span>Tổng cộng:</span>
+                        <span class="amount-total">
+                          <t t-esc="'{:,.0f}'.format(order['amount_total'])"/>
+                          <small class="currency"><t t-esc="order['currency']"/></small>
+                        </span>
+                      </div>
+                      <small class="text-muted d-block mt-1">Giá đã bao gồm VAT</small>
                     </div>
+
                   </div>
                 </div>
               </div>
