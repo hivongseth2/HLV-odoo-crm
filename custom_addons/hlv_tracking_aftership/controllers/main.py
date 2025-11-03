@@ -397,16 +397,32 @@ class WebsiteTrackingPublic(http.Controller):
                                 cp['formatted_time'] = _format_datetime(checkpoint_time)
                         tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))
                         
+                        # Lấy sale_order_id từ record
+                        sale_order_id = None
+                        if record._name == 'stock.picking' and record.sale_id:
+                            sale_order_id = record.sale_id.id
+                        elif record._name == 'sale.order':
+                            sale_order_id = record.id
+                        
                         return request.render("hlv_tracking_aftership.website_track_result", {
                             "error": None,
                             "data": tracking or {},
                             "number": number,
                             "slug": slug or "",
                             "checkpoints": checkpoints,
+                            "sale_order_id": sale_order_id,
                         })
                     else:
                         # API lỗi hoặc chưa có dữ liệu
                         _logger.warning(f"⚠️  API_NO_DATA: AfterShip chưa có dữ liệu cho {number}")
+                        
+                        # Lấy sale_order_id từ record
+                        sale_order_id = None
+                        if record._name == 'stock.picking' and record.sale_id:
+                            sale_order_id = record.sale_id.id
+                        elif record._name == 'sale.order':
+                            sale_order_id = record.id
+                        
                         return request.render("hlv_tracking_aftership.website_track_result", {
                             "error": None,
                             "data": {
@@ -419,6 +435,7 @@ class WebsiteTrackingPublic(http.Controller):
                             "slug": slug or "",
                             "checkpoints": [],
                             "no_data_yet": True,
+                            "sale_order_id": sale_order_id,
                         })
                 else:
                     # Không có aftership_id (đăng ký thất bại)
@@ -453,6 +470,9 @@ class WebsiteTrackingPublic(http.Controller):
                                 cp['formatted_time'] = _format_datetime(checkpoint_time)
                         tracking['tag_vn'] = _vi_status(tracking.get('tag') or tracking.get('status'), tracking.get('status'))
                         
+                        # Lấy sale_order_id từ picking
+                        sale_order_id = existing_pick.sale_id.id if existing_pick.sale_id else None
+                        
                         return request.render("hlv_tracking_aftership.website_track_result", {
                             "error": None,
                             "data": tracking or {},
@@ -461,6 +481,7 @@ class WebsiteTrackingPublic(http.Controller):
                             "checkpoints": checkpoints,
                             "last_update": None,
                             "from_api": True,
+                            "sale_order_id": sale_order_id,
                         })
                 
                 # Nếu chưa có trong hệ thống, báo lỗi
