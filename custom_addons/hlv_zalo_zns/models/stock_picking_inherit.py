@@ -104,9 +104,10 @@ class StockPicking(models.Model):
             "order_code": order_code,
             "phone_number": msisdn.replace("+84", "0") if msisdn.startswith("+84") else msisdn,
             "price": price_value,
-            "status": "Đã gửi hàng",
+            "status": "Đã giao hàng",
             "date": date_str,
-            "id": id_encoded
+            "id": id_encoded,
+            "address":ship_partner.street or ""
         }
 
         _logger.info("ZNS send try (OUT): %s to=%s params=%s", picking.name, msisdn, params)
