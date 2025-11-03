@@ -543,7 +543,7 @@
                             <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_total', 0))"/></span>
                           </div>
 
-                                                    </div>
+                        </div>
                       </div>
                     </t>
                   </t>
@@ -578,12 +578,12 @@
               </div>
             </div>
 
-            <!-- Back Button -->
+            <!-- Back Button
             <div class="text-center mt-4">
               <a href="/saleorder-lookup" class="btn btn-secondary btn-lg">
                 <i class="fa fa-arrow-left me-2"></i> Quay lại
               </a>
-            </div>
+            </div> -->
           </div>
         </div>
       </div>
