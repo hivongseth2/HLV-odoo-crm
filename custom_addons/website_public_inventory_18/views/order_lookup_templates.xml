@@ -381,13 +381,13 @@
                       </p>
                     </div>
                     <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-end gap-2">
-                      <!-- Mobile: full-width, rõ nghĩa -->
-                      <a href="/saleorder-lookup"
+                      <!-- Mobile: full-width, rõ nghĩa - COMMENTED OUT -->
+                      <!-- <a href="/saleorder-lookup"
                         class="btn btn-light btn-sm d-md-none btn-back w-100" aria-label="Quay lại">
                         <i class="fa fa-arrow-left me-2"></i> Quay lại
-                      </a>
+                      </a> -->
 
-                      <a t-attf-href="/track/search?tracking_number={{order.get('name', '')}}"
+                      <!-- <a t-attf-href="/track/search?tracking_number={{order.get('name', '')}}"
                         class="btn btn-primary btn-sm d-md-none btn-track w-100"
                         aria-label="Theo dõi vận chuyển" title="Theo dõi vận chuyển">
                         <i class="fa fa-truck me-2"></i>
@@ -395,17 +395,17 @@
                           <span class="line-1">Theo dõi vận chuyển</span>
                           <span class="line-2">Xem tình trạng giao hàng</span>
                         </span>
-                      </a>
+                      </a> -->
 
-                      <!-- Desktop: inline, cùng hàng với nút Quay lại -->
-                      <a href="/saleorder-lookup" class="btn btn-light d-none d-md-inline-flex btn-back" aria-label="Quay lại">
+                      <!-- Desktop: inline, cùng hàng với nút Quay lại - COMMENTED OUT -->
+                      <!-- <a href="/saleorder-lookup" class="btn btn-light d-none d-md-inline-flex btn-back" aria-label="Quay lại">
                         <i class="fa fa-arrow-left me-2"></i> Quay lại
                       </a>
                       <a t-attf-href="/track/search?tracking_number={{order.get('name', '')}}"
                         class="btn btn-primary d-none d-md-inline-flex btn-track"
                         aria-label="Theo dõi vận chuyển" title="Theo dõi vận chuyển">
                         <i class="fa fa-truck me-2"></i> Theo dõi vận chuyển
-                      </a>
+                      </a> -->
                     </div>
                   </div>
                 </div>
@@ -598,6 +598,13 @@
                   </div>
                 </div>
               </div>
+            </div>
+
+            <!-- Back Button -->
+            <div class="text-center mt-4">
+              <a href="/saleorder-lookup" class="btn btn-secondary btn-lg">
+                <i class="fa fa-arrow-left me-2"></i> Quay lại
+              </a>
             </div>
           </div>
         </div>

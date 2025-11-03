@@ -687,7 +687,8 @@ class SaleOrder(models.Model):
             "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY"
         }
         
-        # Lấy tên khách hàng từ partner hiện tại hoặc từ data
+        # Lấy tên khách hàng từ data MISA trước tiên, nếu không có lấy từ partner hiện tại
+        partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText") or ""
         customer_name = partner_name or self.partner_id.name or ""
         
         if customer_name in e_accounts:
