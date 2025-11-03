@@ -595,10 +595,13 @@
               
                     <div class="total-summary">
                       <div class="summary-row total-row">
-                        <span>Tổng cộng:</span>
+                        <span>TỔNG TIỀN:</span>
                         <span class="amount-total">
                           <t t-esc="'{:,.0f}'.format(order['amount_total'])"/>
-                          <small class="currency"><t t-esc="order['currency']"/></small>
+                          <small class="currency">
+                          <!-- <t t-esc="order['currency']"/> -->
+                          VND
+                          </small>
                         </span>
                       </div>
                       <small class="text-muted d-block mt-1">Giá đã bao gồm VAT</small>

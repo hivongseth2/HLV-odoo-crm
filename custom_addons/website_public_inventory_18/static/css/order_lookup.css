@@ -615,9 +615,9 @@
     }
     
     .o_order_lookup_page .status-info,
-    .o_order_lookup_page .total-summary {
+    /* .o_order_lookup_page .total-summary {
         margin-bottom: 1rem;
-    }
+    } */
     
     .o_order_lookup_page .amount-total {
         font-size: 1.25rem;
@@ -1118,8 +1118,8 @@
     
     /* Mobile total summary */
     .o_order_lookup_page .total-summary {
-        padding: 0.65rem;
-        margin-top: 0.75rem;
+        padding: 0.45rem;
+        margin-top: 0.55rem;
     }
     
     .o_order_lookup_page .summary-row {
