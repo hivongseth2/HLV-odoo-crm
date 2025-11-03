@@ -38,7 +38,7 @@
    ============================================ */
 .o_order_lookup_page .o_page_header {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
-    padding: 2.5rem 0;
+    /* padding: 2.5rem 0; */
     box-shadow: var(--shadow-md);
     position: relative;
     overflow: hidden;
@@ -79,6 +79,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    text-align: center;
+    width: 100%;
+    line-height: 1;
+    min-height: 0;
 }
 
 @media (max-width: 768px) {
