@@ -104,7 +104,7 @@ class StockPicking(models.Model):
             "order_code": order_code,
             "phone_number": msisdn.replace("+84", "0") if msisdn.startswith("+84") else msisdn,
             "price": price_value,
-            "status": "Đã giao hàng",
+            "status": "Đang giao hàng",
             "date": date_str,
             "id": id_encoded,
             "address":ship_partner.street or ""
