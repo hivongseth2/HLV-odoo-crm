@@ -810,7 +810,7 @@ class SaleOrder(models.Model):
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         delivery_no   = data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
-        shipping_addr = data.get("BillingAddress") or ''
+        shipping_addr = data.get("ShippingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
 
         # Fetch OwnerIDText and SaleOrderDate from MISA
