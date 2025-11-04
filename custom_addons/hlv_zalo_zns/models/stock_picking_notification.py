@@ -34,9 +34,41 @@ class StockPicking(models.Model):
         """
         Xác định đơn hàng được xuất/nhập toàn bộ hay một phần
         
+        Kiểm tra từ sale.order.line (nếu có) vì nó chính xác hơn stock.picking
+        Lý do: stock.picking có thể bị tách (split), nhưng sale.order.line là nguồn gốc
+        
         :return: 'toàn bộ' hoặc '1 phần'
         """
         self.ensure_one()
+        
+        # Nếu là outgoing picking, kiểm tra từ sale.order.line
+        if self.picking_type_code == 'outgoing':
+            # Lấy sale.order từ picking (qua origin field)
+            sale_orders = self.env['sale.order'].search([
+                ('name', '=', self.origin)
+            ])
+            
+            if sale_orders:
+                sale_order = sale_orders[0]
+                _logger.debug("Picking %s linked to sale.order %s", self.name, sale_order.name)
+                
+                # Kiểm tra delivery_status của từng sale.order.line
+                for line in sale_order.order_line:
+                    if line.product_id.type != 'service':  # Chỉ kiểm tra product thực (không service)
+                        # delivery_status: 'pending', 'started', 'partial', 'full'
+                        if line.delivery_status in ['pending', 'partial']:
+                            _logger.debug(
+                                "Picking %s: sale.order.line %s has delivery_status=%s (product=%s)",
+                                self.name, line.id, line.delivery_status, line.product_id.name
+                            )
+                            return '1 phần'
+                
+                # Nếu tất cả lines đều 'full' hoặc 'pending' (chưa giao) => giao toàn bộ
+                _logger.debug("Picking %s: all sale.order.lines have delivery_status=full or pending", self.name)
+                return 'toàn bộ'
+        
+        # Nếu không phải outgoing hoặc không tìm thấy sale.order, kiểm tra từ stock.picking
+        _logger.debug("Picking %s: checking from stock.picking (no sale.order linked or not outgoing)", self.name)
         
         # Kiểm tra xem có move line nào bị split (done < demand) không
         for move in self.move_ids_without_package:
