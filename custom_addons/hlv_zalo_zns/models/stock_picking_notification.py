@@ -22,8 +22,10 @@ class StockPicking(models.Model):
         # Kiểm tra xem có move line nào bị split (done < demand) không
         for move in self.move_ids_without_package:
             if move.product_uom_qty > 0:
-                # Nếu quantity_done < quantity demanded => xuất/nhập 1 phần
-                if move.quantity_done < move.product_uom_qty:
+                # Tính tổng qty_done từ move_line_ids
+                qty_done = sum(move.move_line_ids.mapped('qty_done'))
+                # Nếu qty_done < quantity demanded => xuất/nhập 1 phần
+                if qty_done < move.product_uom_qty:
                     return '1 phần'
         
         # Kiểm tra nếu có backorder => xuất/nhập 1 phần
@@ -104,9 +106,11 @@ class StockPicking(models.Model):
         # Danh sách sản phẩm
         message += "\n📦 Danh sách sản phẩm:\n"
         for move in self.move_ids_without_package:
-            if move.quantity_done > 0:
+            # Tính tổng qty_done từ move_line_ids
+            qty_done = sum(move.move_line_ids.mapped('qty_done'))
+            if qty_done > 0:
                 product_name = move.product_id.display_name
-                qty = move.quantity_done
+                qty = qty_done
                 uom = move.product_uom.name if move.product_uom else ''
                 message += f"  • {product_name}\n"
                 message += f"    SL: {qty:.0f} {uom}\n"
@@ -129,6 +133,7 @@ class StockPicking(models.Model):
         - Có config active
         - Loại đơn được bật (incoming/outgoing)
         - Kho phải là TSN hoặc TSNSR (kiểm tra qua picking_type_id.warehouse_id.code)
+        - Với outgoing: Chỉ gửi cho bước xuất cuối cùng tới khách hàng (location_dest_id.usage = 'customer')
         """
         self.ensure_one()
         
@@ -150,6 +155,16 @@ class StockPicking(models.Model):
                 self.name, warehouse_code
             )
             return
+        
+        # Với đơn xuất (outgoing): Chỉ gửi thông báo cho bước xuất cuối cùng tới khách hàng
+        # Kiểm tra location_dest_id.usage = 'customer'
+        if self.picking_type_code == 'outgoing':
+            if not self.location_dest_id or self.location_dest_id.usage != 'customer':
+                _logger.info(
+                    "Zalo Notification skip: picking %s is outgoing but dest location is not customer (usage: %s)",
+                    self.name, self.location_dest_id.usage if self.location_dest_id else 'None'
+                )
+                return
         
         # Lấy config
         config = self.env['hlv.zalo.stock.notification'].sudo()._get_active_config()

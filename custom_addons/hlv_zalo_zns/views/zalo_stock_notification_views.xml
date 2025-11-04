@@ -93,6 +93,7 @@
                                 <li>Đơn hàng đã validate (Done)</li>
                                 <li>Loại đơn: Nhập kho (Incoming) hoặc Xuất kho (Outgoing)</li>
                                 <li><b>Kho phải là TSN hoặc TSNSR</b> (kiểm tra mã kho)</li>
+                                <li><b>Với đơn xuất:</b> Chỉ gửi thông báo cho bước <b>xuất cuối cùng tới khách hàng</b> (location_dest_id là customer)</li>
                                 <li>Chưa gửi thông báo trước đó</li>
                             </ul>
                             <p>
@@ -102,6 +103,7 @@
                                 <li>Chỉ nên có 1 config active tại một thời điểm</li>
                                 <li>Hệ thống tự động refresh access token mỗi giờ</li>
                                 <li>Đơn hàng ở các kho khác sẽ không gửi thông báo</li>
+                                <li><b>Quy trình 3 bước tại TSN:</b> Kho → Đóng gói → Xuất → Khách hàng. Thông báo CHỈ gửi ở bước cuối cùng (Xuất → Khách hàng)</li>
                                 <li>Để lấy Callback URL chính xác, sử dụng domain của Odoo của bạn</li>
                             </ul>
                         </div>
