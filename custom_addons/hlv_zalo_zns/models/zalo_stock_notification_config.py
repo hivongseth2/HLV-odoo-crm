@@ -60,9 +60,11 @@ class ZaloStockNotificationConfig(models.Model):
     name = fields.Char(default='Zalo Stock Notification', required=True)
     app_id = fields.Char('App ID', required=True, default='')
     secret_key = fields.Char('Secret Key', required=True, default='')
-    refresh_token = fields.Text('Refresh Token', required=True)
+    callback_url = fields.Char('OAuth Callback URL', required=True, help='URL để Zalo redirect sau khi authorize')
+    refresh_token = fields.Text('Refresh Token', readonly=True, help='Tự động lưu sau khi authorize')
     access_token = fields.Text('Access Token', readonly=True)
     token_expires_at = fields.Datetime('Token Expires At', readonly=True)
+    authorize_url = fields.Char('Authorize URL', compute='_compute_authorize_url', readonly=True)
     
     # Danh sách user_id cần gửi thông báo (mỗi dòng một ID)
     recipient_ids = fields.Text(
@@ -82,6 +84,74 @@ class ZaloStockNotificationConfig(models.Model):
         """Lấy config đang active"""
         return self.search([('active', '=', True)], limit=1)
 
+    # -------------------- OAuth permission URL --------------------
+    @api.depends('app_id', 'callback_url')
+    def _compute_authorize_url(self):
+        """Tính toán URL để authorize với Zalo"""
+        for rec in self:
+            if rec.app_id and rec.callback_url:
+                from urllib.parse import quote
+                rec.authorize_url = (
+                    "https://oauth.zaloapp.com/v4/oa/permission"
+                    f"?app_id={rec.app_id}&redirect_uri={quote(rec.callback_url, safe='')}"
+                    "&state=odoo_stock_notification"
+                )
+            else:
+                rec.authorize_url = False
+
+    def action_open_oauth(self):
+        """Mở URL để authorize với Zalo"""
+        self.ensure_one()
+        if not self.authorize_url:
+            raise UserError(_("Missing app_id or callback_url"))
+        return {"type": "ir.actions.act_url", "target": "new", "url": self.authorize_url}
+
+    def request_access_token_with_code(self, code):
+        """Exchange authorization code -> access_token & refresh_token"""
+        self.ensure_one()
+        endpoint = 'https://oauth.zaloapp.com/v4/oa/access_token'
+        data = {
+            'grant_type': 'authorization_code',
+            'app_id': self.app_id,
+            'code': code,
+        }
+        
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'secret_key': self.secret_key,
+        }
+
+        try:
+            _logger.info("Exchanging authorization code for access token...")
+            response = requests.post(endpoint, data=data, headers=headers, timeout=15)
+            response.raise_for_status()
+            result = response.json()
+
+            access_token = result.get('access_token')
+            refresh_token = result.get('refresh_token')
+            
+            if not access_token:
+                error_msg = result.get('error_description', 'Unknown error')
+                _logger.error("Failed to get access token: %s", error_msg)
+                raise UserError(_("Không thể lấy access token: %s") % error_msg)
+
+            expires_in = int(result.get('expires_in', 3600))
+            self.write({
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'token_expires_at': fields.Datetime.now() + timedelta(seconds=expires_in - 60),
+            })
+            
+            _logger.info("Zalo Stock Notification tokens obtained successfully (expires_in=%s)", expires_in)
+            return result
+            
+        except requests.exceptions.RequestException as e:
+            _logger.exception("Failed to request access token: %s", e)
+            raise UserError(_("Lỗi kết nối Zalo API: %s") % str(e))
+        except Exception as e:
+            _logger.exception("Unexpected error requesting access token: %s", e)
+            raise UserError(_("Lỗi không mong muốn: %s") % str(e))
+
     def _is_token_expired(self):
         """Kiểm tra token đã hết hạn chưa"""
         self.ensure_one()
@@ -90,7 +160,50 @@ class ZaloStockNotificationConfig(models.Model):
         # Thêm buffer 60s để tránh token hết hạn giữa chừng
         return fields.Datetime.now() >= (self.token_expires_at - timedelta(seconds=60))
 
+    def refresh_access_token(self):
+        """Refresh access token using refresh_token (tương tự ZNS)"""
+        for rec in self:
+            if not rec.refresh_token:
+                _logger.warning("No refresh token for config %s", rec.name)
+                continue
+            try:
+                endpoint = 'https://oauth.zaloapp.com/v4/oa/access_token'
+                data = {
+                    'grant_type': 'refresh_token',
+                    'app_id': rec.app_id,
+                    'refresh_token': rec.refresh_token,
+                }
+                headers = {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'secret_key': rec.secret_key,
+                }
+                _logger.info("Refreshing access token for config %s...", rec.name)
+                response = requests.post(endpoint, data=data, headers=headers, timeout=15)
+                response.raise_for_status()
+                result = response.json()
+                
+                access_token = result.get('access_token')
+                if not access_token:
+                    error_msg = result.get('error_description', result.get('message', 'Unknown error'))
+                    _logger.error("Failed to refresh token for %s: %s", rec.name, error_msg)
+                    continue
+                
+                expires_in = int(result.get('expires_in', 3600))
+                rec.write({
+                    'access_token': access_token,
+                    'refresh_token': result.get('refresh_token', rec.refresh_token),
+                    'token_expires_at': fields.Datetime.now() + timedelta(seconds=expires_in - 60),
+                })
+                _logger.info("Access token refreshed successfully for %s", rec.name)
+            except Exception as e:
+                _logger.exception("Failed to refresh access token for %s: %s", rec.name, e)
+
     def refresh_zalo_access_token(self):
+        """
+        Deprecated: Use refresh_access_token() instead
+        Kept for backward compatibility
+        """
+        self.refresh_access_token()
         """
         Refresh access token từ Zalo OAuth v4
         Tương đương với refresh_zalo_token_if_needed() trong PHP

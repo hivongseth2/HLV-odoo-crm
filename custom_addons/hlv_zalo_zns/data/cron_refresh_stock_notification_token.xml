@@ -12,7 +12,7 @@ configs = model.search([('active', '=', True)])
 for config in configs:
     try:
         if config._is_token_expired():
-            config.refresh_zalo_access_token()
+            config.refresh_access_token()
     except Exception:
         pass
             ]]></field>

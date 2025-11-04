@@ -7,15 +7,20 @@
         <field name="arch" type="xml">
             <form string="Zalo Stock Notification Config">
                 <header>
+                    <button name="action_open_oauth" 
+                            string="Authorize with Zalo" 
+                            type="object" 
+                            class="oe_highlight"
+                            invisible="refresh_token"/>
                     <button name="action_test_send_message" 
                             string="Test Gửi Tin Nhắn" 
                             type="object" 
                             class="oe_highlight"
-                            invisible="not active"/>
+                            invisible="not active or not refresh_token"/>
                     <button name="action_refresh_token" 
                             string="Refresh Token" 
                             type="object"
-                            invisible="not active"/>
+                            invisible="not active or not refresh_token"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -29,6 +34,7 @@
                             <field name="active"/>
                             <field name="app_id"/>
                             <field name="secret_key" password="True"/>
+                            <field name="callback_url" widget="url"/>
                         </group>
                         <group>
                             <field name="access_token" password="True"/>
@@ -38,7 +44,11 @@
                         </group>
                     </group>
                     
-                    <group string="Refresh Token">
+                    <group string="OAuth Authorization" invisible="refresh_token">
+                        <field name="authorize_url" widget="url" readonly="1"/>
+                    </group>
+                    
+                    <group string="Refresh Token" invisible="not refresh_token">
                         <field name="refresh_token" widget="text" password="True"/>
                     </group>
                     
