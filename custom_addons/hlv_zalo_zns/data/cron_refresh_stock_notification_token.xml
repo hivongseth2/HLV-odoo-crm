@@ -14,7 +14,6 @@
             </field>
             <field name="interval_number">1</field>
             <field name="interval_type">hours</field>
-            <field name="number_call">-1</field>
             <field name="active" eval="True"/>
         </record>
     </data>
