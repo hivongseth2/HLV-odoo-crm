@@ -11,6 +11,25 @@ class StockPicking(models.Model):
     # Cờ đánh dấu đã gửi thông báo cho picking này
     zalo_stock_notification_sent = fields.Boolean('Zalo Notification Sent', default=False, copy=False)
 
+    def _get_zalo_error_detail(self, error_code):
+        """
+        Map Zalo error codes to human-readable messages
+        
+        :param error_code: Error code từ Zalo API
+        :return: Chi tiết lỗi
+        """
+        error_map = {
+            -201: "user_id là invalid",
+            -1: "Invalid access_token",
+            -2: "Invalid user_id",
+            -3: "Rate limit exceeded (gửi quá nhanh)",
+            400: "Bad request (định dạng request sai)",
+            401: "Unauthorized (token không còn hiệu lực)",
+            404: "Not found (endpoint không tồn tại)",
+            500: "Zalo server error (lỗi phía Zalo)",
+        }
+        return error_map.get(error_code, f"Unknown error code {error_code}")
+
     def _get_picking_completion_status(self):
         """
         Xác định đơn hàng được xuất/nhập toàn bộ hay một phần
@@ -26,12 +45,18 @@ class StockPicking(models.Model):
                 qty_done = sum(move.move_line_ids.mapped('qty_done'))
                 # Nếu qty_done < quantity demanded => xuất/nhập 1 phần
                 if qty_done < move.product_uom_qty:
+                    _logger.debug(
+                        "Picking %s has partial delivery: product=%s, done=%s, demand=%s",
+                        self.name, move.product_id.name, qty_done, move.product_uom_qty
+                    )
                     return '1 phần'
         
         # Kiểm tra nếu có backorder => xuất/nhập 1 phần
         if self.backorder_id:
+            _logger.debug("Picking %s has backorder: %s", self.name, self.backorder_id.name)
             return '1 phần'
         
+        _logger.debug("Picking %s delivered completely", self.name)
         return 'toàn bộ'
 
     def _format_zalo_notification_message(self):
@@ -43,6 +68,8 @@ class StockPicking(models.Model):
         """
         self.ensure_one()
         
+        _logger.debug("Formatting Zalo notification message for picking %s", self.name)
+        
         # Xác định loại đơn
         if self.picking_type_code == 'outgoing':
             action_type = 'XUẤT'
@@ -50,6 +77,8 @@ class StockPicking(models.Model):
             action_type = 'NHẬP'
         else:
             action_type = self.picking_type_id.name or 'CHUYỂN'
+        
+        _logger.debug("Picking %s action_type: %s", self.name, action_type)
         
         # Lấy mã đơn hàng gốc (source.origin)
         order_code = self.origin or self.name
@@ -67,6 +96,7 @@ class StockPicking(models.Model):
         warehouse_name = ''
         if self.picking_type_id and self.picking_type_id.warehouse_id:
             warehouse_name = self.picking_type_id.warehouse_id.name or ''
+            _logger.debug("Picking %s warehouse: %s", self.name, warehouse_name)
         
         # Build message
         message = f"🔔 Thông báo đơn hàng {action_type}\n"
@@ -81,6 +111,9 @@ class StockPicking(models.Model):
         # Thêm thông tin partner nếu có
         if self.partner_id:
             message += f"👤 Đối tác: {self.partner_id.name}\n"
+            _logger.debug("Picking %s partner: %s", self.name, self.partner_id.name)
+        else:
+            _logger.debug("Picking %s has no partner", self.name)
         
         # Thêm thông tin địa chỉ nếu có
         if self.picking_type_code == 'outgoing' and self.partner_id:
@@ -98,22 +131,33 @@ class StockPicking(models.Model):
                 if address_parts:
                     address = ', '.join(address_parts)
                     message += f"🏠 Địa chỉ: {address}\n"
+                    _logger.debug("Picking %s address: %s", self.name, address)
                 
                 if partner.phone or partner.mobile:
                     phone = partner.phone or partner.mobile
                     message += f"📞 SĐT: {phone}\n"
+                    _logger.debug("Picking %s phone: %s", self.name, phone)
         
         # Danh sách sản phẩm
         message += "\n📦 Danh sách sản phẩm:\n"
+        product_count = 0
         for move in self.move_ids_without_package:
             # Tính tổng qty_done từ move_line_ids
             qty_done = sum(move.move_line_ids.mapped('qty_done'))
             if qty_done > 0:
+                product_count += 1
                 product_name = move.product_id.display_name
                 qty = qty_done
                 uom = move.product_uom.name if move.product_uom else ''
                 message += f"  • {product_name}\n"
                 message += f"    SL: {qty:.0f} {uom}\n"
+                _logger.debug(
+                    "Picking %s product: %s, qty_done=%s, uom=%s",
+                    self.name, product_name, qty_done, uom
+                )
+        
+        if product_count == 0:
+            _logger.warning("Picking %s has no products with qty_done > 0", self.name)
         
         # Thêm note nếu có
         if self.note:
@@ -189,35 +233,98 @@ class StockPicking(models.Model):
             _logger.warning("No recipients configured for Zalo Stock Notifications")
             return
         
+        _logger.info(
+            "Zalo Stock Notification: Starting to send for picking %s to %s recipients (user_ids: %s)",
+            self.name, len(recipients), ", ".join(str(r) for r in recipients)
+        )
+        
         # Format message
         try:
             message_text = self._format_zalo_notification_message()
+            _logger.debug("Zalo Notification message formatted successfully for %s", self.name)
         except Exception as e:
             _logger.exception("Error formatting Zalo Notification message for %s: %s", self.name, e)
             return
         
+        # Kiểm tra access token
+        if not config.access_token:
+            _logger.error("Zalo Config for picking %s has no access_token. Please authorize first.", self.name)
+            return
+        
+        if config.token_expires_at:
+            from datetime import datetime
+            expires_at = config.token_expires_at
+            if isinstance(expires_at, str):
+                from dateutil import parser
+                expires_at = parser.parse(expires_at)
+            
+            if expires_at < datetime.now():
+                _logger.warning(
+                    "Zalo access_token expired at %s for picking %s. Token refresh may be needed.",
+                    config.token_expires_at, self.name
+                )
+        
         # Gửi tin nhắn cho từng recipient
         success_count = 0
-        for user_id in recipients:
+        fail_count = 0
+        for i, user_id in enumerate(recipients, 1):
+            _logger.info(
+                "Zalo Notification: Sending to recipient %s/%s (user_id: %s) for picking %s",
+                i, len(recipients), user_id, self.name
+            )
             try:
                 result = config.send_notification_message(user_id, message_text)
-                if result.get('error') == 0:
+                
+                if not result:
+                    _logger.error(
+                        "Zalo Notification: No response from send_notification_message for user_id %s, picking %s",
+                        user_id, self.name
+                    )
+                    fail_count += 1
+                    continue
+                
+                error_code = result.get('error')
+                error_msg = result.get('message', 'No message in response')
+                
+                if error_code == 0:
                     success_count += 1
-                    _logger.info("Zalo Notification sent to %s for picking %s", user_id, self.name)
+                    _logger.info(
+                        "✓ Zalo Notification sent successfully to %s for picking %s",
+                        user_id, self.name
+                    )
                 else:
+                    fail_count += 1
+                    # Log chi tiết error với error code mapping
+                    error_detail = self._get_zalo_error_detail(error_code)
                     _logger.warning(
-                        "Zalo Notification failed to %s for picking %s: %s",
-                        user_id, self.name, result.get('message', 'Unknown error')
+                        "✗ Zalo Notification failed to %s for picking %s. Error code: %s (%s), Message: %s",
+                        user_id, self.name, error_code, error_detail, error_msg
                     )
             except Exception as e:
-                _logger.exception("Error sending Zalo Notification to %s: %s", user_id, e)
+                fail_count += 1
+                _logger.exception(
+                    "✗ Exception sending Zalo Notification to %s for picking %s: %s",
+                    user_id, self.name, str(e)
+                )
+        
+        # Log tóm tắt kết quả
+        _logger.info(
+            "Zalo Stock Notification Summary for %s: Success=%s, Failed=%s, Total=%s",
+            self.name, success_count, fail_count, len(recipients)
+        )
         
         # Đánh dấu đã gửi nếu có ít nhất 1 tin thành công
         if success_count > 0:
             self.sudo().write({'zalo_stock_notification_sent': True})
             _logger.info(
-                "Zalo Stock Notification sent successfully for %s (%s/%s recipients)",
-                self.name, success_count, len(recipients)
+                "Zalo Stock Notification marked as sent for picking %s",
+                self.name
+            )
+        elif fail_count > 0:
+            _logger.error(
+                "Zalo Stock Notification: All attempts failed for picking %s. "
+                "Please check: 1) user_ids are valid, 2) access_token is not expired, 3) account Zalo is active",
+                self.name
             )
 
     def button_validate(self):
