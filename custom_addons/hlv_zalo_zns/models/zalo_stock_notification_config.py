@@ -414,40 +414,42 @@ class ZaloStockNotificationConfig(models.Model):
         ids = [line.strip() for line in self.recipient_ids.split('\n') if line.strip()]
         return ids
 
-    def get_recipients_for_warehouse(self, warehouse_code):
+    def get_recipients_for_warehouse(self, warehouse_id):
         """
         Lấy danh sách recipient IDs cho một kho cụ thể
         
         Nếu có cấu hình warehouse mapping, sử dụng danh sách recipients từ warehouse đó.
         Ngược lại, sử dụng danh sách recipients mặc định (recipient_ids field).
         
-        :param warehouse_code: Mã kho (VD: 'TSN', 'TSNSR', 'KBC')
+        :param warehouse_id: ID hoặc object của stock.warehouse
         :return: List of user IDs (strings)
         """
         self.ensure_one()
         
-        if not warehouse_code:
-            _logger.warning("warehouse_code is empty, using default recipients")
+        if not warehouse_id:
+            _logger.warning("warehouse_id is empty, using default recipients")
             return self.get_recipient_list()
         
         # Tìm warehouse mapping trong list
         warehouse_mapping = self.warehouse_recipient_ids.filtered(
-            lambda x: x.warehouse_code == warehouse_code and x.active
+            lambda x: x.warehouse_id.id == (warehouse_id.id if hasattr(warehouse_id, 'id') else warehouse_id) and x.active
         )
         
         if warehouse_mapping:
             # Sử dụng danh sách recipients từ warehouse mapping
             recipients = warehouse_mapping[0].get_recipient_list()
+            warehouse_name = warehouse_mapping[0].warehouse_id.name
             _logger.debug(
                 "Found warehouse mapping for %s: %s recipients",
-                warehouse_code, len(recipients)
+                warehouse_name, len(recipients)
             )
             return recipients
         else:
             # Nếu không tìm thấy warehouse mapping, sử dụng danh sách mặc định
+            warehouse_name = warehouse_id.name if hasattr(warehouse_id, 'name') else str(warehouse_id)
             _logger.debug(
                 "No warehouse mapping found for %s, using default recipients",
-                warehouse_code
+                warehouse_name
             )
             return self.get_recipient_list()
 

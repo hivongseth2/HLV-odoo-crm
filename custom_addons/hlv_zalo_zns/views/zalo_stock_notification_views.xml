@@ -163,8 +163,7 @@
         <field name="model">hlv.zalo.warehouse.recipient</field>
         <field name="arch" type="xml">
             <list editable="bottom">
-                <field name="warehouse_code" required="1" />
-                <field name="warehouse_name" />
+                <field name="warehouse_id" required="1" />
                 <field name="recipient_ids" widget="text" />
                 <field name="active" />
             </list>

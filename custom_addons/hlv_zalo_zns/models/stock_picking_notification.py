@@ -230,11 +230,10 @@ class StockPicking(models.Model):
             _logger.info("Zalo Notification already sent for picking %s", self.name)
             return
         
-        # Lấy warehouse code
-        # picking_type_id → warehouse_id → code
-        warehouse_code = ''
+        # Lấy warehouse
+        warehouse_id = None
         if self.picking_type_id and self.picking_type_id.warehouse_id:
-            warehouse_code = self.picking_type_id.warehouse_id.code or ''
+            warehouse_id = self.picking_type_id.warehouse_id
         
         # Với đơn xuất (outgoing): Chỉ gửi thông báo cho bước xuất cuối cùng tới khách hàng
         # Kiểm tra location_dest_id.usage = 'customer'
@@ -262,13 +261,14 @@ class StockPicking(models.Model):
             _logger.info("Zalo Stock Notification disabled for incoming pickings")
             return
         
-        # Lấy danh sách recipients dựa vào warehouse code
-        recipients = config.get_recipients_for_warehouse(warehouse_code)
+        # Lấy danh sách recipients dựa vào warehouse_id
+        recipients = config.get_recipients_for_warehouse(warehouse_id)
         
         if not recipients:
+            warehouse_name = warehouse_id.name if warehouse_id else 'Unknown'
             _logger.warning(
                 "No recipients configured for warehouse %s in Zalo Stock Notifications",
-                warehouse_code
+                warehouse_name
             )
             return
         

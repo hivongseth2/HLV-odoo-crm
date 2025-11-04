@@ -25,15 +25,11 @@ class ZaloWarehouseRecipient(models.Model):
         help='Config Zalo Stock Notification'
     )
 
-    warehouse_code = fields.Char(
-        'Warehouse Code',
+    warehouse_id = fields.Many2one(
+        'stock.warehouse',
+        'Warehouse',
         required=True,
-        help='Mã kho (VD: TSN, TSNSR, KBC)'
-    )
-
-    warehouse_name = fields.Char(
-        'Warehouse Name',
-        help='Tên kho (mục đích hiển thị)'
+        help='Chọn kho'
     )
 
     recipient_ids = fields.Text(
@@ -44,20 +40,20 @@ class ZaloWarehouseRecipient(models.Model):
 
     active = fields.Boolean('Active', default=True)
 
-    @api.constrains('warehouse_code')
-    def _check_warehouse_code_unique(self):
+    @api.constrains('warehouse_id')
+    def _check_warehouse_unique(self):
         """
-        Ensure mỗi warehouse_code chỉ xuất hiện 1 lần trong config
+        Ensure mỗi warehouse_id chỉ xuất hiện 1 lần trong config
         """
         for rec in self:
             duplicates = self.search([
                 ('config_id', '=', rec.config_id.id),
-                ('warehouse_code', '=', rec.warehouse_code),
+                ('warehouse_id', '=', rec.warehouse_id.id),
                 ('id', '!=', rec.id),
             ])
             if duplicates:
                 raise models.ValidationError(
-                    _('Warehouse code "%s" đã tồn tại trong config này') % rec.warehouse_code
+                    _('Warehouse "%s" đã tồn tại trong config này') % rec.warehouse_id.name
                 )
 
     def get_recipient_list(self):
