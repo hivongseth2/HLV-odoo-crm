@@ -455,7 +455,7 @@ class MisaApiUtils(models.AbstractModel):
             return mapping.get(raw, raw)
 
         session = requests.Session()
-        api_url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
+        api_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
         api_headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}" if token else "",

@@ -324,11 +324,11 @@ class StockPicking(models.Model):
                 else:
                     fail_count += 1
                     # Log chi tiết error với error code mapping
-                    error_detail = self._get_zalo_error_detail(error_code)
-                    _logger.warning(
-                        "✗ Zalo Notification failed to %s for picking %s. Error code: %s (%s), Message: %s",
-                        user_id, self.name, error_code, error_detail, error_msg
-                    )
+                    # error_detail = self._get_zalo_error_detail(error_code)
+                    # _logger.warning(
+                    #     "✗ Zalo Notification failed to %s for picking %s. Error code: %s (%s), Message: %s",
+                    #     user_id, self.name, error_code, error_detail, error_msg
+                    # )
             except Exception as e:
                 fail_count += 1
                 _logger.exception(
