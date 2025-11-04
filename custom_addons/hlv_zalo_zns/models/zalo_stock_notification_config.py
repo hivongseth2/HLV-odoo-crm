@@ -326,16 +326,16 @@ class ZaloStockNotificationConfig(models.Model):
             _logger.error("Cannot send notification message: no valid access token")
             return {'error': 'No access token'}
         
-        # Endpoint với access_token là query parameter (không phải header)
-        endpoint = f'https://openapi.zalo.me/v3.0/oa/message/cs?access_token={access_token}'
+        endpoint = 'https://openapi.zalo.me/v3.0/oa/message/cs'
         
         headers = {
             'Content-Type': 'application/json',
+            'access_token': access_token
         }
         
         payload = {
             'recipient': {
-                'user_id': str(user_id)  # Convert to string to ensure correct format
+                'user_id': user_id
             },
             'message': {
                 'text': message_text
