@@ -129,9 +129,22 @@ class StockPicking(models.Model):
         
         # Build message
         message = f"🔔 Thông báo đơn hàng {action_type}\n"
-        message += f"📋 Mã đơn hàng: {order_code}\n"
-        message += f"📦 Mã phiếu xuất kho odoo: {self.name}\n"
+        message += f"📋 Số đơn hàng: {order_code}\n"
+        message += f"📦 Số phiếu xuất kho Odoo: {self.name}\n"
+        message += f"🏢 Kho xuất: {warehouse_name}\n"
         message += f"📊 Trạng thái: {action_type} {completion_status}\n"
+        
+        # Thêm thông tin nhân viên BH nếu có
+        if self.picking_type_id and self.picking_type_id.warehouse_id:
+            # Lấy user responsible của warehouse hoặc picking type
+            responsible_user = None
+            if hasattr(self.picking_type_id, 'user_id') and self.picking_type_id.user_id:
+                responsible_user = self.picking_type_id.user_id
+            
+            if responsible_user:
+                message += f"👤 Nhân viên BH: {responsible_user.name}\n"
+                _logger.debug("Picking %s responsible user: %s", self.name, responsible_user.name)
+        
         # message += f"🕐 Thời gian: {done_date_str}\n"
         
         # # Thêm thông tin partner nếu có

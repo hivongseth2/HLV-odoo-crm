@@ -157,17 +157,17 @@
         action="action_zalo_stock_notification"
         sequence="100" />
 
-    <!-- Tree view cho Zalo Warehouse Recipient -->
-    <record id="view_zalo_warehouse_recipient_tree" model="ir.ui.view">
-        <field name="name">hlv.zalo.warehouse.recipient.tree</field>
+    <!-- List view cho Zalo Warehouse Recipient -->
+    <record id="view_zalo_warehouse_recipient_list" model="ir.ui.view">
+        <field name="name">hlv.zalo.warehouse.recipient.list</field>
         <field name="model">hlv.zalo.warehouse.recipient</field>
         <field name="arch" type="xml">
-            <tree editable="bottom">
+            <list editable="bottom">
                 <field name="warehouse_code" required="1" />
                 <field name="warehouse_name" />
                 <field name="recipient_ids" widget="text" />
                 <field name="active" />
-            </tree>
+            </list>
         </field>
     </record>
 
