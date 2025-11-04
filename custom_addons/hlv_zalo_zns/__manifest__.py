@@ -1,15 +1,20 @@
 {
-    "name": "HLV Zalo ZNS sender",
+    "name": "HLV Zalo ZNS & Stock Notification",
     "version": "1.0.0",
     "category": "Tools",
-    "summary": "Authenticate Zalo OA and send ZNS when pickings complete",
+    "summary": "Send Zalo ZNS to customers and Stock Notifications to internal staff for warehouse operations",
     "depends": ["stock", "base"],
     "data": [
         "security/ir.model.access.csv",
         "views/zns_config_views.xml",
-        "data/cron_refresh_token.xml"
+        "views/zalo_stock_notification_views.xml",
+        "data/cron_refresh_token.xml",
+        "data/cron_refresh_stock_notification_token.xml"
     ],
     "installable": True,
     "application": False,
-    "license": "LGPL-3"
+    "license": "LGPL-3",
+    "external_dependencies": {
+        "python": ["requests"]
+    }
 }
