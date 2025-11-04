@@ -7,82 +7,97 @@
         <field name="arch" type="xml">
             <form string="Zalo Stock Notification Config">
                 <header>
-                    <button name="action_open_oauth" 
-                            string="Authorize with Zalo" 
-                            type="object" 
-                            class="oe_highlight"
-                            invisible="refresh_token != False"/>
-                    <button name="action_test_send_message" 
-                            string="Test Gửi Tin Nhắn" 
-                            type="object" 
-                            class="btn-primary"
-                            invisible="not active or not (refresh_token != False)"/>
-                    <button name="action_refresh_token" 
-                            string="Refresh Token" 
-                            type="object"
-                            class="btn-secondary"
-                            invisible="not active or not (refresh_token != False)"/>
+                    <button name="action_open_oauth"
+                        string="Authorize with Zalo"
+                        type="object"
+                        class="oe_highlight"
+                        invisible="refresh_token != False" />
+                    <button name="action_test_send_message"
+                        string="Test Gửi Tin Nhắn"
+                        type="object"
+                        class="btn-primary"
+                        invisible="not active or not refresh_token" />
+                    <button name="action_preview_send_message"
+                        string="Preview Tin Nhắn"
+                        type="object"
+                        class="btn-secondary"
+                        attrs="{ 'invisible': [('active','=',False), ('refresh_token','=',False)] }" />
+                    <button name="action_refresh_token"
+                        string="Refresh Token"
+                        type="object"
+                        class="btn-secondary"
+                        invisible="not active or not (refresh_token != False)" />
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
-                        <widget name="web_ribbon" title="Inactive" 
-                                bg_color="bg-danger" 
-                                invisible="active"/>
+                        <widget name="web_ribbon" title="Inactive"
+                            bg_color="bg-danger"
+                            invisible="active" />
                     </div>
                     <group>
                         <group>
-                            <field name="name"/>
-                            <field name="active"/>
-                            <field name="app_id"/>
-                            <field name="secret_key" password="True"/>
-                            <field name="callback_url" widget="url"/>
+                            <field name="name" />
+                            <field name="active" />
+                            <field name="app_id" />
+                            <field name="secret_key" password="True" />
+                            <field name="callback_url" widget="url" />
                         </group>
                         <group>
-                            <field name="access_token" password="True"/>
-                            <field name="token_expires_at"/>
-                            <field name="send_on_incoming"/>
-                            <field name="send_on_outgoing"/>
+                            <field name="access_token" password="True" />
+                            <field name="token_expires_at" />
+                            <field name="send_on_incoming" />
+                            <field name="send_on_outgoing" />
                         </group>
                     </group>
-                    
+
                     <group string="OAuth Authorization" invisible="refresh_token != False">
                         <div class="alert alert-warning" role="alert">
-                            <p><strong>Bước 1: Nhập App ID, Secret Key và Callback URL</strong></p>
-                            <p><strong>Bước 2: Click nút "🔐 Authorize with Zalo"</strong> để lấy token tự động</p>
-                            <p>Bạn sẽ được redirect tới Zalo để authorize, sau đó token sẽ được lưu tự động.</p>
+                            <p>
+                                <strong>Bước 1: Nhập App ID, Secret Key và Callback URL</strong>
+                            </p>
+                            <p><strong>Bước 2: Click nút "🔐 Authorize with Zalo"</strong> để lấy
+                                token tự động</p>
+                            <p>Bạn sẽ được redirect tới Zalo để authorize, sau đó token sẽ được lưu
+                                tự động.</p>
                         </div>
-                        <field name="authorize_url" widget="url" readonly="1" 
-                               invisible="not authorize_url"/>
+                        <field name="authorize_url" widget="url" readonly="1"
+                            invisible="not authorize_url" />
                     </group>
-                    
-                        <group string="Refresh Token">
-                            <field name="refresh_token" widget="text" password="True"/>
+
+                    <group string="Refresh Token">
+                        <field name="refresh_token" widget="text" password="True" />
                     </group>
-                    
+
                     <group string="Danh Sách Người Nhận Thông Báo">
-                        <field name="recipient_ids" widget="text" 
-                               placeholder="Nhập mỗi Zalo User ID trên một dòng&#10;Ví dụ:&#10;1228622149344688972&#10;6358388935615848913&#10;7233270943621398925"/>
+                        <field name="recipient_ids" widget="text"
+                            placeholder="Nhập mỗi Zalo User ID trên một dòng&#10;Ví dụ:&#10;1228622149344688972&#10;6358388935615848913&#10;7233270943621398925" />
                     </group>
-                    
+
                     <group string="Hướng Dẫn">
                         <div class="alert alert-info" role="alert">
                             <h4>📋 Cấu hình Zalo Stock Notification:</h4>
                             <ol>
                                 <li>Nhập <b>App ID</b> và <b>Secret Key</b> từ Zalo Developer Portal</li>
-                                <li>Nhập <b>Callback URL</b>: <code>https://your-odoo-domain.com/hlv_zalo/stock_notification/oauth/callback</code></li>
+                                <li>Nhập <b>Callback URL</b>: <code>
+                                    https://your-odoo-domain.com/hlv_zalo/stock_notification/oauth/callback</code></li>
                                 <li>Click nút <b>"🔐 Authorize with Zalo"</b> → Token sẽ tự động lưu</li>
-                                <li>Nhập các <b>Zalo User ID</b> của người cần nhận thông báo (mỗi ID một dòng)</li>
+                                <li>Nhập các <b>Zalo User ID</b> của người cần nhận thông báo (mỗi
+                                    ID một dòng)</li>
                                 <li>Chọn loại đơn hàng cần gửi thông báo (Nhập/Xuất)</li>
                                 <li>Click <b>"Test Gửi Tin Nhắn"</b> để kiểm tra</li>
                             </ol>
-                            <p><b>⚠️ Điều kiện gửi thông báo:</b></p>
+                            <p>
+                                <b>⚠️ Điều kiện gửi thông báo:</b>
+                            </p>
                             <ul>
                                 <li>Đơn hàng đã validate (Done)</li>
                                 <li>Loại đơn: Nhập kho (Incoming) hoặc Xuất kho (Outgoing)</li>
                                 <li><b>Kho phải là TSN hoặc TSNSR</b> (kiểm tra mã kho)</li>
                                 <li>Chưa gửi thông báo trước đó</li>
                             </ul>
-                            <p><b>💡 Lưu ý:</b></p>
+                            <p>
+                                <b>💡 Lưu ý:</b>
+                            </p>
                             <ul>
                                 <li>Chỉ nên có 1 config active tại một thời điểm</li>
                                 <li>Hệ thống tự động refresh access token mỗi giờ</li>
@@ -102,12 +117,12 @@
         <field name="model">hlv.zalo.stock.notification</field>
         <field name="arch" type="xml">
             <list string="Zalo Stock Notification Configs">
-                <field name="name"/>
-                <field name="app_id"/>
-                <field name="token_expires_at"/>
-                <field name="send_on_incoming"/>
-                <field name="send_on_outgoing"/>
-                <field name="active"/>
+                <field name="name" />
+                <field name="app_id" />
+                <field name="token_expires_at" />
+                <field name="send_on_incoming" />
+                <field name="send_on_outgoing" />
+                <field name="active" />
             </list>
         </field>
     </record>
@@ -122,35 +137,36 @@
                 Tạo cấu hình Zalo Stock Notification
             </p>
             <p>
-                Cấu hình để gửi thông báo tự động qua Zalo tới nhân viên nội bộ khi có đơn hàng nhập/xuất kho.
+                Cấu hình để gửi thông báo tự động qua Zalo tới nhân viên nội bộ khi có đơn hàng
+                nhập/xuất kho.
             </p>
         </field>
     </record>
 
     <!-- Menu item -->
     <menuitem id="menu_zalo_stock_notification"
-              name="Zalo Stock Notification"
-              parent="stock.menu_stock_config_settings"
-              action="action_zalo_stock_notification"
-              sequence="100"/>
+        name="Zalo Stock Notification"
+        parent="stock.menu_stock_config_settings"
+        action="action_zalo_stock_notification"
+        sequence="100" />
 
     <!-- Inherit Stock Picking form để thêm button gửi Zalo Notification -->
     <record id="view_picking_form_inherit_zalo_notification" model="ir.ui.view">
         <field name="name">stock.picking.form.inherit.zalo.notification</field>
         <field name="model">stock.picking</field>
-        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="inherit_id" ref="stock.view_picking_form" />
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
-                <button name="action_send_zalo_notification_now" 
-                        string="Gửi Zalo Thông Báo" 
-                        type="object" 
-                        class="btn-secondary"
-                        invisible="state != 'done' or picking_type_code not in ['incoming', 'outgoing']"/>
+                <button name="action_send_zalo_notification_now"
+                    string="Gửi Zalo Thông Báo"
+                    type="object"
+                    class="btn-secondary"
+                    invisible="state != 'done' or picking_type_code not in ['incoming', 'outgoing']" />
             </xpath>
-            
+
             <xpath expr="//sheet//group[@name='other_infos']" position="after">
                 <group string="Zalo Notification">
-                    <field name="zalo_stock_notification_sent" readonly="1"/>
+                    <field name="zalo_stock_notification_sent" readonly="1" />
                 </group>
             </xpath>
         </field>

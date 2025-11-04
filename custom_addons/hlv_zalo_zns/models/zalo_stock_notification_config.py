@@ -426,6 +426,61 @@ class ZaloStockNotificationConfig(models.Model):
             }
         }
 
+    def action_preview_send_message(self):
+        """
+        Build a preview of the test message and payload without sending to Zalo.
+        Returns a client notification showing the message and the sample JSON payload.
+        """
+        self.ensure_one()
+
+        recipients = self.get_recipient_list()
+        if not recipients:
+            raise UserError(_('Chưa có recipient ID nào được cấu hình'))
+
+        test_message = "🔔 Test tin nhắn từ Odoo HLV\n"
+        test_message += f"Thời gian: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
+        test_message += "Hệ thống thông báo đơn hàng nhập/xuất kho đang hoạt động bình thường."
+
+        # Build preview string
+        preview_lines = []
+        preview_lines.append(_('Recipients (%s):') % len(recipients))
+        # show up to first 10 recipients to avoid huge previews
+        for r in recipients[:10]:
+            preview_lines.append(f" - {r}")
+        if len(recipients) > 10:
+            preview_lines.append(f" - ... (+{len(recipients)-10} more)")
+
+        preview_lines.append('')
+        preview_lines.append(_('Message:'))
+        preview_lines.append(test_message)
+        preview_lines.append('')
+        preview_lines.append(_('Sample JSON payload (first recipient):'))
+        sample_payload = {
+            'recipient': {'user_id': recipients[0]},
+            'message': {'text': test_message},
+        }
+        # Convert sample payload to a readable string
+        try:
+            import json
+            payload_str = json.dumps(sample_payload, ensure_ascii=False, indent=2)
+        except Exception:
+            payload_str = str(sample_payload)
+
+        preview_lines.append(payload_str)
+
+        preview_text = '\n'.join(preview_lines)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Preview tin nhắn'),
+                'message': preview_text,
+                'type': 'info',
+                'sticky': True,
+            }
+        }
+
     def action_refresh_token(self):
         """
         Action button để manually refresh token
