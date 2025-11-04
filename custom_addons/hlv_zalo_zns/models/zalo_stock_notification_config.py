@@ -120,8 +120,13 @@ class ZaloStockNotificationConfig(models.Model):
         """
         self.ensure_one()
         
+        # Validate required fields
         if not self.refresh_token:
             raise UserError(_("Refresh token không được để trống"))
+        if not self.app_id:
+            raise UserError(_("App ID không được để trống"))
+        if not self.secret_key:
+            raise UserError(_("Secret Key không được để trống"))
 
         try:
             endpoint = 'https://oauth.zaloapp.com/v4/oa/access_token'
@@ -139,9 +144,19 @@ class ZaloStockNotificationConfig(models.Model):
             
             _logger.info("Refreshing Zalo Stock Notification access token...")
             response = requests.post(endpoint, headers=headers, data=data, timeout=15)
-            response.raise_for_status()
             
-            result = response.json()
+            # Parse response first before checking status
+            try:
+                result = response.json()
+            except ValueError as e:
+                _logger.error("Invalid JSON response from Zalo API: %s", response.text[:200])
+                raise UserError(_("Zalo API trả về dữ liệu không hợp lệ"))
+            
+            # Check for HTTP errors
+            if response.status_code != 200:
+                error_msg = result.get('error_description', result.get('message', 'Unknown error'))
+                _logger.error("Zalo API HTTP %s: %s", response.status_code, error_msg)
+                raise UserError(_("Lỗi Zalo API (HTTP %s): %s") % (response.status_code, error_msg))
             
             if result.get('access_token'):
                 new_access_token = result['access_token']
@@ -164,6 +179,12 @@ class ZaloStockNotificationConfig(models.Model):
         except requests.exceptions.RequestException as e:
             _logger.exception("Zalo Stock Notification token refresh request failed: %s", e)
             raise UserError(_("Lỗi kết nối Zalo API: %s") % str(e))
+        except UserError:
+            # Re-raise UserError as-is
+            raise
+        except Exception as e:
+            _logger.exception("Unexpected error refreshing Zalo token: %s", e)
+            raise UserError(_("Lỗi không mong muốn: %s") % str(e))
 
     def get_valid_access_token(self):
         """
