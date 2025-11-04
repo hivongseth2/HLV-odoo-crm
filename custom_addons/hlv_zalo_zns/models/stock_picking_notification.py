@@ -11,24 +11,24 @@ class StockPicking(models.Model):
     # Cờ đánh dấu đã gửi thông báo cho picking này
     zalo_stock_notification_sent = fields.Boolean('Zalo Notification Sent', default=False, copy=False)
 
-    def _get_zalo_error_detail(self, error_code):
-        """
-        Map Zalo error codes to human-readable messages
+    # def _get_zalo_error_detail(self, error_code):
+    #     """
+    #     Map Zalo error codes to human-readable messages
         
-        :param error_code: Error code từ Zalo API
-        :return: Chi tiết lỗi
-        """
-        error_map = {
-            -201: "user_id là invalid",
-            -1: "Invalid access_token",
-            -2: "Invalid user_id",
-            -3: "Rate limit exceeded (gửi quá nhanh)",
-            400: "Bad request (định dạng request sai)",
-            401: "Unauthorized (token không còn hiệu lực)",
-            404: "Not found (endpoint không tồn tại)",
-            500: "Zalo server error (lỗi phía Zalo)",
-        }
-        return error_map.get(error_code, f"Unknown error code {error_code}")
+    #     :param error_code: Error code từ Zalo API
+    #     :return: Chi tiết lỗi
+    #     """
+    #     error_map = {
+    #         -201: "user_id là invalid",
+    #         -1: "Invalid access_token",
+    #         -2: "Invalid user_id",
+    #         -3: "Rate limit exceeded (gửi quá nhanh)",
+    #         400: "Bad request (định dạng request sai)",
+    #         401: "Unauthorized (token không còn hiệu lực)",
+    #         404: "Not found (endpoint không tồn tại)",
+    #         500: "Zalo server error (lỗi phía Zalo)",
+    #     }
+    #     return error_map.get(error_code, f"Unknown error code {error_code}")
 
     def _get_picking_completion_status(self):
         """
