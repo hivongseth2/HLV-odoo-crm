@@ -129,43 +129,40 @@ class StockPicking(models.Model):
         
         # Build message
         message = f"🔔 Thông báo đơn hàng {action_type}\n"
-        message += "=" * 40 + "\n"
         message += f"📋 Mã đơn hàng: {order_code}\n"
-        message += f"📦 Phiếu kho: {self.name}\n"
-        if warehouse_name:
-            message += f"🏭 Kho: {warehouse_name}\n"
+        message += f"📦 Mã phiếu xuất kho odoo: {self.name}\n"
         message += f"📊 Trạng thái: {action_type} {completion_status}\n"
-        message += f"🕐 Thời gian: {done_date_str}\n"
+        # message += f"🕐 Thời gian: {done_date_str}\n"
         
-        # Thêm thông tin partner nếu có
-        if self.partner_id:
-            message += f"👤 Đối tác: {self.partner_id.name}\n"
-            _logger.debug("Picking %s partner: %s", self.name, self.partner_id.name)
-        else:
-            _logger.debug("Picking %s has no partner", self.name)
+        # # Thêm thông tin partner nếu có
+        # if self.partner_id:
+        #     message += f"👤 Đối tác: {self.partner_id.name}\n"
+        #     _logger.debug("Picking %s partner: %s", self.name, self.partner_id.name)
+        # else:
+        #     _logger.debug("Picking %s has no partner", self.name)
         
         # Thêm thông tin địa chỉ nếu có
-        if self.picking_type_code == 'outgoing' and self.partner_id:
-            # Với đơn xuất, hiển thị địa chỉ giao hàng
-            partner = self._zns_get_shipping_partner() if hasattr(self, '_zns_get_shipping_partner') else self.partner_id
-            if partner:
-                address_parts = []
-                if partner.street:
-                    address_parts.append(partner.street)
-                if partner.city:
-                    address_parts.append(partner.city)
-                if partner.state_id:
-                    address_parts.append(partner.state_id.name)
+        # if self.picking_type_code == 'outgoing' and self.partner_id:
+        #     # Với đơn xuất, hiển thị địa chỉ giao hàng
+        #     partner = self._zns_get_shipping_partner() if hasattr(self, '_zns_get_shipping_partner') else self.partner_id
+        #     if partner:
+        #         address_parts = []
+        #         if partner.street:
+        #             address_parts.append(partner.street)
+        #         if partner.city:
+        #             address_parts.append(partner.city)
+        #         if partner.state_id:
+        #             address_parts.append(partner.state_id.name)
                 
-                if address_parts:
-                    address = ', '.join(address_parts)
-                    message += f"🏠 Địa chỉ: {address}\n"
-                    _logger.debug("Picking %s address: %s", self.name, address)
+        #         if address_parts:
+        #             address = ', '.join(address_parts)
+        #             message += f"🏠 Địa chỉ: {address}\n"
+        #             _logger.debug("Picking %s address: %s", self.name, address)
                 
-                if partner.phone or partner.mobile:
-                    phone = partner.phone or partner.mobile
-                    message += f"📞 SĐT: {phone}\n"
-                    _logger.debug("Picking %s phone: %s", self.name, phone)
+        #         if partner.phone or partner.mobile:
+        #             phone = partner.phone or partner.mobile
+        #             message += f"📞 SĐT: {phone}\n"
+        #             _logger.debug("Picking %s phone: %s", self.name, phone)
         
         # Danh sách sản phẩm
         message += "\n📦 Danh sách sản phẩm:\n"
@@ -192,7 +189,6 @@ class StockPicking(models.Model):
         if self.note:
             message += f"\n📝 Ghi chú: {self.note}\n"
         
-        message += "=" * 40
         
         return message
 
@@ -205,8 +201,14 @@ class StockPicking(models.Model):
         - Chưa gửi trước đó (zalo_stock_notification_sent = False)
         - Có config active
         - Loại đơn được bật (incoming/outgoing)
-        - Kho phải là TSN hoặc TSNSR (kiểm tra qua picking_type_id.warehouse_id.code)
+        - Kho phải được cấu hình hoặc sử dụng danh sách mặc định
         - Với outgoing: Chỉ gửi cho bước xuất cuối cùng tới khách hàng (location_dest_id.usage = 'customer')
+        
+        Logic lấy recipients:
+        - Lấy warehouse code từ picking_type_id.warehouse_id.code
+        - Tìm warehouse mapping tương ứng trong config.warehouse_recipient_ids
+        - Nếu tìm thấy → Sử dụng danh sách recipients từ warehouse mapping
+        - Nếu không tìm thấy → Sử dụng danh sách recipients mặc định
         """
         self.ensure_one()
         
@@ -215,19 +217,11 @@ class StockPicking(models.Model):
             _logger.info("Zalo Notification already sent for picking %s", self.name)
             return
         
-        # Kiểm tra kho: Chỉ gửi cho kho TSN hoặc TSNSR
+        # Lấy warehouse code
         # picking_type_id → warehouse_id → code
         warehouse_code = ''
         if self.picking_type_id and self.picking_type_id.warehouse_id:
             warehouse_code = self.picking_type_id.warehouse_id.code or ''
-        
-        # Nếu không phải TSN hoặc TSNSR thì bỏ qua
-        if warehouse_code not in ['TSN', 'TSNSR']:
-            _logger.info(
-                "Zalo Notification skip: picking %s warehouse code '%s' is not TSN or TSNSR",
-                self.name, warehouse_code
-            )
-            return
         
         # Với đơn xuất (outgoing): Chỉ gửi thông báo cho bước xuất cuối cùng tới khách hàng
         # Kiểm tra location_dest_id.usage = 'customer'
@@ -255,11 +249,14 @@ class StockPicking(models.Model):
             _logger.info("Zalo Stock Notification disabled for incoming pickings")
             return
         
-        # Lấy danh sách recipients
-        recipients = config.get_recipient_list()
+        # Lấy danh sách recipients dựa vào warehouse code
+        recipients = config.get_recipients_for_warehouse(warehouse_code)
         
         if not recipients:
-            _logger.warning("No recipients configured for Zalo Stock Notifications")
+            _logger.warning(
+                "No recipients configured for warehouse %s in Zalo Stock Notifications",
+                warehouse_code
+            )
             return
         
         _logger.info(

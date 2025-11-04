@@ -21,38 +21,49 @@ class ZaloStockNotificationConfig(models.Model):
          + App ID: Lấy từ Zalo Developer Portal
          + Secret Key: Lấy từ Zalo Developer Portal
          + Refresh Token: Lấy từ OAuth flow của Zalo
-         + Recipient User IDs: Nhập các Zalo User ID (mỗi ID một dòng)
+         + Recipient User IDs (tùy chọn): Nhập các Zalo User ID mặc định (mỗi ID một dòng)
            VD: 1228622149344688972
        - Chọn loại đơn cần gửi (Nhập/Xuất)
+       - (Tùy chọn) Thêm cấu hình mapping kho:
+         + Warehouse Code: Mã kho (TSN, TSNSR, KBC, ...)
+         + Recipient User IDs: Danh sách user_id nhận thông báo cho kho đó
+         + Active: Bật/tắt cấu hình
        - Đánh dấu Active
     
     2. ĐIỀU KIỆN GỬI THÔNG BÁO:
        - Đơn hàng đã validate (state = 'done')
        - Loại đơn: incoming (nhập) hoặc outgoing (xuất)
-       - Kho phải là TSN hoặc TSNSR (kiểm tra warehouse_id.code)
+       - Kho phải có cấu hình trong warehouse_recipient_ids hoặc sử dụng danh sách mặc định
        - Chưa gửi thông báo trước đó (zalo_stock_notification_sent = False)
     
-    3. NỘI DUNG THÔNG BÁO:
+    3. LOGIC LẤY RECIPIENTS:
+       a) Hệ thống sẽ lấy mã kho từ picking_type_id.warehouse_id.code
+       b) Tìm kiếm warehouse mapping có warehouse_code matching và active=True
+       c) Nếu tìm thấy → Sử dụng danh sách recipients từ warehouse mapping đó
+       d) Nếu không tìm thấy → Sử dụng danh sách recipients mặc định (recipient_ids field)
+    
+    4. NỘI DUNG THÔNG BÁO:
        - Mã đơn hàng gốc (origin)
        - Trạng thái: Xuất/Nhập toàn bộ hay 1 phần
        - Thời gian xuất/nhập
        - Thông tin đối tác (tên, địa chỉ, SĐT)
        - Danh sách sản phẩm và số lượng
     
-    4. TOKEN MANAGEMENT:
+    5. TOKEN MANAGEMENT:
        - Access token tự động refresh khi hết hạn
        - Cron job chạy mỗi giờ để refresh token
        - Có thể refresh thủ công bằng button "Refresh Token"
     
-    5. TEST:
+    6. TEST:
        - Sau khi cấu hình, click "Test Gửi Tin Nhắn"
        - Kiểm tra Recipient User IDs có nhận được tin không
-       - Nếu OK, validate một đơn nhập/xuất kho TSN hoặc TSNSR để test thật
+       - Nếu OK, validate một đơn nhập/xuất kho để test thật
     
-    6. DEBUG:
+    7. DEBUG:
        - Xem logs: grep "Zalo" trong odoo log file
        - Check zalo_stock_notification_sent field trong stock.picking
        - Verify warehouse code: picking_type_id.warehouse_id.code
+       - Kiểm tra warehouse mapping: warehouse_recipient_ids
     """
     _name = 'hlv.zalo.stock.notification'
     _description = 'Zalo Stock Notification Config'
@@ -76,6 +87,14 @@ class ZaloStockNotificationConfig(models.Model):
     # Cấu hình gửi cho loại đơn nào
     send_on_incoming = fields.Boolean('Gửi khi nhập kho', default=True)
     send_on_outgoing = fields.Boolean('Gửi khi xuất kho', default=True)
+    
+    # Mapping kho với danh sách recipients
+    warehouse_recipient_ids = fields.One2many(
+        'hlv.zalo.warehouse.recipient',
+        'config_id',
+        'Warehouse Recipients',
+        help='Map kho (TSN, TSNSR, KBC, ...) với danh sách user_id nhận thông báo'
+    )
     
     active = fields.Boolean('Active', default=True)
 
@@ -394,6 +413,43 @@ class ZaloStockNotificationConfig(models.Model):
         # Split by line breaks và lọc các dòng trống
         ids = [line.strip() for line in self.recipient_ids.split('\n') if line.strip()]
         return ids
+
+    def get_recipients_for_warehouse(self, warehouse_code):
+        """
+        Lấy danh sách recipient IDs cho một kho cụ thể
+        
+        Nếu có cấu hình warehouse mapping, sử dụng danh sách recipients từ warehouse đó.
+        Ngược lại, sử dụng danh sách recipients mặc định (recipient_ids field).
+        
+        :param warehouse_code: Mã kho (VD: 'TSN', 'TSNSR', 'KBC')
+        :return: List of user IDs (strings)
+        """
+        self.ensure_one()
+        
+        if not warehouse_code:
+            _logger.warning("warehouse_code is empty, using default recipients")
+            return self.get_recipient_list()
+        
+        # Tìm warehouse mapping trong list
+        warehouse_mapping = self.warehouse_recipient_ids.filtered(
+            lambda x: x.warehouse_code == warehouse_code and x.active
+        )
+        
+        if warehouse_mapping:
+            # Sử dụng danh sách recipients từ warehouse mapping
+            recipients = warehouse_mapping[0].get_recipient_list()
+            _logger.debug(
+                "Found warehouse mapping for %s: %s recipients",
+                warehouse_code, len(recipients)
+            )
+            return recipients
+        else:
+            # Nếu không tìm thấy warehouse mapping, sử dụng danh sách mặc định
+            _logger.debug(
+                "No warehouse mapping found for %s, using default recipients",
+                warehouse_code
+            )
+            return self.get_recipient_list()
 
     def action_test_send_message(self):
         """
