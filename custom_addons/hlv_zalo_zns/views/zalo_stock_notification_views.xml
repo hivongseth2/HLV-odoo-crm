@@ -74,14 +74,7 @@
                     </group>
 
                     <group string="Cấu Hình Người Nhận Thông Báo Theo Kho">
-                        <field name="warehouse_recipient_ids" nolabel="1">
-                            <tree editable="bottom">
-                                <field name="warehouse_code" required="1" />
-                                <field name="warehouse_name" />
-                                <field name="recipient_ids" widget="text" />
-                                <field name="active" />
-                            </tree>
-                        </field>
+                        <field name="warehouse_recipient_ids" nolabel="1" />
                     </group>
 
                     <group string="Hướng Dẫn">
@@ -163,6 +156,20 @@
         parent="stock.menu_stock_config_settings"
         action="action_zalo_stock_notification"
         sequence="100" />
+
+    <!-- Tree view cho Zalo Warehouse Recipient -->
+    <record id="view_zalo_warehouse_recipient_tree" model="ir.ui.view">
+        <field name="name">hlv.zalo.warehouse.recipient.tree</field>
+        <field name="model">hlv.zalo.warehouse.recipient</field>
+        <field name="arch" type="xml">
+            <tree editable="bottom">
+                <field name="warehouse_code" required="1" />
+                <field name="warehouse_name" />
+                <field name="recipient_ids" widget="text" />
+                <field name="active" />
+            </tree>
+        </field>
+    </record>
 
     <!-- Inherit Stock Picking form để thêm button gửi Zalo Notification -->
     <record id="view_picking_form_inherit_zalo_notification" model="ir.ui.view">
