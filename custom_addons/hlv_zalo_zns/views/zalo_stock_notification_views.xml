@@ -55,8 +55,8 @@
                                invisible="not authorize_url"/>
                     </group>
                     
-                    <group string="Refresh Token" invisible="refresh_token == False">
-                        <field name="refresh_token" widget="text" password="True" readonly="1"/>
+                        <group string="Refresh Token">
+                            <field name="refresh_token" widget="text" password="True"/>
                     </group>
                     
                     <group string="Danh Sách Người Nhận Thông Báo">

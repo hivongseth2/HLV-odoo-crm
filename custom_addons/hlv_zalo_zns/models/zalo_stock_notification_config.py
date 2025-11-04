@@ -61,8 +61,8 @@ class ZaloStockNotificationConfig(models.Model):
     app_id = fields.Char('App ID', required=True, default='')
     secret_key = fields.Char('Secret Key', required=True, default='')
     callback_url = fields.Char('OAuth Callback URL', required=True, help='URL để Zalo redirect sau khi authorize')
-    refresh_token = fields.Text('Refresh Token', readonly=True, help='Tự động lưu sau khi authorize')
-    access_token = fields.Text('Access Token', readonly=True)
+    refresh_token = fields.Text('Refresh Token', help='Tự động lưu sau khi authorize hoặc có thể nhập thủ công')
+    access_token = fields.Text('Access Token', help='Có thể nhập thủ công hoặc được tự động refresh từ refresh token')
     token_expires_at = fields.Datetime('Token Expires At', readonly=True)
     authorize_url = fields.Char('Authorize URL', compute='_compute_authorize_url', readonly=True)
     
