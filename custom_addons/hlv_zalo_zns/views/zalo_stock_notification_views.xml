@@ -11,17 +11,17 @@
                             string="Test Gửi Tin Nhắn" 
                             type="object" 
                             class="oe_highlight"
-                            attrs="{'invisible': [('active', '=', False)]}"/>
+                            invisible="not active"/>
                     <button name="action_refresh_token" 
                             string="Refresh Token" 
                             type="object"
-                            attrs="{'invisible': [('active', '=', False)]}"/>
+                            invisible="not active"/>
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
                         <widget name="web_ribbon" title="Inactive" 
                                 bg_color="bg-danger" 
-                                attrs="{'invisible': [('active', '=', True)]}"/>
+                                invisible="active"/>
                     </div>
                     <group>
                         <group>
@@ -126,7 +126,7 @@
                         string="Gửi Zalo Thông Báo" 
                         type="object" 
                         class="btn-secondary"
-                        attrs="{'invisible': ['|', ('state', '!=', 'done'), ('picking_type_code', 'not in', ['incoming', 'outgoing'])]}"/>
+                        invisible="state != 'done' or picking_type_code not in ['incoming', 'outgoing']"/>
             </xpath>
             
             <xpath expr="//sheet//group[@name='other_infos']" position="after">
