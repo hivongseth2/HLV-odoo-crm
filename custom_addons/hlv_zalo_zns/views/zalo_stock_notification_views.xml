@@ -12,16 +12,16 @@
                         type="object"
                         class="oe_highlight"
                         invisible="refresh_token != False" />
-                    <button name="action_test_send_message"
-                        string="Test Gửi Tin Nhắn"
-                        type="object"
+                    <button name="action_test_send_message" 
+                        string="Test Gửi Tin Nhắn" 
+                        type="object" 
                         class="btn-primary"
-                        invisible="not active or not refresh_token" />
+                        invisible="not active or not refresh_token"/>
                     <button name="action_preview_send_message"
-                        string="Preview Tin Nhắn"
+                        string="Preview Tin Nhắn" 
                         type="object"
                         class="btn-secondary"
-                        attrs="{ 'invisible': [('active','=',False), ('refresh_token','=',False)] }" />
+                        invisible="not active or not refresh_token"/>
                     <button name="action_refresh_token"
                         string="Refresh Token"
                         type="object"
