@@ -503,27 +503,80 @@ class ZaloStockNotificationConfig(models.Model):
         Action button để test gửi tin nhắn
         """
         self.ensure_one()
-        
-        recipients = self.get_recipient_list()
-        if not recipients:
-            raise UserError(_("Chưa có recipient ID nào được cấu hình"))
-        
-        test_message = "🔔 Test tin nhắn từ Odoo HLV\n"
-        test_message += f"Thời gian: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
-        test_message += "Hệ thống thông báo đơn hàng nhập/xuất kho đang hoạt động bình thường."
-        
+
+        # Send test messages following the preferential logic:
+        # 1) For each active warehouse mapping -> send to its recipients
+        # 2) Then for each active saler mapping -> send to its recipients (skip duplicates)
+        # 3) If nothing sent above -> fallback to default recipients
+        sent_user_ids = set()
         success_count = 0
-        for user_id in recipients:
-            result = self.send_notification_message(user_id, test_message)
-            if result.get('error') == 0:
-                success_count += 1
-        
+        attempts = 0
+
+        now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+
+        # 1) Send tests for warehouse mappings
+        for wh in self.warehouse_recipient_ids.filtered(lambda x: x.active):
+            recipients = wh.get_recipient_list()
+            if not recipients:
+                continue
+            test_message = (
+                f"🔔 Test tin nhắn từ Odoo HLV - Warehouse: {wh.warehouse_id.name}\n"
+                f"Thời gian: {now_str}\n"
+                "Thông điệp thử nghiệm: gửi thử cho cấu hình theo kho."
+            )
+            for user_id in recipients:
+                if user_id in sent_user_ids:
+                    continue
+                attempts += 1
+                result = self.send_notification_message(user_id, test_message)
+                if result.get('error') == 0:
+                    success_count += 1
+                sent_user_ids.add(user_id)
+
+        # 2) Send tests for saler mappings (simulate case where warehouse mapping absent)
+        for sal in self.saler_recipient_ids.filtered(lambda x: x.active):
+            recipients = sal.get_recipient_list()
+            if not recipients:
+                continue
+            test_message = (
+                f"🔔 Test tin nhắn từ Odoo HLV - Saler: {sal.saler_code}\n"
+                f"Thời gian: {now_str}\n"
+                "Thông điệp thử nghiệm: gửi thử cho cấu hình theo nhân viên sale."
+            )
+            for user_id in recipients:
+                if user_id in sent_user_ids:
+                    continue
+                attempts += 1
+                result = self.send_notification_message(user_id, test_message)
+                if result.get('error') == 0:
+                    success_count += 1
+                sent_user_ids.add(user_id)
+
+        # 3) Fallback: if nothing sent, use default recipients
+        if attempts == 0:
+            recipients = self.get_recipient_list()
+            if not recipients:
+                raise UserError(_("Chưa có recipient ID nào được cấu hình"))
+            test_message = (
+                f"🔔 Test tin nhắn từ Odoo HLV - Default\n"
+                f"Thời gian: {now_str}\n"
+                "Thông điệp thử nghiệm: gửi thử cho danh sách mặc định."
+            )
+            for user_id in recipients:
+                attempts += 1
+                if user_id in sent_user_ids:
+                    continue
+                result = self.send_notification_message(user_id, test_message)
+                if result.get('error') == 0:
+                    success_count += 1
+                sent_user_ids.add(user_id)
+
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _('Gửi tin nhắn test'),
-                'message': _('Đã gửi thành công %s/%s tin nhắn') % (success_count, len(recipients)),
+                'message': _('Đã gửi thành công %s/%s tin nhắn') % (success_count, attempts),
                 'type': 'success' if success_count > 0 else 'warning',
                 'sticky': False,
             }
@@ -536,40 +589,47 @@ class ZaloStockNotificationConfig(models.Model):
         """
         self.ensure_one()
 
-        recipients = self.get_recipient_list()
-        if not recipients:
-            raise UserError(_('Chưa có recipient ID nào được cấu hình'))
-
-        test_message = "🔔 Test tin nhắn từ Odoo HLV\n"
-        test_message += f"Thời gian: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
-        test_message += "Hệ thống thông báo đơn hàng nhập/xuất kho đang hoạt động bình thường."
-
-        # Build preview string
+        # Build preview that reflects the preferential logic described:
         preview_lines = []
-        preview_lines.append(_('Recipients (%s):') % len(recipients))
-        # show up to first 10 recipients to avoid huge previews
-        for r in recipients[:10]:
-            preview_lines.append(f" - {r}")
-        if len(recipients) > 10:
-            preview_lines.append(f" - ... (+{len(recipients)-10} more)")
+        now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+
+        total_previewed = 0
+        # Warehouses
+        for wh in self.warehouse_recipient_ids.filtered(lambda x: x.active):
+            recs = wh.get_recipient_list()
+            preview_lines.append(_('Warehouse: %s (Recipients: %s)') % (wh.warehouse_id.name, len(recs)))
+            for r in recs[:20]:
+                preview_lines.append(f" - {r}")
+            if len(recs) > 20:
+                preview_lines.append(f" - ... (+{len(recs)-20} more)")
+            preview_lines.append('')
+            total_previewed += len(recs)
+
+        # Salers
+        for sal in self.saler_recipient_ids.filtered(lambda x: x.active):
+            recs = sal.get_recipient_list()
+            preview_lines.append(_('Saler: %s (Recipients: %s)') % (sal.saler_code, len(recs)))
+            for r in recs[:20]:
+                preview_lines.append(f" - {r}")
+            if len(recs) > 20:
+                preview_lines.append(f" - ... (+{len(recs)-20} more)")
+            preview_lines.append('')
+            total_previewed += len(recs)
+
+        # If no mappings, show default
+        if total_previewed == 0:
+            recipients = self.get_recipient_list()
+            if not recipients:
+                raise UserError(_('Chưa có recipient ID nào được cấu hình'))
+            preview_lines.append(_('Default Recipients (%s):') % len(recipients))
+            for r in recipients[:20]:
+                preview_lines.append(f" - {r}")
+            if len(recipients) > 20:
+                preview_lines.append(f" - ... (+{len(recipients)-20} more)")
 
         preview_lines.append('')
-        preview_lines.append(_('Message:'))
-        preview_lines.append(test_message)
-        preview_lines.append('')
-        preview_lines.append(_('Sample JSON payload (first recipient):'))
-        sample_payload = {
-            'recipient': {'user_id': recipients[0]},
-            'message': {'text': test_message},
-        }
-        # Convert sample payload to a readable string
-        try:
-            import json
-            payload_str = json.dumps(sample_payload, ensure_ascii=False, indent=2)
-        except Exception:
-            payload_str = str(sample_payload)
-
-        preview_lines.append(payload_str)
+        preview_lines.append(_('Message example:'))
+        preview_lines.append(f"🔔 Test tin nhắn từ Odoo HLV\nThời gian: {now_str}\nThông điệp thử nghiệm")
 
         preview_text = '\n'.join(preview_lines)
 

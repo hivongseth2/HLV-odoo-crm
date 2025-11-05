@@ -115,11 +115,14 @@ class StockPicking(models.Model):
         # Trạng thái xuất/nhập (toàn bộ hay 1 phần)
         completion_status = self._get_picking_completion_status()
         
-        # Thời gian xuất/nhập
-        done_date = self.date_done or fields.Datetime.now()
-        done_date_str = fields.Datetime.context_timestamp(
-            self, done_date
-        ).strftime('%d/%m/%Y %H:%M:%S')
+        # Thời gian xuất/nhập (unused)
+        # The following lines originally computed a formatted done date string
+        # but the message line that used `done_date_str` is currently commented
+        # out. Keep these here commented for future re-use.
+        # done_date = self.date_done or fields.Datetime.now()
+        # done_date_str = fields.Datetime.context_timestamp(
+        #     self, done_date
+        # ).strftime('%d/%m/%Y %H:%M:%S')
         
         # Lấy thông tin kho
         warehouse_name = ''
@@ -261,32 +264,55 @@ class StockPicking(models.Model):
             _logger.info("Zalo Stock Notification disabled for incoming pickings")
             return
         
-        # Lấy danh sách recipients dựa vào warehouse_id
-        warehouse_recipients = config.get_recipients_for_warehouse(warehouse_id)
-        
-        # Lấy danh sách recipients dựa vào mã nhân viên sale (nếu có)
-        saler_recipients = []
+        # Preferential logic: nếu có cấu hình cho kho (active) -> dùng recipients của kho
+        # else nếu có cấu hình cho saler -> dùng recipients của saler
+        # else -> dùng default recipients từ config.recipient_ids
         saler_code = None
-        if self.picking_type_code == 'outgoing':
-            # Lấy sale.order từ picking (qua origin field)
-            sale_orders = self.env['sale.order'].search([
-                ('name', '=', self.origin)
-            ])
-            if sale_orders:
-                sale_order = sale_orders[0]
-                # Lấy mã nhân viên sale từ field x_studio_misa_saler_code
-                if hasattr(sale_order, 'x_studio_misa_saler_code'):
-                    saler_code = sale_order.x_studio_misa_saler_code
-                    if saler_code:
-                        saler_recipients = config.get_recipients_for_saler(saler_code)
-                        _logger.debug(
-                            "Picking %s: Found saler_code=%s, saler_recipients=%s",
-                            self.name, saler_code, len(saler_recipients)
-                        )
-        
-        # Merge warehouse_recipients và saler_recipients (loại bỏ trùng lặp)
-        recipients = list(set(warehouse_recipients + saler_recipients))
-        
+
+        # Kiểm tra xem có warehouse mapping active cho kho này không
+        warehouse_mapping = config.warehouse_recipient_ids.filtered(
+            lambda x: x.warehouse_id.id == (warehouse_id.id if hasattr(warehouse_id, 'id') else warehouse_id) and x.active
+        ) if warehouse_id else self.env['hlv.zalo.warehouse.recipient']
+
+        if warehouse_mapping:
+            # Dùng recipients từ warehouse mapping
+            recipients = warehouse_mapping[0].get_recipient_list()
+            _logger.debug(
+                "Picking %s: Using warehouse mapping recipients (%s) for warehouse %s",
+                self.name, len(recipients), warehouse_mapping[0].warehouse_id.name
+            )
+        else:
+            # Nếu không có mapping kho, thử tìm saler (chỉ áp dụng cho outgoing)
+            saler_recipients = []
+            if self.picking_type_code == 'outgoing':
+                sale_orders = self.env['sale.order'].search([
+                    ('name', '=', self.origin)
+                ])
+                if sale_orders:
+                    sale_order = sale_orders[0]
+                    if hasattr(sale_order, 'x_studio_misa_saler_code'):
+                        saler_code = sale_order.x_studio_misa_saler_code
+                        if saler_code:
+                            saler_mapping = config.saler_recipient_ids.filtered(
+                                lambda x: x.saler_code == saler_code and x.active
+                            )
+                            if saler_mapping:
+                                saler_recipients = saler_mapping[0].get_recipient_list()
+                                _logger.debug(
+                                    "Picking %s: Using saler mapping recipients (%s) for saler %s",
+                                    self.name, len(saler_recipients), saler_code
+                                )
+
+            if saler_recipients:
+                recipients = saler_recipients
+            else:
+                # Fallback to default recipients
+                recipients = config.get_recipient_list()
+                _logger.debug(
+                    "Picking %s: Using default recipients (%s)",
+                    self.name, len(recipients)
+                )
+
         if not recipients:
             warehouse_name = warehouse_id.name if warehouse_id else 'Unknown'
             saler_info = f" (saler_code: {saler_code})" if saler_code else ""
@@ -347,7 +373,10 @@ class StockPicking(models.Model):
                     continue
                 
                 error_code = result.get('error')
-                error_msg = result.get('message', 'No message in response')
+                # error_msg = result.get('message', 'No message in response')
+                # `error_msg` is collected in the original implementation but
+                # isn't used in the current logging (that detailed log is
+                # commented out). Keep this commented for easier restoration.
                 
                 if error_code == 0:
                     success_count += 1
