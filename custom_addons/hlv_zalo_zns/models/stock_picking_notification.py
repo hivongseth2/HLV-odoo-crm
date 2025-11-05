@@ -34,8 +34,11 @@ class StockPicking(models.Model):
         """
         Xác định đơn hàng được xuất/nhập toàn bộ hay một phần
         
-        Kiểm tra từ sale.order.line (nếu có) vì nó chính xác hơn stock.picking
-        Lý do: stock.picking có thể bị tách (split), nhưng sale.order.line là nguồn gốc
+        Logic:
+        - Outgoing: Kiểm tra từ sale.order.delivery_status (nếu có) vì nó chính xác hơn stock.picking
+        - Incoming: Chỉ kiểm tra từ stock.picking vì purchase.order không có delivery_status
+        
+        Lý do: stock.picking có thể bị tách (split), nhưng sale.order.line là nguồn gốc cho outgoing
         
         :return: 'toàn bộ' hoặc '1 phần'
         """
@@ -65,7 +68,8 @@ class StockPicking(models.Model):
                     return 'toàn bộ'
         
         # Nếu không phải outgoing hoặc không tìm thấy sale.order, kiểm tra từ stock.picking
-        _logger.debug("Picking %s: checking from stock.picking (no sale.order linked or not outgoing)", self.name)
+        # (Dành cho incoming: vì purchase.order không có delivery_status field)
+        _logger.debug("Picking %s: checking from stock.picking (type=%s, no sale.order linked or not outgoing)", self.name, self.picking_type_code)
         
         # Kiểm tra xem có move line nào bị split (done < demand) không
         for move in self.move_ids_without_package:
@@ -93,19 +97,26 @@ class StockPicking(models.Model):
         Format tin nhắn thông báo theo yêu cầu
         Tương đương với phần build message trong PHP
         
+        Cấu trúc khác nhau giữa incoming/outgoing:
+        - Outgoing: Lấy dữ liệu từ sale.order, nhân viên từ picking_type hoặc sale.order
+        - Incoming: Lấy dữ liệu từ purchase.order (qua move_ids), nhân viên từ picking.user_id
+        
         :return: Message text
         """
         self.ensure_one()
         
-        _logger.debug("Formatting Zalo notification message for picking %s", self.name)
+        _logger.debug("Formatting Zalo notification message for picking %s (type: %s)", self.name, self.picking_type_code)
         
         # Xác định loại đơn
         if self.picking_type_code == 'outgoing':
             action_type = 'XUẤT'
+            label_type = 'xuất'
         elif self.picking_type_code == 'incoming':
             action_type = 'NHẬP'
+            label_type = 'nhập'
         else:
             action_type = self.picking_type_id.name or 'CHUYỂN'
+            label_type = action_type.lower()
         
         _logger.debug("Picking %s action_type: %s", self.name, action_type)
         
@@ -133,20 +144,27 @@ class StockPicking(models.Model):
         # Build message
         message = f"🔔 Thông báo đơn hàng {action_type}\n"
         message += f"📋 Số đơn hàng: {order_code}\n"
-        message += f"📦 Số phiếu xuất kho Odoo: {self.name}\n"
-        message += f"🏢 Kho xuất: {warehouse_name}\n"
+        message += f"📦 Số phiếu {label_type} kho Odoo: {self.name}\n"
+        message += f"🏢 Kho {label_type}: {warehouse_name}\n"
         message += f"📊 Trạng thái: {action_type} {completion_status}\n"
         
-        # Thêm thông tin nhân viên BH nếu có
-        if self.picking_type_id and self.picking_type_id.warehouse_id:
-            # Lấy user responsible của warehouse hoặc picking type
-            responsible_user = None
-            if hasattr(self.picking_type_id, 'user_id') and self.picking_type_id.user_id:
-                responsible_user = self.picking_type_id.user_id
-            
-            if responsible_user:
-                message += f"👤 Nhân viên BH: {responsible_user.name}\n"
-                _logger.debug("Picking %s responsible user: %s", self.name, responsible_user.name)
+        # Thêm thông tin nhân viên phụ trách nếu có
+        # - Outgoing: Lấy từ picking_type
+        # - Incoming: Lấy từ picking.user_id (người phụ trách)
+        responsible_user = None
+        if self.picking_type_code == 'outgoing':
+            # Cho phiếu xuất: lấy user từ picking_type
+            if self.picking_type_id and self.picking_type_id.warehouse_id:
+                if hasattr(self.picking_type_id, 'user_id') and self.picking_type_id.user_id:
+                    responsible_user = self.picking_type_id.user_id
+        elif self.picking_type_code == 'incoming':
+            # Cho phiếu nhập: lấy user từ picking (người phụ trách/nhân viên)
+            if self.user_id:
+                responsible_user = self.user_id
+        
+        if responsible_user:
+            message += f"👤 Nhân viên PH: {responsible_user.name}\n"
+            _logger.debug("Picking %s responsible user: %s", self.name, responsible_user.name)
         
         # message += f"🕐 Thời gian: {done_date_str}\n"
         
@@ -219,12 +237,14 @@ class StockPicking(models.Model):
         - Loại đơn được bật (incoming/outgoing)
         - Kho phải được cấu hình hoặc sử dụng danh sách mặc định
         - Với outgoing: Chỉ gửi cho bước xuất cuối cùng tới khách hàng (location_dest_id.usage = 'customer')
+        - Với incoming: Gửi cho tất cả phiếu nhập
         
         Logic lấy recipients:
-        - Lấy warehouse code từ picking_type_id.warehouse_id.code
-        - Tìm warehouse mapping tương ứng trong config.warehouse_recipient_ids
-        - Nếu tìm thấy → Sử dụng danh sách recipients từ warehouse mapping
-        - Nếu không tìm thấy → Sử dụng danh sách recipients mặc định
+        1. Nếu có warehouse mapping active cho kho → Sử dụng recipients từ warehouse mapping
+        2. Nếu không có warehouse mapping:
+           - Outgoing: Tìm saler mapping từ sale.order → dùng recipients của saler
+           - Incoming: Bỏ qua bước này (không có saler)
+        3. Nếu không tìm thấy bước 1-2 → Sử dụng danh sách recipients mặc định từ config
         """
         self.ensure_one()
         
@@ -265,7 +285,7 @@ class StockPicking(models.Model):
             return
         
         # Preferential logic: nếu có cấu hình cho kho (active) -> dùng recipients của kho
-        # else nếu có cấu hình cho saler -> dùng recipients của saler
+        # else nếu có cấu hình cho saler (outgoing only) -> dùng recipients của saler
         # else -> dùng default recipients từ config.recipient_ids
         saler_code = None
 
@@ -283,6 +303,7 @@ class StockPicking(models.Model):
             )
         else:
             # Nếu không có mapping kho, thử tìm saler (chỉ áp dụng cho outgoing)
+            # Cho incoming: bỏ qua bước này vì không có saler
             saler_recipients = []
             if self.picking_type_code == 'outgoing':
                 sale_orders = self.env['sale.order'].search([
@@ -309,16 +330,16 @@ class StockPicking(models.Model):
                 # Fallback to default recipients
                 recipients = config.get_recipient_list()
                 _logger.debug(
-                    "Picking %s: Using default recipients (%s)",
-                    self.name, len(recipients)
+                    "Picking %s: Using default recipients (%s) (type: %s)",
+                    self.name, len(recipients), self.picking_type_code
                 )
 
         if not recipients:
             warehouse_name = warehouse_id.name if warehouse_id else 'Unknown'
             saler_info = f" (saler_code: {saler_code})" if saler_code else ""
             _logger.warning(
-                "No recipients configured for warehouse %s%s in Zalo Stock Notifications",
-                warehouse_name, saler_info
+                "No recipients configured for warehouse %s%s in Zalo Stock Notifications (picking type: %s)",
+                warehouse_name, saler_info, self.picking_type_code
             )
             return
         
@@ -429,12 +450,17 @@ class StockPicking(models.Model):
         Điều kiện để gửi thông báo:
         1. Đơn hàng đã validate thành công (state = 'done')
         2. Loại đơn phải là incoming (nhập) hoặc outgoing (xuất)
-        3. Kho phải là TSN hoặc TSNSR (check trong _send_zalo_stock_notification)
-        4. Có config Zalo Stock Notification active
-        5. Config đã bật gửi cho loại đơn này (send_on_incoming/send_on_outgoing)
-        6. Chưa gửi thông báo trước đó (zalo_stock_notification_sent = False)
+        3. Có config Zalo Stock Notification active
+        4. Config đã bật gửi cho loại đơn này (send_on_incoming/send_on_outgoing)
+        5. Chưa gửi thông báo trước đó (zalo_stock_notification_sent = False)
+        6. Với outgoing: location_dest_id.usage = 'customer' (chỉ gửi xuất cuối cùng tới khách)
+        7. Kho phải được cấu hình (warehouse mapping) hoặc có recipients mặc định
         
         Lỗi khi gửi thông báo sẽ được log nhưng KHÔNG block việc validate đơn hàng.
+        
+        Định dạng tin nhắn khác nhau cho incoming/outgoing:
+        - Outgoing: Lấy dữ liệu từ sale.order, nhân viên từ picking_type
+        - Incoming: Lấy dữ liệu từ purchase.order, nhân viên từ picking.user_id
         """
         res = super(StockPicking, self).button_validate()
         
