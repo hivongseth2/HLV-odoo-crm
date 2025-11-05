@@ -77,6 +77,10 @@
                         <field name="warehouse_recipient_ids" nolabel="1" />
                     </group>
 
+                    <group string="Cấu Hình Người Nhận Thông Báo Theo Mã Nhân Viên Sale">
+                        <field name="saler_recipient_ids" nolabel="1" />
+                    </group>
+
                     <group string="Hướng Dẫn">
                         <div class="alert alert-info" role="alert">
                             <h4>📋 Cấu hình Zalo Stock Notification:</h4>
@@ -87,6 +91,7 @@
                                 <li>Click nút <b>"🔐 Authorize with Zalo"</b> → Token sẽ tự động lưu</li>
                                 <li><b>Tùy chọn A (Danh sách mặc định):</b> Nhập các <b>Zalo User ID</b> của người cần nhận thông báo trong phần "Danh Sách Người Nhận Thông Báo" (mỗi ID một dòng)</li>
                                 <li><b>Tùy chọn B (Mapping theo kho):</b> Thêm các dòng trong bảng "Cấu Hình Người Nhận Thông Báo Theo Kho" để gán danh sách người nhận khác nhau cho mỗi kho (TSN → User A,B; TSNSR → User C,D; KBC → User E,F)</li>
+                                <li><b>Tùy chọn C (Mapping theo mã nhân viên sale):</b> Thêm các dòng trong bảng "Cấu Hình Người Nhận Thông Báo Theo Mã Nhân Viên Sale" để gán danh sách người nhận cho từng nhân viên sale (BACHTHIKIMTHUY → User X; NGUYENVANA → User Y)</li>
                                 <li>Chọn loại đơn hàng cần gửi thông báo (Nhập/Xuất)</li>
                                 <li>Click <b>"Test Gửi Tin Nhắn"</b> để kiểm tra</li>
                             </ol>
@@ -106,10 +111,16 @@
                             <ul>
                                 <li>Chỉ nên có 1 config active tại một thời điểm</li>
                                 <li>Hệ thống tự động refresh access token mỗi giờ</li>
-                                <li>Nếu có cấu hình warehouse mapping, hệ thống sẽ ưu tiên sử dụng danh sách người nhận của kho đó</li>
-                                <li>Nếu kho không có cấu hình warehouse mapping, hệ thống sẽ sử dụng danh sách mặc định</li>
+                                <li><b>Logic gửi thông báo:</b></li>
+                                <ul>
+                                    <li>Nếu có cấu hình warehouse mapping → Gửi tới danh sách người nhận của kho đó</li>
+                                    <li>Nếu có cấu hình saler mapping (chỉ áp dụng cho đơn xuất) → Gửi tới danh sách người nhận của nhân viên sale đó</li>
+                                    <li>Nếu không có cấu hình warehouse và saler mapping → Sử dụng danh sách mặc định</li>
+                                    <li><b>Các cấu hình hoạt động độc lập:</b> Có thể chỉ setup theo kho, chỉ setup theo nhân viên sale, hoặc setup cả hai (sẽ gửi cho cả hai nhóm)</li>
+                                </ul>
                                 <li><b>Quy trình 3 bước tại TSN:</b> Kho → Đóng gói → Xuất → Khách hàng. Thông báo CHỈ gửi ở bước cuối cùng (Xuất → Khách hàng)</li>
                                 <li>Để lấy Callback URL chính xác, sử dụng domain của Odoo của bạn</li>
+                                <li><b>Mã nhân viên sale:</b> Lấy từ field "Mã nhân viên sale MISA" (x_studio_misa_saler_code) trong Sale Order</li>
                             </ul>
                         </div>
                     </group>
@@ -164,6 +175,19 @@
         <field name="arch" type="xml">
             <list editable="bottom">
                 <field name="warehouse_id" required="1" />
+                <field name="recipient_ids" widget="text" />
+                <field name="active" />
+            </list>
+        </field>
+    </record>
+
+    <!-- List view cho Zalo Saler Recipient -->
+    <record id="view_zalo_saler_recipient_list" model="ir.ui.view">
+        <field name="name">hlv.zalo.saler.recipient.list</field>
+        <field name="model">hlv.zalo.saler.recipient</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="saler_code" required="1" placeholder="Ví dụ: BACHTHIKIMTHUY" />
                 <field name="recipient_ids" widget="text" />
                 <field name="active" />
             </list>

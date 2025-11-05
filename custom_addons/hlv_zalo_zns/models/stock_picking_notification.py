@@ -262,13 +262,37 @@ class StockPicking(models.Model):
             return
         
         # Lấy danh sách recipients dựa vào warehouse_id
-        recipients = config.get_recipients_for_warehouse(warehouse_id)
+        warehouse_recipients = config.get_recipients_for_warehouse(warehouse_id)
+        
+        # Lấy danh sách recipients dựa vào mã nhân viên sale (nếu có)
+        saler_recipients = []
+        saler_code = None
+        if self.picking_type_code == 'outgoing':
+            # Lấy sale.order từ picking (qua origin field)
+            sale_orders = self.env['sale.order'].search([
+                ('name', '=', self.origin)
+            ])
+            if sale_orders:
+                sale_order = sale_orders[0]
+                # Lấy mã nhân viên sale từ field x_studio_misa_saler_code
+                if hasattr(sale_order, 'x_studio_misa_saler_code'):
+                    saler_code = sale_order.x_studio_misa_saler_code
+                    if saler_code:
+                        saler_recipients = config.get_recipients_for_saler(saler_code)
+                        _logger.debug(
+                            "Picking %s: Found saler_code=%s, saler_recipients=%s",
+                            self.name, saler_code, len(saler_recipients)
+                        )
+        
+        # Merge warehouse_recipients và saler_recipients (loại bỏ trùng lặp)
+        recipients = list(set(warehouse_recipients + saler_recipients))
         
         if not recipients:
             warehouse_name = warehouse_id.name if warehouse_id else 'Unknown'
+            saler_info = f" (saler_code: {saler_code})" if saler_code else ""
             _logger.warning(
-                "No recipients configured for warehouse %s in Zalo Stock Notifications",
-                warehouse_name
+                "No recipients configured for warehouse %s%s in Zalo Stock Notifications",
+                warehouse_name, saler_info
             )
             return
         

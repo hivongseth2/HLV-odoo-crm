@@ -96,6 +96,14 @@ class ZaloStockNotificationConfig(models.Model):
         help='Map kho (TSN, TSNSR, KBC, ...) với danh sách user_id nhận thông báo'
     )
     
+    # Mapping mã nhân viên sale với danh sách recipients
+    saler_recipient_ids = fields.One2many(
+        'hlv.zalo.saler.recipient',
+        'config_id',
+        'Saler Recipients',
+        help='Map mã nhân viên sale (BACHTHIKIMTHUY, ...) với danh sách user_id nhận thông báo'
+    )
+    
     active = fields.Boolean('Active', default=True)
 
     @api.model
@@ -452,6 +460,43 @@ class ZaloStockNotificationConfig(models.Model):
                 warehouse_name
             )
             return self.get_recipient_list()
+
+    def get_recipients_for_saler(self, saler_code):
+        """
+        Lấy danh sách recipient IDs cho một mã nhân viên sale cụ thể
+        
+        Nếu có cấu hình saler mapping, sử dụng danh sách recipients từ mã nhân viên đó.
+        Ngược lại, trả về danh sách rỗng (không gửi).
+        
+        :param saler_code: Mã nhân viên sale (string)
+        :return: List of user IDs (strings)
+        """
+        self.ensure_one()
+        
+        if not saler_code:
+            _logger.debug("saler_code is empty, no saler recipients")
+            return []
+        
+        # Tìm saler mapping trong list
+        saler_mapping = self.saler_recipient_ids.filtered(
+            lambda x: x.saler_code == saler_code and x.active
+        )
+        
+        if saler_mapping:
+            # Sử dụng danh sách recipients từ saler mapping
+            recipients = saler_mapping[0].get_recipient_list()
+            _logger.debug(
+                "Found saler mapping for %s: %s recipients",
+                saler_code, len(recipients)
+            )
+            return recipients
+        else:
+            # Nếu không tìm thấy saler mapping, không gửi (trả về rỗng)
+            _logger.debug(
+                "No saler mapping found for %s",
+                saler_code
+            )
+            return []
 
     def action_test_send_message(self):
         """
