@@ -73,27 +73,50 @@
                             placeholder="Nhập mỗi Zalo User ID trên một dòng&#10;Ví dụ:&#10;1228622149344688972&#10;6358388935615848913&#10;7233270943621398925" />
                     </group>
 
-                    <group string="Cấu Hình Người Nhận Thông Báo Theo Kho">
-                        <field name="warehouse_recipient_ids" nolabel="1" />
+                    <!-- NEW: Cơ chế saler online/offline -->
+                    <group string="Cấu Hình Gửi Thông Báo Theo Nhân Viên Sale (Online/Offline)">
+                        <group>
+                            <field name="online_saler_codes" widget="text"
+                                placeholder="Nhập mỗi mã nhân viên sale online trên một dòng&#10;Ví dụ:&#10;SALER_ONLINE_1&#10;SALER_ONLINE_2&#10;SALER_ONLINE_3" />
+                        </group>
+                        <group>
+                            <field name="online_recipient_user_id"
+                                placeholder="Zalo User ID kế toán xử lý đơn hàng ONLINE" />
+                        </group>
+                        <group>
+                            <field name="offline_recipient_user_id"
+                                placeholder="Zalo User ID kế toán xử lý đơn hàng OFFLINE" />
+                        </group>
                     </group>
 
-                    <group string="Cấu Hình Người Nhận Thông Báo Theo Mã Nhân Viên Sale">
+                    <!-- COMMENT: Warehouse mapping - tạm thời không sử dụng -->
+                    <!-- <group string="Cấu Hình Người Nhận Thông Báo Theo Kho">
+                        <field name="warehouse_recipient_ids" nolabel="1" />
+                    </group> -->
+
+                    <!-- COMMENT: Saler mapping cũ - tạm thời không sử dụng -->
+                    <!-- <group string="Cấu Hình Người Nhận Thông Báo Theo Mã Nhân Viên Sale">
                         <field name="saler_recipient_ids" nolabel="1" />
-                    </group>
+                    </group> -->
 
                     <group string="Hướng Dẫn">
                         <div class="alert alert-info" role="alert">
-                            <h4>📋 Cấu hình Zalo Stock Notification:</h4>
+                            <h4>📋 Cấu hình Zalo Stock Notification (Cơ chế saler online/offline):</h4>
                             <ol>
                                 <li>Nhập <b>App ID</b> và <b>Secret Key</b> từ Zalo Developer Portal</li>
                                 <li>Nhập <b>Callback URL</b>: <code>
                                     https://your-odoo-domain.com/hlv_zalo/stock_notification/oauth/callback</code></li>
                                 <li>Click nút <b>"🔐 Authorize with Zalo"</b> → Token sẽ tự động lưu</li>
-                                <li><b>Tùy chọn A (Danh sách mặc định):</b> Nhập các <b>Zalo User ID</b> của người cần nhận thông báo trong phần "Danh Sách Người Nhận Thông Báo" (mỗi ID một dòng)</li>
-                                <li><b>Tùy chọn B (Mapping theo kho):</b> Thêm các dòng trong bảng "Cấu Hình Người Nhận Thông Báo Theo Kho" để gán danh sách người nhận khác nhau cho mỗi kho (TSN → User A,B; TSNSR → User C,D; KBC → User E,F)</li>
-                                <li><b>Tùy chọn C (Mapping theo mã nhân viên sale):</b> Thêm các dòng trong bảng "Cấu Hình Người Nhận Thông Báo Theo Mã Nhân Viên Sale" để gán danh sách người nhận cho từng nhân viên sale (BACHTHIKIMTHUY → User X; NGUYENVANA → User Y)</li>
+                                <li><b>Cấu hình gửi thông báo theo nhân viên sale:</b>
+                                    <ul>
+                                        <li><b>Mã Nhân Viên Sale Online:</b> Nhập danh sách mã nhân viên phụ trách bán online (mỗi mã một dòng)</li>
+                                        <li><b>User ID Kế Toán Online:</b> Nhập Zalo User ID của kế toán xử lý đơn hàng online</li>
+                                        <li><b>User ID Kế Toán Offline:</b> Nhập Zalo User ID của kế toán xử lý đơn hàng offline</li>
+                                    </ul>
+                                </li>
                                 <li>Chọn loại đơn hàng cần gửi thông báo (Nhập/Xuất)</li>
-                                <li>Click <b>"Test Gửi Tin Nhắn"</b> để kiểm tra</li>
+                                <li>Click <b>"Preview Tin Nhắn"</b> để kiểm tra cấu hình</li>
+                                <li>Click <b>"Test Gửi Tin Nhắn"</b> để test gửi</li>
                             </ol>
                             <p>
                                 <b>⚠️ Điều kiện gửi thông báo:</b>
@@ -101,26 +124,39 @@
                             <ul>
                                 <li>Đơn hàng đã validate (Done)</li>
                                 <li>Loại đơn: Nhập kho (Incoming) hoặc Xuất kho (Outgoing)</li>
-                                <li><b>Kho phải có cấu hình trong bảng hoặc sử dụng danh sách mặc định</b></li>
+                                <li><b>Đơn hàng PHẢI có mã nhân viên sale (x_studio_misa_saler_code)</b></li>
                                 <li><b>Với đơn xuất:</b> Chỉ gửi thông báo cho bước <b>xuất cuối cùng tới khách hàng</b> (location_dest_id là customer)</li>
                                 <li>Chưa gửi thông báo trước đó</li>
                             </ul>
                             <p>
-                                <b>💡 Lưu ý:</b>
+                                <b>💡 Cơ chế hoạt động:</b>
+                            </p>
+                            <ul>
+                                <li>Khi validate đơn hàng (outgoing/incoming), hệ thống sẽ:
+                                    <ol>
+                                        <li>Lấy mã nhân viên sale từ sale.order (x_studio_misa_saler_code)</li>
+                                        <li>Kiểm tra mã nhân viên có nằm trong danh sách "Mã Nhân Viên Sale Online" không</li>
+                                        <li>
+                                            Nếu <b>CÓ</b> → Gửi tin nhắn tới <b>User ID Kế Toán Online</b>
+                                        </li>
+                                        <li>
+                                            Nếu <b>KHÔNG</b> → Gửi tin nhắn tới <b>User ID Kế Toán Offline</b>
+                                        </li>
+                                        <li>
+                                            Nếu <b>không có mã nhân viên sale</b> → Không gửi (log warning)
+                                        </li>
+                                    </ol>
+                                </li>
+                            </ul>
+                            <p>
+                                <b>🔍 Lưu ý:</b>
                             </p>
                             <ul>
                                 <li>Chỉ nên có 1 config active tại một thời điểm</li>
                                 <li>Hệ thống tự động refresh access token mỗi giờ</li>
-                                <li><b>Logic gửi thông báo:</b></li>
-                                <ul>
-                                    <li>Nếu có cấu hình warehouse mapping → Gửi tới danh sách người nhận của kho đó</li>
-                                    <li>Nếu có cấu hình saler mapping (chỉ áp dụng cho đơn xuất) → Gửi tới danh sách người nhận của nhân viên sale đó</li>
-                                    <li>Nếu không có cấu hình warehouse và saler mapping → Sử dụng danh sách mặc định</li>
-                                    <li><b>Các cấu hình hoạt động độc lập:</b> Có thể chỉ setup theo kho, chỉ setup theo nhân viên sale, hoặc setup cả hai (sẽ gửi cho cả hai nhóm)</li>
-                                </ul>
-                                <li><b>Quy trình 3 bước tại TSN:</b> Kho → Đóng gói → Xuất → Khách hàng. Thông báo CHỈ gửi ở bước cuối cùng (Xuất → Khách hàng)</li>
                                 <li>Để lấy Callback URL chính xác, sử dụng domain của Odoo của bạn</li>
                                 <li><b>Mã nhân viên sale:</b> Lấy từ field "Mã nhân viên sale MISA" (x_studio_misa_saler_code) trong Sale Order</li>
+                                <li>Thêm mã nhân viên vào danh sách online dễ dàng, chỉ cần cập nhật trực tiếp mà không cần tạo bản ghi mới</li>
                             </ul>
                         </div>
                     </group>
@@ -168,8 +204,8 @@
         action="action_zalo_stock_notification"
         sequence="100" />
 
-    <!-- List view cho Zalo Warehouse Recipient -->
-    <record id="view_zalo_warehouse_recipient_list" model="ir.ui.view">
+    <!-- COMMENT: List view cho Zalo Warehouse Recipient - không sử dụng trong cơ chế mới -->
+    <!-- <record id="view_zalo_warehouse_recipient_list" model="ir.ui.view">
         <field name="name">hlv.zalo.warehouse.recipient.list</field>
         <field name="model">hlv.zalo.warehouse.recipient</field>
         <field name="arch" type="xml">
@@ -179,10 +215,10 @@
                 <field name="active" />
             </list>
         </field>
-    </record>
+    </record> -->
 
-    <!-- List view cho Zalo Saler Recipient -->
-    <record id="view_zalo_saler_recipient_list" model="ir.ui.view">
+    <!-- COMMENT: List view cho Zalo Saler Recipient (cũ) - không sử dụng trong cơ chế mới -->
+    <!-- <record id="view_zalo_saler_recipient_list" model="ir.ui.view">
         <field name="name">hlv.zalo.saler.recipient.list</field>
         <field name="model">hlv.zalo.saler.recipient</field>
         <field name="arch" type="xml">
@@ -192,7 +228,7 @@
                 <field name="active" />
             </list>
         </field>
-    </record>
+    </record> -->
 
     <!-- Inherit Stock Picking form để thêm button gửi Zalo Notification -->
     <record id="view_picking_form_inherit_zalo_notification" model="ir.ui.view">

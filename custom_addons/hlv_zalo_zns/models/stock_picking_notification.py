@@ -231,20 +231,21 @@ class StockPicking(models.Model):
         Gửi thông báo tới nhân viên nội bộ khi đơn hàng được validate
         Tương đương với send_zalo_when_order_placed() trong PHP
         
+        === CƠ CHẾ HOẠT ĐỘNG MỚI ===
+        
+        Dựa trên mã nhân viên sale (saler_code) từ sale.order:
+        1. Tìm mã saler_code từ sale.order (qua origin)
+        2. Kiểm tra saler_code có nằm trong danh sách online không
+        3. Nếu có → Gửi tới user_id Kế toán ONLINE
+        4. Nếu không → Gửi tới user_id Kế toán OFFLINE
+        5. Nếu không có saler_code → Log warning, không gửi
+        
         Điều kiện gửi:
         - Chưa gửi trước đó (zalo_stock_notification_sent = False)
         - Có config active
         - Loại đơn được bật (incoming/outgoing)
-        - Kho phải được cấu hình hoặc sử dụng danh sách mặc định
         - Với outgoing: Chỉ gửi cho bước xuất cuối cùng tới khách hàng (location_dest_id.usage = 'customer')
-        - Với incoming: Gửi cho tất cả phiếu nhập
-        
-        Logic lấy recipients:
-        1. Nếu có warehouse mapping active cho kho → Sử dụng recipients từ warehouse mapping
-        2. Nếu không có warehouse mapping:
-           - Outgoing: Tìm saler mapping từ sale.order → dùng recipients của saler
-           - Incoming: Bỏ qua bước này (không có saler)
-        3. Nếu không tìm thấy bước 1-2 → Sử dụng danh sách recipients mặc định từ config
+        - Với incoming: Gửi cho tất cả phiếu nhập (nếu có saler_code)
         """
         self.ensure_one()
         
@@ -252,11 +253,6 @@ class StockPicking(models.Model):
         if self.zalo_stock_notification_sent:
             _logger.info("Zalo Notification already sent for picking %s", self.name)
             return
-        
-        # Lấy warehouse
-        warehouse_id = None
-        if self.picking_type_id and self.picking_type_id.warehouse_id:
-            warehouse_id = self.picking_type_id.warehouse_id
         
         # Với đơn xuất (outgoing): Chỉ gửi thông báo cho bước xuất cuối cùng tới khách hàng
         # Kiểm tra location_dest_id.usage = 'customer'
@@ -284,68 +280,45 @@ class StockPicking(models.Model):
             _logger.info("Zalo Stock Notification disabled for incoming pickings")
             return
         
-        # Preferential logic: nếu có cấu hình cho kho (active) -> dùng recipients của kho
-        # else nếu có cấu hình cho saler (outgoing only) -> dùng recipients của saler
-        # else -> dùng default recipients từ config.recipient_ids
+        # === CÓ CHẾ MỚI: Lấy saler_code từ sale.order và xác định user_id ===
         saler_code = None
-
-        # Kiểm tra xem có warehouse mapping active cho kho này không
-        warehouse_mapping = config.warehouse_recipient_ids.filtered(
-            lambda x: x.warehouse_id.id == (warehouse_id.id if hasattr(warehouse_id, 'id') else warehouse_id) and x.active
-        ) if warehouse_id else self.env['hlv.zalo.warehouse.recipient']
-
-        if warehouse_mapping:
-            # Dùng recipients từ warehouse mapping
-            recipients = warehouse_mapping[0].get_recipient_list()
-            _logger.debug(
-                "Picking %s: Using warehouse mapping recipients (%s) for warehouse %s",
-                self.name, len(recipients), warehouse_mapping[0].warehouse_id.name
-            )
-        else:
-            # Nếu không có mapping kho, thử tìm saler (chỉ áp dụng cho outgoing)
-            # Cho incoming: bỏ qua bước này vì không có saler
-            saler_recipients = []
-            if self.picking_type_code == 'outgoing':
-                sale_orders = self.env['sale.order'].search([
-                    ('name', '=', self.origin)
-                ])
-                if sale_orders:
-                    sale_order = sale_orders[0]
-                    if hasattr(sale_order, 'x_studio_misa_saler_code'):
-                        saler_code = sale_order.x_studio_misa_saler_code
-                        if saler_code:
-                            saler_mapping = config.saler_recipient_ids.filtered(
-                                lambda x: x.saler_code == saler_code and x.active
-                            )
-                            if saler_mapping:
-                                saler_recipients = saler_mapping[0].get_recipient_list()
-                                _logger.debug(
-                                    "Picking %s: Using saler mapping recipients (%s) for saler %s",
-                                    self.name, len(saler_recipients), saler_code
-                                )
-
-            if saler_recipients:
-                recipients = saler_recipients
-            else:
-                # Fallback to default recipients
-                recipients = config.get_recipient_list()
-                _logger.debug(
-                    "Picking %s: Using default recipients (%s) (type: %s)",
-                    self.name, len(recipients), self.picking_type_code
-                )
-
-        if not recipients:
-            warehouse_name = warehouse_id.name if warehouse_id else 'Unknown'
-            saler_info = f" (saler_code: {saler_code})" if saler_code else ""
+        recipient_user_id = None
+        
+        # Chỉ lấy saler_code cho outgoing picking
+        if self.picking_type_code == 'outgoing':
+            sale_orders = self.env['sale.order'].search([
+                ('name', '=', self.origin)
+            ])
+            if sale_orders:
+                sale_order = sale_orders[0]
+                if hasattr(sale_order, 'x_studio_misa_saler_code'):
+                    saler_code = sale_order.x_studio_misa_saler_code
+                    _logger.debug(
+                        "Picking %s linked to sale.order %s with saler_code: %s",
+                        self.name, sale_order.name, saler_code
+                    )
+        
+        # Nếu không có saler_code, không gửi
+        if not saler_code:
             _logger.warning(
-                "No recipients configured for warehouse %s%s in Zalo Stock Notifications (picking type: %s)",
-                warehouse_name, saler_info, self.picking_type_code
+                "Zalo Notification not sent for picking %s (type: %s): no saler_code found",
+                self.name, self.picking_type_code
+            )
+            return
+        
+        # Xác định user_id dựa trên saler_code
+        recipient_user_id = config.get_recipient_for_saler(saler_code)
+        
+        if not recipient_user_id:
+            _logger.warning(
+                "Zalo Notification not sent for picking %s: no recipient_user_id determined for saler_code %s",
+                self.name, saler_code
             )
             return
         
         _logger.info(
-            "Zalo Stock Notification: Starting to send for picking %s to %s recipients (user_ids: %s)",
-            self.name, len(recipients), ", ".join(str(r) for r in recipients)
+            "Zalo Stock Notification: Starting to send for picking %s to user_id %s (saler_code: %s)",
+            self.name, recipient_user_id, saler_code
         )
         
         # Format message
@@ -374,70 +347,39 @@ class StockPicking(models.Model):
                     config.token_expires_at, self.name
                 )
         
-        # Gửi tin nhắn cho từng recipient
-        success_count = 0
-        fail_count = 0
-        for i, user_id in enumerate(recipients, 1):
-            _logger.info(
-                "Zalo Notification: Sending to recipient %s/%s (user_id: %s) for picking %s",
-                i, len(recipients), user_id, self.name
-            )
-            try:
-                result = config.send_notification_message(user_id, message_text)
-                
-                if not result:
-                    _logger.error(
-                        "Zalo Notification: No response from send_notification_message for user_id %s, picking %s",
-                        user_id, self.name
-                    )
-                    fail_count += 1
-                    continue
-                
-                error_code = result.get('error')
-                # error_msg = result.get('message', 'No message in response')
-                # `error_msg` is collected in the original implementation but
-                # isn't used in the current logging (that detailed log is
-                # commented out). Keep this commented for easier restoration.
-                
-                if error_code == 0:
-                    success_count += 1
-                    _logger.info(
-                        "✓ Zalo Notification sent successfully to %s for picking %s",
-                        user_id, self.name
-                    )
-                else:
-                    fail_count += 1
-                    # Log chi tiết error với error code mapping
-                    # error_detail = self._get_zalo_error_detail(error_code)
-                    # _logger.warning(
-                    #     "✗ Zalo Notification failed to %s for picking %s. Error code: %s (%s), Message: %s",
-                    #     user_id, self.name, error_code, error_detail, error_msg
-                    # )
-            except Exception as e:
-                fail_count += 1
-                _logger.exception(
-                    "✗ Exception sending Zalo Notification to %s for picking %s: %s",
-                    user_id, self.name, str(e)
-                )
-        
-        # Log tóm tắt kết quả
+        # Gửi tin nhắn
         _logger.info(
-            "Zalo Stock Notification Summary for %s: Success=%s, Failed=%s, Total=%s",
-            self.name, success_count, fail_count, len(recipients)
+            "Zalo Notification: Sending to user_id %s for picking %s (saler_code: %s)",
+            recipient_user_id, self.name, saler_code
         )
-        
-        # Đánh dấu đã gửi nếu có ít nhất 1 tin thành công
-        if success_count > 0:
-            self.sudo().write({'zalo_stock_notification_sent': True})
-            _logger.info(
-                "Zalo Stock Notification marked as sent for picking %s",
-                self.name
-            )
-        elif fail_count > 0:
-            _logger.error(
-                "Zalo Stock Notification: All attempts failed for picking %s. "
-                "Please check: 1) user_ids are valid, 2) access_token is not expired, 3) account Zalo is active",
-                self.name
+        try:
+            result = config.send_notification_message(recipient_user_id, message_text)
+            
+            if not result:
+                _logger.error(
+                    "Zalo Notification: No response from send_notification_message for user_id %s, picking %s",
+                    recipient_user_id, self.name
+                )
+                return
+            
+            error_code = result.get('error')
+            
+            if error_code == 0:
+                _logger.info(
+                    "✓ Zalo Notification sent successfully to %s for picking %s (saler_code: %s)",
+                    recipient_user_id, self.name, saler_code
+                )
+                # Đánh dấu đã gửi
+                self.sudo().write({'zalo_stock_notification_sent': True})
+            else:
+                _logger.error(
+                    "✗ Zalo Notification failed to %s for picking %s. Error code: %s",
+                    recipient_user_id, self.name, error_code
+                )
+        except Exception as e:
+            _logger.exception(
+                "✗ Exception sending Zalo Notification to %s for picking %s: %s",
+                recipient_user_id, self.name, str(e)
             )
 
     def button_validate(self):

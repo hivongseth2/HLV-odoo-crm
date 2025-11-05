@@ -104,6 +104,31 @@ class ZaloStockNotificationConfig(models.Model):
         help='Map mã nhân viên sale (BACHTHIKIMTHUY, ...) với danh sách user_id nhận thông báo'
     )
     
+    # ===== NEW: Cơ chế saler online/offline =====
+    # Danh sách mã saler online (mỗi dòng một mã)
+    online_saler_codes = fields.Text(
+        'Mã Nhân Viên Sale Online',
+        default='',
+        help='Danh sách mã nhân viên sale phụ trách bán online (mỗi mã một dòng). '
+             'Ví dụ: SALER_ONLINE_1, SALER_ONLINE_2, ...'
+    )
+    
+    # User ID nhận thông báo cho đơn hàng online
+    online_recipient_user_id = fields.Char(
+        'User ID Kế Toán Online',
+        default='',
+        help='Zalo User ID của kế toán xử lý đơn hàng online. '
+             'Đơn hàng có saler_code nằm trong danh sách online sẽ gửi tới user_id này'
+    )
+    
+    # User ID nhận thông báo cho đơn hàng offline
+    offline_recipient_user_id = fields.Char(
+        'User ID Kế Toán Offline',
+        default='',
+        help='Zalo User ID của kế toán xử lý đơn hàng offline. '
+             'Đơn hàng có saler_code KHÔNG nằm trong danh sách online sẽ gửi tới user_id này'
+    )
+    
     active = fields.Boolean('Active', default=True)
 
     @api.model
@@ -518,154 +543,166 @@ class ZaloStockNotificationConfig(models.Model):
         ids = [line.strip() for line in self.recipient_ids.split('\n') if line.strip()]
         return ids
 
-    def get_recipients_for_warehouse(self, warehouse_id):
+    def get_online_saler_codes(self):
         """
-        Lấy danh sách recipient IDs cho một kho cụ thể
+        Lấy danh sách mã saler online
         
-        Nếu có cấu hình warehouse mapping, sử dụng danh sách recipients từ warehouse đó.
-        Ngược lại, sử dụng danh sách recipients mặc định (recipient_ids field).
-        
-        :param warehouse_id: ID hoặc object của stock.warehouse
-        :return: List of user IDs (strings)
+        :return: List of saler codes (strings)
         """
         self.ensure_one()
+        if not self.online_saler_codes:
+            return []
         
-        if not warehouse_id:
-            _logger.warning("warehouse_id is empty, using default recipients")
-            return self.get_recipient_list()
-        
-        # Tìm warehouse mapping trong list
-        warehouse_mapping = self.warehouse_recipient_ids.filtered(
-            lambda x: x.warehouse_id.id == (warehouse_id.id if hasattr(warehouse_id, 'id') else warehouse_id) and x.active
-        )
-        
-        if warehouse_mapping:
-            # Sử dụng danh sách recipients từ warehouse mapping
-            recipients = warehouse_mapping[0].get_recipient_list()
-            warehouse_name = warehouse_mapping[0].warehouse_id.name
-            _logger.debug(
-                "Found warehouse mapping for %s: %s recipients",
-                warehouse_name, len(recipients)
-            )
-            return recipients
-        else:
-            # Nếu không tìm thấy warehouse mapping, sử dụng danh sách mặc định
-            warehouse_name = warehouse_id.name if hasattr(warehouse_id, 'name') else str(warehouse_id)
-            _logger.debug(
-                "No warehouse mapping found for %s, using default recipients",
-                warehouse_name
-            )
-            return self.get_recipient_list()
+        # Split by line breaks và lọc các dòng trống
+        codes = [line.strip() for line in self.online_saler_codes.split('\n') if line.strip()]
+        return codes
 
-    def get_recipients_for_saler(self, saler_code):
+    def get_recipient_for_saler(self, saler_code):
         """
-        Lấy danh sách recipient IDs cho một mã nhân viên sale cụ thể
+        Lấy user_id nhận thông báo dựa trên mã saler (online hoặc offline)
         
-        Nếu có cấu hình saler mapping, sử dụng danh sách recipients từ mã nhân viên đó.
-        Ngược lại, trả về danh sách rỗng (không gửi).
+        Logic:
+        - Kiểm tra saler_code có nằm trong danh sách online không
+        - Nếu có → Trả về online_recipient_user_id
+        - Nếu không → Trả về offline_recipient_user_id
         
         :param saler_code: Mã nhân viên sale (string)
-        :return: List of user IDs (strings)
+        :return: User ID (string) hoặc rỗng nếu không tìm thấy
         """
         self.ensure_one()
         
         if not saler_code:
-            _logger.debug("saler_code is empty, no saler recipients")
-            return []
+            _logger.debug("saler_code is empty, cannot determine recipient")
+            return None
         
-        # Tìm saler mapping trong list
-        saler_mapping = self.saler_recipient_ids.filtered(
-            lambda x: x.saler_code == saler_code and x.active
-        )
+        online_codes = self.get_online_saler_codes()
         
-        if saler_mapping:
-            # Sử dụng danh sách recipients từ saler mapping
-            recipients = saler_mapping[0].get_recipient_list()
-            _logger.debug(
-                "Found saler mapping for %s: %s recipients",
-                saler_code, len(recipients)
-            )
-            return recipients
+        if saler_code in online_codes:
+            _logger.debug("Saler %s is in online list → using online_recipient_user_id: %s", 
+                         saler_code, self.online_recipient_user_id)
+            return self.online_recipient_user_id
         else:
-            # Nếu không tìm thấy saler mapping, không gửi (trả về rỗng)
-            _logger.debug(
-                "No saler mapping found for %s",
-                saler_code
-            )
-            return []
+            _logger.debug("Saler %s is NOT in online list → using offline_recipient_user_id: %s", 
+                         saler_code, self.offline_recipient_user_id)
+            return self.offline_recipient_user_id
+
+    # def get_recipients_for_warehouse(self, warehouse_id):
+    #     """
+    #     Lấy danh sách recipient IDs cho một kho cụ thể
+        
+    #     Nếu có cấu hình warehouse mapping, sử dụng danh sách recipients từ warehouse đó.
+    #     Ngược lại, sử dụng danh sách recipients mặc định (recipient_ids field).
+        
+    #     :param warehouse_id: ID hoặc object của stock.warehouse
+    #     :return: List of user IDs (strings)
+    #     """
+    #     self.ensure_one()
+        
+    #     if not warehouse_id:
+    #         _logger.warning("warehouse_id is empty, using default recipients")
+    #         return self.get_recipient_list()
+        
+    #     # Tìm warehouse mapping trong list
+    #     warehouse_mapping = self.warehouse_recipient_ids.filtered(
+    #         lambda x: x.warehouse_id.id == (warehouse_id.id if hasattr(warehouse_id, 'id') else warehouse_id) and x.active
+    #     )
+        
+    #     if warehouse_mapping:
+    #         # Sử dụng danh sách recipients từ warehouse mapping
+    #         recipients = warehouse_mapping[0].get_recipient_list()
+    #         warehouse_name = warehouse_mapping[0].warehouse_id.name
+    #         _logger.debug(
+    #             "Found warehouse mapping for %s: %s recipients",
+    #             warehouse_name, len(recipients)
+    #         )
+    #         return recipients
+    #     else:
+    #         # Nếu không tìm thấy warehouse mapping, sử dụng danh sách mặc định
+    #         warehouse_name = warehouse_id.name if hasattr(warehouse_id, 'name') else str(warehouse_id)
+    #         _logger.debug(
+    #             "No warehouse mapping found for %s, using default recipients",
+    #             warehouse_name
+    #         )
+    #         return self.get_recipient_list()
+
+    # def get_recipients_for_saler_old(self, saler_code):
+    #     """
+    #     [DEPRECATED] Phương pháp cũ: mapping từng saler thành danh sách user_id
+        
+    #     Lấy danh sách recipient IDs cho một mã nhân viên sale cụ thể
+        
+    #     Nếu có cấu hình saler mapping, sử dụng danh sách recipients từ mã nhân viên đó.
+    #     Ngược lại, trả về danh sách rỗng (không gửi).
+        
+    #     :param saler_code: Mã nhân viên sale (string)
+    #     :return: List of user IDs (strings)
+    #     """
+    #     self.ensure_one()
+        
+    #     if not saler_code:
+    #         _logger.debug("saler_code is empty, no saler recipients")
+    #         return []
+        
+    #     # Tìm saler mapping trong list
+    #     saler_mapping = self.saler_recipient_ids.filtered(
+    #         lambda x: x.saler_code == saler_code and x.active
+    #     )
+        
+    #     if saler_mapping:
+    #         # Sử dụng danh sách recipients từ saler mapping
+    #         recipients = saler_mapping[0].get_recipient_list()
+    #         _logger.debug(
+    #             "Found saler mapping for %s: %s recipients",
+    #             saler_code, len(recipients)
+    #         )
+    #         return recipients
+    #     else:
+    #         # Nếu không tìm thấy saler mapping, không gửi (trả về rỗng)
+    #         _logger.debug(
+    #             "No saler mapping found for %s",
+    #             saler_code
+    #         )
+    #         return []
 
     def action_test_send_message(self):
         """
-        Action button để test gửi tin nhắn
+        Action button để test gửi tin nhắn với cơ chế saler online/offline mới
         """
         self.ensure_one()
 
-        # Send test messages following the preferential logic:
-        # 1) For each active warehouse mapping -> send to its recipients
-        # 2) Then for each active saler mapping -> send to its recipients (skip duplicates)
-        # 3) If nothing sent above -> fallback to default recipients
+        now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
         sent_user_ids = set()
         success_count = 0
         attempts = 0
 
-        now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-
-        # 1) Send tests for warehouse mappings
-        for wh in self.warehouse_recipient_ids.filtered(lambda x: x.active):
-            recipients = wh.get_recipient_list()
-            if not recipients:
+        # Test gửi cho 2 user_id chính (online và offline)
+        test_recipients = []
+        
+        if self.online_recipient_user_id:
+            test_recipients.append((self.online_recipient_user_id, "Online"))
+        
+        if self.offline_recipient_user_id:
+            test_recipients.append((self.offline_recipient_user_id, "Offline"))
+        
+        if not test_recipients:
+            raise UserError(_("Chưa cấu hình User ID cho kế toán online hoặc offline"))
+        
+        for user_id, recipient_type in test_recipients:
+            if user_id in sent_user_ids:
                 continue
+            
             test_message = (
-                f"🔔 Test tin nhắn từ Odoo HLV - Warehouse: {wh.warehouse_id.name}\n"
+                f"🔔 Test tin nhắn từ Odoo HLV\n"
+                f"Kiểu nhận thông báo: {recipient_type}\n"
                 f"Thời gian: {now_str}\n"
-                "Thông điệp thử nghiệm: gửi thử cho cấu hình theo kho."
+                "Thông điệp thử nghiệm: gửi thử cho cấu hình saler online/offline."
             )
-            for user_id in recipients:
-                if user_id in sent_user_ids:
-                    continue
-                attempts += 1
-                result = self.send_notification_message(user_id, test_message)
-                if result.get('error') == 0:
-                    success_count += 1
-                sent_user_ids.add(user_id)
-
-        # 2) Send tests for saler mappings (simulate case where warehouse mapping absent)
-        for sal in self.saler_recipient_ids.filtered(lambda x: x.active):
-            recipients = sal.get_recipient_list()
-            if not recipients:
-                continue
-            test_message = (
-                f"🔔 Test tin nhắn từ Odoo HLV - Saler: {sal.saler_code}\n"
-                f"Thời gian: {now_str}\n"
-                "Thông điệp thử nghiệm: gửi thử cho cấu hình theo nhân viên sale."
-            )
-            for user_id in recipients:
-                if user_id in sent_user_ids:
-                    continue
-                attempts += 1
-                result = self.send_notification_message(user_id, test_message)
-                if result.get('error') == 0:
-                    success_count += 1
-                sent_user_ids.add(user_id)
-
-        # 3) Fallback: if nothing sent, use default recipients
-        if attempts == 0:
-            recipients = self.get_recipient_list()
-            if not recipients:
-                raise UserError(_("Chưa có recipient ID nào được cấu hình"))
-            test_message = (
-                f"🔔 Test tin nhắn từ Odoo HLV - Default\n"
-                f"Thời gian: {now_str}\n"
-                "Thông điệp thử nghiệm: gửi thử cho danh sách mặc định."
-            )
-            for user_id in recipients:
-                attempts += 1
-                if user_id in sent_user_ids:
-                    continue
-                result = self.send_notification_message(user_id, test_message)
-                if result.get('error') == 0:
-                    success_count += 1
-                sent_user_ids.add(user_id)
+            
+            attempts += 1
+            result = self.send_notification_message(user_id, test_message)
+            if result.get('error') == 0:
+                success_count += 1
+            sent_user_ids.add(user_id)
 
         return {
             'type': 'ir.actions.client',
@@ -680,52 +717,47 @@ class ZaloStockNotificationConfig(models.Model):
 
     def action_preview_send_message(self):
         """
-        Build a preview of the test message and payload without sending to Zalo.
-        Returns a client notification showing the message and the sample JSON payload.
+        Build a preview của cơ chế saler online/offline mới.
+        Hiển thị danh sách mã saler online và 2 user_id nhận thông báo.
         """
         self.ensure_one()
 
-        # Build preview that reflects the preferential logic described:
         preview_lines = []
-        now_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-
-        total_previewed = 0
-        # Warehouses
-        for wh in self.warehouse_recipient_ids.filtered(lambda x: x.active):
-            recs = wh.get_recipient_list()
-            preview_lines.append(_('Warehouse: %s (Recipients: %s)') % (wh.warehouse_id.name, len(recs)))
-            for r in recs[:20]:
-                preview_lines.append(f" - {r}")
-            if len(recs) > 20:
-                preview_lines.append(f" - ... (+{len(recs)-20} more)")
+        
+        # Hiển thị danh sách mã saler online
+        online_codes = self.get_online_saler_codes()
+        if online_codes:
+            preview_lines.append(_('📌 Mã nhân viên sale ONLINE (%s):') % len(online_codes))
+            for code in online_codes[:50]:
+                preview_lines.append(f"  • {code}")
+            if len(online_codes) > 50:
+                preview_lines.append(f"  ... ({len(online_codes)-50} mã khác)")
             preview_lines.append('')
-            total_previewed += len(recs)
-
-        # Salers
-        for sal in self.saler_recipient_ids.filtered(lambda x: x.active):
-            recs = sal.get_recipient_list()
-            preview_lines.append(_('Saler: %s (Recipients: %s)') % (sal.saler_code, len(recs)))
-            for r in recs[:20]:
-                preview_lines.append(f" - {r}")
-            if len(recs) > 20:
-                preview_lines.append(f" - ... (+{len(recs)-20} more)")
+        else:
+            preview_lines.append(_('📌 Mã nhân viên sale ONLINE: (không cấu hình)'))
             preview_lines.append('')
-            total_previewed += len(recs)
-
-        # If no mappings, show default
-        if total_previewed == 0:
-            recipients = self.get_recipient_list()
-            if not recipients:
-                raise UserError(_('Chưa có recipient ID nào được cấu hình'))
-            preview_lines.append(_('Default Recipients (%s):') % len(recipients))
-            for r in recipients[:20]:
-                preview_lines.append(f" - {r}")
-            if len(recipients) > 20:
-                preview_lines.append(f" - ... (+{len(recipients)-20} more)")
-
+        
+        # Hiển thị thông tin nhận thông báo
+        preview_lines.append(_('📨 Cấu hình nhận thông báo:'))
+        
+        if self.online_recipient_user_id:
+            preview_lines.append(_('  ✓ Kế toán ONLINE: %s') % self.online_recipient_user_id)
+        else:
+            preview_lines.append(_('  ✗ Kế toán ONLINE: (chưa cấu hình)'))
+        
+        if self.offline_recipient_user_id:
+            preview_lines.append(_('  ✓ Kế toán OFFLINE: %s') % self.offline_recipient_user_id)
+        else:
+            preview_lines.append(_('  ✗ Kế toán OFFLINE: (chưa cấu hình)'))
+        
         preview_lines.append('')
-        preview_lines.append(_('Message example:'))
-        preview_lines.append(f"🔔 Test tin nhắn từ Odoo HLV\nThời gian: {now_str}\nThông điệp thử nghiệm")
+        preview_lines.append(_('💡 Cơ chế hoạt động:'))
+        preview_lines.append(_('  • Đơn hàng có saler_code trong danh sách ONLINE'))
+        preview_lines.append(_('    → Gửi thông báo tới Kế toán ONLINE'))
+        preview_lines.append(_('  • Đơn hàng có saler_code KHÔNG trong danh sách ONLINE'))
+        preview_lines.append(_('    → Gửi thông báo tới Kế toán OFFLINE'))
+        preview_lines.append(_('  • Đơn hàng không có saler_code'))
+        preview_lines.append(_('    → Không gửi thông báo (log warning)'))
 
         preview_text = '\n'.join(preview_lines)
 
@@ -733,7 +765,7 @@ class ZaloStockNotificationConfig(models.Model):
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _('Preview tin nhắn'),
+                'title': _('Preview cấu hình saler online/offline'),
                 'message': preview_text,
                 'type': 'info',
                 'sticky': True,
