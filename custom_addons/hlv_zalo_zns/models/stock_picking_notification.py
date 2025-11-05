@@ -101,7 +101,11 @@ class StockPicking(models.Model):
         - Outgoing: Lấy dữ liệu từ sale.order, nhân viên từ picking_type hoặc sale.order
         - Incoming: Lấy dữ liệu từ purchase.order (qua move_ids), nhân viên từ picking.user_id
         
-        :return: Message text
+        Định dạng tin nhắn:
+        - In đậm các trường quan trọng: số đơn hàng, số phiếu, mã nhân viên
+        - Sử dụng emoji để dễ phân biệt các section
+        
+        :return: Message text (có markup Zalo)
         """
         self.ensure_one()
         
@@ -126,15 +130,6 @@ class StockPicking(models.Model):
         # Trạng thái xuất/nhập (toàn bộ hay 1 phần)
         completion_status = self._get_picking_completion_status()
         
-        # Thời gian xuất/nhập (unused)
-        # The following lines originally computed a formatted done date string
-        # but the message line that used `done_date_str` is currently commented
-        # out. Keep these here commented for future re-use.
-        # done_date = self.date_done or fields.Datetime.now()
-        # done_date_str = fields.Datetime.context_timestamp(
-        #     self, done_date
-        # ).strftime('%d/%m/%Y %H:%M:%S')
-        
         # Lấy thông tin kho
         warehouse_name = ''
         if self.picking_type_id and self.picking_type_id.warehouse_id:
@@ -143,60 +138,44 @@ class StockPicking(models.Model):
         
         # Build message
         message = f"🔔 Thông báo đơn hàng {action_type}\n"
-        message += f"📋 Số đơn hàng: {order_code}\n"
-        message += f"📦 Số phiếu {label_type} kho Odoo: {self.name}\n"
-        message += f"🏢 Kho {label_type}: {warehouse_name}\n"
-        message += f"📊 Trạng thái: {action_type} {completion_status}\n"
+        message += f"*Số đơn hàng:* {order_code}\n"
+        message += f"*Số phiếu {label_type} kho Odoo:* {self.name}\n"
+        message += f"*Kho {label_type}:* {warehouse_name}\n"
+        message += f"*Trạng thái:* {action_type} {completion_status}\n"
         
-        # Thêm thông tin nhân viên phụ trách nếu có
-        # - Outgoing: Lấy từ picking_type
-        # - Incoming: Lấy từ picking.user_id (người phụ trách)
-        responsible_user = None
+        # Lấy mã nhân viên sale từ sale.order (chỉ cho outgoing)
+        saler_code = None
+        saler_name = None
         if self.picking_type_code == 'outgoing':
-            # Cho phiếu xuất: lấy user từ picking_type
-            if self.picking_type_id and self.picking_type_id.warehouse_id:
-                if hasattr(self.picking_type_id, 'user_id') and self.picking_type_id.user_id:
-                    responsible_user = self.picking_type_id.user_id
-        elif self.picking_type_code == 'incoming':
-            # Cho phiếu nhập: lấy user từ picking (người phụ trách/nhân viên)
+            sale_orders = self.env['sale.order'].search([
+                ('name', '=', self.origin)
+            ])
+            if sale_orders:
+                sale_order = sale_orders[0]
+                if hasattr(sale_order, 'x_studio_misa_saler_code'):
+                    saler_code = sale_order.x_studio_misa_saler_code
+                    _logger.debug("Picking %s sale.order %s saler_code: %s", self.name, sale_order.name, saler_code)
+                
+                # Cố gắng lấy tên nhân viên sale từ user_id nếu có
+                if sale_order.user_id:
+                    saler_name = sale_order.user_id.name
+                    _logger.debug("Picking %s saler_name: %s", self.name, saler_name)
+        
+        # Thêm thông tin nhân viên sale nếu có
+        if saler_code:
+            message += f"*Mã NV Sale:* {saler_code}"
+            if saler_name:
+                message += f" ({saler_name})"
+            message += "\n"
+            _logger.debug("Picking %s added saler info to message", self.name)
+        
+        # Thêm thông tin người phụ trách (chỉ cho phiếu nhập)
+        # - Incoming: Lấy từ picking.user_id (người phụ trách đơn mua hàng)
+        if self.picking_type_code == 'incoming':
+            # Cho phiếu nhập: lấy user từ picking.user_id
             if self.user_id:
-                responsible_user = self.user_id
-        
-        if responsible_user:
-            message += f"👤 Nhân viên PH: {responsible_user.name}\n"
-            _logger.debug("Picking %s responsible user: %s", self.name, responsible_user.name)
-        
-        # message += f"🕐 Thời gian: {done_date_str}\n"
-        
-        # # Thêm thông tin partner nếu có
-        # if self.partner_id:
-        #     message += f"👤 Đối tác: {self.partner_id.name}\n"
-        #     _logger.debug("Picking %s partner: %s", self.name, self.partner_id.name)
-        # else:
-        #     _logger.debug("Picking %s has no partner", self.name)
-        
-        # Thêm thông tin địa chỉ nếu có
-        # if self.picking_type_code == 'outgoing' and self.partner_id:
-        #     # Với đơn xuất, hiển thị địa chỉ giao hàng
-        #     partner = self._zns_get_shipping_partner() if hasattr(self, '_zns_get_shipping_partner') else self.partner_id
-        #     if partner:
-        #         address_parts = []
-        #         if partner.street:
-        #             address_parts.append(partner.street)
-        #         if partner.city:
-        #             address_parts.append(partner.city)
-        #         if partner.state_id:
-        #             address_parts.append(partner.state_id.name)
-                
-        #         if address_parts:
-        #             address = ', '.join(address_parts)
-        #             message += f"🏠 Địa chỉ: {address}\n"
-        #             _logger.debug("Picking %s address: %s", self.name, address)
-                
-        #         if partner.phone or partner.mobile:
-        #             phone = partner.phone or partner.mobile
-        #             message += f"📞 SĐT: {phone}\n"
-        #             _logger.debug("Picking %s phone: %s", self.name, phone)
+                message += f"*Người phụ trách:* {self.user_id.name}\n"
+                _logger.debug("Picking %s (incoming) responsible user: %s", self.name, self.user_id.name)
         
         # Danh sách sản phẩm
         message += "\n📦 Danh sách sản phẩm:\n"
@@ -231,21 +210,24 @@ class StockPicking(models.Model):
         Gửi thông báo tới nhân viên nội bộ khi đơn hàng được validate
         Tương đương với send_zalo_when_order_placed() trong PHP
         
-        === CƠ CHẾ HOẠT ĐỘNG MỚI ===
+        === CƠ CHẾ HOẠT ĐỘNG ===
         
-        Dựa trên mã nhân viên sale (saler_code) từ sale.order:
-        1. Tìm mã saler_code từ sale.order (qua origin)
+        📤 PHIẾU XUẤT (Outgoing):
+        1. Lấy mã saler_code từ sale.order (qua origin)
         2. Kiểm tra saler_code có nằm trong danh sách online không
-        3. Nếu có → Gửi tới user_id Kế toán ONLINE
-        4. Nếu không → Gửi tới user_id Kế toán OFFLINE
+        3. Nếu CÓ → Gửi tới user_id Kế toán ONLINE
+        4. Nếu KHÔNG → Gửi tới user_id Kế toán OFFLINE
         5. Nếu không có saler_code → Log warning, không gửi
+        
+        📥 PHIẾU NHẬP (Incoming):
+        1. TẤT CẢ phiếu nhập → Gửi tới user_id Kế toán NHẬP KHO (cố định)
         
         Điều kiện gửi:
         - Chưa gửi trước đó (zalo_stock_notification_sent = False)
         - Có config active
         - Loại đơn được bật (incoming/outgoing)
         - Với outgoing: Chỉ gửi cho bước xuất cuối cùng tới khách hàng (location_dest_id.usage = 'customer')
-        - Với incoming: Gửi cho tất cả phiếu nhập (nếu có saler_code)
+        - Với incoming: Gửi cho tất cả phiếu nhập
         """
         self.ensure_one()
         
@@ -280,12 +262,12 @@ class StockPicking(models.Model):
             _logger.info("Zalo Stock Notification disabled for incoming pickings")
             return
         
-        # === CÓ CHẾ MỚI: Lấy saler_code từ sale.order và xác định user_id ===
+        # === CÓ CHẾ MỚI: Xác định user_id dựa trên loại phiếu ===
         saler_code = None
         recipient_user_id = None
         
-        # Chỉ lấy saler_code cho outgoing picking
         if self.picking_type_code == 'outgoing':
+            # === PHIẾU XUẤT: Dựa vào saler_code (online/offline) ===
             sale_orders = self.env['sale.order'].search([
                 ('name', '=', self.origin)
             ])
@@ -297,29 +279,52 @@ class StockPicking(models.Model):
                         "Picking %s linked to sale.order %s with saler_code: %s",
                         self.name, sale_order.name, saler_code
                     )
+            
+            # Nếu không có saler_code, không gửi
+            if not saler_code:
+                _logger.warning(
+                    "Zalo Notification not sent for outgoing picking %s: no saler_code found",
+                    self.name
+                )
+                return
+            
+            # Xác định user_id dựa trên saler_code
+            recipient_user_id = config.get_recipient_for_saler(saler_code)
+            
+            if not recipient_user_id:
+                _logger.warning(
+                    "Zalo Notification not sent for outgoing picking %s: no recipient_user_id determined for saler_code %s",
+                    self.name, saler_code
+                )
+                return
         
-        # Nếu không có saler_code, không gửi
-        if not saler_code:
-            _logger.warning(
-                "Zalo Notification not sent for picking %s (type: %s): no saler_code found",
-                self.name, self.picking_type_code
+        elif self.picking_type_code == 'incoming':
+            # === PHIẾU NHẬP: Gửi tới 1 user_id cố định ===
+            recipient_user_id = config.incoming_recipient_user_id
+            
+            if not recipient_user_id:
+                _logger.warning(
+                    "Zalo Notification not sent for incoming picking %s: incoming_recipient_user_id not configured",
+                    self.name
+                )
+                return
+            
+            _logger.debug(
+                "Picking %s (incoming): will send to incoming_recipient_user_id: %s",
+                self.name, recipient_user_id
             )
-            return
         
-        # Xác định user_id dựa trên saler_code
-        recipient_user_id = config.get_recipient_for_saler(saler_code)
-        
-        if not recipient_user_id:
-            _logger.warning(
-                "Zalo Notification not sent for picking %s: no recipient_user_id determined for saler_code %s",
-                self.name, saler_code
+        # Log thông tin gửi
+        if self.picking_type_code == 'outgoing':
+            _logger.info(
+                "Zalo Stock Notification: Starting to send for OUTGOING picking %s to user_id %s (saler_code: %s)",
+                self.name, recipient_user_id, saler_code
             )
-            return
-        
-        _logger.info(
-            "Zalo Stock Notification: Starting to send for picking %s to user_id %s (saler_code: %s)",
-            self.name, recipient_user_id, saler_code
-        )
+        else:
+            _logger.info(
+                "Zalo Stock Notification: Starting to send for INCOMING picking %s to user_id %s",
+                self.name, recipient_user_id
+            )
         
         # Format message
         try:
@@ -348,38 +353,40 @@ class StockPicking(models.Model):
                 )
         
         # Gửi tin nhắn
-        _logger.info(
-            "Zalo Notification: Sending to user_id %s for picking %s (saler_code: %s)",
-            recipient_user_id, self.name, saler_code
-        )
         try:
             result = config.send_notification_message(recipient_user_id, message_text)
             
             if not result:
                 _logger.error(
-                    "Zalo Notification: No response from send_notification_message for user_id %s, picking %s",
-                    recipient_user_id, self.name
+                    "Zalo Notification: No response from send_notification_message for user_id %s, picking %s (%s)",
+                    recipient_user_id, self.name, self.picking_type_code
                 )
                 return
             
             error_code = result.get('error')
             
             if error_code == 0:
-                _logger.info(
-                    "✓ Zalo Notification sent successfully to %s for picking %s (saler_code: %s)",
-                    recipient_user_id, self.name, saler_code
-                )
+                if self.picking_type_code == 'outgoing':
+                    _logger.info(
+                        "✓ Zalo Notification sent successfully to %s for OUTGOING picking %s (saler_code: %s)",
+                        recipient_user_id, self.name, saler_code
+                    )
+                else:
+                    _logger.info(
+                        "✓ Zalo Notification sent successfully to %s for INCOMING picking %s",
+                        recipient_user_id, self.name
+                    )
                 # Đánh dấu đã gửi
                 self.sudo().write({'zalo_stock_notification_sent': True})
             else:
                 _logger.error(
-                    "✗ Zalo Notification failed to %s for picking %s. Error code: %s",
-                    recipient_user_id, self.name, error_code
+                    "✗ Zalo Notification failed to %s for picking %s (%s). Error code: %s",
+                    recipient_user_id, self.name, self.picking_type_code, error_code
                 )
         except Exception as e:
             _logger.exception(
-                "✗ Exception sending Zalo Notification to %s for picking %s: %s",
-                recipient_user_id, self.name, str(e)
+                "✗ Exception sending Zalo Notification to %s for picking %s (%s): %s",
+                recipient_user_id, self.name, self.picking_type_code, str(e)
             )
 
     def button_validate(self):

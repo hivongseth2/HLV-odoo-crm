@@ -73,8 +73,8 @@
                             placeholder="Nhập mỗi Zalo User ID trên một dòng&#10;Ví dụ:&#10;1228622149344688972&#10;6358388935615848913&#10;7233270943621398925" />
                     </group>
 
-                    <!-- NEW: Cơ chế saler online/offline -->
-                    <group string="Cấu Hình Gửi Thông Báo Theo Nhân Viên Sale (Online/Offline)">
+                    <!-- NEW: Cơ chế saler online/offline cho XUẤT KHO -->
+                    <group string="📤 Cấu Hình Phiếu XUẤT KHO (Theo Nhân Viên Sale Online/Offline)">
                         <group>
                             <field name="online_saler_codes" widget="text"
                                 placeholder="Nhập mỗi mã nhân viên sale online trên một dòng&#10;Ví dụ:&#10;SALER_ONLINE_1&#10;SALER_ONLINE_2&#10;SALER_ONLINE_3" />
@@ -82,11 +82,15 @@
                         <group>
                             <field name="online_recipient_user_id"
                                 placeholder="Zalo User ID kế toán xử lý đơn hàng ONLINE" />
-                        </group>
-                        <group>
                             <field name="offline_recipient_user_id"
                                 placeholder="Zalo User ID kế toán xử lý đơn hàng OFFLINE" />
                         </group>
+                    </group>
+
+                    <!-- NEW: Cấu hình cho NHẬP KHO -->
+                    <group string="📥 Cấu Hình Phiếu NHẬP KHO">
+                        <field name="incoming_recipient_user_id"
+                            placeholder="Zalo User ID kế toán xử lý TẤT CẢ phiếu nhập kho" />
                     </group>
 
                     <!-- COMMENT: Warehouse mapping - tạm thời không sử dụng -->
@@ -101,17 +105,22 @@
 
                     <group string="Hướng Dẫn">
                         <div class="alert alert-info" role="alert">
-                            <h4>📋 Cấu hình Zalo Stock Notification (Cơ chế saler online/offline):</h4>
+                            <h4>📋 Cấu hình Zalo Stock Notification:</h4>
                             <ol>
                                 <li>Nhập <b>App ID</b> và <b>Secret Key</b> từ Zalo Developer Portal</li>
                                 <li>Nhập <b>Callback URL</b>: <code>
                                     https://your-odoo-domain.com/hlv_zalo/stock_notification/oauth/callback</code></li>
                                 <li>Click nút <b>"🔐 Authorize with Zalo"</b> → Token sẽ tự động lưu</li>
-                                <li><b>Cấu hình gửi thông báo theo nhân viên sale:</b>
+                                <li><b>📤 Cấu hình Phiếu XUẤT KHO:</b>
                                     <ul>
                                         <li><b>Mã Nhân Viên Sale Online:</b> Nhập danh sách mã nhân viên phụ trách bán online (mỗi mã một dòng)</li>
                                         <li><b>User ID Kế Toán Online:</b> Nhập Zalo User ID của kế toán xử lý đơn hàng online</li>
                                         <li><b>User ID Kế Toán Offline:</b> Nhập Zalo User ID của kế toán xử lý đơn hàng offline</li>
+                                    </ul>
+                                </li>
+                                <li><b>📥 Cấu hình Phiếu NHẬP KHO:</b>
+                                    <ul>
+                                        <li><b>User ID Kế Toán Nhập Kho:</b> Nhập Zalo User ID của kế toán xử lý TẤT CẢ phiếu nhập kho</li>
                                     </ul>
                                 </li>
                                 <li>Chọn loại đơn hàng cần gửi thông báo (Nhập/Xuất)</li>
@@ -124,7 +133,6 @@
                             <ul>
                                 <li>Đơn hàng đã validate (Done)</li>
                                 <li>Loại đơn: Nhập kho (Incoming) hoặc Xuất kho (Outgoing)</li>
-                                <li><b>Đơn hàng PHẢI có mã nhân viên sale (x_studio_misa_saler_code)</b></li>
                                 <li><b>Với đơn xuất:</b> Chỉ gửi thông báo cho bước <b>xuất cuối cùng tới khách hàng</b> (location_dest_id là customer)</li>
                                 <li>Chưa gửi thông báo trước đó</li>
                             </ul>
@@ -132,19 +140,18 @@
                                 <b>💡 Cơ chế hoạt động:</b>
                             </p>
                             <ul>
-                                <li>Khi validate đơn hàng (outgoing/incoming), hệ thống sẽ:
+                                <li><b>📤 Phiếu XUẤT KHO (Outgoing):</b>
                                     <ol>
                                         <li>Lấy mã nhân viên sale từ sale.order (x_studio_misa_saler_code)</li>
                                         <li>Kiểm tra mã nhân viên có nằm trong danh sách "Mã Nhân Viên Sale Online" không</li>
-                                        <li>
-                                            Nếu <b>CÓ</b> → Gửi tin nhắn tới <b>User ID Kế Toán Online</b>
-                                        </li>
-                                        <li>
-                                            Nếu <b>KHÔNG</b> → Gửi tin nhắn tới <b>User ID Kế Toán Offline</b>
-                                        </li>
-                                        <li>
-                                            Nếu <b>không có mã nhân viên sale</b> → Không gửi (log warning)
-                                        </li>
+                                        <li>Nếu <b>CÓ</b> → Gửi tin nhắn tới <b>User ID Kế Toán Online</b></li>
+                                        <li>Nếu <b>KHÔNG</b> → Gửi tin nhắn tới <b>User ID Kế Toán Offline</b></li>
+                                        <li>Nếu <b>không có mã nhân viên sale</b> → Không gửi (log warning)</li>
+                                    </ol>
+                                </li>
+                                <li><b>📥 Phiếu NHẬP KHO (Incoming):</b>
+                                    <ol>
+                                        <li><b>TẤT CẢ</b> phiếu nhập → Gửi tin nhắn tới <b>User ID Kế Toán Nhập Kho</b></li>
                                     </ol>
                                 </li>
                             </ul>

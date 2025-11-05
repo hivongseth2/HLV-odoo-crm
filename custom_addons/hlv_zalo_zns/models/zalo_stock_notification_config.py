@@ -129,6 +129,14 @@ class ZaloStockNotificationConfig(models.Model):
              'Đơn hàng có saler_code KHÔNG nằm trong danh sách online sẽ gửi tới user_id này'
     )
     
+    # User ID nhận thông báo cho đơn nhập kho
+    incoming_recipient_user_id = fields.Char(
+        'User ID Kế Toán Nhập Kho',
+        default='',
+        help='Zalo User ID của kế toán xử lý TẤT CẢ đơn nhập kho. '
+             'Tất cả phiếu nhập kho sẽ gửi thông báo tới user_id này'
+    )
+    
     active = fields.Boolean('Active', default=True)
 
     @api.model
@@ -666,7 +674,7 @@ class ZaloStockNotificationConfig(models.Model):
 
     def action_test_send_message(self):
         """
-        Action button để test gửi tin nhắn với cơ chế saler online/offline mới
+        Action button để test gửi tin nhắn với cơ chế mới (online/offline/incoming)
         """
         self.ensure_one()
 
@@ -675,17 +683,20 @@ class ZaloStockNotificationConfig(models.Model):
         success_count = 0
         attempts = 0
 
-        # Test gửi cho 2 user_id chính (online và offline)
+        # Test gửi cho 3 user_id (online, offline, incoming)
         test_recipients = []
         
         if self.online_recipient_user_id:
-            test_recipients.append((self.online_recipient_user_id, "Online"))
+            test_recipients.append((self.online_recipient_user_id, "Kế toán ONLINE (Xuất)"))
         
         if self.offline_recipient_user_id:
-            test_recipients.append((self.offline_recipient_user_id, "Offline"))
+            test_recipients.append((self.offline_recipient_user_id, "Kế toán OFFLINE (Xuất)"))
+        
+        if self.incoming_recipient_user_id:
+            test_recipients.append((self.incoming_recipient_user_id, "Kế toán NHẬP KHO"))
         
         if not test_recipients:
-            raise UserError(_("Chưa cấu hình User ID cho kế toán online hoặc offline"))
+            raise UserError(_("Chưa cấu hình User ID cho kế toán (online/offline/incoming)"))
         
         for user_id, recipient_type in test_recipients:
             if user_id in sent_user_ids:
@@ -739,6 +750,8 @@ class ZaloStockNotificationConfig(models.Model):
         
         # Hiển thị thông tin nhận thông báo
         preview_lines.append(_('📨 Cấu hình nhận thông báo:'))
+        preview_lines.append('')
+        preview_lines.append(_('📤 PHIẾU XUẤT KHO (Outgoing):'))
         
         if self.online_recipient_user_id:
             preview_lines.append(_('  ✓ Kế toán ONLINE: %s') % self.online_recipient_user_id)
@@ -751,13 +764,26 @@ class ZaloStockNotificationConfig(models.Model):
             preview_lines.append(_('  ✗ Kế toán OFFLINE: (chưa cấu hình)'))
         
         preview_lines.append('')
-        preview_lines.append(_('💡 Cơ chế hoạt động:'))
-        preview_lines.append(_('  • Đơn hàng có saler_code trong danh sách ONLINE'))
+        preview_lines.append(_('� PHIẾU NHẬP KHO (Incoming):'))
+        
+        if self.incoming_recipient_user_id:
+            preview_lines.append(_('  ✓ Kế toán NHẬP KHO: %s') % self.incoming_recipient_user_id)
+        else:
+            preview_lines.append(_('  ✗ Kế toán NHẬP KHO: (chưa cấu hình)'))
+        
+        preview_lines.append('')
+        preview_lines.append(_('�💡 Cơ chế hoạt động:'))
+        preview_lines.append(_('📤 Phiếu XUẤT:'))
+        preview_lines.append(_('  • Có saler_code trong danh sách ONLINE'))
         preview_lines.append(_('    → Gửi thông báo tới Kế toán ONLINE'))
-        preview_lines.append(_('  • Đơn hàng có saler_code KHÔNG trong danh sách ONLINE'))
+        preview_lines.append(_('  • Có saler_code KHÔNG trong danh sách ONLINE'))
         preview_lines.append(_('    → Gửi thông báo tới Kế toán OFFLINE'))
-        preview_lines.append(_('  • Đơn hàng không có saler_code'))
+        preview_lines.append(_('  • Không có saler_code'))
         preview_lines.append(_('    → Không gửi thông báo (log warning)'))
+        preview_lines.append('')
+        preview_lines.append(_('📥 Phiếu NHẬP:'))
+        preview_lines.append(_('  • TẤT CẢ phiếu nhập'))
+        preview_lines.append(_('    → Gửi thông báo tới Kế toán NHẬP KHO'))
 
         preview_text = '\n'.join(preview_lines)
 
