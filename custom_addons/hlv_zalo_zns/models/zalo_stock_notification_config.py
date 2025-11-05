@@ -187,6 +187,95 @@ class ZaloStockNotificationConfig(models.Model):
         # Thêm buffer 60s để tránh token hết hạn giữa chừng
         return fields.Datetime.now() >= (self.token_expires_at - timedelta(seconds=60))
 
+    def _get_advisory_lock_id(self):
+        """
+        Tạo advisory lock ID cho bản ghi này.
+        Advisory lock dùng để tránh race condition khi multiple workers refresh token cùng lúc.
+        
+        Sử dụng ID của config record làm lock ID (hash để fit trong int range của PG).
+        """
+        self.ensure_one()
+        # PostgreSQL advisory lock dùng 2 int64, chúng ta chỉ dùng 1 với config.id
+        # Để an toàn, dùng hash của 'hlv.zalo.stock.notification' + config.id
+        return hash(('hlv.zalo.stock.notification', self.id)) & 0x7FFFFFFF
+
+    def ensure_valid_token(self):
+        """
+        On-demand token refresh: Kiểm tra token còn hợp lệ không, 
+        nếu hết hạn thì refresh ngay với advisory lock.
+        
+        Quy trình:
+        1. Kiểm tra token hết hạn (_is_token_expired())
+        2. Nếu hết hạn, cố gắng lấy advisory lock (non-blocking)
+        3. Nếu lấy được lock → gọi refresh_access_token() → release lock
+        4. Nếu không lấy được lock (có process khác đang refresh) → log warning và tiếp tục
+        
+        Điều này giúp:
+        - Refresh token ngay khi phát hiện hết hạn (không phải chờ cron)
+        - Tránh multiple processes refresh cùng lúc
+        - Giữ cron 1h làm fallback nếu on-demand fail
+        
+        :return: True nếu token hợp lệ (hoặc vừa refresh xong), False nếu có lỗi
+        """
+        self.ensure_one()
+        
+        if not self._is_token_expired():
+            _logger.debug("Zalo Stock Notification config %s: token still valid", self.id)
+            return True
+        
+        _logger.warning("Zalo Stock Notification config %s: token expired, attempting on-demand refresh", self.id)
+        
+        try:
+            # Lấy PostgreSQL advisory lock (non-blocking)
+            lock_id = self._get_advisory_lock_id()
+            
+            # Sử dụng raw SQL để gọi pg_try_advisory_lock
+            # Nếu lấy được lock (return true) -> refresh token
+            # Nếu không lấy được (return false) -> có process khác đang refresh -> log và skip
+            self.env.cr.execute(
+                "SELECT pg_try_advisory_lock(%s)",
+                (lock_id,)
+            )
+            lock_acquired = self.env.cr.fetchone()[0]
+            
+            if not lock_acquired:
+                _logger.warning(
+                    "Zalo Stock Notification config %s: could not acquire lock "
+                    "(another process might be refreshing), skipping on-demand refresh",
+                    self.id
+                )
+                return False
+            
+            try:
+                _logger.info(
+                    "Zalo Stock Notification config %s: acquired lock, starting on-demand refresh",
+                    self.id
+                )
+                self.refresh_access_token()
+                _logger.info(
+                    "Zalo Stock Notification config %s: on-demand refresh completed successfully",
+                    self.id
+                )
+                return True
+                
+            finally:
+                # Luôn release lock dù có lỗi hay không
+                self.env.cr.execute(
+                    "SELECT pg_advisory_unlock(%s)",
+                    (lock_id,)
+                )
+                _logger.debug(
+                    "Zalo Stock Notification config %s: lock released",
+                    self.id
+                )
+        
+        except Exception as e:
+            _logger.exception(
+                "Zalo Stock Notification config %s: error during on-demand refresh: %s",
+                self.id, e
+            )
+            return False
+
     def refresh_access_token(self):
         """Refresh access token using refresh_token (tương tự ZNS)"""
         for rec in self:
@@ -341,11 +430,18 @@ class ZaloStockNotificationConfig(models.Model):
         """
         Gửi tin nhắn thông báo tới một user_id cụ thể
         
+        Bước 1: Gọi ensure_valid_token() để on-demand refresh nếu cần
+        Bước 2: Gửi tin nhắn tới Zalo API
+        
         :param user_id: Zalo User ID
         :param message_text: Nội dung tin nhắn
         :return: Response dict từ Zalo API
         """
         self.ensure_one()
+        
+        # On-demand token refresh: kiểm tra và refresh token ngay nếu hết hạn
+        if not self.ensure_valid_token():
+            _logger.warning("Failed to ensure valid token for user_id=%s, attempting with current token", user_id)
         
         access_token = self.get_valid_access_token()
         
