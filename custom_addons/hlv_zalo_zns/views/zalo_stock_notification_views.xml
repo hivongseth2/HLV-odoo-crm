@@ -151,7 +151,10 @@
                                 </li>
                                 <li><b>📥 Phiếu NHẬP KHO (Incoming):</b>
                                     <ol>
-                                        <li><b>TẤT CẢ</b> phiếu nhập → Gửi tin nhắn tới <b>User ID Kế Toán Nhập Kho</b></li>
+                                        <li>Kiểm tra nguồn gốc phiếu nhập (location_id.usage)</li>
+                                        <li><b>Phiếu nhập từ NHÀ CUNG CẤP</b> (đơn mua hàng) → Gửi tin nhắn tới <b>User ID Kế Toán Nhập Kho</b></li>
+                                        <li><b>Chuyển kho nội bộ</b> (internal transfer) → <b>BỎ QUA</b>, không gửi</li>
+                                        <li><b>Nhập từ trả hàng</b> (customer return) → Có thể mở comment trong code để bật (mặc định tắt)</li>
                                     </ol>
                                 </li>
                             </ul>

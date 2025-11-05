@@ -220,14 +220,18 @@ class StockPicking(models.Model):
         5. Nếu không có saler_code → Log warning, không gửi
         
         📥 PHIẾU NHẬP (Incoming):
-        1. TẤT CẢ phiếu nhập → Gửi tới user_id Kế toán NHẬP KHO (cố định)
+        1. Kiểm tra nguồn gốc phiếu nhập (location_id.usage)
+        2. Chỉ gửi cho phiếu nhập từ NHÀ CUNG CẤP (location_id.usage = 'supplier')
+        3. Bỏ qua CHUYỂN KHO NỘI BỘ (location_id.usage = 'internal')
+        4. (TODO: Có thể mở comment để gửi cho TRẢ HÀNG - location_id.usage = 'customer')
+        5. Gửi tới user_id Kế toán NHẬP KHO (cố định)
         
         Điều kiện gửi:
         - Chưa gửi trước đó (zalo_stock_notification_sent = False)
         - Có config active
         - Loại đơn được bật (incoming/outgoing)
         - Với outgoing: Chỉ gửi cho bước xuất cuối cùng tới khách hàng (location_dest_id.usage = 'customer')
-        - Với incoming: Gửi cho tất cả phiếu nhập
+        - Với incoming: Chỉ gửi cho phiếu nhập từ nhà cung cấp (location_id.usage = 'supplier')
         """
         self.ensure_one()
         
@@ -299,7 +303,46 @@ class StockPicking(models.Model):
                 return
         
         elif self.picking_type_code == 'incoming':
-            # === PHIẾU NHẬP: Gửi tới 1 user_id cố định ===
+            # === PHIẾU NHẬP: Chỉ gửi cho phiếu nhập từ đơn mua hàng ===
+            
+            # Kiểm tra nguồn gốc của phiếu nhập qua location_id.usage
+            if not self.location_id:
+                _logger.warning(
+                    "Zalo Notification not sent for incoming picking %s: no location_id",
+                    self.name
+                )
+                return
+            
+            location_usage = self.location_id.usage
+            
+            # Chỉ gửi thông báo cho phiếu nhập từ NHÀ CUNG CẤP (đơn mua hàng)
+            if location_usage == 'supplier':
+                _logger.debug(
+                    "Picking %s (incoming): from supplier - will send notification",
+                    self.name
+                )
+            # # TODO: Có thể bật để gửi thông báo cho phiếu nhập từ TRẢ HÀNG (customer return)
+            # elif location_usage == 'customer':
+            #     _logger.debug(
+            #         "Picking %s (incoming): from customer return - will send notification",
+            #         self.name
+            #     )
+            # Bỏ qua chuyển kho nội bộ (internal transfer)
+            elif location_usage == 'internal':
+                _logger.info(
+                    "Zalo Notification skip: picking %s is internal transfer (location_id.usage = 'internal')",
+                    self.name
+                )
+                return
+            # Bỏ qua các loại khác
+            else:
+                _logger.info(
+                    "Zalo Notification skip: picking %s has unsupported location_id.usage = '%s'",
+                    self.name, location_usage
+                )
+                return
+            
+            # Lấy user_id nhận thông báo
             recipient_user_id = config.incoming_recipient_user_id
             
             if not recipient_user_id:
@@ -310,8 +353,8 @@ class StockPicking(models.Model):
                 return
             
             _logger.debug(
-                "Picking %s (incoming): will send to incoming_recipient_user_id: %s",
-                self.name, recipient_user_id
+                "Picking %s (incoming from %s): will send to incoming_recipient_user_id: %s",
+                self.name, location_usage, recipient_user_id
             )
         
         # Log thông tin gửi
