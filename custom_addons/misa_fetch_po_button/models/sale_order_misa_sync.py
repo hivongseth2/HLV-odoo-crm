@@ -580,7 +580,6 @@ class SaleOrder(models.Model):
         data = self._misa_fetch_order()
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
-
          # === THÊM MỚI: Kiểm tra trạng thái "Từ chối ghi" ===
         revenue_status_id = data.get("RevenueStatusID")
         revenue_status_text = (data.get("RevenueStatusIDText") or "").strip().lower()
@@ -856,6 +855,8 @@ class SaleOrder(models.Model):
             vals_create['x_studio_misa_saler_code'] = owner_date['owner_code']
         if owner_date.get('sale_order_date'):
             vals_create['x_studio_misa_order_date'] = owner_date['sale_order_date']
+        if owner_date.get('misa_delivery'):
+            vals_create['x_studio_misa_delivery'] = owner_date['misa_delivery']
 
         new_so = env['sale.order'].create(vals_create)
 
