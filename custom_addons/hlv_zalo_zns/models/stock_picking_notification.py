@@ -145,7 +145,6 @@ class StockPicking(models.Model):
         
         # Lấy mã nhân viên sale từ sale.order (chỉ cho outgoing)
         saler_code = None
-        saler_name = None
         if self.picking_type_code == 'outgoing':
             sale_orders = self.env['sale.order'].search([
                 ('name', '=', self.origin)
@@ -155,18 +154,10 @@ class StockPicking(models.Model):
                 if hasattr(sale_order, 'x_studio_misa_saler_code'):
                     saler_code = sale_order.x_studio_misa_saler_code
                     _logger.debug("Picking %s sale.order %s saler_code: %s", self.name, sale_order.name, saler_code)
-                
-                # Cố gắng lấy tên nhân viên sale từ user_id nếu có
-                if sale_order.user_id:
-                    saler_name = sale_order.user_id.name
-                    _logger.debug("Picking %s saler_name: %s", self.name, saler_name)
         
         # Thêm thông tin nhân viên sale nếu có
         if saler_code:
-            message += f"  • Mã NV Sale: {saler_code}"
-            if saler_name:
-                message += f" ({saler_name})"
-            message += "\n"
+            message += f"  • Mã NV Sale: {saler_code}\n"
             _logger.debug("Picking %s added saler info to message", self.name)
         
         # Thêm thông tin người phụ trách (chỉ cho phiếu nhập)
