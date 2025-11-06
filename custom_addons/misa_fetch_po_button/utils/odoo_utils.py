@@ -50,14 +50,26 @@ class OdooUtils(models.AbstractModel):
         })
 
     def _get_or_create_product(self, code, name, unit_name, cost=0.0, product_type="consu", purchase_ok=True, sale_ok=False):
-        """Tìm hoặc tạo mới sản phẩm dựa trên mã, tên, đơn vị tính và giá vốn."""
+        """
+        Tìm hoặc tạo mới sản phẩm dựa trên mã.
+        Nếu tìm thấy → CẬP NHẬT: tên (từ MISA).
+        """
         code = code.strip()
         name = name.strip()
         product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+        
         if product:
-            _logger.info("🔁 Tìm thấy sản phẩm %s. Dùng UOM gốc: %s", code, product.uom_id.name)
+            # ✅ CẬP NHẬT tên từ MISA nếu khác
+            tmpl = product.product_tmpl_id
+            if tmpl.name != name:
+                tmpl.write({'name': name})
+                _logger.info("📝 Cập nhật tên sản phẩm %s: '%s' → '%s'", code, tmpl.name, name)
+            else:
+                _logger.info("🔁 Sản phẩm %s đã tồn tại và không thay đổi", code)
+            
             return product
 
+        # Tạo mới nếu chưa có
         uom = self._get_or_create_uom(unit_name)
         tmpl = self.env["product.template"].create({
             "name": name,
