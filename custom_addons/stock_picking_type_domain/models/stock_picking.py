@@ -31,9 +31,9 @@ class StockPicking(models.Model):
             
             # 1. Kiểm tra nguồn gốc từ Sale Order
             if picking.sale_id:
-                # Lấy hàng, Gói, Lệnh giao hàng
+                # Lấy hàng, Gói, Lệnh giao hàng, Cross-dock
                 domain = [
-                    '|', '|', '|',
+                    '|', '|', '|', '|',
                     ('name', 'ilike', 'Lấy hàng'),
                     ('name', 'ilike', 'Gói'),
                     ('name', 'ilike', 'Lệnh giao hàng'),
@@ -67,7 +67,7 @@ class StockPicking(models.Model):
                 # Kiểm tra nếu origin bắt đầu bằng 'S' (Sale Order)
                 if origin_upper.startswith('S') or 'SO' in origin_upper:
                     domain = [
-                        '|', '|', '|',
+                        '|', '|', '|', '|',
                         ('name', 'ilike', 'Lấy hàng'),
                         ('name', 'ilike', 'Gói'),
                         ('name', 'ilike', 'Lệnh giao hàng'),
@@ -87,7 +87,7 @@ class StockPicking(models.Model):
                 current_code = picking.picking_type_id.code
                 if current_code == 'outgoing':
                     domain = [
-                        '|', '|', '|',
+                        '|', '|', '|', '|',
                         ('name', 'ilike', 'Lấy hàng'),
                         ('name', 'ilike', 'Gói'),
                         ('name', 'ilike', 'Lệnh giao hàng'),
