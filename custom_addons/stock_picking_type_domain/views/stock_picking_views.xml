@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Kế thừa form view của stock.picking -->
+    <record id="view_picking_form_inherit_domain" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit.domain</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <!-- Thêm domain động cho trường picking_type_id -->
+            <xpath expr="//field[@name='picking_type_id']" position="attributes">
+                <attribute name="domain">[('id', 'in', picking_type_domain_ids)]</attribute>
+                <attribute name="options">{'no_create': True, 'no_open': True}</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Kế thừa tree view của stock.picking -->
+    <record id="view_picking_tree_inherit_domain" model="ir.ui.view">
+        <field name="name">stock.picking.tree.inherit.domain</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.vpicktree"/>
+        <field name="arch" type="xml">
+            <!-- Thêm domain động cho trường picking_type_id trong tree view -->
+            <xpath expr="//field[@name='picking_type_id']" position="attributes">
+                <attribute name="domain">[('id', 'in', picking_type_domain_ids)]</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>
