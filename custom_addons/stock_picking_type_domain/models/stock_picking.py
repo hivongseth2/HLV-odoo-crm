@@ -37,6 +37,7 @@ class StockPicking(models.Model):
                     ('name', 'ilike', 'Lấy hàng'),
                     ('name', 'ilike', 'Gói'),
                     ('name', 'ilike', 'Lệnh giao hàng'),
+                    ('name', 'ilike', 'Cross-dock'),
                     ('code', '=', 'outgoing')
                 ]
             
@@ -90,6 +91,7 @@ class StockPicking(models.Model):
                         ('name', 'ilike', 'Lấy hàng'),
                         ('name', 'ilike', 'Gói'),
                         ('name', 'ilike', 'Lệnh giao hàng'),
+                        ('name', 'ilike', 'Cross-dock'),
                         ('code', '=', 'outgoing')
                     ]
                 elif current_code == 'incoming':
