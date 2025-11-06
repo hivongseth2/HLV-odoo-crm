@@ -70,6 +70,7 @@ class StockPicking(models.Model):
                         ('name', 'ilike', 'Lấy hàng'),
                         ('name', 'ilike', 'Gói'),
                         ('name', 'ilike', 'Lệnh giao hàng'),
+                        ('name', 'ilike', 'Cross-dock'),
                         ('code', '=', 'outgoing')
                     ]
                 # Kiểm tra nếu origin bắt đầu bằng 'P' (Purchase Order)
