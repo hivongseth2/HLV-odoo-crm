@@ -1,19 +1,15 @@
 /** @odoo-module **/
 
-import { registry } from "@web/core/registry";
+import { patch } from "@web/core/utils/patch";
+import { BarcodePickingModel } from "@stock_barcode/models/picking_model";
 import { rpc } from "@web/core/network/rpc_service";
+import { useService } from "@web/core/utils/hooks";
 
-const BarcodeMainMenuPatch = {
-    dependencies: ["notification"],
+patch(BarcodePickingModel.prototype, "hlv_barcode_stock_qty", {
+    async _onBarcodeScanned(barcode) {
+        // Gọi hàm gốc để vẫn xử lý logic quét như bình thường
+        await super._onBarcodeScanned(...arguments);
 
-    setup() {
-        this.notification = useService("notification");
-    },
-
-    async onBarcodeScanned(barcode) {
-        if (super.onBarcodeScanned) {
-            super.onBarcodeScanned(barcode);
-        }
         try {
             const result = await rpc("/web/dataset/call_kw", {
                 model: "stock.quant",
@@ -21,10 +17,11 @@ const BarcodeMainMenuPatch = {
                 args: [barcode],
                 kwargs: {},
             });
+
             if (result && !result.error) {
                 this.notification.add(
                     `${result.product}: còn ${result.qty} ${result.uom}`,
-                    { type: "info", title: "Tồn kho" }
+                    { type: "info", title: "Tồn kho hiện tại" }
                 );
             } else {
                 this.notification.add(result.error || "Không tìm thấy sản phẩm", {
@@ -40,6 +37,6 @@ const BarcodeMainMenuPatch = {
             });
         }
     },
-};
+});
 
 registry.category("barcode_handlers").add("hlv_show_stock_qty", BarcodeMainMenuPatch);
