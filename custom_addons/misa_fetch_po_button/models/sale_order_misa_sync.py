@@ -277,6 +277,8 @@ class SaleOrder(models.Model):
             vals_upd['x_studio_misa_saler_code'] = owner_date['owner_code']
         if owner_date.get('sale_order_date'):
             vals_upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+        if owner_date.get('misa_delivery'):
+            vals_upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
         # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
         delivery_order_number = (data.get('DeliveryOrderNumber') or '').strip()
         if delivery_order_number and not self.tracking_number:
@@ -876,6 +878,8 @@ class SaleOrder(models.Model):
             vals_create['x_studio_misa_saler_code'] = owner_date['owner_code']
         if owner_date.get('sale_order_date'):
             vals_create['x_studio_misa_order_date'] = owner_date['sale_order_date']
+        if owner_date.get('misa_delivery'):
+            vals_create['x_studio_misa_delivery'] = owner_date['misa_delivery']
 
         new_so = env['sale.order'].create(vals_create)
 

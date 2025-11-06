@@ -886,6 +886,8 @@ class SaleApiImportWizard(models.TransientModel):
                             upd['x_studio_misa_saler_code'] = owner_date['owner_code']
                         if owner_date.get('sale_order_date'):
                             upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+                        if owner_date.get('misa_delivery'):
+                            upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
                         # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
                         delivery_order_number = (order.get('DeliveryOrderNumber') or '').strip()
                         if delivery_order_number and not existing_order.tracking_number:
@@ -925,6 +927,8 @@ class SaleApiImportWizard(models.TransientModel):
                     sale_vals['x_studio_misa_saler_code'] = owner_date['owner_code']
                 if owner_date.get('sale_order_date'):
                     sale_vals['x_studio_misa_order_date'] = owner_date['sale_order_date']
+                if owner_date.get('misa_delivery'):
+                    sale_vals['x_studio_misa_delivery'] = owner_date['misa_delivery']
 
                 sale_order = self.env['sale.order'].create(sale_vals)
                 

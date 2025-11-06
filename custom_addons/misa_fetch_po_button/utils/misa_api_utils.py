@@ -378,7 +378,8 @@ class MisaApiUtils(models.AbstractModel):
     #=== Hàm lấy OwnerIDText và SaleOrderDate từ SaleOrder ===#
     def get_saleorder_owner_and_date(self, sale_order_id: int | str, sale_headers: object) -> dict:
         """
-        Hàm này dùng để lấy ra mã nhân viên sale (OwnerIDText, chỉ lấy phần trong ngoặc) và ngày đơn hàng (SaleOrderDate)
+        Hàm này dùng để lấy ra mã nhân viên sale (OwnerIDText, chỉ lấy phần trong ngoặc), 
+        ngày đơn hàng (SaleOrderDate) và thông tin giao hàng từ CustomField14
         - Gọi API: POST https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4
         - Payload: {"ID": "<sale_order_id>", "MISAEntityState": "2"}
         - Header: truyền vào từ biến sale_headers (đã build sẵn)
@@ -391,11 +392,11 @@ class MisaApiUtils(models.AbstractModel):
             resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
             if resp.status_code != 200:
                 _logger.error("FormDataNew(SaleOrder) HTTP %s: %s", resp.status_code, resp.text[:300])
-                return {"owner_code": None, "sale_order_date": None}
+                return {"owner_code": None, "sale_order_date": None, "misa_delivery": None}
             data = resp.json() if resp.content else {}
         except Exception as ex:
             _logger.exception("Lỗi gọi FormDataNew SaleOrder (ID=%s): %s", sale_order_id, ex)
-            return {"owner_code": None, "sale_order_date": None}
+            return {"owner_code": None, "sale_order_date": None, "misa_delivery": None}
 
         # Lấy dữ liệu chi tiết đơn hàng từ response
         cd = (data or {}).get("Data", {}).get("CurrentData", {}) or {}
@@ -417,8 +418,11 @@ class MisaApiUtils(models.AbstractModel):
                 _logger.warning("Không parse được SaleOrderDate='%s'", date_text)
                 sale_date = None
 
+        # Lấy thông tin giao hàng từ CustomField14
+        misa_delivery = (cd.get("CustomField14") or "").strip() or None
+
         # Trả về kết quả dạng dict
-        return {"owner_code": owner_code, "sale_order_date": sale_date}    
+        return {"owner_code": owner_code, "sale_order_date": sale_date, "misa_delivery": misa_delivery}    
     
 
 
