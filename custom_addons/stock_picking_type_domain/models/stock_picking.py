@@ -54,10 +54,8 @@ class StockPicking(models.Model):
             elif picking.picking_type_code == 'internal' or (
                 picking.picking_type_id and picking.picking_type_id.code == 'internal'
             ):
-                # Lệnh chuyển hàng nội bộ
+                # Chỉ hiển thị Lệnh chuyển hàng nội bộ, loại bỏ Cross-dock và các loại khác
                 domain = [
-                    '|',
-                    ('name', 'ilike', 'Lệnh chuyển hàng nội bộ'),
                     ('code', '=', 'internal')
                 ]
             
@@ -102,8 +100,6 @@ class StockPicking(models.Model):
                     ]
                 elif current_code == 'internal':
                     domain = [
-                        '|',
-                        ('name', 'ilike', 'Lệnh chuyển hàng nội bộ'),
                         ('code', '=', 'internal')
                     ]
             
