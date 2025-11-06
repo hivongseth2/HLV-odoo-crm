@@ -89,6 +89,7 @@ class StockPicking(models.Model):
             return
 
         order_code = so.name
+        shipping_fee = so.x_studio_misa_delivery or ""
         msisdn = _vn_msisdn(ship_partner.mobile or ship_partner.phone or "")
         if not msisdn:
             _logger.info("ZNS skip: empty phone for %s", picking.name)
@@ -107,7 +108,8 @@ class StockPicking(models.Model):
             "status": "Đang giao hàng",
             "date": date_str,
             "id": id_encoded,
-            "address":ship_partner.street or ""
+            "address":ship_partner.street or "",
+            "shipping_fee":shipping_fee
         }
 
         _logger.info("ZNS send try (OUT): %s to=%s params=%s", picking.name, msisdn, params)
