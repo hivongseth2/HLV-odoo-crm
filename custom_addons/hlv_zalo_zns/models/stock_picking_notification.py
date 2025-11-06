@@ -36,9 +36,9 @@ class StockPicking(models.Model):
         
         Logic:
         - Outgoing: Kiểm tra từ sale.order.delivery_status (nếu có) vì nó chính xác hơn stock.picking
-        - Incoming: Chỉ kiểm tra từ stock.picking vì purchase.order không có delivery_status
+        - Incoming: Kiểm tra từ purchase.order.receipt_status hoặc so sánh qty với purchase.order.line
         
-        Lý do: stock.picking có thể bị tách (split), nhưng sale.order.line là nguồn gốc cho outgoing
+        Lý do: stock.picking có thể bị tách (split), nhưng sale.order.line và purchase.order.line là nguồn gốc
         
         :return: 'toàn bộ' hoặc '1 phần'
         """
@@ -67,9 +67,47 @@ class StockPicking(models.Model):
                     )
                     return 'toàn bộ'
         
-        # Nếu không phải outgoing hoặc không tìm thấy sale.order, kiểm tra từ stock.picking
-        # (Dành cho incoming: vì purchase.order không có delivery_status field)
-        _logger.debug("Picking %s: checking from stock.picking (type=%s, no sale.order linked or not outgoing)", self.name, self.picking_type_code)
+        # Nếu là incoming picking, kiểm tra từ purchase.order
+        elif self.picking_type_code == 'incoming':
+            _logger.debug("Picking %s: checking from purchase.order (type=%s)", self.name, self.picking_type_code)
+            # Lấy purchase.order từ picking (qua origin field)
+            purchase_orders = self.env['purchase.order'].search([
+                ('name', '=', self.origin)
+            ])
+            if purchase_orders:
+                purchase_order = purchase_orders[0]
+                _logger.debug("Picking %s linked to purchase.order %s", self.name, purchase_order.name)
+                # Kiểm tra receipt_status nếu có (Odoo 14+)
+                if hasattr(purchase_order, 'receipt_status'):
+                    # receipt_status: 'pending', 'partial', 'received'
+                    if purchase_order.receipt_status in ['pending', 'partial']:
+                        _logger.debug(
+                            "Picking %s: purchase.order %s has receipt_status=%s",
+                            self.name, purchase_order.name, purchase_order.receipt_status
+                        )
+                        return '1 phần'
+                    elif purchase_order.receipt_status == 'received':
+                        _logger.debug(
+                            "Picking %s: purchase.order %s has receipt_status=received",
+                            self.name, purchase_order.name
+                        )
+                        return 'toàn bộ'
+                else:
+                    # Fallback: so sánh qty_received với qty
+                    _logger.debug("Picking %s: receipt_status not available, comparing quantities", self.name)
+                    for line in purchase_order.order_line:
+                        if line.product_qty > 0:
+                            if line.qty_received < line.product_qty:
+                                _logger.debug(
+                                    "Picking %s: purchase.order line has partial receipt: product=%s, received=%s, qty=%s",
+                                    self.name, line.product_id.name, line.qty_received, line.product_qty
+                                )
+                                return '1 phần'
+                    _logger.debug("Picking %s: purchase.order received completely", self.name)
+                    return 'toàn bộ'
+        
+        # Nếu không phải outgoing hoặc không tìm thấy sale.order/purchase.order, kiểm tra từ stock.picking
+        _logger.debug("Picking %s: checking from stock.picking fallback (type=%s)", self.name, self.picking_type_code)
         
         # Kiểm tra xem có move line nào bị split (done < demand) không
         for move in self.move_ids_without_package:
