@@ -86,6 +86,25 @@ class OdooUtils(models.AbstractModel):
         return tmpl.product_variant_id
     
     
+    def _sync_product_name_from_misa(self, product_code, product_name):
+        """
+        Đồng bộ tên sản phẩm từ MISA.
+        Tìm sản phẩm theo code và cập nhật tên nếu khác.
+        """
+        if not product_code or not product_name:
+            return None
+            
+        code = product_code.strip()
+        name = product_name.strip()
+        
+        product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
+        if product:
+            tmpl = product.product_tmpl_id
+            if tmpl.name != name:
+                tmpl.write({'name': name})
+                _logger.info("📝 Cập nhật tên sản phẩm %s: '%s' → '%s'", code, tmpl.name, name)
+        return product
+    
     def _update_picking_lines(self, picking, lines):
         """
         Cập nhật các dòng move của stock.picking theo danh sách lines mới từ MISA.

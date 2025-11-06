@@ -292,6 +292,32 @@ class SaleApiImportWizard(models.TransientModel):
         return [tax.id] if tax else []
 
 
+    def _sync_all_product_names_from_misa(self, product_lines):
+        """
+        Đồng bộ tên tất cả sản phẩm từ MISA (bao gồm cả combo parent và child).
+        Gọi hàm này TRƯỚC khi xử lý các dòng SO để đảm bảo tên luôn đồng bộ.
+        """
+        odoo_utils = self.env['odoo.utils']
+        synced_count = 0
+        
+        for misa_line in product_lines:
+            # Bỏ qua combo child vì chỉ cần sync parent
+            if misa_line.get("IsChildProduct"):
+                continue
+                
+            product_code = misa_line.get("ProductIDText")
+            product_name = misa_line.get("Description") or product_code
+            
+            if product_code and product_name:
+                result = odoo_utils._sync_product_name_from_misa(product_code, product_name)
+                if result:
+                    synced_count += 1
+        
+        if synced_count > 0:
+            _logger.info("🔄 Đã đồng bộ tên cho %d sản phẩm từ MISA", synced_count)
+        
+        return synced_count
+
     def _update_existing_so_taxes(self, existing_order, product_lines):
         """
         Cập nhật thuế cho SO đã tồn tại.
@@ -302,11 +328,17 @@ class SaleApiImportWizard(models.TransientModel):
                         existing_order.name, existing_order.state)
             return False
 
+        odoo_utils = self.env['odoo.utils']
         updated_count = 0
+        
         for misa_line in product_lines:
             product_code = misa_line.get("ProductIDText")
             if not product_code:
                 continue
+
+            # ✅ ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA
+            product_name = misa_line.get("Description") or product_code
+            odoo_utils._sync_product_name_from_misa(product_code, product_name)
 
             odoo_line = existing_order.order_line.filtered(
                 lambda l: l.product_id.default_code == product_code
@@ -929,6 +961,8 @@ class SaleApiImportWizard(models.TransientModel):
                     if existing_order:
                         # if misa_id_str and not existing_order.misa_id:
                         #     existing_order.misa_id = misa_id_str
+                        # # >>> ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA (TRƯỚC KHI XỬ LÝ) <<<
+                        # self._sync_all_product_names_from_misa(grouped_lines)
                         # # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <<<
                         # self._update_existing_so_taxes(existing_order, grouped_lines)
                         # # >>> CẬP NHẬT COMBO PRODUCT (chỉ dòng cha) <<<
@@ -1268,7 +1302,9 @@ class SaleApiImportWizard(models.TransientModel):
                         if existing_order:
                             if misa_id_str and not existing_order.misa_id:
                                 existing_order.misa_id = misa_id_str
-                            # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <
+                            # >>> ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA (TRƯỚC KHI XỬ LÝ) <<<
+                            self._sync_all_product_names_from_misa(grouped_lines)
+                            # >>> CẬP NHẬT THUẾ CHO SO ĐÃ TỒN TẠI <<<
                             self._update_existing_so_taxes(existing_order, grouped_lines)
                             # >>> THÊM: CẬP NHẬT COMBO PRODUCT (parent-only) <<<
                             self._update_existing_combo_products(existing_order, grouped_lines, sale_headers)
