@@ -137,11 +137,11 @@ class StockPicking(models.Model):
             _logger.debug("Picking %s warehouse: %s", self.name, warehouse_name)
         
         # Build message
-        message = f"🔔 Thông báo đơn hàng {action_type}\n"
-        message += f"*Số đơn hàng:* {order_code}\n"
-        message += f"*Số phiếu {label_type} kho Odoo:* {self.name}\n"
-        message += f"*Kho {label_type}:* {warehouse_name}\n"
-        message += f"*Trạng thái:* {action_type} {completion_status}\n"
+        message = f"🔔 THÔNG BÁO ĐƠN HÀNG {action_type}\n"
+        message += f"Số đơn hàng: {order_code}\n"
+        message += f"Số phiếu {label_type} kho Odoo: {self.name}\n"
+        message += f"Kho {label_type}: {warehouse_name}\n"
+        message += f"Trạng thái: {label_type} {completion_status}\n"
         
         # Lấy mã nhân viên sale từ sale.order (chỉ cho outgoing)
         saler_code = None
@@ -163,7 +163,7 @@ class StockPicking(models.Model):
         
         # Thêm thông tin nhân viên sale nếu có
         if saler_code:
-            message += f"*Mã NV Sale:* {saler_code}"
+            message += f"Mã NV Sale: {saler_code}"
             if saler_name:
                 message += f" ({saler_name})"
             message += "\n"
