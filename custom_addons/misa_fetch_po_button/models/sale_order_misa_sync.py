@@ -298,7 +298,26 @@ class SaleOrder(models.Model):
 
         self.write(vals_upd)
 
-        # ===== 4) Upsert lines theo product_code =====
+        # ===== 4) ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA (TRƯỚC KHI UPSERT LINES) =====
+        _logger.info("🔄 Đồng bộ tên sản phẩm từ MISA cho SO %s...", self.name)
+        synced_count = 0
+        for ln in (lines or []):
+            # Bỏ qua combo child
+            if ln.get("IsChildProduct"):
+                continue
+            
+            product_code = (ln.get("ProductIDText") or "").strip()
+            product_name = ln.get("Description") or product_code
+            
+            if product_code and product_name:
+                result = odoo_utils._sync_product_name_from_misa(product_code, product_name)
+                if result:
+                    synced_count += 1
+        
+        if synced_count > 0:
+            _logger.info("✅ Đã đồng bộ tên cho %d sản phẩm từ MISA", synced_count)
+
+        # ===== 5) Upsert lines theo product_code =====
         SaleLine    = self.env['sale.order.line']
         misa_utils  = self.env['misa.api.utils']
         odoo_utils  = self.env['odoo.utils']
@@ -978,6 +997,25 @@ class SaleOrder(models.Model):
         _logger.info("🔍 Combo map cuối cùng: %s", combo_parent_map)
         _logger.info("📊 Children by parent: %s", {k: len(v) for k, v in children_by_parent.items()})
 
+        # ===== 8.0a) ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA (TRƯỚC KHI TẠO LINES) =====
+        _logger.info("🔄 Đồng bộ tên sản phẩm từ MISA cho đơn %s...", order_no)
+        synced_count = 0
+        for ln in (lines or []):
+            # Bỏ qua combo child
+            if ln.get("IsChildProduct"):
+                continue
+            
+            product_code = (ln.get("ProductIDText") or "").strip()
+            product_name = ln.get("Description") or product_code
+            
+            if product_code and product_name:
+                result = odoo_utils._sync_product_name_from_misa(product_code, product_name)
+                if result:
+                    synced_count += 1
+        
+        if synced_count > 0:
+            _logger.info("✅ Đã đồng bộ tên cho %d sản phẩm từ MISA", synced_count)
+
         # ===== 8.0b) TẠO/CẬP NHẬT COMBO PRODUCTS TRƯỚC KHI TẠO LINES =====
         misa_utils = env['misa.api.utils']
         combo_products_created = set()  # Track các combo đã xử lý
@@ -1347,7 +1385,26 @@ class SaleOrder(models.Model):
             self.write(vals_header_upd)
             _logger.info("✅ Đã cập nhật misa_saler_code/order_date cho SO %s", self.name)
 
-        # --------- Bước 0: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
+        # --------- Bước 0a: ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA ---------
+        _logger.info("🔄 Đồng bộ tên sản phẩm từ MISA cho SO %s...", self.name)
+        synced_count = 0
+        for ln in (lines or []):
+            # Bỏ qua combo child
+            if ln.get("IsChildProduct"):
+                continue
+            
+            product_code = (ln.get("ProductIDText") or "").strip()
+            product_name = ln.get("Description") or product_code
+            
+            if product_code and product_name:
+                result = odoo_utils._sync_product_name_from_misa(product_code, product_name)
+                if result:
+                    synced_count += 1
+        
+        if synced_count > 0:
+            _logger.info("✅ Đã đồng bộ tên cho %d sản phẩm từ MISA", synced_count)
+
+        # --------- Bước 0b: đưa dòng SO về đúng MISA (nếu không có invoice posted) ---------
         if self.invoice_ids.filtered(lambda inv: inv.state == 'posted'):
             _logger.warning("Bỏ qua cập nhật SO lines vì có hoá đơn 'posted'. Sẽ chỉ vá picking mở.")
         else:
