@@ -344,9 +344,9 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-class ProductNameUpdateWizard(models.TransientModel):
-    _name = "product.name.update.wizard"
-    _description = "Cập nhật tên sản phẩm theo Mã (default_code) từ Excel"
+class ProductImportWizard(models.TransientModel):
+    _name = "product.import.wizard"
+    _description = "Wizard to import product from Excel"
 
     file = fields.Binary(string="Excel File", required=True)
     filename = fields.Char(string="File Name")
