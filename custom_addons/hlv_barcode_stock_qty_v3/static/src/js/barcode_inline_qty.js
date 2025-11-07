@@ -1,16 +1,20 @@
 /** @odoo-module **/
 
+// GỌI THEO DEFAULT_CODE (không dùng barcode)
 const RPC_MODEL = "stock.quant";
-const RPC_METHOD = "get_qty_by_barcode_at_warehouse";
+const RPC_METHOD = "get_qty_by_default_code_at_warehouse";
 
+// ---- utils ----
 async function callKw(model, method, args = [], kwargs = {}) {
     const res = await fetch("/web/dataset/call_kw", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            jsonrpc: "2.0", method: "call",
-            params: { model, method, args, kwargs }, id: Date.now()
+            jsonrpc: "2.0",
+            method: "call",
+            params: { model, method, args, kwargs },
+            id: Date.now(),
         }),
     });
     const json = await res.json();
@@ -33,35 +37,50 @@ function insertInline(lineEl, text) {
     badge.textContent = `| ${text}`;
 }
 
-// LẤY PREFIX KHO từ dòng: 'TSN/Khu vực đóng gói' -> 'TSN'
+// Bắt prefix kho từ dòng hoặc header: TSN/Stock, KBC/Tồn kho, KHD/Tồn kho, kể cả có phần con
 function detectWarehousePrefix(lineEl) {
-    const destText = lineEl.querySelector(".o_line_destination_location")?.innerText?.trim() || "";
-    const prefix = destText.split("/")[0]?.trim();
-    if (prefix) return prefix;
+    // 1) trong dòng (nếu layout có)
+    const destText = lineEl.querySelector(".o_line_destination_location")?.innerText || "";
+    let prefix = (destText.split("/")[0] || "").trim();
+    if (["TSN", "KBC", "KHD"].includes(prefix)) return prefix;
 
-    // Fallback: tìm chuỗi đầu tiên chứa dấu '/' ở header
-    const anySlashNode = Array.from(document.querySelectorAll("body *"))
-        .find(n => n.childNodes?.length === 1 && typeof n.innerText === "string" && n.innerText.includes("/"));
-    return anySlashNode ? anySlashNode.innerText.split("/")[0].trim() : null;
+    // 2) header/toàn trang
+    const candidates = [
+        document.querySelector(".o_barcode_container"),
+        document.querySelector(".o-breadcrumb"),
+        document.querySelector(".o_action_manager"),
+        document.body,
+    ];
+    for (const el of candidates) {
+        if (!el) continue;
+        const txt = el.innerText || "";
+        const m = txt.match(/\b(TSN|KBC|KHD)\s*\/\s*(Stock|Tồn kho)\b/i);
+        if (m) return m[1].toUpperCase();
+    }
+    return null;
 }
 
+// Lấy default_code hiển thị trên dòng (span .o_product_code). Fallback: data-barcode (nếu cùng là mã tham chiếu).
+function getDefaultCode(lineEl) {
+    const codeText = lineEl.querySelector(".o_product_code")?.textContent?.trim();
+    return codeText || lineEl.getAttribute("data-barcode") || "";
+}
+
+// ---- main ----
 async function annotateLine(lineEl) {
     try {
-        const barcode = lineEl.getAttribute("default_code");
-        if (!barcode || lineEl.__hlv_done__) return;
+        const defaultCode = getDefaultCode(lineEl);
+        if (!defaultCode || lineEl.__hlv_done__) return;
         lineEl.__hlv_done__ = true;
 
-        const whPrefix = detectWarehousePrefix(lineEl); // TSN/KBC/KHD
-        const result = await callKw(RPC_MODEL, RPC_METHOD, [barcode, whPrefix], {});
-        if (result && !result.error) {
-            const labelPrefix = result.warehouse_prefix || (result.base_location?.split("/")?.[0]) || "tổng";
-            insertInline(lineEl, `tồn (${labelPrefix}): ${result.qty} ${result.uom}`);
-        }
+        const whPrefix = detectWarehousePrefix(lineEl); // 'TSN' / 'KBC' / 'KHD' (có thể null)
+        const result = await callKw(RPC_MODEL, RPC_METHOD, [defaultCode, whPrefix], {});
+        const labelPrefix = whPrefix || (result.base_location?.split("/")?.[0]) || "tổng";
+        insertInline(lineEl, `tồn (${labelPrefix}): ${result.qty} ${result.uom}`);
     } catch (e) {
-        // console.debug("HLV annotate error:", e);
+        // im lặng
     }
 }
-
 
 function scanExisting() {
     document.querySelectorAll(".o_barcode_line[data-barcode]").forEach(annotateLine);

@@ -1,82 +1,98 @@
+# -*- coding: utf-8 -*-
 from odoo import models, api
 
 class StockQuant(models.Model):
     _inherit = "stock.quant"
 
-    @api.model
-    def _find_product_by_code(self, code):
-        """Tìm product theo nhiều khóa: barcode, default_code, template.barcode"""
-        if not code:
-            return self.env['product.product']
-        Product = self.env['product.product']
-        # 1) barcode của variant
-        prod = Product.search([('barcode', '=', code)], limit=1)
-        if prod:
-            return prod
-        # 2) default_code (mã tham chiếu)
-        prod = Product.search([('default_code', '=', code)], limit=1)
-        if prod:
-            return prod
-        # 3) barcode của template
-        tmpl = self.env['product.template'].search([('barcode', '=', code)], limit=1)
-        if tmpl:
-            # nếu template 1 variant thì lấy luôn; nhiều variant thì lấy variant đầu
-            return tmpl.product_variant_id or self.env['product.product'].search(
-                [('product_tmpl_id', '=', tmpl.id)], limit=1
-            )
-        # (tuỳ chọn) 4) bao bì có barcode -> map về product
-        packaging = self.env['product.packaging'].search([('barcode', '=', code)], limit=1)
-        if packaging and packaging.product_id:
-            return packaging.product_id
-        return Product.browse()  # rỗng
-
-    @api.model
-    def get_qty_by_barcode_at_warehouse(self, code, wh_prefix=None):
+    # ---------- helpers ----------
+    def _get_base_location_by_prefix(self, prefix):
         """
-        Trả ON-HAND (quantity, bao gồm reserved) theo kho có code = wh_prefix (TSN/KBC/…).
-        Tìm product theo nhiều khóa: barcode / default_code / template.barcode / packaging.barcode.
+        Xác định location gốc của kho theo prefix (TSN/KBC/KHD).
+        ƯU TIÊN: stock.warehouse.code == prefix -> lot_stock_id.
+        FALLBACK: tìm internal location có complete_name bắt đầu bằng
+                  '<prefix>/Stock' hoặc '<prefix>/Tồn kho'.
+        Cuối cùng: lấy bất kỳ internal dưới view location '<prefix>/'.
         """
-        product = self._find_product_by_code(code)
-        if not product:
-            return {"error": "Không tìm thấy sản phẩm: %s" % code}
+        if not prefix:
+            return False
 
-        # Xác định location gốc của kho từ warehouse.lot_stock_id (không phụ thuộc tên Tồn kho/Stock)
-        base_loc = False
-        if wh_prefix:
-            wh = self.env['stock.warehouse'].search([('code', '=', wh_prefix)], limit=1)
-            if not wh:
-                wh = self.env['stock.warehouse'].search(
-                    [('lot_stock_id.complete_name', 'ilike', wh_prefix + '/%')], limit=1
-                )
-            if wh and wh.lot_stock_id:
-                base_loc = wh.lot_stock_id
-            else:
-                view_loc = self.env['stock.location'].search(
-                    [('usage', '=', 'view'), ('name', '=', wh_prefix)], limit=1
-                )
-                if not view_loc:
-                    view_loc = self.env['stock.location'].search(
-                        [('usage', '=', 'view'), ('complete_name', 'ilike', wh_prefix + '/%')], limit=1
-                    )
-                if view_loc:
-                    base_loc = self.env['stock.location'].search(
-                        [('usage', '=', 'internal'), ('id', 'child_of', view_loc.id)], limit=1
-                    )
+        Warehouse = self.env['stock.warehouse']
+        Location = self.env['stock.location']
 
-        domain = [('product_id', '=', product.id)]
-        if base_loc:
-            domain.append(('location_id', 'child_of', base_loc.id))
+        wh = Warehouse.search([('code', '=', prefix)], limit=1)
+        if wh and wh.lot_stock_id:
+            return wh.lot_stock_id
+
+        # 'Stock' (EN) và 'Tồn kho' (VI)
+        for key in ('Stock', 'Tồn kho'):
+            loc = Location.search([
+                ('usage', '=', 'internal'),
+                ('complete_name', 'ilike', prefix + '/' + key + '%'),
+            ], order='id', limit=1)
+            if loc:
+                return loc
+
+        # fallback: view location + child_of internal
+        view_loc = Location.search([
+            ('usage', '=', 'view'),
+            ('name', '=', prefix)
+        ], limit=1)
+        if not view_loc:
+            view_loc = Location.search([
+                ('usage', '=', 'view'),
+                ('complete_name', 'ilike', prefix + '/%')
+            ], limit=1)
+        if view_loc:
+            loc = Location.search([
+                ('usage', '=', 'internal'),
+                ('id', 'child_of', view_loc.id)
+            ], order='id', limit=1)
+            if loc:
+                return loc
+        return False
+
+    # ---------- public RPC ----------
+    @api.model
+    def get_qty_by_default_code_at_warehouse(self, default_code, wh_prefix=None):
+        """
+        TÍNH 'Số lượng hiện có' (on-hand = quantity, gồm reserved) theo kho TSN/KBC/KHD.
+        TÌM SẢN PHẨM CHỈ THEO default_code:
+          - ưu tiên product.product.default_code
+          - nếu không có: product.template.default_code -> cộng tất cả variant
+        """
+        if not default_code:
+            return {"error": "Thiếu mã tham chiếu."}
+
+        Product = self.env["product.product"]
+        Template = self.env["product.template"]
+
+        prod = Product.search([("default_code", "=", default_code)], limit=1)
+        if prod:
+            products = prod
         else:
-            domain.append(('location_id.usage', '=', 'internal'))
+            tmpl = Template.search([("default_code", "=", default_code)], limit=1)
+            if not tmpl:
+                return {"error": "Không tìm thấy sản phẩm với mã tham chiếu: %s" % default_code}
+            products = tmpl.product_variant_ids  # cộng tất cả biến thể
+
+        base_loc = self._get_base_location_by_prefix(wh_prefix)
+
+        domain = [("product_id", "in", products.ids)]
+        if base_loc:
+            domain.append(("location_id", "child_of", base_loc.id))
+        else:
+            # nếu không đọc được prefix -> tổng internal (để vẫn có số)
+            domain.append(("location_id.usage", "=", "internal"))
 
         quants = self.sudo().search(domain)
-        qty_on_hand = sum(quants.mapped('quantity'))  # ON-HAND (bao gồm reserved)
+
+        # ON-HAND: dùng quantity (KHÔNG trừ reserved)
+        qty_on_hand = sum(quants.mapped("quantity"))
 
         return {
-            "product": product.display_name,
-            "barcode_or_code": code,
+            "default_code": default_code,
             "qty": qty_on_hand,
-            "uom": product.uom_id.name,
+            "uom": (products[:1].uom_id.name if products else ""),
             "warehouse_prefix": wh_prefix,
-            "base_location": base_loc.complete_name if base_loc else None,
+            "base_location": (base_loc.complete_name if base_loc else None),
         }
