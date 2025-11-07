@@ -1,14 +1,17 @@
 /** @odoo-module **/
 
 const RPC_MODEL = "stock.quant";
-const RPC_METHOD = "get_qty_by_barcode_at_location";
+const RPC_METHOD = "get_qty_by_barcode_at_warehouse";
 
 async function callKw(model, method, args = [], kwargs = {}) {
     const res = await fetch("/web/dataset/call_kw", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { model, method, args, kwargs }, id: Date.now() }),
+        body: JSON.stringify({
+            jsonrpc: "2.0", method: "call",
+            params: { model, method, args, kwargs }, id: Date.now()
+        }),
     });
     const json = await res.json();
     if (json.error) throw json.error;
@@ -30,14 +33,16 @@ function insertInline(lineEl, text) {
     badge.textContent = `| ${text}`;
 }
 
-// Lấy prefix kho từ dòng (ví dụ 'TSN' trong 'TSN/Khu vực đóng gói') rồi map sang 'TSN/Stock'
-function detectLocationCompleteName(lineEl) {
-    const dest = lineEl.querySelector(".o_line_destination_location")?.innerText?.trim() || "";
-    // dest ví dụ: "TSN/Khu vực đóng gói"
-    const prefix = dest.split("/")[0]?.trim();
-    if (!prefix) return null;
-    // kho nguồn chuẩn của Odoo: <PREFIX>/Stock
-    return `${prefix}/Stock`;
+// LẤY PREFIX KHO từ dòng: 'TSN/Khu vực đóng gói' -> 'TSN'
+function detectWarehousePrefix(lineEl) {
+    const destText = lineEl.querySelector(".o_line_destination_location")?.innerText?.trim() || "";
+    const prefix = destText.split("/")[0]?.trim();
+    if (prefix) return prefix;
+
+    // Fallback: tìm chuỗi đầu tiên chứa dấu '/' ở header
+    const anySlashNode = Array.from(document.querySelectorAll("body *"))
+        .find(n => n.childNodes?.length === 1 && typeof n.innerText === "string" && n.innerText.includes("/"));
+    return anySlashNode ? anySlashNode.innerText.split("/")[0].trim() : null;
 }
 
 async function annotateLine(lineEl) {
@@ -46,17 +51,17 @@ async function annotateLine(lineEl) {
         if (!barcode || lineEl.__hlv_done__) return;
         lineEl.__hlv_done__ = true;
 
-        const locationComplete = detectLocationCompleteName(lineEl); // ví dụ 'TSN/Stock'
-        const result = await callKw(RPC_MODEL, RPC_METHOD, [barcode, locationComplete], {});
+        const whPrefix = detectWarehousePrefix(lineEl); // TSN/KBC/KHD
+        const result = await callKw(RPC_MODEL, RPC_METHOD, [barcode, whPrefix], {});
         if (result && !result.error) {
-            const locLabel = result.location ? `${result.location.split("/")[0]}` : "tổng";
-            insertInline(lineEl, `tồn (${locLabel}): ${result.qty} ${result.uom}`);
+            const labelPrefix = result.warehouse_prefix || (result.base_location?.split("/")?.[0]) || "tổng";
+            insertInline(lineEl, `tồn (${labelPrefix}): ${result.qty} ${result.uom}`);
         }
     } catch (e) {
-        // im lặng để không phá UI
         // console.debug("HLV annotate error:", e);
     }
 }
+
 
 function scanExisting() {
     document.querySelectorAll(".o_barcode_line[data-barcode]").forEach(annotateLine);
