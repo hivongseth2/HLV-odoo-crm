@@ -26,21 +26,21 @@ class StockPicking(models.Model):
 
     # ---- Tìm SO gốc cho phiếu (ưu tiên group → origin → sale_line) ----
     def _zns_resolve_sale_order(self):
-            self.ensure_one()
-            so = False
-            if self.group_id and getattr(self.group_id, "sale_id", False):
-                so = self.group_id.sale_id
-            if not so and self.origin:
-                so = self.env['sale.order'].sudo().search([('name', '=', self.origin)], limit=1)
-            if not so:
-                so_rs = self.mapped('move_ids_without_package.sale_line_id.order_id')
-                so = so_rs[:1] if so_rs else False
-            return so
+        self.ensure_one()
+        so = False
+        if self.group_id and getattr(self.group_id, "sale_id", False):
+            so = self.group_id.sale_id
+        if not so and self.origin:
+            so = self.env['sale.order'].sudo().search([('name', '=', self.origin)], limit=1)
+        if not so:
+            so_rs = self.mapped('move_ids_without_package.sale_line_id.order_id')
+            so = so_rs[:1] if so_rs else False
+        return so
 
     def _zns_resolve_purchase_order(self):
-            self.ensure_one()
-            po_rs = self.mapped('move_ids_without_package.purchase_line_id.order_id')
-            return po_rs[:1] if po_rs else False
+        self.ensure_one()
+        po_rs = self.mapped('move_ids_without_package.purchase_line_id.order_id')
+        return po_rs[:1] if po_rs else False
 
     # ---- Lấy partner giao hàng (từ SO nếu có) ----
     def _zns_get_shipping_partner(self):
