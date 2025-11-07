@@ -351,11 +351,11 @@ class StockPicking(models.Model):
                     self.name
                 )
             # # TODO: Có thể bật để gửi thông báo cho phiếu nhập từ TRẢ HÀNG (customer return)
-            # elif location_usage == 'customer':
-            #     _logger.debug(
-            #         "Picking %s (incoming): from customer return - will send notification",
-            #         self.name
-            #     )
+            elif location_usage == 'customer':
+                _logger.debug(
+                    "Picking %s (incoming): from customer return - will send notification",
+                    self.name
+                )
             # Bỏ qua chuyển kho nội bộ (internal transfer)
             elif location_usage == 'internal':
                 _logger.info(
