@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 const RPC_MODEL = "stock.quant";
-const RPC_METHOD = "get_qty_by_default_code_at_warehouse";  // <-- ĐÚNG TÊN RPC
+const RPC_METHOD = "get_qty_by_default_code_at_warehouse";
 
 async function callKw(model, method, args = [], kwargs = {}) {
     const res = await fetch("/web/dataset/call_kw", {
@@ -48,13 +48,6 @@ function getDefaultCode(lineEl) {
     return codeText || lineEl.getAttribute("data-barcode") || "";
 }
 
-/** @odoo-module **/
-
-const RPC_MODEL = "stock.quant";
-const RPC_METHOD = "get_qty_by_default_code_at_warehouse";  // <-- ĐÚNG TÊN RPC
-
-// ... các hàm callKw/insertInline/ detectWarehousePrefix/getDefaultCode giữ nguyên ...
-
 async function annotateLine(lineEl) {
     try {
         const defaultCode = getDefaultCode(lineEl);
@@ -73,7 +66,6 @@ async function annotateLine(lineEl) {
         // no-op
     }
 }
-
 function scanExisting() {
     document.querySelectorAll(".o_barcode_line[data-barcode]").forEach(annotateLine);
 }
