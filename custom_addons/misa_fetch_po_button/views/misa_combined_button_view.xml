@@ -23,6 +23,14 @@
         <field name="target">new</field>
     </record>
 
+    <!-- Action cho Return Order -->
+    <record id="action_misa_return_fetch_main" model="ir.actions.act_window">
+        <field name="name">Lấy đơn hàng trả về từ MISA</field>
+        <field name="res_model">misa.return.fetch</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
     <!-- Action cho Login MISA -->
     <record id="action_login_misa_api" model="ir.actions.act_window">
         <field name="name">Login MISA</field>
@@ -67,6 +75,27 @@
                 <footer>
                     <button name="action_fetch_transfers"
                             string="Lấy Transfer từ MISA"
+                            type="object"
+                            class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Giao diện form cho Return Order -->
+    <record id="view_misa_return_fetch_form" model="ir.ui.view">
+        <field name="name">misa.return.fetch.form</field>
+        <field name="model">misa.return.fetch</field>
+        <field name="arch" type="xml">
+            <form string="Lấy đơn hàng trả về từ MISA">
+                <group>
+                    <field name="date_from" required="1"/>
+                    <field name="date_to" required="1"/>
+                </group>
+                <footer>
+                    <button name="action_fetch_return_orders"
+                            string="Lấy đơn trả về từ MISA"
                             type="object"
                             class="btn-primary"/>
                     <button string="Hủy" class="btn-secondary" special="cancel"/>
@@ -125,16 +154,23 @@
               action="action_misa_transfer_fetch_main"
               sequence="101"/>
 
+    <!-- Menu con cho Return Order -->
+    <menuitem id="menu_import_misa_return"
+              name="Lấy đơn trả về từ MISA"
+              parent="menu_misa_import_root"
+              action="action_misa_return_fetch_main"
+              sequence="102"/>
+
     <!-- Menu con cho Sale Order -->
     <menuitem id="menu_import_sale_api"
               name="Lấy Sale Order từ MISA API"
               parent="menu_misa_import_root"
               action="action_sale_api_import_wizard_main"
-              sequence="102"/>
+              sequence="103"/>
     <!-- Menu con cho Login -->
     <menuitem id="menu_login_misa_api"
           name="Login MISA"
           parent="menu_misa_import_root"
           action="action_login_misa_api"
-          sequence="102"/>
+          sequence="104"/>
 </odoo>
