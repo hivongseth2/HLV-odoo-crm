@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <template id="hlv_assets_barcode_inline"
+  <template id="hlv_barcode_inline_assets"
             name="HLV: Barcode inline qty assets"
             inherit_id="stock_barcode.assets_backend">
     <xpath expr="." position="inside">
