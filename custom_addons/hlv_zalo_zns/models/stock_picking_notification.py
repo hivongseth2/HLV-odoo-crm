@@ -406,9 +406,14 @@ class StockPicking(models.Model):
             _logger.exception("Error formatting Zalo Notification message for %s: %s", self.name, e)
             return
         
-        # Kiểm tra access token
-        if not config.access_token:
-            _logger.error("Zalo Config for picking %s has no access_token. Please authorize first.", self.name)
+        # Kiểm tra access token (sử dụng method để hỗ trợ shared token)
+        try:
+            access_token = config.get_valid_access_token()
+            if not access_token:
+                _logger.error("Zalo Config for picking %s has no valid access_token. Please authorize first.", self.name)
+                return
+        except Exception as e:
+            _logger.exception("Error getting access token for picking %s: %s", self.name, e)
             return
         
         if config.token_expires_at:
