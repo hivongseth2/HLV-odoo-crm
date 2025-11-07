@@ -11,22 +11,22 @@
                         string="Authorize with Zalo"
                         type="object"
                         class="oe_highlight"
-                        invisible="refresh_token != False" />
+                        invisible="use_shared_token or refresh_token != False" />
                     <button name="action_test_send_message" 
                         string="Test Gửi Tin Nhắn" 
                         type="object" 
                         class="btn-primary"
-                        invisible="not active or not refresh_token"/>
+                        invisible="not active"/>
                     <button name="action_preview_send_message"
                         string="Preview Tin Nhắn" 
                         type="object"
                         class="btn-secondary"
-                        invisible="not active or not refresh_token"/>
+                        invisible="not active"/>
                     <button name="action_refresh_token"
                         string="Refresh Token"
                         type="object"
                         class="btn-secondary"
-                        invisible="not active or not (refresh_token != False)" />
+                        invisible="use_shared_token or not active or not (refresh_token != False)" />
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -38,6 +38,33 @@
                         <group>
                             <field name="name" />
                             <field name="active" />
+                            <field name="use_shared_token" 
+                                   help="Khuyến nghị BẬT để sử dụng Shared Token Manager (dễ quản lý hơn)"/>
+                            <field name="send_on_incoming" />
+                            <field name="send_on_outgoing" />
+                        </group>
+                        <group invisible="not use_shared_token">
+                            <div style="padding: 10px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px;">
+                              <p style="margin: 5px 0; color: #155724;">
+                                <b>✅ Đang sử dụng Shared Token Manager</b>
+                              </p>
+                              <p style="margin: 5px 0; color: #155724;">
+                                Token được quản lý tập trung tại <b>Zalo > 🔑 Shared Token</b>
+                              </p>
+                            </div>
+                        </group>
+                    </group>
+                    
+                    <group string="⚠️ Own Token (Deprecated)" invisible="use_shared_token">
+                        <div style="padding: 10px; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px; margin: 10px 0;">
+                          <p style="margin: 5px 0; color: #856404;">
+                            <b>⚠️ Chế độ này đã deprecated</b>
+                          </p>
+                          <p style="margin: 5px 0; color: #856404;">
+                            Khuyến nghị BẬT "Use Shared Token" để dễ quản lý hơn
+                          </p>
+                        </div>
+                        <group>
                             <field name="app_id" />
                             <field name="secret_key" password="True" />
                             <field name="callback_url" widget="url" />
@@ -45,8 +72,6 @@
                         <group>
                             <field name="access_token" password="True" />
                             <field name="token_expires_at" />
-                            <field name="send_on_incoming" />
-                            <field name="send_on_outgoing" />
                         </group>
                     </group>
 
