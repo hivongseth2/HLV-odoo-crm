@@ -9,10 +9,8 @@ async function callKw(model, method, args = [], kwargs = {}) {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            jsonrpc: "2.0",
-            method: "call",
-            params: { model, method, args, kwargs },
-            id: Date.now(),
+            jsonrpc: "2.0", method: "call",
+            params: { model, method, args, kwargs }, id: Date.now()
         }),
     });
     const json = await res.json();
@@ -35,37 +33,44 @@ function insertInline(lineEl, text) {
     badge.textContent = `| ${text}`;
 }
 
+// BẮT prefix từ dòng: support 'TSN/Stock', 'KBC/Tồn kho', 'KBC/Tồn kho/D8-T4', ...
 function detectWarehousePrefix(lineEl) {
-    const destText = lineEl.querySelector(".o_line_destination_location")?.innerText?.trim() || "";
-    const prefix = destText.split("/")[0]?.trim();
-    return prefix || null;
+    const text = lineEl.querySelector(".o_line_destination_location")?.innerText || "";
+    // lấy phần trước dấu '/'
+    let prefix = (text.split("/")[0] || "").trim();
+    // fallback: dò trong toàn bộ text của dòng xem có chuỗi bắt đầu bằng TSN/KBC/KHD
+    if (!prefix) {
+        const full = lineEl.innerText || "";
+        const m = full.match(/\b(TSN|KBC|KHD)\s*\//i);
+        if (m) prefix = m[1].toUpperCase();
+    }
+    if (["TSN", "KBC", "KHD"].includes(prefix)) return prefix;
+    return null; // để backend fallback 'tổng' nếu không đọc được
 }
 
-// >>> lấy default_code từ mã hiển thị trên dòng
+// Lấy default_code hiển thị trên dòng (span .o_product_code). Fallback: data-barcode.
 function getDefaultCode(lineEl) {
     const codeText = lineEl.querySelector(".o_product_code")?.textContent?.trim();
-    // nếu không có, fallback dùng data-barcode
     return codeText || lineEl.getAttribute("data-barcode") || "";
 }
 
 async function annotateLine(lineEl) {
     try {
-        const defaultCode = getDefaultCode(lineEl);
-        if (!defaultCode || lineEl.__hlv_done__) return;
+        const code = getDefaultCode(lineEl);
+        if (!code || lineEl.__hlv_done__) return;
         lineEl.__hlv_done__ = true;
 
-        const whPrefix = detectWarehousePrefix(lineEl); // ví dụ 'KBC' / 'TSN'
-        const result = await callKw(RPC_MODEL, RPC_METHOD, [defaultCode, whPrefix], {});
+        const whPrefix = detectWarehousePrefix(lineEl); // 'TSN' / 'KBC' / 'KHD'
+        const result = await callKw(RPC_MODEL, RPC_METHOD, [code, whPrefix], {});
 
-        if (result && !result.error) {
-            // DÙ server có trả nhãn hay không, ta vẫn hiển thị theo whPrefix lấy từ dòng
-            const labelPrefix = whPrefix || (result.base_location?.split("/")?.[0]) || "tổng";
-            insertInline(lineEl, `tồn (${labelPrefix}): ${result.qty} ${result.uom}`);
-        }
+        // Hiển thị theo prefix đã bắt (ưu tiên), nếu không có thì rơi về base_location/tổng
+        const labelPrefix = whPrefix || (result.base_location?.split("/")?.[0]) || "tổng";
+        insertInline(lineEl, `tồn (${labelPrefix}): ${result.qty} ${result.uom}`);
     } catch (e) {
-        // no-op
+        // im lặng để không phá UI
     }
 }
+
 function scanExisting() {
     document.querySelectorAll(".o_barcode_line[data-barcode]").forEach(annotateLine);
 }
