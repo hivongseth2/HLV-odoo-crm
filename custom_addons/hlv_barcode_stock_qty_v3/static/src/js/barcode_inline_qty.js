@@ -47,7 +47,7 @@ function detectWarehousePrefix(lineEl) {
 
 async function annotateLine(lineEl) {
     try {
-        const barcode = lineEl.getAttribute("data-barcode");
+        const barcode = lineEl.getAttribute("default_code");
         if (!barcode || lineEl.__hlv_done__) return;
         lineEl.__hlv_done__ = true;
 
