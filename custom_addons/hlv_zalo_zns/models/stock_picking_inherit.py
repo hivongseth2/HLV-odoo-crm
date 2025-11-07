@@ -109,11 +109,8 @@ class StockPicking(models.Model):
             "date": date_str,
             "id": id_encoded,
             "address":ship_partner.street or "",
+            # "shipping_fee":shipping_fee
         }
-        
-        # Only include shipping_fee if it has a value (not empty string)
-        if shipping_fee:
-            params["shipping_fee"] = shipping_fee
 
         _logger.info("ZNS send try (OUT): %s to=%s params=%s", picking.name, msisdn, params)
         try:
