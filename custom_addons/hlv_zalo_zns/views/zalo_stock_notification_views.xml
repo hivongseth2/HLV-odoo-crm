@@ -212,10 +212,21 @@
                 <field name="send_on_incoming" />
                 <field name="send_on_outgoing" />
                 <field name="active" />
+            </list>
+        </field>
+    </record>
+
+    <!-- Search view cho Zalo Stock Notification Config -->
+    <record id="view_zalo_stock_notification_search" model="ir.ui.view">
+        <field name="name">hlv.zalo.stock.notification.search</field>
+        <field name="model">hlv.zalo.stock.notification</field>
+        <field name="arch" type="xml">
+            <search string="Zalo Stock Notification">
+                <field name="name" string="Tên" />
                 <filter string="Active" name="active" domain="[('active', '=', True)]"/>
                 <filter string="Inactive" name="inactive" domain="[('active', '=', False)]"/>
                 <filter string="All" name="all" domain="[]"/>
-            </list>
+            </search>
         </field>
     </record>
 
