@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <!-- Nhét JS/CSS vào đúng bundle của Barcode -->
+  <template id="hlv_assets_barcode_inline"
+            inherit_id="stock_barcode.assets_backend"
+            name="HLV: Barcode inline qty assets">
+    <xpath expr="." position="inside">
+      <script type="module" src="/hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js"/>
+      <link rel="stylesheet" href="/hlv_barcode_stock_qty_v3/static/src/css/inline.css"/>
+    </xpath>
+  </template>
+</odoo>
