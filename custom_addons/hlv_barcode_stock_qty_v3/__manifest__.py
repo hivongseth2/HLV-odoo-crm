@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 {
     'name': 'HLV Barcode Stock Quantity (v3 inline)',
-    'version': '1.2.4',  # tăng version để Odoo rebuild assets
+    'version': '1.2.3',  # tăng version để Odoo rebuild assets
     'summary': 'Hiển thị tồn kho khi quét barcode (inline ngay sau 0/x Cái)',
     'author': 'HLV - Thanh Luan',
     'category': 'Inventory/Barcode',
