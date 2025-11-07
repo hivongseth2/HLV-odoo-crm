@@ -847,3 +847,14 @@ class ZaloStockNotificationConfig(models.Model):
             }
         except Exception as e:
             raise UserError(_("Lỗi khi refresh token: %s") % str(e))
+
+    def unlink(self):
+        """
+        Ngăn chặn xóa bản ghi Zalo Stock Notification Config.
+        Thay vào đó, nên sử dụng toggle 'Active' để tắt/bật.
+        """
+        raise UserError(
+            _('Không thể xóa bản ghi Zalo Stock Notification Config.\n\n'
+              'Để tắt cấu hình, hãy uncheck "Active" thay vì xóa.\n'
+              'Điều này giúp giữ lại lịch sử và dữ liệu cấu hình.')
+        )
