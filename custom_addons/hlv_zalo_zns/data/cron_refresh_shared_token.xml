@@ -37,7 +37,6 @@ for token_manager in token_managers:
             <field name="interval_number">1</field>
             <field name="interval_type">hours</field>
             <field name="active" eval="True"/>
-            <field name="numbercall">-1</field>
         </record>
     </data>
 </odoo>
