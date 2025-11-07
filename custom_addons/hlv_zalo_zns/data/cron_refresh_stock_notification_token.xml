@@ -17,22 +17,13 @@
             <field name="model_id" ref="model_hlv_zalo_stock_notification"/>
             <field name="state">code</field>
             <field name="code"><![CDATA[
-import logging
-_logger = logging.getLogger(__name__)
-
 configs = model.search([('active', '=', True)])
-_logger.info("Zalo Stock Notification cron: checking %s active configs", len(configs))
-
 for config in configs:
     try:
         if config._is_token_expired():
-            _logger.info("Zalo Stock Notification cron: token expired for config %s (%s), refreshing...", config.id, config.name)
             config.refresh_access_token()
-            _logger.info("Zalo Stock Notification cron: token refreshed successfully for config %s", config.id)
-        else:
-            _logger.debug("Zalo Stock Notification cron: token still valid for config %s (%s)", config.id, config.name)
-    except Exception as e:
-        _logger.exception("Zalo Stock Notification cron: error refreshing token for config %s (%s): %s", config.id, config.name, e)
+    except Exception:
+        pass
             ]]></field>
             <field name="interval_number">1</field>
             <field name="interval_type">hours</field>
