@@ -8,14 +8,15 @@
     'depends': ['stock', 'stock_barcode'],
     'data': [],
     'assets': {
+        'stock_barcode.assets_backend': [
+            '/hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js',
+            '/hlv_barcode_stock_qty_v3/static/src/css/inline.css',
+        ],
         'web.assets_backend': [
-            '/hlv_barcode_stock_qty_v3/static/src/js/barcode_show_stock.js',
+            '/hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js',
             '/hlv_barcode_stock_qty_v3/static/src/css/inline.css',
-        ],
-        'web.assets_web': [
-            '/hlv_barcode_stock_qty_v3/static/src/js/barcode_show_stock.js',
-            '/hlv_barcode_stock_qty_v3/static/src/css/inline.css',
-        ],
+        ]
+      
     },
     'installable': True,
     'application': False,
