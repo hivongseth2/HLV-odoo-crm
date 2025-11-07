@@ -62,10 +62,22 @@ function detectWarehousePrefix(lineEl) {
 
 // Lấy default_code hiển thị trên dòng (span .o_product_code). Fallback: data-barcode (nếu cùng là mã tham chiếu).
 function getDefaultCode(lineEl) {
-    const codeText = lineEl.querySelector(".o_product_code")?.textContent?.trim();
-    return codeText || lineEl.getAttribute("data-barcode") || "";
-}
+    // ưu tiên phần tử chuyên dụng (thường là thế này)
+    let txt = lineEl.querySelector(".o_product_ref .o_product_code")?.textContent?.trim()
+        || lineEl.querySelector(".o_product_code")?.textContent?.trim()
+        || "";
 
+    // nếu vẫn trống: một số theme gộp code vào .o_product_ref (kèm tên) -> tách bằng regex
+    if (!txt) {
+        const refText = lineEl.querySelector(".o_product_ref")?.textContent?.trim() || "";
+        // lấy token đầu tiên (A-Z0-9._-), phù hợp kiểu mã như 06019C62L0, DAYINOX304-1.0, RP7-350G...
+        const m = refText.match(/^[A-Z0-9._-]+/i);
+        if (m) txt = m[0];
+    }
+
+    // KHÔNG fallback sang data-barcode nữa (tránh dùng barcode)
+    return txt;  // có thể trả "" -> caller sẽ bỏ qua
+}
 // ---- main ----
 async function annotateLine(lineEl) {
     try {
@@ -73,13 +85,17 @@ async function annotateLine(lineEl) {
         if (!defaultCode || lineEl.__hlv_done__) return;
         lineEl.__hlv_done__ = true;
 
-        const whPrefix = detectWarehousePrefix(lineEl); // 'TSN' / 'KBC' / 'KHD' (có thể null)
-        const result = await callKw(RPC_MODEL, RPC_METHOD, [defaultCode, whPrefix], {});
+        const whPrefix = detectWarehousePrefix(lineEl);  // TSN / KBC / KHD
+        const result = await callKw(
+            "stock.quant",
+            "get_qty_by_default_code_at_warehouse",
+            [defaultCode, whPrefix],
+            {}
+        );
+
         const labelPrefix = whPrefix || (result.base_location?.split("/")?.[0]) || "tổng";
         insertInline(lineEl, `tồn (${labelPrefix}): ${result.qty} ${result.uom}`);
-    } catch (e) {
-        // im lặng
-    }
+    } catch (e) { /* im lặng */ }
 }
 
 function scanExisting() {
