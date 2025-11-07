@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'HLV Barcode Stock Quantity (v3 inline)',
-    'version': '1.2',
+    'version': '1.2.3',
     'summary': 'Hiển thị tồn kho khi quét barcode (inline ngay sau 0/x Cái)',
     'author': 'HLV - Thanh Luan',
     'category': 'Inventory/Barcode',
