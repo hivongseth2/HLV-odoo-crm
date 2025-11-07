@@ -8,10 +8,8 @@ class StockQuant(models.Model):
         product = self.env['product.product'].search([('barcode', '=', barcode)], limit=1)
         if not product:
             return {"error": "Không tìm thấy sản phẩm có mã vạch này."}
-
         quants = self.search([('product_id', '=', product.id)])
         qty = sum(quants.mapped('quantity'))
-
         return {
             "product": product.display_name,
             "barcode": barcode,

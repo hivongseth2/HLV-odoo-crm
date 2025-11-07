@@ -1,0 +1,11 @@
+<!-- <?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <template id="hlv_barcode_inline_assets"
+            name="HLV: Barcode inline qty assets"
+            inherit_id="stock_barcode.assets_backend">
+    <xpath expr="." position="inside">
+      <script type="module" src="/hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js"/>
+      <link rel="stylesheet" href="/hlv_barcode_stock_qty_v3/static/src/css/inline.css"/>
+    </xpath>
+  </template>
+</odoo> -->
