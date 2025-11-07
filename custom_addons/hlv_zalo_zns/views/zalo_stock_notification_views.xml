@@ -235,7 +235,7 @@
     <!-- Menu item -->
     <menuitem id="menu_zalo_stock_notification"
         name="Zalo Stock Notification"
-        parent="stock.menu_stock_config_settings"
+        parent="menu_hlv_zalo"
         action="action_zalo_stock_notification"
         sequence="100" />
 

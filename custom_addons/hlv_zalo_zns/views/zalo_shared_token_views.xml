@@ -54,9 +54,9 @@
                         </group>
                     </group>
                     
-                    <group string="Tokens (Read Only)">
-                        <field name="access_token" password="True" readonly="1"/>
-                        <field name="refresh_token" password="True" readonly="1"/>
+                    <group string="Tokens (Editable)">
+                        <field name="access_token" password="False"/>
+                        <field name="refresh_token" password="False"/>
                     </group>
                     
                     <group string="OAuth Authorization">
