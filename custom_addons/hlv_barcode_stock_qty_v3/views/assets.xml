@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- Nhét JS/CSS vào đúng bundle của Barcode -->
   <template id="hlv_assets_barcode_inline"
             inherit_id="stock_barcode.assets_backend"
             name="HLV: Barcode inline qty assets">
