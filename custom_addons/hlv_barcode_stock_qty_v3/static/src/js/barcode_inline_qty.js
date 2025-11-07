@@ -1,19 +1,14 @@
 /** @odoo-module **/
 
 const RPC_MODEL = "stock.quant";
-const RPC_METHOD = "get_qty_by_barcode";
+const RPC_METHOD = "get_qty_by_barcode_at_location";
 
 async function callKw(model, method, args = [], kwargs = {}) {
     const res = await fetch("/web/dataset/call_kw", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            jsonrpc: "2.0",
-            method: "call",
-            params: { model, method, args, kwargs },
-            id: Date.now(),
-        }),
+        body: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { model, method, args, kwargs }, id: Date.now() }),
     });
     const json = await res.json();
     if (json.error) throw json.error;
@@ -32,7 +27,17 @@ function insertInline(lineEl, text) {
         badge.style.color = "#0a7";
         qtyEl.parentElement.appendChild(badge);
     }
-    badge.textContent = `| tồn: ${text}`;
+    badge.textContent = `| ${text}`;
+}
+
+// Lấy prefix kho từ dòng (ví dụ 'TSN' trong 'TSN/Khu vực đóng gói') rồi map sang 'TSN/Stock'
+function detectLocationCompleteName(lineEl) {
+    const dest = lineEl.querySelector(".o_line_destination_location")?.innerText?.trim() || "";
+    // dest ví dụ: "TSN/Khu vực đóng gói"
+    const prefix = dest.split("/")[0]?.trim();
+    if (!prefix) return null;
+    // kho nguồn chuẩn của Odoo: <PREFIX>/Stock
+    return `${prefix}/Stock`;
 }
 
 async function annotateLine(lineEl) {
@@ -41,10 +46,15 @@ async function annotateLine(lineEl) {
         if (!barcode || lineEl.__hlv_done__) return;
         lineEl.__hlv_done__ = true;
 
-        const result = await callKw(RPC_MODEL, RPC_METHOD, [barcode], {});
-        if (result && !result.error) insertInline(lineEl, `${result.qty} ${result.uom}`);
+        const locationComplete = detectLocationCompleteName(lineEl); // ví dụ 'TSN/Stock'
+        const result = await callKw(RPC_MODEL, RPC_METHOD, [barcode, locationComplete], {});
+        if (result && !result.error) {
+            const locLabel = result.location ? `${result.location.split("/")[0]}` : "tổng";
+            insertInline(lineEl, `tồn (${locLabel}): ${result.qty} ${result.uom}`);
+        }
     } catch (e) {
-        console.debug("HLV annotate error:", e);
+        // im lặng để không phá UI
+        // console.debug("HLV annotate error:", e);
     }
 }
 
@@ -63,7 +73,6 @@ function setupObserver() {
             });
         }
     });
-    // Đợi đến khi document.body sẵn sàng
     const waitBody = () => {
         if (document.body) {
             obs.observe(document.body, { childList: true, subtree: true });
@@ -77,6 +86,5 @@ function setupObserver() {
 }
 
 if (location.pathname.includes("/odoo/barcode/")) {
-    console.log("[HLV] barcode_inline_qty.js LOADED (observer fixed)");
     setupObserver();
 }
