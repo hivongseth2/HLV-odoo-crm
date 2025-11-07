@@ -62,8 +62,18 @@ function detectWarehousePrefix(lineEl) {
 
 // Lấy default_code hiển thị trên dòng (span .o_product_code). Fallback: data-barcode (nếu cùng là mã tham chiếu).
 function getDefaultCode(lineEl) {
-    const codeText = lineEl.querySelector(".o_product_code")?.textContent?.trim();
-    return codeText || lineEl.getAttribute("data-barcode") || "";
+    // trường hợp chuẩn
+    let txt = lineEl.querySelector(".o_product_ref .o_product_code")?.textContent?.trim()
+        || lineEl.querySelector(".o_product_code")?.textContent?.trim()
+        || "";
+
+    // fallback: nếu code dính chung text
+    if (!txt) {
+        const refText = lineEl.querySelector(".o_product_ref")?.textContent?.trim() || "";
+        const m = refText.match(/^[A-Z0-9._-]+/i);
+        if (m) txt = m[0];
+    }
+    return txt;                 // KHÔNG fallback sang data-barcode nữa
 }
 
 // ---- main ----
@@ -73,17 +83,21 @@ async function annotateLine(lineEl) {
         if (!defaultCode || lineEl.__hlv_done__) return;
         lineEl.__hlv_done__ = true;
 
-        const whPrefix = detectWarehousePrefix(lineEl); // 'TSN' / 'KBC' / 'KHD' (có thể null)
-        const result = await callKw(RPC_MODEL, RPC_METHOD, [defaultCode, whPrefix], {});
+        const whPrefix = detectWarehousePrefix(lineEl);          // TSN/KBC/KHD
+        const result = await callKw(
+            "stock.quant",
+            "get_qty_by_default_code_at_warehouse",
+            [defaultCode, whPrefix],
+            {}
+        );
+
         const labelPrefix = whPrefix || (result.base_location?.split("/")?.[0]) || "tổng";
         insertInline(lineEl, `tồn (${labelPrefix}): ${result.qty} ${result.uom}`);
-    } catch (e) {
-        // im lặng
-    }
+    } catch (e) {/* no-op */ }
 }
 
 function scanExisting() {
-    document.querySelectorAll(".o_barcode_line[data-barcode]").forEach(annotateLine);
+    document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
 }
 
 function setupObserver() {
@@ -92,8 +106,8 @@ function setupObserver() {
         for (const m of mutations) {
             m.addedNodes.forEach((node) => {
                 if (!(node instanceof HTMLElement)) return;
-                if (node.matches(".o_barcode_line[data-barcode]")) annotateLine(node);
-                node.querySelectorAll?.(".o_barcode_line[data-barcode]").forEach(annotateLine);
+                if (node.matches(".o_barcode_line")) annotateLine(node);
+                node.querySelectorAll?.(".o_barcode_line").forEach(annotateLine);
             });
         }
     });
