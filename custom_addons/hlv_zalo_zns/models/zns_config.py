@@ -12,13 +12,22 @@ class ZaloZNSConfig(models.Model):
     _description = 'Zalo ZNS Config'
 
     name = fields.Char(default='Zalo ZNS Config')
-    app_id = fields.Char('App ID', required=True)
-    app_secret = fields.Char('App Secret', required=True)
+    
+    # ===== NEW: Option to use Shared Token =====
+    use_shared_token = fields.Boolean(
+        'Use Shared Token',
+        default=True,
+        help='Nếu bật, sẽ sử dụng token từ Shared Token Manager thay vì token riêng'
+    )
+    
+    # ===== OLD: Deprecated token fields (kept for backward compatibility) =====
+    app_id = fields.Char('App ID', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
+    app_secret = fields.Char('App Secret', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
     oa_id = fields.Char('OA ID', help='Official Account ID')
-    callback_url = fields.Char('OAuth Callback URL', required=True)
-    access_token = fields.Text('Access Token', readonly=True)
-    refresh_token = fields.Text('Refresh Token', readonly=True)
-    token_expires_at = fields.Datetime('Token Expires At', readonly=True)
+    callback_url = fields.Char('OAuth Callback URL', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
+    access_token = fields.Text('Access Token', readonly=True, help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
+    refresh_token = fields.Text('Refresh Token', readonly=True, help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
+    token_expires_at = fields.Datetime('Token Expires At', readonly=True, help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
     template_id = fields.Char('ZNS Template ID', help='Approved ZNS template ID')
 
     authorize_url = fields.Char('Authorize URL', compute='_compute_authorize_url', readonly=True)
@@ -115,6 +124,29 @@ class ZaloZNSConfig(models.Model):
             except Exception as e:
                 _logger.exception("Refresh Zalo token failed: %s", e)
 
+    def _get_access_token(self):
+        """
+        Lấy access token - Ưu tiên từ Shared Token Manager
+        
+        :return: access_token (string) hoặc False
+        """
+        self.ensure_one()
+        
+        if self.use_shared_token:
+            # Sử dụng Shared Token Manager
+            _logger.debug("ZNS Config: Using Shared Token Manager")
+            access_token = self.env['hlv.zalo.shared.token']._get_shared_token()
+            if access_token:
+                return access_token
+            else:
+                _logger.warning("ZNS Config: Shared Token not available, falling back to own token")
+        
+        # Fallback: Sử dụng token riêng (backward compatibility)
+        if (not self.access_token) or self._token_expired():
+            self.refresh_access_token()
+        
+        return self.access_token
+
     # -------------------- Send ZNS --------------------
     def send_zns(self, msisdn, params):
         """
@@ -122,14 +154,18 @@ class ZaloZNSConfig(models.Model):
         - Header dùng 'access_token'
         - Body dùng 'phone' + 'template_data'
         - Xử lý một số lỗi phổ biến: token invalid, price invalid format
+        
+        === CẬP NHẬT: Hỗ trợ Shared Token ===
+        - Nếu use_shared_token = True: Lấy token từ Shared Token Manager
+        - Nếu use_shared_token = False: Sử dụng token riêng (cũ)
         """
         self.ensure_one()
 
-        def _call(body):
-            endpoint = "https://business.openapi.zalo.me/message/template"  # đổi nếu OA của anh yêu cầu endpoint khác
+        def _call(body, token):
+            endpoint = "https://business.openapi.zalo.me/message/template"
             headers = {
                 "Content-Type": "application/json",
-                "access_token": self.access_token,  # ZNS: dùng header này
+                "access_token": token,
             }
             r = requests.post(endpoint, json=body, headers=headers, timeout=20)
             txt = r.text
@@ -140,11 +176,10 @@ class ZaloZNSConfig(models.Model):
             _logger.info("ZNS call status=%s resp=%s", r.status_code, txt)
             return r.status_code, j
 
-        # Refresh token nếu cần
-        if (not self.access_token) or self._token_expired():
-            self.refresh_access_token()
-        if not self.access_token:
-            raise UserError(_("No valid access token"))
+        # Lấy access token (từ Shared Token hoặc token riêng)
+        access_token = self._get_access_token()
+        if not access_token:
+            raise UserError(_("No valid access token. Please configure Shared Token Manager or own token."))
 
         body = {
             "template_id": self.template_id,
@@ -153,15 +188,26 @@ class ZaloZNSConfig(models.Model):
             # "oa_id": self.oa_id,  # mở nếu cần
         }
 
-        status, resp = _call(body)
+        status, resp = _call(body, access_token)
 
         # Nếu token invalid (-124/-216), thử refresh rồi gọi lại 1 lần
         if isinstance(resp, dict) and resp.get("error") in (-124, -216):
             _logger.info("ZNS token invalid -> refresh and retry once")
-            self.refresh_access_token()
-            if not self.access_token:
+            
+            if self.use_shared_token:
+                # Refresh Shared Token
+                token_manager = self.env['hlv.zalo.shared.token'].search([('active', '=', True)], limit=1)
+                if token_manager:
+                    token_manager.refresh_access_token()
+                    access_token = token_manager.access_token
+            else:
+                # Refresh own token
+                self.refresh_access_token()
+                access_token = self.access_token
+            
+            if not access_token:
                 raise UserError(_("Cannot refresh access token"))
-            status, resp = _call(body)
+            status, resp = _call(body, access_token)
 
         # Nếu price invalid format (-1124), ép về chuỗi số và retry 1 lần
         if isinstance(resp, dict) and resp.get("error") == -1124:
@@ -170,6 +216,6 @@ class ZaloZNSConfig(models.Model):
                 td["price"] = str(td["price"])  # ép chuỗi số
                 body["template_data"] = td
                 _logger.info("ZNS retry with price as string")
-                status, resp = _call(body)
+                status, resp = _call(body, access_token)
 
         return resp

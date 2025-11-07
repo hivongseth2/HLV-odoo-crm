@@ -69,12 +69,21 @@ class ZaloStockNotificationConfig(models.Model):
     _description = 'Zalo Stock Notification Config'
 
     name = fields.Char(default='Zalo Stock Notification', required=True)
-    app_id = fields.Char('App ID', required=True, default='')
-    secret_key = fields.Char('Secret Key', required=True, default='')
-    callback_url = fields.Char('OAuth Callback URL', required=True, help='URL để Zalo redirect sau khi authorize')
-    refresh_token = fields.Text('Refresh Token', help='Tự động lưu sau khi authorize hoặc có thể nhập thủ công')
-    access_token = fields.Text('Access Token', help='Có thể nhập thủ công hoặc được tự động refresh từ refresh token')
-    token_expires_at = fields.Datetime('Token Expires At', readonly=True)
+    
+    # ===== NEW: Option to use Shared Token =====
+    use_shared_token = fields.Boolean(
+        'Use Shared Token',
+        default=True,
+        help='Nếu bật, sẽ sử dụng token từ Shared Token Manager thay vì token riêng'
+    )
+    
+    # ===== OLD: Deprecated token fields (kept for backward compatibility) =====
+    app_id = fields.Char('App ID', default='', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
+    secret_key = fields.Char('Secret Key', default='', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
+    callback_url = fields.Char('OAuth Callback URL', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
+    refresh_token = fields.Text('Refresh Token', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
+    access_token = fields.Text('Access Token', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
+    token_expires_at = fields.Datetime('Token Expires At', readonly=True, help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
     authorize_url = fields.Char('Authorize URL', compute='_compute_authorize_url', readonly=True)
     
     # Danh sách user_id cần gửi thông báo (mỗi dòng một ID)
@@ -450,10 +459,26 @@ class ZaloStockNotificationConfig(models.Model):
 
     def get_valid_access_token(self):
         """
-        Lấy access token hợp lệ, tự động refresh nếu cần
+        Lấy access token hợp lệ - Ưu tiên từ Shared Token Manager
+        
+        === CẬP NHẬT: Hỗ trợ Shared Token ===
+        - Nếu use_shared_token = True: Lấy token từ Shared Token Manager
+        - Nếu use_shared_token = False: Sử dụng token riêng (cũ)
+        
+        :return: access_token (string) hoặc False
         """
         self.ensure_one()
         
+        if self.use_shared_token:
+            # Sử dụng Shared Token Manager
+            _logger.debug("Stock Notification Config: Using Shared Token Manager")
+            access_token = self.env['hlv.zalo.shared.token']._get_shared_token()
+            if access_token:
+                return access_token
+            else:
+                _logger.warning("Stock Notification Config: Shared Token not available, falling back to own token")
+        
+        # Fallback: Sử dụng token riêng (backward compatibility)
         if not self.access_token or self._is_token_expired():
             return self.refresh_zalo_access_token()
         
@@ -463,8 +488,12 @@ class ZaloStockNotificationConfig(models.Model):
         """
         Gửi tin nhắn thông báo tới một user_id cụ thể
         
-        Bước 1: Gọi ensure_valid_token() để on-demand refresh nếu cần
+        Bước 1: Gọi ensure_valid_token() (nếu dùng token riêng) hoặc lấy từ Shared Token
         Bước 2: Gửi tin nhắn tới Zalo API
+        
+        === CẬP NHẬT: Hỗ trợ Shared Token ===
+        - Nếu use_shared_token = True: Shared Token tự động refresh
+        - Nếu use_shared_token = False: Gọi ensure_valid_token() như cũ
         
         :param user_id: Zalo User ID
         :param message_text: Nội dung tin nhắn
@@ -472,9 +501,10 @@ class ZaloStockNotificationConfig(models.Model):
         """
         self.ensure_one()
         
-        # On-demand token refresh: kiểm tra và refresh token ngay nếu hết hạn
-        if not self.ensure_valid_token():
-            _logger.warning("Failed to ensure valid token for user_id=%s, attempting with current token", user_id)
+        # On-demand token refresh (chỉ cho token riêng)
+        if not self.use_shared_token:
+            if not self.ensure_valid_token():
+                _logger.warning("Failed to ensure valid token for user_id=%s, attempting with current token", user_id)
         
         access_token = self.get_valid_access_token()
         
