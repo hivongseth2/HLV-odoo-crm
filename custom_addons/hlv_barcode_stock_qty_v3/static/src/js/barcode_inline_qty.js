@@ -98,7 +98,7 @@ function setupObserver() {
 
 // Chỉ chạy trên trang Barcode
 if (location.pathname.includes("/odoo/barcode/")) {
-    // console.log("[HLV] barcode_inline_qty.js LOADED", location.pathname);
+    console.log("[HLV] barcode_inline_qty.js LOADED", location.pathname);
     // Khởi động
     setupObserver();
     // Quét các dòng có sẵn sau khi trang dựng xong
