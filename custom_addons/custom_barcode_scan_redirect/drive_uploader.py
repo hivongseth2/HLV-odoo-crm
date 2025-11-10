@@ -99,11 +99,12 @@ class DriveManager:
             raise RuntimeError("Token hết hạn hoặc bị thu hồi. Vào /gdrive/oauth2/start để kết nối lại.")
 
         self.drive = GoogleDrive(gauth)
-        self.root_folder_name = self._get_param('gdrive.root_folder', 'KHO_HCM')
+        # Note: root_folder_name sẽ được set động khi upload dựa vào picking
+        self.root_folder_name = None
         self.anyone_link = str(self._get_param('gdrive.anyone_link', 'false')).lower() == 'true'
-        self.root_folder_id = self.get_or_create_folder(self.root_folder_name)
+        self.root_folder_id = None
 
-        _logger.info("✅ Google Drive OAuth ready. Root=%s (id=%s)", self.root_folder_name, self.root_folder_id)
+        _logger.info("✅ Google Drive OAuth ready. Warehouse mapping enabled.")
 
     # ==== Drive utils ====
     def _list(self, q):
@@ -123,15 +124,53 @@ class DriveManager:
         f.Upload()
         return f['id']
 
-    def _ensure_path(self):
+    def _ensure_path(self, picking_id):
+        """Tạo cấu trúc folder: ROOT_FOLDER/DD_MM_YYYY/clip
+        
+        Args:
+            picking_id: ID của stock.picking để lấy warehouse code
+            
+        Returns:
+            folder_id của thư mục clip
+        """
+        # Lấy warehouse code từ picking
+        with odoo_registry(self.dbname).cursor() as cr:
+            env = api.Environment(cr, SUPERUSER_ID, {})
+            picking = env['stock.picking'].sudo().browse(picking_id)
+            warehouse_code = picking.location_id.warehouse_id.code or 'DEFAULT'
+            
+            # Mapping warehouse code -> folder name (dễ đọc)
+            # Format: TSN:KHO_HCM,KBC:KHO_BENCAM
+            mapping_str = self._get_param('gdrive.warehouse_folder_mapping', 'TSN:KHO_HCM,KBC:KHO_BENCAM')
+            warehouse_mapping = {}
+            for item in mapping_str.split(','):
+                if ':' in item:
+                    code, folder = item.strip().split(':', 1)
+                    warehouse_mapping[code.strip()] = folder.strip()
+            
+            # Lấy folder name từ mapping, fallback về warehouse code
+            root_name = warehouse_mapping.get(warehouse_code, f'KHO_{warehouse_code}')
+        
+        # Tạo cấu trúc folder
+        root_id = self.get_or_create_folder(root_name, None)
         day = datetime.now().strftime("%d_%m_%Y")
-        day_id = self.get_or_create_folder(day, parent_id=self.root_folder_id)
+        day_id = self.get_or_create_folder(day, parent_id=root_id)
         clip_id = self.get_or_create_folder("clip", parent_id=day_id)
+        
+        _logger.info("📁 Folder structure: %s/%s/clip (warehouse: %s)", root_name, day, warehouse_code)
         return clip_id
 
-    def upload_file(self, local_path, title=None, mimetype='video/webm'):
+    def upload_file(self, local_path, picking_id, title=None, mimetype='video/webm'):
+        """Upload file lên Google Drive
+        
+        Args:
+            local_path: đường dẫn file local
+            picking_id: ID của stock.picking (để xác định warehouse)
+            title: tên file (optional)
+            mimetype: loại file (optional)
+        """
         try:
-            parent_id = self._ensure_path()
+            parent_id = self._ensure_path(picking_id)
             if not title:
                 title = os.path.basename(local_path)
 

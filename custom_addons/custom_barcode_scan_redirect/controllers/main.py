@@ -77,12 +77,24 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             csec  = ICP.get_param('gdrive.oauth_client_secret') or ''
             redir = ICP.get_param('gdrive.oauth_redirect_uri') or ''
             scopes_line = ICP.get_param('gdrive.oauth_scopes') or 'https://www.googleapis.com/auth/drive.file'
-            root_name = ICP.get_param('gdrive.root_folder') or 'KHO_HCM'
-            anyone_link = (ICP.get_param('gdrive.anyone_link') or 'false').lower() == 'true'
-
-
             
+            # Lấy warehouse code từ picking
             picking = env['stock.picking'].sudo().browse(picking_id)
+            warehouse_code = picking.location_id.warehouse_id.code or 'DEFAULT'
+            
+            # Mapping warehouse code -> folder name (dễ đọc)
+            # Format: TSN:KHO_HCM,KBC:KHO_BENCAM
+            mapping_str = ICP.get_param('gdrive.warehouse_folder_mapping') or 'TSN:KHO_HCM,KBC:KHO_BENCAM'
+            warehouse_mapping = {}
+            for item in mapping_str.split(','):
+                if ':' in item:
+                    code, folder = item.strip().split(':', 1)
+                    warehouse_mapping[code.strip()] = folder.strip()
+            
+            # Lấy folder name từ mapping, fallback về warehouse code
+            root_name = warehouse_mapping.get(warehouse_code, f'KHO_{warehouse_code}')
+            
+            anyone_link = (ICP.get_param('gdrive.anyone_link') or 'false').lower() == 'true'
             # order
             order_name = ''
             try:
