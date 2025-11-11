@@ -56,7 +56,7 @@ class WordPressOrderWebhook(http.Controller):
     - Hoặc giới hạn IP được phép gọi
     """
     
-    @http.route('/hlv_zalo/wordpress/order/notify', type='json', auth='public', methods=['POST'], csrf=False, cors='*')
+    @http.route('/hlv_zalo/wordpress/order/notify', type='http', auth='public', methods=['POST'], csrf=False, cors='*')
     def wordpress_order_notify(self, **kwargs):
         """
         Nhận thông tin đơn hàng từ WordPress và gửi thông báo Zalo
@@ -66,6 +66,17 @@ class WordPressOrderWebhook(http.Controller):
         """
         
         try:
+            # Parse JSON data từ request body
+            try:
+                data = json.loads(request.httprequest.data.decode('utf-8'))
+            except (json.JSONDecodeError, AttributeError, UnicodeDecodeError) as e:
+                _logger.warning("WordPress webhook - Invalid JSON in request body: %s", str(e))
+                return Response(
+                    json.dumps({'success': False, 'error': 'Invalid JSON format'}),
+                    content_type='application/json',
+                    status=400
+                )
+            
             # Kiểm tra API key từ System Parameters
             api_key_param = request.env['ir.config_parameter'].sudo().get_param('odoo-secret-key')
             
@@ -75,22 +86,21 @@ class WordPressOrderWebhook(http.Controller):
                 
                 if not request_api_key:
                     _logger.warning("WordPress webhook - Missing API key in request header")
-                    return {
-                        'success': False,
-                        'error': 'Missing API key. Please provide X-API-Key header.'
-                    }
+                    return Response(
+                        json.dumps({'success': False, 'error': 'Missing API key. Please provide X-API-Key header.'}),
+                        content_type='application/json',
+                        status=401
+                    )
                 
                 if request_api_key != api_key_param:
                     _logger.warning("WordPress webhook - Invalid API key provided")
-                    return {
-                        'success': False,
-                        'error': 'Invalid API key'
-                    }
+                    return Response(
+                        json.dumps({'success': False, 'error': 'Invalid API key'}),
+                        content_type='application/json',
+                        status=403
+                    )
                 
                 _logger.debug("WordPress webhook - API key validated successfully")
-            
-            # Lấy dữ liệu từ request
-            data = request.jsonrequest
             
             _logger.info("Received WordPress order webhook for order_id: %s", data.get('order_id', 'N/A'))
             
@@ -101,10 +111,11 @@ class WordPressOrderWebhook(http.Controller):
             if missing_fields:
                 _logger.warning("WordPress webhook - Missing required fields: %s (order_id: %s)", 
                               missing_fields, data.get('order_id', 'N/A'))
-                return {
-                    'success': False,
-                    'error': f'Missing required fields: {", ".join(missing_fields)}'
-                }
+                return Response(
+                    json.dumps({'success': False, 'error': f'Missing required fields: {", ".join(missing_fields)}'}),
+                    content_type='application/json',
+                    status=400
+                )
             
             # Lấy access token từ Shared Token Manager
             token_manager = request.env['hlv.zalo.shared.token'].sudo()
@@ -113,10 +124,11 @@ class WordPressOrderWebhook(http.Controller):
             if not access_token:
                 _logger.error("WordPress webhook - No active Zalo token found (order_id: %s)", 
                             data.get('order_id', 'N/A'))
-                return {
-                    'success': False,
-                    'error': 'No active Zalo token found. Please configure Zalo Shared Token Manager in Odoo.'
-                }
+                return Response(
+                    json.dumps({'success': False, 'error': 'No active Zalo token found. Please configure Zalo Shared Token Manager in Odoo.'}),
+                    content_type='application/json',
+                    status=500
+                )
             
             # Lấy danh sách recipients (từ request hoặc từ config mặc định)
             recipient_user_ids = data.get('recipient_user_ids', [])
@@ -132,10 +144,11 @@ class WordPressOrderWebhook(http.Controller):
                 else:
                     _logger.warning("WordPress webhook - No recipients configured (order_id: %s)", 
                                   data.get('order_id', 'N/A'))
-                    return {
-                        'success': False,
-                        'error': 'No recipients configured. Please add recipient_user_ids or configure Zalo Stock Notification in Odoo.'
-                    }
+                    return Response(
+                        json.dumps({'success': False, 'error': 'No recipients configured. Please add recipient_user_ids or configure Zalo Stock Notification in Odoo.'}),
+                        content_type='application/json',
+                        status=500
+                    )
             else:
                 _logger.info("WordPress webhook - Using %d recipients from request (order_id: %s)", 
                            len(recipient_user_ids), data.get('order_id', 'N/A'))
@@ -165,20 +178,27 @@ class WordPressOrderWebhook(http.Controller):
             _logger.info("WordPress webhook - Summary for order_id %s: sent=%d, failed=%d", 
                        data.get('order_id', 'N/A'), success_count, failed_count)
             
-            return {
+            response_data = {
                 'success': True,
-                'message': f'Đã gửi thông báo thành công',
+                'message': 'Đã gửi thông báo thành công',
                 'sent_count': success_count,
                 'failed_count': failed_count,
                 'results': results
             }
             
+            return Response(
+                json.dumps(response_data),
+                content_type='application/json',
+                status=200
+            )
+            
         except Exception as e:
             _logger.exception("Error processing WordPress order webhook: %s", e)
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            return Response(
+                json.dumps({'success': False, 'error': str(e)}),
+                content_type='application/json',
+                status=500
+            )
     
     def _build_order_message(self, data):
         """
