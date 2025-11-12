@@ -586,54 +586,104 @@ class ChatbotController(http.Controller):
         return out
 
 
+    def _generate_ai_response(
+        self,
+        user_message,
+        inventory_results,
+        web_results,
+        config,
+        parsed_entities=None,
+        warehouse_code=None,
+        history=None,
+    ):
+        """
+        Sinh câu trả lời ngắn gọn, thân thiện; dùng tồn THỰC TẾ; có nhớ hội thoại (history).
+        - In đậm **Tên sản phẩm**, in nghiêng _(Mã: ...)_.
+        - Liệt kê theo 1., 2., 3. nếu có nhiều sản phẩm.
+        - Kết thúc bằng 1 câu hỏi ngắn để gợi ý tiếp.
+        """
 
-    # ===== AI RESPONSE (friendly) =====
-    def _generate_ai_response(self, user_message, inventory_results, web_results, config, parsed_entities=None, warehouse_code=None):
-        context = (
-            "Bạn là trợ lý bán hàng của cửa hàng dụng cụ. "
-            "Hãy trả lời ngắn gọn, thân thiện, có định dạng (in đậm tên sp), gợi ý tiếp theo. "
-            "Nếu có danh sách SP, liệt kê theo mục 1., 2., 3. và bôi đậm **Tên sản phẩm**, in nghiêng mã _(Mã: ...)_.\n"
+        # 1) System prompt (vai trò + style)
+        sys_prompt = (
+            "Bạn là trợ lý AI cho kho hàng HLV, hỗ trợ saler & thủ kho tra cứu nhanh.\n"
+            "Nguyên tắc trả lời:\n"
+            "- Ngắn gọn, thân thiện, đúng trọng tâm.\n"
+            "- Nếu có danh sách sản phẩm, liệt kê dạng 1., 2., 3. và dùng **Tên sản phẩm**; mã in nghiêng _(Mã: ...)_.\n"
+            "- Luôn dùng số *tồn thực tế* (onhand). Nếu có theo kho, hiển thị dạng `TSN: 3, KBC: 2`.\n"
+            "- Tránh lặp từ; nếu dữ liệu rõ, không cần rào trước đón sau.\n"
+            "- Kết thúc bằng một câu hỏi ngắn để tiếp tục hỗ trợ."
         )
+
+        # 2) Chuẩn bị “context block” (đưa dữ liệu có cấu trúc cho model)
+        #    Đưa như 1 assistant message để model nhìn thấy nhưng không lẫn với câu hỏi user.
+        def num(n):
+            try:
+                return int(n or 0)
+            except Exception:
+                return 0
+
+        ctx_lines = []
         if parsed_entities:
-            context += f"[THÔNG TIN TRUY VẤN] {json.dumps(parsed_entities, ensure_ascii=False)}\n"
+            ctx_lines.append(f"[THÔNG TIN TRUY VẤN] {json.dumps(parsed_entities, ensure_ascii=False)}")
         if warehouse_code:
-            context += f"[KHO ƯU TIÊN] {warehouse_code}\n"
+            ctx_lines.append(f"[KHO ƯU TIÊN] {warehouse_code}")
 
         if inventory_results:
-            context += "DỮ LIỆU TỒN KHO (hiển thị *Tồn thực tế*):\n"
-            for item in inventory_results:
-                line = f"- **{item['name']}**"
-                if item.get("default_code"):
-                    line += f" _(Mã: {item['default_code']})_"
-                # dùng tồn thực tế
-                onhand_total = int(item.get("qty_onhand", 0))
-                line += f" — **{onhand_total} {item.get('uom','')}** (tồn thực tế)"
+            ctx_lines.append("DỮ LIỆU TỒN KHO (Tồn thực tế):")
+            for idx, item in enumerate(inventory_results, start=1):
+                name = item.get("name") or ""
+                code = item.get("default_code") or ""
+                uom = item.get("uom") or ""
+                onhand_total = num(item.get("qty_onhand"))
                 by_wh = item.get("by_warehouse") or {}
-                if by_wh:
-                    parts = [f"`{k}: {int(v)}`" for k, v in by_wh.items() if v]
-                    if parts:
-                        line += f" — theo kho: {', '.join(parts)}"
-                # (tuỳ chọn) thêm chú thích khả dụng
-                # avail_total = int(item.get("qty_available", 0))
-                # line += f" — khả dụng: {avail_total}"
-                context += line + "\n"
+                parts = [f"{k}: {num(v)}" for k, v in by_wh.items() if num(v) > 0]
+                line = f"{idx}. **{name}**"
+                if code:
+                    line += f" _(Mã: {code})_"
+                line += f" — **{onhand_total} {uom}**"
+                if parts:
+                    line += " — theo kho: " + ", ".join(parts)
+                # combo (nếu có)
+                if item.get("is_combo") and item.get("components"):
+                    comps = []
+                    for c in item["components"]:
+                        cname = c.get("name") or ""
+                        ccode = c.get("default_code") or ""
+                        comps.append(f"{cname}" + (f" _(Mã: {ccode})_" if ccode else ""))
+                    if comps:
+                        line += " — thành phần: " + "; ".join(comps)
+                ctx_lines.append(line)
         else:
-            context += "Không tìm thấy sản phẩm phù hợp trong kho.\n"
+            ctx_lines.append("Không tìm thấy sản phẩm phù hợp trong kho.")
 
         if web_results and config.get("web_search_enabled"):
-            context += "Tham khảo trên web:\n"
+            ctx_lines.append("Tham khảo trên web:")
             for w in web_results[:3]:
-                context += f"- {w.get('title','')} — {w.get('price','')} ({w.get('link','')})\n"
+                title = w.get("title", "")
+                price = w.get("price", "")
+                link = w.get("link", "")
+                ctx_lines.append(f"- {title} — {price} ({link})")
 
-        context += "\nHãy kết thúc bằng 1 câu hỏi ngắn để tiếp tục hỗ trợ."
+        ctx_lines.append("Hãy kết thúc bằng 1 câu hỏi ngắn để tiếp tục hỗ trợ.")
+        context_block = "\n".join(ctx_lines)
 
-        messages = [
-            {"role": "system", "content": context},
-            {"role": "user", "content": user_message},
-        ]
+        # 3) Build message list với history (nếu có)
+        messages = [{"role": "system", "content": sys_prompt}]
+        if history:
+            # history đã là list[{"role":"user"/"assistant","content": "..."}]
+            messages.extend(history)
+        # Đưa context dữ liệu như 1 assistant “context carrier”
+        messages.append({"role": "assistant", "content": context_block})
+        # Tin nhắn hiện tại của user luôn ở cuối
+        messages.append({"role": "user", "content": user_message})
+
+        # 4) Gọi model
         text = self._call_openai(messages, config)
         if not text:
-            text = "Mình đã tìm và gợi ý theo hiểu biết tốt nhất. Bạn cần mình kiểm tra lại theo mã khác không ạ?"
+            text = (
+                "Mình đã tổng hợp tồn thực tế như trên. Bạn muốn xem chi tiết ở kho nào, "
+                "hoặc mình so sánh thêm mẫu tương đương không ạ?"
+            )
         return text
 
     # ===== SIMPLE WEB SEARCH PLACEHOLDER =====
@@ -662,8 +712,9 @@ class ChatbotController(http.Controller):
     def chatbot_message(self, **kw):
         """
         Flexible input:
-          - JSON: {"message": "..."}
-          - Form data: message=...
+        - JSON: {"message": "..."}
+        - Form data: message=...
+        Có nhớ hội thoại ngắn hạn qua request.session["chatbot_history"].
         """
         try:
             # ---- parse message ----
@@ -673,23 +724,43 @@ class ChatbotController(http.Controller):
                 except Exception:
                     data = {}
                 user_message = _norm(data.get("message") or "")
-                # nối chữ-số để giảm miss
+                # nối chữ<->số để giảm miss
                 user_message = re.sub(r"([A-Za-z])\s+(\d)", r"\1\2", user_message)
                 user_message = re.sub(r"(\d)\s+([A-Za-z])", r"\1\2", user_message)
             else:
                 user_message = _norm(request.params.get("message") or kw.get("message") or "")
+
             if not user_message:
-                return request.make_response(json.dumps({"success": False, "error": "Empty message"}),
-                                             headers=[("Content-Type", "application/json")])
+                return request.make_response(
+                    json.dumps({"success": False, "error": "Empty message"}),
+                    headers=[("Content-Type", "application/json")]
+                )
 
             cfg = self._get_chatbot_config()
             if not cfg["enabled"]:
-                return request.make_response(json.dumps({"success": False, "error": "Chatbot is not enabled"}),
-                                             headers=[("Content-Type", "application/json")])
+                return request.make_response(
+                    json.dumps({"success": False, "error": "Chatbot is not enabled"}),
+                    headers=[("Content-Type", "application/json")]
+                )
             if not cfg["api_key"]:
-                # Cho phép chạy không AI? Ở đây yêu cầu AI cho smart-search.
-                return request.make_response(json.dumps({"success": False, "error": "OpenAI API key not configured"}),
-                                             headers=[("Content-Type", "application/json")])
+                return request.make_response(
+                    json.dumps({"success": False, "error": "OpenAI API key not configured"}),
+                    headers=[("Content-Type", "application/json")]
+                )
+
+            # ---- simple commands (optional) ----
+            # ví dụ: người dùng gõ 'reset' để xoá lịch sử
+            if user_message.strip().lower() in {"reset", "xoa", "clear"}:
+                request.session["chatbot_history"] = []
+                payload = {
+                    "success": True,
+                    "response": "Đã xoá lịch sử cuộc trò chuyện. Mình có thể giúp gì tiếp cho bạn?",
+                    "inventory_results": [],
+                    "web_results": [],
+                    "parsed": {},
+                    "warehouse": None,
+                }
+                return request.make_response(json.dumps(payload), headers=[("Content-Type", "application/json")])
 
             # ---- parse local hint ----
             ent_local = self._extract_entities_local(user_message)
@@ -701,18 +772,16 @@ class ChatbotController(http.Controller):
             # ---- Get stock per warehouse ----
             inv = []
             web_results = []
+            stock_map = {}   # <- đảm bảo có biến
             if products:
                 ids = [p["id"] for p in products]
                 stock_map = self._get_stock_by_warehouse(ids, warehouse=wh)
-            for p in products:
-                per_wh_struct = stock_map.get(p["id"], {})  # {"TSN": {"onhand":..., "reserved":..., "available":...}, ...}
-                # Tổng theo từng loại:
+
+            for p in (products or []):
+                per_wh_struct = stock_map.get(p["id"], {})  # {"TSN": {"onhand":..., "reserved":..., "available":...}}
                 total_onhand = sum(v.get("onhand", 0.0) for v in per_wh_struct.values()) if per_wh_struct else 0.0
                 total_reserved = sum(v.get("reserved", 0.0) for v in per_wh_struct.values()) if per_wh_struct else 0.0
                 total_available = sum(v.get("available", 0.0) for v in per_wh_struct.values()) if per_wh_struct else 0.0
-
-                # Rút gọn by_warehouse chỉ còn "onhand" (nếu bạn muốn AI nói tồn thực tế),
-                # hoặc giữ nguyên 3 số để FE render chi tiết:
                 by_wh_onhand = {k: float(v.get("onhand", 0.0)) for k, v in per_wh_struct.items()}
 
                 inv.append({
@@ -722,25 +791,34 @@ class ChatbotController(http.Controller):
                     "uom": p["uom"],
                     "list_price": p["list_price"],
                     "commercial_price": p["commercial_price"],
-                    # số tổng
                     "qty_onhand": total_onhand,
                     "qty_reserved": total_reserved,
                     "qty_available": total_available,
-                    # chi tiết theo kho (tồn thực tế)
-                    "by_warehouse": by_wh_onhand,
+                    "by_warehouse": by_wh_onhand,  # tồn thực tế theo kho
                     "is_combo": p.get("is_combo", False),
                     "components": p.get("components", []),
                 })
-            else:
-                if cfg["web_search_enabled"]:
-                    web_results = self._search_web(user_message)
 
-            # ---- AI final response text ----
+            if not inv and cfg.get("web_search_enabled"):
+                web_results = self._search_web(user_message)
+
+            # ---- build parsed info ----
             parsed = {
                 "sku_fragments": ent_local.get("sku_fragments"),
                 "warehouse_hint": ent_local.get("warehouse_hint"),
                 "quantity": ent_local.get("quantity"),
             }
+
+            # ---- Conversation memory ----
+            session = request.session
+            history = session.get("chatbot_history", [])
+            # chỉ giữ 10 lượt gần nhất
+            if len(history) > 10:
+                history = history[-10:]
+            # thêm câu người dùng
+            history.append({"role": "user", "content": user_message})
+
+            # ---- AI final response (có history) ----
             ai_text = self._generate_ai_response(
                 user_message=user_message,
                 inventory_results=inv,
@@ -748,13 +826,22 @@ class ChatbotController(http.Controller):
                 config=cfg,
                 parsed_entities=parsed,
                 warehouse_code=(wh.code if wh else None),
+                history=history,                  # <--- TRUYỀN HISTORY VÀO ĐÂY
             )
+
+            # Lưu phản hồi của bot vào history rồi ghi lại session
+            if ai_text:
+                history.append({"role": "assistant", "content": ai_text})
+            # cắt ngắn để không phình session
+            if len(history) > 10:
+                history = history[-10:]
+            session["chatbot_history"] = history
 
             payload = {
                 "success": True,
                 "response": ai_text,
                 "inventory_results": inv,
-                "web_results": web_results if cfg["web_search_enabled"] else [],
+                "web_results": web_results if cfg.get("web_search_enabled") else [],
                 "parsed": parsed,
                 "warehouse": (wh.code if wh else None),
             }
@@ -762,5 +849,7 @@ class ChatbotController(http.Controller):
 
         except Exception as e:
             _logger.exception("Chatbot error")
-            return request.make_response(json.dumps({"success": False, "error": str(e)}),
-                                         headers=[("Content-Type", "application/json")])
+            return request.make_response(
+                json.dumps({"success": False, "error": str(e)}),
+                headers=[("Content-Type", "application/json")]
+            )
