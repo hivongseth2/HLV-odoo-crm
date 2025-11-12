@@ -13,6 +13,11 @@ const ChatbotWidget = publicWidget.Widget.extend({
         "click .chatbot-close": "_onCloseChatbot",
         "click .chatbot-minimize": "_onMinimize",
     },
+    _scrollToBottom() {
+        const box = this.$(".chatbot-messages")[0];
+        if (!box) return;
+        box.scrollTop = box.scrollHeight;
+    },
 
     start() {
         this._super(...arguments);
