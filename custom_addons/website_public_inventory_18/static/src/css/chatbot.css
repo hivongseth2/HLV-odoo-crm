@@ -42,17 +42,19 @@
 }
 
 /* ============ Panel ============ */
-.chatbot-container{
-  /* giữ kích thước mặc định */
+.chatbot-container {
   width: 380px;
   height: 520px;
-  /* QUAN TRỌNG: giới hạn theo viewport để không bị kẹt */
+  background: var(--card);
+  border-radius: 10px;
   max-height: calc(100vh - 40px);
+
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
   display: none;
   flex-direction: column;
-  overflow: hidden;           /* ẩn viền ngoài, bên trong vùng messages sẽ scroll */
+  overflow: hidden;
 }
-
 .chatbot-container.chatbot-open {
   display: flex;
 }
@@ -83,32 +85,19 @@
 }
 
 /* ============ Body & Messages ============ */
-.chatbot-body{ flex:1; display:flex; flex-direction:column; min-height:0; }
-.chatbot-messages{ flex:1; overflow-y:auto; min-height:0; }
-.chatbot-container.chatbot-expanded{
-  width: min(720px, 96vw);
-  height: min(80vh, 96vh);
-  max-height: calc(100vh - 20px);
+.chatbot-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
 }
 
-@media (max-width: 480px){
-  .chatbot-container.chatbot-expanded{
-    width: 100vw;
-    height: 100vh;
-    max-height: 100vh;
-    right: 0; bottom: 0;
-    border-radius: 0;
-  }
+.chatbot-messages {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
 }
 
-/* --- MINIMIZED MODE (thu nhỏ panel, chỉ còn header) --- */
-.chatbot-container.chatbot-minimized{
-  height: auto;
-  max-height: none;
-}
-.chatbot-container.chatbot-minimized .chatbot-body{
-  display: none;  /* ẩn phần nội dung + input */
-}
 .chatbot-message {
   margin-bottom: 12px;
   display: flex;
@@ -368,4 +357,29 @@
     width: 50px;
     height: 50px;
   }
+}
+.chatbot-container.chatbot-expanded{
+  width: min(720px, 96vw);
+  height: min(80vh, 96vh);
+  max-height: calc(100vh - 20px);
+}
+
+/* Mobile: expanded = full screen */
+@media (max-width: 480px){
+  .chatbot-container.chatbot-expanded{
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    right: 0; bottom: 0;
+    border-radius: 0;
+  }
+}
+
+/* --- MINIMIZED MODE (thu nhỏ panel, chỉ còn header) --- */
+.chatbot-container.chatbot-minimized{
+  height: auto;
+  max-height: none;
+}
+.chatbot-container.chatbot-minimized .chatbot-body{
+  display: none;  /* ẩn phần nội dung + input */
 }
