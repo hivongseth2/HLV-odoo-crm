@@ -6,7 +6,7 @@
       
       <!-- Link to External CSS -->
       <xpath expr="//head" position="inside">
-        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/css/order_lookup.css"/>
+        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/src/css/order_lookup.css"/>
       </xpath>
       
       <div id="wrap" class="oe_structure">
@@ -363,7 +363,7 @@
       
       <!-- Link to External CSS -->
       <xpath expr="//head" position="inside">
-        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/css/order_lookup.css"/>
+        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/src/css/order_lookup.css"/>
       </xpath>
       
       <div id="wrap" class="oe_structure">

@@ -56,12 +56,12 @@
     <record id="chatbot_assets_frontend" model="ir.asset">
         <field name="name">Chatbot Assets</field>
         <field name="bundle">web.assets_frontend</field>
-        <field name="path">website_public_inventory_18/static/css/chatbot.css</field>
+        <field name="path">website_public_inventory_18/static/src/css/chatbot.css</field>
     </record>
     
     <record id="chatbot_js_frontend" model="ir.asset">
         <field name="name">Chatbot JS</field>
         <field name="bundle">web.assets_frontend</field>
-        <field name="path">website_public_inventory_18/static/js/chatbot.js</field>
+        <field name="path">website_public_inventory_18/static/src/js/chatbot.js</field>
     </record>
 </odoo>
