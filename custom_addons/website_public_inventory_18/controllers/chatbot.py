@@ -286,21 +286,22 @@ class ChatbotController(http.Controller):
             _add_products(prods_nm, score_name)
 
         # 4) fallback theo token từ câu hỏi (OR) nếu vẫn ít
-        if len(results) < 3 and query_text:
-            tokens = [t for t in re.split(r"[\s,;/]+", _norm(query_text)) if t and not t.isdigit()]
-            if tokens:
-                dom_tok = ["|"] * (len(tokens) - 1)
-                for t in tokens:
-                    dom_tok += [("name", "ilike", t)]
-                prods_tok = Product.search(dom_tok, limit=limit * 2)
+        # cuối hàm, trước khi hợp kết quả, nếu kết quả còn ít thì dùng AND thay vì OR
+        if len(results) < 2 and query_text:
+            # bỏ ngoặc/ dấu phẩy, gộp lại
+            q_clean = re.sub(r"[()]+", " ", query_text)
+            tokens_and = [t for t in re.split(r"[\s,;/]+", _norm(q_clean)) if len(t) >= 2 and not t.isdigit()]
+            if tokens_and:
+                # name chứa tất cả token
+                dom = []
+                for t in tokens_and:
+                    dom = expression.AND([dom, [("name", "ilike", t)]]) if dom else [("name", "ilike", t)]
+                prods_and = Product.search(dom, limit=limit)
+                for p in prods_and:
+                    if p.id not in seen:
+                        seen.add(p.id)
+                        results.append(p)
 
-                def score_token(prod):
-                    name = (prod.name or "").lower()
-                    hit = sum(1 for t in tokens if t in name)
-                    # mỗi token trúng cho 8 điểm, tối đa 40
-                    return min(hit * 8, 40)
-
-                _add_products(prods_tok, score_token)
 
         # ---------- Sắp xếp theo điểm & cắt limit ----------
         ranked = sorted(results.values(), key=lambda it: (-it[1], (it[0].default_code or ""), it[0].name or ""))
@@ -517,113 +518,138 @@ THÔNG TIN BÓC TÁCH:
             "web_search_enabled": bool(config.get("web_search_enabled")),
         }
         return request.make_response(json.dumps(data), headers=[("Content-Type", "application/json")])
+@http.route('/chatbot/message', type='http', auth='public', methods=['POST'], csrf=False, website=True)
+def chatbot_message(self, **kw):
+    """
+    Nhận input linh hoạt:
+      - Content-Type: application/json  -> request.jsonrequest
+      - Form/x-www-form-urlencoded      -> request.params/kw
+    Bóc tách thực thể (local + AI fallback), tìm sản phẩm theo fragment,
+    quy ra tồn theo kho, rồi sinh câu trả lời. Đồng bộ số lượng item giữa
+    câu trả lời AI và danh sách trả về FE bằng cách cắt TOP_K.
+    """
+    import json
+    import re
 
-    @http.route('/chatbot/message', type='http', auth='public', methods=['POST'], csrf=False, website=True)
-    def chatbot_message(self, **kw):
-        """
-        Nhận input linh hoạt:
-          - Content-Type: application/json  -> request.jsonrequest
-          - Form/x-www-form-urlencoded      -> request.params/kw
-        Bóc tách thực thể (local + AI fallback), tìm sản phẩm theo fragment,
-        quy ra tồn theo kho, rồi sinh câu trả lời.
-        """
-        try:
-            # ---- Lấy message ----
-            if request.httprequest.mimetype == "application/json":
+    def _normalize_user_text(s: str) -> str:
+        s = re.sub(r"\s+", " ", (s or "")).strip()
+        # Nối chữ–số và số–chữ: "FID 3" -> "FID3", "3 AH" -> "3AH"
+        s = re.sub(r"([A-Za-z])\s+(\d)", r"\1\2", s)
+        s = re.sub(r"(\d)\s+([A-Za-z])", r"\1\2", s)
+        return s
+
+    try:
+        # ---------------- Input ----------------
+        content_type = (request.httprequest.content_type or "").lower()
+        user_message = ""
+
+        if "application/json" in content_type:
+            try:
                 data = request.jsonrequest or {}
-                user_message = (data.get("message") or "").strip()
-                user_message = re.sub(r"\s+", " ", user_message or "").strip()
-                user_message = re.sub(r"([A-Za-z])\s+(\d)", r"\1\2", user_message)
-                user_message = re.sub(r"(\d)\s+([A-Za-z])", r"\1\2", user_message)
-
-            else:
-                user_message = (request.params.get("message") or kw.get("message") or "").strip()
-
-            config = self._get_chatbot_config()
-            if not config["enabled"]:
-                return request.make_response(json.dumps({"success": False, "error": "Chatbot is not enabled"}),
-                                             headers=[("Content-Type", "application/json")])
-            if not config["api_key"]:
-                # Bạn có thể đổi thành cho phép chạy "không AI" nếu muốn
-                return request.make_response(json.dumps({"success": False, "error": "OpenAI API key not configured"}),
-                                             headers=[("Content-Type", "application/json")])
-            if not user_message:
-                return request.make_response(json.dumps({"success": False, "error": "Empty message"}),
-                                             headers=[("Content-Type", "application/json")])
-
-            # ---- Bóc tách local ----
-            ent_local = _extract_entities_local(user_message)
-
-            # ---- Bóc tách AI (fallback nếu local mơ hồ) ----
-            ent_ai = {}
-            need_ai = (not ent_local.get("sku_fragments")) and (not ent_local.get("warehouse_hint"))
-            if need_ai:
-                ent_ai = self._ai_extract_entities(user_message, config)
-
-            # Merge entities (AI thắng khi có giá trị)
-            sku_frags = ent_ai.get("sku_fragments") or ent_local.get("sku_fragments") or []
-            warehouse_hint = ent_ai.get("warehouse_hint") or ent_local.get("warehouse_hint")
-            asked_qty = ent_ai.get("quantity") if ent_ai.get("quantity") is not None else ent_local.get("quantity")
-
-            # ---- Xác định kho ----
-            wh = self._find_warehouse(warehouse_hint) if warehouse_hint else None
-
-            # ---- Tìm sản phẩm theo fragment linh hoạt ----
-            products = self._flexible_product_search(user_message, sku_fragments=sku_frags, limit=20)
-
-            # ---- Lấy tồn theo kho ----
-            stock_map = {}
-            if products:
-                ids = [p["id"] for p in products]
-                stock_map = self._get_stock_by_warehouse(ids, warehouse=wh)
-
-            # ---- Đóng gói inventory_results cho AI/FE ----
-            inv = []
-            for p in products:
-                per_wh = stock_map.get(p["id"], {})
-                qty_total = sum(per_wh.values()) if per_wh else 0.0
-                inv.append({
-                    "id": p["id"],
-                    "name": p["name"],
-                    "default_code": p["default_code"],
-                    "uom": p["uom"],
-                    "list_price": p["list_price"],
-                    "commercial_price": p["commercial_price"],
-                    "qty_available": qty_total,
-                    "by_warehouse": per_wh,  # ví dụ {"TSN": 12, "KBC": 3}
-                })
-
-            # ---- Web search nếu không thấy trong kho ----
-            web_results = []
-            if not inv and config["web_search_enabled"]:
-                web_results = self._search_web(user_message)
-
-            # ---- Trả lời bằng AI (có thêm context kho + qty) ----
-            parsed = {
-                "sku_fragments": sku_frags,
-                "warehouse_hint": warehouse_hint,
-                "quantity": asked_qty,
-            }
-            ai_response = self._generate_ai_response(
-                user_message=user_message,
-                inventory_results=inv,
-                web_results=web_results,
-                config=config,
-                parsed_entities=parsed,
-                warehouse_code=(wh.code if wh else None),
+            except Exception:
+                data = {}
+            user_message = _normalize_user_text(data.get("message") or "")
+        else:
+            user_message = _normalize_user_text(
+                request.params.get("message") or kw.get("message") or ""
             )
 
-            payload = {
-                "success": True,
-                "response": ai_response,
-                "inventory_results": inv,
-                "web_results": web_results if config["web_search_enabled"] else [],
-                "parsed": parsed,
-                "warehouse": (wh.code if wh else None),
-            }
-            return request.make_response(json.dumps(payload), headers=[("Content-Type", "application/json")])
-
-        except Exception as e:
-            _logger.exception("Chatbot error")
-            return request.make_response(json.dumps({"success": False, "error": str(e)}),
+        # ---------------- Config checks ----------------
+        config = self._get_chatbot_config()
+        if not config.get("enabled"):
+            payload = {"success": False, "error": "Chatbot is not enabled"}
+            return request.make_response(json.dumps(payload, ensure_ascii=False),
                                          headers=[("Content-Type", "application/json")])
+
+        if not user_message:
+            payload = {"success": False, "error": "Empty message"}
+            return request.make_response(json.dumps(payload, ensure_ascii=False),
+                                         headers=[("Content-Type", "application/json")])
+
+        # Lưu ý: có thể cho phép chạy "không AI" nếu muốn.
+        if not config.get("api_key"):
+            payload = {"success": False, "error": "OpenAI API key not configured"}
+            return request.make_response(json.dumps(payload, ensure_ascii=False),
+                                         headers=[("Content-Type", "application/json")])
+
+        # ---------------- Entity extraction ----------------
+        ent_local = _extract_entities_local(user_message) or {}
+        need_ai = (not ent_local.get("sku_fragments")) and (not ent_local.get("warehouse_hint"))
+        ent_ai = self._ai_extract_entities(user_message, config) if need_ai else {}
+
+        # Merge (AI > local nếu có giá trị)
+        sku_frags = ent_ai.get("sku_fragments") or ent_local.get("sku_fragments") or []
+        warehouse_hint = ent_ai.get("warehouse_hint") or ent_local.get("warehouse_hint")
+        asked_qty = ent_ai.get("quantity") if ent_ai.get("quantity") is not None else ent_local.get("quantity")
+
+        # ---------------- Warehouse resolve ----------------
+        wh = self._find_warehouse(warehouse_hint) if warehouse_hint else None
+
+        # ---------------- Product search ----------------
+        # trả về đã sắp xếp theo mức độ khớp (trong _flexible_product_search)
+        raw_products = self._flexible_product_search(user_message, sku_fragments=sku_frags, limit=20)
+
+        # ---------------- Stock by warehouse ----------------
+        stock_map = {}
+        if raw_products:
+            prod_ids = [p["id"] for p in raw_products]
+            stock_map = self._get_stock_by_warehouse(prod_ids, warehouse=wh)  # {product_id: {WH: qty, ...}}
+
+        # ---------------- Build inventory_results ----------------
+        inv = []
+        for p in raw_products:
+            per_wh = stock_map.get(p["id"], {}) or {}
+            qty_total = float(sum(per_wh.values())) if per_wh else 0.0
+            inv.append({
+                "id": p["id"],
+                "name": p.get("name") or "",
+                "default_code": p.get("default_code") or "",
+                "barcode": p.get("barcode") or "",
+                "uom": p.get("uom") or "",
+                "list_price": p.get("list_price") or 0.0,
+                "commercial_price": p.get("commercial_price") or 0.0,
+                "qty_available": qty_total,
+                "by_warehouse": per_wh,  # ví dụ {"TSN": 7, "TSNSR": 1}
+            })
+
+        # ---------------- Keep results small & coherent ----------------
+        # CẮT TOP_K để đồng bộ: AI chỉ thấy và FE chỉ nhận ngần ấy.
+        TOP_K = 3
+        selected_inv = inv[:TOP_K]
+
+        # ---------------- Web search (fallback) ----------------
+        web_results = []
+        if not selected_inv and config.get("web_search_enabled"):
+            web_results = self._search_web(user_message)
+
+        # ---------------- AI response ----------------
+        parsed = {
+            "sku_fragments": sku_frags,
+            "warehouse_hint": warehouse_hint,
+            "quantity": asked_qty,
+        }
+        ai_response = self._generate_ai_response(
+            user_message=user_message,
+            inventory_results=selected_inv,
+            web_results=web_results,
+            config=config,
+            parsed_entities=parsed,
+            warehouse_code=(wh.code if wh else None),
+        )
+
+        payload = {
+            "success": True,
+            "response": ai_response,
+            "inventory_results": selected_inv,  # chỉ trả đúng những gì AI đã thấy
+            "web_results": web_results if config.get("web_search_enabled") else [],
+            "parsed": parsed,
+            "warehouse": (wh.code if wh else None),
+        }
+        return request.make_response(json.dumps(payload, ensure_ascii=False),
+                                     headers=[("Content-Type", "application/json")])
+
+    except Exception as e:
+        _logger.exception("Chatbot error")
+        payload = {"success": False, "error": str(e)}
+        return request.make_response(json.dumps(payload, ensure_ascii=False),
+                                     headers=[("Content-Type", "application/json")])

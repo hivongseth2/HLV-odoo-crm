@@ -131,17 +131,27 @@ const ChatbotWidget = publicWidget.Widget.extend({
                     return;
                 }
 
-                // 1) text “thân thiện”
-                if (result.response) {
-                    self._addBotText(result.response);
+                // 1) text "thân thiện"
+                if (result.response) self._addBotText(result.response);
+
+                // 2) product cards: lọc bằng mã xuất hiện trong response (nếu có)
+                let products = Array.isArray(result.inventory_results) ? result.inventory_results : [];
+                if (result.response && products.length > 0) {
+                    const codesInText = (result.response.match(/\(Mã:\s*([A-Za-z0-9\-\_]+)/g) || [])
+                        .map(s => s.replace(/\(Mã:\s*/, '').trim());
+                    if (codesInText.length) {
+                        const set = new Set(codesInText.map(x => x.toUpperCase()));
+                        const filtered = products.filter(p => (p.default_code || "").toUpperCase() && set.has((p.default_code || "").toUpperCase()));
+                        if (filtered.length) products = filtered;
+                    }
                 }
-                // 2) card sản phẩm
-                const products = Array.isArray(result.inventory_results) ? result.inventory_results : [];
                 if (products.length) self._addProductList(products);
-                // 3) web tham khảo
+
+                // 3) web
                 const web = Array.isArray(result.web_results) ? result.web_results : [];
                 if (web.length) self._addWebList(web);
             },
+
             error(err) {
                 self._setLoading(false);
                 console.error("Chatbot error:", err);
