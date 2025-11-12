@@ -511,25 +511,28 @@ class ChatbotController(http.Controller):
 
     def _get_stock_by_warehouse(self, product_ids, warehouse=None):
         """
-        Trả về: {product_id: {WH_CODE: qty_avail, ...}}
-        - Map location bất kỳ về đúng kho bằng cách leo parent tới root view_location.
+        Return:
+        {
+            product_id: {
+            WH_CODE: {"onhand": x, "reserved": y, "available": x - y},
+            ...
+            },
+            ...
+        }
         """
         env = request.env
         Quant = env["stock.quant"].sudo()
         Loc = env["stock.location"].sudo()
 
-        # Warehouses được phép
         whs = self._allowed_warehouses()
         if warehouse:
             whs = whs.filtered(lambda w: w.id == warehouse.id) or whs
         if not whs:
             return {}
 
-        # Map root_location_id -> WH code
         root_id_to_wh = {w.view_location_id.id: w.code for w in whs}
         root_ids_set = set(root_id_to_wh.keys())
 
-        # Lấy quants theo các root
         domain = [
             ("product_id", "in", product_ids),
             ("location_id", "child_of", list(root_ids_set)),
@@ -541,20 +544,18 @@ class ChatbotController(http.Controller):
             lazy=False,
         )
 
-        # Thu thập tất cả location xuất hiện để bulk-read parent chain
         loc_ids = {g["location_id"][0] for g in groups if g.get("location_id")}
-        # Bulk read parent cho nhanh
         locs = Loc.browse(list(loc_ids)).sudo()
         id_to_parent = {l.id: (l.location_id.id or False) for l in locs}
 
         def find_root(loc_id: int):
-            """Leo lên tới root view_location của 1 WH được phép."""
             seen = set()
             cur = loc_id
             while cur and cur not in seen:
                 if cur in root_ids_set:
                     return cur
                 seen.add(cur)
+                # nếu parent chưa cache, đọc nhanh từ DB (an toàn)
                 cur = id_to_parent.get(cur) or Loc.browse(cur).location_id.id or False
             return None
 
@@ -572,14 +573,18 @@ class ChatbotController(http.Controller):
             if not wh_code:
                 continue
 
-            qty = float(g.get("quantity_sum") or g.get("quantity") or 0.0)
-            res = float(g.get("reserved_quantity_sum") or g.get("reserved_quantity") or 0.0)
-            avail = qty - res
+            onhand = float(g.get("quantity_sum") or g.get("quantity") or 0.0)
+            reserved = float(g.get("reserved_quantity_sum") or g.get("reserved_quantity") or 0.0)
+            available = onhand - reserved
 
-            out.setdefault(pid, {}).setdefault(wh_code, 0.0)
-            out[pid][wh_code] += avail
+            out.setdefault(pid, {})
+            wh_bucket = out[pid].setdefault(wh_code, {"onhand": 0.0, "reserved": 0.0, "available": 0.0})
+            wh_bucket["onhand"] += onhand
+            wh_bucket["reserved"] += reserved
+            wh_bucket["available"] += available
 
         return out
+
 
 
     # ===== AI RESPONSE (friendly) =====
@@ -695,7 +700,7 @@ class ChatbotController(http.Controller):
             if products:
                 ids = [p["id"] for p in products]
                 stock_map = self._get_stock_by_warehouse(ids, warehouse=wh)
-                for p in products:
+            for p in products:
                     per_wh = stock_map.get(p["id"], {})
                     qty_total = sum(v for v in per_wh.values()) if per_wh else 0.0
                     inv.append({
