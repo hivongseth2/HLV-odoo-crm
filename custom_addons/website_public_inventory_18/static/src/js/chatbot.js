@@ -12,6 +12,7 @@ const ChatbotWidget = publicWidget.Widget.extend({
         "keypress .chatbot-input": "_onKeyPress",
         "click .chatbot-close": "_onCloseChatbot",
         "click .chatbot-minimize": "_onMinimize",
+        "click .btn-ghost": "_onAskMore",
     },
     _scrollToBottom() {
         const box = this.$(".chatbot-messages")[0];
@@ -58,7 +59,14 @@ const ChatbotWidget = publicWidget.Widget.extend({
         ev.preventDefault();
         this.isOpen ? this._closeChatbot() : this._openChatbot();
     },
-
+    _onAskMore(ev) {
+        const code = $(ev.currentTarget).data("code");
+        if (!code) return;
+        const msg = `Cho mình xem thêm thông tin về ${code}`;
+        this._addUserText(msg);
+        this.$(".chatbot-input").val(msg);
+        this._sendMessage();
+    },
     _openChatbot() {
         this.isOpen = true;
         this.$(".chatbot-container").addClass("chatbot-open");
@@ -162,7 +170,9 @@ const ChatbotWidget = publicWidget.Widget.extend({
         const $wrap = this._messagesEl().append($msg);
 
         // Force reflow + scroll
-        requestAnimationFrame(() => this._scrollToBottom());
+        // requestAnimationFrame(() => this._scrollToBottom());
+        requestAnimationFrame(() => this._scrollToBottom && this._scrollToBottom());
+
         // Sau khi ảnh load xong (card sản phẩm), scroll lại
         $msg.find("img").on("load", () => this._scrollToBottom());
     },
@@ -171,12 +181,11 @@ const ChatbotWidget = publicWidget.Widget.extend({
     _addUserText(text) {
         this._addMessageHtml(escape(text), "user");
     },
-
     _addBotText(text) {
-        // Cho phép xuống dòng nhẹ (AI có thể trả về \n)
-        const safe = escape(text).replace(/\n/g, "<br/>");
+        const safe = (text || "").replace(/\n/g, "<br/>"); // KHÔNG escape ở đây
         this._addMessageHtml(safe, "bot");
     },
+
 
     _addProductList(products) {
         // Danh sách card sản phẩm

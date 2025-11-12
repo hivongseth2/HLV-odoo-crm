@@ -67,6 +67,7 @@ def _extract_entities_local(text: str):
     """
     raw = text or ""
     norm = _norm(raw)
+    norm = re.sub(r"([a-zA-Z])\s+(\d)", r"\1\2", norm)
 
     # quantity
     qty = None
@@ -174,6 +175,8 @@ class ChatbotController(http.Controller):
         """
         
         query_text = re.sub(r"\s+", " ", query_text or "").strip() 
+        query_text = re.sub(r"([a-zA-Z])\s+(\d)", r"\1\2", query_text)  # <<-- thêm
+
         env = request.env
         Product = env["product.product"].sudo()
 
@@ -374,35 +377,51 @@ THÔNG TIN BÓC TÁCH:
         if inventory_results:
             context += "📦 TỒN KHO HIỆN TẠI:\n"
             for item in inventory_results:
-                line = f"- {item['name']}"
-                if item.get("default_code"):
-                    line += f" (Mã: {item['default_code']})"
-                total = item.get("qty_available", 0)
-                line += f" | Tổng tồn: {int(total)} {item.get('uom','')}"
+                name = (item.get("name") or "").replace("*", "")  # tránh phá Markdown
+                code = item.get("default_code") or ""
+                uom  = item.get("uom") or ""
+                total = int(item.get("qty_available", 0) or 0)
                 by_wh = item.get("by_warehouse") or {}
+                price = int(item.get("list_price", 0) or 0)
+                cp    = int(item.get("commercial_price", 0) or 0)
+
+                line = f"- **{name}**"
+                if code:
+                    line += f" _(Mã: {code})_"
+                line += f" — **{total} {uom}**"
+
                 if by_wh:
-                    parts = [f"{k}: {int(v)}" for k, v in by_wh.items()]
-                    line += " | Theo kho: " + ", ".join(parts)
-                line += f" | Giá lẻ: {int(item.get('list_price', 0)):,} VND"
-                cp = item.get("commercial_price") or 0
-                if cp and cp != item.get("list_price"):
-                    line += f" | Giá TM: {int(cp):,} VND"
+                    # dạng `TSN: 7` · `TSNSR: 1` cho dễ đọc
+                    parts = [f"`{k}: {int(v)}`" for k, v in by_wh.items()]
+                    line += " · " + " · ".join(parts)
+
+                line += f" · Giá lẻ: **{price:,} VND**"
+                if cp and cp != price:
+                    line += f" · TM: **{cp:,} VND**"
+
                 context += line + "\n"
         else:
             context += "❌ Không tìm thấy sản phẩm phù hợp trong kho.\n"
             if web_results and config.get("web_search_enabled"):
                 context += "🌐 Kết quả web (tham khảo):\n"
                 for w in web_results[:5]:
-                    context += f"- {w.get('title','')}: {w.get('price','')} | {w.get('link','')}\n"
+                    title = w.get("title","")
+                    price = w.get("price","")
+                    link  = w.get("link","")
+                    context += f"- **{title}**: {price} | {link}\n"
+
 
         context += """
-HƯỚNG DẪN TRẢ LỜI:
-- Nếu có kho yêu cầu (ví dụ TSN): nêu tồn của kho đó đầu tiên.
-- Nếu người dùng chỉ gõ fragment (ví dụ '39-055'), hãy xác nhận tương ứng với mã đầy đủ nếu nhận diện được (ví dụ '0-39-055').
-- Nếu không tìm thấy, gợi ý kiểm tra lại mã hoặc mô tả chi tiết hơn.
-- Kết thúc bằng 1 câu hỏi ngắn để tiếp tục hỗ trợ.
-- Đây là đoạn chat phục vụ người dùng nội bộ (saler, thủ kho) không phải của khách hàng
-"""
+            QUY ƯỚC TRÌNH BÀY:
+            - Luôn **in đậm tên sản phẩm**; mã sản phẩm dùng _nghiêng_, tồn/kho/giá dùng **đậm**.
+            - Mỗi sản phẩm 1 dòng gọn, kho hiển thị dạng `KHO: số`.
+            HƯỚNG DẪN TRẢ LỜI:
+            - Nếu có kho yêu cầu (ví dụ TSN): nêu tồn của kho đó đầu tiên.
+            - Nếu người dùng chỉ gõ fragment (ví dụ '39-055'), hãy xác nhận tương ứng với mã đầy đủ nếu nhận diện được (ví dụ '0-39-055').
+            - Nếu không tìm thấy, gợi ý kiểm tra lại mã hoặc mô tả chi tiết hơn.
+            - Kết thúc bằng 1 câu hỏi ngắn để tiếp tục hỗ trợ.
+            - Đây là đoạn chat phục vụ người dùng nội bộ (saler, thủ kho) không phải của khách hàng
+            """
 
         messages = [
             {"role": "system", "content": context},
