@@ -13,6 +13,8 @@ const ChatbotWidget = publicWidget.Widget.extend({
         "click .chatbot-close": "_onCloseChatbot",
         "click .chatbot-minimize": "_onMinimize",
         "click .btn-ghost": "_onAskMore",
+        "click .chatbot-expand": "_onExpandToggle",   // <== mới
+
     },
     _scrollToBottom() {
         const box = this.$(".chatbot-messages")[0];
@@ -90,11 +92,29 @@ const ChatbotWidget = publicWidget.Widget.extend({
         this._closeChatbot();
     },
 
-    _onMinimize(ev) {
+    _onExpandToggle(ev) {
         ev.preventDefault();
-        this.$(".chatbot-container").toggleClass("chatbot-minimized");
+        const $panel = this.$(".chatbot-container");
+        this.isExpanded = !this.isExpanded;
+        $panel.toggleClass("chatbot-expanded", this.isExpanded);
+
+        // đổi icon expand/compress nếu muốn
+        const $icon = this.$(".chatbot-expand i");
+        if ($icon.length) {
+            $icon.toggleClass("fa-expand", !this.isExpanded);
+            $icon.toggleClass("fa-compress", this.isExpanded);
+        }
+
+        // sau khi đổi kích thước, kéo xuống cuối cho chắc
+        requestAnimationFrame(() => this._scrollToBottom());
     },
 
+    // === Minimize: ẩn body, chỉ để header
+    _onMinimize(ev) {
+        ev.preventDefault();
+        const $panel = this.$(".chatbot-container");
+        $panel.toggleClass("chatbot-minimized");
+    },
     _onKeyPress(ev) {
         if (ev.which === 13 && !ev.shiftKey) {
             ev.preventDefault();

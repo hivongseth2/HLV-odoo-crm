@@ -16,12 +16,21 @@
                         <i class="fa fa-robot me-2"></i>
                         HỖ TRỢ TRA CỨU TỒN
                     </h5>
-                    <div class="chatbot-controls">
-                    
-                        <button class="chatbot-close" title="Đóng">
-                            <i class="fa fa-times"></i>
-                        </button>
-                    </div>
+                   <div class="chatbot-controls">
+                    <!-- Expand / Collapse -->
+                    <button class="chatbot-expand" title="Mở rộng / Thu nhỏ">
+                        <i class="fa fa-expand"></i>
+                    </button>
+                    <!-- Minimize body -->
+                    <button class="chatbot-minimize" title="Thu gọn">
+                        <i class="fa fa-minus"></i>
+                    </button>
+                    <!-- Close -->
+                    <button class="chatbot-close" title="Đóng">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+
                 </div>
                 
                 <!-- Body -->
