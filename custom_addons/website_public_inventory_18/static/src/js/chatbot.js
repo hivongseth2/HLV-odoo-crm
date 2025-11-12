@@ -3,158 +3,155 @@
 import publicWidget from "@web/legacy/js/public/public_widget";
 
 const ChatbotWidget = publicWidget.Widget.extend({
-        template: 'website_public_inventory_18.chatbot_widget',
-        events: {
-            'click .chatbot-toggle': '_onToggleChatbot',
-            'click .chatbot-send': '_onSendMessage',
-            'keypress .chatbot-input': '_onKeyPress',
-            'click .chatbot-close': '_onCloseChatbot',
-        },
+    // 👉 BẮT BUỘC: selector để auto-mount
+    selector: '.chatbot-widget',
 
-        start: function () {
-            this._super.apply(this, arguments);
-            this._initializeChatbot();
-        },
+    // (tuỳ chọn) không cần 'template' nếu đã render bằng t-call trong XML
+    // template: 'website_public_inventory_18.chatbot_widget',
 
-        _initializeChatbot: function () {
-            this.isOpen = false;
-            this.isLoading = false;
-            this._checkChatbotStatus();
-        },
+    events: {
+        'click .chatbot-toggle': '_onToggleChatbot',
+        'click .chatbot-send': '_onSendMessage',
+        'keypress .chatbot-input': '_onKeyPress',
+        'click .chatbot-close': '_onCloseChatbot',
+        // nếu muốn xài nút minimize thì thêm handler:
+        'click .chatbot-minimize': '_onMinimize',
+    },
 
-        _checkChatbotStatus: function () {
-            const self = this;
-            $.ajax({
-                url: '/chatbot/status',
-                type: 'GET',
-                dataType: 'json',
-                success: function (result) {
-                    if (result.enabled) {
-                        self.$el.show();
-                    } else {
-                        self.$el.hide();
-                    }
-                },
-                error: function (error) {
-                    console.error('Error checking chatbot status:', error);
-                    self.$el.hide();
-                }
-            });
-        },
+    start() {
+        this._super(...arguments);
+        this._initializeChatbot();
+    },
 
-        _onToggleChatbot: function (ev) {
-            ev.preventDefault();
-            if (this.isOpen) {
-                this._closeChatbot();
-            } else {
-                this._openChatbot();
+    _initializeChatbot() {
+        this.isOpen = false;
+        this.isLoading = false;
+        this._checkChatbotStatus();
+    },
+
+    _checkChatbotStatus() {
+        const self = this;
+        $.ajax({
+            url: '/chatbot/status',
+            type: 'GET',
+            dataType: 'json',
+            success(result) {
+                if (result.enabled) self.$el.show();
+                else self.$el.hide();
+            },
+            error(err) {
+                console.error('Error checking chatbot status:', err);
+                // tuỳ bạn: ẩn khi lỗi hay vẫn hiển thị để test local
+                self.$el.show(); // 👈 trong lúc dev nên để show để test giao diện
             }
-        },
+        });
+    },
 
-        _openChatbot: function () {
-            this.isOpen = true;
-            this.$('.chatbot-container').addClass('chatbot-open');
-            this.$('.chatbot-input').focus();
-            
-            // Add welcome message if chat is empty
-            if (this.$('.chatbot-messages .message').length === 0) {
-                this._addMessage('Xin chào! Tôi có thể giúp bạn tìm kiếm sản phẩm và kiểm tra tồn kho. Bạn cần hỗ trợ gì?', 'bot');
-            }
-        },
+    _onToggleChatbot(ev) {
+        ev.preventDefault();
+        this.isOpen ? this._closeChatbot() : this._openChatbot();
+    },
 
-        _closeChatbot: function () {
-            this.isOpen = false;
-            this.$('.chatbot-container').removeClass('chatbot-open');
-        },
+    _openChatbot() {
+        this.isOpen = true;
+        this.$('.chatbot-container').addClass('chatbot-open');
+        this.$('.chatbot-input').focus();
 
-        _onCloseChatbot: function (ev) {
-            ev.preventDefault();
-            this._closeChatbot();
-        },
+        if (this.$('.chatbot-messages .message').length === 0) {
+            this._addMessage(
+                'Xin chào! Tôi có thể giúp bạn tìm kiếm sản phẩm và kiểm tra tồn kho. Bạn cần hỗ trợ gì?',
+                'bot'
+            );
+        }
+    },
 
-        _onKeyPress: function (ev) {
-            if (ev.which === 13 && !ev.shiftKey) { // Enter key
-                ev.preventDefault();
-                this._sendMessage();
-            }
-        },
+    _closeChatbot() {
+        this.isOpen = false;
+        this.$('.chatbot-container').removeClass('chatbot-open');
+    },
 
-        _onSendMessage: function (ev) {
+    _onCloseChatbot(ev) {
+        ev.preventDefault();
+        this._closeChatbot();
+    },
+
+    _onMinimize(ev) {
+        ev.preventDefault();
+        this.$('.chatbot-container').toggleClass('chatbot-minimized');
+    },
+
+    _onKeyPress(ev) {
+        if (ev.which === 13 && !ev.shiftKey) {
             ev.preventDefault();
             this._sendMessage();
-        },
+        }
+    },
 
-        _sendMessage: function () {
-            if (this.isLoading) return;
+    _onSendMessage(ev) {
+        ev.preventDefault();
+        this._sendMessage();
+    },
 
-            const input = this.$('.chatbot-input');
-            const message = input.val().trim();
-            
-            if (!message) return;
+    _sendMessage() {
+        if (this.isLoading) return;
 
-            // Add user message to chat
-            this._addMessage(message, 'user');
-            input.val('');
+        const input = this.$('.chatbot-input');
+        const message = (input.val() || '').trim();
+        if (!message) return;
 
-            // Show loading
-            this._setLoading(true);
+        this._addMessage(message, 'user');
+        input.val('');
+        this._setLoading(true);
 
-            // Send to backend using simple AJAX
-            const self = this;
-            $.ajax({
-                url: '/chatbot/message',
-                type: 'POST',
-                dataType: 'json',
-                data: {
-                    message: message,
-                    csrf_token: odoo.csrf_token
-                },
-                success: function (result) {
-                    self._setLoading(false);
-                    if (result.success) {
-                        self._addMessage(result.response, 'bot');
-                    } else {
-                        self._addMessage('Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.', 'bot error');
-                    }
-                },
-                error: function (error) {
-                    self._setLoading(false);
-                    console.error('Chatbot error:', error);
-                    self._addMessage('Xin lỗi, không thể kết nối đến server. Vui lòng thử lại sau.', 'bot error');
-                }
-            });
-        },
-
-        _addMessage: function (text, type) {
-            const messagesContainer = this.$('.chatbot-messages');
-            const messageHtml = `
-                <div class="message ${type}">
-                    <div class="message-content">${text}</div>
-                    <div class="message-time">${new Date().toLocaleTimeString()}</div>
-                </div>
-            `;
-            messagesContainer.append(messageHtml);
-            messagesContainer.scrollTop(messagesContainer[0].scrollHeight);
-        },
-
-        _setLoading: function (loading) {
-            this.isLoading = loading;
-            const sendBtn = this.$('.chatbot-send');
-            const input = this.$('.chatbot-input');
-            
-            if (loading) {
-                sendBtn.prop('disabled', true).text('...');
-                input.prop('disabled', true);
-                this._addMessage('Đang xử lý...', 'bot loading');
-            } else {
-                sendBtn.prop('disabled', false).text('Gửi');
-                input.prop('disabled', false);
-                // Remove loading message
-                this.$('.message.loading').last().remove();
+        const self = this;
+        $.ajax({
+            url: '/chatbot/message',
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                message: message,
+                csrf_token: odoo.csrf_token
+            },
+            success(result) {
+                self._setLoading(false);
+                if (result.success) self._addMessage(result.response, 'bot');
+                else self._addMessage('Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.', 'bot error');
+            },
+            error(err) {
+                self._setLoading(false);
+                console.error('Chatbot error:', err);
+                self._addMessage('Xin lỗi, không thể kết nối đến server. Vui lòng thử lại sau.', 'bot error');
             }
-        },
-    });
+        });
+    },
+
+    _addMessage(text, type) {
+        const messagesContainer = this.$('.chatbot-messages');
+        const messageHtml = `
+            <div class="message ${type}${type.includes('loading') ? ' loading' : ''}">
+                <div class="message-content">${_.escape(text)}</div>
+                <div class="message-time">${new Date().toLocaleTimeString()}</div>
+            </div>`;
+        messagesContainer.append(messageHtml);
+        messagesContainer.scrollTop(messagesContainer[0].scrollHeight);
+    },
+
+    _setLoading(loading) {
+        this.isLoading = loading;
+        const sendBtn = this.$('.chatbot-send');
+        const input = this.$('.chatbot-input');
+
+        if (loading) {
+            sendBtn.prop('disabled', true).text('...');
+            input.prop('disabled', true);
+            this._addMessage('Đang xử lý...', 'bot loading');
+        } else {
+            sendBtn.prop('disabled', false).text('Gửi');
+            input.prop('disabled', false);
+            this.$('.message.loading').last().remove();
+        }
+    },
+});
 
 publicWidget.registry.chatbot = ChatbotWidget;
-
 export default ChatbotWidget;
