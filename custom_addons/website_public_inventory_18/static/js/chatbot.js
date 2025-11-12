@@ -1,13 +1,10 @@
-odoo.define('website_public_inventory_18.chatbot', function (require) {
-    'use strict';
+/** @odoo-module **/
 
-    var publicWidget = require('web.public.widget');
-    var ajax = require('web.ajax');
-    var core = require('web.core');
+import publicWidget from "@web/legacy/js/public/public_widget";
+import { jsonrpc } from "@web/core/network/rpc_service";
+import { _t } from "@web/core/l10n/translation";
 
-    var _t = core._t;
-
-    var ChatbotWidget = publicWidget.Widget.extend({
+const ChatbotWidget = publicWidget.Widget.extend({
         template: 'website_public_inventory_18.chatbot_widget',
         events: {
             'click .chatbot-toggle': '_onToggleChatbot',
@@ -35,7 +32,7 @@ odoo.define('website_public_inventory_18.chatbot', function (require) {
 
         _checkChatbotStatus: function () {
             var self = this;
-            return ajax.jsonRpc('/chatbot/status', 'call', {}).then(function (result) {
+            return jsonrpc('/chatbot/status', {}).then(function (result) {
                 if (!result.enabled || !result.configured) {
                     self.$el.hide();
                 } else {
@@ -177,7 +174,7 @@ odoo.define('website_public_inventory_18.chatbot', function (require) {
             this.isLoading = true;
             this._showTypingIndicator();
 
-            ajax.jsonRpc('/chatbot/message', 'call', {
+            jsonrpc('/chatbot/message', {
                 message: message
             }).then(function (result) {
                 self._hideTypingIndicator();
@@ -228,26 +225,25 @@ odoo.define('website_public_inventory_18.chatbot', function (require) {
         },
     });
 
-    // Auto-initialize chatbot on pages with inventory
-    publicWidget.registry.chatbot = publicWidget.Widget.extend({
-        selector: 'body',
-        
-        start: function () {
-            var self = this;
-            return this._super.apply(this, arguments).then(function () {
-                // Only show chatbot on inventory pages
-                if (window.location.pathname.includes('/search_stock') || 
-                    window.location.pathname.includes('/inventory')) {
-                    self._initChatbot();
-                }
-            });
-        },
+// Auto-initialize chatbot on pages with inventory
+publicWidget.registry.chatbot = publicWidget.Widget.extend({
+    selector: 'body',
+    
+    start: function () {
+        var self = this;
+        return this._super.apply(this, arguments).then(function () {
+            // Only show chatbot on inventory pages
+            if (window.location.pathname.includes('/search_stock') || 
+                window.location.pathname.includes('/inventory')) {
+                self._initChatbot();
+            }
+        });
+    },
 
-        _initChatbot: function () {
-            var chatbot = new ChatbotWidget(this);
-            chatbot.appendTo(this.$el);
-        },
-    });
-
-    return ChatbotWidget;
+    _initChatbot: function () {
+        var chatbot = new ChatbotWidget(this);
+        chatbot.appendTo(this.$el);
+    },
 });
+
+export default ChatbotWidget;
