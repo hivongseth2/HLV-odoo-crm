@@ -322,7 +322,7 @@ CÁCH TRẢ LỜI:
             }
     
     @http.route('/chatbot/status', type='http', auth='public', methods=['GET'], csrf=False, website=True)
-        def chatbot_status(self, **kw):
+    def chatbot_status(self, **kw):
             """Get chatbot status (HTTP GET for frontend JS)"""
             config = self._get_chatbot_config()
             data = {
