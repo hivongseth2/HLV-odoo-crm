@@ -171,70 +171,155 @@ class ChatbotController(http.Controller):
 
     def _flexible_product_search(self, query_text: str, sku_fragments=None, limit=20):
         """
-        Tìm sản phẩm linh hoạt theo default_code / name với nhiều pattern.
+        Tìm sản phẩm linh hoạt theo default_code / barcode / name với nhiều pattern & thứ tự ưu tiên.
+        Trả về: [{id, name, default_code, barcode, uom, list_price, commercial_price}, ...]
         """
-        
-        query_text = re.sub(r"\s+", " ", query_text or "").strip() 
-        query_text = re.sub(r"([a-zA-Z])\s+(\d)", r"\1\2", query_text)  # <<-- thêm
+        import re
+        from odoo.osv import expression
+
+        # ---------- Chuẩn hoá input ----------
+        query_text = re.sub(r"\s+", " ", query_text or "").strip()
+        # Nối chữ–số và số–chữ (FID 3 -> FID3; 3 AH -> 3AH)
+        query_text = re.sub(r"([A-Za-z])\s+(\d)", r"\1\2", query_text)
+        query_text = re.sub(r"(\d)\s+([A-Za-z])", r"\1\2", query_text)
 
         env = request.env
         Product = env["product.product"].sudo()
 
+        # ---------- Lấy fragments ----------
         frags = sku_fragments or []
         if not frags and query_text:
-            frags = _extract_entities_local(query_text)["sku_fragments"]
+            frags = _extract_entities_local(query_text).get("sku_fragments", []) or []
 
-        patterns = self._mk_patterns_from_fragments(frags)
-        results = []
-        seen = set()
+        # Nếu không có fragment nào, thử coi cả câu hỏi là 1 fragment "mềm"
+        if not frags and query_text:
+            frags = [query_text]
 
-        # 1) default_code
+        # ---------- Tạo patterns ----------
+        def _strip_seps(s):
+            return re.sub(r"[\s\-\_\/\.]+", "", s or "")
+
+        base_patterns = self._mk_patterns_from_fragments(frags)  # đã gồm: nguyên bản, loại sep, thêm "0-"
+        more = []
+        for p in list(base_patterns):
+            sp = _strip_seps(p)
+            if sp and sp != p:
+                more.append(sp)
+        patterns = list(dict.fromkeys(base_patterns + more))  # unique & giữ thứ tự
+
+        # ---------- Tìm kiếm & chấm điểm ----------
+        results = {}  # pid -> (product, score)
+
+        def _add_products(prods, score_fn):
+            for p in prods:
+                cur = results.get(p.id)
+                sc = score_fn(p)
+                if (cur is None) or (sc > cur[1]):
+                    results[p.id] = (p, sc)
+
+        # 1) default_code ưu tiên cao nhất
         if patterns:
-            dom = ["|"] * (len(patterns) - 1)
-            for p in patterns:
-                dom += [("default_code", "ilike", p)]
-            prods = Product.search(dom, limit=limit)
-            for p in prods:
-                if p.id not in seen:
-                    seen.add(p.id)
-                    results.append(p)
+            # exact-like (so sánh dạng strip-seps) -> điểm rất cao
+            dom_dc = ["|"] * (len(patterns) - 1)
+            for pat in patterns:
+                dom_dc += [("default_code", "ilike", pat)]
+            prods_dc = Product.search(dom_dc, limit=limit * 3)  # kéo rộng, sẽ sàng điểm & cắt sau
 
-        # 2) name (nếu ít)
-        if len(results) < 5 and patterns:
-            dom = ["|"] * (len(patterns) - 1)
-            for p in patterns:
-                dom += [("name", "ilike", p)]
-            prods = Product.search(dom, limit=limit)
-            for p in prods:
-                if p.id not in seen:
-                    seen.add(p.id)
-                    results.append(p)
+            def score_default_code(prod):
+                dc = (prod.default_code or "")
+                dc_norm = _strip_seps(dc).lower()
+                best = 0
+                for pat in patterns:
+                    p_norm = _strip_seps(pat).lower()
+                    if not p_norm:
+                        continue
+                    if dc_norm == p_norm:
+                        best = max(best, 100)    # trùng tuyệt đối (bỏ sep)
+                    elif p_norm in dc_norm:
+                        best = max(best, 80)     # chứa
+                return best if best else 0
 
-        # 3) tokens từ câu hỏi
+            _add_products(prods_dc, score_default_code)
+
+        # 2) barcode (nếu có)
+        if patterns:
+            dom_bc = ["|"] * (len(patterns) - 1)
+            for pat in patterns:
+                dom_bc += [("barcode", "ilike", pat)]
+            prods_bc = Product.search(dom_bc, limit=limit * 2)
+
+            def score_barcode(prod):
+                bc = (prod.barcode or "").lower()
+                best = 0
+                for pat in patterns:
+                    p = pat.lower()
+                    if not p:
+                        continue
+                    if bc == p:
+                        best = max(best, 75)
+                    elif p in bc:
+                        best = max(best, 65)
+                return best
+
+            _add_products(prods_bc, score_barcode)
+
+        # 3) name (ưu tiên thấp hơn default_code)
+        if patterns:
+            dom_nm = ["|"] * (len(patterns) - 1)
+            for pat in patterns:
+                dom_nm += [("name", "ilike", pat)]
+            prods_nm = Product.search(dom_nm, limit=limit * 2)
+
+            def score_name(prod):
+                name = (prod.name or "").lower()
+                best = 0
+                for pat in patterns:
+                    p = pat.lower()
+                    if not p:
+                        continue
+                    if name == p:
+                        best = max(best, 60)
+                    elif p in name:
+                        best = max(best, 50)
+                return best
+
+            _add_products(prods_nm, score_name)
+
+        # 4) fallback theo token từ câu hỏi (OR) nếu vẫn ít
         if len(results) < 3 and query_text:
             tokens = [t for t in re.split(r"[\s,;/]+", _norm(query_text)) if t and not t.isdigit()]
-            dom = []
-            for t in tokens:
-                dom += [("name", "ilike", t)]
-            if dom:
-                prods = Product.search(dom, limit=limit)
-                for p in prods:
-                    if p.id not in seen:
-                        seen.add(p.id)
-                        results.append(p)
+            if tokens:
+                dom_tok = ["|"] * (len(tokens) - 1)
+                for t in tokens:
+                    dom_tok += [("name", "ilike", t)]
+                prods_tok = Product.search(dom_tok, limit=limit * 2)
 
+                def score_token(prod):
+                    name = (prod.name or "").lower()
+                    hit = sum(1 for t in tokens if t in name)
+                    # mỗi token trúng cho 8 điểm, tối đa 40
+                    return min(hit * 8, 40)
+
+                _add_products(prods_tok, score_token)
+
+        # ---------- Sắp xếp theo điểm & cắt limit ----------
+        ranked = sorted(results.values(), key=lambda it: (-it[1], (it[0].default_code or ""), it[0].name or ""))
+        ranked = ranked[:limit]
+
+        # ---------- Chuẩn hoá output ----------
         out = []
-        for p in results[:limit]:
+        for prod, _score in ranked:
             out.append({
-                "id": p.id,
-                "name": p.name,
-                "default_code": p.default_code or "",
-                "barcode": p.barcode or "",
-                "uom": p.uom_id.name or "",
-                "list_price": p.lst_price or 0.0,
-                "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
+                "id": prod.id,
+                "name": prod.name,
+                "default_code": prod.default_code or "",
+                "barcode": prod.barcode or "",
+                "uom": prod.uom_id.name or "",
+                "list_price": getattr(prod, "lst_price", None) if hasattr(prod, "lst_price") else prod.list_price,
+                "commercial_price": getattr(prod.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
             })
         return out
+
 
     def _get_stock_by_warehouse(self, product_ids, warehouse=None):
         """

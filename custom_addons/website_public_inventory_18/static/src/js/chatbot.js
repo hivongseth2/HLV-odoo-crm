@@ -157,30 +157,41 @@ const ChatbotWidget = publicWidget.Widget.extend({
         return this.$(".chatbot-messages");
     },
 
-    _addMessage(text, type) {
-        const messagesContainer = this.$('.chatbot-messages');
-        const html = (text || "")
-            .replace(/\n/g, "<br>")
-            .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-            .replace(/_(.*?)_/g, "<i>$1</i>")
-            .replace(/`(.*?)`/g, "<code>$1</code>");
-        const messageHtml = `
-      <div class="message ${type}">
-        <div class="message-content">${html}</div>
-        <div class="message-time">${new Date().toLocaleTimeString()}</div>
-      </div>`;
-        messagesContainer.append(messageHtml);
-        this._scrollToBottom && this._scrollToBottom();
-    },
+    _addMessageHtml(html, type /* 'user' | 'bot' */) {
+        const sideClass = type === "user" ? "user-message" : "bot-message";
+        // Dùng DOM thay vì string để chắc chắn style apply
+        const $msg = $(document.createElement("div"))
+            .addClass(`chatbot-message ${sideClass}`)
+            .append(
+                $("<div>").addClass("message-content").html(html),  // HTML render ngay
+                $("<div>").addClass("message-time").text(new Date().toLocaleTimeString())
+            );
 
+        const $wrap = this._messagesEl().append($msg);
+
+        // Force reflow + scroll
+        // requestAnimationFrame(() => this._scrollToBottom());
+        requestAnimationFrame(() => this._scrollToBottom && this._scrollToBottom());
+
+        // Sau khi ảnh load xong (card sản phẩm), scroll lại
+        $msg.find("img").on("load", () => this._scrollToBottom());
+    },
 
 
     _addUserText(text) {
         this._addMessageHtml(escape(text), "user");
     },
     _addBotText(text) {
-        const safe = (text || "").replace(/\n/g, "<br/>"); // KHÔNG escape ở đây
-        this._addMessageHtml(safe, "bot");
+        // Convert Markdown cơ bản → HTML, sau đó xuống dòng
+        const html = (text || "")
+            .replace(/&/g, "&amp;")                // chống XSS nhẹ cho &, <, >
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")   // **đậm**
+            .replace(/_(.+?)_/g, "<i>$1</i>")         // _nghiêng_
+            .replace(/`(.+?)`/g, "<code>$1</code>")   // `code`
+            .replace(/\n/g, "<br/>");                 // xuống dòng
+        this._addMessageHtml(html, "bot");
     },
 
 
