@@ -1,0 +1,11 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_ai_sales_inquiry_user,ai.sales.inquiry.user,model_ai_sales_inquiry,base.group_user,1,1,1,0
+access_ai_sales_inquiry_manager,ai.sales.inquiry.manager,model_ai_sales_inquiry,sales_team.group_sale_manager,1,1,1,1
+access_ai_sales_inquiry_line_user,ai.sales.inquiry.line.user,model_ai_sales_inquiry_line,base.group_user,1,1,1,0
+access_ai_sales_inquiry_line_manager,ai.sales.inquiry.line.manager,model_ai_sales_inquiry_line,sales_team.group_sale_manager,1,1,1,1
+access_ai_sales_supplier_contact_user,ai.sales.supplier.contact.user,model_ai_sales_supplier_contact,base.group_user,1,0,0,0
+access_ai_sales_supplier_contact_manager,ai.sales.supplier.contact.manager,model_ai_sales_supplier_contact,sales_team.group_sale_manager,1,1,1,1
+access_ai_sales_communication_log_user,ai.sales.communication.log.user,model_ai_sales_communication_log,base.group_user,1,0,0,0
+access_ai_sales_communication_log_manager,ai.sales.communication.log.manager,model_ai_sales_communication_log,sales_team.group_sale_manager,1,1,1,1
+access_ai_sales_service_user,ai.sales.service.user,model_ai_sales_service,base.group_user,1,0,0,0
+access_ai_sales_service_manager,ai.sales.service.manager,model_ai_sales_service,sales_team.group_sale_manager,1,1,1,1

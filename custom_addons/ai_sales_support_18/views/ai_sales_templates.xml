@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- AI Sales Support Test Page -->
+        <template id="test_page" name="AI Sales Support Test">
+            <t t-call="website.layout">
+                <div id="wrap" class="oe_structure oe_empty">
+                    <div class="container mt-4">
+                        <div class="row">
+                            <div class="col-lg-8 offset-lg-2">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h3 class="card-title">AI Sales Support Test</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="alert alert-info">
+                                            <strong>Welcome, <t t-esc="user.name"/>!</strong><br/>
+                                            Test the AI Sales Support functionality below.
+                                        </div>
+                                        
+                                        <form id="ai-sales-form">
+                                            <div class="mb-3">
+                                                <label for="customer_select" class="form-label">Customer (Optional)</label>
+                                                <select class="form-select" id="customer_select" name="customer_id">
+                                                    <option value="">Select a customer...</option>
+                                                    <!-- Customers will be loaded via JavaScript -->
+                                                </select>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <label for="inquiry_text" class="form-label">Sales Inquiry</label>
+                                                <textarea class="form-control" id="inquiry_text" name="inquiry_text" rows="4" 
+                                                          placeholder="Enter your sales inquiry here. For example:&#10;&#10;Tôi cần báo giá cho:&#10;- Laptop Dell XPS 13: 5 chiếc&#10;- Mouse Logitech MX Master: 10 chiếc&#10;- Bàn phím cơ Keychron K2: 3 chiếc&#10;&#10;Khách hàng cần giao hàng trong tuần này."></textarea>
+                                            </div>
+                                            
+                                            <button type="submit" class="btn btn-primary" id="submit-btn">
+                                                <i class="fa fa-paper-plane me-2"></i>Process Inquiry
+                                            </button>
+                                        </form>
+                                        
+                                        <div id="result-section" class="mt-4" style="display: none;">
+                                            <h5>AI Response:</h5>
+                                            <div id="ai-response" class="alert alert-success"></div>
+                                            
+                                            <div id="inquiry-details" class="mt-3">
+                                                <h6>Inquiry Details:</h6>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <strong>Reference:</strong> <span id="inquiry-ref"></span><br/>
+                                                        <strong>Status:</strong> <span id="inquiry-status" class="badge"></span><br/>
+                                                        <strong>Total Amount:</strong> <span id="inquiry-total"></span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <strong>Processing Time:</strong> <span id="processing-time"></span><br/>
+                                                        <strong>Inventory Sufficient:</strong> <span id="inventory-sufficient"></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="mt-3">
+                                                <button type="button" class="btn btn-success" id="create-quotation-btn" style="display: none;">
+                                                    <i class="fa fa-file-text me-2"></i>Create Quotation
+                                                </button>
+                                                <a href="#" class="btn btn-info" id="view-inquiry-btn" target="_blank">
+                                                    <i class="fa fa-eye me-2"></i>View Full Details
+                                                </a>
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="error-section" class="mt-4" style="display: none;">
+                                            <div class="alert alert-danger">
+                                                <strong>Error:</strong> <span id="error-message"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Recent Inquiries -->
+                                <div class="card mt-4">
+                                    <div class="card-header">
+                                        <h5 class="card-title">Recent Inquiries</h5>
+                                        <button type="button" class="btn btn-sm btn-outline-primary float-end" id="refresh-inquiries">
+                                            <i class="fa fa-refresh"></i> Refresh
+                                        </button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="recent-inquiries">
+                                            <div class="text-center">
+                                                <i class="fa fa-spinner fa-spin"></i> Loading...
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </template>
+
+        <!-- AI Sales Widget Template -->
+        <template id="ai_sales_widget" name="AI Sales Widget">
+            <div class="ai-sales-widget" style="display: none;">
+                <div class="ai-sales-toggle">
+                    <button class="btn btn-primary btn-lg rounded-circle ai-sales-toggle-btn">
+                        <i class="fa fa-robot"></i>
+                    </button>
+                </div>
+                
+                <div class="ai-sales-container">
+                    <div class="ai-sales-header">
+                        <h5 class="mb-0">AI Sales Assistant</h5>
+                        <button class="btn btn-sm btn-outline-light ai-sales-close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="ai-sales-body">
+                        <div class="ai-sales-messages"></div>
+                        
+                        <div class="ai-sales-input-group">
+                            <textarea class="form-control ai-sales-input" rows="2" 
+                                      placeholder="Enter your sales inquiry..."></textarea>
+                            <button class="btn btn-primary ai-sales-send">
+                                <i class="fa fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </data>
+</odoo>

@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- AI Sales Inquiry Tree View -->
+        <record id="ai_sales_inquiry_view_tree" model="ir.ui.view">
+            <field name="name">ai.sales.inquiry.tree</field>
+            <field name="model">ai.sales.inquiry</field>
+            <field name="arch" type="xml">
+                <tree string="AI Sales Inquiries" decoration-info="state=='draft'" decoration-warning="state=='processing'" decoration-success="state=='completed'">
+                    <field name="inquiry_reference"/>
+                    <field name="sales_person_id"/>
+                    <field name="customer_id"/>
+                    <field name="state" widget="badge" decoration-info="state=='draft'" decoration-warning="state in ('processing','inventory_check','supplier_contact')" decoration-success="state in ('quotation_ready','completed')" decoration-danger="state=='failed'"/>
+                    <field name="total_amount" widget="monetary"/>
+                    <field name="processing_duration"/>
+                    <field name="create_date"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- AI Sales Inquiry Form View -->
+        <record id="ai_sales_inquiry_view_form" model="ir.ui.view">
+            <field name="name">ai.sales.inquiry.form</field>
+            <field name="model">ai.sales.inquiry</field>
+            <field name="arch" type="xml">
+                <form string="AI Sales Inquiry">
+                    <header>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,processing,inventory_check,supplier_contact,quotation_ready,completed"/>
+                        <button name="start_processing" string="Start Processing" type="object" invisible="state != 'draft'" class="btn-primary"/>
+                        <button name="complete_processing" string="Complete" type="object" invisible="state not in ('quotation_ready',)" class="btn-success"/>
+                        <button name="create_quotation" string="Create Quotation" type="object" invisible="not customer_id or quotation_id" class="btn-primary"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="action_view_quotation" type="object" class="oe_stat_button" icon="fa-file-text-o" invisible="not quotation_id">
+                                <field name="quotation_id" widget="statinfo" string="Quotation"/>
+                            </button>
+                        </div>
+                        
+                        <group>
+                            <group>
+                                <field name="inquiry_reference" readonly="1"/>
+                                <field name="sales_person_id" readonly="1"/>
+                                <field name="customer_id"/>
+                                <field name="currency_id" invisible="1"/>
+                            </group>
+                            <group>
+                                <field name="total_amount" widget="monetary"/>
+                                <field name="processing_duration" widget="float_time"/>
+                                <field name="inventory_sufficient" readonly="1"/>
+                            </group>
+                        </group>
+                        
+                        <notebook>
+                            <page string="Inquiry Details">
+                                <group>
+                                    <field name="inquiry_text" widget="text" readonly="1"/>
+                                    <field name="processed_inquiry" widget="text" readonly="1" invisible="not processed_inquiry"/>
+                                </group>
+                            </page>
+                            
+                            <page string="AI Analysis" invisible="not ai_analysis">
+                                <field name="ai_analysis" widget="text" readonly="1"/>
+                            </page>
+                            
+                            <page string="Product Lines">
+                                <field name="product_lines">
+                                    <tree editable="bottom">
+                                        <field name="sequence" widget="handle"/>
+                                        <field name="product_id"/>
+                                        <field name="product_code"/>
+                                        <field name="product_name"/>
+                                        <field name="description"/>
+                                        <field name="quantity"/>
+                                        <field name="uom_id"/>
+                                        <field name="available_qty" readonly="1"/>
+                                        <field name="is_sufficient" readonly="1" widget="boolean_toggle"/>
+                                        <field name="unit_price" widget="monetary"/>
+                                        <field name="subtotal" widget="monetary" readonly="1"/>
+                                        <field name="supplier_id"/>
+                                        <field name="currency_id" column_invisible="1"/>
+                                    </tree>
+                                </field>
+                            </page>
+                            
+                            <page string="Inventory Check" invisible="not inventory_check_details">
+                                <field name="inventory_check_details" widget="text" readonly="1"/>
+                            </page>
+                            
+                            <page string="Supplier Communication" invisible="state not in ('supplier_contact', 'quotation_ready', 'completed')">
+                                <group>
+                                    <field name="suppliers_contacted" widget="many2many_tags" readonly="1"/>
+                                </group>
+                                <field name="supplier_responses" widget="text" readonly="1" invisible="not supplier_responses"/>
+                                
+                                <field name="communication_log_ids" readonly="1">
+                                    <tree>
+                                        <field name="create_date"/>
+                                        <field name="supplier_contact_id"/>
+                                        <field name="message_type" widget="badge"/>
+                                        <field name="status" widget="badge"/>
+                                        <field name="message_content"/>
+                                    </tree>
+                                </field>
+                            </page>
+                            
+                            <page string="AI Response">
+                                <field name="ai_response" widget="text" readonly="1"/>
+                            </page>
+                            
+                            <page string="Notes">
+                                <field name="notes" widget="text"/>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <div class="oe_chatter">
+                        <field name="message_follower_ids"/>
+                        <field name="activity_ids"/>
+                        <field name="message_ids"/>
+                    </div>
+                </form>
+            </field>
+        </record>
+
+        <!-- AI Sales Inquiry Search View -->
+        <record id="ai_sales_inquiry_view_search" model="ir.ui.view">
+            <field name="name">ai.sales.inquiry.search</field>
+            <field name="model">ai.sales.inquiry</field>
+            <field name="arch" type="xml">
+                <search string="AI Sales Inquiries">
+                    <field name="inquiry_reference"/>
+                    <field name="sales_person_id"/>
+                    <field name="customer_id"/>
+                    <field name="inquiry_text"/>
+                    
+                    <filter string="My Inquiries" name="my_inquiries" domain="[('sales_person_id', '=', uid)]"/>
+                    <filter string="Draft" name="draft" domain="[('state', '=', 'draft')]"/>
+                    <filter string="Processing" name="processing" domain="[('state', 'in', ['processing', 'inventory_check', 'supplier_contact'])]"/>
+                    <filter string="Ready" name="ready" domain="[('state', '=', 'quotation_ready')]"/>
+                    <filter string="Completed" name="completed" domain="[('state', '=', 'completed')]"/>
+                    <filter string="Failed" name="failed" domain="[('state', '=', 'failed')]"/>
+                    
+                    <separator/>
+                    <filter string="Today" name="today" domain="[('create_date', '>=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                    <filter string="This Week" name="this_week" domain="[('create_date', '>=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                    
+                    <group expand="0" string="Group By">
+                        <filter string="Sales Person" name="group_sales_person" context="{'group_by': 'sales_person_id'}"/>
+                        <filter string="State" name="group_state" context="{'group_by': 'state'}"/>
+                        <filter string="Customer" name="group_customer" context="{'group_by': 'customer_id'}"/>
+                        <filter string="Date" name="group_date" context="{'group_by': 'create_date:day'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- AI Sales Inquiry Action -->
+        <record id="ai_sales_inquiry_action" model="ir.actions.act_window">
+            <field name="name">AI Sales Inquiries</field>
+            <field name="res_model">ai.sales.inquiry</field>
+            <field name="view_mode">tree,form</field>
+            <field name="context">{'search_default_my_inquiries': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create your first AI Sales Inquiry!
+                </p>
+                <p>
+                    AI Sales Support helps you process customer inquiries automatically,
+                    check inventory, contact suppliers, and generate quotations.
+                </p>
+            </field>
+        </record>
+
+        <!-- AI Sales Inquiry Line Tree View -->
+        <record id="ai_sales_inquiry_line_view_tree" model="ir.ui.view">
+            <field name="name">ai.sales.inquiry.line.tree</field>
+            <field name="model">ai.sales.inquiry.line</field>
+            <field name="arch" type="xml">
+                <tree string="Inquiry Lines">
+                    <field name="inquiry_id"/>
+                    <field name="product_id"/>
+                    <field name="product_name"/>
+                    <field name="quantity"/>
+                    <field name="available_qty"/>
+                    <field name="is_sufficient" widget="boolean_toggle"/>
+                    <field name="unit_price" widget="monetary"/>
+                    <field name="subtotal" widget="monetary"/>
+                    <field name="currency_id" column_invisible="1"/>
+                </tree>
+            </field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="url(#grad1)" stroke="#fff" stroke-width="4"/>
+  
+  <!-- Robot head -->
+  <rect x="40" y="35" width="48" height="40" rx="8" fill="#fff" opacity="0.9"/>
+  
+  <!-- Eyes -->
+  <circle cx="52" cy="50" r="4" fill="#667eea"/>
+  <circle cx="76" cy="50" r="4" fill="#667eea"/>
+  
+  <!-- Mouth -->
+  <rect x="56" y="62" width="16" height="3" rx="1.5" fill="#667eea"/>
+  
+  <!-- Antenna -->
+  <line x1="64" y1="35" x2="64" y2="25" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="64" cy="22" r="3" fill="#fff"/>
+  
+  <!-- Sales chart icon -->
+  <g transform="translate(20, 85)">
+    <rect x="0" y="15" width="8" height="15" fill="#fff" opacity="0.8"/>
+    <rect x="12" y="10" width="8" height="20" fill="#fff" opacity="0.8"/>
+    <rect x="24" y="5" width="8" height="25" fill="#fff" opacity="0.8"/>
+    <rect x="36" y="0" width="8" height="30" fill="#fff" opacity="0.8"/>
+  </g>
+  
+  <!-- Chat bubble -->
+  <g transform="translate(75, 80)">
+    <ellipse cx="15" cy="15" rx="18" ry="12" fill="#fff" opacity="0.8"/>
+    <polygon points="8,20 3,25 8,25" fill="#fff" opacity="0.8"/>
+    <text x="15" y="19" text-anchor="middle" font-family="Arial" font-size="10" fill="#667eea">AI</text>
+  </g>
+</svg>

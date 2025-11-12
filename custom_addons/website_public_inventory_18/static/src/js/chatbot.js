@@ -1,249 +1,316 @@
 /** @odoo-module **/
 
 import publicWidget from "@web/legacy/js/public/public_widget";
-import { jsonrpc } from "@web/core/network/rpc_service";
-import { _t } from "@web/core/l10n/translation";
+import { escape } from "@web/core/utils/strings";
 
 const ChatbotWidget = publicWidget.Widget.extend({
-        template: 'website_public_inventory_18.chatbot_widget',
-        events: {
-            'click .chatbot-toggle': '_onToggleChatbot',
-            'click .chatbot-close': '_onCloseChatbot',
-            'click .chatbot-send': '_onSendMessage',
-            'keypress .chatbot-input': '_onKeyPress',
-            'click .chatbot-minimize': '_onMinimizeChatbot',
-        },
+    selector: ".chatbot-widget",
 
-        init: function (parent, options) {
-            this._super.apply(this, arguments);
-            this.isOpen = false;
-            this.isMinimized = false;
-            this.messages = [];
-            this.isLoading = false;
-        },
+    events: {
+        "click .chatbot-toggle": "_onToggleChatbot",
+        "click .chatbot-send": "_onSendMessage",
+        "keypress .chatbot-input": "_onKeyPress",
+        "click .chatbot-close": "_onCloseChatbot",
+        "click .chatbot-minimize": "_onMinimize",
+        "click .btn-ghost": "_onAskMore",
+    },
+    _scrollToBottom() {
+        const box = this.$(".chatbot-messages")[0];
+        if (!box) return;
+        box.scrollTop = box.scrollHeight;
+    },
 
-        start: function () {
-            var self = this;
-            return this._super.apply(this, arguments).then(function () {
-                self._checkChatbotStatus();
-                self._initializeChatbot();
-            });
-        },
+    start() {
+        this._super(...arguments);
+        this._initializeChatbot();
 
-        _checkChatbotStatus: function () {
-            var self = this;
-            return jsonrpc('/chatbot/status', {}).then(function (result) {
-                if (!result.enabled || !result.configured) {
-                    self.$el.hide();
-                } else {
-                    self.$el.show();
-                }
-            }).catch(function () {
-                self.$el.hide();
-            });
-        },
+        const target = this._messagesEl()[0];
+        if (target && !this._mo) {
+            this._mo = new MutationObserver(() => this._scrollToBottom());
+            this._mo.observe(target, { childList: true, subtree: true });
+        }
+    },
 
-        _initializeChatbot: function () {
-            this._addMessage('bot', 'Xin chào! Tôi có thể giúp bạn tìm kiếm thông tin sản phẩm và tồn kho. Hãy cho tôi biết bạn đang tìm gì?');
-        },
 
-        _onToggleChatbot: function (ev) {
-            ev.preventDefault();
-            if (this.isOpen) {
-                this._closeChatbot();
-            } else {
-                this._openChatbot();
-            }
-        },
+    _initializeChatbot() {
+        this.isOpen = false;
+        this.isLoading = false;
+        this._checkChatbotStatus();
+    },
 
-        _onCloseChatbot: function (ev) {
-            ev.preventDefault();
-            this._closeChatbot();
-        },
-
-        _onMinimizeChatbot: function (ev) {
-            ev.preventDefault();
-            this.isMinimized = !this.isMinimized;
-            this.$('.chatbot-body').toggle(!this.isMinimized);
-            this.$('.chatbot-minimize i').toggleClass('fa-minus fa-plus');
-        },
-
-        _openChatbot: function () {
-            this.isOpen = true;
-            this.isMinimized = false;
-            this.$('.chatbot-container').addClass('chatbot-open');
-            this.$('.chatbot-toggle').hide();
-            this.$('.chatbot-input').focus();
-        },
-
-        _closeChatbot: function () {
-            this.isOpen = false;
-            this.isMinimized = false;
-            this.$('.chatbot-container').removeClass('chatbot-open');
-            this.$('.chatbot-toggle').show();
-        },
-
-        _onKeyPress: function (ev) {
-            if (ev.which === 13) { // Enter key
-                ev.preventDefault();
-                this._onSendMessage();
-            }
-        },
-
-        _onSendMessage: function () {
-            if (this.isLoading) return;
-
-            var message = this.$('.chatbot-input').val().trim();
-            if (!message) return;
-
-            this._addMessage('user', message);
-            this.$('.chatbot-input').val('');
-            this._sendMessageToBot(message);
-        },
-
-        _addMessage: function (sender, text, data) {
-            var messageHtml = '';
-            var timestamp = new Date().toLocaleTimeString('vi-VN', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-
-            if (sender === 'user') {
-                messageHtml = `
-                    <div class="chatbot-message user-message">
-                        <div class="message-content">${this._escapeHtml(text)}</div>
-                        <div class="message-time">${timestamp}</div>
-                    </div>
-                `;
-            } else {
-                messageHtml = `
-                    <div class="chatbot-message bot-message">
-                        <div class="message-content">${this._formatBotMessage(text, data)}</div>
-                        <div class="message-time">${timestamp}</div>
-                    </div>
-                `;
-            }
-
-            this.$('.chatbot-messages').append(messageHtml);
-            this._scrollToBottom();
-        },
-
-        _formatBotMessage: function (text, data) {
-            var html = this._escapeHtml(text).replace(/\n/g, '<br>');
-            
-            // Add inventory results if available
-            if (data && data.inventory_results && data.inventory_results.length > 0) {
-                html += '<div class="inventory-results mt-2">';
-                html += '<strong>Sản phẩm trong kho:</strong>';
-                data.inventory_results.forEach(function (item) {
-                    html += `
-                        <div class="product-item border rounded p-2 mt-1">
-                            <div class="product-name font-weight-bold">${item.name}</div>
-                            ${item.default_code ? `<div class="product-code text-muted">Mã: ${item.default_code}</div>` : ''}
-                            <div class="product-stock">Tồn kho: <span class="badge badge-success">${item.qty_available} ${item.uom}</span></div>
-                            <div class="product-price">Giá: <span class="text-primary">${item.list_price.toLocaleString('vi-VN')} VND</span></div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-            }
-
-            // Add web results if available
-            if (data && data.web_results && data.web_results.length > 0) {
-                html += '<div class="web-results mt-2">';
-                html += '<strong>Kết quả tìm kiếm web:</strong>';
-                data.web_results.forEach(function (item) {
-                    html += `
-                        <div class="web-item border rounded p-2 mt-1">
-                            <div class="web-title font-weight-bold">
-                                <a href="${item.link}" target="_blank">${item.title}</a>
-                            </div>
-                            <div class="web-price text-success">${item.price}</div>
-                            <div class="web-description text-muted">${item.description}</div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-            }
-
-            return html;
-        },
-
-        _sendMessageToBot: function (message) {
-            var self = this;
-            this.isLoading = true;
-            this._showTypingIndicator();
-
-            jsonrpc('/chatbot/message', {
-                message: message
-            }).then(function (result) {
-                self._hideTypingIndicator();
-                self.isLoading = false;
-
-                if (result.success) {
-                    self._addMessage('bot', result.response, result);
-                } else {
-                    self._addMessage('bot', 'Xin lỗi, đã có lỗi xảy ra: ' + (result.error || 'Unknown error'));
-                }
-            }).catch(function (error) {
-                self._hideTypingIndicator();
-                self.isLoading = false;
-                self._addMessage('bot', 'Xin lỗi, không thể kết nối đến server. Vui lòng thử lại sau.');
-                console.error('Chatbot error:', error);
-            });
-        },
-
-        _showTypingIndicator: function () {
-            var typingHtml = `
-                <div class="chatbot-message bot-message typing-indicator">
-                    <div class="message-content">
-                        <div class="typing-dots">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                        </div>
-                    </div>
-                </div>
-            `;
-            this.$('.chatbot-messages').append(typingHtml);
-            this._scrollToBottom();
-        },
-
-        _hideTypingIndicator: function () {
-            this.$('.typing-indicator').remove();
-        },
-
-        _scrollToBottom: function () {
-            var messagesContainer = this.$('.chatbot-messages')[0];
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        },
-
-        _escapeHtml: function (text) {
-            var div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        },
-    });
-
-// Auto-initialize chatbot on pages with inventory
-publicWidget.registry.chatbot = publicWidget.Widget.extend({
-    selector: 'body',
-    
-    start: function () {
-        var self = this;
-        return this._super.apply(this, arguments).then(function () {
-            // Only show chatbot on inventory pages
-            if (window.location.pathname.includes('/search_stock') || 
-                window.location.pathname.includes('/inventory')) {
-                self._initChatbot();
-            }
+    _checkChatbotStatus() {
+        const self = this;
+        $.ajax({
+            url: "/chatbot/status",
+            type: "GET",
+            dataType: "json",
+            success(result) {
+                if (result.enabled) self.$el.show();
+                else self.$el.hide();
+            },
+            error(err) {
+                console.error("Error checking chatbot status:", err);
+                self.$el.show(); // dev: vẫn show để test
+            },
         });
     },
 
-    _initChatbot: function () {
-        var chatbot = new ChatbotWidget(this);
-        chatbot.appendTo(this.$el);
+    _onToggleChatbot(ev) {
+        ev.preventDefault();
+        this.isOpen ? this._closeChatbot() : this._openChatbot();
+    },
+    _onAskMore(ev) {
+        const code = $(ev.currentTarget).data("code");
+        if (!code) return;
+        const msg = `Cho mình xem thêm thông tin về ${code}`;
+        this._addUserText(msg);
+        this.$(".chatbot-input").val(msg);
+        this._sendMessage();
+    },
+    _openChatbot() {
+        this.isOpen = true;
+        this.$(".chatbot-container").addClass("chatbot-open");
+        this.$(".chatbot-input").focus();
+
+        if (this.$(".chatbot-messages .chatbot-message").length === 0) {
+            // Lời chào thân thiện, ngắn gọn
+            this._addBotText(
+                "Chào bạn 👋 Mình là trợ lý bán hàng. Bạn có thể hỏi mã/ tên sản phẩm và kho (ví dụ: “39-055 Tân Sơn Nhì còn mấy cái?”)."
+            );
+        }
+    },
+
+    _closeChatbot() {
+        this.isOpen = false;
+        this.$(".chatbot-container").removeClass("chatbot-open");
+    },
+
+    _onCloseChatbot(ev) {
+        ev.preventDefault();
+        this._closeChatbot();
+    },
+
+    _onMinimize(ev) {
+        ev.preventDefault();
+        this.$(".chatbot-container").toggleClass("chatbot-minimized");
+    },
+
+    _onKeyPress(ev) {
+        if (ev.which === 13 && !ev.shiftKey) {
+            ev.preventDefault();
+            this._sendMessage();
+        }
+    },
+
+    _onSendMessage(ev) {
+        ev?.preventDefault?.();
+        this._sendMessage();
+    },
+    _sendMessage() {
+        if (this.isLoading) return;
+
+        const input = this.$(".chatbot-input");
+        // normalize: gộp khoảng trắng
+        const message = (input.val() || "").replace(/\s+/g, " ").trim();
+        if (!message) return;
+
+        this._addUserText(message);
+        input.val("");
+        this._setLoading(true);
+
+        const self = this;
+        $.ajax({
+            url: "/chatbot/message",
+            type: "POST",
+            dataType: "json",
+            data: { message, csrf_token: odoo.csrf_token },
+            success(result) {
+                self._setLoading(false);
+                if (!result || !result.success) {
+                    self._addBotText("Xin lỗi, đã có lỗi xảy ra. Bạn thử lại giúp mình nhé.");
+                    return;
+                }
+
+                // 1) text "thân thiện"
+                if (result.response) self._addBotText(result.response);
+
+                // 2) product cards: lọc bằng mã xuất hiện trong response (nếu có)
+                let products = Array.isArray(result.inventory_results) ? result.inventory_results : [];
+                if (result.response && products.length > 0) {
+                    const codesInText = (result.response.match(/\(Mã:\s*([A-Za-z0-9\-\_]+)/g) || [])
+                        .map(s => s.replace(/\(Mã:\s*/, '').trim());
+                    if (codesInText.length) {
+                        const set = new Set(codesInText.map(x => x.toUpperCase()));
+                        const filtered = products.filter(p => (p.default_code || "").toUpperCase() && set.has((p.default_code || "").toUpperCase()));
+                        if (filtered.length) products = filtered;
+                    }
+                }
+                if (products.length) self._addProductList(products);
+
+                // 3) web
+                const web = Array.isArray(result.web_results) ? result.web_results : [];
+                if (web.length) self._addWebList(web);
+            },
+
+            error(err) {
+                self._setLoading(false);
+                console.error("Chatbot error:", err);
+                self._addBotText("Xin lỗi, không thể kết nối đến server. Bạn thử lại sau nhé.");
+            },
+        });
+    },
+
+
+    // ========== Render helpers ==========
+
+    _messagesEl() {
+        return this.$(".chatbot-messages");
+    },
+
+    _addMessageHtml(html, type /* 'user' | 'bot' */) {
+        const sideClass = type === "user" ? "user-message" : "bot-message";
+        // Dùng DOM thay vì string để chắc chắn style apply
+        const $msg = $(document.createElement("div"))
+            .addClass(`chatbot-message ${sideClass}`)
+            .append(
+                $("<div>").addClass("message-content").html(html),  // HTML render ngay
+                $("<div>").addClass("message-time").text(new Date().toLocaleTimeString())
+            );
+
+        const $wrap = this._messagesEl().append($msg);
+
+        // Force reflow + scroll
+        // requestAnimationFrame(() => this._scrollToBottom());
+        requestAnimationFrame(() => this._scrollToBottom && this._scrollToBottom());
+
+        // Sau khi ảnh load xong (card sản phẩm), scroll lại
+        $msg.find("img").on("load", () => this._scrollToBottom());
+    },
+
+
+    _addUserText(text) {
+        this._addMessageHtml(escape(text), "user");
+    },
+    _addBotText(text) {
+        // Convert Markdown cơ bản → HTML, sau đó xuống dòng
+        const html = (text || "")
+            .replace(/&/g, "&amp;")                // chống XSS nhẹ cho &, <, >
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")   // **đậm**
+            .replace(/_(.+?)_/g, "<i>$1</i>")         // _nghiêng_
+            .replace(/`(.+?)`/g, "<code>$1</code>")   // `code`
+            .replace(/\n/g, "<br/>");                 // xuống dòng
+        this._addMessageHtml(html, "bot");
+    },
+
+
+    _addProductList(products) {
+        // Danh sách card sản phẩm
+        const cardsHtml = products
+            .map((p) => this._renderProductCard(p))
+            .join("");
+        const container = `
+      <div class="product-list">
+        ${cardsHtml}
+      </div>
+    `;
+        this._addMessageHtml(container, "bot");
+    },
+
+    _renderProductCard(p) {
+        // Ảnh sản phẩm: ưu tiên ảnh product.product
+        const imgUrl = `/web/image/product.product/${p.id}/image_128`;// fallback đủ nhanh; muốn nét hơn dùng image_512
+        const code = escape(p.default_code || "");
+        const name = escape(p.name || "");
+        const uom = escape(p.uom || "");
+        const price = Number(p.list_price || 0);
+        const tmPrice = Number(p.commercial_price || 0);
+        const byWh = p.by_warehouse || {};
+        const whChips = Object.keys(byWh)
+            .map((wh) => {
+                const qty = byWh[wh];
+                return `<span class="chip chip-warehouse">${escape(wh)}: ${qty}</span>`;
+            })
+            .join(" ");
+
+        // Nhãn “Còn hàng / Sắp hết / Hết hàng”
+        const total = Number(p.qty_available || 0);
+        let stockLabel = `<span class="stock-badge badge-out">Hết hàng</span>`;
+        if (total > 10) stockLabel = `<span class="stock-badge badge-in">Còn nhiều</span>`;
+        else if (total > 0) stockLabel = `<span class="stock-badge badge-low">Sắp hết</span>`;
+
+        return `
+      <div class="product-card">
+        <div class="pc-left">
+          <img class="pc-image" src="${imgUrl}" alt="${name}" onerror="this.src='https://via.placeholder.com/96?text=No+Image';"/>
+        </div>
+        <div class="pc-right">
+          <div class="pc-name">${name}</div>
+          <div class="pc-code">Mã: <strong>${code || "—"}</strong></div>
+          <div class="pc-stockline">
+            ${stockLabel}
+            <span class="pc-uom">Tổng tồn: ${total} ${uom}</span>
+          </div>
+          <div class="pc-wh">${whChips}</div>
+          <div class="pc-price">
+            <span class="price-retail">${price.toLocaleString()} VND</span>
+            ${tmPrice && tmPrice !== price
+                ? `<span class="price-commercial">TM: ${tmPrice.toLocaleString()} VND</span>`
+                : ""
+            }
+          </div>
+          <div class="pc-actions">
+            <button class="btn-ghost" data-code="${code}">Hỏi thêm</button>
+            <button class="btn-primary" data-code="${code}">Đặt mua</button>
+          </div>
+        </div>
+      </div>
+    `;
+    },
+
+    _addWebList(items) {
+        const html = items
+            .map(
+                (w) => `
+        <div class="web-item">
+          <div class="web-title"><a href="${escape(w.link)}" target="_blank" rel="noopener">${escape(
+                    w.title || "Kết quả"
+                )}</a></div>
+          <div class="web-price">${escape(w.price || "")}</div>
+          <div class="web-description">${escape(w.description || "")}</div>
+        </div>`
+            )
+            .join("");
+        this._addMessageHtml(`<div class="web-results">${html}</div>`, "bot");
+    },
+
+    _setLoading(loading) {
+        this.isLoading = loading;
+        const sendBtn = this.$(".chatbot-send");
+        const input = this.$(".chatbot-input");
+
+        if (loading) {
+            sendBtn.prop("disabled", true).text("...");
+            input.prop("disabled", true);
+
+            const dots = `
+    <div class="chatbot-message bot-message typing-indicator">
+      <div class="message-content">
+        <div class="typing-dots"><span></span><span></span><span></span></div>
+      </div>
+      <div class="message-time">${new Date().toLocaleTimeString()}</div>
+    </div>`;
+            const $wrap = this._messagesEl().append(dots);
+            this._scrollToBottom();
+        } else {
+            sendBtn.prop("disabled", false).text("Gửi");
+            input.prop("disabled", false);
+            this.$(".typing-indicator").last().remove();
+        }
+
     },
 });
 
+publicWidget.registry.chatbot = ChatbotWidget;
 export default ChatbotWidget;
