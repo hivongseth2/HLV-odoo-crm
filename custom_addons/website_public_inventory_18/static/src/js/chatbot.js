@@ -1,6 +1,7 @@
 /** @odoo-module **/
 
 import publicWidget from "@web/legacy/js/public/public_widget";
+import { escape } from "@web/core/utils/strings"; // 👈 thêm dòng này
 
 const ChatbotWidget = publicWidget.Widget.extend({
     // 👉 BẮT BUỘC: selector để auto-mount
@@ -129,7 +130,7 @@ const ChatbotWidget = publicWidget.Widget.extend({
         const messagesContainer = this.$('.chatbot-messages');
         const messageHtml = `
             <div class="message ${type}${type.includes('loading') ? ' loading' : ''}">
-                <div class="message-content">${_.escape(text)}</div>
+               <div class="message-content">${escape(text)}</div>
                 <div class="message-time">${new Date().toLocaleTimeString()}</div>
             </div>`;
         messagesContainer.append(messageHtml);

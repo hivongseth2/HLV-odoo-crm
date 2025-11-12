@@ -321,12 +321,17 @@ CÁCH TRẢ LỜI:
                 'error': str(e)
             }
     
-    @http.route('/chatbot/status', type='json', auth='public', methods=['GET'])
-    def chatbot_status(self):
-        """Get chatbot status"""
-        config = self._get_chatbot_config()
-        return {
-            'enabled': config['enabled'],
-            'configured': bool(config['api_key']),
-            'web_search_enabled': config['web_search_enabled']
-        }
+    @http.route('/chatbot/status', type='http', auth='public', methods=['GET'], csrf=False, website=True)
+        def chatbot_status(self, **kw):
+            """Get chatbot status (HTTP GET for frontend JS)"""
+            config = self._get_chatbot_config()
+            data = {
+                'enabled': bool(config.get('enabled')),
+                'configured': bool(config.get('api_key')),
+                'web_search_enabled': bool(config.get('web_search_enabled')),
+            }
+            # Trả về JSON chuẩn
+            return request.make_response(
+                json.dumps(data),
+                headers=[('Content-Type', 'application/json')]
+            )
