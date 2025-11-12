@@ -75,7 +75,7 @@ const ChatbotWidget = publicWidget.Widget.extend({
         if (this.$(".chatbot-messages .chatbot-message").length === 0) {
             // Lời chào thân thiện, ngắn gọn
             this._addBotText(
-                "Chào bạn 👋 Mình là trợ lý bán hàng. Bạn có thể hỏi mã/ tên sản phẩm và kho (ví dụ: “39-055 Tân Sơn Nhì còn mấy cái?”)."
+                "Chào bạn 👋 Mình là trợ lý bán hàng. Bạn có thể hỏi mã/ tên sản phẩm và kho (ví dụ: “fpd30x kbc?”)."
             );
         }
     },
