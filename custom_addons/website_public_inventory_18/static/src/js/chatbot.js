@@ -118,6 +118,26 @@ const ChatbotWidget = publicWidget.Widget.extend({
         input.val("");
         this._setLoading(true);
 
+
+        function canonSku(s = "") {
+            return String(s).toUpperCase().replace(/[^A-Z0-9]/g, "");
+        }
+
+        // Bóc mọi "(Mã: ...)" trong text, hỗ trợ cả combo có dấu '+'
+        function extractSkusFromResponse(text = "") {
+            const out = new Set();
+            // Bắt chuỗi giữa "(Mã:" và dấu ')'
+            for (const m of text.matchAll(/\(Mã:\s*([^)]+?)\)/gi)) {
+                const raw = (m[1] || "").trim().replace(/[`*_]/g, "");
+                // tách theo '+' nếu là combo
+                raw.split("+").forEach(part => {
+                    const sku = canonSku(part);
+                    if (sku) out.add(sku);
+                });
+            }
+            return out; // Set các SKU đã chuẩn hoá
+        }
+
         const self = this;
         $.ajax({
             url: "/chatbot/message",
@@ -131,26 +151,33 @@ const ChatbotWidget = publicWidget.Widget.extend({
                     return;
                 }
 
-                // 1) text "thân thiện"
+                // 1) text
                 if (result.response) self._addBotText(result.response);
 
-                // 2) product cards: lọc bằng mã xuất hiện trong response (nếu có)
+                // 2) product cards: chỉ render những mã xuất hiện trong response
                 let products = Array.isArray(result.inventory_results) ? result.inventory_results : [];
-                if (result.response && products.length > 0) {
-                    const codesInText = (result.response.match(/\(Mã:\s*([A-Za-z0-9\-\_]+)/g) || [])
-                        .map(s => s.replace(/\(Mã:\s*/, '').trim());
-                    if (codesInText.length) {
-                        const set = new Set(codesInText.map(x => x.toUpperCase()));
-                        const filtered = products.filter(p => (p.default_code || "").toUpperCase() && set.has((p.default_code || "").toUpperCase()));
-                        if (filtered.length) products = filtered;
+
+                if (result.response && products.length) {
+                    const codesSet = extractSkusFromResponse(result.response); // Set đã canon
+                    if (codesSet.size) {
+                        products = products.filter(p => {
+                            const sku = canonSku(p.default_code || "");
+                            if (!sku) return false;
+                            return codesSet.has(sku);
+                        });
+                    } else {
+                        // Nếu AI không nêu mã, để tránh “tràn” thì giới hạn 3 sản phẩm đầu
+                        products = products.slice(0, 3);
                     }
                 }
+
                 if (products.length) self._addProductList(products);
 
                 // 3) web
                 const web = Array.isArray(result.web_results) ? result.web_results : [];
                 if (web.length) self._addWebList(web);
             },
+
 
             error(err) {
                 self._setLoading(false);
