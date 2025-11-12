@@ -511,22 +511,28 @@ class ChatbotController(http.Controller):
 
     def _get_stock_by_warehouse(self, product_ids, warehouse=None):
         """
-        Return: {product_id: {WH_CODE: qty, ...}}
-        If warehouse is provided → only that warehouse code.
+        Trả về: {product_id: {WH_CODE: qty_avail, ...}}
+        - Map location bất kỳ về đúng kho bằng cách leo parent tới root view_location.
         """
         env = request.env
         Quant = env["stock.quant"].sudo()
+        Loc = env["stock.location"].sudo()
+
+        # Warehouses được phép
         whs = self._allowed_warehouses()
         if warehouse:
             whs = whs.filtered(lambda w: w.id == warehouse.id) or whs
-
-        root_ids = whs.mapped("view_location_id").ids
-        if not root_ids:
+        if not whs:
             return {}
 
+        # Map root_location_id -> WH code
+        root_id_to_wh = {w.view_location_id.id: w.code for w in whs}
+        root_ids_set = set(root_id_to_wh.keys())
+
+        # Lấy quants theo các root
         domain = [
             ("product_id", "in", product_ids),
-            ("location_id", "child_of", root_ids),
+            ("location_id", "child_of", list(root_ids_set)),
         ]
         groups = Quant.read_group(
             domain,
@@ -535,32 +541,46 @@ class ChatbotController(http.Controller):
             lazy=False,
         )
 
-        # map location_id → wh_code
-        loc_to_wh = {}
-        for wh in whs:
-            for loc in wh.view_location_id.child_ids:
-                loc_to_wh[loc.id] = wh.code
-            loc_to_wh[wh.view_location_id.id] = wh.code
+        # Thu thập tất cả location xuất hiện để bulk-read parent chain
+        loc_ids = {g["location_id"][0] for g in groups if g.get("location_id")}
+        # Bulk read parent cho nhanh
+        locs = Loc.browse(list(loc_ids)).sudo()
+        id_to_parent = {l.id: (l.location_id.id or False) for l in locs}
 
-        out = defaultdict(lambda: defaultdict(float))
+        def find_root(loc_id: int):
+            """Leo lên tới root view_location của 1 WH được phép."""
+            seen = set()
+            cur = loc_id
+            while cur and cur not in seen:
+                if cur in root_ids_set:
+                    return cur
+                seen.add(cur)
+                cur = id_to_parent.get(cur) or Loc.browse(cur).location_id.id or False
+            return None
+
+        out = {}
         for g in groups:
             pid = g.get("product_id") and g["product_id"][0]
             loc_id = g.get("location_id") and g["location_id"][0]
             if not pid or not loc_id:
                 continue
-            wh_code = loc_to_wh.get(loc_id)
+
+            root = find_root(loc_id)
+            if not root:
+                continue
+            wh_code = root_id_to_wh.get(root)
             if not wh_code:
-                # try parent mapping: safest fallback to top root
-                for wh in whs:
-                    if request.env["stock.location"].browse(loc_id).id in wh.view_location_id.child_ids.ids:
-                        wh_code = wh.code
-                        break
-            qty = float(g.get("quantity_sum") or g.get("quantity") or 0.0) - float(
-                g.get("reserved_quantity_sum") or g.get("reserved_quantity") or 0.0
-            )
-            if wh_code:
-                out[pid][wh_code] += qty
+                continue
+
+            qty = float(g.get("quantity_sum") or g.get("quantity") or 0.0)
+            res = float(g.get("reserved_quantity_sum") or g.get("reserved_quantity") or 0.0)
+            avail = qty - res
+
+            out.setdefault(pid, {}).setdefault(wh_code, 0.0)
+            out[pid][wh_code] += avail
+
         return out
+
 
     # ===== AI RESPONSE (friendly) =====
     def _generate_ai_response(self, user_message, inventory_results, web_results, config, parsed_entities=None, warehouse_code=None):
