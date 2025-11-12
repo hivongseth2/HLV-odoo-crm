@@ -13,7 +13,7 @@
                 <!-- Header -->
                 <div class="chatbot-header">
                     <h4 class="chatbot-title">
-                        <i class="fa fa-robot mr-2"></i>
+                        <i class="fa fa-robot me-2"></i>
                         Trợ lý AI
                     </h4>
                     <div class="chatbot-controls">

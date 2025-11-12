@@ -22,7 +22,7 @@
           <!-- AI Chatbot Configuration -->
           <setting id="chatbot_ai_settings" string="AI Chatbot" help="Configure AI chatbot for product search assistance">
             <field name="chatbot_enabled"/>
-            <div class="content-group" attrs="{'invisible': [('chatbot_enabled', '=', False)]}">
+            <div class="content-group" invisible="not chatbot_enabled">
               <div class="row mt16">
                 <label for="openai_api_key" class="col-3 o_light_label"/>
                 <field name="openai_api_key" password="True" placeholder="sk-..."/>
