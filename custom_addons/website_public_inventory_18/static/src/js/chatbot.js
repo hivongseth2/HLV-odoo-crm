@@ -219,55 +219,68 @@ const ChatbotWidget = publicWidget.Widget.extend({
     },
 
     _renderProductCard(p) {
-        // Ảnh sản phẩm: ưu tiên ảnh product.product
-        const imgUrl = `/web/image/product.product/${p.id}/image_128`;// fallback đủ nhanh; muốn nét hơn dùng image_512
-        const code = escape(p.default_code || "");
-        const name = escape(p.name || "");
-        const uom = escape(p.uom || "");
-        const price = Number(p.list_price || 0);
-        const tmPrice = Number(p.commercial_price || 0);
-        const byWh = p.by_warehouse || {};
-        const whChips = Object.keys(byWh)
+        // Ảnh
+        const imgUrl = `/web/image/product.product/${p.id}/image_128`;
+
+        // ===== chọn số liệu TỒN THỰC TẾ trước, fallback sang available nếu thiếu =====
+        const totalOnhand = Number(
+            (p.qty_onhand !== undefined ? p.qty_onhand : p.qty_available) || 0
+        );
+
+        // by_warehouse:
+        // - nếu backend gửi by_warehouse_full: {TSN: {onhand, reserved, available}}
+        // - nếu backend đã rút gọn: by_warehouse = {TSN: onhand}
+        const perWh = p.by_warehouse_full || p.by_warehouse || {};
+        const whChips = Object.keys(perWh)
             .map((wh) => {
-                const qty = byWh[wh];
-                return `<span class="chip chip-warehouse">${escape(wh)}: ${qty}</span>`;
+                const row = perWh[wh];
+                const onhand = typeof row === "object" ? Number(row.onhand || 0) : Number(row || 0);
+                return `<span class="chip chip-warehouse">${_.escape(wh)}: ${onhand}</span>`;
             })
             .join(" ");
 
-        // Nhãn “Còn hàng / Sắp hết / Hết hàng”
-        const total = Number(p.qty_available || 0);
+        // Badge theo tồn THỰC TẾ
         let stockLabel = `<span class="stock-badge badge-out">Hết hàng</span>`;
-        if (total > 10) stockLabel = `<span class="stock-badge badge-in">Còn nhiều</span>`;
-        else if (total > 0) stockLabel = `<span class="stock-badge badge-low">Sắp hết</span>`;
+        if (totalOnhand > 10) stockLabel = `<span class="stock-badge badge-in">Còn nhiều</span>`;
+        else if (totalOnhand > 0) stockLabel = `<span class="stock-badge badge-low">Sắp hết</span>`;
+
+        const code = _.escape(p.default_code || "");
+        const name = _.escape(p.name || "");
+        const uom = _.escape(p.uom || "");
+        const price = Number(p.list_price || 0);
+        const tmPrice = Number(p.commercial_price || 0);
 
         return `
-      <div class="product-card">
-        <div class="pc-left">
-          <img class="pc-image" src="${imgUrl}" alt="${name}" onerror="this.src='https://via.placeholder.com/96?text=No+Image';"/>
+    <div class="product-card">
+      <div class="pc-left">
+        <img class="pc-image" src="${imgUrl}" alt="${name}"
+             onerror="this.src='https://via.placeholder.com/96?text=No+Image';"/>
+      </div>
+      <div class="pc-right">
+        <div class="pc-name">${name}</div>
+        <div class="pc-code">Mã: <strong>${code || "—"}</strong></div>
+
+        <div class="pc-stockline">
+          ${stockLabel}
+          <span class="pc-uom">Tổng tồn (thực tế): ${totalOnhand} ${uom}</span>
         </div>
-        <div class="pc-right">
-          <div class="pc-name">${name}</div>
-          <div class="pc-code">Mã: <strong>${code || "—"}</strong></div>
-          <div class="pc-stockline">
-            ${stockLabel}
-            <span class="pc-uom">Tổng tồn: ${total} ${uom}</span>
-          </div>
-          <div class="pc-wh">${whChips}</div>
-          <div class="pc-price">
-            <span class="price-retail">${price.toLocaleString()} VND</span>
-            ${tmPrice && tmPrice !== price
-                ? `<span class="price-commercial">TM: ${tmPrice.toLocaleString()} VND</span>`
-                : ""
-            }
-          </div>
-          <div class="pc-actions">
-            <button class="btn-ghost" data-code="${code}">Hỏi thêm</button>
-            <button class="btn-primary" data-code="${code}">Đặt mua</button>
-          </div>
+
+        <div class="pc-wh">${whChips}</div>
+
+        <div class="pc-price">
+          <span class="price-retail">${price.toLocaleString()} VND</span>
+          ${tmPrice && tmPrice !== price ? `<span class="price-commercial">TM:${tmPrice.toLocaleString()} VND</span>` : ""}
+        </div>
+
+        <div class="pc-actions">
+          <button class="btn-ghost" data-code="${code}">Hỏi thêm</button>
+          <button class="btn-primary" data-code="${code}">Đặt mua</button>
         </div>
       </div>
-    `;
+    </div>
+  `;
     },
+
 
     _addWebList(items) {
         const html = items
