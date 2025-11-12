@@ -47,7 +47,7 @@
 
     <!-- Extend inventory page to include chatbot -->
     <template id="inventory_page_with_chatbot" inherit_id="website_public_inventory_18.inventory_page">
-        <xpath expr="//div[@class='container mt-4']" position="after">
+        <xpath expr="//main[@id='wrap']" position="inside">
             <t t-call="website_public_inventory_18.chatbot_widget"/>
         </xpath>
     </template>
