@@ -799,8 +799,8 @@ class ChatbotController(http.Controller):
                     "components": p.get("components", []),
                 })
 
-            if not inv and cfg.get("web_search_enabled"):
-                web_results = self._search_web(user_message)
+            # if not inv and cfg.get("web_search_enabled"):
+            #     web_results = self._search_web(user_message)
 
             # ---- build parsed info ----
             parsed = {
