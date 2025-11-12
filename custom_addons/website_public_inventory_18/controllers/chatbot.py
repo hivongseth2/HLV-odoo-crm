@@ -172,77 +172,60 @@ class ChatbotController(http.Controller):
         
     def _flexible_product_search(self, query_text: str, sku_fragments=None, limit=20):
         """
-        Tìm sản phẩm linh hoạt theo default_code / barcode / name với nhiều pattern & ưu tiên.
-        - Nếu người dùng có 'combo intent' (gõ "combo", "CB-...", có dấu '+'): cho phép trả combo.
-        - Nếu không có 'combo intent': loại combo khỏi kết quả.
-        - Với sản phẩm combo, trả kèm 'components' (các SP con) để FE/AI render.
-        Trả về: [{
-            id, name, default_code, barcode, uom, list_price, commercial_price,
-            is_combo: bool,
-            components: [{'product_id','name','default_code','uom','qty'}]  # chỉ có khi is_combo
-        }, ...]
+        Tìm sản phẩm linh hoạt theo default_code / barcode / name.
+        - Hỗ trợ mã có khoảng trắng (VD: "M12 FID2") và biến thể không khoảng trắng ("M12FID2").
+        - Nhận diện 'combo intent' (có 'combo', 'cb', dấu '+', fragment bắt đầu 'CB').
+        - Với combo: cho phép tìm theo chuỗi có dấu '+' (dùng wildcard '%') và trả kèm components.
+        - Nếu không có 'combo intent' thì loại combo khỏi kết quả.
+        Trả về: [{id,name,default_code,barcode,uom,list_price,commercial_price,is_combo,components}]
         """
         import re
         from odoo.osv import expression
 
         env = request.env
         Product = env["product.product"].sudo()
-        PTmpl   = env["product.template"].sudo()
-        Bom     = env["mrp.bom"].sudo() if "mrp.bom" in env else None
+        Bom = env["mrp.bom"].sudo() if "mrp.bom" in env else None
 
-        # -------- helpers --------
+        # ---------- helpers ----------
         def _strip_seps(s: str) -> str:
             return re.sub(r"[\s\-\_\/\.]+", "", s or "")
 
         def _normalize_q(s: str) -> str:
             s = re.sub(r"\s+", " ", (s or "")).strip()
-            # Nối chữ–số và số–chữ: "FID 3" -> "FID3", "3 AH" -> "3AH"
+            # "FID 3"->"FID3", "3 AH"->"3AH"
             s = re.sub(r"([A-Za-z])\s+(\d)", r"\1\2", s)
             s = re.sub(r"(\d)\s+([A-Za-z])", r"\1\2", s)
             return s
 
         def _has_combo_intent(q: str, frags):
             qn = (q or "").lower()
-            if "combo" in qn:
+            if "combo" in qn or "+" in qn:
                 return True
-            if "+" in qn:
-                return True
-            # token bắt đầu bằng cb- hoặc cb
             if re.search(r"\bcb[\-\w]*", qn):
                 return True
-            # bất kỳ fragment nào bắt đầu bằng CB
             for f in (frags or []):
                 if (f or "").upper().startswith("CB"):
                     return True
             return False
 
         def _is_combo_product(prod):
-            # 1) custom boolean trên template
+            # custom flag
             if getattr(prod.product_tmpl_id, "is_combo", False):
                 return True
-            # 2) có BOM kiểu kit/phantom (nếu có mrp)
+            # có BOM (kit/phantom/normal)
             if Bom:
-                bom = Bom.search([
-                    ("product_tmpl_id", "=", prod.product_tmpl_id.id),
-                    ("type", "in", ["phantom", "normal"])  # tuỳ bạn: kit thường 'phantom'
-                ], limit=1)
+                bom = Bom.search([("product_tmpl_id", "=", prod.product_tmpl_id.id),
+                                ("type", "in", ["phantom", "normal"])], limit=1)
                 if bom:
                     return True
-            # 3) custom relation 'combo_line_ids' (nếu bạn có)
+            # custom relation combo_line_ids
             if hasattr(prod.product_tmpl_id, "combo_line_ids") and prod.product_tmpl_id.combo_line_ids:
                 return True
             return False
 
         def _get_combo_components(prod):
-            """
-            Trả về list [{'product_id','name','default_code','uom','qty'}] cho combo.
-            Ưu tiên:
-            - custom combo_line_ids (nếu có)
-            - mrp.bom lines (nếu có)
-            Không lấy tồn ở đây; phần tồn combo sẽ tính ở nơi khác (min(child_stock // qty)).
-            """
             comps = []
-            # 1) custom combo_line_ids
+            # custom combo_line_ids
             if hasattr(prod.product_tmpl_id, "combo_line_ids") and prod.product_tmpl_id.combo_line_ids:
                 for line in prod.product_tmpl_id.combo_line_ids:
                     p = line.product_id.product_variant_id or line.product_id
@@ -254,13 +237,10 @@ class ChatbotController(http.Controller):
                         "qty": float(getattr(line, "product_qty", 1.0) or 1.0),
                     })
                 return comps
-
-            # 2) mrp.bom
+            # BOM
             if Bom:
-                bom = Bom.search([
-                    ("product_tmpl_id", "=", prod.product_tmpl_id.id),
-                    ("type", "in", ["phantom", "normal"])
-                ], limit=1)
+                bom = Bom.search([("product_tmpl_id", "=", prod.product_tmpl_id.id),
+                                ("type", "in", ["phantom", "normal"])], limit=1)
                 if bom:
                     for bl in bom.bom_line_ids:
                         p = bl.product_id.product_variant_id or bl.product_id
@@ -273,8 +253,10 @@ class ChatbotController(http.Controller):
                         })
             return comps
 
-        # -------- chuẩn hoá input / fragments --------
+        # ---------- chuẩn hoá input & fragments ----------
         query_text = _normalize_q(query_text)
+
+        # LẤY FRAGS: ưu tiên tham số truyền vào, rồi extractor, rồi tách theo '+'
         frags = list(sku_fragments or [])
         if not frags and query_text:
             try:
@@ -282,27 +264,30 @@ class ChatbotController(http.Controller):
                 frags = list(extracted.get("sku_fragments") or [])
             except Exception:
                 frags = []
+        # Bổ sung từ chuỗi combo "A+B+C"
+        if "+" in (query_text or ""):
+            frags += [s.strip() for s in query_text.split("+") if s.strip()]
 
+        # Nếu vẫn trống, coi cả câu hỏi là một fragment mềm
         if not frags and query_text:
             frags = [query_text]
 
         combo_intent = _has_combo_intent(query_text, frags)
 
-        # -------- patterns --------
+        # ---------- tạo patterns ----------
         def _mk_patterns_from_fragments_local(_frags):
             pats, seen = [], set()
             for raw in _frags:
                 if not raw:
                     continue
                 a = raw.strip()
-                b = _strip_seps(a)
-
+                b = _strip_seps(a)             # bỏ tất cả separator
+                # giữ nguyên & bản không separator
                 for cand in (a, b):
                     if cand and cand not in seen:
                         seen.add(cand)
                         pats.append(cand)
-
-                # Heuristic thêm: "0-xx-xxx" cho dãy số 5+ digit
+                # heuristic thêm "0-xx-xxx" nếu có >=5 digits liền
                 digits_only = re.sub(r"\D", "", a)
                 if len(digits_only) >= 5:
                     zeroed = f"0-{digits_only[:2]}-{digits_only[2:]}"
@@ -316,32 +301,55 @@ class ChatbotController(http.Controller):
         else:
             patterns = _mk_patterns_from_fragments_local(frags)
 
+        # Bổ sung phiên bản bỏ separator cho tất cả pattern
         more = []
         for p in patterns:
             sp = _strip_seps(p)
             if sp and sp != p:
                 more.append(sp)
-        patterns = list(dict.fromkeys(patterns + more))  # unique theo thứ tự
+        patterns = list(dict.fromkeys(patterns + more))  # unique + giữ thứ tự
 
-        # -------- tìm & chấm điểm --------
+        # Với combo, tạo thêm pattern wildcard toàn chuỗi (để match default_code có dấu +/space/-)
+        combo_wildcards = []
+        if combo_intent:
+            q_no_space = query_text.replace(" ", "")
+            if "+" in query_text or "+" in q_no_space:
+                # "M18 FHIW2F12+M18B5+M12-18C" -> "%M18%FHIW2F12%M18B5%M12%18C%"
+                # dùng đơn giản: thay '+' bằng '%' và mọi separator bằng '%' (nhiều % vẫn ok)
+                def _to_wc(s):
+                    s = re.sub(r"[\s\-\_\/\.]+", "%", s)
+                    s = s.replace("+", "%")
+                    return f"%{s}%"
+                combo_wildcards = list(dict.fromkeys([_to_wc(query_text), _to_wc(q_no_space)]))
+
+        # ---------- tìm & chấm điểm ----------
         results = {}  # pid -> (product, score)
 
         def _add_products(prods, score_fn):
             for pr in prods:
-                # Lọc combo theo ý định người dùng
                 if _is_combo_product(pr) and not combo_intent:
+                    # Không có combo intent thì bỏ combo
                     continue
                 sc = score_fn(pr)
                 cur = results.get(pr.id)
                 if cur is None or sc > cur[1]:
                     results[pr.id] = (pr, sc)
 
-        # 1) default_code
-        if patterns:
-            dom_dc = ["|"] * (len(patterns) - 1) if len(patterns) > 1 else []
-            for pat in patterns:
-                dom_dc += [("default_code", "ilike", pat)]
-            prods_dc = Product.search(dom_dc, limit=limit * 3)
+        # 1) default_code (ưu tiên cao nhất)
+        if patterns or combo_wildcards:
+            dom_dc = []
+            if patterns:
+                dom_dc = ["|"] * (len(patterns) - 1) if len(patterns) > 1 else []
+                for pat in patterns:
+                    dom_dc += [("default_code", "ilike", pat)]
+            # thêm wildcard combo
+            if combo_wildcards:
+                dom_wc = ["|"] * (len(combo_wildcards) - 1) if len(combo_wildcards) > 1 else []
+                for wc in combo_wildcards:
+                    dom_wc += [("default_code", "ilike", wc)]
+                dom_dc = expression.OR([dom_dc, dom_wc]) if dom_dc else dom_wc
+
+            prods_dc = Product.search(dom_dc or [], limit=limit * 3)
 
             def score_dc(prod):
                 dc = (prod.default_code or "")
@@ -355,6 +363,9 @@ class ChatbotController(http.Controller):
                         best = max(best, 100)
                     elif p_n in dc_n:
                         best = max(best, 80)
+                # nếu match theo wildcard combo, cộng điểm cao
+                if combo_wildcards and any(re.sub(r"%+", "%", wc).lower().strip("%") in dc.replace(" ", "").replace("-", "").lower() for wc in combo_wildcards):
+                    best = max(best, 90)
                 return best
 
             _add_products(prods_dc, score_dc)
@@ -406,9 +417,9 @@ class ChatbotController(http.Controller):
         # 4) Fallback OR tokens
         if len(results) < 3 and query_text:
             try:
-                tokens = [t for t in re.split(r"[\s,;/]+", _norm(query_text)) if t and not t.isdigit()]
+                tokens = [t for t in re.split(r"[\s,;/\+]+", _norm(query_text)) if t and not t.isdigit()]
             except Exception:
-                tokens = [t for t in re.split(r"[\s,;/]+", query_text.lower()) if t and not t.isdigit()]
+                tokens = [t for t in re.split(r"[\s,;/\+]+", query_text.lower()) if t and not t.isdigit()]
             if tokens:
                 dom_or = ["|"] * (len(tokens) - 1) if len(tokens) > 1 else []
                 for t in tokens:
@@ -426,9 +437,9 @@ class ChatbotController(http.Controller):
         if len(results) < 2 and query_text:
             q_clean = re.sub(r"[()]+", " ", query_text)
             try:
-                toks = [t for t in re.split(r"[\s,;/]+", _norm(q_clean)) if len(t) >= 2 and not t.isdigit()]
+                toks = [t for t in re.split(r"[\s,;/\+]+", _norm(q_clean)) if len(t) >= 2 and not t.isdigit()]
             except Exception:
-                toks = [t for t in re.split(r"[\s,;/]+", q_clean.lower()) if len(t) >= 2 and not t.isdigit()]
+                toks = [t for t in re.split(r"[\s,;/\+]+", q_clean.lower()) if len(t) >= 2 and not t.isdigit()]
             if toks:
                 dom_and = []
                 for t in toks:
@@ -440,7 +451,7 @@ class ChatbotController(http.Controller):
 
                 _add_products(prods_and, score_tok_and)
 
-        # -------- sắp xếp & đóng gói --------
+        # ---------- sắp xếp & đóng gói ----------
         ranked = sorted(
             results.values(),
             key=lambda it: (-it[1], (it[0].default_code or ""), (it[0].name or "")),
@@ -449,7 +460,7 @@ class ChatbotController(http.Controller):
         out = []
         for prod, _score in ranked:
             is_combo = _is_combo_product(prod)
-            comp = _get_combo_components(prod) if (is_combo and combo_intent) else []
+            comps = _get_combo_components(prod) if (is_combo and combo_intent) else []
             out.append({
                 "id": prod.id,
                 "name": prod.name,
@@ -459,7 +470,7 @@ class ChatbotController(http.Controller):
                 "list_price": getattr(prod, "lst_price", None) if hasattr(prod, "lst_price") else prod.list_price,
                 "commercial_price": getattr(prod.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
                 "is_combo": bool(is_combo and combo_intent),
-                "components": comp,   # chỉ có khi is_combo & có combo_intent
+                "components": comps,   # chỉ đi kèm nếu là combo & có combo_intent
             })
         return out
 
