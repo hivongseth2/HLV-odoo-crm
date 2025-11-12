@@ -599,24 +599,24 @@ class ChatbotController(http.Controller):
         if warehouse_code:
             context += f"[KHO ƯU TIÊN] {warehouse_code}\n"
 
-       if inventory_results:
-        context += "DỮ LIỆU TỒN KHO (hiển thị *Tồn thực tế*):\n"
-        for item in inventory_results:
-            line = f"- **{item['name']}**"
-            if item.get("default_code"):
-                line += f" _(Mã: {item['default_code']})_"
-            # dùng tồn thực tế
-            onhand_total = int(item.get("qty_onhand", 0))
-            line += f" — **{onhand_total} {item.get('uom','')}** (tồn thực tế)"
-            by_wh = item.get("by_warehouse") or {}
-            if by_wh:
-                parts = [f"`{k}: {int(v)}`" for k, v in by_wh.items() if v]
-                if parts:
-                    line += f" — theo kho: {', '.join(parts)}"
-            # (tuỳ chọn) thêm chú thích khả dụng
-            # avail_total = int(item.get("qty_available", 0))
-            # line += f" — khả dụng: {avail_total}"
-            context += line + "\n"
+        if inventory_results:
+            context += "DỮ LIỆU TỒN KHO (hiển thị *Tồn thực tế*):\n"
+            for item in inventory_results:
+                line = f"- **{item['name']}**"
+                if item.get("default_code"):
+                    line += f" _(Mã: {item['default_code']})_"
+                # dùng tồn thực tế
+                onhand_total = int(item.get("qty_onhand", 0))
+                line += f" — **{onhand_total} {item.get('uom','')}** (tồn thực tế)"
+                by_wh = item.get("by_warehouse") or {}
+                if by_wh:
+                    parts = [f"`{k}: {int(v)}`" for k, v in by_wh.items() if v]
+                    if parts:
+                        line += f" — theo kho: {', '.join(parts)}"
+                # (tuỳ chọn) thêm chú thích khả dụng
+                # avail_total = int(item.get("qty_available", 0))
+                # line += f" — khả dụng: {avail_total}"
+                context += line + "\n"
         else:
             context += "Không tìm thấy sản phẩm phù hợp trong kho.\n"
 
