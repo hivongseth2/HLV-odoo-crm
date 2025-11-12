@@ -1,22 +1,17 @@
 /** @odoo-module **/
 
 import publicWidget from "@web/legacy/js/public/public_widget";
-import { escape } from "@web/core/utils/strings"; // 👈 thêm dòng này
+import { escape } from "@web/core/utils/strings";
 
 const ChatbotWidget = publicWidget.Widget.extend({
-    // 👉 BẮT BUỘC: selector để auto-mount
-    selector: '.chatbot-widget',
-
-    // (tuỳ chọn) không cần 'template' nếu đã render bằng t-call trong XML
-    // template: 'website_public_inventory_18.chatbot_widget',
+    selector: ".chatbot-widget",
 
     events: {
-        'click .chatbot-toggle': '_onToggleChatbot',
-        'click .chatbot-send': '_onSendMessage',
-        'keypress .chatbot-input': '_onKeyPress',
-        'click .chatbot-close': '_onCloseChatbot',
-        // nếu muốn xài nút minimize thì thêm handler:
-        'click .chatbot-minimize': '_onMinimize',
+        "click .chatbot-toggle": "_onToggleChatbot",
+        "click .chatbot-send": "_onSendMessage",
+        "keypress .chatbot-input": "_onKeyPress",
+        "click .chatbot-close": "_onCloseChatbot",
+        "click .chatbot-minimize": "_onMinimize",
     },
 
     start() {
@@ -33,18 +28,17 @@ const ChatbotWidget = publicWidget.Widget.extend({
     _checkChatbotStatus() {
         const self = this;
         $.ajax({
-            url: '/chatbot/status',
-            type: 'GET',
-            dataType: 'json',
+            url: "/chatbot/status",
+            type: "GET",
+            dataType: "json",
             success(result) {
                 if (result.enabled) self.$el.show();
                 else self.$el.hide();
             },
             error(err) {
-                console.error('Error checking chatbot status:', err);
-                // tuỳ bạn: ẩn khi lỗi hay vẫn hiển thị để test local
-                self.$el.show(); // 👈 trong lúc dev nên để show để test giao diện
-            }
+                console.error("Error checking chatbot status:", err);
+                self.$el.show(); // dev: vẫn show để test
+            },
         });
     },
 
@@ -55,20 +49,20 @@ const ChatbotWidget = publicWidget.Widget.extend({
 
     _openChatbot() {
         this.isOpen = true;
-        this.$('.chatbot-container').addClass('chatbot-open');
-        this.$('.chatbot-input').focus();
+        this.$(".chatbot-container").addClass("chatbot-open");
+        this.$(".chatbot-input").focus();
 
-        if (this.$('.chatbot-messages .message').length === 0) {
-            this._addMessage(
-                'Xin chào! Tôi có thể giúp bạn tìm kiếm sản phẩm và kiểm tra tồn kho. Bạn cần hỗ trợ gì?',
-                'bot'
+        if (this.$(".chatbot-messages .chatbot-message").length === 0) {
+            // Lời chào thân thiện, ngắn gọn
+            this._addBotText(
+                "Chào bạn 👋 Mình là trợ lý bán hàng. Bạn có thể hỏi mã/ tên sản phẩm và kho (ví dụ: “39-055 Tân Sơn Nhì còn mấy cái?”)."
             );
         }
     },
 
     _closeChatbot() {
         this.isOpen = false;
-        this.$('.chatbot-container').removeClass('chatbot-open');
+        this.$(".chatbot-container").removeClass("chatbot-open");
     },
 
     _onCloseChatbot(ev) {
@@ -78,7 +72,7 @@ const ChatbotWidget = publicWidget.Widget.extend({
 
     _onMinimize(ev) {
         ev.preventDefault();
-        this.$('.chatbot-container').toggleClass('chatbot-minimized');
+        this.$(".chatbot-container").toggleClass("chatbot-minimized");
     },
 
     _onKeyPress(ev) {
@@ -89,67 +83,199 @@ const ChatbotWidget = publicWidget.Widget.extend({
     },
 
     _onSendMessage(ev) {
-        ev.preventDefault();
+        ev?.preventDefault?.();
         this._sendMessage();
     },
 
     _sendMessage() {
         if (this.isLoading) return;
 
-        const input = this.$('.chatbot-input');
-        const message = (input.val() || '').trim();
+        const input = this.$(".chatbot-input");
+        const message = (input.val() || "").trim();
         if (!message) return;
 
-        this._addMessage(message, 'user');
-        input.val('');
+        this._addUserText(message);
+        input.val("");
         this._setLoading(true);
 
         const self = this;
         $.ajax({
-            url: '/chatbot/message',
-            type: 'POST',
-            dataType: 'json',
+            url: "/chatbot/message",
+            type: "POST",
+            dataType: "json",
             data: {
                 message: message,
-                csrf_token: odoo.csrf_token
+                csrf_token: odoo.csrf_token,
             },
             success(result) {
                 self._setLoading(false);
-                if (result.success) self._addMessage(result.response, 'bot');
-                else self._addMessage('Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.', 'bot error');
+
+                if (!result || !result.success) {
+                    self._addBotText(
+                        "Xin lỗi, đã có lỗi xảy ra. Bạn thử lại giúp mình nhé."
+                    );
+                    return;
+                }
+
+                // 1) Trả lời “thân thiện”
+                if (result.response) {
+                    self._addBotText(result.response);
+                }
+
+                // 2) Nếu có inventory_results -> render thẻ sản phẩm đẹp + ảnh
+                const products = Array.isArray(result.inventory_results)
+                    ? result.inventory_results
+                    : [];
+                if (products.length) {
+                    self._addProductList(products);
+                }
+
+                // 3) Nếu có web_results (tham khảo)
+                const web = Array.isArray(result.web_results) ? result.web_results : [];
+                if (web.length) {
+                    self._addWebList(web);
+                }
             },
             error(err) {
                 self._setLoading(false);
-                console.error('Chatbot error:', err);
-                self._addMessage('Xin lỗi, không thể kết nối đến server. Vui lòng thử lại sau.', 'bot error');
-            }
+                console.error("Chatbot error:", err);
+                self._addBotText(
+                    "Xin lỗi, không thể kết nối đến server. Bạn thử lại sau nhé."
+                );
+            },
         });
     },
 
-    _addMessage(text, type) {
-        const messagesContainer = this.$('.chatbot-messages');
-        const messageHtml = `
-            <div class="message ${type}${type.includes('loading') ? ' loading' : ''}">
-               <div class="message-content">${escape(text)}</div>
-                <div class="message-time">${new Date().toLocaleTimeString()}</div>
-            </div>`;
-        messagesContainer.append(messageHtml);
-        messagesContainer.scrollTop(messagesContainer[0].scrollHeight);
+    // ========== Render helpers ==========
+
+    _messagesEl() {
+        return this.$(".chatbot-messages");
+    },
+
+    _addMessageHtml(html, type /* 'user' | 'bot' */) {
+        const sideClass = type === "user" ? "user-message" : "bot-message";
+        const $msg = $(`
+      <div class="chatbot-message ${sideClass}">
+        <div class="message-content">${html}</div>
+        <div class="message-time">${new Date().toLocaleTimeString()}</div>
+      </div>
+    `);
+        const $wrap = this._messagesEl().append($msg);
+        $wrap.scrollTop($wrap[0].scrollHeight);
+    },
+
+    _addUserText(text) {
+        this._addMessageHtml(escape(text), "user");
+    },
+
+    _addBotText(text) {
+        // Cho phép xuống dòng nhẹ (AI có thể trả về \n)
+        const safe = escape(text).replace(/\n/g, "<br/>");
+        this._addMessageHtml(safe, "bot");
+    },
+
+    _addProductList(products) {
+        // Danh sách card sản phẩm
+        const cardsHtml = products
+            .map((p) => this._renderProductCard(p))
+            .join("");
+        const container = `
+      <div class="product-list">
+        ${cardsHtml}
+      </div>
+    `;
+        this._addMessageHtml(container, "bot");
+    },
+
+    _renderProductCard(p) {
+        // Ảnh sản phẩm: ưu tiên ảnh product.product
+        const imgUrl = `/web/image/product.product/${p.id}/image_128`;// fallback đủ nhanh; muốn nét hơn dùng image_512
+        const code = escape(p.default_code || "");
+        const name = escape(p.name || "");
+        const uom = escape(p.uom || "");
+        const price = Number(p.list_price || 0);
+        const tmPrice = Number(p.commercial_price || 0);
+        const byWh = p.by_warehouse || {};
+        const whChips = Object.keys(byWh)
+            .map((wh) => {
+                const qty = byWh[wh];
+                return `<span class="chip chip-warehouse">${escape(wh)}: ${qty}</span>`;
+            })
+            .join(" ");
+
+        // Nhãn “Còn hàng / Sắp hết / Hết hàng”
+        const total = Number(p.qty_available || 0);
+        let stockLabel = `<span class="stock-badge badge-out">Hết hàng</span>`;
+        if (total > 10) stockLabel = `<span class="stock-badge badge-in">Còn nhiều</span>`;
+        else if (total > 0) stockLabel = `<span class="stock-badge badge-low">Sắp hết</span>`;
+
+        return `
+      <div class="product-card">
+        <div class="pc-left">
+          <img class="pc-image" src="${imgUrl}" alt="${name}" onerror="this.src='https://via.placeholder.com/96?text=No+Image';"/>
+        </div>
+        <div class="pc-right">
+          <div class="pc-name">${name}</div>
+          <div class="pc-code">Mã: <strong>${code || "—"}</strong></div>
+          <div class="pc-stockline">
+            ${stockLabel}
+            <span class="pc-uom">Tổng tồn: ${total} ${uom}</span>
+          </div>
+          <div class="pc-wh">${whChips}</div>
+          <div class="pc-price">
+            <span class="price-retail">${price.toLocaleString()} VND</span>
+            ${tmPrice && tmPrice !== price
+                ? `<span class="price-commercial">TM: ${tmPrice.toLocaleString()} VND</span>`
+                : ""
+            }
+          </div>
+          <div class="pc-actions">
+            <button class="btn-ghost" data-code="${code}">Hỏi thêm</button>
+            <button class="btn-primary" data-code="${code}">Đặt mua</button>
+          </div>
+        </div>
+      </div>
+    `;
+    },
+
+    _addWebList(items) {
+        const html = items
+            .map(
+                (w) => `
+        <div class="web-item">
+          <div class="web-title"><a href="${escape(w.link)}" target="_blank" rel="noopener">${escape(
+                    w.title || "Kết quả"
+                )}</a></div>
+          <div class="web-price">${escape(w.price || "")}</div>
+          <div class="web-description">${escape(w.description || "")}</div>
+        </div>`
+            )
+            .join("");
+        this._addMessageHtml(`<div class="web-results">${html}</div>`, "bot");
     },
 
     _setLoading(loading) {
         this.isLoading = loading;
-        const sendBtn = this.$('.chatbot-send');
-        const input = this.$('.chatbot-input');
+        const sendBtn = this.$(".chatbot-send");
+        const input = this.$(".chatbot-input");
 
         if (loading) {
-            sendBtn.prop('disabled', true).text('...');
-            input.prop('disabled', true);
-            this._addMessage('Đang xử lý...', 'bot loading');
+            sendBtn.prop("disabled", true).text("...");
+            input.prop("disabled", true);
+            // typing indicator
+            const dots = `
+        <div class="chatbot-message bot-message typing-indicator">
+          <div class="message-content">
+            <div class="typing-dots"><span></span><span></span><span></span></div>
+          </div>
+          <div class="message-time">${new Date().toLocaleTimeString()}</div>
+        </div>`;
+            this._messagesEl().append(dots);
+            this._messagesEl().scrollTop(this._messagesEl()[0].scrollHeight);
         } else {
-            sendBtn.prop('disabled', false).text('Gửi');
-            input.prop('disabled', false);
-            this.$('.message.loading').last().remove();
+            sendBtn.prop("disabled", false).text("Gửi");
+            input.prop("disabled", false);
+            this.$(".typing-indicator").last().remove();
         }
     },
 });

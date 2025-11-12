@@ -399,6 +399,7 @@ HƯỚNG DẪN TRẢ LỜI:
 - Nếu người dùng chỉ gõ fragment (ví dụ '39-055'), hãy xác nhận tương ứng với mã đầy đủ nếu nhận diện được (ví dụ '0-39-055').
 - Nếu không tìm thấy, gợi ý kiểm tra lại mã hoặc mô tả chi tiết hơn.
 - Kết thúc bằng 1 câu hỏi ngắn để tiếp tục hỗ trợ.
+- Đây là đoạn chat phục vụ người dùng nội bộ (saler, thủ kho) không phải của khách hàng
 """
 
         messages = [
