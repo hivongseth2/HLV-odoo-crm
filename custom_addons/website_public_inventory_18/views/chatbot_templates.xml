@@ -54,9 +54,7 @@
 
     <!-- Assets -->
     <template id="chatbot_assets_frontend" inherit_id="web.assets_frontend">
-        <xpath expr="." position="inside">
-            <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/css/chatbot.css"/>
-            <script type="text/javascript" src="/website_public_inventory_18/static/js/chatbot.js"></script>
-        </xpath>
+        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/css/chatbot.css"/>
+        <script type="text/javascript" src="/website_public_inventory_18/static/js/chatbot.js"></script>
     </template>
 </odoo>
