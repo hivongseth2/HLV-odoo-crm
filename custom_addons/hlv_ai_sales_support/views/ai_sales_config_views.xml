@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- AI Sales Config Form View -->
+    <record id="view_ai_sales_config_form" model="ir.ui.view">
+        <field name="name">hlv.ai.sales.config.form</field>
+        <field name="model">hlv.ai.sales.config</field>
+        <field name="arch" type="xml">
+            <form string="AI Sales Configuration">
+                <header>
+                    <button name="test_openai_connection" type="object" string="Test OpenAI Connection" 
+                            class="btn-primary" icon="fa-plug"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Configuration Name"/>
+                        </h1>
+                    </div>
+                    
+                    <group>
+                        <field name="active"/>
+                    </group>
+                    
+                    <notebook>
+                        <page string="OpenAI Configuration" name="openai_config">
+                            <group>
+                                <group string="API Settings">
+                                    <field name="openai_api_key" password="True" required="1"/>
+                                    <field name="openai_model" required="1"/>
+                                    <field name="max_tokens"/>
+                                    <field name="temperature"/>
+                                </group>
+                            </group>
+                        </page>
+                        
+                        <page string="AI Prompts" name="ai_prompts">
+                            <group>
+                                <field name="product_analysis_prompt" widget="text" 
+                                       placeholder="Enter the prompt template for product analysis..."/>
+                                <field name="supplier_inquiry_prompt" widget="text"
+                                       placeholder="Enter the template for supplier inquiry messages..."/>
+                            </group>
+                        </page>
+                        
+                        <page string="Response Settings" name="response_settings">
+                            <group>
+                                <group string="Quotation Settings">
+                                    <field name="auto_send_quotation"/>
+                                    <field name="quotation_validity_days"/>
+                                </group>
+                                <group string="Inventory Settings">
+                                    <field name="stock_buffer_percentage"/>
+                                    <field name="check_all_warehouses"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- AI Sales Config Tree View -->
+    <record id="view_ai_sales_config_tree" model="ir.ui.view">
+        <field name="name">hlv.ai.sales.config.tree</field>
+        <field name="model">hlv.ai.sales.config</field>
+        <field name="arch" type="xml">
+            <tree string="AI Sales Configurations">
+                <field name="name"/>
+                <field name="active"/>
+                <field name="openai_model"/>
+                <field name="quotation_validity_days"/>
+                <field name="stock_buffer_percentage"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- AI Sales Config Action -->
+    <record id="action_ai_sales_config" model="ir.actions.act_window">
+        <field name="name">AI Sales Configuration</field>
+        <field name="res_model">hlv.ai.sales.config</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Configure AI Sales Support Settings
+            </p>
+            <p>
+                Set up your OpenAI API key, prompts, and other configuration options
+                for the AI Sales Support system.
+            </p>
+        </field>
+    </record>
+</odoo>

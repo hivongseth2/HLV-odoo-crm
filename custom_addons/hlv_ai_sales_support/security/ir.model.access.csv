@@ -1,0 +1,15 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_ai_sales_config_user,hlv.ai.sales.config.user,model_hlv_ai_sales_config,base.group_user,1,0,0,0
+access_ai_sales_config_manager,hlv.ai.sales.config.manager,model_hlv_ai_sales_config,base.group_system,1,1,1,1
+access_supplier_contact_user,hlv.ai.supplier.contact.user,model_hlv_ai_supplier_contact,base.group_user,1,0,0,0
+access_supplier_contact_sales,hlv.ai.supplier.contact.sales,model_hlv_ai_supplier_contact,sales_team.group_sale_salesman,1,1,1,0
+access_supplier_contact_manager,hlv.ai.supplier.contact.manager,model_hlv_ai_supplier_contact,sales_team.group_sale_manager,1,1,1,1
+access_sales_request_user,hlv.ai.sales.request.user,model_hlv_ai_sales_request,base.group_user,1,0,0,0
+access_sales_request_sales,hlv.ai.sales.request.sales,model_hlv_ai_sales_request,sales_team.group_sale_salesman,1,1,1,0
+access_sales_request_manager,hlv.ai.sales.request.manager,model_hlv_ai_sales_request,sales_team.group_sale_manager,1,1,1,1
+access_product_inquiry_user,hlv.ai.product.inquiry.user,model_hlv_ai_product_inquiry,base.group_user,1,0,0,0
+access_product_inquiry_sales,hlv.ai.product.inquiry.sales,model_hlv_ai_product_inquiry,sales_team.group_sale_salesman,1,1,1,0
+access_product_inquiry_manager,hlv.ai.product.inquiry.manager,model_hlv_ai_product_inquiry,sales_team.group_sale_manager,1,1,1,1
+access_sales_response_user,hlv.ai.sales.response.user,model_hlv_ai_sales_response,base.group_user,1,0,0,0
+access_sales_response_sales,hlv.ai.sales.response.sales,model_hlv_ai_sales_response,sales_team.group_sale_salesman,1,1,1,0
+access_sales_response_manager,hlv.ai.sales.response.manager,model_hlv_ai_sales_response,sales_team.group_sale_manager,1,1,1,1

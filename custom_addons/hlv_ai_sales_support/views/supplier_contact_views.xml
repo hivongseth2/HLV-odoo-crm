@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Supplier Contact Form View -->
+    <record id="view_supplier_contact_form" model="ir.ui.view">
+        <field name="name">hlv.ai.supplier.contact.form</field>
+        <field name="model">hlv.ai.supplier.contact</field>
+        <field name="arch" type="xml">
+            <form string="Supplier Contact">
+                <header>
+                    <button name="action_test_zalo_connection" type="object" string="Test Zalo Connection" 
+                            class="btn-primary" icon="fa-comments"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Supplier Name"/>
+                        </h1>
+                    </div>
+                    
+                    <group>
+                        <group>
+                            <field name="active"/>
+                            <field name="priority"/>
+                        </group>
+                        <group>
+                            <field name="partner_id"/>
+                            <field name="company"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <page string="Contact Information" name="contact_info">
+                            <group>
+                                <group string="Zalo Information">
+                                    <field name="zalo_user_id" required="1"/>
+                                    <field name="preferred_language"/>
+                                    <field name="response_time_hours"/>
+                                </group>
+                                <group string="Other Contact">
+                                    <field name="contact_person"/>
+                                    <field name="phone"/>
+                                    <field name="email"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="address" widget="text"/>
+                            </group>
+                        </page>
+                        
+                        <page string="Product Categories" name="products">
+                            <group>
+                                <field name="product_category_ids" widget="many2many_tags"/>
+                                <field name="product_tags" widget="text" 
+                                       placeholder="Enter comma-separated product tags..."/>
+                            </group>
+                        </page>
+                        
+                        <page string="Statistics" name="statistics">
+                            <group>
+                                <group string="Performance Metrics">
+                                    <field name="total_inquiries" readonly="1"/>
+                                    <field name="successful_responses" readonly="1"/>
+                                    <field name="response_rate" readonly="1"/>
+                                    <field name="last_inquiry_date" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                        
+                        <page string="Inquiry History" name="inquiry_history">
+                            <field name="inquiry_ids" readonly="1">
+                                <tree>
+                                    <field name="inquiry_id"/>
+                                    <field name="product_name"/>
+                                    <field name="quantity"/>
+                                    <field name="state"/>
+                                    <field name="sent_date"/>
+                                    <field name="quoted_price"/>
+                                    <field name="delivery_time"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Supplier Contact Tree View -->
+    <record id="view_supplier_contact_tree" model="ir.ui.view">
+        <field name="name">hlv.ai.supplier.contact.tree</field>
+        <field name="model">hlv.ai.supplier.contact</field>
+        <field name="arch" type="xml">
+            <tree string="Supplier Contacts">
+                <field name="name"/>
+                <field name="active"/>
+                <field name="priority"/>
+                <field name="contact_person"/>
+                <field name="zalo_user_id"/>
+                <field name="response_rate"/>
+                <field name="total_inquiries"/>
+                <field name="last_inquiry_date"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Supplier Contact Kanban View -->
+    <record id="view_supplier_contact_kanban" model="ir.ui.view">
+        <field name="name">hlv.ai.supplier.contact.kanban</field>
+        <field name="model">hlv.ai.supplier.contact</field>
+        <field name="arch" type="xml">
+            <kanban>
+                <field name="name"/>
+                <field name="contact_person"/>
+                <field name="response_rate"/>
+                <field name="total_inquiries"/>
+                <field name="priority"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_card oe_kanban_global_click">
+                            <div class="oe_kanban_content">
+                                <div class="o_kanban_record_top">
+                                    <div class="o_kanban_record_headings">
+                                        <strong class="o_kanban_record_title">
+                                            <field name="name"/>
+                                        </strong>
+                                        <br/>
+                                        <span class="o_kanban_record_subtitle">
+                                            <field name="contact_person"/>
+                                        </span>
+                                    </div>
+                                    <div class="o_kanban_record_top_right">
+                                        <div class="o_priority_star">
+                                            <field name="priority" widget="priority"/>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="o_kanban_record_body">
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <span>Response Rate:</span><br/>
+                                            <strong><field name="response_rate"/>%</strong>
+                                        </div>
+                                        <div class="col-6">
+                                            <span>Total Inquiries:</span><br/>
+                                            <strong><field name="total_inquiries"/></strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- Supplier Contact Search View -->
+    <record id="view_supplier_contact_search" model="ir.ui.view">
+        <field name="name">hlv.ai.supplier.contact.search</field>
+        <field name="model">hlv.ai.supplier.contact</field>
+        <field name="arch" type="xml">
+            <search string="Search Suppliers">
+                <field name="name"/>
+                <field name="contact_person"/>
+                <field name="zalo_user_id"/>
+                <field name="product_category_ids"/>
+                <field name="product_tags"/>
+                
+                <filter string="Active" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Inactive" name="inactive" domain="[('active', '=', False)]"/>
+                
+                <separator/>
+                <filter string="High Priority" name="high_priority" domain="[('priority', '>=', 8)]"/>
+                <filter string="Good Response Rate" name="good_response" domain="[('response_rate', '>=', 80)]"/>
+                
+                <group expand="0" string="Group By">
+                    <filter string="Priority" name="group_priority" context="{'group_by': 'priority'}"/>
+                    <filter string="Product Categories" name="group_categories" context="{'group_by': 'product_category_ids'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Supplier Contact Action -->
+    <record id="action_supplier_contact" model="ir.actions.act_window">
+        <field name="name">Supplier Contacts</field>
+        <field name="res_model">hlv.ai.supplier.contact</field>
+        <field name="view_mode">kanban,tree,form</field>
+        <field name="context">{'search_default_active': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Add your first supplier contact
+            </p>
+            <p>
+                Configure supplier contacts with their Zalo User IDs to enable
+                automatic communication for product inquiries.
+            </p>
+        </field>
+    </record>
+</odoo>

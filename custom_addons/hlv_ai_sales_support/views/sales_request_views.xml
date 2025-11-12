@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Sales Request Form View -->
+    <record id="view_sales_request_form" model="ir.ui.view">
+        <field name="name">hlv.ai.sales.request.form</field>
+        <field name="model">hlv.ai.sales.request</field>
+        <field name="arch" type="xml">
+            <form string="Sales Request">
+                <header>
+                    <button name="action_start_processing" type="object" string="Start Processing" 
+                            class="btn-primary" attrs="{'invisible': [('state', '!=', 'draft')]}"/>
+                    <button name="action_retry_processing" type="object" string="Retry" 
+                            class="btn-warning" attrs="{'invisible': [('state', '!=', 'error')]}"/>
+                    <button name="action_cancel" type="object" string="Cancel" 
+                            class="btn-secondary" attrs="{'invisible': [('state', 'in', ['completed', 'cancelled'])]}"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,analyzing,checking_stock,contacting_suppliers,waiting_response,preparing_quote,completed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="request_id" readonly="1"/>
+                        </h1>
+                    </div>
+                    
+                    <group>
+                        <group string="Request Information">
+                            <field name="sales_person"/>
+                            <field name="sales_email"/>
+                            <field name="customer_name"/>
+                        </group>
+                        <group string="Processing Information">
+                            <field name="processing_started" readonly="1"/>
+                            <field name="processing_completed" readonly="1"/>
+                            <field name="processing_duration" readonly="1"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <page string="Original Request" name="original_request">
+                            <group>
+                                <field name="original_request" widget="text" readonly="1"/>
+                            </group>
+                        </page>
+                        
+                        <page string="AI Analysis" name="ai_analysis">
+                            <group>
+                                <group string="Analysis Results">
+                                    <field name="analyzed_product_name" readonly="1"/>
+                                    <field name="analyzed_category" readonly="1"/>
+                                    <field name="requested_quantity" readonly="1"/>
+                                    <field name="requested_unit" readonly="1"/>
+                                </group>
+                                <group string="Keywords">
+                                    <field name="analyzed_keywords" readonly="1"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="analyzed_description" widget="text" readonly="1"/>
+                            </group>
+                            <group>
+                                <field name="ai_analysis" widget="text" readonly="1" 
+                                       attrs="{'invisible': [('ai_analysis', '=', False)]}"/>
+                            </group>
+                        </page>
+                        
+                        <page string="Product Matching" name="product_matching">
+                            <group>
+                                <field name="matched_product_ids" widget="many2many_tags" readonly="1"/>
+                                <field name="selected_product_id" readonly="1"/>
+                            </group>
+                        </page>
+                        
+                        <page string="Stock &amp; Pricing" name="stock_pricing">
+                            <group>
+                                <group string="Stock Information">
+                                    <field name="stock_available" readonly="1"/>
+                                    <field name="stock_sufficient" readonly="1"/>
+                                    <field name="stock_check_details" widget="text" readonly="1"/>
+                                </group>
+                                <group string="Pricing">
+                                    <field name="unit_price"/>
+                                    <field name="total_price" readonly="1"/>
+                                    <field name="currency_id"/>
+                                    <field name="quotation_valid_until"/>
+                                </group>
+                            </group>
+                        </page>
+                        
+                        <page string="Supplier Communication" name="supplier_communication">
+                            <group>
+                                <group string="Statistics">
+                                    <field name="suppliers_contacted" readonly="1"/>
+                                    <field name="suppliers_responded" readonly="1"/>
+                                </group>
+                            </group>
+                            <field name="inquiry_ids" readonly="1">
+                                <tree>
+                                    <field name="inquiry_id"/>
+                                    <field name="supplier_id"/>
+                                    <field name="state"/>
+                                    <field name="sent_date"/>
+                                    <field name="quoted_price"/>
+                                    <field name="delivery_time"/>
+                                </tree>
+                            </field>
+                        </page>
+                        
+                        <page string="Response" name="response">
+                            <group>
+                                <group string="Response Status">
+                                    <field name="response_sent" readonly="1"/>
+                                    <field name="response_sent_date" readonly="1"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="final_response" widget="text" readonly="1"/>
+                            </group>
+                            <field name="response_ids" readonly="1">
+                                <tree>
+                                    <field name="response_id"/>
+                                    <field name="response_type"/>
+                                    <field name="delivery_method"/>
+                                    <field name="sent"/>
+                                    <field name="delivery_status"/>
+                                </tree>
+                            </field>
+                        </page>
+                        
+                        <page string="Error Information" name="error_info" attrs="{'invisible': [('error_message', '=', False)]}">
+                            <group>
+                                <field name="retry_count" readonly="1"/>
+                                <field name="error_message" widget="text" readonly="1"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Sales Request Tree View -->
+    <record id="view_sales_request_tree" model="ir.ui.view">
+        <field name="name">hlv.ai.sales.request.tree</field>
+        <field name="model">hlv.ai.sales.request</field>
+        <field name="arch" type="xml">
+            <tree string="Sales Requests" decoration-success="state=='completed'" 
+                  decoration-danger="state=='error'" decoration-warning="state=='cancelled'">
+                <field name="request_id"/>
+                <field name="sales_person"/>
+                <field name="customer_name"/>
+                <field name="analyzed_product_name"/>
+                <field name="state"/>
+                <field name="stock_sufficient"/>
+                <field name="total_price"/>
+                <field name="processing_duration"/>
+                <field name="create_date"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Sales Request Kanban View -->
+    <record id="view_sales_request_kanban" model="ir.ui.view">
+        <field name="name">hlv.ai.sales.request.kanban</field>
+        <field name="model">hlv.ai.sales.request</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state">
+                <field name="request_id"/>
+                <field name="sales_person"/>
+                <field name="customer_name"/>
+                <field name="analyzed_product_name"/>
+                <field name="total_price"/>
+                <field name="state"/>
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_card oe_kanban_global_click">
+                            <div class="oe_kanban_content">
+                                <div class="o_kanban_record_top">
+                                    <div class="o_kanban_record_headings">
+                                        <strong class="o_kanban_record_title">
+                                            <field name="request_id"/>
+                                        </strong>
+                                        <br/>
+                                        <span class="o_kanban_record_subtitle">
+                                            <field name="sales_person"/> - <field name="customer_name"/>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="o_kanban_record_body">
+                                    <div t-if="record.analyzed_product_name.value">
+                                        <strong>Product:</strong> <field name="analyzed_product_name"/>
+                                    </div>
+                                    <div t-if="record.total_price.value">
+                                        <strong>Total:</strong> <field name="total_price"/> VND
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- Sales Request Search View -->
+    <record id="view_sales_request_search" model="ir.ui.view">
+        <field name="name">hlv.ai.sales.request.search</field>
+        <field name="model">hlv.ai.sales.request</field>
+        <field name="arch" type="xml">
+            <search string="Search Sales Requests">
+                <field name="request_id"/>
+                <field name="sales_person"/>
+                <field name="customer_name"/>
+                <field name="analyzed_product_name"/>
+                <field name="original_request"/>
+                
+                <filter string="Draft" name="draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Processing" name="processing" domain="[('state', 'in', ['analyzing', 'checking_stock', 'contacting_suppliers', 'waiting_response', 'preparing_quote'])]"/>
+                <filter string="Completed" name="completed" domain="[('state', '=', 'completed')]"/>
+                <filter string="Error" name="error" domain="[('state', '=', 'error')]"/>
+                
+                <separator/>
+                <filter string="Stock Sufficient" name="stock_sufficient" domain="[('stock_sufficient', '=', True)]"/>
+                <filter string="Stock Insufficient" name="stock_insufficient" domain="[('stock_sufficient', '=', False)]"/>
+                
+                <separator/>
+                <filter string="Today" name="today" domain="[('create_date', '>=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                <filter string="This Week" name="this_week" domain="[('create_date', '>=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                
+                <group expand="0" string="Group By">
+                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Sales Person" name="group_sales_person" context="{'group_by': 'sales_person'}"/>
+                    <filter string="Date" name="group_date" context="{'group_by': 'create_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Sales Request Action -->
+    <record id="action_sales_request" model="ir.actions.act_window">
+        <field name="name">Sales Requests</field>
+        <field name="res_model">hlv.ai.sales.request</field>
+        <field name="view_mode">kanban,tree,form</field>
+        <field name="context">{'search_default_today': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No sales requests yet
+            </p>
+            <p>
+                Sales requests will appear here when created through the API
+                or when sales team members submit product inquiries.
+            </p>
+        </field>
+    </record>
+</odoo>
