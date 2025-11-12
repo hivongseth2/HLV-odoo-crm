@@ -12,14 +12,12 @@
             <div class="chatbot-container">
                 <!-- Header -->
                 <div class="chatbot-header">
-                    <h4 class="chatbot-title">
+                    <h5 class="chatbot-title">
                         <i class="fa fa-robot me-2"></i>
                         HỖ TRỢ TRA CỨU TỒN
-                    </h4>
+                    </h5>
                     <div class="chatbot-controls">
-                        <!-- <button class="chatbot-minimize" title="Thu nhỏ">
-                            <i class="fa fa-minus"></i>
-                        </button> -->
+                    
                         <button class="chatbot-close" title="Đóng">
                             <i class="fa fa-times"></i>
                         </button>
