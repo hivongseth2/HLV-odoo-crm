@@ -599,20 +599,24 @@ class ChatbotController(http.Controller):
         if warehouse_code:
             context += f"[KHO ƯU TIÊN] {warehouse_code}\n"
 
-        if inventory_results:
-            context += "DỮ LIỆU TỒN KHO:\n"
-            for item in inventory_results:
-                line = f"- **{item['name']}**"
-                if item.get("default_code"):
-                    line += f" _(Mã: {item['default_code']})_"
-                total = int(item.get("qty_available", 0))
-                line += f" — **{total} {item.get('uom','')}**"
-                by_wh = item.get("by_warehouse") or {}
-                if by_wh:
-                    parts = [f"`{k}: {int(v)}`" for k, v in by_wh.items() if v]
-                    if parts:
-                        line += f" (theo kho: {', '.join(parts)})"
-                context += line + "\n"
+       if inventory_results:
+        context += "DỮ LIỆU TỒN KHO (hiển thị *Tồn thực tế*):\n"
+        for item in inventory_results:
+            line = f"- **{item['name']}**"
+            if item.get("default_code"):
+                line += f" _(Mã: {item['default_code']})_"
+            # dùng tồn thực tế
+            onhand_total = int(item.get("qty_onhand", 0))
+            line += f" — **{onhand_total} {item.get('uom','')}** (tồn thực tế)"
+            by_wh = item.get("by_warehouse") or {}
+            if by_wh:
+                parts = [f"`{k}: {int(v)}`" for k, v in by_wh.items() if v]
+                if parts:
+                    line += f" — theo kho: {', '.join(parts)}"
+            # (tuỳ chọn) thêm chú thích khả dụng
+            # avail_total = int(item.get("qty_available", 0))
+            # line += f" — khả dụng: {avail_total}"
+            context += line + "\n"
         else:
             context += "Không tìm thấy sản phẩm phù hợp trong kho.\n"
 
@@ -701,20 +705,32 @@ class ChatbotController(http.Controller):
                 ids = [p["id"] for p in products]
                 stock_map = self._get_stock_by_warehouse(ids, warehouse=wh)
             for p in products:
-                    per_wh = stock_map.get(p["id"], {})
-                    qty_total = sum(v for v in per_wh.values()) if per_wh else 0.0
-                    inv.append({
-                        "id": p["id"],
-                        "name": p["name"],
-                        "default_code": p["default_code"],
-                        "uom": p["uom"],
-                        "list_price": p["list_price"],
-                        "commercial_price": p["commercial_price"],
-                        "qty_available": qty_total,
-                        "by_warehouse": per_wh,
-                        "is_combo": p.get("is_combo", False),
-                        "components": p.get("components", []),
-                    })
+                per_wh_struct = stock_map.get(p["id"], {})  # {"TSN": {"onhand":..., "reserved":..., "available":...}, ...}
+                # Tổng theo từng loại:
+                total_onhand = sum(v.get("onhand", 0.0) for v in per_wh_struct.values()) if per_wh_struct else 0.0
+                total_reserved = sum(v.get("reserved", 0.0) for v in per_wh_struct.values()) if per_wh_struct else 0.0
+                total_available = sum(v.get("available", 0.0) for v in per_wh_struct.values()) if per_wh_struct else 0.0
+
+                # Rút gọn by_warehouse chỉ còn "onhand" (nếu bạn muốn AI nói tồn thực tế),
+                # hoặc giữ nguyên 3 số để FE render chi tiết:
+                by_wh_onhand = {k: float(v.get("onhand", 0.0)) for k, v in per_wh_struct.items()}
+
+                inv.append({
+                    "id": p["id"],
+                    "name": p["name"],
+                    "default_code": p["default_code"],
+                    "uom": p["uom"],
+                    "list_price": p["list_price"],
+                    "commercial_price": p["commercial_price"],
+                    # số tổng
+                    "qty_onhand": total_onhand,
+                    "qty_reserved": total_reserved,
+                    "qty_available": total_available,
+                    # chi tiết theo kho (tồn thực tế)
+                    "by_warehouse": by_wh_onhand,
+                    "is_combo": p.get("is_combo", False),
+                    "components": p.get("components", []),
+                })
             else:
                 if cfg["web_search_enabled"]:
                     web_results = self._search_web(user_message)
