@@ -19,7 +19,7 @@
         "web.assets_frontend": [
             "website_public_inventory_18/static/src/css/order_lookup.css",
             "website_public_inventory_18/static/src/css/chatbot.css",
-            "website_public_inventory_18/static/src/js/chatbot.js",
+            "website_public_inventory_18/static/src/js/chatbot_old.js",
         ],
     },
     "installable": True,
