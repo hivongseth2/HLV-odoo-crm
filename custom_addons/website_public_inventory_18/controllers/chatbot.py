@@ -171,84 +171,131 @@ class ChatbotController(http.Controller):
 
     def _flexible_product_search(self, query_text: str, sku_fragments=None, limit=20):
         """
-        Tìm sản phẩm linh hoạt theo default_code / barcode / name với nhiều pattern & thứ tự ưu tiên.
+        Tìm sản phẩm linh hoạt theo default_code / barcode / name với nhiều pattern & ưu tiên.
         Trả về: [{id, name, default_code, barcode, uom, list_price, commercial_price}, ...]
         """
         import re
         from odoo.osv import expression
 
-        # ---------- Chuẩn hoá input ----------
-        query_text = re.sub(r"\s+", " ", query_text or "").strip()
-        # Nối chữ–số và số–chữ (FID 3 -> FID3; 3 AH -> 3AH)
-        query_text = re.sub(r"([A-Za-z])\s+(\d)", r"\1\2", query_text)
-        query_text = re.sub(r"(\d)\s+([A-Za-z])", r"\1\2", query_text)
+        # ---------------- Chuẩn hoá input ----------------
+        def _strip_seps(s: str) -> str:
+            return re.sub(r"[\s\-\_\/\.]+", "", s or "")
+
+        def _normalize_q(s: str) -> str:
+            s = re.sub(r"\s+", " ", (s or "")).strip()
+            # Nối chữ–số và số–chữ: "FID 3" -> "FID3", "3 AH" -> "3AH"
+            s = re.sub(r"([A-Za-z])\s+(\d)", r"\1\2", s)
+            s = re.sub(r"(\d)\s+([A-Za-z])", r"\1\2", s)
+            return s
+
+        query_text = _normalize_q(query_text)
 
         env = request.env
         Product = env["product.product"].sudo()
 
-        # ---------- Lấy fragments ----------
-        frags = sku_fragments or []
+        # ---------------- Lấy fragments ----------------
+        frags = list(sku_fragments or [])
         if not frags and query_text:
-            frags = _extract_entities_local(query_text).get("sku_fragments", []) or []
+            # dùng extractor local nếu có
+            try:
+                extracted = _extract_entities_local(query_text) or {}
+                frags = list(extracted.get("sku_fragments") or [])
+            except Exception:
+                frags = []
 
-        # Nếu không có fragment nào, thử coi cả câu hỏi là 1 fragment "mềm"
+        # Nếu vẫn rỗng, coi cả câu hỏi là 1 fragment mềm
         if not frags and query_text:
             frags = [query_text]
 
-        # ---------- Tạo patterns ----------
-        def _strip_seps(s):
-            return re.sub(r"[\s\-\_\/\.]+", "", s or "")
+        # ---------------- Tạo patterns (unique, giữ thứ tự) ----------------
+        def _mk_patterns_from_fragments_local(_frags):
+            pats = []
+            seen = set()
 
-        base_patterns = self._mk_patterns_from_fragments(frags)  # đã gồm: nguyên bản, loại sep, thêm "0-"
+            for raw in _frags:
+                if not raw:
+                    continue
+                a = raw.strip()
+                b = _strip_seps(a)
+
+                # dạng nguyên bản
+                for cand in (a, b):
+                    if cand and cand not in seen:
+                        seen.add(cand)
+                        pats.append(cand)
+
+                # nếu là chuỗi kiểu "39-055" hoặc "39055" → thêm "0-39-055"
+                digits = re.sub(r"\D", "", a)
+                if digits and len(digits) >= 3:
+                    # chèn gạch 0-xx-xxx (heuristic)
+                    if "-" in a or "_" in a or "/" in a or "." in a:
+                        # chuẩn hoá về dãy số rồi format 0-xx-xxx nếu tách được
+                        digits_only = re.sub(r"\D", "", a)
+                    else:
+                        digits_only = digits
+                    if len(digits_only) >= 5:
+                        zeroed = f"0-{digits_only[:2]}-{digits_only[2:]}"
+                        if zeroed not in seen:
+                            seen.add(zeroed)
+                            pats.append(zeroed)
+
+            return pats
+
+        # Dùng hàm của lớp nếu có, không thì dùng local
+        if hasattr(self, "_mk_patterns_from_fragments"):
+            patterns = self._mk_patterns_from_fragments(frags) or []
+        else:
+            patterns = _mk_patterns_from_fragments_local(frags)
+
+        # Bổ sung biến thể bỏ tất cả separator
         more = []
-        for p in list(base_patterns):
+        for p in patterns:
             sp = _strip_seps(p)
             if sp and sp != p:
                 more.append(sp)
-        patterns = list(dict.fromkeys(base_patterns + more))  # unique & giữ thứ tự
+        patterns = list(dict.fromkeys(patterns + more))  # unique + giữ thứ tự
 
-        # ---------- Tìm kiếm & chấm điểm ----------
+        # ---------------- Tìm & chấm điểm ----------------
         results = {}  # pid -> (product, score)
 
         def _add_products(prods, score_fn):
-            for p in prods:
-                cur = results.get(p.id)
-                sc = score_fn(p)
-                if (cur is None) or (sc > cur[1]):
-                    results[p.id] = (p, sc)
+            for pr in prods:
+                sc = score_fn(pr)
+                cur = results.get(pr.id)
+                if cur is None or sc > cur[1]:
+                    results[pr.id] = (pr, sc)
 
-        # 1) default_code ưu tiên cao nhất
+        # 1) default_code (ưu tiên cao nhất)
         if patterns:
-            # exact-like (so sánh dạng strip-seps) -> điểm rất cao
-            dom_dc = ["|"] * (len(patterns) - 1)
+            dom_dc = ["|"] * (len(patterns) - 1) if len(patterns) > 1 else []
             for pat in patterns:
                 dom_dc += [("default_code", "ilike", pat)]
-            prods_dc = Product.search(dom_dc, limit=limit * 3)  # kéo rộng, sẽ sàng điểm & cắt sau
+            prods_dc = Product.search(dom_dc, limit=limit * 3)
 
-            def score_default_code(prod):
+            def score_dc(prod):
                 dc = (prod.default_code or "")
-                dc_norm = _strip_seps(dc).lower()
+                dc_n = _strip_seps(dc).lower()
                 best = 0
                 for pat in patterns:
-                    p_norm = _strip_seps(pat).lower()
-                    if not p_norm:
+                    p_n = _strip_seps(pat).lower()
+                    if not p_n:
                         continue
-                    if dc_norm == p_norm:
-                        best = max(best, 100)    # trùng tuyệt đối (bỏ sep)
-                    elif p_norm in dc_norm:
-                        best = max(best, 80)     # chứa
-                return best if best else 0
+                    if dc_n == p_n:
+                        best = max(best, 100)   # match tuyệt đối (bỏ sep)
+                    elif p_n in dc_n:
+                        best = max(best, 80)    # chứa
+                return best
 
-            _add_products(prods_dc, score_default_code)
+            _add_products(prods_dc, score_dc)
 
-        # 2) barcode (nếu có)
+        # 2) barcode
         if patterns:
-            dom_bc = ["|"] * (len(patterns) - 1)
+            dom_bc = ["|"] * (len(patterns) - 1) if len(patterns) > 1 else []
             for pat in patterns:
                 dom_bc += [("barcode", "ilike", pat)]
             prods_bc = Product.search(dom_bc, limit=limit * 2)
 
-            def score_barcode(prod):
+            def score_bc(prod):
                 bc = (prod.barcode or "").lower()
                 best = 0
                 for pat in patterns:
@@ -261,16 +308,16 @@ class ChatbotController(http.Controller):
                         best = max(best, 65)
                 return best
 
-            _add_products(prods_bc, score_barcode)
+            _add_products(prods_bc, score_bc)
 
-        # 3) name (ưu tiên thấp hơn default_code)
+        # 3) name
         if patterns:
-            dom_nm = ["|"] * (len(patterns) - 1)
+            dom_nm = ["|"] * (len(patterns) - 1) if len(patterns) > 1 else []
             for pat in patterns:
                 dom_nm += [("name", "ilike", pat)]
             prods_nm = Product.search(dom_nm, limit=limit * 2)
 
-            def score_name(prod):
+            def score_nm(prod):
                 name = (prod.name or "").lower()
                 best = 0
                 for pat in patterns:
@@ -283,31 +330,55 @@ class ChatbotController(http.Controller):
                         best = max(best, 50)
                 return best
 
-            _add_products(prods_nm, score_name)
+            _add_products(prods_nm, score_nm)
 
-        # 4) fallback theo token từ câu hỏi (OR) nếu vẫn ít
-        # cuối hàm, trước khi hợp kết quả, nếu kết quả còn ít thì dùng AND thay vì OR
+        # 4) Fallback: token OR
+        if len(results) < 3 and query_text:
+            try:
+                tokens = [t for t in re.split(r"[\s,;/]+", _norm(query_text)) if t and not t.isdigit()]
+            except Exception:
+                tokens = [t for t in re.split(r"[\s,;/]+", query_text.lower()) if t and not t.isdigit()]
+
+            if tokens:
+                dom_or = ["|"] * (len(tokens) - 1) if len(tokens) > 1 else []
+                for t in tokens:
+                    dom_or += [("name", "ilike", t)]
+                prods_or = Product.search(dom_or, limit=limit * 2)
+
+                def score_tok_or(prod):
+                    name = (prod.name or "").lower()
+                    hit = sum(1 for t in tokens if t in name)
+                    return min(hit * 8, 40)  # mỗi token 8 điểm, tối đa 40
+
+                _add_products(prods_or, score_tok_or)
+
+        # 5) Fallback: token AND (tên chứa tất cả token)
         if len(results) < 2 and query_text:
-            # bỏ ngoặc/ dấu phẩy, gộp lại
-            q_clean = re.sub(r"[()]+", " ", query_text)
-            tokens_and = [t for t in re.split(r"[\s,;/]+", _norm(q_clean)) if len(t) >= 2 and not t.isdigit()]
-            if tokens_and:
-                # name chứa tất cả token
-                dom = []
-                for t in tokens_and:
-                    dom = expression.AND([dom, [("name", "ilike", t)]]) if dom else [("name", "ilike", t)]
-                prods_and = Product.search(dom, limit=limit)
-                for p in prods_and:
-                    if p.id not in seen:
-                        seen.add(p.id)
-                        results.append(p)
+            try:
+                q_clean = re.sub(r"[()]+", " ", query_text)
+                toks = [t for t in re.split(r"[\s,;/]+", _norm(q_clean)) if len(t) >= 2 and not t.isdigit()]
+            except Exception:
+                q_clean = re.sub(r"[()]+", " ", query_text)
+                toks = [t for t in re.split(r"[\s,;/]+", q_clean.lower()) if len(t) >= 2 and not t.isdigit()]
 
+            if toks:
+                dom_and = []
+                for t in toks:
+                    dom_and = expression.AND([dom_and, [("name", "ilike", t)]]) if dom_and else [("name", "ilike", t)]
+                prods_and = Product.search(dom_and, limit=limit)
 
-        # ---------- Sắp xếp theo điểm & cắt limit ----------
-        ranked = sorted(results.values(), key=lambda it: (-it[1], (it[0].default_code or ""), it[0].name or ""))
-        ranked = ranked[:limit]
+                def score_tok_and(prod):
+                    # đủ tất cả token → điểm 55 (giữa name và barcode)
+                    return 55
 
-        # ---------- Chuẩn hoá output ----------
+                _add_products(prods_and, score_tok_and)
+
+        # ---------------- Sắp xếp & trả về ----------------
+        ranked = sorted(
+            results.values(),
+            key=lambda it: (-it[1], (it[0].default_code or ""), (it[0].name or "")),
+        )[:limit]
+
         out = []
         for prod, _score in ranked:
             out.append({
@@ -320,7 +391,6 @@ class ChatbotController(http.Controller):
                 "commercial_price": getattr(prod.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
             })
         return out
-
 
     def _get_stock_by_warehouse(self, product_ids, warehouse=None):
         """
