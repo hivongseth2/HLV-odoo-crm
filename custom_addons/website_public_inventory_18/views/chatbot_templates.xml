@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Chatbot Widget Template -->
+    <template id="chatbot_widget" name="AI Chatbot Widget">
+        <div class="chatbot-widget">
+            <!-- Toggle Button -->
+            <button class="chatbot-toggle" title="Mở trợ lý AI">
+                <i class="fa fa-comments"></i>
+            </button>
+            
+            <!-- Chatbot Container -->
+            <div class="chatbot-container">
+                <!-- Header -->
+                <div class="chatbot-header">
+                    <h4 class="chatbot-title">
+                        <i class="fa fa-robot mr-2"></i>
+                        Trợ lý AI
+                    </h4>
+                    <div class="chatbot-controls">
+                        <button class="chatbot-minimize" title="Thu nhỏ">
+                            <i class="fa fa-minus"></i>
+                        </button>
+                        <button class="chatbot-close" title="Đóng">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Body -->
+                <div class="chatbot-body">
+                    <!-- Messages Area -->
+                    <div class="chatbot-messages">
+                        <!-- Messages will be added here dynamically -->
+                    </div>
+                    
+                    <!-- Input Area -->
+                    <div class="chatbot-input-area">
+                        <input type="text" class="chatbot-input" placeholder="Nhập câu hỏi của bạn..." maxlength="500"/>
+                        <button class="chatbot-send" title="Gửi">
+                            <i class="fa fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Extend inventory page to include chatbot -->
+    <template id="inventory_page_with_chatbot" inherit_id="website_public_inventory_18.inventory_page">
+        <xpath expr="//div[@class='container mt-4']" position="after">
+            <t t-call="website_public_inventory_18.chatbot_widget"/>
+        </xpath>
+    </template>
+
+    <!-- Assets -->
+    <template id="chatbot_assets_frontend" inherit_id="web.assets_frontend">
+        <xpath expr="." position="inside">
+            <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/css/chatbot.css"/>
+            <script type="text/javascript" src="/website_public_inventory_18/static/js/chatbot.js"></script>
+        </xpath>
+    </template>
+</odoo>

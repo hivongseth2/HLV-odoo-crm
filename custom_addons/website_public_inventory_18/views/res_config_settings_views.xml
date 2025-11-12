@@ -14,8 +14,41 @@
             <field name="allowed_warehouse_ids" widget="many2many_tags" options="{'no_create': True, 'no_open': True}"/>
             <div class="content-group mt8">
               <small class="text-muted">
-                Trang công khai: <code>/inventory</code> — hiển thị tồn khả dụng (quantity - reserved) theo các kho được chọn.
+                Trang công khai: <code>/search_stock</code> — hiển thị tồn khả dụng (quantity - reserved) theo các kho được chọn.
               </small>
+            </div>
+          </setting>
+          
+          <!-- AI Chatbot Configuration -->
+          <setting id="chatbot_ai_settings" string="AI Chatbot" help="Configure AI chatbot for product search assistance">
+            <field name="chatbot_enabled"/>
+            <div class="content-group" attrs="{'invisible': [('chatbot_enabled', '=', False)]}">
+              <div class="row mt16">
+                <label for="openai_api_key" class="col-3 o_light_label"/>
+                <field name="openai_api_key" password="True" placeholder="sk-..."/>
+                <button name="test_openai_connection" type="object" string="Test Connection" class="btn-link"/>
+              </div>
+              <div class="row">
+                <label for="openai_model" class="col-3 o_light_label"/>
+                <field name="openai_model"/>
+              </div>
+              <div class="row">
+                <label for="chatbot_max_tokens" class="col-3 o_light_label"/>
+                <field name="chatbot_max_tokens"/>
+              </div>
+              <div class="row">
+                <label for="chatbot_temperature" class="col-3 o_light_label"/>
+                <field name="chatbot_temperature"/>
+              </div>
+              <div class="row">
+                <label for="web_search_enabled" class="col-3 o_light_label"/>
+                <field name="web_search_enabled"/>
+              </div>
+              <div class="content-group mt8">
+                <small class="text-muted">
+                  Chatbot sẽ tìm kiếm sản phẩm trong kho và web search khi không tìm thấy.
+                </small>
+              </div>
             </div>
           </setting>
         </block>

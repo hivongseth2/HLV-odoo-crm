@@ -13,10 +13,13 @@
         "views/order_lookup_templates.xml",
         "views/menu.xml",
         "views/res_config_settings_views.xml",
+        "views/chatbot_templates.xml",
     ],
     "assets": {
         "web.assets_frontend": [
             "website_public_inventory_18/static/css/order_lookup.css",
+            "website_public_inventory_18/static/css/chatbot.css",
+            "website_public_inventory_18/static/js/chatbot.js",
         ],
     },
     "installable": True,
