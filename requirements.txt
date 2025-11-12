@@ -10,3 +10,5 @@ pydrive2
 oauth2client
 openpyxl>=3.1.2,<4
 qrcode[pil]
+openai
+requests
