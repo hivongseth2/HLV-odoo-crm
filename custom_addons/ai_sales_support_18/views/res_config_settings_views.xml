@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- AI Sales Support Configuration -->
+        <record id="res_config_settings_view_form_ai_sales" model="ir.ui.view">
+            <field name="name">res.config.settings.view.form.inherit.ai.sales</field>
+            <field name="model">res.config.settings</field>
+            <field name="priority" eval="90"/>
+            <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//form" position="inside">
+                    <app data-string="AI Sales Support" string="AI Sales Support" name="ai_sales_support">
+                        <block title="AI Sales Support Configuration">
+                            <setting string="Enable AI Sales Support" help="Enable AI-powered sales support functionality">
+                                <field name="ai_sales_enabled"/>
+                            </setting>
+                        </block>
+                        
+                        <block title="ChatGPT Configuration" invisible="not ai_sales_enabled">
+                            <setting string="ChatGPT API Key" help="OpenAI API key for ChatGPT integration">
+                                <field name="chatgpt_api_key" password="True" placeholder="sk-..."/>
+                            </setting>
+                            <setting string="ChatGPT Model" help="ChatGPT model to use for AI processing">
+                                <field name="chatgpt_model"/>
+                            </setting>
+                            <setting string="Max Tokens" help="Maximum number of tokens for ChatGPT response">
+                                <field name="chatgpt_max_tokens"/>
+                            </setting>
+                            <setting string="Temperature" help="Temperature for ChatGPT response (0.0 to 1.0)">
+                                <field name="chatgpt_temperature"/>
+                            </setting>
+                        </block>
+                        
+                        <block title="Zalo Configuration" invisible="not ai_sales_enabled">
+                            <setting string="Zalo OA Access Token" help="Zalo Official Account access token">
+                                <field name="zalo_oa_access_token" password="True" placeholder="Access token from Zalo OA"/>
+                            </setting>
+                            <setting string="Zalo App ID" help="Zalo application ID">
+                                <field name="zalo_app_id" placeholder="App ID from Zalo Developer"/>
+                            </setting>
+                            <setting string="Zalo App Secret" help="Zalo application secret key">
+                                <field name="zalo_app_secret" password="True" placeholder="App secret from Zalo Developer"/>
+                            </setting>
+                        </block>
+                        
+                        <block title="AI Behavior Settings" invisible="not ai_sales_enabled">
+                            <setting string="Auto Contact Suppliers" help="Automatically contact suppliers when stock is insufficient">
+                                <field name="auto_contact_suppliers"/>
+                            </setting>
+                            <setting string="Supplier Response Timeout" help="How long to wait for supplier response before timeout">
+                                <field name="supplier_response_timeout"/> minutes
+                            </setting>
+                            <setting string="Default Markup Percentage" help="Default markup percentage to apply to supplier prices">
+                                <field name="default_markup_percentage"/>%
+                            </setting>
+                        </block>
+                        
+                        <block title="AI System Prompt" invisible="not ai_sales_enabled">
+                            <setting string="System Prompt" help="System prompt to guide AI behavior">
+                                <field name="ai_system_prompt" widget="text" placeholder="Enter system prompt for AI..."/>
+                            </setting>
+                        </block>
+                    </app>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

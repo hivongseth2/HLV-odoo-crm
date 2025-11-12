@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Main Menu -->
+        <menuitem id="ai_sales_support_main_menu"
+                  name="AI Sales Support"
+                  sequence="50"
+                  web_icon="ai_sales_support_18,static/description/icon.png"/>
+
+        <!-- Sales Inquiries Menu -->
+        <menuitem id="ai_sales_inquiry_menu"
+                  name="Sales Inquiries"
+                  parent="ai_sales_support_main_menu"
+                  action="ai_sales_inquiry_action"
+                  sequence="10"/>
+
+        <!-- Supplier Contacts Menu -->
+        <menuitem id="supplier_contact_menu"
+                  name="Supplier Contacts"
+                  parent="ai_sales_support_main_menu"
+                  action="supplier_contact_action"
+                  sequence="20"/>
+
+        <!-- Communication Log Menu -->
+        <menuitem id="communication_log_menu"
+                  name="Communication Log"
+                  parent="ai_sales_support_main_menu"
+                  action="communication_log_action"
+                  sequence="30"/>
+
+        <!-- Configuration Menu -->
+        <menuitem id="ai_sales_config_menu"
+                  name="Configuration"
+                  parent="ai_sales_support_main_menu"
+                  sequence="90"/>
+
+        <!-- Settings Menu -->
+        <menuitem id="ai_sales_settings_menu"
+                  name="Settings"
+                  parent="ai_sales_config_menu"
+                  action="base.action_res_config_settings"
+                  sequence="10"/>
+    </data>
+</odoo>
