@@ -373,35 +373,28 @@ THÔNG TIN BÓC TÁCH:
 - Kho yêu cầu: {wh or "Không xác định"}
 - Số lượng hỏi: {qty if qty is not None else "Không nêu"}
 """
-
         if inventory_results:
             context += "📦 TỒN KHO HIỆN TẠI:\n"
-            for item in inventory_results:
-                name = (item.get("name") or "").replace("*", "")  # tránh phá Markdown
+            for i, item in enumerate(inventory_results, start=1):
+                name = (item.get("name") or "").replace("*", "")
                 code = item.get("default_code") or ""
                 uom  = item.get("uom") or ""
-                total = int(item.get("qty_available", 0) or 0)
+                total = int(item.get("qty_available", 0))
                 by_wh = item.get("by_warehouse") or {}
-                price = int(item.get("list_price", 0) or 0)
-                cp    = int(item.get("commercial_price", 0) or 0)
+                price = int(item.get("list_price", 0))
+                cp = int(item.get("commercial_price", 0))
 
-                line = f"- **{name}**"
-                if code:
-                    line += f" _(Mã: {code})_"
-                line += f" — **{total} {uom}**"
-
+                line = f"{i}. **{name}** _(Mã: {code})_ có **{total} {uom}**"
                 if by_wh:
-                    # dạng `TSN: 7` · `TSNSR: 1` cho dễ đọc
                     parts = [f"`{k}: {int(v)}`" for k, v in by_wh.items()]
-                    line += " · " + " · ".join(parts)
-
-                line += f" · Giá lẻ: **{price:,} VND**"
+                    line += " với chi tiết: " + ", ".join(parts)
+                line += f". 💰 Giá lẻ: **{price:,} VND**"
                 if cp and cp != price:
-                    line += f" · TM: **{cp:,} VND**"
-
+                    line += f", TM: **{cp:,} VND**"
                 context += line + "\n"
         else:
             context += "❌ Không tìm thấy sản phẩm phù hợp trong kho.\n"
+
             if web_results and config.get("web_search_enabled"):
                 context += "🌐 Kết quả web (tham khảo):\n"
                 for w in web_results[:5]:
@@ -454,7 +447,9 @@ THÔNG TIN BÓC TÁCH:
             if request.httprequest.mimetype == "application/json":
                 data = request.jsonrequest or {}
                 user_message = (data.get("message") or "").strip()
-                user_message = re.sub(r"\s+", " ", user_message).strip()
+                user_message = re.sub(r"\s+", " ", user_message or "").strip()
+                user_message = re.sub(r"([A-Za-z])\s+(\d)", r"\1\2", user_message)
+                user_message = re.sub(r"(\d)\s+([A-Za-z])", r"\1\2", user_message)
 
             else:
                 user_message = (request.params.get("message") or kw.get("message") or "").strip()

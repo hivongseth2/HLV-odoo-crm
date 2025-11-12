@@ -157,25 +157,22 @@ const ChatbotWidget = publicWidget.Widget.extend({
         return this.$(".chatbot-messages");
     },
 
-    _addMessageHtml(html, type /* 'user' | 'bot' */) {
-        const sideClass = type === "user" ? "user-message" : "bot-message";
-        // Dùng DOM thay vì string để chắc chắn style apply
-        const $msg = $(document.createElement("div"))
-            .addClass(`chatbot-message ${sideClass}`)
-            .append(
-                $("<div>").addClass("message-content").html(html),  // HTML render ngay
-                $("<div>").addClass("message-time").text(new Date().toLocaleTimeString())
-            );
-
-        const $wrap = this._messagesEl().append($msg);
-
-        // Force reflow + scroll
-        // requestAnimationFrame(() => this._scrollToBottom());
-        requestAnimationFrame(() => this._scrollToBottom && this._scrollToBottom());
-
-        // Sau khi ảnh load xong (card sản phẩm), scroll lại
-        $msg.find("img").on("load", () => this._scrollToBottom());
+    _addMessage(text, type) {
+        const messagesContainer = this.$('.chatbot-messages');
+        const html = (text || "")
+            .replace(/\n/g, "<br>")
+            .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+            .replace(/_(.*?)_/g, "<i>$1</i>")
+            .replace(/`(.*?)`/g, "<code>$1</code>");
+        const messageHtml = `
+      <div class="message ${type}">
+        <div class="message-content">${html}</div>
+        <div class="message-time">${new Date().toLocaleTimeString()}</div>
+      </div>`;
+        messagesContainer.append(messageHtml);
+        this._scrollToBottom && this._scrollToBottom();
     },
+
 
 
     _addUserText(text) {
