@@ -151,3 +151,12 @@
   .chatbot-container { width: calc(100vw - 20px); height: 440px; }
   .chatbot-toggle { width: 52px; height: 52px; }
 }
+.chatbot-container { display: none; flex-direction: column; }
+.chatbot-container.chatbot-open { display: flex; }
+
+/* Quan trọng: cho phép flex-child bị overflow scroll */
+.chatbot-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.chatbot-messages { flex: 1; padding: 14px; overflow-y: auto; min-height: 0; }
+
+/* Bỏ/không cần max-height cứng nếu đã dùng flex  */
+ /* xoá dòng: max-height: 350px; nếu bạn còn để */

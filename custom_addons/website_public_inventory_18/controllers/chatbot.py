@@ -172,6 +172,8 @@ class ChatbotController(http.Controller):
         """
         Tìm sản phẩm linh hoạt theo default_code / name với nhiều pattern.
         """
+        
+        query_text = re.sub(r"\s+", " ", query_text or "").strip() 
         env = request.env
         Product = env["product.product"].sudo()
 
@@ -433,6 +435,8 @@ HƯỚNG DẪN TRẢ LỜI:
             if request.httprequest.mimetype == "application/json":
                 data = request.jsonrequest or {}
                 user_message = (data.get("message") or "").strip()
+                user_message = re.sub(r"\s+", " ", user_message).strip()
+
             else:
                 user_message = (request.params.get("message") or kw.get("message") or "").strip()
 
