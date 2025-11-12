@@ -45,45 +45,121 @@ class ChatbotController(http.Controller):
         }
 
     # ===== OPENAI CALLS =====
-    def _call_openai(self, messages, config):
-        """Thin wrapper for OpenAI chat.completions (text output)."""
+    def _call_openai(self, messages, config, *, force_json=False, max_tokens=None, temperature=None):
+        """
+        Wrapper call OpenAI.
+        - force_json=True: yêu cầu model trả JSON object.
+        - Trả về string (nếu force_json=False) hoặc string JSON (nếu force_json=True).
+        """
         try:
-            import openai  # python package "openai>=1.0"
+            import openai
             client = openai.OpenAI(api_key=config["api_key"])
-            resp = client.chat.completions.create(
-                model=config["model"],
-                messages=messages,
-                max_tokens=config["max_tokens"],
-                temperature=config["temperature"],
-                response_format={"type": "text"},
-            )
+            kwargs = {
+                "model": config["model"],
+                "messages": messages,
+                "max_tokens": max_tokens if max_tokens is not None else int(config.get("max_tokens", 600)),
+                "temperature": temperature if temperature is not None else float(config.get("temperature", 0.2)),
+            }
+            if force_json:
+                # Buộc trả JSON object (các model 4o/4.1/mini đều hỗ trợ)
+                kwargs["response_format"] = {"type": "json_object"}
+
+            resp = client.chat.completions.create(**kwargs)
             if resp.choices:
-                return resp.choices[0].message.content
+                return resp.choices[0].message.content or ""
             return ""
         except ImportError:
             return "ERROR_OPENAI_NOT_INSTALLED"
         except Exception as e:
             _logger.error("OpenAI error: %s", e)
             return ""
+        
+        
+    
+    def _safe_json_from_text(self, text: str):
+        """
+        Cố gắng parse JSON từ text lẫn lộn:
+        - Thử loads trực tiếp
+        - Thử cắt khỏi ```json ... ``` hoặc ``` ... ```
+        - Thử regex non-greedy { ... } (đa đối tượng) và parse lần lượt
+        - Thử cân ngoặc {} để lấy object lớn nhất hợp lệ
+        Trả về dict hoặc {}.
+        """
+        import json as _json
+        s = (text or "").strip()
+        if not s:
+            return {}
+
+        # 1) trực tiếp
+        try:
+            obj = _json.loads(s)
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+
+        # 2) khối fenced code
+        m = re.search(r"```json\s*(\{.*?\})\s*```", s, re.S | re.I)
+        if m:
+            try:
+                obj = _json.loads(m.group(1))
+                if isinstance(obj, dict):
+                    return obj
+            except Exception:
+                pass
+        m = re.search(r"```\s*(\{.*?\})\s*```", s, re.S | re.I)
+        if m:
+            try:
+                obj = _json.loads(m.group(1))
+                if isinstance(obj, dict):
+                    return obj
+            except Exception:
+                pass
+
+        # 3) non-greedy nhiều object: lấy cái parse được đầu tiên
+        candidates = re.findall(r"\{.*?\}", s, re.S)
+        for cand in candidates:
+            try:
+                obj = _json.loads(cand)
+                if isinstance(obj, dict):
+                    return obj
+            except Exception:
+                continue
+
+        # 4) cân ngoặc: lấy vùng từ { đầu tiên tới } khớp
+        start = s.find("{")
+        if start != -1:
+            level = 0
+            for i in range(start, len(s)):
+                ch = s[i]
+                if ch == "{":
+                    level += 1
+                elif ch == "}":
+                    level -= 1
+                    if level == 0:
+                        seg = s[start:i+1]
+                        try:
+                            obj = _json.loads(seg)
+                            if isinstance(obj, dict):
+                                return obj
+                        except Exception:
+                            break
+
+        return {}
+
+
 
     def _ai_generate_search_plan(self, user_text: str, config: dict, tried_candidates=None, broaden=False):
-        """
-        Ask LLM to return a JSON search plan:
-        {
-          "intent": {"is_combo": bool, "quantity": int|null, "warehouses": ["TSN","KBC"]},
-          "products": [{"raw": "...", "is_combo": bool, "candidates": ["...","..."]}]
-        }
-        """
         tried_candidates = tried_candidates or []
         sys_prompt = (
             "Bạn là công cụ phân tích truy vấn sản phẩm cho kho Odoo.\n"
-            "Nhiệm vụ: xuất JSON đúng schema.\n"
-            "- Nhận diện 'is_combo' nếu người dùng có ý định combo (từ 'combo', 'cb', ký tự '+', mô tả ghép mã).\n"
-            "- Với mỗi cụm sản phẩm, sinh 'candidates' đa dạng: giữ nguyên, bỏ/đổi separators (space/hyphen/underscore/slash/dot), viết liền, "
-            "biến 'chữ-số' ('FID 3'->'FID3'), thêm dạng '0-xx-xxx' nếu có >=5 chữ số liên tiếp.\n"
-            "- Nếu broaden=true, mở rộng thêm biến thể thực tế (ví dụ hậu tố -0, -0X, -X0, -ASIA) khi hợp lý.\n"
-            "- Nếu là combo, giữ nguyên chuỗi có '+', đồng thời tách từng thành phần làm candidates riêng.\n"
-            "- Không giải thích, chỉ trả JSON hợp lệ."
+            "Xuất JSON đúng schema, KHÔNG kèm lời giải thích.\n"
+            "- Nhận diện 'is_combo' nếu có 'combo'/'cb'/dấu '+'.\n"
+            "- Sinh 'candidates' đa dạng: giữ nguyên, bỏ/đổi separators (space/hyphen/underscore/slash/dot), viết liền, "
+            "chuẩn 'chữ-số' ('FID 3'->'FID3'), có thể thêm biến thể phổ biến (-0, -0X, -X0, -ASIA) khi hợp lý.\n"
+            "- Nếu broaden=true, mở rộng thêm 5–10 candidates thực tế.\n"
+            "- Nếu là combo, giữ chuỗi có '+' và cả các thành phần riêng lẻ.\n"
+            "Chỉ trả JSON object theo schema."
         )
         user_payload = {
             "query": user_text,
@@ -93,29 +169,40 @@ class ChatbotController(http.Controller):
                 "intent": {"is_combo": True, "quantity": None, "warehouses": ["TSN"]},
                 "products": [
                     {"raw": "M18 FHIW2F12+M18B5+M12-18C", "is_combo": True,
-                     "candidates": ["M18 FHIW2F12+M18B5+M12-18C","FHIW2F12","M18B5","M12-18C","M1218C"]}
+                    "candidates": ["M18 FHIW2F12+M18B5+M12-18C","FHIW2F12","M18B5","M12-18C","M1218C"]}
                 ],
             },
         }
+
+        # 1) ưu tiên JSON mode
         raw = self._call_openai(
             messages=[
-                {"role": "system", "content": sys_prompt + "\nCHỈ TRẢ JSON HỢP LỆ."},
+                {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
             ],
             config={**config, "max_tokens": min(1200, int(config.get("max_tokens", 600)))},
+            force_json=True,
         )
-        if not raw:
-            return {"intent": {}, "products": []}
-        try:
-            plan = json.loads(raw)
-        except Exception:
-            m = re.search(r"\{.*\}", raw, re.S)
-            plan = json.loads(m.group(0)) if m else {"intent": {}, "products": []}
+
+        plan = self._safe_json_from_text(raw)
+        if not plan:
+            # 2) fallback: gọi text-mode rồi parse an toàn
+            raw2 = self._call_openai(
+                messages=[
+                    {"role": "system", "content": sys_prompt + "\nCHỈ TRẢ JSON."},
+                    {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+                ],
+                config={**config, "max_tokens": min(1200, int(config.get("max_tokens", 600)))},
+                force_json=False,
+            )
+            plan = self._safe_json_from_text(raw2) or {}
+
         if not isinstance(plan, dict):
-            plan = {"intent": {}, "products": []}
+            plan = {}
         plan.setdefault("intent", {})
         plan.setdefault("products", [])
         return plan
+
 
     # ===== LOCAL ENTITY EXTRACTION (fallback/assist) =====
     def _extract_entities_local(self, text: str):
