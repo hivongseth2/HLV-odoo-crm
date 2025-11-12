@@ -267,59 +267,58 @@ CÁCH TRẢ LỜI:
         
         return self._call_openai(messages, config)
     
-    @http.route('/chatbot/message', type='json', auth='public', methods=['POST'], csrf=False)
-    def chatbot_message(self, **kwargs):
-        """Handle chatbot messages"""
+    @http.route('/chatbot/message', type='http', auth='public', methods=['POST'], csrf=False, website=True)
+    def chatbot_message(self, **kw):
+        """Handle chatbot messages (accept JSON or form-encoded)."""
         try:
-            # Get configuration
+            # --- Parse payload robustly ---
+            user_message = ''
+            # Nếu client gửi JSON:
+            if request.httprequest.mimetype == 'application/json':
+                try:
+                    data = request.jsonrequest or {}
+                except Exception as ex:
+                    _logger.warning("Invalid JSON body: %s", ex)
+                    data = {}
+                user_message = (data.get('message') or '').strip()
+            else:
+                # Form/x-www-form-urlencoded, multipart...
+                user_message = (request.params.get('message') or kw.get('message') or '').strip()
+
+            # --- Config checks ---
             config = self._get_chatbot_config()
-            
             if not config['enabled']:
-                return {
-                    'success': False,
-                    'error': 'Chatbot is not enabled'
-                }
-            
+                payload = {'success': False, 'error': 'Chatbot is not enabled'}
+                return request.make_response(json.dumps(payload), headers=[('Content-Type', 'application/json')])
+
             if not config['api_key']:
-                return {
-                    'success': False,
-                    'error': 'OpenAI API key not configured'
-                }
-            
-            # Get user message
-            data = request.jsonrequest
-            user_message = data.get('message', '').strip()
-            
+                payload = {'success': False, 'error': 'OpenAI API key not configured'}
+                return request.make_response(json.dumps(payload), headers=[('Content-Type', 'application/json')])
+
             if not user_message:
-                return {
-                    'success': False,
-                    'error': 'Empty message'
-                }
-            
-            # Search in inventory first
+                payload = {'success': False, 'error': 'Empty message'}
+                return request.make_response(json.dumps(payload), headers=[('Content-Type', 'application/json')])
+
+            # --- Your business logic ---
             inventory_results = self._search_products_in_inventory(user_message)
-            
-            # If no results in inventory and web search enabled, search web
             web_results = []
-            if not inventory_results and config['web_search_enabled']:
+            if (not inventory_results) and config['web_search_enabled']:
                 web_results = self._search_web(user_message)
-            
-            # Generate AI response
+
             ai_response = self._generate_ai_response(user_message, inventory_results, web_results, config)
-            
-            return {
+
+            payload = {
                 'success': True,
                 'response': ai_response,
                 'inventory_results': inventory_results,
                 'web_results': web_results if config['web_search_enabled'] else []
             }
-            
+            return request.make_response(json.dumps(payload), headers=[('Content-Type', 'application/json')])
+
         except Exception as e:
-            _logger.error(f"Chatbot error: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            _logger.exception("Chatbot error")
+            payload = {'success': False, 'error': str(e)}
+            return request.make_response(json.dumps(payload), headers=[('Content-Type', 'application/json')])
     
     @http.route('/chatbot/status', type='http', auth='public', methods=['GET'], csrf=False, website=True)
     def chatbot_status(self, **kw):
