@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Main Menu -->
+    <menuitem id="menu_ai_sales_support_main" 
+              name="AI Sales Support" 
+              sequence="50"
+              web_icon="hlv_ai_sales_support,static/description/icon.png"/>
+
+    <!-- Operations Menu -->
+    <menuitem id="menu_ai_sales_operations" 
+              name="Operations" 
+              parent="menu_ai_sales_support_main" 
+              sequence="10"/>
+
+    <menuitem id="menu_sales_request" 
+              name="Sales Requests" 
+              parent="menu_ai_sales_operations" 
+              action="action_sales_request" 
+              sequence="10"/>
+
+    <menuitem id="menu_product_inquiry" 
+              name="Product Inquiries" 
+              parent="menu_ai_sales_operations" 
+              action="action_product_inquiry" 
+              sequence="20"/>
+
+    <!-- Configuration Menu -->
+    <menuitem id="menu_ai_sales_configuration" 
+              name="Configuration" 
+              parent="menu_ai_sales_support_main" 
+              sequence="90"/>
+
+    <menuitem id="menu_ai_sales_config" 
+              name="AI Configuration" 
+              parent="menu_ai_sales_configuration" 
+              action="action_ai_sales_config" 
+              sequence="10"/>
+
+    <menuitem id="menu_supplier_contact" 
+              name="Supplier Contacts" 
+              parent="menu_ai_sales_configuration" 
+              action="action_supplier_contact" 
+              sequence="20"/>
+
+    <!-- Dashboard Menu Item (placeholder for future dashboard) -->
+    <menuitem id="menu_ai_sales_dashboard" 
+              name="Dashboard" 
+              parent="menu_ai_sales_support_main" 
+              sequence="5"/>
+</odoo>
