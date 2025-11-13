@@ -354,17 +354,20 @@ class ChatbotController(http.Controller):
                         "components": []
                     }
         else:
-            # Tìm kiếm thông thường
+            # Tìm kiếm thông thường - LOẠI BỎ CÁC SẢN PHẨM COMBO
             all_results = {}
             for prod in all_products:
+                # Bỏ qua sản phẩm combo nếu không phải combo query
+                if _is_combo_product(prod):
+                    continue
+                
                 score = _fuzzy_score(prod, query_normalized, is_combo_query)
                 if score > 30:  # threshold
-                    is_combo = _is_combo_product(prod)
                     all_results[prod.id] = {
                         "product": prod,
                         "score": score,
-                        "is_combo": is_combo,
-                        "components": _get_combo_components(prod) if is_combo else []
+                        "is_combo": False,
+                        "components": []
                     }
         
         # Sắp xếp theo score
