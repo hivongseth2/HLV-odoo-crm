@@ -81,7 +81,13 @@
   background: rgba(255, 255, 255, 0.15);
 }
 
-.chatbot-body{ flex:1; display:flex; flex-direction:column; min-height:0; }
+/* ============ Body & Messages ============ */
+.chatbot-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
 
 .chatbot-messages {
   flex: 1;
