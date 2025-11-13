@@ -380,3 +380,70 @@
 .chatbot-container.chatbot-minimized .chatbot-body{
   display: none;  /* ẩn phần nội dung + input */
 }
+
+/* ==== FIX: nền trắng, scroll chuẩn, neo đúng vị trí ==== */
+
+/* Widget luôn cố định ở góc, nổi trên mọi lớp */
+.chatbot-widget{
+  position: fixed !important;
+  right: 20px; bottom: 20px;
+  z-index: 2147483000; /* cực cao */
+}
+
+/* Panel neo ngay trên nút, nền trắng solid */
+.chatbot-container{
+  position: absolute;            /* neo theo .chatbot-widget */
+  right: 0; bottom: 70px;        /* nhô lên trên nút 56px */
+  background-color: #fff !important;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Thân & vùng chat phải trắng, không trong suốt */
+.chatbot-body{
+  background-color: #fff !important;
+  min-height: 0;                 /* QUAN TRỌNG cho flex scroll */
+}
+
+.chatbot-messages{
+  background-color: #fff !important;
+  min-height: 0;                 /* để được co lại trong flex */
+  overflow-y: auto;              /* bật scroll */
+  -webkit-overflow-scrolling: touch; /* mượt trên mobile */
+}
+
+/* Expanded: tách khỏi widget, dùng viewport */
+.chatbot-container.chatbot-expanded{
+  position: fixed;               /* ra khỏi flow của widget */
+  right: 10px; bottom: 10px;
+  width: min(720px, 96vw);
+  height: min(80vh, 96vh);
+  max-height: calc(100vh - 20px);
+  background-color: #fff !important;
+}
+
+/* Mobile expanded: full screen */
+@media (max-width: 480px){
+  .chatbot-container.chatbot-expanded{
+    right: 0; bottom: 0;
+    width: 100vw; height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+}
+
+/* Minimized: chỉ còn header (không bị trong suốt) */
+.chatbot-container.chatbot-minimized{
+  height: auto; max-height: none;
+  background-color: #fff !important;
+}
+.chatbot-container.chatbot-minimized .chatbot-body{ display:none; }
+
+/* Ngăn rule global nào đó làm trong suốt phần con */
+.chatbot-container *{
+  background-image: none !important;
+  /* KHÔNG reset background-color của bubble, nên không đặt background-color ở đây */
+}
