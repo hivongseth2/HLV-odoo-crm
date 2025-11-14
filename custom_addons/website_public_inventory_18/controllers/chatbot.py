@@ -5,6 +5,7 @@ import logging
 
 from odoo import http
 from odoo.http import request
+import json as _json
 
 _logger = logging.getLogger(__name__)
 
@@ -22,6 +23,31 @@ def _norm(s: str) -> str:
 # AI AGENT (Responses API + Vector Store + Odoo)
 # ============================
 
+
+def _safe_json_from_text(text: str):
+    s = (text or "").strip()
+    if not s:
+        return {}
+
+    # 1) Thử parse trực tiếp
+    try:
+        obj = _json.loads(s)
+        if isinstance(obj, dict):
+            return obj
+    except Exception:
+        pass
+
+    # 2) Bắt tất cả khối {...} rồi lấy khối CUỐI CÙNG
+    matches = re.findall(r"\{.*?\}", s, re.S)
+    for cand in reversed(matches):
+        try:
+            obj = _json.loads(cand)
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            continue
+
+    return {}
 class AIChatAgent(object):
     """
     Agent AI cho kho HLV (luồng mới):
@@ -148,7 +174,7 @@ class AIChatAgent(object):
 
             raw = resp.output_text or "{}"
             try:
-                parsed = json.loads(raw)
+                parsed = _safe_json_from_text(raw)
             except Exception:
                 _logger.warning("Cannot parse query_analysis JSON, raw=%s", raw)
                 parsed = {}
