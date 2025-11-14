@@ -215,7 +215,7 @@ class WordPressOrderWebhook(http.Controller):
         # Header theo trạng thái đơn
         if status == 'cancelled':
             # === ĐƠN HỦY ===
-            message = "🆘🆘🆘HỦY ĐƠN HÀNG (hoanglongvu.com)\n"
+            message = "🆘🆘🆘 HỦY ĐƠN HÀNG (hoanglongvu.com)\n"
             if cancel_reason:
                 message += f"🔥LÝ DO: {cancel_reason}\n\n"
             else:
