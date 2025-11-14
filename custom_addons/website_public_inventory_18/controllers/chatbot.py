@@ -96,7 +96,15 @@ class AIChatAgent(object):
                     },
                 },
                 # Để an toàn, chỉ bắt buộc 3 field chính, còn lại optional
-                "required": ["action", "normalized_query", "product_codes"],
+                # "required": ["action", "normalized_query", "product_codes"],
+                "required": [
+                    "action",
+                    "normalized_query",
+                    "product_codes",
+                    "warehouse_hint",
+                    "quantity",
+                    "allow_web_search",
+                ],
                 "additionalProperties": False,
             },
         }
