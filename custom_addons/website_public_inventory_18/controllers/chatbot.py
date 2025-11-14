@@ -175,32 +175,40 @@ class AIChatAgent(object):
         normalized_query = _norm(query_info.get("normalized_query") or "")
         sku_candidates = query_info.get("sku_candidates") or []
 
-        # Nếu có sku_candidates → ưu tiên search theo đó
-        codes = [c.strip() for c in sku_candidates if c.strip()]
+        codes = [c.strip() for c in sku_candidates if c and c.strip()]
         products = Product.browse()
 
+        # ===== 1) Nếu có sku_candidates => ưu tiên search theo mã =====
         if codes:
             domain = []
             for code in codes:
                 code = code.strip()
-                code_dom = ["|", "|",
-                            ("default_code", "ilike", code),
-                            ("barcode", "ilike", code),
-                            ("name", "ilike", code)]
-                if domain:
-                    domain = ["|"] + domain + [code_dom]
-                else:
-                    domain = code_dom
+                like_code = "%%%s%%" % code.replace(" ", "%")
+
+                # sub-domain cho từng code:
+                # (default_code ilike code) OR (barcode ilike code) OR (name ilike %code%)
+                sub_domain = [
+                    "|", "|",
+                    ("default_code", "ilike", code),
+                    ("barcode", "ilike", code),
+                    ("name", "ilike", like_code),
+                ]
+
+                # OR nhiều sub_domain lại với nhau
+                domain = expression.OR([domain, sub_domain]) if domain else sub_domain
+
             products = Product.search(domain, limit=limit)
 
-        # Nếu chưa có gì, fallback search theo normalized_query
+        # ===== 2) Nếu không có hoặc không tìm được => fallback theo normalized_query =====
         if not products and normalized_query:
             q = normalized_query
-            like_name = "%" + q.replace(" ", "%") + "%"
-            domain = ["|", "|",
-                      ("default_code", "ilike", q),
-                      ("barcode", "ilike", q),
-                      ("name", "ilike", like_name)]
+            like_name = "%%%s%%" % q.replace(" ", "%")
+            domain = [
+                "|", "|",
+                ("default_code", "ilike", q),
+                ("barcode", "ilike", q),
+                ("name", "ilike", like_name),
+            ]
             products = Product.search(domain, limit=limit)
 
         return products
