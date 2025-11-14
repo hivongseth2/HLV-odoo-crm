@@ -140,12 +140,12 @@ class AIChatAgent(object):
                 model=self.config["model"],
                 instructions=instructions,
                 input=user_message,
-                # tools=tools if tools else None,
                 **({"tools": tools} if tools else {}),
                 text={"format": schema},
-                # temperature=0,
                 max_output_tokens=int(self.config.get("max_tokens", 400)),
+                include=["output[*].file_search_call.search_results"],
             )
+
             raw = resp.output_text or "{}"
             try:
                 parsed = json.loads(raw)
