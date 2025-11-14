@@ -21,6 +21,7 @@
 
         <footer>
           <button string="Xuất Excel" type="object" name="action_export" class="btn-primary"/>
+          <button string="Xuất JSON" type="object" name="action_export_json" class="btn-primary"/>
           <button string="Đóng" special="cancel" class="btn-secondary"/>
         </footer>
       </form>
