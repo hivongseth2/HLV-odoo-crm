@@ -13,6 +13,8 @@ const ChatbotWidget = publicWidget.Widget.extend({
         "click .chatbot-close": "_onCloseChatbot",
         "click .chatbot-minimize": "_onMinimize",
         "click .btn-ghost": "_onAskMore",
+        "click .chatbot-expand": "_onExpandToggle",   // <== mới
+
     },
     _scrollToBottom() {
         const box = this.$(".chatbot-messages")[0];
@@ -75,7 +77,7 @@ const ChatbotWidget = publicWidget.Widget.extend({
         if (this.$(".chatbot-messages .chatbot-message").length === 0) {
             // Lời chào thân thiện, ngắn gọn
             this._addBotText(
-                "Chào bạn 👋 Mình là trợ lý bán hàng. Bạn có thể hỏi mã/ tên sản phẩm và kho (ví dụ: “39-055 Tân Sơn Nhì còn mấy cái?”)."
+                "Chào bạn 👋 Mình là trợ lý bán hàng. Bạn có thể hỏi mã/ tên sản phẩm và kho (ví dụ: “fpd30x kbc?”)."
             );
         }
     },
@@ -90,11 +92,29 @@ const ChatbotWidget = publicWidget.Widget.extend({
         this._closeChatbot();
     },
 
-    _onMinimize(ev) {
+    _onExpandToggle(ev) {
         ev.preventDefault();
-        this.$(".chatbot-container").toggleClass("chatbot-minimized");
+        const $panel = this.$(".chatbot-container");
+        this.isExpanded = !this.isExpanded;
+        $panel.toggleClass("chatbot-expanded", this.isExpanded);
+
+        // đổi icon expand/compress nếu muốn
+        const $icon = this.$(".chatbot-expand i");
+        if ($icon.length) {
+            $icon.toggleClass("fa-expand", !this.isExpanded);
+            $icon.toggleClass("fa-compress", this.isExpanded);
+        }
+
+        // sau khi đổi kích thước, kéo xuống cuối cho chắc
+        requestAnimationFrame(() => this._scrollToBottom());
     },
 
+    // === Minimize: ẩn body, chỉ để header
+    _onMinimize(ev) {
+        ev.preventDefault();
+        const $panel = this.$(".chatbot-container");
+        $panel.toggleClass("chatbot-minimized");
+    },
     _onKeyPress(ev) {
         if (ev.which === 13 && !ev.shiftKey) {
             ev.preventDefault();
@@ -118,6 +138,26 @@ const ChatbotWidget = publicWidget.Widget.extend({
         input.val("");
         this._setLoading(true);
 
+
+        function canonSku(s = "") {
+            return String(s).toUpperCase().replace(/[^A-Z0-9]/g, "");
+        }
+
+        // Bóc mọi "(Mã: ...)" trong text, hỗ trợ cả combo có dấu '+'
+        function extractSkusFromResponse(text = "") {
+            const out = new Set();
+            // Bắt chuỗi giữa "(Mã:" và dấu ')'
+            for (const m of text.matchAll(/\(Mã:\s*([^)]+?)\)/gi)) {
+                const raw = (m[1] || "").trim().replace(/[`*_]/g, "");
+                // tách theo '+' nếu là combo
+                raw.split("+").forEach(part => {
+                    const sku = canonSku(part);
+                    if (sku) out.add(sku);
+                });
+            }
+            return out; // Set các SKU đã chuẩn hoá
+        }
+
         const self = this;
         $.ajax({
             url: "/chatbot/message",
@@ -131,26 +171,33 @@ const ChatbotWidget = publicWidget.Widget.extend({
                     return;
                 }
 
-                // 1) text "thân thiện"
+                // 1) text
                 if (result.response) self._addBotText(result.response);
 
-                // 2) product cards: lọc bằng mã xuất hiện trong response (nếu có)
+                // 2) product cards: chỉ render những mã xuất hiện trong response
                 let products = Array.isArray(result.inventory_results) ? result.inventory_results : [];
-                if (result.response && products.length > 0) {
-                    const codesInText = (result.response.match(/\(Mã:\s*([A-Za-z0-9\-\_]+)/g) || [])
-                        .map(s => s.replace(/\(Mã:\s*/, '').trim());
-                    if (codesInText.length) {
-                        const set = new Set(codesInText.map(x => x.toUpperCase()));
-                        const filtered = products.filter(p => (p.default_code || "").toUpperCase() && set.has((p.default_code || "").toUpperCase()));
-                        if (filtered.length) products = filtered;
+
+                if (result.response && products.length) {
+                    const codesSet = extractSkusFromResponse(result.response); // Set đã canon
+                    if (codesSet.size) {
+                        products = products.filter(p => {
+                            const sku = canonSku(p.default_code || "");
+                            if (!sku) return false;
+                            return codesSet.has(sku);
+                        });
+                    } else {
+                        // Nếu AI không nêu mã, để tránh “tràn” thì giới hạn 3 sản phẩm đầu
+                        products = products.slice(0, 3);
                     }
                 }
+
                 if (products.length) self._addProductList(products);
 
                 // 3) web
                 const web = Array.isArray(result.web_results) ? result.web_results : [];
                 if (web.length) self._addWebList(web);
             },
+
 
             error(err) {
                 self._setLoading(false);
@@ -219,54 +266,63 @@ const ChatbotWidget = publicWidget.Widget.extend({
     },
 
     _renderProductCard(p) {
-        // Ảnh sản phẩm: ưu tiên ảnh product.product
-        const imgUrl = `/web/image/product.product/${p.id}/image_128`;// fallback đủ nhanh; muốn nét hơn dùng image_512
+        const imgUrl = `/web/image/product.product/${p.id}/image_128`;
+
+        const totalOnhand = Number(
+            (p.qty_onhand !== undefined ? p.qty_onhand : p.qty_available) || 0
+        );
+
+        const perWh = p.by_warehouse_full || p.by_warehouse || {};
+        const whChips = Object.keys(perWh)
+            .map((wh) => {
+                const row = perWh[wh];
+                const onhand = typeof row === "object" ? Number(row.onhand || 0) : Number(row || 0);
+                return `<span class="chip chip-warehouse">${escape(wh)}: ${onhand}</span>`;
+            })
+            .join(" ");
+
+        let stockLabel = `<span class="stock-badge badge-out">Hết hàng</span>`;
+        if (totalOnhand > 10) stockLabel = `<span class="stock-badge badge-in">Còn nhiều</span>`;
+        else if (totalOnhand > 0) stockLabel = `<span class="stock-badge badge-low">Sắp hết</span>`;
+
         const code = escape(p.default_code || "");
         const name = escape(p.name || "");
         const uom = escape(p.uom || "");
         const price = Number(p.list_price || 0);
         const tmPrice = Number(p.commercial_price || 0);
-        const byWh = p.by_warehouse || {};
-        const whChips = Object.keys(byWh)
-            .map((wh) => {
-                const qty = byWh[wh];
-                return `<span class="chip chip-warehouse">${escape(wh)}: ${qty}</span>`;
-            })
-            .join(" ");
-
-        // Nhãn “Còn hàng / Sắp hết / Hết hàng”
-        const total = Number(p.qty_available || 0);
-        let stockLabel = `<span class="stock-badge badge-out">Hết hàng</span>`;
-        if (total > 10) stockLabel = `<span class="stock-badge badge-in">Còn nhiều</span>`;
-        else if (total > 0) stockLabel = `<span class="stock-badge badge-low">Sắp hết</span>`;
 
         return `
-      <div class="product-card">
-        <div class="pc-left">
-          <img class="pc-image" src="${imgUrl}" alt="${name}" onerror="this.src='https://via.placeholder.com/96?text=No+Image';"/>
+    <div class="product-card">
+      <div class="pc-left">
+        <img class="pc-image" src="${imgUrl}" alt="${name}"
+             onerror="this.src='https://via.placeholder.com/96?text=No+Image';"/>
+      </div>
+      <div class="pc-right">
+        <div class="pc-name">${name}</div>
+        <div class="pc-code">Mã: <strong>${code || "—"}</strong></div>
+
+        <div class="pc-stockline">
+          ${stockLabel}
+          <span class="pc-uom">Tổng tồn (thực tế): ${totalOnhand} ${uom}</span>
         </div>
-        <div class="pc-right">
-          <div class="pc-name">${name}</div>
-          <div class="pc-code">Mã: <strong>${code || "—"}</strong></div>
-          <div class="pc-stockline">
-            ${stockLabel}
-            <span class="pc-uom">Tổng tồn: ${total} ${uom}</span>
-          </div>
-          <div class="pc-wh">${whChips}</div>
-          <div class="pc-price">
-            <span class="price-retail">${price.toLocaleString()} VND</span>
-            ${tmPrice && tmPrice !== price
-                ? `<span class="price-commercial">TM: ${tmPrice.toLocaleString()} VND</span>`
+
+        <div class="pc-wh">${whChips}</div>
+
+        <div class="pc-price">
+          <span class="price-retail">${price.toLocaleString()} VND</span>
+          ${tmPrice && tmPrice !== price
+                ? `<span class="price-commercial">TM:${tmPrice.toLocaleString()} VND</span>`
                 : ""
             }
-          </div>
-          <div class="pc-actions">
-            <button class="btn-ghost" data-code="${code}">Hỏi thêm</button>
-            <button class="btn-primary" data-code="${code}">Đặt mua</button>
-          </div>
+        </div>
+
+        <div class="pc-actions">
+          <button class="btn-ghost" data-code="${code}">Hỏi thêm</button>
+          <button class="btn-primary" data-code="${code}">Đặt mua</button>
         </div>
       </div>
-    `;
+    </div>
+  `;
     },
 
     _addWebList(items) {

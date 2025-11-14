@@ -2,534 +2,268 @@
 import json
 import re
 import logging
-from collections import defaultdict
 
 from odoo import http
 from odoo.http import request
-from odoo.osv import expression
+import json as _json
 
 _logger = logging.getLogger(__name__)
 
+# ============================
+# Utils (normalize text)
+# ============================
 
-# -----------------------------
-# Utils (normalize & text)
-# -----------------------------
 def _norm(s: str) -> str:
     s = (s or "").strip()
     s = re.sub(r"\s+", " ", s)
     return s
 
 
-def _strip_seps(s: str) -> str:
-    """Remove spaces and separators for fuzzy compare."""
-    return re.sub(r"[\s\-\_\/\.]+", "", s or "")
+# ============================
+# AI AGENT (Responses API + Vector Store + Odoo)
+# ============================
 
 
-# -----------------------------
-# Controller
-# -----------------------------
-class ChatbotController(http.Controller):
-    # ===== CONFIG =====
-    def _get_chatbot_config(self):
-        """Read settings from System Parameters."""
-        param = request.env["ir.config_parameter"].sudo()
-        return {
-            "enabled": param.get_param("website_public_inventory_18.chatbot_enabled", default=False) in (True, "True", "1", "true"),
-            "api_key": param.get_param("website_public_inventory_18.openai_api_key", default=""),
-            "model": param.get_param("website_public_inventory_18.openai_model", default="gpt-4o-mini"),
-            "max_tokens": int(param.get_param("website_public_inventory_18.chatbot_max_tokens", default=600)),
-            "temperature": float(param.get_param("website_public_inventory_18.chatbot_temperature", default=0.2)),
-            "web_search_enabled": param.get_param("website_public_inventory_18.web_search_enabled", default=True) in (True, "True", "1", "true"),
-            # kho cho phép hiển thị (tùy chọn)
-            "allowed_warehouse_ids": param.get_param("website_public_inventory_18.allowed_warehouse_ids", default=""),
-        }
+def _safe_json_from_text(text: str):
+    s = (text or "").strip()
+    if not s:
+        return {}
 
-    # ===== OPENAI CALLS =====
-    def _call_openai(self, messages, config, *, force_json=False, max_tokens=None, temperature=None):
-        """
-        Wrapper call OpenAI.
-        - force_json=True: yêu cầu model trả JSON object.
-        - Trả về string (nếu force_json=False) hoặc string JSON (nếu force_json=True).
-        """
+    # 1) Thử parse trực tiếp
+    try:
+        obj = _json.loads(s)
+        if isinstance(obj, dict):
+            return obj
+    except Exception:
+        pass
+
+    # 2) Bắt tất cả khối {...} rồi lấy khối CUỐI CÙNG
+    matches = re.findall(r"\{.*?\}", s, re.S)
+    for cand in reversed(matches):
         try:
-            import openai
-            client = openai.OpenAI(api_key=config["api_key"])
-            kwargs = {
-                "model": config["model"],
-                "messages": messages,
-                "max_tokens": max_tokens if max_tokens is not None else int(config.get("max_tokens", 600)),
-                "temperature": temperature if temperature is not None else float(config.get("temperature", 0.2)),
-            }
-            if force_json:
-                # Buộc trả JSON object (các model 4o/4.1/mini đều hỗ trợ)
-                kwargs["response_format"] = {"type": "json_object"}
-
-            resp = client.chat.completions.create(**kwargs)
-            if resp.choices:
-                return resp.choices[0].message.content or ""
-            return ""
-        except ImportError:
-            return "ERROR_OPENAI_NOT_INSTALLED"
-        except Exception as e:
-            _logger.error("OpenAI error: %s", e)
-            return ""
-        
-        
-    
-    def _safe_json_from_text(self, text: str):
-        """
-        Cố gắng parse JSON từ text lẫn lộn:
-        - Thử loads trực tiếp
-        - Thử cắt khỏi ```json ... ``` hoặc ``` ... ```
-        - Thử regex non-greedy { ... } (đa đối tượng) và parse lần lượt
-        - Thử cân ngoặc {} để lấy object lớn nhất hợp lệ
-        Trả về dict hoặc {}.
-        """
-        import json as _json
-        s = (text or "").strip()
-        if not s:
-            return {}
-
-        # 1) trực tiếp
-        try:
-            obj = _json.loads(s)
+            obj = _json.loads(cand)
             if isinstance(obj, dict):
                 return obj
         except Exception:
-            pass
+            continue
 
-        # 2) khối fenced code
-        m = re.search(r"```json\s*(\{.*?\})\s*```", s, re.S | re.I)
-        if m:
-            try:
-                obj = _json.loads(m.group(1))
-                if isinstance(obj, dict):
-                    return obj
-            except Exception:
-                pass
-        m = re.search(r"```\s*(\{.*?\})\s*```", s, re.S | re.I)
-        if m:
-            try:
-                obj = _json.loads(m.group(1))
-                if isinstance(obj, dict):
-                    return obj
-            except Exception:
-                pass
+    return {}
+class AIChatAgent(object):
+    """
+    Agent AI cho kho HLV (luồng mới):
+    - Bước 1: Dùng Responses API + file_search (vector store product) để phân tích truy vấn,
+      tìm ra action + danh sách mã sản phẩm nên kiểm tra.
+    - Bước 2: Dùng Odoo ORM để lấy tồn kho + giá theo các mã đó.
+    - Bước 3: Dùng Responses API để soạn câu trả lời thân thiện, có format.
+    """
 
-        # 3) non-greedy nhiều object: lấy cái parse được đầu tiên
-        candidates = re.findall(r"\{.*?\}", s, re.S)
-        for cand in candidates:
-            try:
-                obj = _json.loads(cand)
-                if isinstance(obj, dict):
-                    return obj
-            except Exception:
-                continue
+    def __init__(self, env, config):
+        self.env = env
+        self.config = config
 
-        # 4) cân ngoặc: lấy vùng từ { đầu tiên tới } khớp
-        start = s.find("{")
-        if start != -1:
-            level = 0
-            for i in range(start, len(s)):
-                ch = s[i]
-                if ch == "{":
-                    level += 1
-                elif ch == "}":
-                    level -= 1
-                    if level == 0:
-                        seg = s[start:i+1]
-                        try:
-                            obj = _json.loads(seg)
-                            if isinstance(obj, dict):
-                                return obj
-                        except Exception:
-                            break
+    # -------- OpenAI client (Responses API) --------
+    def _get_client(self):
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise RuntimeError("Python package 'openai' chưa được cài đặt. Hãy: pip install openai")
 
-        return {}
+        api_key = self.config.get("api_key") or ""
+        if not api_key:
+            raise RuntimeError("Chưa cấu hình OpenAI API key")
+        return OpenAI(api_key=api_key)
 
+    # -------- STEP 1: Phân tích truy vấn + dùng file_search trên vector store --------
+    def analyze_query(self, user_message: str) -> dict:
+        """
+        Gọi Responses API để bóc tách truy vấn, sử dụng file_search (vector store product) làm kiến thức nền.
 
+        Output mong muốn:
+        - action: 'search_product' / 'smalltalk' / 'help' / 'unknown'
+        - normalized_query: text đã chuẩn hóa
+        - product_codes: list mã sản phẩm nên kiểm tra tồn (ưu tiên lấy từ vector store)
+        - warehouse_hint: TSN / KBC / TSNSR / KHD / None
+        - quantity: số lượng (nếu có)
+        - allow_web_search: có cho phép search web không
+        """
+        client = self._get_client()
 
-    def _ai_generate_search_plan(self, user_text: str, config: dict, tried_candidates=None, broaden=False):
-        tried_candidates = tried_candidates or []
-        sys_prompt = (
-            "Bạn là công cụ phân tích truy vấn sản phẩm cho kho Odoo.\n"
-            "Xuất JSON đúng schema, KHÔNG kèm lời giải thích.\n"
-            "- Nhận diện 'is_combo' nếu có 'combo'/'cb'/dấu '+'.\n"
-            "- Sinh 'candidates' đa dạng: giữ nguyên, bỏ/đổi separators (space/hyphen/underscore/slash/dot), viết liền, "
-            "chuẩn 'chữ-số' ('FID 3'->'FID3'), có thể thêm biến thể phổ biến (-0, -0X, -X0, -ASIA) khi hợp lý.\n"
-            "- Nếu broaden=true, mở rộng thêm 5–10 candidates thực tế.\n"
-            "- Nếu là combo, giữ chuỗi có '+' và cả các thành phần riêng lẻ.\n"
-            "Chỉ trả JSON object theo schema."
-        )
-        user_payload = {
-            "query": user_text,
-            "broaden": bool(broaden),
-            "tried_candidates": tried_candidates[:50],
+        vector_store_id = self.config.get("product_vector_store_id") or ""
+
+        # JSON schema cho Structured Output
+        schema = {
+            "type": "json_schema",
+            "name": "catalog_query_analysis",
+            "strict": True,
             "schema": {
-                "intent": {"is_combo": True, "quantity": None, "warehouses": ["TSN"]},
-                "products": [
-                    {"raw": "M18 FHIW2F12+M18B5+M12-18C", "is_combo": True,
-                    "candidates": ["M18 FHIW2F12+M18B5+M12-18C","FHIW2F12","M18B5","M12-18C","M1218C"]}
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["search_product", "smalltalk", "help", "unknown"],
+                    },
+                    "normalized_query": {"type": "string"},
+                    "product_codes": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Danh sách mã sản phẩm chuẩn (default_code) nên kiểm tra tồn kho.",
+                    },
+                    "warehouse_hint": {
+                        "type": "string",
+                        "description": "Mã kho gợi ý (TSN, KBC, TSNSR, KHD) nếu user có nhắc, nếu không thì chuỗi rỗng.",
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "description": "Số lượng nếu user có đề cập, nếu không thì 0.",
+                    },
+                    "allow_web_search": {
+                        "type": "boolean",
+                        "description": "true nếu user đang hỏi thông tin thị trường / giá tham khảo ngoài kho.",
+                    },
+                },
+                # Để an toàn, chỉ bắt buộc 3 field chính, còn lại optional
+                # "required": ["action", "normalized_query", "product_codes"],
+                "required": [
+                    "action",
+                    "normalized_query",
+                    "product_codes",
+                    "warehouse_hint",
+                    "quantity",
+                    "allow_web_search",
                 ],
+                "additionalProperties": False,
             },
         }
 
-        # 1) ưu tiên JSON mode
-        raw = self._call_openai(
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
-            ],
-            config={**config, "max_tokens": min(1200, int(config.get("max_tokens", 600)))},
-            force_json=True,
+        instructions = (
+            "Bạn là bộ phân tích truy vấn cho kho HLV.\n"
+            "Bạn có quyền dùng tool 'file_search' để tra cứu catalog sản phẩm (mã, tên, alias...).\n"
+            "Nhiệm vụ:\n"
+            "- Xác định action: nếu user muốn tra sản phẩm / tồn kho / giá -> 'search_product';\n"
+            "  nếu chỉ chào hỏi -> 'smalltalk'; nếu hỏi cách dùng chatbot -> 'help'; nếu không rõ -> 'unknown'.\n"
+            "- normalized_query: phiên bản đã chuẩn hóa của câu hỏi.\n"
+            "- product_codes: từ catalog, chọn ra các mã sản phẩm (default_code) phù hợp với câu hỏi.\n"
+            "  Ưu tiên mã thân máy chính (main) hơn phụ tùng nếu cùng series.\n"
+            "- warehouse_hint: nếu user có nhắc khu vực / kho (TSN, TSNSR, KBC, KHD, tân sơn nhất, bến cam...),\n"
+            "  hãy map về 1 trong 'TSN', 'TSNSR', 'KBC', 'KHD'. Nếu không rõ, trả về chuỗi rỗng.\n"
+            "- quantity: nếu user có nhắc số lượng (vd: 5 cái, 10 bộ...), ghi số; nếu không thì 0.\n"
+            "- allow_web_search: true nếu user đang hỏi giá thị trường / thông tin tham khảo ngoài kho; ngược lại false.\n\n"
+            "Chỉ xuất JSON đúng schema, không kèm giải thích."
         )
 
-        plan = self._safe_json_from_text(raw)
-        if not plan:
-            # 2) fallback: gọi text-mode rồi parse an toàn
-            raw2 = self._call_openai(
-                messages=[
-                    {"role": "system", "content": sys_prompt + "\nCHỈ TRẢ JSON."},
-                    {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
-                ],
-                config={**config, "max_tokens": min(1200, int(config.get("max_tokens", 600)))},
-                force_json=False,
+        # Chuẩn bị tools: chỉ dùng file_search ở bước phân tích
+        tools = None
+        if vector_store_id:
+            tools = [
+                {
+                    "type": "file_search",
+                    "vector_store_ids": [vector_store_id],
+                }
+            ]
+
+
+        try:
+            resp = client.responses.create(
+                model=self.config["model"],
+                instructions=instructions,
+                input=user_message,
+                **({"tools": tools} if tools else {}),
+                text={"format": schema},
+                max_output_tokens=int(self.config.get("max_tokens", 400)),
+                include=["output[*].file_search_call.search_results"],
             )
-            plan = self._safe_json_from_text(raw2) or {}
 
-        if not isinstance(plan, dict):
-            plan = {}
-        plan.setdefault("intent", {})
-        plan.setdefault("products", [])
-        return plan
-
-
-    # ===== LOCAL ENTITY EXTRACTION (fallback/assist) =====
-    def _extract_entities_local(self, text: str):
-        """
-        Nhanh-gọn: tách fragment mã, kho & số lượng cơ bản (không AI).
-        """
-        t = _norm(text or "")
-        # sku fragments: tách theo dấu +, dấu phẩy, khoảng trắng lớn
-        frags = []
-        # Ưu tiên dấu '+'
-        if "+" in t:
-            frags = [s.strip() for s in t.split("+") if s.strip()]
-        # Tách thêm các cụm mã kiểu A1-23-456 hoặc chữ-số
-        tokens = re.findall(r"[A-Za-z0-9\-_/\.]+", t)
-        for tok in tokens:
-            if len(tok) >= 2 and tok not in frags:
-                frags.append(tok)
-
-        # warehouse hint
-        # mapping ví dụ người dùng đã nêu
-        wh_hint = None
-        lower = t.lower()
-        if "tân sơn nhì" in lower or "tsn" in lower:
-            wh_hint = "TSN"
-        if "showroom" in lower or "tsnsr" in lower or "tân sơn nhì showroom" in lower:
-            wh_hint = "TSNSR"
-        if "bến cam" in lower or "kbc" in lower:
-            wh_hint = "KBC"
-        if "hiền đức" in lower or "khd" in lower:
-            wh_hint = "KHD"
-
-        # quantity
-        qty = None
-        m = re.search(r"\b(\d+)\s*(cai|cái|pcs|piece|chiếc)?\b", lower)
-        if m:
+            # ====== DEBUG: xem model có gọi file_search hay không ======
             try:
-                qty = int(m.group(1))
+                for i, item in enumerate(getattr(resp, "output", []) or []):
+                    if getattr(item, "type", "") == "file_search_call":
+                        # chuyển về dict để tránh AttributeError
+                        data = item.model_dump()
+
+                        # trong data sẽ có key "file_search_call"
+                        fs = data.get("file_search_call", {}) or data
+
+                        q = fs.get("query")
+                        results = []
+                        for r in fs.get("search_results", []) or []:
+                            doc = r.get("document") or {}
+                            doc_id = doc.get("id")
+                            score = r.get("score")
+
+                            txt = ""
+                            contents = r.get("content") or []
+                            if contents and contents[0].get("type") == "text":
+                                txt = (contents[0].get("text") or "")[:120]
+
+                            results.append((doc_id, score, txt))
+
+                        _logger.info(
+                            "AIChatAgent.file_search_call[%s]: query=%r, results=%s",
+                            i, q, results,
+                        )
             except Exception:
-                qty = None
+                _logger.exception("Cannot inspect file_search_call results")
 
-        return {"sku_fragments": frags, "warehouse_hint": wh_hint, "quantity": qty}
+            raw = resp.output_text or "{}"
+            parsed = _safe_json_from_text(raw)
 
-    # ===== AI-ASSISTED SEARCH =====
-    def _ai_smart_product_search(self, user_text: str, limit=20):
-        """
-        AI-assisted search → list of product dicts.
-        """
-        env = request.env
-        Product = env["product.product"].sudo()
-        Bom = env["mrp.bom"].sudo() if "mrp.bom" in env else None
+        except Exception as e:
+            _logger.error("Error calling Responses API (analyze_query): %s", e)
+            parsed = {}
 
-        def _is_combo_product(prod):
-            if getattr(prod.product_tmpl_id, "is_combo", False):
-                return True
-            if Bom:
-                bom = Bom.search([("product_tmpl_id", "=", prod.product_tmpl_id.id),
-                                  ("type", "in", ["phantom", "normal"])], limit=1)
-                if bom:
-                    return True
-            if hasattr(prod.product_tmpl_id, "combo_line_ids") and prod.product_tmpl_id.combo_line_ids:
-                return True
-            return False
+        # Fallback an toàn
+        if not isinstance(parsed, dict):
+            parsed = {}
 
-        def _get_combo_components(prod):
-            comps = []
-            if hasattr(prod.product_tmpl_id, "combo_line_ids") and prod.product_tmpl_id.combo_line_ids:
-                for line in prod.product_tmpl_id.combo_line_ids:
-                    p = line.product_id.product_variant_id or line.product_id
-                    comps.append({
-                        "product_id": p.id,
-                        "name": p.name,
-                        "default_code": p.default_code or "",
-                        "uom": p.uom_id.name or "",
-                        "qty": float(getattr(line, "product_qty", 1.0) or 1.0),
-                    })
-                return comps
-            if Bom:
-                bom = Bom.search([("product_tmpl_id", "=", prod.product_tmpl_id.id),
-                                  ("type", "in", ["phantom", "normal"])], limit=1)
-                if bom:
-                    for bl in bom.bom_line_ids:
-                        p = bl.product_id.product_variant_id or bl.product_id
-                        comps.append({
-                            "product_id": p.id,
-                            "name": p.name,
-                            "default_code": p.default_code or "",
-                            "uom": p.uom_id.name or "",
-                            "qty": float(bl.product_qty or 1.0),
-                        })
-            return comps
+        parsed.setdefault("action", "search_product")
+        parsed.setdefault("normalized_query", user_message)
+        parsed.setdefault("product_codes", [])
+        parsed.setdefault("warehouse_hint", "")
+        parsed.setdefault("quantity", 0)
+        parsed.setdefault("allow_web_search", False)
 
-        def _score_match(prod, candidate: str):
-            c = (candidate or "").strip()
-            if not c:
-                return 0
-            c_n = _strip_seps(c).lower()
-            dc = (prod.default_code or "")
-            bc = (prod.barcode or "")
-            nm = (prod.name or "")
+        return parsed
 
-            dc_n = _strip_seps(dc).lower()
-            bc_n = _strip_seps(bc).lower()
-            nm_n = nm.lower()
+    # -------- STEP 2a: Map kho từ hint --------
+    def _find_warehouse(self, hint):
+        """Map text hint → stock.warehouse record (code)."""
+        if not hint:
+            return None
+        code = str(hint).strip().upper()
+        aliases = {
+            "HCM": "TSN", "TSN": "TSN", "TSNSR": "TSNSR",
+            "HCM_SHOWROOM": "TSNSR", "BENCAM": "KBC",
+            "KBC": "KBC", "HIENDUC": "KHD", "KHD": "KHD",
+        }
+        code = aliases.get(code, code)
+        Wh = self.env["stock.warehouse"].sudo()
+        wh = Wh.search([("code", "=", code)], limit=1)
+        return wh or None
 
-            best = 0
-            if dc_n == c_n:
-                best = max(best, 100)
-            elif c_n and c_n in dc_n:
-                best = max(best, 85)
-            if bc_n == c_n:
-                best = max(best, 80)
-            elif c_n and c_n in bc_n:
-                best = max(best, 70)
-            c_l = c.lower()
-            if nm_n == c_l:
-                best = max(best, 65)
-            elif c_l and c_l in nm_n:
-                best = max(best, 55)
-            return best
-
-        def _query_products_for_candidates(cands, allow_combo=True, limit_each=60):
-            results = {}
-            if not cands:
-                return results
-            dom = []
-            for cand in cands:
-                if not cand:
-                    continue
-                # ilike cho default_code/barcode/name
-                for field in ("default_code", "barcode", "name"):
-                    new = [(field, "ilike", cand)]
-                    dom = expression.OR([dom, new]) if dom else new
-                # strip seps variant
-                ss = _strip_seps(cand)
-                if ss and ss != cand:
-                    for field in ("default_code", "barcode", "name"):
-                        new = [(field, "ilike", ss)]
-                        dom = expression.OR([dom, new])
-            prods = Product.search(dom or [], limit=limit_each)
-            for p in prods:
-                if (not allow_combo) and _is_combo_product(p):
-                    continue
-                sc = 0
-                for cand in cands:
-                    sc = max(sc, _score_match(p, cand))
-                cur = results.get(p.id)
-                if (cur is None) or (sc > cur[1]):
-                    results[p.id] = (p, sc)
-            return results
-
-        # 1) AI tạo plan
-        config = self._get_chatbot_config()
-        plan = self._ai_generate_search_plan(user_text, config)
-        is_combo_intent = bool(plan.get("intent", {}).get("is_combo"))
-
-        # gom candidates, unique
-        all_candidates = []
-        for pr in plan.get("products", []):
-            for c in (pr.get("candidates") or []):
-                if c and c not in all_candidates:
-                    all_candidates.append(c)
-
-        # bổ sung từ local nếu trống
-        if not all_candidates:
-            local = self._extract_entities_local(user_text)
-            frs = local.get("sku_fragments") or []
-            for f in frs:
-                if f and f not in all_candidates:
-                    all_candidates.append(f)
-            t = _norm(user_text)
-            if t and t not in all_candidates:
-                all_candidates.append(t)
-                ss = _strip_seps(t)
-                if ss and ss != t and ss not in all_candidates:
-                    all_candidates.append(ss)
-                if "+" in t:
-                    parts = [x.strip() for x in t.split("+") if x.strip()]
-                    for p in parts:
-                        if p not in all_candidates:
-                            all_candidates.append(p)
-
-        # 2) query lần 1
-        results = _query_products_for_candidates(
-            all_candidates,
-            allow_combo=is_combo_intent,
-            limit_each=max(80, 4 * limit),
-        )
-
-        # 3) broaden nếu trắng
-        if not results:
-            more = self._ai_generate_search_plan(
-                user_text,
-                config,
-                tried_candidates=all_candidates,
-                broaden=True,
-            )
-            more_candidates = []
-            for pr in more.get("products", []):
-                for c in (pr.get("candidates") or []):
-                    if c and c not in all_candidates and c not in more_candidates:
-                        more_candidates.append(c)
-            if more_candidates:
-                extra = _query_products_for_candidates(
-                    more_candidates,
-                    allow_combo=is_combo_intent,
-                    limit_each=max(80, 4 * limit),
-                )
-                results.update(extra)
-
-        # 4) pack
-        ranked = sorted(
-            results.values(),
-            key=lambda it: (-it[1], (it[0].default_code or ""), (it[0].name or "")),
-        )[:limit]
-
-        out = []
-        for prod, score in ranked:
-            is_combo = _is_combo_product(prod)
-            comps = self._get_combo_components_cached(prod) if (is_combo and is_combo_intent) else []
-            out.append({
-                "id": prod.id,
-                "name": prod.name,
-                "default_code": prod.default_code or "",
-                "barcode": prod.barcode or "",
-                "uom": prod.uom_id.name or "",
-                "list_price": getattr(prod, "lst_price", None) if hasattr(prod, "lst_price") else prod.list_price,
-                "commercial_price": getattr(prod.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
-                "is_combo": bool(is_combo and is_combo_intent),
-                "components": comps,
-            })
-        return out
-
-    # small cache for combo components
-    def _get_combo_components_cached(self, prod):
-        cache = getattr(self, "_combo_comp_cache", None)
-        if cache is None:
-            cache = {}
-            setattr(self, "_combo_comp_cache", cache)
-        if prod.id in cache:
-            return cache[prod.id]
-        # compute
-        comps = []
-        # custom lines
-        if hasattr(prod.product_tmpl_id, "combo_line_ids") and prod.product_tmpl_id.combo_line_ids:
-            for line in prod.product_tmpl_id.combo_line_ids:
-                p = line.product_id.product_variant_id or line.product_id
-                comps.append({
-                    "product_id": p.id,
-                    "name": p.name,
-                    "default_code": p.default_code or "",
-                    "uom": p.uom_id.name or "",
-                    "qty": float(getattr(line, "product_qty", 1.0) or 1.0),
-                })
-            cache[prod.id] = comps
-            return comps
-        # BOM
-        Bom = request.env["mrp.bom"].sudo() if "mrp.bom" in request.env else None
-        if Bom:
-            bom = Bom.search([("product_tmpl_id", "=", prod.product_tmpl_id.id),
-                              ("type", "in", ["phantom", "normal"])], limit=1)
-            if bom:
-                for bl in bom.bom_line_ids:
-                    p = bl.product_id.product_variant_id or bl.product_id
-                    comps.append({
-                        "product_id": p.id,
-                        "name": p.name,
-                        "default_code": p.default_code or "",
-                        "uom": p.uom_id.name or "",
-                        "qty": float(bl.product_qty or 1.0),
-                    })
-        cache[prod.id] = comps
-        return comps
-
-    # ===== STOCK HELPERS =====
     def _allowed_warehouses(self):
-        env = request.env
-        Wh = env["stock.warehouse"].sudo()
-        param = self._get_chatbot_config().get("allowed_warehouse_ids") or ""
-        ids = [int(x) for x in param.split(",") if x.strip().isdigit()]
+        Wh = self.env["stock.warehouse"].sudo()
+        ids_raw = self.config.get("allowed_warehouse_ids") or ""
+        ids = [int(x) for x in ids_raw.split(",") if x.strip().isdigit()]
         if ids:
             whs = Wh.browse(ids).exists()
             if whs:
                 return whs
         return Wh.search([])
 
-    def _find_warehouse(self, hint):
-        """Map text hint → stock.warehouse record (code)."""
-        if not hint:
-            return None
-        code = str(hint).strip().upper()
-        # quick aliases
-        aliases = {
-            "HCM": "TSN",
-            "TSN": "TSN",
-            "TSNSR": "TSNSR",
-            "HCM_SHOWROOM": "TSNSR",
-            "BENCAM": "KBC",
-            "KBC": "KBC",
-            "HIENDUC": "KHD",
-            "KHD": "KHD",
-        }
-        code = aliases.get(code, code)
-        Wh = request.env["stock.warehouse"].sudo()
-        wh = Wh.search([("code", "=", code)], limit=1)
-        return wh or None
-
+    # -------- STEP 2b: Lấy tồn kho theo kho --------
     def _get_stock_by_warehouse(self, product_ids, warehouse=None):
-        """
-        Trả về: {product_id: {WH_CODE: qty_avail, ...}}
-        - Map location bất kỳ về đúng kho bằng cách leo parent tới root view_location.
-        """
-        env = request.env
-        Quant = env["stock.quant"].sudo()
-        Loc = env["stock.location"].sudo()
+        Quant = self.env["stock.quant"].sudo()
+        Loc = self.env["stock.location"].sudo()
 
-        # Warehouses được phép
         whs = self._allowed_warehouses()
         if warehouse:
             whs = whs.filtered(lambda w: w.id == warehouse.id) or whs
         if not whs:
             return {}
 
-        # Map root_location_id -> WH code
         root_id_to_wh = {w.view_location_id.id: w.code for w in whs}
         root_ids_set = set(root_id_to_wh.keys())
 
-        # Lấy quants theo các root
         domain = [
             ("product_id", "in", product_ids),
             ("location_id", "child_of", list(root_ids_set)),
@@ -541,14 +275,11 @@ class ChatbotController(http.Controller):
             lazy=False,
         )
 
-        # Thu thập tất cả location xuất hiện để bulk-read parent chain
         loc_ids = {g["location_id"][0] for g in groups if g.get("location_id")}
-        # Bulk read parent cho nhanh
         locs = Loc.browse(list(loc_ids)).sudo()
         id_to_parent = {l.id: (l.location_id.id or False) for l in locs}
 
         def find_root(loc_id: int):
-            """Leo lên tới root view_location của 1 WH được phép."""
             seen = set()
             cur = loc_id
             while cur and cur not in seen:
@@ -572,73 +303,307 @@ class ChatbotController(http.Controller):
             if not wh_code:
                 continue
 
-            qty = float(g.get("quantity_sum") or g.get("quantity") or 0.0)
-            res = float(g.get("reserved_quantity_sum") or g.get("reserved_quantity") or 0.0)
-            avail = qty - res
+            onhand = float(g.get("quantity_sum") or g.get("quantity") or 0.0)
+            reserved = float(g.get("reserved_quantity_sum") or g.get("reserved_quantity") or 0.0)
+            available = onhand - reserved
 
-            out.setdefault(pid, {}).setdefault(wh_code, 0.0)
-            out[pid][wh_code] += avail
+            out.setdefault(pid, {})
+            wh_bucket = out[pid].setdefault(wh_code, {"onhand": 0.0, "reserved": 0.0, "available": 0.0})
+            wh_bucket["onhand"] += onhand
+            wh_bucket["reserved"] += reserved
+            wh_bucket["available"] += available
 
         return out
 
+    # -------- STEP 2c: Chạy inventory thực tế trên Odoo dựa trên analysis --------
+    def _run_inventory_lookup(self, analysis: dict, limit: int = 20):
+        """
+        Dựa trên kết quả phân tích (đã dùng file_search), quyết định lấy tồn kho từ Odoo.
+        Ưu tiên product_codes; nếu không có, fallback bằng normalized_query.
+        """
+        Product = self.env["product.product"].sudo()
 
-    # ===== AI RESPONSE (friendly) =====
-    def _generate_ai_response(self, user_message, inventory_results, web_results, config, parsed_entities=None, warehouse_code=None):
-        context = (
-            "Bạn là trợ lý bán hàng của cửa hàng dụng cụ. "
-            "Hãy trả lời ngắn gọn, thân thiện, có định dạng (in đậm tên sp), gợi ý tiếp theo. "
-            "Nếu có danh sách SP, liệt kê theo mục 1., 2., 3. và bôi đậm **Tên sản phẩm**, in nghiêng mã _(Mã: ...)_.\n"
+        normalized_query = _norm(analysis.get("normalized_query") or "")
+        product_codes = analysis.get("product_codes") or []
+        warehouse_hint = analysis.get("warehouse_hint") or ""
+        wh = self._find_warehouse(warehouse_hint) if warehouse_hint else None
+
+        products = Product.browse()
+
+        # 1) Nếu có product_codes (từ catalog) -> ưu tiên tìm theo default_code trong đó
+        if product_codes:
+            clean_codes = [c.strip() for c in product_codes if c and c.strip()]
+            clean_codes = list(dict.fromkeys(clean_codes))  # bỏ trùng
+            if clean_codes:
+                products = Product.search([("default_code", "in", clean_codes)], limit=limit)
+
+        # 2) Nếu vẫn chưa thấy gì, fallback theo normalized_query (tối thiểu vẫn có search fuzzy)
+        if not products and normalized_query:
+            q = normalized_query
+            like_name = "%%%s%%" % q.replace(" ", "%")
+            domain = [
+                "|", "|",
+                ("default_code", "ilike", q),
+                ("barcode", "ilike", q),
+                ("name", "ilike", like_name),
+            ]
+            products = Product.search(domain, limit=limit)
+
+        if not products:
+            return {
+                "query": normalized_query,
+                "warehouse": wh.code if wh else None,
+                "items": [],
+            }
+
+        stock_map = self._get_stock_by_warehouse(products.ids, warehouse=wh)
+        items = []
+
+        for p in products:
+            wh_data = stock_map.get(p.id, {}) or {}
+            total_onhand = sum(v.get("onhand", 0.0) for v in wh_data.values())
+            total_reserved = sum(v.get("reserved", 0.0) for v in wh_data.values())
+            total_available = sum(v.get("available", 0.0) for v in wh_data.values())
+
+            items.append({
+                "id": p.id,
+                "name": p.name,
+                "default_code": p.default_code or "",
+                "uom": p.uom_id.name if p.uom_id else "",
+                "list_price": p.list_price,
+                "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
+                "qty_onhand": float(total_onhand),
+                "qty_reserved": float(total_reserved),
+                "qty_available": float(total_available),  # giữ lại nếu sau này cần
+                "by_warehouse": {k: float(v.get("onhand", 0.0)) for k, v in wh_data.items()},
+            })
+
+
+        return {
+            "query": normalized_query,
+            "warehouse": wh.code if wh else None,
+            "items": items,
+        }
+
+    # -------- STEP 3: Gọi Responses API để soạn câu trả lời --------
+    def generate_answer(
+        self,
+        user_message: str,
+        analysis: dict,
+        inventory_payload: dict,
+        history=None,
+    ) -> str:
+        client = self._get_client()
+
+        sys_prompt = (
+            "Bạn là trợ lý AI cho kho hàng HLV, hỗ trợ saler & thủ kho tra cứu nhanh.\n"
+            "Nguyên tắc trả lời:\n"
+            "- Ngắn gọn, thân thiện, đúng trọng tâm.\n"
+            "- Nếu có danh sách sản phẩm, liệt kê dạng 1., 2., 3. và dùng **Tên sản phẩm**; "
+            "mã in nghiêng _(Mã: ...)_.\n"
+            # "- Luôn dùng số *tồn thực tế* (available = onhand + reserved).\n"
+            "- Luôn dùng số *tồn thực tế* (onhand, CHƯA trừ reserved). Không dùng số available.\n"
+
+            "- Khi hiển thị theo kho, LUÔN liệt kê ĐẦY ĐỦ tất cả kho có trong dữ liệu (ví dụ: "
+            "`TSN: 3, KBC: 2, KHD: 5, TSNSR: 1`). Không được tự ý bỏ qua kho nào.\n"
+            "- Có thể nhắc giá bán và giá thương mại (TM) nếu có.\n"
+            "- Nếu không tìm thấy sản phẩm: hướng dẫn user gửi thêm mã, hình, hoặc mô tả rõ hơn.\n"
+            "- Kết thúc bằng một câu hỏi ngắn để tiếp tục hỗ trợ.\n"
         )
-        if parsed_entities:
-            context += f"[THÔNG TIN TRUY VẤN] {json.dumps(parsed_entities, ensure_ascii=False)}\n"
-        if warehouse_code:
-            context += f"[KHO ƯU TIÊN] {warehouse_code}\n"
 
-        if inventory_results:
-            context += "DỮ LIỆU TỒN KHO:\n"
-            for item in inventory_results:
-                line = f"- **{item['name']}**"
-                if item.get("default_code"):
-                    line += f" _(Mã: {item['default_code']})_"
-                total = int(item.get("qty_available", 0))
-                line += f" — **{total} {item.get('uom','')}**"
+
+        def num(x):
+            try:
+                return int(x or 0)
+            except Exception:
+                return 0
+
+        items = inventory_payload.get("items", []) or []
+        wh_code = inventory_payload.get("warehouse")
+        normalized_query = analysis.get("normalized_query")
+
+        ctx_lines = []
+        ctx_lines.append(f"[THÔNG TIN TRUY VẤN PHÂN TÍCH] {json.dumps(analysis, ensure_ascii=False)}")
+        if wh_code:
+            ctx_lines.append(f"[KHO ƯU TIÊN] {wh_code}")
+
+        if items:
+            # ctx_lines.append("DỮ LIỆU TỒN KHO (available = onhand - reserved):")
+            ctx_lines.append("DỮ LIỆU TỒN KHO (tồn thực tế = onhand, CHƯA trừ reserved):")
+            for idx, item in enumerate(items, start=1):
+                name = item.get("name") or ""
+                code = item.get("default_code") or ""
+                uom = item.get("uom") or ""
+                # total_available = num(item.get("qty_available"))
+                # by_wh = item.get("by_warehouse") or {}
+                # parts = [f"{k}: {num(v)}" for k, v in by_wh.items() if num(v) > 0]
+
+                # line = f"{idx}. **{name}**"
+                # if code:
+                #     line += f" _(Mã: {code})_"
+                # if uom:
+                #     line += f" — **{total_available} {uom} available**"
+                # else:
+                #     line += f" — **{total_available} available**"
+                # if parts:
+                #     line += " — theo kho: " + ", ".join(parts)
+                
+                total_onhand = num(item.get("qty_onhand"))
                 by_wh = item.get("by_warehouse") or {}
-                if by_wh:
-                    parts = [f"`{k}: {int(v)}`" for k, v in by_wh.items() if v]
-                    if parts:
-                        line += f" (theo kho: {', '.join(parts)})"
-                context += line + "\n"
+
+                # nếu có ít nhất 1 kho > 0 thì show kho > 0, nếu tất cả =0 vẫn show hết để biết đã check đủ kho
+                vals = {k: num(v) for k, v in by_wh.items()}
+                if vals:
+                    if any(v > 0 for v in vals.values()):
+                        parts = [f"{k}: {v}" for k, v in vals.items() if v > 0]
+                    else:
+                        parts = [f"{k}: {v}" for k, v in vals.items()]
+                else:
+                    parts = []
+
+                line = f"{idx}. **{name}**"
+                if code:
+                    line += f" _(Mã: {code})_"
+                if uom:
+                    line += f" — **{total_onhand} {uom} tồn thực tế**"
+                else:
+                    line += f" — **{total_onhand} tồn thực tế**"
+                if parts:
+                    line += " — theo kho: " + ", ".join(parts)
+                list_price = item.get("list_price")
+                comm_price = item.get("commercial_price")
+                if list_price or comm_price:
+                    price_parts = []
+                    if list_price:
+                        price_parts.append(f"Giá niêm yết: {int(list_price):,} VND".replace(",", "."))
+                    if comm_price:
+                        price_parts.append(f"Giá TM: {int(comm_price):,} VND".replace(",", "."))
+                    line += " — " + " | ".join(price_parts)
+
+                ctx_lines.append(line)
         else:
-            context += "Không tìm thấy sản phẩm phù hợp trong kho.\n"
+            ctx_lines.append(
+                "Không tìm thấy sản phẩm phù hợp trong kho với truy vấn hiện tại. "
+                "Có thể mã hoặc tên sản phẩm chưa đúng với catalog."
+            )
 
-        if web_results and config.get("web_search_enabled"):
-            context += "Tham khảo trên web:\n"
-            for w in web_results[:3]:
-                context += f"- {w.get('title','')} — {w.get('price','')} ({w.get('link','')})\n"
+        ctx_lines.append("Hãy dựa trên dữ liệu trên để trả lời user bằng tiếng Việt.")
+        inventory_context = "\n".join(ctx_lines)
 
-        context += "\nHãy kết thúc bằng 1 câu hỏi ngắn để tiếp tục hỗ trợ."
+        # Chuẩn bị lịch sử hội thoại (nếu có)
+        conversation = []
+        if history:
+            conversation.extend(history)
+        conversation.append({"role": "assistant", "content": inventory_context})
+        conversation.append({"role": "user", "content": user_message})
 
-        messages = [
-            {"role": "system", "content": context},
-            {"role": "user", "content": user_message},
-        ]
-        text = self._call_openai(messages, config)
+        try:
+            resp = client.responses.create(
+                model=self.config["model"],
+                instructions=sys_prompt,
+                input=conversation,
+                # temperature=float(self.config.get("temperature", 0.2)),
+                max_output_tokens=int(self.config.get("max_tokens", 600)),
+            )
+            text = resp.output_text or ""
+        except Exception as e:
+            _logger.error("Error calling Responses API (generate_answer): %s", e)
+            text = ""
+
         if not text:
-            text = "Mình đã tìm và gợi ý theo hiểu biết tốt nhất. Bạn cần mình kiểm tra lại theo mã khác không ạ?"
+            text = (
+                "Mình đã xem tồn kho theo truy vấn của bạn như trên. "
+                "Bạn muốn xem chi tiết kho nào, hay mình gợi ý thêm sản phẩm tương đương không ạ?"
+            )
         return text
 
-    # ===== SIMPLE WEB SEARCH PLACEHOLDER =====
-    def _search_web(self, query):
-        # Có thể tích hợp Google CSE/Bing sau này. Hiện trả kết quả mẫu.
-        q = (query or "").lower()
-        return [{
-            "title": f"Tìm {query} trên Shopee",
-            "link": f"https://shopee.vn/search?keyword={query.replace(' ', '%20')}",
-            "price": "Đa dạng",
-            "description": "Kết quả tham khảo",
-        }]
+    # -------- Orchestrator: chạy full pipeline cho 1 message --------
+    def handle_message(self, user_message: str, history=None):
+        """
+        Pipeline mới:
+        - Bước 1: analyze_query (có dùng file_search) -> action + product_codes + warehouse_hint...
+        - Bước 2: nếu action là smalltalk/help/unknown -> trả lời trực tiếp, không cần tra tồn kho.
+        - Bước 3: nếu action = search_product -> _run_inventory_lookup -> generate_answer.
+        """
+        # Bước 1: phân tích truy vấn
+        analysis = self.analyze_query(user_message=user_message)
+        action = analysis.get("action", "search_product")
 
-    # ===== ROUTES =====
+        # smalltalk / help / unknown -> không cần tra tồn kho
+        if action in ("smalltalk", "help", "unknown"):
+            client = self._get_client()
+            sys_prompt = (
+                "Bạn là trợ lý AI thân thiện cho kho hàng HLV.\n"
+                "- Nếu user chào hỏi / smalltalk: trả lời ngắn gọn, tự nhiên.\n"
+                "- Nếu user hỏi cách dùng chatbot: giải thích cách gửi mã, tên sản phẩm, hỏi tồn kho,\n"
+                "  hỏi giá, gõ 'reset' để xoá lịch sử.\n"
+                "- Không cần tra tồn kho khi action không phải 'search_product'.\n"
+            )
+            conversation = []
+            if history:
+                conversation.extend(history)
+            conversation.append({"role": "user", "content": user_message})
+
+            try:
+                resp = client.responses.create(
+                    model=self.config["model"],
+                    instructions=sys_prompt,
+                    input=conversation,
+                    # temperature=float(self.config.get("temperature", 0.3)),
+                    max_output_tokens=int(self.config.get("max_tokens", 400)),
+                )
+                txt = resp.output_text or "Mình có thể giúp bạn tra cứu sản phẩm và tồn kho. Bạn thử gửi mã hoặc tên sản phẩm nhé?"
+            except Exception as e:
+                _logger.error("Error calling Responses API (smalltalk/help): %s", e)
+                txt = "Mình có thể giúp bạn tra cứu sản phẩm và tồn kho. Bạn thử gửi mã hoặc tên sản phẩm nhé?"
+
+            return {
+                "response": txt,
+                "inventory": [],
+                "parsed": analysis,
+                "warehouse": None,
+            }
+
+        # Bước 2: action = search_product -> tra tồn kho thực tế
+        inventory_payload = self._run_inventory_lookup(analysis, limit=20)
+
+        # Bước 3: generate câu trả lời cuối cùng
+        final_text = self.generate_answer(
+            user_message=user_message,
+            analysis=analysis,
+            inventory_payload=inventory_payload,
+            history=history,
+        )
+
+        return {
+            "response": final_text,
+            "inventory": inventory_payload.get("items", []),
+            "parsed": analysis,
+            "warehouse": inventory_payload.get("warehouse"),
+        }
+
+
+# ============================
+# CONTROLLER
+# ============================
+
+class ChatbotController(http.Controller):
+    # ===== CONFIG =====
+    def _get_chatbot_config(self):
+        """Read settings from System Parameters."""
+        param = request.env["ir.config_parameter"].sudo()
+        return {
+            "enabled": param.get_param("website_public_inventory_18.chatbot_enabled", default=False) in (True, "True", "1", "true"),
+            "api_key": param.get_param("website_public_inventory_18.openai_api_key", default=""),
+            # model đã chuyển sang Responses API (ví dụ: gpt-4.1-mini / gpt-5)
+            "model": param.get_param("website_public_inventory_18.openai_model", default="gpt-4.1-mini"),
+            "product_vector_store_id": param.get_param("website_public_inventory_18.product_vector_store_id", ""),
+            "max_tokens": int(param.get_param("website_public_inventory_18.chatbot_max_tokens", default=600)),
+            # "temperature": float(param.get_param("website_public_inventory_18.chatbot_temperature", default=0.2)),
+            "web_search_enabled": param.get_param("website_public_inventory_18.web_search_enabled", default=True) in (True, "True", "1", "true"),
+            "allowed_warehouse_ids": param.get_param("website_public_inventory_18.allowed_warehouse_ids", default=""),
+        }
+
     @http.route('/chatbot/status', type='http', auth='public', methods=['GET'], csrf=False, website=True)
     def chatbot_status(self, **kw):
         cfg = self._get_chatbot_config()
@@ -651,95 +616,88 @@ class ChatbotController(http.Controller):
 
     @http.route('/chatbot/message', type='http', auth='public', methods=['POST'], csrf=False, website=True)
     def chatbot_message(self, **kw):
-        """
-        Flexible input:
-          - JSON: {"message": "..."}
-          - Form data: message=...
-        """
+        """Handle chatbot message with conversation history (agentic version)."""
         try:
-            # ---- parse message ----
+            # Parse message
             if request.httprequest.mimetype == "application/json":
                 try:
                     data = request.jsonrequest or {}
                 except Exception:
                     data = {}
                 user_message = _norm(data.get("message") or "")
-                # nối chữ-số để giảm miss
+                # Ghép chữ + số dính liền (M18 B5 -> M18B5)
                 user_message = re.sub(r"([A-Za-z])\s+(\d)", r"\1\2", user_message)
                 user_message = re.sub(r"(\d)\s+([A-Za-z])", r"\1\2", user_message)
             else:
                 user_message = _norm(request.params.get("message") or kw.get("message") or "")
+
             if not user_message:
-                return request.make_response(json.dumps({"success": False, "error": "Empty message"}),
-                                             headers=[("Content-Type", "application/json")])
+                return request.make_response(
+                    json.dumps({"success": False, "error": "Empty message"}),
+                    headers=[("Content-Type", "application/json")]
+                )
 
             cfg = self._get_chatbot_config()
             if not cfg["enabled"]:
-                return request.make_response(json.dumps({"success": False, "error": "Chatbot is not enabled"}),
-                                             headers=[("Content-Type", "application/json")])
+                return request.make_response(
+                    json.dumps({"success": False, "error": "Chatbot is not enabled"}),
+                    headers=[("Content-Type", "application/json")]
+                )
             if not cfg["api_key"]:
-                # Cho phép chạy không AI? Ở đây yêu cầu AI cho smart-search.
-                return request.make_response(json.dumps({"success": False, "error": "OpenAI API key not configured"}),
-                                             headers=[("Content-Type", "application/json")])
+                return request.make_response(
+                    json.dumps({"success": False, "error": "OpenAI API key not configured"}),
+                    headers=[("Content-Type", "application/json")]
+                )
 
-            # ---- parse local hint ----
-            ent_local = self._extract_entities_local(user_message)
-            wh = self._find_warehouse(ent_local.get("warehouse_hint")) if ent_local.get("warehouse_hint") else None
+            # Reset command
+            if user_message.strip().lower() in {"reset", "xoa", "clear"}:
+                request.session["chatbot_history"] = []
+                payload = {
+                    "success": True,
+                    "response": "Đã xoá lịch sử cuộc trò chuyện. Mình có thể giúp gì tiếp cho bạn?",
+                    "inventory_results": [],
+                    "web_results": [],
+                    "parsed": {},
+                    "warehouse": None,
+                }
+                return request.make_response(json.dumps(payload), headers=[("Content-Type", "application/json")])
 
-            # ---- AI-assisted product search ----
-            products = self._ai_smart_product_search(user_message, limit=20)
+            # Conversation history (giữ tối đa 10 message gần nhất)
+            session = request.session
+            history = session.get("chatbot_history", [])
+            if len(history) > 10:
+                history = history[-10:]
+            history.append({"role": "user", "content": user_message})
 
-            # ---- Get stock per warehouse ----
-            inv = []
-            web_results = []
-            if products:
-                ids = [p["id"] for p in products]
-                stock_map = self._get_stock_by_warehouse(ids, warehouse=wh)
-                for p in products:
-                    per_wh = stock_map.get(p["id"], {})
-                    qty_total = sum(v for v in per_wh.values()) if per_wh else 0.0
-                    inv.append({
-                        "id": p["id"],
-                        "name": p["name"],
-                        "default_code": p["default_code"],
-                        "uom": p["uom"],
-                        "list_price": p["list_price"],
-                        "commercial_price": p["commercial_price"],
-                        "qty_available": qty_total,
-                        "by_warehouse": per_wh,
-                        "is_combo": p.get("is_combo", False),
-                        "components": p.get("components", []),
-                    })
-            else:
-                if cfg["web_search_enabled"]:
-                    web_results = self._search_web(user_message)
+            # Dùng Agent mới
+            agent = AIChatAgent(request.env, cfg)
+            result = agent.handle_message(user_message=user_message, history=history)
 
-            # ---- AI final response text ----
-            parsed = {
-                "sku_fragments": ent_local.get("sku_fragments"),
-                "warehouse_hint": ent_local.get("warehouse_hint"),
-                "quantity": ent_local.get("quantity"),
-            }
-            ai_text = self._generate_ai_response(
-                user_message=user_message,
-                inventory_results=inv,
-                web_results=web_results,
-                config=cfg,
-                parsed_entities=parsed,
-                warehouse_code=(wh.code if wh else None),
-            )
+            ai_text = result.get("response")
+            inv = result.get("inventory") or []
+            parsed = result.get("parsed") or {}
+            wh_code = result.get("warehouse")
+
+            # Lưu history
+            if ai_text:
+                history.append({"role": "assistant", "content": ai_text})
+            if len(history) > 10:
+                history = history[-10:]
+            session["chatbot_history"] = history
 
             payload = {
                 "success": True,
                 "response": ai_text,
                 "inventory_results": inv,
-                "web_results": web_results if cfg["web_search_enabled"] else [],
+                "web_results": [],  # sau này nếu dùng web_search thật thì thêm vào
                 "parsed": parsed,
-                "warehouse": (wh.code if wh else None),
+                "warehouse": wh_code,
             }
             return request.make_response(json.dumps(payload), headers=[("Content-Type", "application/json")])
 
         except Exception as e:
             _logger.exception("Chatbot error")
-            return request.make_response(json.dumps({"success": False, "error": str(e)}),
-                                         headers=[("Content-Type", "application/json")])
+            return request.make_response(
+                json.dumps({"success": False, "error": str(e)}),
+                headers=[("Content-Type", "application/json")]
+            )
