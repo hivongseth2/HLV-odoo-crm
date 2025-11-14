@@ -494,31 +494,34 @@ class AIChatAgent(object):
     # -------- Orchestrator: chạy full pipeline cho 1 message --------
     def handle_message(self, user_message: str, history=None):
         """
-        Agent chính:
-        - Gọi Responses API với tools.
-        - Nếu model trả lời luôn -> trả plain text.
-        - Nếu model gọi function 'search_inventory' -> tự chạy tool + gọi lại Responses để soạn câu trả lời cuối.
+        Agent chính (phiên bản đơn giản, tránh lỗi call_id):
+        - Call 1: dùng tools để model quyết định có gọi 'search_inventory' không.
+        - Nếu không dùng tool: trả luôn output_text.
+        - Nếu có function_call: backend chạy tool, rồi Call 2 cho model soạn câu trả lời từ dữ liệu DB.
         """
         from openai import OpenAI
         import json as _json
 
         client = self._get_client()
 
+        # Prompt chung cho cả 2 lượt gọi
         sys_prompt = (
             "Bạn là trợ lý AI cho kho hàng HLV.\n"
             "- Khi cần tra cứu sản phẩm hoặc tồn kho, HÃY dùng tool 'search_inventory' với query phù hợp.\n"
             "- Nếu chỉ chào hỏi, smalltalk, giải thích cách dùng… thì trả lời trực tiếp, KHÔNG cần gọi tool.\n"
-            "- Khi đã có dữ liệu từ tool, hãy giải thích rõ ràng, liệt kê sản phẩm dạng 1., 2., 3., "
-            "bôi đậm tên **Tên sản phẩm**, mã in nghiêng _(Mã: ...)_ và hiển thị tồn theo kho.\n"
+            "- Khi đã có dữ liệu từ tool hoặc từ context, hãy giải thích rõ ràng, "
+            "liệt kê sản phẩm dạng 1., 2., 3., bôi đậm **Tên sản phẩm**, mã in nghiêng _(Mã: ...)_ "
+            "và hiển thị tồn theo kho.\n"
+            "- Luôn kết thúc bằng một câu hỏi ngắn để tiếp tục hỗ trợ.\n"
         )
 
-        # === build context messages từ history ===
+        # === Build context từ history ===
         messages = []
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": user_message})
 
-        # === CALL 1: cho model quyết định có gọi tool không ===
+        # === CALL 1: Model quyết định dùng tool hay không ===
         first = client.responses.create(
             model=self.config["model"],
             instructions=sys_prompt,
@@ -528,26 +531,19 @@ class AIChatAgent(object):
             max_output_tokens=int(self.config.get("max_tokens", 400)),
         )
 
-        # Nếu model đã trả lời text luôn (không dùng tool)
-        if first.output_text and not any(
-            getattr(item, "type", "") == "function_call" for item in getattr(first, "output", [])
-        ):
-            return {
-                "response": first.output_text,
-                "inventory_results": [],
-                "parsed": {},
-                "warehouse": None,
-            }
-
-        # Tìm function_call trong output
-        tool_calls = []
+        # Nếu model đã trả lời text luôn (không gọi tool)
+        has_tool_call = False
+        tool_call_item = None
         for item in getattr(first, "output", []):
-            if getattr(item, "type", "") == "function_call":
-                tool_calls.append(item)
+            # Tùy SDK, có thể là 'function_call' hoặc 'tool_call'
+            if getattr(item, "type", "") in ("function_call", "tool_call"):
+                has_tool_call = True
+                tool_call_item = item
+                break
 
-        if not tool_calls:
-            # fallback an toàn
-            txt = first.output_text or "Mình chưa rõ ý bạn. Bạn có thể gửi mã hoặc tên sản phẩm cụ thể hơn không?"
+        if not has_tool_call:
+            # Không dùng tool → trả luôn output_text
+            txt = first.output_text or "Mình chưa rõ ý bạn. Bạn có thể gửi mã hoặc tên sản phẩm rõ hơn không?"
             return {
                 "response": txt,
                 "inventory_results": [],
@@ -555,10 +551,9 @@ class AIChatAgent(object):
                 "warehouse": None,
             }
 
-        # Hiện tại mình giả định chỉ 1 tool_call
-        tc = tool_calls[0]
-        fn_name = getattr(tc, "name", "")
-        raw_args = getattr(tc, "arguments", "{}")
+        # === Có function_call: chạy tool ở backend ===
+        fn_name = getattr(tool_call_item, "name", "")
+        raw_args = getattr(tool_call_item, "arguments", "{}")
         try:
             args = _json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
         except Exception:
@@ -572,40 +567,39 @@ class AIChatAgent(object):
             limit = int(args.get("limit") or 20)
             inventory_payload = self._search_inventory_tool(query, warehouse_hint=wh_hint, limit=limit)
 
-        # === CALL 2: đưa kết quả tool cho model, nhờ nó soạn câu trả lời ===
-        # Tạo item function_call_output tương ứng với call_id
-        call_id = getattr(tc, "id", "call_1")
+        # === CALL 2: Gửi kết quả tool vào context, nhờ model soạn câu trả lời ===
+        # Chuẩn bị block context về dữ liệu DB
+        ctx_lines = []
+        ctx_lines.append("DỮ LIỆU TRA TỪ DATABASE (Odoo):")
+        ctx_lines.append(_json.dumps(inventory_payload, ensure_ascii=False, indent=2))
+        ctx_block = "\n".join(ctx_lines)
 
-        tool_output_item = {
-            "type": "function_call_output",
-            "call_id": call_id,
-            "output": _json.dumps(inventory_payload, ensure_ascii=False),
-        }
-
-        # input mới = history + user + function_call + function_call_output
         second_input = []
         if history:
             second_input.extend(history)
-        second_input.append({"role": "user", "content": user_message})
-        # đưa lại function_call như 1 item input
+        # Cho model biết đây là kết quả tra kho
         second_input.append({
-            "type": "function_call",
-            "name": fn_name,
-            "id": call_id,
-            "arguments": raw_args,
+            "role": "assistant",
+            "content": ctx_block,
         })
-        second_input.append(tool_output_item)
+        # Và đây là câu hỏi ban đầu của user
+        second_input.append({
+            "role": "user",
+            "content": user_message,
+        })
 
         second = client.responses.create(
             model=self.config["model"],
             instructions=sys_prompt,
             input=second_input,
+            # lần 2 không cần tools nữa, chỉ cần NLG
             temperature=float(self.config.get("temperature", 0.2)),
             max_output_tokens=int(self.config.get("max_tokens", 600)),
         )
 
         final_text = second.output_text or (
-            "Mình đã tra tồn kho theo thông tin bạn gửi. Bạn cần gợi ý thêm mẫu tương đương không ạ?"
+            "Mình đã tra tồn kho theo thông tin bạn gửi. "
+            "Bạn cần gợi ý thêm mẫu tương đương không ạ?"
         )
 
         return {
@@ -614,8 +608,6 @@ class AIChatAgent(object):
             "parsed": {"tool": fn_name, "args": args},
             "warehouse": inventory_payload.get("warehouse"),
         }
-
-
 
 # ============================
 # CONTROLLER
