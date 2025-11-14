@@ -161,6 +161,7 @@ class AIChatAgent(object):
                 }
             ]
 
+
         try:
             resp = client.responses.create(
                 model=self.config["model"],
@@ -172,23 +173,28 @@ class AIChatAgent(object):
                 include=["output[*].file_search_call.search_results"],
             )
 
+            # ====== DEBUG: xem model có gọi file_search hay không ======
             try:
                 for i, item in enumerate(getattr(resp, "output", []) or []):
                     if getattr(item, "type", "") == "file_search_call":
-                        fs = item.file_search_call
-                        # query mà model gửi lên vector store
-                        q = getattr(fs, "query", None)
-                        # top kết quả kèm đoạn text
+                        # chuyển về dict để tránh AttributeError
+                        data = item.model_dump()
+
+                        # trong data sẽ có key "file_search_call"
+                        fs = data.get("file_search_call", {}) or data
+
+                        q = fs.get("query")
                         results = []
-                        for r in getattr(fs, "search_results", []) or []:
-                            doc_id = getattr(r, "document", {}).get("id", None)
-                            score = getattr(r, "score", None)
-                            # mỗi result có list "content", mình chỉ lấy đoạn text đầu tiên cho dễ nhìn
+                        for r in fs.get("search_results", []) or []:
+                            doc = r.get("document") or {}
+                            doc_id = doc.get("id")
+                            score = r.get("score")
+
                             txt = ""
-                            if getattr(r, "content", None):
-                                c0 = r.content[0]
-                                if getattr(c0, "type", "") == "text":
-                                    txt = c0.text[:120]  # cắt 120 ký tự cho log
+                            contents = r.get("content") or []
+                            if contents and contents[0].get("type") == "text":
+                                txt = (contents[0].get("text") or "")[:120]
+
                             results.append((doc_id, score, txt))
 
                         _logger.info(
@@ -200,6 +206,7 @@ class AIChatAgent(object):
 
             raw = resp.output_text or "{}"
             parsed = _safe_json_from_text(raw)
+
         except Exception as e:
             _logger.error("Error calling Responses API (analyze_query): %s", e)
             parsed = {}
