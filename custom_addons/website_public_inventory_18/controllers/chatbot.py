@@ -118,21 +118,22 @@ class AIChatAgent(object):
         )
 
         # Chuẩn bị tools: chỉ dùng file_search ở bước phân tích
-        tools = []
+        tools = None
         if vector_store_id:
-            tools.append({
-                "type": "file_search",
-                "file_search": {
+            tools = [
+                {
+                    "type": "file_search",
                     "vector_store_ids": [vector_store_id],
-                },
-            })
+                }
+            ]
 
         try:
             resp = client.responses.create(
                 model=self.config["model"],
                 instructions=instructions,
                 input=user_message,
-                tools=tools if tools else None,
+                # tools=tools if tools else None,
+                **({"tools": tools} if tools else {}),
                 text={"format": schema},
                 temperature=0,
                 max_output_tokens=int(self.config.get("max_tokens", 400)),
