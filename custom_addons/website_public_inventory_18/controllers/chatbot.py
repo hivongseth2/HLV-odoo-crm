@@ -143,6 +143,119 @@ class AIChatAgent(object):
 
         return parsed
 
+
+    #-- hàm để model goi
+    def _search_inventory_tool(self, query: str, warehouse_hint: str = None, limit: int = 20):
+        """
+        Tool: tra cứu sản phẩm + tồn kho trong Odoo.
+        Dùng cho function calling 'search_inventory'.
+        """
+        Product = self.env["product.product"].sudo()
+
+        q = (query or "").strip()
+        if not q:
+            return {"query": query, "warehouse": None, "items": []}
+
+        # tách theo dấu phẩy để hỗ trợ nhiều mã 1 lúc: fid2,fpd3,m18b5
+        raw_codes = [c.strip() for c in q.replace(";", ",").split(",") if c.strip()]
+        codes = list(dict.fromkeys(raw_codes)) if raw_codes else []
+
+        # tìm kho gợi ý
+        wh = self._find_warehouse(warehouse_hint) if warehouse_hint else None
+
+        # ===== search từng mã riêng rồi gộp =====
+        products = Product.browse()
+        if codes:
+            per_code_limit = max(3, limit // max(1, len(codes)))
+            for code in codes:
+                like_code = "%%%s%%" % code.replace(" ", "%")
+                sub_domain = [
+                    "|", "|",
+                    ("default_code", "ilike", code),
+                    ("barcode", "ilike", code),
+                    ("name", "ilike", like_code),
+                ]
+                res = Product.search(sub_domain, limit=per_code_limit)
+                products |= res
+                if len(products) >= limit:
+                    break
+
+        # nếu không có codes (vd user gõ "khoan bê tông milwaukee m18") thì search full text
+        if not products and q:
+            like_name = "%%%s%%" % q.replace(" ", "%")
+            domain = [
+                "|", "|",
+                ("default_code", "ilike", q),
+                ("barcode", "ilike", q),
+                ("name", "ilike", like_name),
+            ]
+            products = Product.search(domain, limit=limit)
+
+        if not products:
+            return {"query": query, "warehouse": None, "items": []}
+
+        # lấy tồn kho theo kho
+        stock_map = self._get_stock_by_warehouse(products.ids, warehouse=wh)
+        items = []
+
+        for p in products:
+            wh_data = stock_map.get(p.id, {}) or {}
+            total_onhand = sum(v.get("onhand", 0.0) for v in wh_data.values())
+            total_reserved = sum(v.get("reserved", 0.0) for v in wh_data.values())
+            total_available = sum(v.get("available", 0.0) for v in wh_data.values())
+
+            items.append({
+                "id": p.id,
+                "name": p.name,
+                "default_code": p.default_code or "",
+                "uom": p.uom_id.name if p.uom_id else "",
+                "list_price": p.list_price,
+                "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
+                "qty_onhand": total_onhand,
+                "qty_reserved": total_reserved,
+                "qty_available": total_available,
+                "by_warehouse": {k: float(v.get("available", 0.0)) for k, v in wh_data.items()},
+            })
+
+        return {
+            "query": query,
+            "warehouse": wh.code if wh else None,
+            "items": items,
+        }
+        
+        
+        
+        
+        
+    def _get_tools_def(self):
+            return [
+                {
+                    "type": "function",
+                    "name": "search_inventory",
+                    "description": "Tra cứu sản phẩm + tồn kho trong Odoo theo mã hoặc tên.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Chuỗi user nhập, có thể chứa 1 hoặc nhiều mã, vd: 'fid2,fpd3,m18b5'",
+                            },
+                            "warehouse_hint": {
+                                "type": ["string", "null"],
+                                "description": "Mã kho gợi ý: TSN, KBC, TSNSR, KHD nếu có.",
+                            },
+                            "limit": {
+                                "type": "number",
+                                "description": "Số lượng sản phẩm tối đa cần trả về.",
+                            },
+                        },
+                        "required": ["query"],
+                        "additionalProperties": False,
+                    },
+                }
+            ]
+
+
     # -------- STEP 2a: Map kho từ hint --------
     def _find_warehouse(self, hint):
         """Map text hint → stock.warehouse record (code)."""
@@ -380,82 +493,128 @@ class AIChatAgent(object):
 
     # -------- Orchestrator: chạy full pipeline cho 1 message --------
     def handle_message(self, user_message: str, history=None):
-        parsed = self.analyze_query(user_message)
-        action = parsed.get("action") or "search_product"
+        """
+        Agent chính:
+        - Gọi Responses API với tools.
+        - Nếu model trả lời luôn -> trả plain text.
+        - Nếu model gọi function 'search_inventory' -> tự chạy tool + gọi lại Responses để soạn câu trả lời cuối.
+        """
+        from openai import OpenAI
+        import json as _json
 
-        # Nếu chỉ smalltalk / help → không cần động tới DB
-        if action in ("smalltalk", "help", "unknown"):
-            # Gọi 1 lần Responses để trả lời tự do
-            client = self._get_client()
-            instructions = (
-                "Bạn là trợ lý AI thân thiện của kho HLV. "
-                "Nếu user chỉ chào hỏi hoặc hỏi cách dùng, hãy trả lời ngắn gọn, dễ hiểu."
-            )
-            try:
-                resp = client.responses.create(
-                    model=self.config["model"],
-                    instructions=instructions,
-                    input=user_message,
-                    temperature=float(self.config.get("temperature", 0.4)),
-                    max_output_tokens=int(self.config.get("max_tokens", 300)),
-                )
-                ai_text = resp.output_text or "Chào bạn, mình là trợ lý kho HLV. Bạn cần tra cứu mã hàng hay tồn kho nào ạ?"
-            except Exception as e:
-                _logger.error("Error calling Responses API (smalltalk/help): %s", e)
-                ai_text = "Chào bạn, hiện mình đang gặp chút sự cố kết nối AI. Bạn có thể thử lại sau nhé."
+        client = self._get_client()
+
+        sys_prompt = (
+            "Bạn là trợ lý AI cho kho hàng HLV.\n"
+            "- Khi cần tra cứu sản phẩm hoặc tồn kho, HÃY dùng tool 'search_inventory' với query phù hợp.\n"
+            "- Nếu chỉ chào hỏi, smalltalk, giải thích cách dùng… thì trả lời trực tiếp, KHÔNG cần gọi tool.\n"
+            "- Khi đã có dữ liệu từ tool, hãy giải thích rõ ràng, liệt kê sản phẩm dạng 1., 2., 3., "
+            "bôi đậm tên **Tên sản phẩm**, mã in nghiêng _(Mã: ...)_ và hiển thị tồn theo kho.\n"
+        )
+
+        # === build context messages từ history ===
+        messages = []
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": user_message})
+
+        # === CALL 1: cho model quyết định có gọi tool không ===
+        first = client.responses.create(
+            model=self.config["model"],
+            instructions=sys_prompt,
+            input=messages,
+            tools=self._get_tools_def(),
+            temperature=float(self.config.get("temperature", 0.2)),
+            max_output_tokens=int(self.config.get("max_tokens", 400)),
+        )
+
+        # Nếu model đã trả lời text luôn (không dùng tool)
+        if first.output_text and not any(
+            getattr(item, "type", "") == "function_call" for item in getattr(first, "output", [])
+        ):
             return {
-                "response": ai_text,
-                "inventory": [],
-                "parsed": parsed,
+                "response": first.output_text,
+                "inventory_results": [],
+                "parsed": {},
                 "warehouse": None,
             }
 
-        # action = search_product
-        warehouse_hint = parsed.get("warehouse_hint")
-        wh = self._find_warehouse(warehouse_hint) if warehouse_hint else None
+        # Tìm function_call trong output
+        tool_calls = []
+        for item in getattr(first, "output", []):
+            if getattr(item, "type", "") == "function_call":
+                tool_calls.append(item)
 
-        products = self.search_products(parsed, limit=20)
-        inv_list = []
-        stock_map = {}
+        if not tool_calls:
+            # fallback an toàn
+            txt = first.output_text or "Mình chưa rõ ý bạn. Bạn có thể gửi mã hoặc tên sản phẩm cụ thể hơn không?"
+            return {
+                "response": txt,
+                "inventory_results": [],
+                "parsed": {},
+                "warehouse": None,
+            }
 
-        if products:
-            ids = products.ids
-            stock_map = self._get_stock_by_warehouse(ids, warehouse=wh)
+        # Hiện tại mình giả định chỉ 1 tool_call
+        tc = tool_calls[0]
+        fn_name = getattr(tc, "name", "")
+        raw_args = getattr(tc, "arguments", "{}")
+        try:
+            args = _json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+        except Exception:
+            args = {}
 
-            for p in products:
-                wh_data = stock_map.get(p.id, {}) or {}
-                total_onhand = sum(v.get("onhand", 0.0) for v in wh_data.values())
-                total_reserved = sum(v.get("reserved", 0.0) for v in wh_data.values())
-                total_available = sum(v.get("available", 0.0) for v in wh_data.values())
+        inventory_payload = {"query": "", "warehouse": None, "items": []}
 
-                inv_list.append({
-                    "id": p.id,
-                    "name": p.name,
-                    "default_code": p.default_code or "",
-                    "uom": p.uom_id.name if p.uom_id else "",
-                    "list_price": p.list_price,
-                    "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
-                    "qty_onhand": total_onhand,
-                    "qty_reserved": total_reserved,
-                    "qty_available": total_available,
-                    "by_warehouse": {k: float(v.get("available", 0.0)) for k, v in wh_data.items()},
-                })
+        if fn_name == "search_inventory":
+            query = args.get("query") or user_message
+            wh_hint = args.get("warehouse_hint")
+            limit = int(args.get("limit") or 20)
+            inventory_payload = self._search_inventory_tool(query, warehouse_hint=wh_hint, limit=limit)
 
-        ai_text = self.generate_answer(
-            user_message=user_message,
-            products=products,
-            stock_map=stock_map,
-            parsed=parsed,
-            warehouse=wh,
-            history=history,
+        # === CALL 2: đưa kết quả tool cho model, nhờ nó soạn câu trả lời ===
+        # Tạo item function_call_output tương ứng với call_id
+        call_id = getattr(tc, "id", "call_1")
+
+        tool_output_item = {
+            "type": "function_call_output",
+            "call_id": call_id,
+            "output": _json.dumps(inventory_payload, ensure_ascii=False),
+        }
+
+        # input mới = history + user + function_call + function_call_output
+        second_input = []
+        if history:
+            second_input.extend(history)
+        second_input.append({"role": "user", "content": user_message})
+        # đưa lại function_call như 1 item input
+        second_input.append({
+            "type": "function_call",
+            "name": fn_name,
+            "id": call_id,
+            "arguments": raw_args,
+        })
+        second_input.append(tool_output_item)
+
+        second = client.responses.create(
+            model=self.config["model"],
+            instructions=sys_prompt,
+            input=second_input,
+            temperature=float(self.config.get("temperature", 0.2)),
+            max_output_tokens=int(self.config.get("max_tokens", 600)),
+        )
+
+        final_text = second.output_text or (
+            "Mình đã tra tồn kho theo thông tin bạn gửi. Bạn cần gợi ý thêm mẫu tương đương không ạ?"
         )
 
         return {
-            "response": ai_text,
-            "inventory": inv_list,
-            "parsed": parsed,
-            "warehouse": wh.code if wh else None,
+            "response": final_text,
+            "inventory_results": inventory_payload.get("items", []),
+            "parsed": {"tool": fn_name, "args": args},
+            "warehouse": inventory_payload.get("warehouse"),
         }
+
 
 
 # ============================
