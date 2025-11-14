@@ -203,14 +203,31 @@ class WordPressOrderWebhook(http.Controller):
     def _build_order_message(self, data):
         """
         Tạo nội dung tin nhắn từ dữ liệu đơn hàng
-        
+            
         :param data: Dict chứa thông tin đơn hàng
         :return: String message
         """
-        message = "Đơn hàng mới (hoanglongvu.com)\n"
+
+        # Lấy trạng thái & lý do hủy (nếu có)
+        status = (data.get('order_status') or '').strip().lower()
+        cancel_reason = (data.get('cancel_reason') or '').strip()
+
+        # Header theo trạng thái đơn
+        if status == 'cancelled':
+            # === ĐƠN HỦY ===
+            message = "HỦY ĐƠN HÀNG (hoanglongvu.com)\n"
+            if cancel_reason:
+                message += f"*LÝ DO:* {cancel_reason}\n\n"
+            else:
+                message += "*LÝ DO:* (không có ghi chú)\n\n"
+        else:
+            # === ĐƠN BÌNH THƯỜNG (MỚI / ĐANG XỬ LÝ / HOÀN THÀNH) ===
+            message = "Đơn hàng mới (hoanglongvu.com)\n"
+
+        # 👤 Khách hàng
         message += f"👤 Khách hàng: {data.get('customer_name', 'Không rõ')}\n"
-        
-        # Danh sách sản phẩm
+
+        # 📦 Sản phẩm
         products = data.get('products', [])
         if products:
             message += "📦 Sản phẩm:\n"
@@ -218,21 +235,25 @@ class WordPressOrderWebhook(http.Controller):
                 name = product.get('name', 'Unknown')
                 quantity = product.get('quantity', 0)
                 message += f"• {name}    SL: {quantity}\n"
-        
-        # Thông tin khác
+
+        # 🏠 Địa chỉ
         if data.get('customer_address'):
             message += f"🏠 Địa chỉ: {data['customer_address']}\n"
-        
+
+        # 📞 SĐT
         if data.get('customer_phone'):
             message += f"📞 SĐT: {data['customer_phone']}\n"
-        
+
+        # 📧 Email
         if data.get('customer_email'):
             message += f"📧 Email: {data['customer_email']}\n"
-        
+
+        # 💰 Tổng
         if data.get('total'):
             message += f"💰 Tổng: {data['total']}"
-        
+
         return message
+
     
     def _send_zalo_message(self, access_token, user_id, message_text):
         """
