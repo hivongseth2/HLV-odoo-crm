@@ -172,12 +172,34 @@ class AIChatAgent(object):
                 include=["output[*].file_search_call.search_results"],
             )
 
-            raw = resp.output_text or "{}"
             try:
-                parsed = _safe_json_from_text(raw)
+                for i, item in enumerate(getattr(resp, "output", []) or []):
+                    if getattr(item, "type", "") == "file_search_call":
+                        fs = item.file_search_call
+                        # query mà model gửi lên vector store
+                        q = getattr(fs, "query", None)
+                        # top kết quả kèm đoạn text
+                        results = []
+                        for r in getattr(fs, "search_results", []) or []:
+                            doc_id = getattr(r, "document", {}).get("id", None)
+                            score = getattr(r, "score", None)
+                            # mỗi result có list "content", mình chỉ lấy đoạn text đầu tiên cho dễ nhìn
+                            txt = ""
+                            if getattr(r, "content", None):
+                                c0 = r.content[0]
+                                if getattr(c0, "type", "") == "text":
+                                    txt = c0.text[:120]  # cắt 120 ký tự cho log
+                            results.append((doc_id, score, txt))
+
+                        _logger.info(
+                            "AIChatAgent.file_search_call[%s]: query=%r, results=%s",
+                            i, q, results,
+                        )
             except Exception:
-                _logger.warning("Cannot parse query_analysis JSON, raw=%s", raw)
-                parsed = {}
+                _logger.exception("Cannot inspect file_search_call results")
+
+            raw = resp.output_text or "{}"
+            parsed = _safe_json_from_text(raw)
         except Exception as e:
             _logger.error("Error calling Responses API (analyze_query): %s", e)
             parsed = {}
