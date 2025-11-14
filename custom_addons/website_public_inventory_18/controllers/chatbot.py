@@ -86,7 +86,14 @@ class AIChatAgent(object):
                         "type": "boolean"
                     }
                 },
-                "required": ["action", "normalized_query", "sku_candidates"],
+                "required": [
+                    "action",
+                    "normalized_query",
+                    "sku_candidates",
+                    "warehouse_hint",
+                    "quantity",
+                    "allow_web_search",
+                ],
                 "additionalProperties": False,
             },
         }
