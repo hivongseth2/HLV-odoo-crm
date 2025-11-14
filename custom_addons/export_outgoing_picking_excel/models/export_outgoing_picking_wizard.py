@@ -3,6 +3,7 @@ from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 import base64
 import datetime
+import json
 from io import BytesIO
 
 try:
@@ -544,6 +545,123 @@ class PickingExportWizard(models.TransientModel):
             "res_id": self.id,
         })
 
+        return {
+            "type": "ir.actions.act_url",
+            "url": f"/web/content/{attachment.id}?download=true",
+            "target": "self",
+        }
+
+    def _get_json_data(self, picking):
+        """
+        Lấy dữ liệu JSON: mã đơn hàng và dict sản phẩm với số lượng
+        Trả về dict: {'ma_don_hang': 'SO001', 'san_pham': {'PROD001': 10.0, 'PROD002': 5.0}}
+        """
+        so = self._find_sale_order(picking.move_ids_without_package[0] if picking.move_ids_without_package else None, picking)
+        
+        # Mã đơn hàng: ưu tiên sale order name, sau đó là picking origin
+        sale_name = so.name if so else (picking.origin or picking.name or "")
+        
+        # Dict để lưu sản phẩm và số lượng
+        san_pham_dict = {}
+        
+        # Xử lý từng move line hoặc move
+        if picking.move_line_ids:
+            for ml in picking.move_line_ids:
+                prod = ml.product_id
+                if not prod:
+                    continue
+                
+                product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
+                qty = ml.qty_done or 0.0
+                
+                if product_code and qty > 0:
+                    # Cộng dồn số lượng nếu sản phẩm đã có
+                    if product_code in san_pham_dict:
+                        san_pham_dict[product_code] += qty
+                    else:
+                        san_pham_dict[product_code] = qty
+        else:
+            for mv in picking.move_ids_without_package:
+                prod = mv.product_id
+                if not prod:
+                    continue
+                
+                product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
+                qty = mv.qty_done if hasattr(mv, 'qty_done') else (mv.product_uom_qty or 0.0)
+                
+                if product_code and qty > 0:
+                    # Cộng dồn số lượng nếu sản phẩm đã có
+                    if product_code in san_pham_dict:
+                        san_pham_dict[product_code] += qty
+                    else:
+                        san_pham_dict[product_code] = qty
+        
+        # Chỉ trả về nếu có sản phẩm
+        if san_pham_dict:
+            return {
+                'ma_don_hang': sale_name,
+                'san_pham': san_pham_dict
+            }
+        return None
+
+    def action_export_json(self):
+        """
+        Xuất dữ liệu ra file JSON với format nhóm theo mã đơn hàng:
+        - mã đơn hàng
+        - san_pham: dict chứa tất cả sản phẩm và số lượng trong đơn hàng đó
+        """
+        self.ensure_one()
+        
+        pickings = self.env["stock.picking"].sudo().search(self._domain(), order="scheduled_date asc, id asc")
+        if not pickings:
+            raise UserError(_("Không tìm thấy phiếu xuất kho nào trong khoảng ngày đã chọn."))
+        
+        # Dict để nhóm theo mã đơn hàng
+        orders_dict = {}
+        
+        # Thu thập dữ liệu từ tất cả pickings
+        for picking in pickings:
+            order_data = self._get_json_data(picking)
+            if not order_data:
+                continue
+            
+            ma_don_hang = order_data['ma_don_hang']
+            san_pham = order_data['san_pham']
+            
+            # Nếu đơn hàng đã tồn tại, cộng dồn sản phẩm
+            if ma_don_hang in orders_dict:
+                for product_code, qty in san_pham.items():
+                    if product_code in orders_dict[ma_don_hang]['san_pham']:
+                        orders_dict[ma_don_hang]['san_pham'][product_code] += qty
+                    else:
+                        orders_dict[ma_don_hang]['san_pham'][product_code] = qty
+            else:
+                orders_dict[ma_don_hang] = {
+                    'ma_don_hang': ma_don_hang,
+                    'san_pham': san_pham.copy()
+                }
+        
+        # Chuyển thành list
+        all_rows = list(orders_dict.values())
+        
+        if not all_rows:
+            raise UserError(_("Không có dữ liệu chi tiết để xuất."))
+        
+        # Chuyển đổi sang JSON
+        json_data = json.dumps(all_rows, ensure_ascii=False, indent=2)
+        json_bytes = json_data.encode('utf-8')
+        
+        # Tạo attachment
+        filename = f"Xuat_ban_hang_hoa_{self.date_from}_{self.date_to}.json"
+        attachment = self.env["ir.attachment"].sudo().create({
+            "name": filename,
+            "type": "binary",
+            "mimetype": "application/json",
+            "datas": base64.b64encode(json_bytes),
+            "res_model": "picking.export.wizard",
+            "res_id": self.id,
+        })
+        
         return {
             "type": "ir.actions.act_url",
             "url": f"/web/content/{attachment.id}?download=true",
