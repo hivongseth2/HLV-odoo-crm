@@ -143,7 +143,7 @@ class AIChatAgent(object):
                 # tools=tools if tools else None,
                 **({"tools": tools} if tools else {}),
                 text={"format": schema},
-                temperature=0,
+                # temperature=0,
                 max_output_tokens=int(self.config.get("max_tokens", 400)),
             )
             raw = resp.output_text or "{}"
@@ -447,7 +447,7 @@ class AIChatAgent(object):
                 model=self.config["model"],
                 instructions=sys_prompt,
                 input=conversation,
-                temperature=float(self.config.get("temperature", 0.2)),
+                # temperature=float(self.config.get("temperature", 0.2)),
                 max_output_tokens=int(self.config.get("max_tokens", 600)),
             )
             text = resp.output_text or ""
@@ -494,7 +494,7 @@ class AIChatAgent(object):
                     model=self.config["model"],
                     instructions=sys_prompt,
                     input=conversation,
-                    temperature=float(self.config.get("temperature", 0.3)),
+                    # temperature=float(self.config.get("temperature", 0.3)),
                     max_output_tokens=int(self.config.get("max_tokens", 400)),
                 )
                 txt = resp.output_text or "Mình có thể giúp bạn tra cứu sản phẩm và tồn kho. Bạn thử gửi mã hoặc tên sản phẩm nhé?"
@@ -544,7 +544,7 @@ class ChatbotController(http.Controller):
             "model": param.get_param("website_public_inventory_18.openai_model", default="gpt-4.1-mini"),
             "product_vector_store_id": param.get_param("website_public_inventory_18.product_vector_store_id", ""),
             "max_tokens": int(param.get_param("website_public_inventory_18.chatbot_max_tokens", default=600)),
-            "temperature": float(param.get_param("website_public_inventory_18.chatbot_temperature", default=0.2)),
+            # "temperature": float(param.get_param("website_public_inventory_18.chatbot_temperature", default=0.2)),
             "web_search_enabled": param.get_param("website_public_inventory_18.web_search_enabled", default=True) in (True, "True", "1", "true"),
             "allowed_warehouse_ids": param.get_param("website_public_inventory_18.allowed_warehouse_ids", default=""),
         }
