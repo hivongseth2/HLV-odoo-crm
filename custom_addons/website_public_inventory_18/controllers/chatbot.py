@@ -5,7 +5,6 @@ import logging
 
 from odoo import http
 from odoo.http import request
-from odoo.osv import expression
 
 _logger = logging.getLogger(__name__)
 
@@ -20,14 +19,15 @@ def _norm(s: str) -> str:
 
 
 # ============================
-# AI AGENT (Responses API + Odoo)
+# AI AGENT (Responses API + Vector Store + Odoo)
 # ============================
 
 class AIChatAgent(object):
     """
-    Agent AI cho kho HLV:
-    - Bước 1: Dùng Responses API + Structured Output để phân tích truy vấn.
-    - Bước 2: Dùng Odoo ORM để search sản phẩm, lấy tồn kho.
+    Agent AI cho kho HLV (luồng mới):
+    - Bước 1: Dùng Responses API + file_search (vector store product) để phân tích truy vấn,
+      tìm ra action + danh sách mã sản phẩm nên kiểm tra.
+    - Bước 2: Dùng Odoo ORM để lấy tồn kho + giá theo các mã đó.
     - Bước 3: Dùng Responses API để soạn câu trả lời thân thiện, có format.
     """
 
@@ -47,22 +47,27 @@ class AIChatAgent(object):
             raise RuntimeError("Chưa cấu hình OpenAI API key")
         return OpenAI(api_key=api_key)
 
-    # -------- STEP 1: Phân tích truy vấn bằng Structured Outputs --------
+    # -------- STEP 1: Phân tích truy vấn + dùng file_search trên vector store --------
     def analyze_query(self, user_message: str) -> dict:
         """
-        Gọi Responses API để bóc tách:
-        - action: search_product / smalltalk / help / unknown
+        Gọi Responses API để bóc tách truy vấn, sử dụng file_search (vector store product) làm kiến thức nền.
+
+        Output mong muốn:
+        - action: 'search_product' / 'smalltalk' / 'help' / 'unknown'
         - normalized_query: text đã chuẩn hóa
-        - sku_candidates: list mã khả nghi (FHIW2F12, M18B5, 48-22-2182…)
+        - product_codes: list mã sản phẩm nên kiểm tra tồn (ưu tiên lấy từ vector store)
         - warehouse_hint: TSN / KBC / TSNSR / KHD / None
         - quantity: số lượng (nếu có)
         - allow_web_search: có cho phép search web không
         """
         client = self._get_client()
 
+        vector_store_id = self.config.get("product_vector_store_id") or ""
+
+        # JSON schema cho Structured Output
         schema = {
             "type": "json_schema",
-            "name": "query_analysis",
+            "name": "catalog_query_analysis",
             "strict": True,
             "schema": {
                 "type": "object",
@@ -72,51 +77,62 @@ class AIChatAgent(object):
                         "enum": ["search_product", "smalltalk", "help", "unknown"],
                     },
                     "normalized_query": {"type": "string"},
-                    "sku_candidates": {
+                    "product_codes": {
                         "type": "array",
                         "items": {"type": "string"},
+                        "description": "Danh sách mã sản phẩm chuẩn (default_code) nên kiểm tra tồn kho.",
                     },
                     "warehouse_hint": {
-                        "type": ["string", "null"]
+                        "type": "string",
+                        "description": "Mã kho gợi ý (TSN, KBC, TSNSR, KHD) nếu user có nhắc, nếu không thì chuỗi rỗng.",
                     },
                     "quantity": {
-                        "type": ["number", "null"]
+                        "type": "number",
+                        "description": "Số lượng nếu user có đề cập, nếu không thì 0.",
                     },
                     "allow_web_search": {
-                        "type": "boolean"
-                    }
+                        "type": "boolean",
+                        "description": "true nếu user đang hỏi thông tin thị trường / giá tham khảo ngoài kho.",
+                    },
                 },
-                "required": [
-                    "action",
-                    "normalized_query",
-                    "sku_candidates",
-                    "warehouse_hint",
-                    "quantity",
-                    "allow_web_search",
-                ],
+                # Để an toàn, chỉ bắt buộc 3 field chính, còn lại optional
+                "required": ["action", "normalized_query", "product_codes"],
                 "additionalProperties": False,
             },
         }
 
         instructions = (
             "Bạn là bộ phân tích truy vấn cho kho HLV.\n"
-            "Nhiệm vụ: Đọc câu hỏi của user, trích xuất thông tin thành JSON đúng schema.\n"
-            "- Nếu user muốn tra mã hàng / sản phẩm / tồn kho / giá: action = 'search_product'.\n"
-            "- Nếu chỉ chào hỏi, nói chuyện phiếm: action = 'smalltalk'.\n"
-            "- Nếu hỏi cách dùng chatbot: action = 'help'.\n"
-            "- Nếu không rõ: action = 'unknown'.\n"
-            "- sku_candidates: liệt kê các chuỗi có khả năng là mã SP (chứa chữ + số, như FHIW2F12, M18B5, 48-22-2182...).\n"
-            "- warehouse_hint: map về 1 trong: 'TSN', 'TSNSR', 'KBC', 'KHD' nếu user có nhắc khu vực/kho, nếu không thì null.\n"
-            "- quantity: nếu user có nói số lượng (vd: 10 cái, 5 bộ...), ghi số; nếu không thì null.\n"
-            "- allow_web_search: true nếu user đang hỏi thông tin thị trường / giá tham khảo ngoài kho; ngược lại false.\n"
-            "Chỉ xuất JSON, không giải thích thêm."
+            "Bạn có quyền dùng tool 'file_search' để tra cứu catalog sản phẩm (mã, tên, alias...).\n"
+            "Nhiệm vụ:\n"
+            "- Xác định action: nếu user muốn tra sản phẩm / tồn kho / giá -> 'search_product';\n"
+            "  nếu chỉ chào hỏi -> 'smalltalk'; nếu hỏi cách dùng chatbot -> 'help'; nếu không rõ -> 'unknown'.\n"
+            "- normalized_query: phiên bản đã chuẩn hóa của câu hỏi.\n"
+            "- product_codes: từ catalog, chọn ra các mã sản phẩm (default_code) phù hợp với câu hỏi.\n"
+            "  Ưu tiên mã thân máy chính (main) hơn phụ tùng nếu cùng series.\n"
+            "- warehouse_hint: nếu user có nhắc khu vực / kho (TSN, TSNSR, KBC, KHD, tân sơn nhất, bến cam...),\n"
+            "  hãy map về 1 trong 'TSN', 'TSNSR', 'KBC', 'KHD'. Nếu không rõ, trả về chuỗi rỗng.\n"
+            "- quantity: nếu user có nhắc số lượng (vd: 5 cái, 10 bộ...), ghi số; nếu không thì 0.\n"
+            "- allow_web_search: true nếu user đang hỏi giá thị trường / thông tin tham khảo ngoài kho; ngược lại false.\n\n"
+            "Chỉ xuất JSON đúng schema, không kèm giải thích."
         )
+
+        # Chuẩn bị tools: chỉ dùng file_search ở bước phân tích
+        tools = []
+        if vector_store_id:
+            tools.append({
+                "type": "file_search",
+                "file_search": {
+                    "vector_store_ids": [vector_store_id],
+                },
+            })
 
         try:
             resp = client.responses.create(
                 model=self.config["model"],
                 instructions=instructions,
                 input=user_message,
+                tools=tools if tools else None,
                 text={"format": schema},
                 temperature=0,
                 max_output_tokens=int(self.config.get("max_tokens", 400)),
@@ -134,127 +150,15 @@ class AIChatAgent(object):
         # Fallback an toàn
         if not isinstance(parsed, dict):
             parsed = {}
+
         parsed.setdefault("action", "search_product")
         parsed.setdefault("normalized_query", user_message)
-        parsed.setdefault("sku_candidates", [])
-        parsed.setdefault("warehouse_hint", None)
-        parsed.setdefault("quantity", None)
+        parsed.setdefault("product_codes", [])
+        parsed.setdefault("warehouse_hint", "")
+        parsed.setdefault("quantity", 0)
         parsed.setdefault("allow_web_search", False)
 
         return parsed
-
-
-    #-- hàm để model goi
-    def _search_inventory_tool(self, query: str, warehouse_hint: str = None, limit: int = 20):
-        """
-        Tool: tra cứu sản phẩm + tồn kho trong Odoo.
-        Dùng cho function calling 'search_inventory'.
-        """
-        Product = self.env["product.product"].sudo()
-
-        q = (query or "").strip()
-        if not q:
-            return {"query": query, "warehouse": None, "items": []}
-
-        # tách theo dấu phẩy để hỗ trợ nhiều mã 1 lúc: fid2,fpd3,m18b5
-        raw_codes = [c.strip() for c in q.replace(";", ",").split(",") if c.strip()]
-        codes = list(dict.fromkeys(raw_codes)) if raw_codes else []
-
-        # tìm kho gợi ý
-        wh = self._find_warehouse(warehouse_hint) if warehouse_hint else None
-
-        # ===== search từng mã riêng rồi gộp =====
-        products = Product.browse()
-        if codes:
-            per_code_limit = max(3, limit // max(1, len(codes)))
-            for code in codes:
-                like_code = "%%%s%%" % code.replace(" ", "%")
-                sub_domain = [
-                    "|", "|",
-                    ("default_code", "ilike", code),
-                    ("barcode", "ilike", code),
-                    ("name", "ilike", like_code),
-                ]
-                res = Product.search(sub_domain, limit=per_code_limit)
-                products |= res
-                if len(products) >= limit:
-                    break
-
-        # nếu không có codes (vd user gõ "khoan bê tông milwaukee m18") thì search full text
-        if not products and q:
-            like_name = "%%%s%%" % q.replace(" ", "%")
-            domain = [
-                "|", "|",
-                ("default_code", "ilike", q),
-                ("barcode", "ilike", q),
-                ("name", "ilike", like_name),
-            ]
-            products = Product.search(domain, limit=limit)
-
-        if not products:
-            return {"query": query, "warehouse": None, "items": []}
-
-        # lấy tồn kho theo kho
-        stock_map = self._get_stock_by_warehouse(products.ids, warehouse=wh)
-        items = []
-
-        for p in products:
-            wh_data = stock_map.get(p.id, {}) or {}
-            total_onhand = sum(v.get("onhand", 0.0) for v in wh_data.values())
-            total_reserved = sum(v.get("reserved", 0.0) for v in wh_data.values())
-            total_available = sum(v.get("available", 0.0) for v in wh_data.values())
-
-            items.append({
-                "id": p.id,
-                "name": p.name,
-                "default_code": p.default_code or "",
-                "uom": p.uom_id.name if p.uom_id else "",
-                "list_price": p.list_price,
-                "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
-                "qty_onhand": total_onhand,
-                "qty_reserved": total_reserved,
-                "qty_available": total_available,
-                "by_warehouse": {k: float(v.get("available", 0.0)) for k, v in wh_data.items()},
-            })
-
-        return {
-            "query": query,
-            "warehouse": wh.code if wh else None,
-            "items": items,
-        }
-        
-        
-        
-        
-        
-    def _get_tools_def(self):
-            return [
-                {
-                    "type": "function",
-                    "name": "search_inventory",
-                    "description": "Tra cứu sản phẩm + tồn kho trong Odoo theo mã hoặc tên.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Chuỗi user nhập, có thể chứa 1 hoặc nhiều mã, vd: 'fid2,fpd3,m18b5'",
-                            },
-                            "warehouse_hint": {
-                                "type": ["string", "null"],
-                                "description": "Mã kho gợi ý: TSN, KBC, TSNSR, KHD nếu có.",
-                            },
-                            "limit": {
-                                "type": "number",
-                                "description": "Số lượng sản phẩm tối đa cần trả về.",
-                            },
-                        },
-                        "required": ["query"],
-                        "additionalProperties": False,
-                    },
-                }
-            ]
-
 
     # -------- STEP 2a: Map kho từ hint --------
     def _find_warehouse(self, hint):
@@ -282,61 +186,7 @@ class AIChatAgent(object):
                 return whs
         return Wh.search([])
 
-    # -------- STEP 2b: Search product bằng Odoo ORM (cách mới, đơn giản hơn) --------
-    def search_products(self, query_info: dict, limit=20):
-        Product = self.env["product.product"].sudo()
-        normalized_query = _norm(query_info.get("normalized_query") or "")
-        sku_candidates = query_info.get("sku_candidates") or []
-
-        codes = [c.strip() for c in sku_candidates if c and c.strip()]
-        products = Product.browse()
-
-        # ===== 1) Nếu có sku_candidates => xử lý từng mã riêng =====
-        if codes:
-            codes = list(dict.fromkeys(codes))  # bỏ trùng
-            per_code_limit = max(3, limit // max(1, len(codes)))  # mỗi mã lấy vài sp
-
-            all_products = Product.browse()
-            for code in codes:
-                code = code.strip()
-                if not code:
-                    continue
-
-                like_code = "%%%s%%" % code.replace(" ", "%")
-
-                sub_domain = [
-                    "|", "|",
-                    ("default_code", "ilike", code),
-                    ("barcode", "ilike", code),
-                    ("name", "ilike", like_code),
-                ]
-
-                # search riêng cho từng code (y như khi user chỉ gõ 1 mã)
-                res = Product.search(sub_domain, limit=per_code_limit)
-                all_products |= res
-
-                if len(all_products) >= limit:
-                    break
-
-            if all_products:
-                products = all_products
-
-        # ===== 2) Nếu vẫn chưa có gì, fallback theo normalized_query =====
-        if not products and normalized_query:
-            q = normalized_query
-            like_name = "%%%s%%" % q.replace(" ", "%")
-            domain = [
-                "|", "|",
-                ("default_code", "ilike", q),
-                ("barcode", "ilike", q),
-                ("name", "ilike", like_name),
-            ]
-            products = Product.search(domain, limit=limit)
-
-        return products
-
-
-    # -------- STEP 2c: Lấy tồn kho theo kho --------
+    # -------- STEP 2b: Lấy tồn kho theo kho --------
     def _get_stock_by_warehouse(self, product_ids, warehouse=None):
         Quant = self.env["stock.quant"].sudo()
         Loc = self.env["stock.location"].sudo()
@@ -401,14 +251,81 @@ class AIChatAgent(object):
 
         return out
 
+    # -------- STEP 2c: Chạy inventory thực tế trên Odoo dựa trên analysis --------
+    def _run_inventory_lookup(self, analysis: dict, limit: int = 20):
+        """
+        Dựa trên kết quả phân tích (đã dùng file_search), quyết định lấy tồn kho từ Odoo.
+        Ưu tiên product_codes; nếu không có, fallback bằng normalized_query.
+        """
+        Product = self.env["product.product"].sudo()
+
+        normalized_query = _norm(analysis.get("normalized_query") or "")
+        product_codes = analysis.get("product_codes") or []
+        warehouse_hint = analysis.get("warehouse_hint") or ""
+        wh = self._find_warehouse(warehouse_hint) if warehouse_hint else None
+
+        products = Product.browse()
+
+        # 1) Nếu có product_codes (từ catalog) -> ưu tiên tìm theo default_code trong đó
+        if product_codes:
+            clean_codes = [c.strip() for c in product_codes if c and c.strip()]
+            clean_codes = list(dict.fromkeys(clean_codes))  # bỏ trùng
+            if clean_codes:
+                products = Product.search([("default_code", "in", clean_codes)], limit=limit)
+
+        # 2) Nếu vẫn chưa thấy gì, fallback theo normalized_query (tối thiểu vẫn có search fuzzy)
+        if not products and normalized_query:
+            q = normalized_query
+            like_name = "%%%s%%" % q.replace(" ", "%")
+            domain = [
+                "|", "|",
+                ("default_code", "ilike", q),
+                ("barcode", "ilike", q),
+                ("name", "ilike", like_name),
+            ]
+            products = Product.search(domain, limit=limit)
+
+        if not products:
+            return {
+                "query": normalized_query,
+                "warehouse": wh.code if wh else None,
+                "items": [],
+            }
+
+        stock_map = self._get_stock_by_warehouse(products.ids, warehouse=wh)
+        items = []
+
+        for p in products:
+            wh_data = stock_map.get(p.id, {}) or {}
+            total_onhand = sum(v.get("onhand", 0.0) for v in wh_data.values())
+            total_reserved = sum(v.get("reserved", 0.0) for v in wh_data.values())
+            total_available = sum(v.get("available", 0.0) for v in wh_data.values())
+
+            items.append({
+                "id": p.id,
+                "name": p.name,
+                "default_code": p.default_code or "",
+                "uom": p.uom_id.name if p.uom_id else "",
+                "list_price": p.list_price,
+                "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
+                "qty_onhand": float(total_onhand),
+                "qty_reserved": float(total_reserved),
+                "qty_available": float(total_available),
+                "by_warehouse": {k: float(v.get("available", 0.0)) for k, v in wh_data.items()},
+            })
+
+        return {
+            "query": normalized_query,
+            "warehouse": wh.code if wh else None,
+            "items": items,
+        }
+
     # -------- STEP 3: Gọi Responses API để soạn câu trả lời --------
     def generate_answer(
         self,
         user_message: str,
-        products,
-        stock_map: dict,
-        parsed: dict,
-        warehouse,
+        analysis: dict,
+        inventory_payload: dict,
         history=None,
     ) -> str:
         client = self._get_client()
@@ -419,7 +336,9 @@ class AIChatAgent(object):
             "- Ngắn gọn, thân thiện, đúng trọng tâm.\n"
             "- Nếu có danh sách sản phẩm, liệt kê dạng 1., 2., 3. và dùng **Tên sản phẩm**; "
             "mã in nghiêng _(Mã: ...)_.\n"
-            "- Luôn dùng số *tồn thực tế* (available = onhand - reserved). Hiển thị theo kho: `TSN: 3, KBC: 2`.\n"
+            "- Luôn dùng số *tồn thực tế* (available = onhand - reserved). "
+            "Hiển thị theo kho: `TSN: 3, KBC: 2`.\n"
+            "- Có thể nhắc giá bán và giá thương mại (TM) nếu có.\n"
             "- Nếu không tìm thấy sản phẩm: hướng dẫn user gửi thêm mã, hình, hoặc mô tả rõ hơn.\n"
             "- Kết thúc bằng một câu hỏi ngắn để tiếp tục hỗ trợ.\n"
         )
@@ -430,45 +349,60 @@ class AIChatAgent(object):
             except Exception:
                 return 0
 
-        # Tạo context về kết quả tồn kho để AI dựa vào
+        items = inventory_payload.get("items", []) or []
+        wh_code = inventory_payload.get("warehouse")
+        normalized_query = analysis.get("normalized_query")
+
         ctx_lines = []
-        ctx_lines.append(f"[THÔNG TIN TRUY VẤN PHÂN TÍCH] {json.dumps(parsed, ensure_ascii=False)}")
-        if warehouse:
-            ctx_lines.append(f"[KHO ƯU TIÊN] {warehouse.code} ({warehouse.name})")
+        ctx_lines.append(f"[THÔNG TIN TRUY VẤN PHÂN TÍCH] {json.dumps(analysis, ensure_ascii=False)}")
+        if wh_code:
+            ctx_lines.append(f"[KHO ƯU TIÊN] {wh_code}")
 
-        if products:
+        if items:
             ctx_lines.append("DỮ LIỆU TỒN KHO (available = onhand - reserved):")
-            for idx, p in enumerate(products, start=1):
-                wh_data = stock_map.get(p.id, {}) or {}
-                total_onhand = sum(v.get("onhand", 0.0) for v in wh_data.values())
-                total_reserved = sum(v.get("reserved", 0.0) for v in wh_data.values())
-                total_available = sum(v.get("available", 0.0) for v in wh_data.values())
-                parts = [f"{k}: {num(v.get('available', 0.0))}" for k, v in wh_data.items() if num(v.get("available", 0.0)) > 0]
+            for idx, item in enumerate(items, start=1):
+                name = item.get("name") or ""
+                code = item.get("default_code") or ""
+                uom = item.get("uom") or ""
+                total_available = num(item.get("qty_available"))
+                by_wh = item.get("by_warehouse") or {}
+                parts = [f"{k}: {num(v)}" for k, v in by_wh.items() if num(v) > 0]
 
-                line = f"{idx}. **{p.name}**"
-                if p.default_code:
-                    line += f" _(Mã: {p.default_code})_"
-                if p.uom_id:
-                    line += f" — **{num(total_available)} {p.uom_id.name} available**"
+                line = f"{idx}. **{name}**"
+                if code:
+                    line += f" _(Mã: {code})_"
+                if uom:
+                    line += f" — **{total_available} {uom} available**"
                 else:
-                    line += f" — **{num(total_available)} available**"
+                    line += f" — **{total_available} available**"
                 if parts:
                     line += " — theo kho: " + ", ".join(parts)
+
+                list_price = item.get("list_price")
+                comm_price = item.get("commercial_price")
+                if list_price or comm_price:
+                    price_parts = []
+                    if list_price:
+                        price_parts.append(f"Giá niêm yết: {int(list_price):,} VND".replace(",", "."))
+                    if comm_price:
+                        price_parts.append(f"Giá TM: {int(comm_price):,} VND".replace(",", "."))
+                    line += " — " + " | ".join(price_parts)
+
                 ctx_lines.append(line)
         else:
-            ctx_lines.append("Không tìm thấy sản phẩm phù hợp trong kho với truy vấn hiện tại.")
+            ctx_lines.append(
+                "Không tìm thấy sản phẩm phù hợp trong kho với truy vấn hiện tại. "
+                "Có thể mã hoặc tên sản phẩm chưa đúng với catalog."
+            )
 
-        ctx_lines.append("Hãy dựa trên dữ liệu trên để trả lời user.")
+        ctx_lines.append("Hãy dựa trên dữ liệu trên để trả lời user bằng tiếng Việt.")
         inventory_context = "\n".join(ctx_lines)
 
         # Chuẩn bị lịch sử hội thoại (nếu có)
         conversation = []
         if history:
-            # history đã là list[{role, content}] từ session
             conversation.extend(history)
-        # Thêm context kỹ thuật như 1 message assistant
         conversation.append({"role": "assistant", "content": inventory_context})
-        # Thêm câu hỏi mới của user
         conversation.append({"role": "user", "content": user_message})
 
         try:
@@ -494,120 +428,68 @@ class AIChatAgent(object):
     # -------- Orchestrator: chạy full pipeline cho 1 message --------
     def handle_message(self, user_message: str, history=None):
         """
-        Agent chính (phiên bản đơn giản, tránh lỗi call_id):
-        - Call 1: dùng tools để model quyết định có gọi 'search_inventory' không.
-        - Nếu không dùng tool: trả luôn output_text.
-        - Nếu có function_call: backend chạy tool, rồi Call 2 cho model soạn câu trả lời từ dữ liệu DB.
+        Pipeline mới:
+        - Bước 1: analyze_query (có dùng file_search) -> action + product_codes + warehouse_hint...
+        - Bước 2: nếu action là smalltalk/help/unknown -> trả lời trực tiếp, không cần tra tồn kho.
+        - Bước 3: nếu action = search_product -> _run_inventory_lookup -> generate_answer.
         """
-        from openai import OpenAI
-        import json as _json
+        # Bước 1: phân tích truy vấn
+        analysis = self.analyze_query(user_message=user_message)
+        action = analysis.get("action", "search_product")
 
-        client = self._get_client()
+        # smalltalk / help / unknown -> không cần tra tồn kho
+        if action in ("smalltalk", "help", "unknown"):
+            client = self._get_client()
+            sys_prompt = (
+                "Bạn là trợ lý AI thân thiện cho kho hàng HLV.\n"
+                "- Nếu user chào hỏi / smalltalk: trả lời ngắn gọn, tự nhiên.\n"
+                "- Nếu user hỏi cách dùng chatbot: giải thích cách gửi mã, tên sản phẩm, hỏi tồn kho,\n"
+                "  hỏi giá, gõ 'reset' để xoá lịch sử.\n"
+                "- Không cần tra tồn kho khi action không phải 'search_product'.\n"
+            )
+            conversation = []
+            if history:
+                conversation.extend(history)
+            conversation.append({"role": "user", "content": user_message})
 
-        # Prompt chung cho cả 2 lượt gọi
-        sys_prompt = (
-            "Bạn là trợ lý AI cho kho hàng HLV.\n"
-            "- Khi cần tra cứu sản phẩm hoặc tồn kho, HÃY dùng tool 'search_inventory' với query phù hợp.\n"
-            "- Nếu chỉ chào hỏi, smalltalk, giải thích cách dùng… thì trả lời trực tiếp, KHÔNG cần gọi tool.\n"
-            "- Khi đã có dữ liệu từ tool hoặc từ context, hãy giải thích rõ ràng, "
-            "liệt kê sản phẩm dạng 1., 2., 3., bôi đậm **Tên sản phẩm**, mã in nghiêng _(Mã: ...)_ "
-            "và hiển thị tồn theo kho.\n"
-            "- Luôn kết thúc bằng một câu hỏi ngắn để tiếp tục hỗ trợ.\n"
-        )
+            try:
+                resp = client.responses.create(
+                    model=self.config["model"],
+                    instructions=sys_prompt,
+                    input=conversation,
+                    temperature=float(self.config.get("temperature", 0.3)),
+                    max_output_tokens=int(self.config.get("max_tokens", 400)),
+                )
+                txt = resp.output_text or "Mình có thể giúp bạn tra cứu sản phẩm và tồn kho. Bạn thử gửi mã hoặc tên sản phẩm nhé?"
+            except Exception as e:
+                _logger.error("Error calling Responses API (smalltalk/help): %s", e)
+                txt = "Mình có thể giúp bạn tra cứu sản phẩm và tồn kho. Bạn thử gửi mã hoặc tên sản phẩm nhé?"
 
-        # === Build context từ history ===
-        messages = []
-        if history:
-            messages.extend(history)
-        messages.append({"role": "user", "content": user_message})
-
-        # === CALL 1: Model quyết định dùng tool hay không ===
-        first = client.responses.create(
-            model=self.config["model"],
-            instructions=sys_prompt,
-            input=messages,
-            tools=self._get_tools_def(),
-            temperature=float(self.config.get("temperature", 0.2)),
-            max_output_tokens=int(self.config.get("max_tokens", 400)),
-        )
-
-        # Nếu model đã trả lời text luôn (không gọi tool)
-        has_tool_call = False
-        tool_call_item = None
-        for item in getattr(first, "output", []):
-            # Tùy SDK, có thể là 'function_call' hoặc 'tool_call'
-            if getattr(item, "type", "") in ("function_call", "tool_call"):
-                has_tool_call = True
-                tool_call_item = item
-                break
-
-        if not has_tool_call:
-            # Không dùng tool → trả luôn output_text
-            txt = first.output_text or "Mình chưa rõ ý bạn. Bạn có thể gửi mã hoặc tên sản phẩm rõ hơn không?"
             return {
                 "response": txt,
-                "inventory_results": [],
-                "parsed": {},
+                "inventory": [],
+                "parsed": analysis,
                 "warehouse": None,
             }
 
-        # === Có function_call: chạy tool ở backend ===
-        fn_name = getattr(tool_call_item, "name", "")
-        raw_args = getattr(tool_call_item, "arguments", "{}")
-        try:
-            args = _json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
-        except Exception:
-            args = {}
+        # Bước 2: action = search_product -> tra tồn kho thực tế
+        inventory_payload = self._run_inventory_lookup(analysis, limit=20)
 
-        inventory_payload = {"query": "", "warehouse": None, "items": []}
-
-        if fn_name == "search_inventory":
-            query = args.get("query") or user_message
-            wh_hint = args.get("warehouse_hint")
-            limit = int(args.get("limit") or 20)
-            inventory_payload = self._search_inventory_tool(query, warehouse_hint=wh_hint, limit=limit)
-
-        # === CALL 2: Gửi kết quả tool vào context, nhờ model soạn câu trả lời ===
-        # Chuẩn bị block context về dữ liệu DB
-        ctx_lines = []
-        ctx_lines.append("DỮ LIỆU TRA TỪ DATABASE (Odoo):")
-        ctx_lines.append(_json.dumps(inventory_payload, ensure_ascii=False, indent=2))
-        ctx_block = "\n".join(ctx_lines)
-
-        second_input = []
-        if history:
-            second_input.extend(history)
-        # Cho model biết đây là kết quả tra kho
-        second_input.append({
-            "role": "assistant",
-            "content": ctx_block,
-        })
-        # Và đây là câu hỏi ban đầu của user
-        second_input.append({
-            "role": "user",
-            "content": user_message,
-        })
-
-        second = client.responses.create(
-            model=self.config["model"],
-            instructions=sys_prompt,
-            input=second_input,
-            # lần 2 không cần tools nữa, chỉ cần NLG
-            temperature=float(self.config.get("temperature", 0.2)),
-            max_output_tokens=int(self.config.get("max_tokens", 600)),
-        )
-
-        final_text = second.output_text or (
-            "Mình đã tra tồn kho theo thông tin bạn gửi. "
-            "Bạn cần gợi ý thêm mẫu tương đương không ạ?"
+        # Bước 3: generate câu trả lời cuối cùng
+        final_text = self.generate_answer(
+            user_message=user_message,
+            analysis=analysis,
+            inventory_payload=inventory_payload,
+            history=history,
         )
 
         return {
             "response": final_text,
-            "inventory_results": inventory_payload.get("items", []),
-            "parsed": {"tool": fn_name, "args": args},
+            "inventory": inventory_payload.get("items", []),
+            "parsed": analysis,
             "warehouse": inventory_payload.get("warehouse"),
         }
+
 
 # ============================
 # CONTROLLER
@@ -623,6 +505,7 @@ class ChatbotController(http.Controller):
             "api_key": param.get_param("website_public_inventory_18.openai_api_key", default=""),
             # model đã chuyển sang Responses API (ví dụ: gpt-4.1-mini / gpt-5)
             "model": param.get_param("website_public_inventory_18.openai_model", default="gpt-4.1-mini"),
+            "product_vector_store_id": param.get_param("website_public_inventory_18.product_vector_store_id", ""),
             "max_tokens": int(param.get_param("website_public_inventory_18.chatbot_max_tokens", default=600)),
             "temperature": float(param.get_param("website_public_inventory_18.chatbot_temperature", default=0.2)),
             "web_search_enabled": param.get_param("website_public_inventory_18.web_search_enabled", default=True) in (True, "True", "1", "true"),
