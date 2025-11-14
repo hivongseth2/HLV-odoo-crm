@@ -161,6 +161,7 @@ class AIChatAgent(object):
                 }
             ]
 
+    
 
         try:
             resp = client.responses.create(
@@ -175,37 +176,35 @@ class AIChatAgent(object):
 
             # ====== DEBUG: xem model có gọi file_search hay không ======
             try:
-                for i, item in enumerate(getattr(resp, "output", []) or []):
-                    if getattr(item, "type", "") == "file_search_call":
-                        # chuyển về dict để tránh AttributeError
-                        data = item.model_dump()
+                for out_idx, out in enumerate(getattr(resp, "output", []) or []):
+                    fs_list = getattr(out, "file_search_call", None)
+                    if not fs_list:
+                        continue
 
-                        # trong data sẽ có key "file_search_call"
-                        fs = data.get("file_search_call", {}) or data
-
-                        q = fs.get("query")
-                        results = []
-                        for r in fs.get("search_results", []) or []:
+                    for fs_idx, fs in enumerate(fs_list):
+                        data = fs.model_dump()
+                        results = data.get("search_results") or []
+                        top = []
+                        for r in results[:5]:
                             doc = r.get("document") or {}
                             doc_id = doc.get("id")
                             score = r.get("score")
-
                             txt = ""
                             contents = r.get("content") or []
                             if contents and contents[0].get("type") == "text":
                                 txt = (contents[0].get("text") or "")[:120]
-
-                            results.append((doc_id, score, txt))
+                            top.append((doc_id, score, txt))
 
                         _logger.info(
-                            "AIChatAgent.file_search_call[%s]: query=%r, results=%s",
-                            i, q, results,
+                            "AIChatAgent.file_search_call[%s][%s]: results=%s",
+                            out_idx, fs_idx, top,
                         )
             except Exception:
                 _logger.exception("Cannot inspect file_search_call results")
 
             raw = resp.output_text or "{}"
             parsed = _safe_json_from_text(raw)
+
 
         except Exception as e:
             _logger.error("Error calling Responses API (analyze_query): %s", e)
