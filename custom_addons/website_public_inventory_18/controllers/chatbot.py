@@ -345,12 +345,14 @@ class AIChatAgent(object):
             "- Ngắn gọn, thân thiện, đúng trọng tâm.\n"
             "- Nếu có danh sách sản phẩm, liệt kê dạng 1., 2., 3. và dùng **Tên sản phẩm**; "
             "mã in nghiêng _(Mã: ...)_.\n"
-            "- Luôn dùng số *tồn thực tế* (available = onhand - reserved). "
-            "Hiển thị theo kho: `TSN: 3, KBC: 2`.\n"
+            "- Luôn dùng số *tồn thực tế* (available = onhand - reserved).\n"
+            "- Khi hiển thị theo kho, LUÔN liệt kê ĐẦY ĐỦ tất cả kho có trong dữ liệu (ví dụ: "
+            "`TSN: 3, KBC: 2, KHD: 5, TSNSR: 1`). Không được tự ý bỏ qua kho nào.\n"
             "- Có thể nhắc giá bán và giá thương mại (TM) nếu có.\n"
             "- Nếu không tìm thấy sản phẩm: hướng dẫn user gửi thêm mã, hình, hoặc mô tả rõ hơn.\n"
             "- Kết thúc bằng một câu hỏi ngắn để tiếp tục hỗ trợ.\n"
         )
+
 
         def num(x):
             try:
