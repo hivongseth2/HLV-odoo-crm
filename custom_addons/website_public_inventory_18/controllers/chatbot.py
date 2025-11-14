@@ -178,15 +178,19 @@ class AIChatAgent(object):
         codes = [c.strip() for c in sku_candidates if c and c.strip()]
         products = Product.browse()
 
-        # ===== 1) Nếu có sku_candidates => ưu tiên search theo mã =====
+        # ===== 1) Nếu có sku_candidates => xử lý từng mã riêng =====
         if codes:
-            domain = []
+            codes = list(dict.fromkeys(codes))  # bỏ trùng
+            per_code_limit = max(3, limit // max(1, len(codes)))  # mỗi mã lấy vài sp
+
+            all_products = Product.browse()
             for code in codes:
                 code = code.strip()
+                if not code:
+                    continue
+
                 like_code = "%%%s%%" % code.replace(" ", "%")
 
-                # sub-domain cho từng code:
-                # (default_code ilike code) OR (barcode ilike code) OR (name ilike %code%)
                 sub_domain = [
                     "|", "|",
                     ("default_code", "ilike", code),
@@ -194,12 +198,17 @@ class AIChatAgent(object):
                     ("name", "ilike", like_code),
                 ]
 
-                # OR nhiều sub_domain lại với nhau
-                domain = expression.OR([domain, sub_domain]) if domain else sub_domain
+                # search riêng cho từng code (y như khi user chỉ gõ 1 mã)
+                res = Product.search(sub_domain, limit=per_code_limit)
+                all_products |= res
 
-            products = Product.search(domain, limit=limit)
+                if len(all_products) >= limit:
+                    break
 
-        # ===== 2) Nếu không có hoặc không tìm được => fallback theo normalized_query =====
+            if all_products:
+                products = all_products
+
+        # ===== 2) Nếu vẫn chưa có gì, fallback theo normalized_query =====
         if not products and normalized_query:
             q = normalized_query
             like_name = "%%%s%%" % q.replace(" ", "%")
@@ -212,6 +221,7 @@ class AIChatAgent(object):
             products = Product.search(domain, limit=limit)
 
         return products
+
 
     # -------- STEP 2c: Lấy tồn kho theo kho --------
     def _get_stock_by_warehouse(self, product_ids, warehouse=None):
