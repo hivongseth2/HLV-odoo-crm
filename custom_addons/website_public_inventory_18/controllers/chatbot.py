@@ -319,9 +319,10 @@ class AIChatAgent(object):
                 "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
                 "qty_onhand": float(total_onhand),
                 "qty_reserved": float(total_reserved),
-                "qty_available": float(total_available),
-                "by_warehouse": {k: float(v.get("available", 0.0)) for k, v in wh_data.items()},
+                "qty_available": float(total_available),  # giữ lại nếu sau này cần
+                "by_warehouse": {k: float(v.get("onhand", 0.0)) for k, v in wh_data.items()},
             })
+
 
         return {
             "query": normalized_query,
@@ -345,7 +346,9 @@ class AIChatAgent(object):
             "- Ngắn gọn, thân thiện, đúng trọng tâm.\n"
             "- Nếu có danh sách sản phẩm, liệt kê dạng 1., 2., 3. và dùng **Tên sản phẩm**; "
             "mã in nghiêng _(Mã: ...)_.\n"
-            "- Luôn dùng số *tồn thực tế* (available = onhand - reserved).\n"
+            # "- Luôn dùng số *tồn thực tế* (available = onhand + reserved).\n"
+            "- Luôn dùng số *tồn thực tế* (onhand, CHƯA trừ reserved). Không dùng số available.\n"
+
             "- Khi hiển thị theo kho, LUÔN liệt kê ĐẦY ĐỦ tất cả kho có trong dữ liệu (ví dụ: "
             "`TSN: 3, KBC: 2, KHD: 5, TSNSR: 1`). Không được tự ý bỏ qua kho nào.\n"
             "- Có thể nhắc giá bán và giá thương mại (TM) nếu có.\n"
@@ -370,25 +373,48 @@ class AIChatAgent(object):
             ctx_lines.append(f"[KHO ƯU TIÊN] {wh_code}")
 
         if items:
-            ctx_lines.append("DỮ LIỆU TỒN KHO (available = onhand - reserved):")
+            # ctx_lines.append("DỮ LIỆU TỒN KHO (available = onhand - reserved):")
+            ctx_lines.append("DỮ LIỆU TỒN KHO (tồn thực tế = onhand, CHƯA trừ reserved):")
             for idx, item in enumerate(items, start=1):
                 name = item.get("name") or ""
                 code = item.get("default_code") or ""
                 uom = item.get("uom") or ""
-                total_available = num(item.get("qty_available"))
+                # total_available = num(item.get("qty_available"))
+                # by_wh = item.get("by_warehouse") or {}
+                # parts = [f"{k}: {num(v)}" for k, v in by_wh.items() if num(v) > 0]
+
+                # line = f"{idx}. **{name}**"
+                # if code:
+                #     line += f" _(Mã: {code})_"
+                # if uom:
+                #     line += f" — **{total_available} {uom} available**"
+                # else:
+                #     line += f" — **{total_available} available**"
+                # if parts:
+                #     line += " — theo kho: " + ", ".join(parts)
+                
+                total_onhand = num(item.get("qty_onhand"))
                 by_wh = item.get("by_warehouse") or {}
-                parts = [f"{k}: {num(v)}" for k, v in by_wh.items() if num(v) > 0]
+
+                # nếu có ít nhất 1 kho > 0 thì show kho > 0, nếu tất cả =0 vẫn show hết để biết đã check đủ kho
+                vals = {k: num(v) for k, v in by_wh.items()}
+                if vals:
+                    if any(v > 0 for v in vals.values()):
+                        parts = [f"{k}: {v}" for k, v in vals.items() if v > 0]
+                    else:
+                        parts = [f"{k}: {v}" for k, v in vals.items()]
+                else:
+                    parts = []
 
                 line = f"{idx}. **{name}**"
                 if code:
                     line += f" _(Mã: {code})_"
                 if uom:
-                    line += f" — **{total_available} {uom} available**"
+                    line += f" — **{total_onhand} {uom} tồn thực tế**"
                 else:
-                    line += f" — **{total_available} available**"
+                    line += f" — **{total_onhand} tồn thực tế**"
                 if parts:
                     line += " — theo kho: " + ", ".join(parts)
-
                 list_price = item.get("list_price")
                 comm_price = item.get("commercial_price")
                 if list_price or comm_price:
