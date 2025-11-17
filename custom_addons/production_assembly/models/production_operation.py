@@ -158,27 +158,31 @@ class ProductionOperation(models.Model):
         moves._action_confirm()
         moves._action_assign()
         
-        # Create a temporary picking to handle the moves properly
-        picking_vals = {
-            'location_id': moves[0].location_id.id,
-            'location_dest_id': moves[0].location_dest_id.id,
-            'picking_type_id': self.env.ref('stock.picking_type_internal').id,
-            'immediate_transfer': True,
-            'move_ids': [(6, 0, moves.ids)],
-        }
-        
-        picking = self.env['stock.picking'].create(picking_vals)
-        
-        # Assign the picking
-        picking.action_assign()
-        
-        # Set quantities on move lines
-        for move in picking.move_ids:
-            for move_line in move.move_line_ids:
-                move_line.qty_done = move.product_uom_qty
-        
-        # Validate the picking (this should complete all moves)
-        picking.button_validate()
+        # Process moves directly without picking - simpler approach
+        for move in moves:
+            # Ensure move is assigned
+            if move.state not in ('assigned', 'partially_available'):
+                move._action_assign()
+            
+            # Create move lines if they don't exist
+            if not move.move_line_ids:
+                move_line_vals = {
+                    'move_id': move.id,
+                    'product_id': move.product_id.id,
+                    'product_uom_id': move.product_uom.id,
+                    'location_id': move.location_id.id,
+                    'location_dest_id': move.location_dest_id.id,
+                    'company_id': move.company_id.id,
+                    'qty_done': move.product_uom_qty,
+                }
+                self.env['stock.move.line'].create(move_line_vals)
+            else:
+                # Set qty_done on existing move lines
+                for move_line in move.move_line_ids:
+                    move_line.qty_done = move.product_uom_qty
+            
+            # Complete the move
+            move._action_done()
         
         self.state = 'done'
         
