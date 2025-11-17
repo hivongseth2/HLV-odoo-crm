@@ -133,6 +133,85 @@ document.addEventListener("DOMContentLoaded", function () {
 
   }
 
+  // ===== PACKAGE BARCODE HANDLER =====
+  function isProductBarcode(barcode) {
+    // Check if barcode exists in product list
+    const exists = [...document.querySelectorAll('[data-barcode]')]
+      .some(el => normalizeCode(el.dataset.barcode) === normalizeCode(barcode));
+    return exists;
+  }
+
+  async function handlePackageBarcode(packageBarcode) {
+    // Collect all completed items (done_qty >= required_qty)
+    const items = document.querySelectorAll("#product_list .product-item");
+    const completedItems = [];
+
+    items.forEach(item => {
+      const doneEl = item.querySelector(".done");
+      const requiredEl = item.querySelectorAll("span")[1];
+      const done = parseFloat(doneEl?.innerText || 0);
+      const required = parseFloat(requiredEl?.innerText || 0);
+      const lineId = item.dataset.lineId;
+
+      if (done >= required && required > 0) {
+        completedItems.push({
+          move_line_id: parseInt(lineId),
+          qty: done
+        });
+      }
+    });
+
+    if (completedItems.length === 0) {
+      toast.warn("⚠️ Không có sản phẩm nào hoàn tất để tạo kiện", { ms: 2500 });
+      playError();
+      setFocus();
+      return;
+    }
+
+    // Call API to create partial pack
+    try {
+      const res = await fetch("/pack_scan/create_partial_pack", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "call",
+          params: {
+            picking_id: pickingId,
+            package_barcode: packageBarcode,
+            move_line_data: completedItems
+          }
+        })
+      });
+
+      const response = await res.json();
+      const result = response.result || response;
+
+      if (result?.error) {
+        toast.error("❌ " + result.error, { ms: 2500 });
+        playError();
+        setFocus();
+        return;
+      }
+
+      toast.success(`✅ Tạo kiện thành công! ${completedItems.length} sản phẩm`, { ms: 2000 });
+      playSuccess();
+
+      // Reload page after 1.5 seconds to show updated state
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err) {
+      toast.error("❌ Lỗi kết nối: " + err.message, { ms: 2500 });
+      playError();
+      setFocus();
+    }
+  }
+  // ===== END PACKAGE BARCODE HANDLER =====
+
 
   input?.addEventListener("keypress", function (e) {
     if (e.key !== "Enter") return;
@@ -146,12 +225,16 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // mapping: nếu quét “key” thì cộng 0.1 vào barcode mục tiêu
+    // mapping: nếu quét "key" thì cộng 0.1 vào barcode mục tiêu
     const targetBarcode = BARCODE_MAP_POINT_ONE[raw];
     if (targetBarcode) {
       updateQty(targetBarcode, 0.1);
-    } else {
+    } else if (isProductBarcode(raw)) {
+      // Nếu là barcode sản phẩm, cập nhật số lượng
       updateQty(raw, 1);
+    } else {
+      // Nếu không là barcode sản phẩm, coi là package barcode - tạo kiện từ các sản phẩm hoàn tất
+      handlePackageBarcode(raw);
     }
 
     input.value = "";
@@ -537,113 +620,11 @@ function createModal(title, content, buttons = []) {
   return modal;
 }
 
-// Tạo partial pack
-document.getElementById('btnPartialPack')?.addEventListener('click', async function() {
-  const items = document.querySelectorAll("#product_list .product-item");
-  let selectedItems = [];
-  
-  // Tạo form để chọn items
-  const formDiv = document.createElement('div');
-  formDiv.style.cssText = 'max-height: 300px; overflow-y: auto;';
-  
-  items.forEach(item => {
-    const barcode = item.dataset.barcode;
-    const lineId = item.dataset.lineId;
-    const doneEl = item.querySelector('.done');
-    const requiredEl = item.querySelectorAll('span')[1];
-    const done = parseFloat(doneEl?.innerText || 0);
-    const required = parseFloat(requiredEl?.innerText || 0);
-    const name = item.querySelector('strong').innerText;
-    
-    const label = document.createElement('label');
-    label.style.cssText = 'display: block; padding: 8px; border-bottom: 1px solid #e5e7eb; cursor: pointer;';
-    
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.value = lineId;
-    checkbox.dataset.done = done;
-    checkbox.dataset.required = required;
-    
-    const inputQty = document.createElement('input');
-    inputQty.type = 'number';
-    inputQty.min = '0';
-    inputQty.max = String(done);
-    inputQty.value = String(done);
-    inputQty.style.cssText = 'width: 80px; margin-left: 10px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px;';
-    
-    label.appendChild(checkbox);
-    label.appendChild(document.createTextNode(` ${name} (${done}/${required})`));
-    label.appendChild(inputQty);
-    
-    checkbox.addEventListener('change', () => {
-      inputQty.disabled = !checkbox.checked;
-    });
-    inputQty.disabled = true;
-    
-    formDiv.appendChild(label);
-  });
-  
-  const textDiv = document.createElement('div');
-  textDiv.textContent = 'Chọn sản phẩm để tạo partial pack:';
-  
-  const contentDiv = document.createElement('div');
-  contentDiv.appendChild(textDiv);
-  contentDiv.appendChild(formDiv);
-  
-  createModal(
-    '📦 Tạo Partial Pack',
-    contentDiv,
-    [
-      {
-        label: 'Hủy',
-        color: '#999',
-        onclick: () => {}
-      },
-      {
-        label: 'Tạo Partial Pack',
-        color: '#16a34a',
-        onclick: async () => {
-          const moveLineData = [];
-          document.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
-            const qtyInput = checkbox.parentElement.querySelector('input[type="number"]');
-            const qty = parseFloat(qtyInput.value) || 0;
-            if (qty > 0) {
-              moveLineData.push({
-                move_line_id: parseInt(checkbox.value),
-                qty: qty
-              });
-            }
-          });
-          
-          if (moveLineData.length === 0) {
-            toast.warn('Vui lòng chọn ít nhất 1 sản phẩm');
-            return;
-          }
-          
-          const res = await fetch('/pack_scan/create_partial_pack', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              method: 'call',
-              params: { picking_id: pickingId, move_line_data: moveLineData }
-            })
-          });
-          const response = await res.json();
-          const result = response.result || response;
-          
-          if (result?.success) {
-            toast.success(result.message, { ms: 2000 });
-            setTimeout(() => {
-              window.location.reload();
-            }, 1000);
-          } else {
-            toast.error(result?.error || 'Tạo partial pack thất bại', { ms: 2000 });
-          }
-        }
-      }
-    ]
-  );
+// Tạo partial pack (auto - tự động từ sản phẩm đã hoàn tất)
+document.getElementById('btnPartialPack')?.addEventListener('click', function() {
+  // Gọi hàm handlePackageBarcode với một package ID tạo từ thời gian để đảm bảo duy nhất
+  const autoPackageBarcode = `AUTO-PKG-${Date.now()}`;
+  handlePackageBarcode(autoPackageBarcode);
 });
 
 // In nhãn
