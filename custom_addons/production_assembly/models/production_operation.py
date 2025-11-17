@@ -16,7 +16,6 @@ class StockMove(models.Model):
 class ProductionOperation(models.Model):
     _name = 'production.operation'
     _description = 'Production Assembly/Disassembly Operation'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'date desc, id desc'
     _rec_name = 'name'
 
@@ -37,10 +36,10 @@ class ProductionOperation(models.Model):
     )
     
     operation_type = fields.Selection([
-        ('assembly', 'Assembly (Production)'),
-        ('disassembly', 'Disassembly')
-    ], string='Operation Type', required=True, default='assembly',
-       readonly=True, states={'draft': [('readonly', False)]}, tracking=True)
+        ('assembly', 'Sản xuất'),
+        ('disassembly', 'Tháo gỡ')
+    ], string='Loại hoạt động', required=True, default='assembly',
+       readonly=True, states={'draft': [('readonly', False)]})
     
     main_product_id = fields.Many2one(
         'product.product',
@@ -88,10 +87,10 @@ class ProductionOperation(models.Model):
     )
     
     state = fields.Selection([
-        ('draft', 'Draft'),
-        ('done', 'Done'),
-        ('cancel', 'Cancelled')
-    ], string='Status', default='draft', readonly=True, tracking=True)
+        ('draft', 'Nháp'),
+        ('done', 'Hoàn thành'),
+        ('cancel', 'Đã hủy')
+    ], string='Trạng thái', default='draft', readonly=True)
     
     move_ids = fields.One2many(
         'stock.move',
@@ -259,12 +258,6 @@ class ProductionOperation(models.Model):
         cancelled_moves._action_cancel()
         
         self.state = 'cancel'
-        
-        # Post message to chatter
-        self.message_post(
-            body=_('Operation cancelled. %d stock moves were cancelled.') % len(cancelled_moves),
-            message_type='notification'
-        )
         
         return True
 

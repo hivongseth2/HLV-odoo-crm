@@ -5,13 +5,13 @@
         <field name="name">production.operation.list</field>
         <field name="model">production.operation</field>
         <field name="arch" type="xml">
-            <list string="Production Operations" default_order="date desc" create="1" edit="1" delete="1">
-                <field name="name" string="Operation Number"/>
-                <field name="date"/>
-                <field name="operation_type" string="Type" widget="badge" decoration-info="operation_type == 'assembly'" decoration-warning="operation_type == 'disassembly'"/>
-                <field name="main_product_id" string="Main Product"/>
-                <field name="main_product_qty" string="Quantity"/>
-                <field name="state" string="Status" widget="badge" decoration-success="state == 'done'" decoration-muted="state == 'cancel'" decoration-info="state == 'draft'"/>
+            <list string="Hoạt động sản xuất" default_order="date desc" create="1" edit="1" delete="1">
+                <field name="name" string="Số chứng từ"/>
+                <field name="date" string="Ngày"/>
+                <field name="operation_type" string="Loại hoạt động" widget="badge" decoration-info="operation_type == 'assembly'" decoration-warning="operation_type == 'disassembly'"/>
+                <field name="main_product_id" string="Sản phẩm chính"/>
+                <field name="main_product_qty" string="Số lượng"/>
+                <field name="state" string="Trạng thái" widget="badge" decoration-success="state == 'done'" decoration-muted="state == 'cancel'" decoration-info="state == 'draft'"/>
                 <field name="company_id" groups="base.group_multi_company" column_invisible="1"/>
             </list>
         </field>
@@ -22,24 +22,24 @@
         <field name="name">production.operation.form</field>
         <field name="model">production.operation</field>
         <field name="arch" type="xml">
-            <form string="Production Operation">
+            <form string="Hoạt động sản xuất">
                 <header>
                     <button name="action_process_operation" 
-                            string="Process Assembly" 
+                            string="Thực hiện sản xuất" 
                             type="object" 
                             class="oe_highlight" 
                             invisible="state != 'draft' or operation_type != 'assembly'"/>
                     <button name="action_process_operation" 
-                            string="Process Disassembly" 
+                            string="Thực hiện tháo gỡ" 
                             type="object" 
                             class="oe_highlight" 
                             invisible="state != 'draft' or operation_type != 'disassembly'"/>
                     <button name="action_cancel" 
-                            string="Cancel" 
+                            string="Hủy" 
                             type="object" 
                             invisible="state != 'draft'"/>
                     <button name="action_set_to_draft" 
-                            string="Set to Draft" 
+                            string="Chuyển về nháp" 
                             type="object" 
                             invisible="state != 'cancel'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
@@ -50,74 +50,65 @@
                             <field name="name" readonly="1"/>
                         </h1>
                     </div>
-                    <group>
-                        <group name="main_info" string="Operation Information">
-                            <field name="operation_type" readonly="state != 'draft'"/>
-                            <field name="date" readonly="state != 'draft'"/>
-                            <field name="company_id" groups="base.group_multi_company" readonly="state != 'draft'"/>
-                        </group>
-                        <group name="product_info" string="Product Information">
-                            <field name="main_product_id" readonly="state != 'draft'"/>
-                            <field name="main_product_qty" readonly="state != 'draft'"/>
-                            <field name="main_product_uom_id" readonly="1"/>
-                            <field name="destination_location_id" 
-                                   string="Destination Location" 
-                                   readonly="state != 'draft'" 
-                                   invisible="operation_type == 'disassembly'"/>
-                            <field name="destination_location_id" 
-                                   string="Source Location" 
-                                   readonly="state != 'draft'" 
-                                   invisible="operation_type == 'assembly'"/>
-                        </group>
+                    <group col="4">
+                        <field name="operation_type" string="Loại hoạt động" readonly="state != 'draft'"/>
+                        <field name="date" string="Ngày" readonly="state != 'draft'"/>
+                        <field name="main_product_id" string="Sản phẩm chính" readonly="state != 'draft'"/>
+                        <field name="main_product_qty" string="Số lượng" readonly="state != 'draft'"/>
+                        <field name="main_product_uom_id" string="Đơn vị tính" readonly="1"/>
+                        <field name="destination_location_id" 
+                               string="Vị trí đích" 
+                               readonly="state != 'draft'" 
+                               invisible="operation_type == 'disassembly'"/>
+                        <field name="destination_location_id" 
+                               string="Vị trí nguồn" 
+                               readonly="state != 'draft'" 
+                               invisible="operation_type == 'assembly'"/>
+                        <field name="company_id" groups="base.group_multi_company" string="Công ty" readonly="state != 'draft'"/>
                     </group>
                     
                     <notebook>
-                        <page string="Components" name="components">
+                        <page string="Thành phần" name="components">
                             <field name="component_line_ids" readonly="state != 'draft'">
-                                <list string="Component Lines" editable="bottom">
+                                <list string="Danh sách thành phần" editable="bottom">
                                     <field name="sequence" widget="handle"/>
-                                    <field name="product_id"/>
-                                    <field name="qty"/>
-                                    <field name="product_uom_id" readonly="1"/>
+                                    <field name="product_id" string="Sản phẩm"/>
+                                    <field name="qty" string="Số lượng"/>
+                                    <field name="product_uom_id" string="Đơn vị tính" readonly="1"/>
                                     <field name="source_location_id" 
-                                           string="Source Location" 
+                                           string="Vị trí nguồn" 
                                            column_invisible="parent.operation_type == 'disassembly'"/>
                                     <field name="source_location_id" 
-                                           string="Destination Location" 
+                                           string="Vị trí đích" 
                                            column_invisible="parent.operation_type == 'assembly'"/>
                                     <field name="available_qty" 
-                                           string="Available" 
+                                           string="Có sẵn" 
                                            column_invisible="parent.operation_type == 'disassembly'"/>
                                     <field name="operation_type" column_invisible="1"/>
                                 </list>
                             </field>
                         </page>
                         
-                        <page string="Stock Moves" name="stock_moves" invisible="not move_ids">
+                        <page string="Chuyển kho" name="stock_moves" invisible="not move_ids">
                             <field name="move_ids" readonly="1">
-                                <list string="Stock Moves">
-                                    <field name="name"/>
-                                    <field name="product_id"/>
-                                    <field name="product_uom_qty"/>
-                                    <field name="product_uom"/>
-                                    <field name="location_id"/>
-                                    <field name="location_dest_id"/>
-                                    <field name="state"/>
-                                    <field name="date"/>
+                                <list string="Chuyển kho">
+                                    <field name="name" string="Tên"/>
+                                    <field name="product_id" string="Sản phẩm"/>
+                                    <field name="product_uom_qty" string="Số lượng"/>
+                                    <field name="product_uom" string="Đơn vị"/>
+                                    <field name="location_id" string="Từ vị trí"/>
+                                    <field name="location_dest_id" string="Đến vị trí"/>
+                                    <field name="state" string="Trạng thái"/>
+                                    <field name="date" string="Ngày"/>
                                 </list>
                             </field>
                         </page>
                         
-                        <page string="Notes" name="notes">
-                            <field name="notes" placeholder="Additional notes about this operation..."/>
+                        <page string="Ghi chú" name="notes">
+                            <field name="notes" string="Ghi chú" placeholder="Ghi chú bổ sung về hoạt động này..."/>
                         </page>
                     </notebook>
                 </sheet>
-                <div class="oe_chatter">
-                    <field name="message_follower_ids"/>
-                    <field name="activity_ids"/>
-                    <field name="message_ids"/>
-                </div>
             </form>
         </field>
     </record>
@@ -127,27 +118,27 @@
         <field name="name">production.operation.search</field>
         <field name="model">production.operation</field>
         <field name="arch" type="xml">
-            <search string="Production Operations">
-                <field name="name" string="Operation Number"/>
-                <field name="main_product_id" string="Product"/>
-                <field name="destination_location_id" string="Location"/>
+            <search string="Hoạt động sản xuất">
+                <field name="name" string="Số chứng từ"/>
+                <field name="main_product_id" string="Sản phẩm"/>
+                <field name="destination_location_id" string="Vị trí"/>
                 <separator/>
-                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
-                <filter name="done" string="Done" domain="[('state', '=', 'done')]"/>
-                <filter name="cancelled" string="Cancelled" domain="[('state', '=', 'cancel')]"/>
+                <filter name="draft" string="Nháp" domain="[('state', '=', 'draft')]"/>
+                <filter name="done" string="Hoàn thành" domain="[('state', '=', 'done')]"/>
+                <filter name="cancelled" string="Đã hủy" domain="[('state', '=', 'cancel')]"/>
                 <separator/>
-                <filter name="assembly" string="Assembly" domain="[('operation_type', '=', 'assembly')]"/>
-                <filter name="disassembly" string="Disassembly" domain="[('operation_type', '=', 'disassembly')]"/>
+                <filter name="assembly" string="Sản xuất" domain="[('operation_type', '=', 'assembly')]"/>
+                <filter name="disassembly" string="Tháo gỡ" domain="[('operation_type', '=', 'disassembly')]"/>
                 <separator/>
-                <filter name="today" string="Today" domain="[('date', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0))), ('date', '&lt;=', datetime.datetime.combine(context_today(), datetime.time(23,59,59)))]"/>
-                <filter name="this_week" string="This Week" domain="[('date', '&gt;=', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%Y-%m-%d')), ('date', '&lt;=', (context_today() + datetime.timedelta(days=6-context_today().weekday())).strftime('%Y-%m-%d'))]"/>
-                <filter name="this_month" string="This Month" domain="[('date', '&gt;=', datetime.datetime.now().strftime('%Y-%m-01')), ('date', '&lt;=', (datetime.datetime.now().replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1))]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_by_operation_type" string="Operation Type" context="{'group_by': 'operation_type'}"/>
-                    <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
-                    <filter name="group_by_main_product" string="Main Product" context="{'group_by': 'main_product_id'}"/>
-                    <filter name="group_by_location" string="Location" context="{'group_by': 'destination_location_id'}"/>
-                    <filter name="group_by_date" string="Date" context="{'group_by': 'date:day'}"/>
+                <filter name="today" string="Hôm nay" domain="[('date', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0))), ('date', '&lt;=', datetime.datetime.combine(context_today(), datetime.time(23,59,59)))]"/>
+                <filter name="this_week" string="Tuần này" domain="[('date', '&gt;=', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%Y-%m-%d')), ('date', '&lt;=', (context_today() + datetime.timedelta(days=6-context_today().weekday())).strftime('%Y-%m-%d'))]"/>
+                <filter name="this_month" string="Tháng này" domain="[('date', '&gt;=', datetime.datetime.now().strftime('%Y-%m-01')), ('date', '&lt;=', (datetime.datetime.now().replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1))]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_by_operation_type" string="Loại hoạt động" context="{'group_by': 'operation_type'}"/>
+                    <filter name="group_by_state" string="Trạng thái" context="{'group_by': 'state'}"/>
+                    <filter name="group_by_main_product" string="Sản phẩm chính" context="{'group_by': 'main_product_id'}"/>
+                    <filter name="group_by_location" string="Vị trí" context="{'group_by': 'destination_location_id'}"/>
+                    <filter name="group_by_date" string="Ngày" context="{'group_by': 'date:day'}"/>
                 </group>
             </search>
         </field>
@@ -155,28 +146,28 @@
 
     <!-- Production Operation Action -->
     <record id="action_production_operation" model="ir.actions.act_window">
-        <field name="name">Production Operations</field>
+        <field name="name">Hoạt động sản xuất</field>
         <field name="res_model">production.operation</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_production_operation_search"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
-                Create your first production operation!
+                Tạo hoạt động sản xuất đầu tiên của bạn!
             </p>
             <p>
-                Production operations allow you to:
+                Hoạt động sản xuất cho phép bạn:
                 <ul>
-                    <li><strong>Assembly:</strong> Combine components to create finished products</li>
-                    <li><strong>Disassembly:</strong> Break down finished products into components</li>
+                    <li><strong>Sản xuất:</strong> Kết hợp các thành phần để tạo thành phẩm</li>
+                    <li><strong>Tháo gỡ:</strong> Tháo thành phẩm thành các thành phần</li>
                 </ul>
-                All operations use Virtual Locations/Production as intermediate location for stock moves.
+                Tất cả hoạt động sử dụng Vị trí ảo/Sản xuất làm vị trí trung gian cho chuyển kho.
             </p>
         </field>
     </record>
 
     <!-- Assembly Operations Action -->
     <record id="action_production_assembly" model="ir.actions.act_window">
-        <field name="name">Assembly Operations</field>
+        <field name="name">Hoạt động sản xuất</field>
         <field name="res_model">production.operation</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('operation_type', '=', 'assembly')]</field>
@@ -186,7 +177,7 @@
 
     <!-- Disassembly Operations Action -->
     <record id="action_production_disassembly" model="ir.actions.act_window">
-        <field name="name">Disassembly Operations</field>
+        <field name="name">Hoạt động tháo gỡ</field>
         <field name="res_model">production.operation</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('operation_type', '=', 'disassembly')]</field>

@@ -1,0 +1,162 @@
+/* Production Assembly Module CSS */
+
+/* Responsive layout for form view */
+.o_form_view .o_form_sheet {
+    max-width: 100%;
+    padding: 16px;
+}
+
+/* Better spacing for groups on large screens */
+@media (min-width: 1200px) {
+    .o_form_view .o_group {
+        margin-bottom: 16px;
+    }
+    
+    .o_form_view .o_group .o_group_col_6 {
+        width: 50%;
+        float: left;
+        padding-right: 8px;
+    }
+    
+    .o_form_view .o_group .o_group_col_6:last-child {
+        padding-right: 0;
+        padding-left: 8px;
+    }
+}
+
+/* Improve list view on large screens */
+@media (min-width: 1200px) {
+    .o_list_view .o_list_table {
+        width: 100%;
+        table-layout: auto;
+    }
+    
+    .o_list_view .o_list_table th,
+    .o_list_view .o_list_table td {
+        padding: 8px 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Specific column widths for better layout */
+    .o_list_view .o_list_table th:first-child,
+    .o_list_view .o_list_table td:first-child {
+        width: 15%; /* Operation Number */
+    }
+    
+    .o_list_view .o_list_table th:nth-child(2),
+    .o_list_view .o_list_table td:nth-child(2) {
+        width: 12%; /* Date */
+    }
+    
+    .o_list_view .o_list_table th:nth-child(3),
+    .o_list_view .o_list_table td:nth-child(3) {
+        width: 15%; /* Operation Type */
+    }
+    
+    .o_list_view .o_list_table th:nth-child(4),
+    .o_list_view .o_list_table td:nth-child(4) {
+        width: 25%; /* Main Product */
+    }
+    
+    .o_list_view .o_list_table th:nth-child(5),
+    .o_list_view .o_list_table td:nth-child(5) {
+        width: 10%; /* Quantity */
+    }
+    
+    .o_list_view .o_list_table th:nth-child(6),
+    .o_list_view .o_list_table td:nth-child(6) {
+        width: 13%; /* Status */
+    }
+    
+    .o_list_view .o_list_table th:last-child,
+    .o_list_view .o_list_table td:last-child {
+        width: 10%; /* Actions */
+    }
+}
+
+/* Form view improvements */
+.o_form_view .o_form_statusbar {
+    margin-bottom: 16px;
+}
+
+.o_form_view .o_notebook {
+    margin-top: 16px;
+}
+
+.o_form_view .o_notebook .nav-tabs {
+    border-bottom: 2px solid #dee2e6;
+}
+
+.o_form_view .o_notebook .nav-tabs .nav-link {
+    padding: 12px 20px;
+    font-weight: 500;
+}
+
+.o_form_view .o_notebook .nav-tabs .nav-link.active {
+    border-bottom: 2px solid #007bff;
+    color: #007bff;
+}
+
+/* Component lines table improvements */
+.o_field_one2many .o_list_table {
+    margin-top: 8px;
+}
+
+.o_field_one2many .o_list_table th,
+.o_field_one2many .o_list_table td {
+    padding: 8px;
+    vertical-align: middle;
+}
+
+/* Button styling */
+.o_form_view .oe_button_box {
+    margin-bottom: 16px;
+}
+
+.o_form_view .oe_button_box .btn {
+    margin: 2px;
+    min-width: 120px;
+}
+
+/* Status badge styling */
+.o_form_view .o_field_widget.badge {
+    font-size: 12px;
+    padding: 4px 8px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .o_form_view .o_form_sheet {
+        padding: 8px;
+    }
+    
+    .o_form_view .o_group {
+        margin-bottom: 8px;
+    }
+    
+    .o_list_view .o_list_table th,
+    .o_list_view .o_list_table td {
+        padding: 4px 6px;
+        font-size: 12px;
+    }
+    
+    .o_form_view .oe_button_box .btn {
+        min-width: 100px;
+        font-size: 12px;
+    }
+}
+
+/* Print styles */
+@media print {
+    .o_form_view .oe_button_box,
+    .o_form_view .o_form_statusbar .o_statusbar_buttons {
+        display: none !important;
+    }
+    
+    .o_form_view .o_form_sheet {
+        box-shadow: none;
+        border: none;
+    }
+}
