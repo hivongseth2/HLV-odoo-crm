@@ -85,6 +85,7 @@ class WebsitePublicInventorySettings(models.TransientModel):
         param.set_param("website_public_inventory_18.chatbot_max_tokens", self.chatbot_max_tokens)
         param.set_param("website_public_inventory_18.chatbot_temperature", self.chatbot_temperature)
         param.set_param("website_public_inventory_18.web_search_enabled", self.web_search_enabled)
+        
 
     # ============================
     # TEST CONNECTION — 已換 Responses API
@@ -103,7 +104,6 @@ class WebsitePublicInventorySettings(models.TransientModel):
                 model=self.openai_model,
                 input="Hello! This is a test from Odoo.",
                 max_output_tokens=10,
-                temperature=0
             )
 
             if resp.output_text:

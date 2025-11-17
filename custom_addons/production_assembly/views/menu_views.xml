@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Main Menu -->
+    <menuitem id="menu_production_assembly_root"
+              name="Production Assembly"
+              parent="stock.menu_stock_root"
+              sequence="50"/>
+
+    <!-- Operations Menu -->
+    <menuitem id="menu_production_operations"
+              name="Operations"
+              parent="menu_production_assembly_root"
+              sequence="10"/>
+
+    <!-- All Operations -->
+    <menuitem id="menu_production_operation_all"
+              name="All Operations"
+              parent="menu_production_operations"
+              action="action_production_operation"
+              sequence="10"/>
+
+    <!-- Assembly Operations -->
+    <menuitem id="menu_production_assembly_operations"
+              name="Assembly"
+              parent="menu_production_operations"
+              action="action_production_assembly"
+              sequence="20"/>
+
+    <!-- Disassembly Operations -->
+    <menuitem id="menu_production_disassembly_operations"
+              name="Disassembly"
+              parent="menu_production_operations"
+              action="action_production_disassembly"
+              sequence="30"/>
+</odoo>
