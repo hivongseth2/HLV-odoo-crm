@@ -81,10 +81,12 @@
                                     <field name="product_uom_id" string="Đơn vị tính" readonly="1"/>
                                     <field name="source_location_id" 
                                            string="Vị trí nguồn" 
-                                           column_invisible="parent.operation_type == 'disassembly'"/>
+                                           column_invisible="parent.operation_type == 'disassembly'"
+                                           domain="[('id', 'in', available_location_ids)]"/>
                                     <field name="source_location_id" 
                                            string="Vị trí đích" 
-                                           column_invisible="parent.operation_type == 'assembly'"/>
+                                           column_invisible="parent.operation_type == 'assembly'"
+                                           domain="[('id', 'in', available_location_ids)]"/>
                                     <field name="available_qty" 
                                            string="Có sẵn" 
                                            column_invisible="parent.operation_type == 'disassembly'"/>

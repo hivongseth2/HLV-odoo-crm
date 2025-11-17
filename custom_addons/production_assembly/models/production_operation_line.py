@@ -48,7 +48,8 @@ class ProductionOperationLine(models.Model):
     available_location_ids = fields.Many2many(
         'stock.location',
         compute='_compute_available_location_ids',
-        string='Available Locations'
+        string='Available Locations',
+        store=False
     )
     
     # Related fields for easier access
@@ -77,19 +78,22 @@ class ProductionOperationLine(models.Model):
         help="Available quantity in source location (for assembly operations)"
     )
     
-    @api.depends('product_id', 'operation_type', 'company_id')
     def _compute_available_location_ids(self):
+        """Compute available locations based on operation type and user access"""
+        warehouse_config = self.env['warehouse.access.config']
+        
         for line in self:
             if line.operation_type == 'assembly' and line.product_id:
                 # For assembly: only show locations where the product has stock and user has access
-                warehouse_config = self.env['warehouse.access.config']
                 locations = warehouse_config.get_locations_with_stock(line.product_id.id, self.env.user.id)
                 line.available_location_ids = locations
-            else:
+            elif line.operation_type == 'disassembly':
                 # For disassembly: show accessible internal locations
-                warehouse_config = self.env['warehouse.access.config']
                 accessible_locations = warehouse_config.get_accessible_locations(self.env.user.id)
                 line.available_location_ids = accessible_locations
+            else:
+                # Return empty recordset for other cases
+                line.available_location_ids = self.env['stock.location']
 
     @api.depends('product_id', 'source_location_id', 'operation_type')
     def _compute_available_qty(self):
@@ -104,9 +108,12 @@ class ProductionOperationLine(models.Model):
                 line.available_qty = sum(quants.mapped('quantity'))
             else:
                 line.available_qty = 0.0
-
-    @api.onchange('product_id')
+    
+    @api.onchange('product_id', 'operation_type')
     def _onchange_product_id(self):
+        # Force recompute available locations when product or operation type changes
+        self._compute_available_location_ids()
+        
         if self.product_id:
             # Clear current location selection
             self.source_location_id = False

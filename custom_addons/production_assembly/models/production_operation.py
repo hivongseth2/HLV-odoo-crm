@@ -91,14 +91,16 @@ class ProductionOperation(models.Model):
     available_source_location_ids = fields.Many2many(
         'stock.location',
         compute='_compute_available_source_locations',
-        string='Vị trí nguồn có sẵn'
+        string='Vị trí nguồn có sẵn',
+        store=False
     )
     
     # Computed field for filtering destination locations with access control
     available_destination_location_ids = fields.Many2many(
         'stock.location',
         compute='_compute_available_destination_locations',
-        string='Vị trí đích có sẵn'
+        string='Vị trí đích có sẵn',
+        store=False
     )
     
     component_line_ids = fields.One2many(
@@ -140,14 +142,16 @@ class ProductionOperation(models.Model):
     @api.depends('main_product_id', 'operation_type')
     def _compute_available_source_locations(self):
         """Compute available source locations based on product stock and user access"""
+        warehouse_config = self.env['warehouse.access.config']
+        
         for record in self:
             if record.operation_type == 'disassembly' and record.main_product_id:
                 # Get locations with stock for this product that user can access
-                warehouse_config = self.env['warehouse.access.config']
                 locations = warehouse_config.get_locations_with_stock(record.main_product_id.id, self.env.user.id)
                 record.available_source_location_ids = locations
             else:
-                record.available_source_location_ids = False
+                # Return empty recordset for other cases
+                record.available_source_location_ids = self.env['stock.location']
     
     @api.depends('operation_type')
     def _compute_available_destination_locations(self):
@@ -161,9 +165,9 @@ class ProductionOperation(models.Model):
                 internal_locations = accessible_locations.filtered(lambda l: l.usage == 'internal')
                 record.available_destination_location_ids = internal_locations
             else:
-                record.available_destination_location_ids = False
+                record.available_destination_location_ids = self.env['stock.location']
 
-    @api.onchange('main_product_id')
+    @api.onchange('main_product_id', 'operation_type')
     def _onchange_main_product_id(self):
         if self.main_product_id:
             # Set default destination location to stock location if not set
@@ -174,8 +178,13 @@ class ProductionOperation(models.Model):
                 ], limit=1)
                 if stock_location:
                     self.destination_location_id = stock_location.id
-            
-            # Clear source location when product changes
+        
+        # Force recompute of available locations when product or operation type changes
+        self._compute_available_source_locations()
+        self._compute_available_destination_locations()
+        
+        # Clear source location when product changes
+        if self.main_product_id:
             self.source_location_id = False
 
     def action_process_operation(self):
