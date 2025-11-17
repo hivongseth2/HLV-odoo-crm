@@ -160,12 +160,28 @@ class ProductionOperation(models.Model):
         
         # Process moves with available quantities
         for move in moves:
-            if move.state == 'assigned':
-                move._action_done()
-            else:
-                # Force move if not enough stock (for production scenarios)
-                move.quantity_done = move.product_uom_qty
-                move._action_done()
+            # Set quantity_done for move lines
+            for move_line in move.move_line_ids:
+                move_line.quantity = move_line.reserved_quantity or move.product_uom_qty
+            
+            # If no move lines exist, create them
+            if not move.move_line_ids:
+                move._action_assign()
+                if not move.move_line_ids:
+                    # Create move line manually for production scenarios
+                    self.env['stock.move.line'].create({
+                        'move_id': move.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'quantity': move.product_uom_qty,
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                        'company_id': move.company_id.id,
+                    })
+            
+            # Set quantity_done and complete the move
+            move.quantity_done = move.product_uom_qty
+            move._action_done()
         
         self.state = 'done'
         
