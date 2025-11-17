@@ -930,3 +930,27 @@ async function savePackageChanges() {
   toast.success("✅ Đã lưu thay đổi! Tải lại trang...");
   setTimeout(() => window.location.reload(), 1500);
 }
+
+async function splitPackageFromModal() {
+  if (!currentPackageData) return;
+  if (!confirm('Bạn chắc chắn muốn tách gói này thành một phiếu riêng?')) return;
+  const pickingId = parseInt(window.location.pathname.split("/").pop());
+  try {
+    const res = await fetch('/pack_scan/split_package', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { picking_id: pickingId, package_id: currentPackageData.package_id } })
+    });
+    const response = await res.json();
+    const result = response.result || response;
+    if (result?.error) {
+      toast.error('❌ ' + result.error);
+      return;
+    }
+    toast.success('✅ ' + result.message);
+    // Open new picking view
+    setTimeout(() => { window.location.href = '/custom_barcode_scan/pack_view/' + result.new_picking_id; }, 1000);
+  } catch (err) {
+    toast.error('❌ Lỗi kết nối: ' + err.message);
+  }
+}

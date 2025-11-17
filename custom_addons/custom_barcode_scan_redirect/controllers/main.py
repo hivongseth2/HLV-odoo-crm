@@ -873,6 +873,30 @@ class CustomBarcodeScanController(http.Controller):
             _logger.exception("ADD_ITEM_TO_PACKAGE error")
             return {"error": str(e)}
 
+    @http.route('/pack_scan/split_package', type='json', auth='user', csrf=False)
+    def split_package(self, **kwargs):
+        """
+        Tách 1 package thành phiếu riêng (tạo picking mới và chuyển các move_line)
+        """
+        picking_id = kwargs.get('picking_id')
+        package_id = kwargs.get('package_id')
+
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+
+        try:
+            result = picking.split_package_to_new_picking(package_id)
+            return {
+                'success': True,
+                'new_picking_id': result['picking_id'],
+                'new_picking_name': result['picking_name'],
+                'message': f"✅ Đã tách {result['picking_name']} thành công!"
+            }
+        except Exception as e:
+            _logger.exception('SPLIT_PACKAGE error')
+            return {"error": str(e)}
+
     @http.route('/gdrive/oauth2/disconnect', type='http', auth='user', website=True, csrf=False)
     def disconnect(self, **kw):
         # Xoá token hiện tại => lần sau sẽ bắt đăng nhập lại (chọn tài khoản khác)

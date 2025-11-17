@@ -363,3 +363,71 @@ class StockPickingPartial(models.Model):
             'success': True,
             'message': f"Thêm {qty} vào package thành công"
         }
+
+    def split_package_to_new_picking(self, package_id):
+        """
+        Tách 1 package thành phiếu mới (tương tự tách đơn trong bán hàng)
+        Cơ chế:
+        - Tạo 1 stock.picking mới (cùng picking_type, partner, locations)
+        - Copy move của các move_lines trong package thành moves mới trong picking mới
+        - Copy move_line với qty_done sang picking mới và xóa qty_done + result_package_id trên move_line gốc
+        - Trả về id, name của picking mới
+        """
+        self.ensure_one()
+
+        Package = self.env['stock.quant.package']
+        package = Package.sudo().browse(package_id)
+        if not package.exists():
+            raise ValidationError("Gói hàng không tồn tại!")
+
+        # Lấy tất cả move_line trong picking thuộc package này
+        ml_lines = self.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', self.id),
+            ('result_package_id', '=', package_id)
+        ])
+
+        if not ml_lines:
+            raise ValidationError("Không có sản phẩm nào trong gói để tách!")
+
+        # Tạo 1 picking mới kế thừa một số thông tin
+        new_picking_vals = {
+            'picking_type_id': self.picking_type_id.id,
+            'location_id': self.location_id.id,
+            'location_dest_id': self.location_dest_id.id,
+            'partner_id': self.partner_id.id or False,
+            'origin': (self.origin or self.name) + (f'/{package.name}' if package.name else ''),
+            'move_type': self.move_type,
+            'group_id': self.group_id and self.group_id.id or False,
+        }
+        new_picking = self.env['stock.picking'].sudo().create(new_picking_vals)
+
+        # Copy moves and move_lines
+        for ml in ml_lines:
+            if ml.qty_done <= 0:
+                continue
+
+            orig_move = ml.move_id
+            # Copy move for new picking
+            new_move = orig_move.copy({
+                'picking_id': new_picking.id,
+                'product_uom_qty': ml.qty_done,
+            })
+
+            # Copy move_line to new picking/move with same qty_done and package
+            new_ml = ml.copy({
+                'move_id': new_move.id,
+                'qty_done': ml.qty_done,
+                'result_package_id': package.id,
+            })
+
+            # Remove from original: reset qty_done and result_package_id
+            ml.qty_done = 0
+            ml.result_package_id = False
+
+        # Try to assign new picking
+        try:
+            new_picking.action_assign()
+        except Exception:
+            pass
+
+        return {'picking_id': new_picking.id, 'picking_name': new_picking.name}

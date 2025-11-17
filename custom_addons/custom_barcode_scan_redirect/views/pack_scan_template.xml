@@ -192,6 +192,7 @@
         <!-- Modal Footer -->
         <div style="padding:16px 20px; border-top:1px solid #e5e7eb; display:flex; gap:8px; justify-content:flex-end;">
           <button onclick="closePackageEditModal()" style="background:#e5e7eb; color:#1f2937; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600;">Đóng</button>
+          <button onclick="splitPackageFromModal()" style="background:#fb923c; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600;">🔀 Tách gói</button>
           <button onclick="savePackageChanges()" style="background:#3b82f6; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600;">💾 Lưu thay đổi</button>
         </div>
       </div>
