@@ -2,7 +2,7 @@
 <odoo>
     <!-- Main Menu -->
     <menuitem id="menu_production_assembly_root"
-              name="Sản xuất đơn giản"
+              name="Sản xuất"
               parent="stock.menu_stock_root"
               sequence="50"/>
 
