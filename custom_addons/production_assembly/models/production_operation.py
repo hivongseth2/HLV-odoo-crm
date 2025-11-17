@@ -94,6 +94,13 @@ class ProductionOperation(models.Model):
         string='Vị trí nguồn có sẵn'
     )
     
+    # Computed field for filtering destination locations with access control
+    available_destination_location_ids = fields.Many2many(
+        'stock.location',
+        compute='_compute_available_destination_locations',
+        string='Vị trí đích có sẵn'
+    )
+    
     component_line_ids = fields.One2many(
         'production.operation.line',
         'operation_id',
@@ -137,10 +144,24 @@ class ProductionOperation(models.Model):
             if record.operation_type == 'disassembly' and record.main_product_id:
                 # Get locations with stock for this product that user can access
                 warehouse_config = self.env['warehouse.access.config']
-                locations = warehouse_config.get_locations_with_stock(record.main_product_id.id)
+                locations = warehouse_config.get_locations_with_stock(record.main_product_id.id, self.env.user.id)
                 record.available_source_location_ids = locations
             else:
                 record.available_source_location_ids = False
+    
+    @api.depends('operation_type')
+    def _compute_available_destination_locations(self):
+        """Compute available destination locations based on warehouse access control"""
+        for record in self:
+            if record.operation_type:
+                # Get user's accessible locations
+                accessible_locations = self._get_user_accessible_locations()
+                
+                # Filter internal locations
+                internal_locations = accessible_locations.filtered(lambda l: l.usage == 'internal')
+                record.available_destination_location_ids = internal_locations
+            else:
+                record.available_destination_location_ids = False
 
     @api.onchange('main_product_id')
     def _onchange_main_product_id(self):
@@ -330,3 +351,45 @@ class ProductionOperation(models.Model):
             products = record.component_line_ids.mapped('product_id')
             if len(products) != len(record.component_line_ids):
                 raise ValidationError(_('Duplicate products are not allowed in component lines.'))
+    
+    @api.constrains('destination_location_id', 'source_location_id')
+    def _check_location_access(self):
+        """Check if user has access to selected locations"""
+        for record in self:
+            accessible_locations = record._get_user_accessible_locations()
+            
+            # Check destination location access for assembly
+            if record.operation_type == 'assembly' and record.destination_location_id:
+                if record.destination_location_id not in accessible_locations:
+                    raise ValidationError(_('Bạn không có quyền truy cập vào vị trí đích đã chọn: %s') % record.destination_location_id.display_name)
+            
+            # Check source location access for disassembly
+            if record.operation_type == 'disassembly' and record.source_location_id:
+                if record.source_location_id not in accessible_locations:
+                    raise ValidationError(_('Bạn không có quyền truy cập vào vị trí nguồn đã chọn: %s') % record.source_location_id.display_name)
+    
+    def _get_user_accessible_locations(self):
+        """Get locations that current user has access to"""
+        current_user = self.env.user
+        
+        # Check if user has warehouse access configuration
+        warehouse_config = self.env['warehouse.access.config'].search([
+            ('user_id', '=', current_user.id)
+        ], limit=1)
+        
+        if warehouse_config:
+            # Return configured locations and warehouse locations
+            accessible_locations = warehouse_config.location_ids
+            
+            # Add warehouse locations if configured
+            for warehouse in warehouse_config.warehouse_ids:
+                accessible_locations |= warehouse.lot_stock_id
+                accessible_locations |= warehouse.view_location_id.child_ids
+            
+            return accessible_locations
+        else:
+            # If no configuration, return all internal locations (default behavior)
+            return self.env['stock.location'].search([
+                ('usage', '=', 'internal'),
+                ('company_id', '=', self.company_id.id or self.env.company.id)
+            ])
