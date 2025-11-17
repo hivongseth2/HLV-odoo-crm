@@ -120,26 +120,54 @@ class WordPressOrderWebhook(http.Controller):
             # # Lấy access token từ Shared Token Manager
             # token_manager = request.env['hlv.zalo.shared.token'].sudo()
             # access_token = token_manager._get_shared_token()
-            config = self.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
+            # Thay khúc này trong wordpress_order_notify
+
+            # # Lấy access token từ Shared Token Manager
+            # token_manager = request.env['hlv.zalo.shared.token'].sudo()
+            # access_token = token_manager._get_shared_token()
+
+            # Lấy config qua request.env (KHÔNG dùng self.env trong controller)
+            config = request.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
+
+            if not config:
+                _logger.error(
+                    "WordPress webhook - No active Zalo Stock Notification config found (order_id: %s)",
+                    data.get('order_id', 'N/A')
+                )
+                return Response(
+                    json.dumps({'success': False, 'error': 'No active Zalo config found'}),
+                    content_type='application/json',
+                    status=500,
+                )
 
             try:
                 access_token = config.get_valid_access_token()
-                if not access_token:
-                    _logger.error("Zalo Config for picking %s has no valid access_token. Please authorize first.", self.name)
-                    return
             except Exception as e:
-                _logger.exception("Error getting access token for picking %s: %s", self.name, e)
-                return
-                
-            if not access_token:
-                _logger.error("WordPress webhook - No active Zalo token found (order_id: %s)", 
-                            data.get('order_id', 'N/A'))
-                return Response(
-                    json.dumps({'success': False, 'error': 'No active Zalo token found. Please configure Zalo Shared Token Manager in Odoo.'}),
-                    content_type='application/json',
-                    status=500
+                _logger.exception(
+                    "WordPress webhook - Error getting access token (order_id: %s): %s",
+                    data.get('order_id', 'N/A'),
+                    e,
                 )
-            
+                return Response(
+                    json.dumps({'success': False, 'error': 'Error getting Zalo access token'}),
+                    content_type='application/json',
+                    status=500,
+                )
+
+            if not access_token:
+                _logger.error(
+                    "WordPress webhook - No valid Zalo access_token (order_id: %s)",
+                    data.get('order_id', 'N/A')
+                )
+                return Response(
+                    json.dumps({
+                        'success': False,
+                        'error': 'No active Zalo token found. Please configure Zalo Stock Notification in Odoo.',
+                    }),
+                    content_type='application/json',
+                    status=500,
+                )
+
             # Lấy danh sách recipients (từ request hoặc từ config mặc định)
             recipient_user_ids = data.get('recipient_user_ids', [])
             
