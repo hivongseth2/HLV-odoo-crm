@@ -158,31 +158,31 @@ class ProductionOperation(models.Model):
         moves._action_confirm()
         moves._action_assign()
         
-        # Process moves with available quantities
+        # Process moves directly without picking - simpler approach
         for move in moves:
             # Ensure move is assigned
             if move.state not in ('assigned', 'partially_available'):
                 move._action_assign()
             
-            # Set quantity on move lines (Odoo 18 uses 'quantity' field)
-            if move.move_line_ids:
-                for move_line in move.move_line_ids:
-                    move_line.quantity = move.product_uom_qty
-            else:
-                # If no move lines, create them manually
+            # Create move lines if they don't exist
+            if not move.move_line_ids:
                 move_line_vals = {
                     'move_id': move.id,
                     'product_id': move.product_id.id,
                     'product_uom_id': move.product_uom.id,
-                    'quantity': move.product_uom_qty,
                     'location_id': move.location_id.id,
                     'location_dest_id': move.location_dest_id.id,
                     'company_id': move.company_id.id,
+                    'qty_done': move.product_uom_qty,
                 }
                 self.env['stock.move.line'].create(move_line_vals)
+            else:
+                # Set qty_done on existing move lines
+                for move_line in move.move_line_ids:
+                    move_line.qty_done = move.product_uom_qty
             
-            # Complete the move with context to bypass some validations
-            move.with_context(skip_backorder=True, skip_sms=True)._action_done()
+            # Complete the move
+            move._action_done()
         
         self.state = 'done'
         
