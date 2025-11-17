@@ -5,16 +5,14 @@
         <field name="name">production.operation.list</field>
         <field name="model">production.operation</field>
         <field name="arch" type="xml">
-            <list string="Production Operations" default_order="date desc">
+            <list string="Production Operations" default_order="date desc" create="1" edit="1" delete="1">
                 <field name="name" string="Operation Number"/>
                 <field name="date"/>
-                <field name="operation_type" string="Type"/>
+                <field name="operation_type" string="Type" widget="badge" decoration-info="operation_type == 'assembly'" decoration-warning="operation_type == 'disassembly'"/>
                 <field name="main_product_id" string="Main Product"/>
                 <field name="main_product_qty" string="Quantity"/>
-                <field name="main_product_uom_id" string="UoM"/>
-                <field name="destination_location_id" string="Location"/>
-                <field name="state" string="Status" decoration-success="state == 'done'" decoration-muted="state == 'cancel'"/>
-                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="state" string="Status" widget="badge" decoration-success="state == 'done'" decoration-muted="state == 'cancel'" decoration-info="state == 'draft'"/>
+                <field name="company_id" groups="base.group_multi_company" column_invisible="1"/>
             </list>
         </field>
     </record>
@@ -62,11 +60,13 @@
                             <field name="main_product_id" readonly="state != 'draft'"/>
                             <field name="main_product_qty" readonly="state != 'draft'"/>
                             <field name="main_product_uom_id" readonly="1"/>
-                            <field name="destination_location_id" readonly="state != 'draft'" 
+                            <field name="destination_location_id" 
                                    string="Destination Location" 
+                                   readonly="state != 'draft'" 
                                    invisible="operation_type == 'disassembly'"/>
-                            <field name="destination_location_id" readonly="state != 'draft'" 
+                            <field name="destination_location_id" 
                                    string="Source Location" 
+                                   readonly="state != 'draft'" 
                                    invisible="operation_type == 'assembly'"/>
                         </group>
                     </group>
@@ -81,13 +81,13 @@
                                     <field name="product_uom_id" readonly="1"/>
                                     <field name="source_location_id" 
                                            string="Source Location" 
-                                           invisible="parent.operation_type == 'disassembly'"/>
+                                           column_invisible="parent.operation_type == 'disassembly'"/>
                                     <field name="source_location_id" 
                                            string="Destination Location" 
-                                           invisible="parent.operation_type == 'assembly'"/>
+                                           column_invisible="parent.operation_type == 'assembly'"/>
                                     <field name="available_qty" 
                                            string="Available" 
-                                           invisible="parent.operation_type == 'disassembly'"/>
+                                           column_invisible="parent.operation_type == 'disassembly'"/>
                                     <field name="operation_type" column_invisible="1"/>
                                 </list>
                             </field>

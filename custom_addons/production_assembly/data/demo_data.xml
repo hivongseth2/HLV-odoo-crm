@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Demo Production Operations -->
+        <record id="demo_assembly_operation_1" model="production.operation">
+            <field name="name">ASM/2024/001</field>
+            <field name="operation_type">assembly</field>
+            <field name="main_product_id" ref="product.product_product_25"/>
+            <field name="main_product_qty">10</field>
+            <field name="destination_location_id" ref="stock.stock_location_stock"/>
+            <field name="date" eval="(DateTime.now() - timedelta(days=2)).strftime('%Y-%m-%d %H:%M:%S')"/>
+            <field name="state">draft</field>
+            <field name="notes">Demo assembly operation for testing</field>
+        </record>
+
+        <record id="demo_disassembly_operation_1" model="production.operation">
+            <field name="name">DIS/2024/001</field>
+            <field name="operation_type">disassembly</field>
+            <field name="main_product_id" ref="product.product_product_27"/>
+            <field name="main_product_qty">5</field>
+            <field name="destination_location_id" ref="stock.stock_location_stock"/>
+            <field name="date" eval="(DateTime.now() - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')"/>
+            <field name="state">draft</field>
+            <field name="notes">Demo disassembly operation for testing</field>
+        </record>
+
+        <!-- Demo Component Lines for Assembly -->
+        <record id="demo_assembly_line_1" model="production.operation.line">
+            <field name="operation_id" ref="demo_assembly_operation_1"/>
+            <field name="product_id" ref="product.product_product_11"/>
+            <field name="qty">20</field>
+            <field name="source_location_id" ref="stock.stock_location_stock"/>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="demo_assembly_line_2" model="production.operation.line">
+            <field name="operation_id" ref="demo_assembly_operation_1"/>
+            <field name="product_id" ref="product.product_product_12"/>
+            <field name="qty">15</field>
+            <field name="source_location_id" ref="stock.stock_location_stock"/>
+            <field name="sequence">20</field>
+        </record>
+
+        <!-- Demo Component Lines for Disassembly -->
+        <record id="demo_disassembly_line_1" model="production.operation.line">
+            <field name="operation_id" ref="demo_disassembly_operation_1"/>
+            <field name="product_id" ref="product.product_product_13"/>
+            <field name="qty">10</field>
+            <field name="source_location_id" ref="stock.stock_location_stock"/>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="demo_disassembly_line_2" model="production.operation.line">
+            <field name="operation_id" ref="demo_disassembly_operation_1"/>
+            <field name="product_id" ref="product.product_product_14"/>
+            <field name="qty">8</field>
+            <field name="source_location_id" ref="stock.stock_location_stock"/>
+            <field name="sequence">20</field>
+        </record>
+    </data>
+</odoo>

@@ -38,6 +38,9 @@ Interface:
         'views/menu_views.xml',
         'data/sequence_data.xml',
     ],
+    'demo': [
+        'data/demo_data.xml',
+    ],
     'installable': True,
     'auto_install': False,
     'application': False,
