@@ -369,8 +369,12 @@ class StockPickingPartial(models.Model):
         Tách 1 package thành phiếu mới (tương tự tách đơn trong bán hàng)
         Cơ chế:
         - Tạo 1 stock.picking mới (cùng picking_type, partner, locations)
-        - Copy move của các move_lines trong package thành moves mới trong picking mới
-        - Copy move_line với qty_done sang picking mới và xóa qty_done + result_package_id trên move_line gốc
+        - Tính tổng qty_done đã tách cho mỗi sản phẩm
+        - Copy move cho phần tách (với product_uom_qty = tổng qty_done tách)
+        - Copy move_line sang picking mới với qty_done = qty_done tách
+        - Trên original move: tính remaining planned qty = product_uom_qty - tổng qty_done tách
+          và cập nhật move gốc
+        - Xóa move_line đã tách khỏi original picking
         - Trả về id, name của picking mới
         """
         self.ensure_one()
@@ -401,11 +405,9 @@ class StockPickingPartial(models.Model):
         }
         new_picking = self.env['stock.picking'].sudo().create(new_picking_vals)
 
-        # Copy moves and move_lines
-        # We'll group moved quantities by original move so we update planned qtys correctly,
-        # and then unlink the moved move_lines from the original picking to avoid showing
-        # zeroed quantities in the original.
-        moved_by_move = {}
+        # Track moved quantities and move_lines by original move
+        # For each original move, we need to know total qty_done being moved out
+        moved_by_move = {}  # {move_id: {'move': move_obj, 'moved_qty': total, 'move_lines': [...]}}
         moved_ml_ids = []
 
         for ml in ml_lines:
@@ -415,39 +417,52 @@ class StockPickingPartial(models.Model):
             orig_move = ml.move_id
             moved_qty = float(ml.qty_done or 0.0)
 
-            # Copy move for new picking (only the moved qty)
-            new_move = orig_move.copy({
-                'picking_id': new_picking.id,
-                'product_uom_qty': moved_qty,
-            })
-
-            # Copy move_line to new picking/move with same qty_done and package
-            new_ml = ml.copy({
-                'move_id': new_move.id,
-                'qty_done': moved_qty,
-                'result_package_id': package.id,
-            })
-
-            # Accumulate moved qty per original move
+            # Track this move_line for removal later
             if orig_move.id not in moved_by_move:
-                moved_by_move[orig_move.id] = {'move': orig_move, 'moved': 0.0}
-            moved_by_move[orig_move.id]['moved'] += moved_qty
+                moved_by_move[orig_move.id] = {
+                    'move': orig_move,
+                    'moved_qty': 0.0,
+                    'move_lines': []
+                }
+            moved_by_move[orig_move.id]['moved_qty'] += moved_qty
+            moved_by_move[orig_move.id]['move_lines'].append(ml)
             moved_ml_ids.append(ml.id)
 
-        # For each original move, subtract moved qty from its planned qty
-        for info in moved_by_move.values():
+        # Now process each original move: create new move with moved qty, 
+        # and update original move's planned qty
+        for orig_move_id, info in moved_by_move.items():
             orig_move = info['move']
-            total_moved = float(info['moved'] or 0.0)
-            try:
-                orig_qty = float(orig_move.product_uom_qty or 0.0)
-            except Exception:
-                orig_qty = 0.0
-            remain_qty = orig_qty - total_moved
-            if remain_qty < 0:
-                remain_qty = 0.0
-            orig_move.sudo().write({'product_uom_qty': remain_qty})
+            total_moved_qty = float(info['moved_qty'] or 0.0)
+            move_lines_to_move = info['move_lines']
 
-        # Remove moved move_lines from original picking (they now belong to new picking)
+            # Create a new move in the new picking with qty = total moved
+            new_move = orig_move.copy({
+                'picking_id': new_picking.id,
+                'product_uom_qty': total_moved_qty,
+            })
+
+            # For each move_line, copy it to the new move/picking
+            for ml in move_lines_to_move:
+                new_ml = ml.copy({
+                    'move_id': new_move.id,
+                    'qty_done': ml.qty_done,
+                    'result_package_id': package.id,
+                })
+
+            # Update original move's planned qty: reduce it by the moved qty
+            # Remaining planned qty = original planned qty - total moved qty_done
+            try:
+                orig_planned_qty = float(orig_move.product_uom_qty or 0.0)
+            except Exception:
+                orig_planned_qty = 0.0
+            
+            remaining_planned_qty = orig_planned_qty - total_moved_qty
+            if remaining_planned_qty < 0:
+                remaining_planned_qty = 0.0
+            
+            orig_move.sudo().write({'product_uom_qty': remaining_planned_qty})
+
+        # Remove moved move_lines from original picking
         if moved_ml_ids:
             self.env['stock.move.line'].sudo().browse(moved_ml_ids).unlink()
 
