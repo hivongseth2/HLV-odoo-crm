@@ -46,6 +46,7 @@ Interface:
     },
     'demo': [
         'data/demo_data.xml',
+        'data/demo_warehouse_access.xml',
     ],
     'installable': True,
     'auto_install': False,
