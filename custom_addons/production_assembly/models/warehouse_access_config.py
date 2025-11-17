@@ -42,40 +42,49 @@ class WarehouseAccessConfig(models.Model):
         string='Hoạt động',
         default=True
     )
-    
     @api.model
     def get_accessible_locations(self, user_id=None):
-        """Lấy danh sách vị trí mà user được phép truy cập"""
+        """Lấy danh sách vị trí mà user được phép truy cập (bao gồm vị trí con của kho)."""
         if not user_id:
             user_id = self.env.user.id
-            
-        # Kiểm tra nếu user là admin hoặc có quyền quản trị viên kho
-        if self.env.user.has_group('stock.group_stock_manager'):
-            return self.env['stock.location'].search([('usage', 'in', ['internal', 'transit'])])
-            
-        config = self.search([('user_id', '=', user_id), ('active', '=', True)], limit=1)
-        
+
+        user = self.env['res.users'].browse(user_id)
+
+        # Nếu là superuser (odoo admin) thì cho full
+        if user._is_superuser():
+            return self.env['stock.location'].search([
+                ('usage', 'in', ['internal', 'transit'])
+            ])
+
+        # Tìm config theo user
+        config = self.search([
+            ('user_id', '=', user.id),
+            ('active', '=', True)
+        ], limit=1)
+
         if not config:
-            # Nếu không có config, không cho phép truy cập vị trí nào
+            # Không có config => không thấy vị trí nào (hoặc bạn có thể cho full tùy policy)
             return self.env['stock.location']
-            
+
+        # Nếu là admin kho trong config thì cho full
         if config.is_admin:
-            # Nếu là admin kho, cho phép truy cập tất cả
-            return self.env['stock.location'].search([('usage', 'in', ['internal', 'transit'])])
-            
-        # Lấy vị trí từ config trực tiếp và từ warehouse
+            return self.env['stock.location'].search([
+                ('usage', 'in', ['internal', 'transit'])
+            ])
+
+        # Lấy vị trí được gán trực tiếp
         accessible_locations = config.location_ids
-        
-        # Thêm vị trí từ warehouse được phép truy cập
+
+        # Lấy tất cả vị trí con của các kho được phép truy cập
         for warehouse in config.warehouse_ids:
             warehouse_locations = self.env['stock.location'].search([
                 ('id', 'child_of', warehouse.view_location_id.id),
-                ('usage', 'in', ['internal', 'transit'])
+                ('usage', 'in', ['internal', 'transit']),
             ])
             accessible_locations |= warehouse_locations
-            
+
         return accessible_locations
-    
+
     @api.model
     def get_locations_with_stock(self, product_id, user_id=None):
         """Lấy danh sách vị trí có tồn kho của sản phẩm và user được phép truy cập"""
