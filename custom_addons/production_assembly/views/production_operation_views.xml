@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Production Operation List View -->
+    <record id="view_production_operation_list" model="ir.ui.view">
+        <field name="name">production.operation.list</field>
+        <field name="model">production.operation</field>
+        <field name="arch" type="xml">
+            <list string="Production Operations" default_order="date desc">
+                <field name="name" string="Operation Number"/>
+                <field name="date"/>
+                <field name="operation_type" string="Type"/>
+                <field name="main_product_id" string="Main Product"/>
+                <field name="main_product_qty" string="Quantity"/>
+                <field name="main_product_uom_id" string="UoM"/>
+                <field name="destination_location_id" string="Location"/>
+                <field name="state" string="Status" decoration-success="state == 'done'" decoration-muted="state == 'cancel'"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Production Operation Form View -->
+    <record id="view_production_operation_form" model="ir.ui.view">
+        <field name="name">production.operation.form</field>
+        <field name="model">production.operation</field>
+        <field name="arch" type="xml">
+            <form string="Production Operation">
+                <header>
+                    <button name="action_process_operation" 
+                            string="Process Assembly" 
+                            type="object" 
+                            class="oe_highlight" 
+                            invisible="state != 'draft' or operation_type != 'assembly'"/>
+                    <button name="action_process_operation" 
+                            string="Process Disassembly" 
+                            type="object" 
+                            class="oe_highlight" 
+                            invisible="state != 'draft' or operation_type != 'disassembly'"/>
+                    <button name="action_cancel" 
+                            string="Cancel" 
+                            type="object" 
+                            invisible="state != 'draft'"/>
+                    <button name="action_set_to_draft" 
+                            string="Set to Draft" 
+                            type="object" 
+                            invisible="state != 'cancel'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group name="main_info" string="Operation Information">
+                            <field name="operation_type" readonly="state != 'draft'"/>
+                            <field name="date" readonly="state != 'draft'"/>
+                            <field name="company_id" groups="base.group_multi_company" readonly="state != 'draft'"/>
+                        </group>
+                        <group name="product_info" string="Product Information">
+                            <field name="main_product_id" readonly="state != 'draft'"/>
+                            <field name="main_product_qty" readonly="state != 'draft'"/>
+                            <field name="main_product_uom_id" readonly="1"/>
+                            <field name="destination_location_id" readonly="state != 'draft'" 
+                                   string="Destination Location" 
+                                   invisible="operation_type == 'disassembly'"/>
+                            <field name="destination_location_id" readonly="state != 'draft'" 
+                                   string="Source Location" 
+                                   invisible="operation_type == 'assembly'"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <page string="Components" name="components">
+                            <field name="component_line_ids" readonly="state != 'draft'">
+                                <list string="Component Lines" editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="product_id"/>
+                                    <field name="qty"/>
+                                    <field name="product_uom_id" readonly="1"/>
+                                    <field name="source_location_id" 
+                                           string="Source Location" 
+                                           invisible="parent.operation_type == 'disassembly'"/>
+                                    <field name="source_location_id" 
+                                           string="Destination Location" 
+                                           invisible="parent.operation_type == 'assembly'"/>
+                                    <field name="available_qty" 
+                                           string="Available" 
+                                           invisible="parent.operation_type == 'disassembly'"/>
+                                    <field name="operation_type" column_invisible="1"/>
+                                </list>
+                            </field>
+                        </page>
+                        
+                        <page string="Stock Moves" name="stock_moves" invisible="not move_ids">
+                            <field name="move_ids" readonly="1">
+                                <list string="Stock Moves">
+                                    <field name="name"/>
+                                    <field name="product_id"/>
+                                    <field name="product_uom_qty"/>
+                                    <field name="product_uom"/>
+                                    <field name="location_id"/>
+                                    <field name="location_dest_id"/>
+                                    <field name="state"/>
+                                    <field name="date"/>
+                                </list>
+                            </field>
+                        </page>
+                        
+                        <page string="Notes" name="notes">
+                            <field name="notes" placeholder="Additional notes about this operation..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <!-- Production Operation Search View -->
+    <record id="view_production_operation_search" model="ir.ui.view">
+        <field name="name">production.operation.search</field>
+        <field name="model">production.operation</field>
+        <field name="arch" type="xml">
+            <search string="Production Operations">
+                <field name="name" string="Operation Number"/>
+                <field name="main_product_id" string="Product"/>
+                <field name="destination_location_id" string="Location"/>
+                <separator/>
+                <filter name="draft" string="Draft" domain="[('state', '=', 'draft')]"/>
+                <filter name="done" string="Done" domain="[('state', '=', 'done')]"/>
+                <filter name="cancelled" string="Cancelled" domain="[('state', '=', 'cancel')]"/>
+                <separator/>
+                <filter name="assembly" string="Assembly" domain="[('operation_type', '=', 'assembly')]"/>
+                <filter name="disassembly" string="Disassembly" domain="[('operation_type', '=', 'disassembly')]"/>
+                <separator/>
+                <filter name="today" string="Today" domain="[('date', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0))), ('date', '&lt;=', datetime.datetime.combine(context_today(), datetime.time(23,59,59)))]"/>
+                <filter name="this_week" string="This Week" domain="[('date', '&gt;=', (context_today() - datetime.timedelta(days=context_today().weekday())).strftime('%Y-%m-%d')), ('date', '&lt;=', (context_today() + datetime.timedelta(days=6-context_today().weekday())).strftime('%Y-%m-%d'))]"/>
+                <filter name="this_month" string="This Month" domain="[('date', '&gt;=', datetime.datetime.now().strftime('%Y-%m-01')), ('date', '&lt;=', (datetime.datetime.now().replace(day=1) + datetime.timedelta(days=32)).replace(day=1) - datetime.timedelta(days=1))]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_by_operation_type" string="Operation Type" context="{'group_by': 'operation_type'}"/>
+                    <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
+                    <filter name="group_by_main_product" string="Main Product" context="{'group_by': 'main_product_id'}"/>
+                    <filter name="group_by_location" string="Location" context="{'group_by': 'destination_location_id'}"/>
+                    <filter name="group_by_date" string="Date" context="{'group_by': 'date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Production Operation Action -->
+    <record id="action_production_operation" model="ir.actions.act_window">
+        <field name="name">Production Operations</field>
+        <field name="res_model">production.operation</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_production_operation_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first production operation!
+            </p>
+            <p>
+                Production operations allow you to:
+                <ul>
+                    <li><strong>Assembly:</strong> Combine components to create finished products</li>
+                    <li><strong>Disassembly:</strong> Break down finished products into components</li>
+                </ul>
+                All operations use Virtual Locations/Production as intermediate location for stock moves.
+            </p>
+        </field>
+    </record>
+
+    <!-- Assembly Operations Action -->
+    <record id="action_production_assembly" model="ir.actions.act_window">
+        <field name="name">Assembly Operations</field>
+        <field name="res_model">production.operation</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('operation_type', '=', 'assembly')]</field>
+        <field name="context">{'default_operation_type': 'assembly'}</field>
+        <field name="search_view_id" ref="view_production_operation_search"/>
+    </record>
+
+    <!-- Disassembly Operations Action -->
+    <record id="action_production_disassembly" model="ir.actions.act_window">
+        <field name="name">Disassembly Operations</field>
+        <field name="res_model">production.operation</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('operation_type', '=', 'disassembly')]</field>
+        <field name="context">{'default_operation_type': 'disassembly'}</field>
+        <field name="search_view_id" ref="view_production_operation_search"/>
+    </record>
+</odoo>
