@@ -9,6 +9,7 @@ class ZaloVerifyController(http.Controller):
 <html lang="en">
 <head>
     <meta property="zalo-platform-site-verification" content="KlhW2wRGLp15rFikZ_v-4tVer0kRdWDKCpCt" />
+    <meta name="zalo-platform-site-verification" content="CuIw8EUG4oeaWgOA_Aey27sgfoUHt75wDpOv" />
 </head>
 <body>
 There Is No Limit To What You Can Accomplish Using Zalo!
