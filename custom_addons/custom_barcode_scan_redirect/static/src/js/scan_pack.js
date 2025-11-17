@@ -173,12 +173,14 @@ document.addEventListener("DOMContentLoaded", function () {
       const done = parseFloat(doneEl?.innerText || 0);
       const required = parseFloat(requiredEl?.innerText || 0);
       const lineId = item.dataset.lineId;
-      if (done >= required && required > 0) {
+      // Cho phép pack sản phẩm bất kể done >= required hay chưa
+      // Chỉ cần done > 0 là được pack (quét 1 phần hay đủ đều được)
+      if (done > 0 && required > 0) {
         completedItems.push({ move_line_id: parseInt(lineId), qty: done });
       }
     });
     if (completedItems.length === 0) {
-      toast.warn("⚠️ Không có sản phẩm nào hoàn tất để tạo kiện", { ms: 2500 });
+      toast.warn("⚠️ Không có sản phẩm nào được quét để tạo kiện", { ms: 2500 });
       playError();
       setFocus();
       return;
