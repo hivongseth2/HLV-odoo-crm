@@ -5,16 +5,14 @@
         <field name="name">production.operation.list</field>
         <field name="model">production.operation</field>
         <field name="arch" type="xml">
-            <list string="Production Operations" default_order="date desc">
+            <list string="Production Operations" default_order="date desc" create="1" edit="1" delete="1">
                 <field name="name" string="Operation Number"/>
                 <field name="date"/>
-                <field name="operation_type" string="Type"/>
+                <field name="operation_type" string="Type" widget="badge" decoration-info="operation_type == 'assembly'" decoration-warning="operation_type == 'disassembly'"/>
                 <field name="main_product_id" string="Main Product"/>
                 <field name="main_product_qty" string="Quantity"/>
-                <field name="main_product_uom_id" string="UoM"/>
-                <field name="destination_location_id" string="Location"/>
-                <field name="state" string="Status" decoration-success="state == 'done'" decoration-muted="state == 'cancel'"/>
-                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="state" string="Status" widget="badge" decoration-success="state == 'done'" decoration-muted="state == 'cancel'" decoration-info="state == 'draft'"/>
+                <field name="company_id" groups="base.group_multi_company" column_invisible="1"/>
             </list>
         </field>
     </record>
@@ -30,20 +28,20 @@
                             string="Process Assembly" 
                             type="object" 
                             class="oe_highlight" 
-                            invisible="state != 'draft' or operation_type != 'assembly'"/>
+                            attrs="{'invisible': ['|', ('state', '!=', 'draft'), ('operation_type', '!=', 'assembly')]}"/>
                     <button name="action_process_operation" 
                             string="Process Disassembly" 
                             type="object" 
                             class="oe_highlight" 
-                            invisible="state != 'draft' or operation_type != 'disassembly'"/>
+                            attrs="{'invisible': ['|', ('state', '!=', 'draft'), ('operation_type', '!=', 'disassembly')]}"/>
                     <button name="action_cancel" 
                             string="Cancel" 
                             type="object" 
-                            invisible="state != 'draft'"/>
+                            attrs="{'invisible': [('state', '!=', 'draft')]}"/>
                     <button name="action_set_to_draft" 
                             string="Set to Draft" 
                             type="object" 
-                            invisible="state != 'cancel'"/>
+                            attrs="{'invisible': [('state', '!=', 'cancel')]}"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,done"/>
                 </header>
                 <sheet>
@@ -54,26 +52,26 @@
                     </div>
                     <group>
                         <group name="main_info" string="Operation Information">
-                            <field name="operation_type" readonly="state != 'draft'"/>
-                            <field name="date" readonly="state != 'draft'"/>
-                            <field name="company_id" groups="base.group_multi_company" readonly="state != 'draft'"/>
+                            <field name="operation_type" attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                            <field name="date" attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                            <field name="company_id" groups="base.group_multi_company" attrs="{'readonly': [('state', '!=', 'draft')]}"/>
                         </group>
                         <group name="product_info" string="Product Information">
-                            <field name="main_product_id" readonly="state != 'draft'"/>
-                            <field name="main_product_qty" readonly="state != 'draft'"/>
+                            <field name="main_product_id" attrs="{'readonly': [('state', '!=', 'draft')]}"/>
+                            <field name="main_product_qty" attrs="{'readonly': [('state', '!=', 'draft')]}"/>
                             <field name="main_product_uom_id" readonly="1"/>
-                            <field name="destination_location_id" readonly="state != 'draft'" 
+                            <field name="destination_location_id" 
                                    string="Destination Location" 
-                                   invisible="operation_type == 'disassembly'"/>
-                            <field name="destination_location_id" readonly="state != 'draft'" 
+                                   attrs="{'readonly': [('state', '!=', 'draft')], 'invisible': [('operation_type', '=', 'disassembly')]}"/>
+                            <field name="destination_location_id" 
                                    string="Source Location" 
-                                   invisible="operation_type == 'assembly'"/>
+                                   attrs="{'readonly': [('state', '!=', 'draft')], 'invisible': [('operation_type', '=', 'assembly')]}"/>
                         </group>
                     </group>
                     
                     <notebook>
                         <page string="Components" name="components">
-                            <field name="component_line_ids" readonly="state != 'draft'">
+                            <field name="component_line_ids" attrs="{'readonly': [('state', '!=', 'draft')]}">
                                 <list string="Component Lines" editable="bottom">
                                     <field name="sequence" widget="handle"/>
                                     <field name="product_id"/>
@@ -81,19 +79,19 @@
                                     <field name="product_uom_id" readonly="1"/>
                                     <field name="source_location_id" 
                                            string="Source Location" 
-                                           invisible="parent.operation_type == 'disassembly'"/>
+                                           attrs="{'column_invisible': [('parent.operation_type', '=', 'disassembly')]}"/>
                                     <field name="source_location_id" 
                                            string="Destination Location" 
-                                           invisible="parent.operation_type == 'assembly'"/>
+                                           attrs="{'column_invisible': [('parent.operation_type', '=', 'assembly')]}"/>
                                     <field name="available_qty" 
                                            string="Available" 
-                                           invisible="parent.operation_type == 'disassembly'"/>
+                                           attrs="{'column_invisible': [('parent.operation_type', '=', 'disassembly')]}"/>
                                     <field name="operation_type" column_invisible="1"/>
                                 </list>
                             </field>
                         </page>
                         
-                        <page string="Stock Moves" name="stock_moves" invisible="not move_ids">
+                        <page string="Stock Moves" name="stock_moves" attrs="{'invisible': [('move_ids', '=', [])]}">
                             <field name="move_ids" readonly="1">
                                 <list string="Stock Moves">
                                     <field name="name"/>
