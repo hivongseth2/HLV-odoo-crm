@@ -402,38 +402,54 @@ class StockPickingPartial(models.Model):
         new_picking = self.env['stock.picking'].sudo().create(new_picking_vals)
 
         # Copy moves and move_lines
+        # We'll group moved quantities by original move so we update planned qtys correctly,
+        # and then unlink the moved move_lines from the original picking to avoid showing
+        # zeroed quantities in the original.
+        moved_by_move = {}
+        moved_ml_ids = []
+
         for ml in ml_lines:
             if ml.qty_done <= 0:
                 continue
 
             orig_move = ml.move_id
+            moved_qty = float(ml.qty_done or 0.0)
+
             # Copy move for new picking (only the moved qty)
             new_move = orig_move.copy({
                 'picking_id': new_picking.id,
-                'product_uom_qty': ml.qty_done,
+                'product_uom_qty': moved_qty,
             })
 
             # Copy move_line to new picking/move with same qty_done and package
             new_ml = ml.copy({
                 'move_id': new_move.id,
-                'qty_done': ml.qty_done,
+                'qty_done': moved_qty,
                 'result_package_id': package.id,
             })
 
-            # Reduce original move planned qty by the moved qty
+            # Accumulate moved qty per original move
+            if orig_move.id not in moved_by_move:
+                moved_by_move[orig_move.id] = {'move': orig_move, 'moved': 0.0}
+            moved_by_move[orig_move.id]['moved'] += moved_qty
+            moved_ml_ids.append(ml.id)
+
+        # For each original move, subtract moved qty from its planned qty
+        for info in moved_by_move.values():
+            orig_move = info['move']
+            total_moved = float(info['moved'] or 0.0)
             try:
                 orig_qty = float(orig_move.product_uom_qty or 0.0)
             except Exception:
                 orig_qty = 0.0
-            remain_qty = orig_qty - float(ml.qty_done or 0.0)
+            remain_qty = orig_qty - total_moved
             if remain_qty < 0:
                 remain_qty = 0.0
-            # write back remaining planned qty (use sudo to avoid access issues)
             orig_move.sudo().write({'product_uom_qty': remain_qty})
 
-            # Remove from original: reset qty_done and result_package_id on move_line
-            ml.qty_done = 0
-            ml.result_package_id = False
+        # Remove moved move_lines from original picking (they now belong to new picking)
+        if moved_ml_ids:
+            self.env['stock.move.line'].sudo().browse(moved_ml_ids).unlink()
 
         # Try to assign new picking
         try:
