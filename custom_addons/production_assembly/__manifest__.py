@@ -35,6 +35,7 @@ Interface:
     'data': [
         'security/ir.model.access.csv',
         'views/production_operation_views.xml',
+        'views/warehouse_access_config_views.xml',
         'views/menu_views.xml',
         'data/sequence_data.xml',
     ],
@@ -45,6 +46,7 @@ Interface:
     },
     'demo': [
         'data/demo_data.xml',
+        'data/demo_warehouse_access.xml',
     ],
     'installable': True,
     'auto_install': False,

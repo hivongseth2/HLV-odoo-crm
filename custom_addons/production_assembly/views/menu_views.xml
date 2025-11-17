@@ -32,4 +32,17 @@
               parent="menu_production_operations"
               action="action_production_disassembly"
               sequence="30"/>
+
+    <!-- Configuration Menu -->
+    <menuitem id="menu_production_assembly_config"
+              name="Cấu hình"
+              parent="menu_production_assembly_root"
+              sequence="90"/>
+
+    <!-- Warehouse Access Config -->
+    <menuitem id="menu_warehouse_access_config"
+              name="Phân quyền kho"
+              parent="menu_production_assembly_config"
+              action="action_warehouse_access_config"
+              sequence="10"/>
 </odoo>

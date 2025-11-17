@@ -81,21 +81,15 @@ class ProductionOperationLine(models.Model):
     def _compute_available_location_ids(self):
         for line in self:
             if line.operation_type == 'assembly' and line.product_id:
-                # For assembly: only show locations where the product has stock
-                quants = self.env['stock.quant'].search([
-                    ('product_id', '=', line.product_id.id),
-                    ('quantity', '>', 0),
-                    ('location_id.usage', '=', 'internal'),
-                    ('company_id', '=', line.company_id.id or self.env.company.id)
-                ])
-                line.available_location_ids = quants.mapped('location_id')
-            else:
-                # For disassembly: show all internal locations
-                locations = self.env['stock.location'].search([
-                    ('usage', '=', 'internal'),
-                    ('company_id', '=', line.company_id.id or self.env.company.id)
-                ])
+                # For assembly: only show locations where the product has stock and user has access
+                warehouse_config = self.env['warehouse.access.config']
+                locations = warehouse_config.get_locations_with_stock(line.product_id.id, self.env.user.id)
                 line.available_location_ids = locations
+            else:
+                # For disassembly: show accessible internal locations
+                warehouse_config = self.env['warehouse.access.config']
+                accessible_locations = warehouse_config.get_accessible_locations(self.env.user.id)
+                line.available_location_ids = accessible_locations
 
     @api.depends('product_id', 'source_location_id', 'operation_type')
     def _compute_available_qty(self):
@@ -117,30 +111,35 @@ class ProductionOperationLine(models.Model):
             # Clear current location selection
             self.source_location_id = False
             
-            # For assembly operations, try to find a location with stock
+            # For assembly operations, try to find a location with stock that user can access
             if self.operation_type == 'assembly':
-                quants = self.env['stock.quant'].search([
-                    ('product_id', '=', self.product_id.id),
-                    ('quantity', '>', 0),
-                    ('location_id.usage', '=', 'internal'),
-                    ('company_id', '=', self.operation_id.company_id.id or self.env.company.id)
-                ], limit=1)
-                if quants:
-                    self.source_location_id = quants.location_id.id
+                warehouse_config = self.env['warehouse.access.config']
+                locations = warehouse_config.get_locations_with_stock(self.product_id.id, self.env.user.id)
+                if locations:
+                    self.source_location_id = locations[0].id
             else:
-                # For disassembly, set default to first internal location
-                stock_location = self.env['stock.location'].search([
-                    ('usage', '=', 'internal'),
-                    ('company_id', '=', self.operation_id.company_id.id or self.env.company.id)
-                ], limit=1)
-                if stock_location:
-                    self.source_location_id = stock_location.id
+                # For disassembly, set default to first accessible internal location
+                warehouse_config = self.env['warehouse.access.config']
+                accessible_locations = warehouse_config.get_accessible_locations(self.env.user.id)
+                if accessible_locations:
+                    self.source_location_id = accessible_locations[0].id
 
     @api.constrains('qty')
     def _check_qty(self):
         for line in self:
             if line.qty <= 0:
                 raise ValidationError(_('Component quantity must be positive.'))
+    
+    @api.constrains('source_location_id')
+    def _check_location_access(self):
+        """Check if user has access to selected location"""
+        for line in self:
+            if line.source_location_id:
+                warehouse_config = self.env['warehouse.access.config']
+                accessible_locations = warehouse_config.get_accessible_locations(self.env.user.id)
+                
+                if line.source_location_id not in accessible_locations:
+                    raise ValidationError(_('Bạn không có quyền truy cập vào vị trí đã chọn: %s') % line.source_location_id.display_name)
 
     @api.constrains('product_id', 'operation_id')
     def _check_product_unique(self):

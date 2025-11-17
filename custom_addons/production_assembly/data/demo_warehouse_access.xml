@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        
+        <!-- Demo Warehouse Access Config -->
+        <record id="demo_warehouse_access_admin" model="warehouse.access.config">
+            <field name="user_id" ref="base.user_admin"/>
+            <field name="location_ids" eval="[(6, 0, [
+                ref('stock.stock_location_stock'),
+                ref('stock.stock_location_components'),
+                ref('stock.stock_location_14')
+            ])]"/>
+            <field name="warehouse_ids" eval="[(6, 0, [ref('stock.warehouse0')])]"/>
+        </record>
+        
+        <!-- Demo Products for Testing -->
+        <record id="demo_product_finished" model="product.product">
+            <field name="name">Sản phẩm hoàn thiện Demo</field>
+            <field name="type">product</field>
+            <field name="categ_id" ref="product.product_category_all"/>
+            <field name="list_price">100.0</field>
+            <field name="standard_price">80.0</field>
+        </record>
+        
+        <record id="demo_product_component1" model="product.product">
+            <field name="name">Thành phần 1 Demo</field>
+            <field name="type">product</field>
+            <field name="categ_id" ref="product.product_category_all"/>
+            <field name="list_price">30.0</field>
+            <field name="standard_price">25.0</field>
+        </record>
+        
+        <record id="demo_product_component2" model="product.product">
+            <field name="name">Thành phần 2 Demo</field>
+            <field name="type">product</field>
+            <field name="categ_id" ref="product.product_category_all"/>
+            <field name="list_price">20.0</field>
+            <field name="standard_price">15.0</field>
+        </record>
+        
+        <!-- Demo Stock Quants -->
+        <record id="demo_quant_component1" model="stock.quant">
+            <field name="product_id" ref="demo_product_component1"/>
+            <field name="location_id" ref="stock.stock_location_components"/>
+            <field name="quantity">50.0</field>
+        </record>
+        
+        <record id="demo_quant_component2" model="stock.quant">
+            <field name="product_id" ref="demo_product_component2"/>
+            <field name="location_id" ref="stock.stock_location_components"/>
+            <field name="quantity">30.0</field>
+        </record>
+        
+        <record id="demo_quant_finished" model="stock.quant">
+            <field name="product_id" ref="demo_product_finished"/>
+            <field name="location_id" ref="stock.stock_location_stock"/>
+            <field name="quantity">10.0</field>
+        </record>
+        
+        <!-- Demo Assembly Operation -->
+        <record id="demo_assembly_operation" model="production.operation">
+            <field name="operation_type">assembly</field>
+            <field name="main_product_id" ref="demo_product_finished"/>
+            <field name="main_product_qty">5.0</field>
+            <field name="destination_location_id" ref="stock.stock_location_stock"/>
+            <field name="state">draft</field>
+        </record>
+        
+        <!-- Demo Assembly Components -->
+        <record id="demo_assembly_line1" model="production.operation.line">
+            <field name="operation_id" ref="demo_assembly_operation"/>
+            <field name="product_id" ref="demo_product_component1"/>
+            <field name="qty">10.0</field>
+            <field name="source_location_id" ref="stock.stock_location_components"/>
+        </record>
+        
+        <record id="demo_assembly_line2" model="production.operation.line">
+            <field name="operation_id" ref="demo_assembly_operation"/>
+            <field name="product_id" ref="demo_product_component2"/>
+            <field name="qty">5.0</field>
+            <field name="source_location_id" ref="stock.stock_location_components"/>
+        </record>
+        
+        <!-- Demo Disassembly Operation -->
+        <record id="demo_disassembly_operation" model="production.operation">
+            <field name="operation_type">disassembly</field>
+            <field name="main_product_id" ref="demo_product_finished"/>
+            <field name="main_product_qty">2.0</field>
+            <field name="source_location_id" ref="stock.stock_location_stock"/>
+            <field name="state">draft</field>
+        </record>
+        
+        <!-- Demo Disassembly Components -->
+        <record id="demo_disassembly_line1" model="production.operation.line">
+            <field name="operation_id" ref="demo_disassembly_operation"/>
+            <field name="product_id" ref="demo_product_component1"/>
+            <field name="qty">4.0</field>
+            <field name="source_location_id" ref="stock.stock_location_components"/>
+        </record>
+        
+        <record id="demo_disassembly_line2" model="production.operation.line">
+            <field name="operation_id" ref="demo_disassembly_operation"/>
+            <field name="product_id" ref="demo_product_component2"/>
+            <field name="qty">2.0</field>
+            <field name="source_location_id" ref="stock.stock_location_components"/>
+        </record>
+        
+    </data>
+</odoo>
