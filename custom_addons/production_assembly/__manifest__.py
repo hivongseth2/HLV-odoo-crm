@@ -31,7 +31,7 @@ Interface:
     """,
     'author': 'HLV Development Team',
     'website': 'https://hoanglongvu.com',
-    'depends': ['stock'],
+    'depends': ['stock', 'mail'],
     'data': [
         'security/ir.model.access.csv',
         'views/production_operation_views.xml',

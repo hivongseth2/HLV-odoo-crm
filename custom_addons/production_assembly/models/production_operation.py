@@ -16,6 +16,7 @@ class StockMove(models.Model):
 class ProductionOperation(models.Model):
     _name = 'production.operation'
     _description = 'Production Assembly/Disassembly Operation'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'date desc, id desc'
     _rec_name = 'name'
 
@@ -39,7 +40,7 @@ class ProductionOperation(models.Model):
         ('assembly', 'Assembly (Production)'),
         ('disassembly', 'Disassembly')
     ], string='Operation Type', required=True, default='assembly',
-       readonly=True, states={'draft': [('readonly', False)]})
+       readonly=True, states={'draft': [('readonly', False)]}, tracking=True)
     
     main_product_id = fields.Many2one(
         'product.product',
@@ -48,7 +49,8 @@ class ProductionOperation(models.Model):
         domain=[('type', 'in', ['product', 'consu'])],
         readonly=True,
         states={'draft': [('readonly', False)]},
-        help="Product to be produced (assembly) or disassembled"
+        help="Product to be produced (assembly) or disassembled",
+        tracking=True
     )
     
     main_product_qty = fields.Float(
@@ -167,6 +169,16 @@ class ProductionOperation(models.Model):
                 move._action_done()
         
         self.state = 'done'
+        
+        # Post message to chatter
+        operation_type_name = dict(self._fields['operation_type'].selection)[self.operation_type]
+        self.message_post(
+            body=_('%s operation completed successfully. %d stock moves created.') % (
+                operation_type_name, len(moves)
+            ),
+            message_type='notification'
+        )
+        
         return True
 
     def _prepare_assembly_moves(self, virtual_location):
@@ -243,9 +255,17 @@ class ProductionOperation(models.Model):
             raise UserError(_('Cannot cancel a completed operation.'))
         
         # Cancel related stock moves
-        self.move_ids.filtered(lambda m: m.state not in ('done', 'cancel'))._action_cancel()
+        cancelled_moves = self.move_ids.filtered(lambda m: m.state not in ('done', 'cancel'))
+        cancelled_moves._action_cancel()
         
         self.state = 'cancel'
+        
+        # Post message to chatter
+        self.message_post(
+            body=_('Operation cancelled. %d stock moves were cancelled.') % len(cancelled_moves),
+            message_type='notification'
+        )
+        
         return True
 
     def action_set_to_draft(self):
