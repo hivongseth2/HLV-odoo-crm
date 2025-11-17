@@ -477,3 +477,254 @@ async function diag() {
 }
 
 window.addEventListener('beforeunload', () => { try { mediaRecorder && mediaRecorder.stop(); } catch { } });
+
+// ===================== PARTIAL PACK MANAGEMENT =====================
+// Hàm tạo modal dialog
+function createModal(title, content, buttons = []) {
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+    z-index: 10000;
+  `;
+  
+  const modalContent = document.createElement('div');
+  modalContent.style.cssText = `
+    background: #fff; border-radius: 12px; padding: 20px; max-width: 600px;
+    width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  `;
+  
+  const titleEl = document.createElement('h2');
+  titleEl.textContent = title;
+  titleEl.style.margin = '0 0 16px 0';
+  modalContent.appendChild(titleEl);
+  
+  if (typeof content === 'string') {
+    const contentDiv = document.createElement('div');
+    contentDiv.innerHTML = content;
+    modalContent.appendChild(contentDiv);
+  } else {
+    modalContent.appendChild(content);
+  }
+  
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.cssText = 'display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;';
+  
+  buttons.forEach(btn => {
+    const button = document.createElement('button');
+    button.textContent = btn.label;
+    button.style.cssText = `
+      padding: 10px 16px; border: none; border-radius: 8px;
+      cursor: pointer; font-size: 14px; font-weight: 600;
+      background: ${btn.color || '#3b82f6'}; color: #fff;
+    `;
+    button.addEventListener('click', () => {
+      btn.onclick();
+      modal.remove();
+    });
+    buttonContainer.appendChild(button);
+  });
+  
+  modalContent.appendChild(buttonContainer);
+  modal.appendChild(modalContent);
+  
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+  
+  document.body.appendChild(modal);
+  return modal;
+}
+
+// Tạo partial pack
+document.getElementById('btnPartialPack')?.addEventListener('click', async function() {
+  const items = document.querySelectorAll("#product_list .product-item");
+  let selectedItems = [];
+  
+  // Tạo form để chọn items
+  const formDiv = document.createElement('div');
+  formDiv.style.cssText = 'max-height: 300px; overflow-y: auto;';
+  
+  items.forEach(item => {
+    const barcode = item.dataset.barcode;
+    const lineId = item.dataset.lineId;
+    const doneEl = item.querySelector('.done');
+    const requiredEl = item.querySelectorAll('span')[1];
+    const done = parseFloat(doneEl?.innerText || 0);
+    const required = parseFloat(requiredEl?.innerText || 0);
+    const name = item.querySelector('strong').innerText;
+    
+    const label = document.createElement('label');
+    label.style.cssText = 'display: block; padding: 8px; border-bottom: 1px solid #e5e7eb; cursor: pointer;';
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = lineId;
+    checkbox.dataset.done = done;
+    checkbox.dataset.required = required;
+    
+    const inputQty = document.createElement('input');
+    inputQty.type = 'number';
+    inputQty.min = '0';
+    inputQty.max = String(done);
+    inputQty.value = String(done);
+    inputQty.style.cssText = 'width: 80px; margin-left: 10px; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px;';
+    
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(` ${name} (${done}/${required})`));
+    label.appendChild(inputQty);
+    
+    checkbox.addEventListener('change', () => {
+      inputQty.disabled = !checkbox.checked;
+    });
+    inputQty.disabled = true;
+    
+    formDiv.appendChild(label);
+  });
+  
+  const textDiv = document.createElement('div');
+  textDiv.textContent = 'Chọn sản phẩm để tạo partial pack:';
+  
+  const contentDiv = document.createElement('div');
+  contentDiv.appendChild(textDiv);
+  contentDiv.appendChild(formDiv);
+  
+  createModal(
+    '📦 Tạo Partial Pack',
+    contentDiv,
+    [
+      {
+        label: 'Hủy',
+        color: '#999',
+        onclick: () => {}
+      },
+      {
+        label: 'Tạo Partial Pack',
+        color: '#16a34a',
+        onclick: async () => {
+          const moveLineData = [];
+          document.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+            const qtyInput = checkbox.parentElement.querySelector('input[type="number"]');
+            const qty = parseFloat(qtyInput.value) || 0;
+            if (qty > 0) {
+              moveLineData.push({
+                move_line_id: parseInt(checkbox.value),
+                qty: qty
+              });
+            }
+          });
+          
+          if (moveLineData.length === 0) {
+            toast.warn('Vui lòng chọn ít nhất 1 sản phẩm');
+            return;
+          }
+          
+          const res = await fetch('/pack_scan/create_partial_pack', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'call',
+              params: { picking_id: pickingId, move_line_data: moveLineData }
+            })
+          });
+          const response = await res.json();
+          const result = response.result || response;
+          
+          if (result?.success) {
+            toast.success(result.message, { ms: 2000 });
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
+          } else {
+            toast.error(result?.error || 'Tạo partial pack thất bại', { ms: 2000 });
+          }
+        }
+      }
+    ]
+  );
+});
+
+// In nhãn
+document.getElementById('btnPrintLabel')?.addEventListener('click', async function() {
+  const res = await fetch('/pack_scan/print_label', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'call',
+      params: { picking_id: pickingId }
+    })
+  });
+  const response = await res.json();
+  const result = response.result || response;
+  
+  if (result?.success) {
+    toast.success(result.message, { ms: 1500 });
+    window.open(result.report_url, '_blank');
+  } else {
+    toast.error(result?.error || 'Không thể in nhãn', { ms: 2000 });
+  }
+});
+
+// Action buttons cho sibling packs
+document.addEventListener('click', async function(e) {
+  const unpackBtn = e.target.closest('.btn-unpack');
+  const editBtn = e.target.closest('.btn-edit');
+  const transferBtn = e.target.closest('.btn-transfer');
+  
+  if (unpackBtn) {
+    const packId = parseInt(unpackBtn.dataset.packId);
+    if (confirm('Bạn chắc chắn muốn unpack kiện này?')) {
+      const res = await fetch('/pack_scan/unpack', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'call',
+          params: { picking_id: packId }
+        })
+      });
+      const response = await res.json();
+      const result = response.result || response;
+      
+      if (result?.success) {
+        toast.success(result.message, { ms: 2000 });
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        toast.error(result?.error || 'Unpack thất bại', { ms: 2000 });
+      }
+    }
+  }
+  
+  if (editBtn) {
+    const packId = parseInt(editBtn.dataset.packId);
+    // Mở trang edit của pack đó
+    window.location.href = `/custom_barcode_scan/pack_view/${packId}`;
+  }
+  
+  if (transferBtn) {
+    const sourcePack = parseInt(transferBtn.dataset.packId);
+    const targetPack = pickingId;
+    
+    createModal(
+      '↔️ Chuyển sản phẩm',
+      'Tính năng chuyển sản phẩm giữa các pack. Chọn sản phẩm để chuyển.',
+      [
+        {
+          label: 'Hủy',
+          color: '#999',
+          onclick: () => {}
+        },
+        {
+          label: 'Chuyển',
+          color: '#ffa500',
+          onclick: async () => {
+            toast.info('Tính năng này sẽ được hoàn thiện trong phiên bản tiếp theo', { ms: 2000 });
+          }
+        }
+      ]
+    );
+  }
+});

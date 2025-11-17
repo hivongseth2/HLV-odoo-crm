@@ -129,3 +129,107 @@
 .toast.error{   background:#dc2626; }
 .toast.info{    background:#2563eb; }
 .toast.warn{    background:#d97706; }
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content h2 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: #111827;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  justify-content: flex-end;
+}
+
+.modal-button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: opacity .2s;
+}
+
+.modal-button:hover {
+  opacity: 0.9;
+}
+
+.modal-button.primary {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.modal-button.secondary {
+  background: #999;
+  color: #fff;
+}
+
+.modal-button.success {
+  background: #16a34a;
+  color: #fff;
+}
+
+.modal-button.danger {
+  background: #dc2626;
+  color: #fff;
+}
+
+/* Pack action buttons */
+.btn-pack-action {
+  padding: 6px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .2s;
+  flex: 1;
+  min-width: 70px;
+}
+
+.btn-pack-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-unpack {
+  background: #ff6b6b;
+  color: #fff;
+}
+
+.btn-edit {
+  background: #4c7ceb;
+  color: #fff;
+}
+
+.btn-transfer {
+  background: #ffa500;
+  color: #fff;
+}

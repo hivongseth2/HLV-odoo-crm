@@ -604,6 +604,125 @@ class CustomBarcodeScanController(http.Controller):
 
       
       
+    # ===================== PARTIAL PACK MANAGEMENT =====================
+    @http.route('/pack_scan/create_partial_pack', type='json', auth='user', csrf=False)
+    def create_partial_pack(self, **kwargs):
+        """
+        Tạo partial pack từ picking hiện tại
+        move_line_data: [{'move_line_id': int, 'qty': float}, ...]
+        """
+        picking_id = kwargs.get("picking_id")
+        move_line_data = kwargs.get("move_line_data", [])
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            # Tạo partial pack
+            new_picking = picking.create_partial_pack(move_line_data)
+            return {
+                "success": True,
+                "new_pack_id": new_picking.id,
+                "new_pack_name": new_picking.name,
+                "message": f"✅ Tạo partial pack {new_picking.name} thành công!"
+            }
+        except Exception as e:
+            _logger.exception("CREATE_PARTIAL_PACK error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/unpack', type='json', auth='user', csrf=False)
+    def unpack_pack(self, **kwargs):
+        """
+        Unpack: chuyển items từ partial pack về picking gốc
+        """
+        picking_id = kwargs.get("picking_id")
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            picking.unpack_partial()
+            return {
+                "success": True,
+                "message": f"✅ Unpack {picking.name} thành công!"
+            }
+        except Exception as e:
+            _logger.exception("UNPACK error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/add_to_pack', type='json', auth='user', csrf=False)
+    def add_to_pack(self, **kwargs):
+        """
+        Thêm items vào pack từ picking gốc
+        """
+        picking_id = kwargs.get("picking_id")
+        move_line_data = kwargs.get("move_line_data", [])
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            picking.add_to_pack(move_line_data)
+            return {
+                "success": True,
+                "message": "✅ Thêm sản phẩm vào pack thành công!"
+            }
+        except Exception as e:
+            _logger.exception("ADD_TO_PACK error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/transfer_pack_item', type='json', auth='user', csrf=False)
+    def transfer_pack_item(self, **kwargs):
+        """
+        Chuyển items từ pack này sang pack khác
+        """
+        picking_id = kwargs.get("picking_id")
+        target_pack_id = kwargs.get("target_pack_id")
+        move_line_data = kwargs.get("move_line_data", [])
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Pack nguồn không tồn tại"}
+        
+        try:
+            picking.transfer_pack_item(target_pack_id, move_line_data)
+            return {
+                "success": True,
+                "message": "✅ Chuyển sản phẩm sang pack khác thành công!"
+            }
+        except Exception as e:
+            _logger.exception("TRANSFER_PACK_ITEM error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/print_label', type='json', auth='user', csrf=False)
+    def print_label(self, **kwargs):
+        """
+        In nhãn dán cho package
+        """
+        picking_id = kwargs.get("picking_id")
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            # Lấy report action
+            report_action = request.env.ref(
+                'hlv_pack_sequence.action_report_simple_package_labels'
+            ).sudo()
+            
+            return {
+                "success": True,
+                "report_url": f"/report/pdf/hlv_pack_sequence.report_simple_package_label_document/{picking_id}",
+                "message": "✅ Đang chuẩn bị in nhãn..."
+            }
+        except Exception as e:
+            _logger.exception("PRINT_LABEL error")
+            return {"error": str(e)}
+
     @http.route('/gdrive/oauth2/disconnect', type='http', auth='user', website=True, csrf=False)
     def disconnect(self, **kw):
         # Xoá token hiện tại => lần sau sẽ bắt đăng nhập lại (chọn tài khoản khác)

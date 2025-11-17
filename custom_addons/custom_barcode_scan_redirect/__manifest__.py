@@ -2,16 +2,14 @@
 {
     "name": "Custom Barcode Pack Scan",
     "version": "1.0",
-    "depends": ["stock", "stock_barcode"],
+    "depends": ["stock", "stock_barcode", "hlv_pack_sequence"],
     "author": "Anh Yêu",
     "category": "Warehouse",
-    "summary": "Scan từng sản phẩm trong phiếu Pack bằng barcode",
+    "summary": "Scan từng sản phẩm trong phiếu Pack bằng barcode + Partial Pack Management",
     "data": [
         "views/pack_scan_template.xml",
         "views/menu.xml",
         "views/scan_ui_template.xml",
-
-
     ],
     "installable": True,
     "application": False,
@@ -24,6 +22,4 @@
     },
     # 'external_dependencies': {'python': ['pydrive2']},
     'external_dependencies': {'python': ['pydrive2','oauth2client']},
-
-
 }
