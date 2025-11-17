@@ -60,10 +60,12 @@
                                string="Vị trí đích" 
                                readonly="state != 'draft'" 
                                invisible="operation_type == 'disassembly'"/>
-                        <field name="destination_location_id" 
+                        <field name="source_location_id" 
                                string="Vị trí nguồn" 
                                readonly="state != 'draft'" 
-                               invisible="operation_type == 'assembly'"/>
+                               invisible="operation_type == 'assembly'"
+                               domain="[('id', 'in', available_source_location_ids)]"/>
+                        <field name="available_source_location_ids" invisible="1"/>
                         <field name="company_id" groups="base.group_multi_company" string="Công ty" readonly="state != 'draft'"/>
                     </group>
                     

@@ -78,6 +78,22 @@ class ProductionOperation(models.Model):
         help="Location where finished product will be stored (assembly) or where main product is taken from (disassembly)"
     )
     
+    source_location_id = fields.Many2one(
+        'stock.location',
+        string='Vị trí nguồn',
+        domain=[('usage', '=', 'internal')],
+        readonly=True,
+        states={'draft': [('readonly', False)]},
+        help='Vị trí lấy sản phẩm cần tháo gỡ (chỉ dùng cho tháo gỡ)'
+    )
+    
+    # Computed field for filtering source locations with stock
+    available_source_location_ids = fields.Many2many(
+        'stock.location',
+        compute='_compute_available_source_locations',
+        string='Vị trí nguồn có sẵn'
+    )
+    
     component_line_ids = fields.One2many(
         'production.operation.line',
         'operation_id',
@@ -114,6 +130,18 @@ class ProductionOperation(models.Model):
             vals['name'] = self.env['ir.sequence'].next_by_code('production.operation') or _('New')
         return super().create(vals)
 
+    @api.depends('main_product_id', 'operation_type')
+    def _compute_available_source_locations(self):
+        """Compute available source locations based on product stock and user access"""
+        for record in self:
+            if record.operation_type == 'disassembly' and record.main_product_id:
+                # Get locations with stock for this product that user can access
+                warehouse_config = self.env['warehouse.access.config']
+                locations = warehouse_config.get_locations_with_stock(record.main_product_id.id)
+                record.available_source_location_ids = locations
+            else:
+                record.available_source_location_ids = False
+
     @api.onchange('main_product_id')
     def _onchange_main_product_id(self):
         if self.main_product_id:
@@ -125,6 +153,9 @@ class ProductionOperation(models.Model):
                 ], limit=1)
                 if stock_location:
                     self.destination_location_id = stock_location.id
+            
+            # Clear source location when product changes
+            self.source_location_id = False
 
     def action_process_operation(self):
         """Process the assembly or disassembly operation"""
@@ -225,13 +256,17 @@ class ProductionOperation(models.Model):
         """Prepare stock moves for disassembly operation"""
         moves = []
         
+        # Validate source location for disassembly
+        if not self.source_location_id:
+            raise UserError(_('Please select a source location for disassembly operation.'))
+        
         # Step 1: Move main product from source to virtual location
         moves.append({
             'name': f'{self.name} - {self.main_product_id.name} (To Disassemble)',
             'product_id': self.main_product_id.id,
             'product_uom_qty': self.main_product_qty,
             'product_uom': self.main_product_uom_id.id,
-            'location_id': self.destination_location_id.id,  # In disassembly, this is source location
+            'location_id': self.source_location_id.id,  # Use dedicated source location
             'location_dest_id': virtual_location.id,
             'production_operation_id': self.id,
             'company_id': self.company_id.id,
