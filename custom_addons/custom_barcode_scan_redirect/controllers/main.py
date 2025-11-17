@@ -614,13 +614,17 @@ class CustomBarcodeScanController(http.Controller):
         picking_id = kwargs.get("picking_id")
         move_line_data = kwargs.get("move_line_data", [])
         
+        _logger.info(f"CREATE_PARTIAL_PACK: picking_id={picking_id}, items={len(move_line_data)}")
+        
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         if not picking.exists():
+            _logger.error(f"CREATE_PARTIAL_PACK: Picking {picking_id} không tồn tại")
             return {"error": "Phiếu không tồn tại"}
         
         try:
             # Tạo partial pack
             new_picking = picking.create_partial_pack(move_line_data)
+            _logger.info(f"CREATE_PARTIAL_PACK: Success! New picking: {new_picking.name} (ID: {new_picking.id})")
             return {
                 "success": True,
                 "new_pack_id": new_picking.id,

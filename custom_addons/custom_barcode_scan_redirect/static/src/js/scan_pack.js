@@ -195,8 +195,16 @@ document.addEventListener("DOMContentLoaded", function () {
       });
       const response = await res.json();
       const result = response.result || response;
+      console.log("API Response:", response);
+      console.log("Result:", result);
       if (result?.error) {
         toast.error("❌ " + result.error, { ms: 2500 });
+        playError();
+        setFocus();
+        return;
+      }
+      if (!result?.success) {
+        toast.error("❌ API response không hợp lệ: " + JSON.stringify(result), { ms: 2500 });
         playError();
         setFocus();
         return;
