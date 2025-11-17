@@ -31,13 +31,18 @@ Interface:
     """,
     'author': 'HLV Development Team',
     'website': 'https://hoanglongvu.com',
-    'depends': ['stock', 'mail'],
+    'depends': ['stock'],
     'data': [
         'security/ir.model.access.csv',
         'views/production_operation_views.xml',
         'views/menu_views.xml',
         'data/sequence_data.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'production_assembly/static/src/css/production_assembly.css',
+        ],
+    },
     'demo': [
         'data/demo_data.xml',
     ],
