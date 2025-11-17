@@ -149,12 +149,67 @@ document.addEventListener("DOMContentLoaded", function () {
     const targetBarcode = BARCODE_MAP_POINT_ONE[raw];
     if (targetBarcode) {
       updateQty(targetBarcode, 0.1);
-    } else {
+    } else if (isProductBarcode(raw)) {
       updateQty(raw, 1);
+    } else {
+      handlePackageBarcode(raw);
     }
 
     input.value = "";
   });
+
+  function isProductBarcode(barcode) {
+    const exists = [...document.querySelectorAll('[data-barcode]')]
+      .some(el => normalizeCode(el.dataset.barcode) === normalizeCode(barcode));
+    return exists;
+  }
+
+  async function handlePackageBarcode(packageBarcode) {
+    const items = document.querySelectorAll("#product_list .product-item");
+    const completedItems = [];
+    items.forEach(item => {
+      const doneEl = item.querySelector(".done");
+      const requiredEl = item.querySelectorAll("span")[1];
+      const done = parseFloat(doneEl?.innerText || 0);
+      const required = parseFloat(requiredEl?.innerText || 0);
+      const lineId = item.dataset.lineId;
+      if (done >= required && required > 0) {
+        completedItems.push({ move_line_id: parseInt(lineId), qty: done });
+      }
+    });
+    if (completedItems.length === 0) {
+      toast.warn("⚠️ Không có sản phẩm nào hoàn tất để tạo kiện", { ms: 2500 });
+      playError();
+      setFocus();
+      return;
+    }
+    try {
+      const res = await fetch("/pack_scan/create_partial_pack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "call",
+          params: { picking_id: pickingId, package_barcode: packageBarcode, move_line_data: completedItems }
+        })
+      });
+      const response = await res.json();
+      const result = response.result || response;
+      if (result?.error) {
+        toast.error("❌ " + result.error, { ms: 2500 });
+        playError();
+        setFocus();
+        return;
+      }
+      toast.success(`✅ Tạo kiện thành công! ${completedItems.length} sản phẩm`, { ms: 2000 });
+      playSuccess();
+      setTimeout(() => { window.location.reload(); }, 1500);
+    } catch (err) {
+      toast.error("❌ Lỗi kết nối: " + err.message, { ms: 2500 });
+      playError();
+      setFocus();
+    }
+  }
 
   list?.querySelectorAll(".btn-plus").forEach(btn =>
     btn.addEventListener("click", () =>

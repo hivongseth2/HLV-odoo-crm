@@ -82,7 +82,6 @@ class StockPickingPartial(models.Model):
             new_move_line = move_line.copy({
                 'move_id': new_move.id,
                 'qty_done': qty,
-                'qty': qty,
                 'original_move_line_id': move_line.id,
             })
             
