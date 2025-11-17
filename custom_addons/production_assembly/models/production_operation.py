@@ -164,17 +164,17 @@ class ProductionOperation(models.Model):
             if move.state not in ('assigned', 'partially_available'):
                 move._action_assign()
             
-            # Set quantity_done on move lines
+            # Set quantity on move lines (Odoo 18 uses 'quantity' field)
             if move.move_line_ids:
                 for move_line in move.move_line_ids:
-                    move_line.quantity_done = move.product_uom_qty
+                    move_line.quantity = move.product_uom_qty
             else:
                 # If no move lines, create them manually
                 move_line_vals = {
                     'move_id': move.id,
                     'product_id': move.product_id.id,
                     'product_uom_id': move.product_uom.id,
-                    'quantity_done': move.product_uom_qty,
+                    'quantity': move.product_uom_qty,
                     'location_id': move.location_id.id,
                     'location_dest_id': move.location_dest_id.id,
                     'company_id': move.company_id.id,
