@@ -160,12 +160,15 @@ class ProductionOperation(models.Model):
         
         # Process moves with available quantities
         for move in moves:
-            if move.state == 'assigned':
-                move._action_done()
-            else:
-                # Force move if not enough stock (for production scenarios)
-                move.quantity_done = move.product_uom_qty
-                move._action_done()
+            # Ensure move is assigned
+            if move.state not in ('assigned', 'partially_available'):
+                move._action_assign()
+            
+            # Set quantity_done directly on the move
+            move.quantity_done = move.product_uom_qty
+            
+            # Complete the move
+            move._action_done()
         
         self.state = 'done'
         
