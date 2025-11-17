@@ -407,7 +407,7 @@ class StockPickingPartial(models.Model):
                 continue
 
             orig_move = ml.move_id
-            # Copy move for new picking
+            # Copy move for new picking (only the moved qty)
             new_move = orig_move.copy({
                 'picking_id': new_picking.id,
                 'product_uom_qty': ml.qty_done,
@@ -420,7 +420,18 @@ class StockPickingPartial(models.Model):
                 'result_package_id': package.id,
             })
 
-            # Remove from original: reset qty_done and result_package_id
+            # Reduce original move planned qty by the moved qty
+            try:
+                orig_qty = float(orig_move.product_uom_qty or 0.0)
+            except Exception:
+                orig_qty = 0.0
+            remain_qty = orig_qty - float(ml.qty_done or 0.0)
+            if remain_qty < 0:
+                remain_qty = 0.0
+            # write back remaining planned qty (use sudo to avoid access issues)
+            orig_move.sudo().write({'product_uom_qty': remain_qty})
+
+            # Remove from original: reset qty_done and result_package_id on move_line
             ml.qty_done = 0
             ml.result_package_id = False
 
