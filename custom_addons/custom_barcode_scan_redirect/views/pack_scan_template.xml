@@ -93,41 +93,58 @@
             style="border:none;background:#eef2ff;padding:6px 10px;border-radius:8px;cursor:pointer;">Ẩn/Hiện</button>
   </div>
   <div class="panel-body" style="max-height: 46vh; overflow:auto;">
-    <t t-if="sibling_packs">
+    <!-- Section 1: Current Picking Packages -->
+    <t t-if="picking_packages">
+      <div style="padding:8px 12px 4px;">
+        <div style="font-weight:600; margin-bottom:8px; font-size:13px; color:#1f2937;">🔵 Gói hàng đơn này:</div>
+      </div>
       <ul style="list-style:none; margin:0; padding:0;">
-        <t t-foreach="sibling_packs" t-as="sp">
-          <li style="display:flex; flex-direction:column; padding:10px 12px; border-bottom:1px solid #f1f5f9;">
+        <t t-foreach="picking_packages" t-as="pkg">
+          <li style="display:flex; flex-direction:column; padding:10px 12px; border-bottom:1px solid #f1f5f9; background:#f9fafb;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-              <a t-att-href="'/custom_barcode_scan/pack_view/%s' % sp['id']"
-                 style="text-decoration:none; font-weight:600;">
-                <t t-esc="sp['name']"/>
-              </a>
-              <span t-attf-class="badge #{'badge-ok' if sp['state'] in ['assigned','in_progress'] else ('badge-warn' if sp['state'] in ['waiting','confirmed'] else 'badge-muted')}"
-                    style="min-width:88px; text-align:center;">
-                <t t-esc="sp['state_label']"/>
+              <strong style="text-decoration:none; font-weight:600; color:#065f46;">
+                <t t-esc="pkg['name']"/>
+              </strong>
+              <span style="background:#e7f5ff; color:#0c63e4; padding:4px 8px; border-radius:4px; font-size:12px;">
+                <t t-esc="pkg['qty']"/> SP
               </span>
-            </div>
-            <!-- Action buttons cho partial pack -->
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button class="btn-pack-action btn-unpack" t-att-data-pack-id="sp['id']" 
-                      style="flex:1; min-width:70px; padding:6px 10px; font-size:12px; background:#ff6b6b; color:#fff; border:none; border-radius:6px; cursor:pointer;">
-                🔓 Unpack
-              </button>
-              <button class="btn-pack-action btn-edit" t-att-data-pack-id="sp['id']"
-                      style="flex:1; min-width:70px; padding:6px 10px; font-size:12px; background:#4c7ceb; color:#fff; border:none; border-radius:6px; cursor:pointer;">
-                ✏️ Edit
-              </button>
-              <button class="btn-pack-action btn-transfer" t-att-data-pack-id="sp['id']"
-                      style="flex:1; min-width:70px; padding:6px 10px; font-size:12px; background:#ffa500; color:#fff; border:none; border-radius:6px; cursor:pointer;">
-                ↔️ Transfer
-              </button>
             </div>
           </li>
         </t>
       </ul>
     </t>
-    <t t-if="not sibling_packs">
-      <div style="padding:12px;">Không còn PACK nào khác để xử lý.</div>
+    
+    <!-- Empty state for current picking -->
+    <t t-if="not picking_packages">
+      <div style="padding:12px 12px 0; font-size:13px; color:#6b7280;">
+        <div style="font-weight:600; margin-bottom:8px; color:#1f2937;">🔵 Gói hàng đơn này:</div>
+        <div style="padding:8px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:4px; font-size:12px;">
+          Chưa có gói hàng. Quét sản phẩm và nhấn "Pack 1 phần" để tạo.
+        </div>
+      </div>
+    </t>
+    
+    <!-- Section 2: Related Pickings/Sibling Packs -->
+    <t t-if="sibling_packs">
+      <div style="padding:12px 12px 8px; margin-top:8px; border-top:1px solid #e5e7eb;">
+        <div style="font-weight:600; margin-bottom:8px; font-size:13px; color:#1f2937;">📋 Đơn hàng khác cùng order:</div>
+        <ul style="list-style:none; margin:0; padding:0;">
+          <t t-foreach="sibling_packs" t-as="sp">
+            <li style="display:flex; flex-direction:column; padding:10px 12px; border-bottom:1px solid #f1f5f9;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <a t-att-href="'/custom_barcode_scan/pack_view/%s' % sp['id']"
+                   style="text-decoration:none; font-weight:600; color:#2563eb;">
+                  <t t-esc="sp['name']"/>
+                </a>
+                <span t-attf-class="badge #{'badge-ok' if sp['state'] in ['assigned','in_progress'] else ('badge-warn' if sp['state'] in ['waiting','confirmed'] else 'badge-muted')}"
+                      style="min-width:88px; text-align:center; font-size:11px;">
+                  <t t-esc="sp['state_label']"/>
+                </span>
+              </div>
+            </li>
+          </t>
+        </ul>
+      </div>
     </t>
   </div>
 </div>

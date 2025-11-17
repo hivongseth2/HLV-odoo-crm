@@ -355,12 +355,25 @@ class CustomBarcodeScanController(http.Controller):
             'state_label': state_label.get(s.state, s.state),
         } for s in siblings_sorted]
 
+        # Lấy danh sách packages của picking hiện tại
+        picking_packages = []
+        MoveLine = request.env['stock.move.line']
+        package_ids = picking.move_line_ids.mapped('result_package_id').ids
+        if package_ids:
+            packages = request.env['stock.quant.package'].sudo().browse(package_ids)
+            picking_packages = [{
+                'id': pkg.id,
+                'name': pkg.name,
+                'qty': sum(ml.qty_done for ml in picking.move_line_ids.filtered(lambda ml: ml.result_package_id.id == pkg.id)),
+            } for pkg in packages]
+
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
             'lines': lines,
             'origin_pick_name': origin_pick.name if origin_pick else '',
             'drive_connected': drive_connected,
-            'sibling_packs': sibling_packs,   # <<<<<<<<<<<<<< thêm vào context
+            'sibling_packs': sibling_packs,
+            'picking_packages': picking_packages,
         })
 
 

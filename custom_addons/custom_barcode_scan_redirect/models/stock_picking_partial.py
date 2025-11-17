@@ -40,10 +40,19 @@ class StockPickingPartial(models.Model):
         if self.state not in ['assigned', 'confirmed', 'in_progress']:
             raise ValidationError("Chỉ có thể tạo gói từ các phiếu đã xác nhận hoặc đang làm!")
         
-        # Tạo package mới (stock.quant.package)
+        # Tạo package mới (stock.quant.package) với tên từ sequence
         Package = self.env['stock.quant.package']
+        
+        # Lấy tên package từ ir.sequence hoặc tạo tên mặc định
+        try:
+            package_name = self.env['ir.sequence'].next_by_code('stock.quant.package')
+        except:
+            # Fallback: nếu sequence không tồn tại, dùng định dạng PACK + số
+            count = Package.search_count([])
+            package_name = f"PACK{count + 1:07d}"
+        
         new_package = Package.create({
-            'name': f"{self.name}-PKG-{len(self.move_line_ids.mapped('result_package_id')) + 1}",
+            'name': package_name,
         })
         
         # Cập nhật result_package_id cho các move_line hoàn tất
