@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Warehouse Access Config List View -->
+    <record id="view_warehouse_access_config_list" model="ir.ui.view">
+        <field name="name">warehouse.access.config.list</field>
+        <field name="model">warehouse.access.config</field>
+        <field name="arch" type="xml">
+            <list string="Cấu hình phân quyền kho">
+                <field name="user_id"/>
+                <field name="is_admin"/>
+                <field name="warehouse_ids" widget="many2many_tags"/>
+                <field name="location_ids" widget="many2many_tags"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Warehouse Access Config Form View -->
+    <record id="view_warehouse_access_config_form" model="ir.ui.view">
+        <field name="name">warehouse.access.config.form</field>
+        <field name="model">warehouse.access.config</field>
+        <field name="arch" type="xml">
+            <form string="Cấu hình phân quyền kho">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="toggle_active" type="object" class="oe_stat_button" icon="fa-archive">
+                            <field name="active" widget="boolean_button" options='{"terminology": "archive"}'/>
+                        </button>
+                    </div>
+                    
+                    <group>
+                        <group>
+                            <field name="user_id" options="{'no_create': True}"/>
+                            <field name="is_admin"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <page string="Kho được phép truy cập" name="warehouses">
+                            <field name="warehouse_ids">
+                                <list editable="bottom">
+                                    <field name="name"/>
+                                    <field name="code"/>
+                                    <field name="company_id"/>
+                                </list>
+                            </field>
+                        </page>
+                        
+                        <page string="Vị trí cụ thể" name="locations">
+                            <field name="location_ids">
+                                <list editable="bottom">
+                                    <field name="name"/>
+                                    <field name="complete_name"/>
+                                    <field name="usage"/>
+                                    <field name="company_id"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Warehouse Access Config Search View -->
+    <record id="view_warehouse_access_config_search" model="ir.ui.view">
+        <field name="name">warehouse.access.config.search</field>
+        <field name="model">warehouse.access.config</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm cấu hình phân quyền kho">
+                <field name="user_id"/>
+                <field name="warehouse_ids"/>
+                <field name="location_ids"/>
+                
+                <filter string="Quản trị viên kho" name="admin_users" domain="[('is_admin', '=', True)]"/>
+                <filter string="Người dùng thường" name="regular_users" domain="[('is_admin', '=', False)]"/>
+                <separator/>
+                <filter string="Hoạt động" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Không hoạt động" name="inactive" domain="[('active', '=', False)]"/>
+                
+                <group expand="0" string="Nhóm theo">
+                    <filter string="Người dùng" name="group_user" context="{'group_by': 'user_id'}"/>
+                    <filter string="Loại quyền" name="group_admin" context="{'group_by': 'is_admin'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action for Warehouse Access Config -->
+    <record id="action_warehouse_access_config" model="ir.actions.act_window">
+        <field name="name">Cấu hình phân quyền kho</field>
+        <field name="res_model">warehouse.access.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_warehouse_access_config_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Tạo cấu hình phân quyền kho mới
+            </p>
+            <p>
+                Cấu hình này cho phép bạn chỉ định người dùng nào có thể truy cập kho nào trong hệ thống.
+                Bạn có thể cấp quyền theo từng kho cụ thể hoặc theo vị trí chi tiết.
+            </p>
+        </field>
+    </record>
+
+
+
+</odoo>

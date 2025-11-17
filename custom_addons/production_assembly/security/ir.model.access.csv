@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_production_operation_user,production.operation.user,model_production_operation,stock.group_stock_user,1,1,1,0
+access_production_operation_manager,production.operation.manager,model_production_operation,stock.group_stock_manager,1,1,1,1
+access_production_operation_line_user,production.operation.line.user,model_production_operation_line,stock.group_stock_user,1,1,1,1
+access_production_operation_line_manager,production.operation.line.manager,model_production_operation_line,stock.group_stock_manager,1,1,1,1
+access_warehouse_access_config_user,warehouse.access.config.user,model_warehouse_access_config,stock.group_stock_user,1,0,0,0
+access_warehouse_access_config_manager,warehouse.access.config.manager,model_warehouse_access_config,stock.group_stock_manager,1,1,1,1
