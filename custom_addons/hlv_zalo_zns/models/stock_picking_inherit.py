@@ -109,7 +109,7 @@ class StockPicking(models.Model):
             "date": date_str,
             "id": id_encoded,
             "address":ship_partner.street or "",
-            "shipping_fee":shipping_fee
+            "shipping_fee":shipping_fee or ""
         }
 
         _logger.info("ZNS send try (OUT): %s to=%s params=%s", picking.name, msisdn, params)
