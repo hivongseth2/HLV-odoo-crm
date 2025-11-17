@@ -276,6 +276,33 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  // Nút Partial Pack - tạo kiện tự động từ sản phẩm hoàn tất
+  document.getElementById('btnPartialPack')?.addEventListener('click', function() {
+    const autoPackageBarcode = `AUTO-PKG-${Date.now()}`;
+    handlePackageBarcode(autoPackageBarcode);
+  });
+
+  // Nút In nhãn
+  document.getElementById('btnPrintLabel')?.addEventListener('click', async function() {
+    const res = await fetch('/pack_scan/print_label', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'call',
+        params: { picking_id: pickingId }
+      })
+    });
+    const response = await res.json();
+    const result = response.result || response;
+    if (result?.success) {
+      toast.success(result.message, { ms: 1500 });
+      window.open(result.report_url, '_blank');
+    } else {
+      toast.error(result?.error || 'Không thể in nhãn', { ms: 2000 });
+    }
+  });
+
   setFocus();
   diag();
   setTimeout(startRecording, 400);
@@ -598,13 +625,6 @@ function createModal(title, content, buttons = []) {
   document.body.appendChild(modal);
   return modal;
 }
-
-// Tạo partial pack (auto - tự động từ sản phẩm đã hoàn tất)
-document.getElementById('btnPartialPack')?.addEventListener('click', function() {
-  // Gọi hàm handlePackageBarcode với một package ID tạo từ thời gian để đảm bảo duy nhất
-  const autoPackageBarcode = `AUTO-PKG-${Date.now()}`;
-  handlePackageBarcode(autoPackageBarcode);
-});
 
 // In nhãn
 document.getElementById('btnPrintLabel')?.addEventListener('click', async function() {
