@@ -169,15 +169,6 @@ class ProductionOperation(models.Model):
         
         self.state = 'done'
         
-        # Post message to chatter
-        operation_type_name = dict(self._fields['operation_type'].selection)[self.operation_type]
-        self.message_post(
-            body=_('%s operation completed successfully. %d stock moves created.') % (
-                operation_type_name, len(moves)
-            ),
-            message_type='notification'
-        )
-        
         return True
 
     def _prepare_assembly_moves(self, virtual_location):

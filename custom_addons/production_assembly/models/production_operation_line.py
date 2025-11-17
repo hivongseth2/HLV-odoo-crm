@@ -40,8 +40,15 @@ class ProductionOperationLine(models.Model):
         'stock.location',
         string='Source/Destination Location',
         required=True,
-        domain=[('usage', '=', 'internal')],
+        domain="[('usage', '=', 'internal'), ('id', 'in', available_location_ids)]",
         help="For Assembly: Location where component is taken from. For Disassembly: Location where component will be placed."
+    )
+    
+    # Computed field for available locations
+    available_location_ids = fields.Many2many(
+        'stock.location',
+        compute='_compute_available_location_ids',
+        string='Available Locations'
     )
     
     # Related fields for easier access
@@ -70,6 +77,26 @@ class ProductionOperationLine(models.Model):
         help="Available quantity in source location (for assembly operations)"
     )
     
+    @api.depends('product_id', 'operation_type', 'company_id')
+    def _compute_available_location_ids(self):
+        for line in self:
+            if line.operation_type == 'assembly' and line.product_id:
+                # For assembly: only show locations where the product has stock
+                quants = self.env['stock.quant'].search([
+                    ('product_id', '=', line.product_id.id),
+                    ('quantity', '>', 0),
+                    ('location_id.usage', '=', 'internal'),
+                    ('company_id', '=', line.company_id.id or self.env.company.id)
+                ])
+                line.available_location_ids = quants.mapped('location_id')
+            else:
+                # For disassembly: show all internal locations
+                locations = self.env['stock.location'].search([
+                    ('usage', '=', 'internal'),
+                    ('company_id', '=', line.company_id.id or self.env.company.id)
+                ])
+                line.available_location_ids = locations
+
     @api.depends('product_id', 'source_location_id', 'operation_type')
     def _compute_available_qty(self):
         for line in self:
@@ -86,14 +113,28 @@ class ProductionOperationLine(models.Model):
 
     @api.onchange('product_id')
     def _onchange_product_id(self):
-        if self.product_id and not self.source_location_id:
-            # Set default source location to stock location
-            stock_location = self.env['stock.location'].search([
-                ('usage', '=', 'internal'),
-                ('company_id', '=', self.operation_id.company_id.id)
-            ], limit=1)
-            if stock_location:
-                self.source_location_id = stock_location.id
+        if self.product_id:
+            # Clear current location selection
+            self.source_location_id = False
+            
+            # For assembly operations, try to find a location with stock
+            if self.operation_type == 'assembly':
+                quants = self.env['stock.quant'].search([
+                    ('product_id', '=', self.product_id.id),
+                    ('quantity', '>', 0),
+                    ('location_id.usage', '=', 'internal'),
+                    ('company_id', '=', self.operation_id.company_id.id or self.env.company.id)
+                ], limit=1)
+                if quants:
+                    self.source_location_id = quants.location_id.id
+            else:
+                # For disassembly, set default to first internal location
+                stock_location = self.env['stock.location'].search([
+                    ('usage', '=', 'internal'),
+                    ('company_id', '=', self.operation_id.company_id.id or self.env.company.id)
+                ], limit=1)
+                if stock_location:
+                    self.source_location_id = stock_location.id
 
     @api.constrains('qty')
     def _check_qty(self):

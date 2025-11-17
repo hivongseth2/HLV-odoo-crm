@@ -85,6 +85,7 @@
                                            string="Có sẵn" 
                                            column_invisible="parent.operation_type == 'disassembly'"/>
                                     <field name="operation_type" column_invisible="1"/>
+                                    <field name="available_location_ids" column_invisible="1"/>
                                 </list>
                             </field>
                         </page>
