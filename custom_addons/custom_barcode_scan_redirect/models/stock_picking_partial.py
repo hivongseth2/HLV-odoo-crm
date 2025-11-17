@@ -188,3 +188,178 @@ class StockPickingPartial(models.Model):
                     'qty_done': qty,
                     'original_move_line_id': move_line.original_move_line_id,
                 })
+
+    def get_package_details(self, package_id):
+        """
+        Lấy chi tiết sản phẩm trong 1 package để hiển thị modal edit
+        Returns: {
+            'package_id': int,
+            'package_name': str,
+            'items': [
+                {'move_line_id': int, 'product_id': int, 'product_name': str, 'qty_done': float, 'uom': str},
+                ...
+            ]
+        }
+        """
+        self.ensure_one()
+        
+        Package = self.env['stock.quant.package']
+        package = Package.sudo().browse(package_id)
+        
+        if not package.exists():
+            raise ValidationError("Gói hàng không tồn tại!")
+        
+        # Lấy tất cả move_lines của picking này và package này
+        move_lines = self.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', self.id),
+            ('result_package_id', '=', package_id)
+        ])
+        
+        items = []
+        for ml in move_lines:
+            items.append({
+                'move_line_id': ml.id,
+                'product_id': ml.product_id.id,
+                'product_name': ml.product_id.name,
+                'qty_done': ml.qty_done,
+                'uom': ml.product_uom_id.name,
+            })
+        
+        return {
+            'package_id': package.id,
+            'package_name': package.name,
+            'items': items,
+        }
+
+    def update_package_item_qty(self, package_id, move_line_id, new_qty):
+        """
+        Cập nhật số lượng của 1 sản phẩm trong package
+        """
+        self.ensure_one()
+        
+        move_line = self.env['stock.move.line'].sudo().browse(move_line_id)
+        if not move_line.exists() or move_line.picking_id.id != self.id:
+            raise ValidationError("Move line không tồn tại!")
+        
+        if move_line.result_package_id.id != package_id:
+            raise ValidationError("Move line này không thuộc package này!")
+        
+        if new_qty < 0:
+            raise ValidationError("Số lượng không được âm!")
+        
+        old_qty = move_line.qty_done
+        move_line.qty_done = new_qty
+        
+        return {
+            'success': True,
+            'old_qty': old_qty,
+            'new_qty': new_qty,
+            'message': f"Cập nhật thành công: {old_qty} → {new_qty}"
+        }
+
+    def remove_package_item(self, package_id, move_line_id):
+        """
+        Xoá 1 sản phẩm khỏi package (đặt qty_done = 0 và xoá result_package_id)
+        """
+        self.ensure_one()
+        
+        move_line = self.env['stock.move.line'].sudo().browse(move_line_id)
+        if not move_line.exists() or move_line.picking_id.id != self.id:
+            raise ValidationError("Move line không tồn tại!")
+        
+        if move_line.result_package_id.id != package_id:
+            raise ValidationError("Move line này không thuộc package này!")
+        
+        # Xoá khỏi package
+        move_line.result_package_id = None
+        move_line.qty_done = 0
+        
+        return {
+            'success': True,
+            'message': f"Đã xoá sản phẩm khỏi package"
+        }
+
+    def transfer_package_item(self, from_package_id, to_package_id, move_line_id, qty):
+        """
+        Chuyển 1 sản phẩm từ package này sang package khác
+        """
+        self.ensure_one()
+        
+        move_line = self.env['stock.move.line'].sudo().browse(move_line_id)
+        if not move_line.exists() or move_line.picking_id.id != self.id:
+            raise ValidationError("Move line không tồn tại!")
+        
+        if move_line.result_package_id.id != from_package_id:
+            raise ValidationError("Move line này không thuộc package nguồn!")
+        
+        if qty <= 0 or qty > move_line.qty_done:
+            raise ValidationError("Số lượng chuyển không hợp lệ!")
+        
+        # Cập nhật package hiện tại
+        move_line.qty_done -= qty
+        if move_line.qty_done == 0:
+            move_line.result_package_id = None
+        
+        # Kiểm tra xem sản phẩm có trong package đích không
+        existing_in_target = self.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', self.id),
+            ('product_id', '=', move_line.product_id.id),
+            ('result_package_id', '=', to_package_id)
+        ], limit=1)
+        
+        if existing_in_target:
+            # Cộng vào sản phẩm hiện có
+            existing_in_target.qty_done += qty
+        else:
+            # Tạo move_line mới cho package đích
+            new_move_line = move_line.copy({
+                'result_package_id': to_package_id,
+                'qty_done': qty,
+            })
+        
+        return {
+            'success': True,
+            'message': f"Chuyển {qty} sang package đích thành công"
+        }
+
+    def add_item_to_package(self, package_id, move_line_id, qty):
+        """
+        Thêm sản phẩm vào package (bổ sung sau, quét thêm)
+        move_line_id là item chưa được gán vào package nào hoặc đã có quantity khả dụng
+        """
+        self.ensure_one()
+        
+        move_line = self.env['stock.move.line'].sudo().browse(move_line_id)
+        if not move_line.exists() or move_line.picking_id.id != self.id:
+            raise ValidationError("Move line không tồn tại!")
+        
+        if qty <= 0:
+            raise ValidationError("Số lượng thêm phải > 0!")
+        
+        # Kiểm tra có chỗ trống có sẵn không
+        existing_in_target = self.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', self.id),
+            ('product_id', '=', move_line.product_id.id),
+            ('result_package_id', '=', package_id)
+        ], limit=1)
+        
+        if existing_in_target:
+            # Cộng vào sản phẩm hiện có
+            existing_in_target.qty_done += qty
+            move_line.qty_done -= qty
+            if move_line.qty_done == 0:
+                move_line.result_package_id = None
+        else:
+            # Tạo move_line mới hoặc di chuyển
+            move_line.qty_done -= qty
+            new_move_line = move_line.copy({
+                'result_package_id': package_id,
+                'qty_done': qty,
+            })
+            if move_line.qty_done == 0:
+                move_line.result_package_id = None
+        
+        return {
+            'success': True,
+            'message': f"Thêm {qty} vào package thành công"
+        }

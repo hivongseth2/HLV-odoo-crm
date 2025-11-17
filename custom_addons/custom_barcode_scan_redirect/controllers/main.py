@@ -740,6 +740,128 @@ class CustomBarcodeScanController(http.Controller):
             _logger.exception("PRINT_LABEL error")
             return {"error": str(e)}
 
+    # ===================== PACKAGE EDIT MANAGEMENT =====================
+    @http.route('/pack_scan/get_package_details', type='json', auth='user', csrf=False)
+    def get_package_details(self, **kwargs):
+        """
+        Lấy chi tiết sản phẩm trong 1 package để hiển thị modal edit
+        """
+        picking_id = kwargs.get("picking_id")
+        package_id = kwargs.get("package_id")
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            result = picking.get_package_details(package_id)
+            
+            # Lấy danh sách các package khác của cùng picking (để chuyển sang)
+            other_packages = []
+            package_ids = picking.move_line_ids.mapped('result_package_id').ids
+            if package_ids:
+                packages = request.env['stock.quant.package'].sudo().browse(package_ids)
+                other_packages = [{
+                    'id': pkg.id,
+                    'name': pkg.name
+                } for pkg in packages if pkg.id != package_id]
+            
+            result['other_packages'] = other_packages
+            result['all_items'] = picking.move_line_ids.filtered(lambda ml: ml.result_package_id.id == 0 or not ml.result_package_id).mapped(lambda ml: {
+                'move_line_id': ml.id,
+                'product_name': ml.product_id.name,
+                'qty_available': ml.product_uom_qty - ml.qty_done
+            })
+            
+            return result
+        except Exception as e:
+            _logger.exception("GET_PACKAGE_DETAILS error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/update_package_item_qty', type='json', auth='user', csrf=False)
+    def update_package_item_qty(self, **kwargs):
+        """
+        Cập nhật số lượng của 1 sản phẩm trong package
+        """
+        picking_id = kwargs.get("picking_id")
+        package_id = kwargs.get("package_id")
+        move_line_id = kwargs.get("move_line_id")
+        new_qty = kwargs.get("new_qty", 0)
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            result = picking.update_package_item_qty(package_id, move_line_id, new_qty)
+            return result
+        except Exception as e:
+            _logger.exception("UPDATE_PACKAGE_ITEM_QTY error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/remove_package_item', type='json', auth='user', csrf=False)
+    def remove_package_item(self, **kwargs):
+        """
+        Xoá 1 sản phẩm khỏi package
+        """
+        picking_id = kwargs.get("picking_id")
+        package_id = kwargs.get("package_id")
+        move_line_id = kwargs.get("move_line_id")
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            result = picking.remove_package_item(package_id, move_line_id)
+            return result
+        except Exception as e:
+            _logger.exception("REMOVE_PACKAGE_ITEM error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/transfer_package_item', type='json', auth='user', csrf=False)
+    def transfer_package_item(self, **kwargs):
+        """
+        Chuyển 1 sản phẩm từ package này sang package khác
+        """
+        picking_id = kwargs.get("picking_id")
+        from_package_id = kwargs.get("from_package_id")
+        to_package_id = kwargs.get("to_package_id")
+        move_line_id = kwargs.get("move_line_id")
+        qty = kwargs.get("qty", 0)
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            result = picking.transfer_package_item(from_package_id, to_package_id, move_line_id, qty)
+            return result
+        except Exception as e:
+            _logger.exception("TRANSFER_PACKAGE_ITEM error")
+            return {"error": str(e)}
+
+    @http.route('/pack_scan/add_item_to_package', type='json', auth='user', csrf=False)
+    def add_item_to_package(self, **kwargs):
+        """
+        Thêm sản phẩm vào package (bổ sung sau)
+        """
+        picking_id = kwargs.get("picking_id")
+        package_id = kwargs.get("package_id")
+        move_line_id = kwargs.get("move_line_id")
+        qty = kwargs.get("qty", 0)
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            result = picking.add_item_to_package(package_id, move_line_id, qty)
+            return result
+        except Exception as e:
+            _logger.exception("ADD_ITEM_TO_PACKAGE error")
+            return {"error": str(e)}
+
     @http.route('/gdrive/oauth2/disconnect', type='http', auth='user', website=True, csrf=False)
     def disconnect(self, **kw):
         # Xoá token hiện tại => lần sau sẽ bắt đăng nhập lại (chọn tài khoản khác)

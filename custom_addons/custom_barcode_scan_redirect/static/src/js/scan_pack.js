@@ -709,3 +709,224 @@ document.addEventListener('click', async function(e) {
     );
   }
 });
+
+// ===================== PACKAGE EDIT MODAL FUNCTIONS =====================
+let currentPackageData = null;
+
+async function openPackageEditModal(event) {
+  event.stopPropagation();
+  
+  const packageId = event.currentTarget.dataset.packageId;
+  const pickingId = parseInt(window.location.pathname.split("/").pop());
+  
+  try {
+    const res = await fetch("/pack_scan/get_package_details", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: { picking_id: pickingId, package_id: parseInt(packageId) }
+      })
+    });
+    
+    const response = await res.json();
+    const result = response.result || response;
+    
+    if (result?.error) {
+      toast.error("❌ " + result.error);
+      return;
+    }
+    
+    currentPackageData = result;
+    document.getElementById('modalPackageName').innerText = result.package_name;
+    
+    // Render items list
+    const itemsList = document.getElementById('packageItemsList');
+    itemsList.innerHTML = '';
+    
+    result.items.forEach(item => {
+      const li = document.createElement('li');
+      li.style.cssText = 'display:flex; gap:8px; padding:8px; margin-bottom:8px; background:#f3f4f6; border-radius:6px; align-items:center;';
+      li.innerHTML = `
+        <div style="flex:1;">
+          <div style="font-weight:600; font-size:14px;">${item.product_name}</div>
+          <div style="font-size:12px; color:#6b7280;">Số lượng: <strong>${item.qty_done}</strong> ${item.uom}</div>
+        </div>
+        <input type="number" min="0" value="${item.qty_done}" data-move-line-id="${item.move_line_id}" class="item-qty-input" 
+               style="width:60px; padding:4px; border:1px solid #d1d5db; border-radius:4px;" />
+        <button class="btn-remove-item" data-move-line-id="${item.move_line_id}" 
+                style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:12px;">🗑️ Xoá</button>
+      `;
+      
+      // Remove button handler
+      li.querySelector('.btn-remove-item').addEventListener('click', async () => {
+        if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
+          await removePackageItem(item.move_line_id);
+        }
+      });
+      
+      itemsList.appendChild(li);
+    });
+    
+    // Populate add item select
+    const addItemSelect = document.getElementById('addItemSelect');
+    addItemSelect.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
+    
+    if (result.all_items && result.all_items.length > 0) {
+      result.all_items.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.move_line_id;
+        option.innerText = `${item.product_name} (Còn: ${item.qty_available})`;
+        addItemSelect.appendChild(option);
+      });
+    }
+    
+    // Show modal
+    document.getElementById('packageEditModal').style.display = 'flex';
+    
+  } catch (err) {
+    toast.error("❌ Lỗi kết nối: " + err.message);
+  }
+}
+
+function closePackageEditModal() {
+  document.getElementById('packageEditModal').style.display = 'none';
+  currentPackageData = null;
+}
+
+async function removePackageItem(moveLineId) {
+  const pickingId = parseInt(window.location.pathname.split("/").pop());
+  
+  try {
+    const res = await fetch("/pack_scan/remove_package_item", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: { 
+          picking_id: pickingId, 
+          package_id: currentPackageData.package_id,
+          move_line_id: moveLineId
+        }
+      })
+    });
+    
+    const response = await res.json();
+    const result = response.result || response;
+    
+    if (result?.error) {
+      toast.error("❌ " + result.error);
+      return;
+    }
+    
+    toast.success("✅ Đã xoá sản phẩm!");
+    // Reload modal to refresh
+    openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
+    
+  } catch (err) {
+    toast.error("❌ Lỗi kết nối: " + err.message);
+  }
+}
+
+async function addItemToPackage() {
+  const pickingId = parseInt(window.location.pathname.split("/").pop());
+  const moveLineId = parseInt(document.getElementById('addItemSelect').value);
+  const qty = parseFloat(document.getElementById('addItemQty').value);
+  
+  if (!moveLineId || qty <= 0) {
+    toast.warn("⚠️ Vui lòng chọn sản phẩm và nhập số lượng");
+    return;
+  }
+  
+  try {
+    const res = await fetch("/pack_scan/add_item_to_package", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "call",
+        params: { 
+          picking_id: pickingId, 
+          package_id: currentPackageData.package_id,
+          move_line_id: moveLineId,
+          qty: qty
+        }
+      })
+    });
+    
+    const response = await res.json();
+    const result = response.result || response;
+    
+    if (result?.error) {
+      toast.error("❌ " + result.error);
+      return;
+    }
+    
+    toast.success("✅ " + result.message);
+    document.getElementById('addItemSelect').value = '';
+    document.getElementById('addItemQty').value = '1';
+    // Reload modal
+    openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
+    
+  } catch (err) {
+    toast.error("❌ Lỗi kết nối: " + err.message);
+  }
+}
+
+async function savePackageChanges() {
+  const pickingId = parseInt(window.location.pathname.split("/").pop());
+  const inputs = document.querySelectorAll('.item-qty-input');
+  
+  let hasChanges = false;
+  
+  for (let input of inputs) {
+    const moveLineId = parseInt(input.dataset.moveLineId);
+    const newQty = parseFloat(input.value);
+    
+    // Tìm qty cũ
+    const oldQty = currentPackageData.items.find(i => i.move_line_id === moveLineId)?.qty_done;
+    
+    if (newQty !== oldQty) {
+      hasChanges = true;
+      
+      try {
+        const res = await fetch("/pack_scan/update_package_item_qty", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "call",
+            params: { 
+              picking_id: pickingId, 
+              package_id: currentPackageData.package_id,
+              move_line_id: moveLineId,
+              new_qty: newQty
+            }
+          })
+        });
+        
+        const response = await res.json();
+        const result = response.result || response;
+        
+        if (result?.error) {
+          toast.error("❌ " + result.error);
+          return;
+        }
+        
+      } catch (err) {
+        toast.error("❌ Lỗi kết nối: " + err.message);
+        return;
+      }
+    }
+  }
+  
+  if (!hasChanges) {
+    toast.info("ℹ️ Không có thay đổi nào");
+    return;
+  }
+  
+  toast.success("✅ Đã lưu thay đổi! Tải lại trang...");
+  setTimeout(() => window.location.reload(), 1500);
+}

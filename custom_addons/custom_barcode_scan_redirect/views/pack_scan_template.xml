@@ -100,14 +100,21 @@
       </div>
       <ul style="list-style:none; margin:0; padding:0;">
         <t t-foreach="picking_packages" t-as="pkg">
-          <li style="display:flex; flex-direction:column; padding:10px 12px; border-bottom:1px solid #f1f5f9; background:#f9fafb;">
+          <li style="display:flex; flex-direction:column; padding:10px 12px; border-bottom:1px solid #f1f5f9; background:#f9fafb; cursor:pointer; transition:background 0.2s;" 
+              t-att-data-package-id="pkg['id']" class="package-item"
+              onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='#f9fafb'">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-              <strong style="text-decoration:none; font-weight:600; color:#065f46;">
+              <strong style="text-decoration:none; font-weight:600; color:#065f46; flex:1;">
                 <t t-esc="pkg['name']"/>
               </strong>
-              <span style="background:#e7f5ff; color:#0c63e4; padding:4px 8px; border-radius:4px; font-size:12px;">
+              <span style="background:#e7f5ff; color:#0c63e4; padding:4px 8px; border-radius:4px; font-size:12px; margin-right:8px;">
                 <t t-esc="pkg['qty']"/> SP
               </span>
+              <button class="btn-package-edit" t-att-data-package-id="pkg['id']" 
+                      style="background:#3b82f6; color:white; border:none; padding:4px 8px; border-radius:4px; font-size:11px; cursor:pointer;"
+                      onclick="openPackageEditModal(event)">
+                ✏️ Edit
+              </button>
             </div>
           </li>
         </t>
@@ -148,6 +155,47 @@
     </t>
   </div>
 </div>
+
+    <!-- MODAL: Edit Package -->
+    <div id="packageEditModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center;">
+      <div style="background:white; border-radius:12px; width:90%; max-width:600px; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+        <!-- Modal Header -->
+        <div style="padding:16px 20px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0; font-size:18px; font-weight:600;">📦 <span id="modalPackageName">PACK0000001</span></h3>
+          <button onclick="closePackageEditModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#6b7280;">✕</button>
+        </div>
+        
+        <!-- Modal Body -->
+        <div style="padding:20px;">
+          <!-- Items in Package -->
+          <div style="margin-bottom:20px;">
+            <h4 style="margin:0 0 12px 0; font-weight:600; color:#1f2937;">Sản phẩm trong gói:</h4>
+            <ul id="packageItemsList" style="list-style:none; margin:0; padding:0;">
+              <!-- Items will be populated by JavaScript -->
+            </ul>
+          </div>
+          
+          <!-- Add More Items Section -->
+          <div style="margin-top:20px; padding-top:20px; border-top:1px solid #e5e7eb;">
+            <h4 style="margin:0 0 12px 0; font-weight:600; color:#1f2937;">Thêm sản phẩm vào gói:</h4>
+            <div style="display:flex; gap:8px;">
+              <select id="addItemSelect" style="flex:1; padding:8px; border:1px solid #d1d5db; border-radius:6px; font-size:14px;">
+                <option value="">-- Chọn sản phẩm --</option>
+                <!-- Options will be populated by JavaScript -->
+              </select>
+              <input id="addItemQty" type="number" min="1" value="1" style="width:80px; padding:8px; border:1px solid #d1d5db; border-radius:6px;"/>
+              <button onclick="addItemToPackage()" style="background:#10b981; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600;">➕ Thêm</button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Modal Footer -->
+        <div style="padding:16px 20px; border-top:1px solid #e5e7eb; display:flex; gap:8px; justify-content:flex-end;">
+          <button onclick="closePackageEditModal()" style="background:#e5e7eb; color:#1f2937; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600;">Đóng</button>
+          <button onclick="savePackageChanges()" style="background:#3b82f6; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600;">💾 Lưu thay đổi</button>
+        </div>
+      </div>
+    </div>
 
     </t>
   </template>
