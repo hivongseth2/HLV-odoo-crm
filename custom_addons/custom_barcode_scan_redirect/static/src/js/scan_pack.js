@@ -133,86 +133,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   }
 
-  // ===== PACKAGE BARCODE HANDLER =====
-  function isProductBarcode(barcode) {
-    // Check if barcode exists in product list
-    const exists = [...document.querySelectorAll('[data-barcode]')]
-      .some(el => normalizeCode(el.dataset.barcode) === normalizeCode(barcode));
-    return exists;
-  }
-
-  async function handlePackageBarcode(packageBarcode) {
-    // Collect all completed items (done_qty >= required_qty)
-    const items = document.querySelectorAll("#product_list .product-item");
-    const completedItems = [];
-
-    items.forEach(item => {
-      const doneEl = item.querySelector(".done");
-      const requiredEl = item.querySelectorAll("span")[1];
-      const done = parseFloat(doneEl?.innerText || 0);
-      const required = parseFloat(requiredEl?.innerText || 0);
-      const lineId = item.dataset.lineId;
-
-      if (done >= required && required > 0) {
-        completedItems.push({
-          move_line_id: parseInt(lineId),
-          qty: done
-        });
-      }
-    });
-
-    if (completedItems.length === 0) {
-      toast.warn("⚠️ Không có sản phẩm nào hoàn tất để tạo kiện", { ms: 2500 });
-      playError();
-      setFocus();
-      return;
-    }
-
-    // Call API to create partial pack
-    try {
-      const res = await fetch("/pack_scan/create_partial_pack", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "call",
-          params: {
-            picking_id: pickingId,
-            package_barcode: packageBarcode,
-            move_line_data: completedItems
-          }
-        })
-      });
-
-      const response = await res.json();
-      const result = response.result || response;
-
-      if (result?.error) {
-        toast.error("❌ " + result.error, { ms: 2500 });
-        playError();
-        setFocus();
-        return;
-      }
-
-      toast.success(`✅ Tạo kiện thành công! ${completedItems.length} sản phẩm`, { ms: 2000 });
-      playSuccess();
-
-      // Reload page after 1.5 seconds to show updated state
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-    } catch (err) {
-      toast.error("❌ Lỗi kết nối: " + err.message, { ms: 2500 });
-      playError();
-      setFocus();
-    }
-  }
-  // ===== END PACKAGE BARCODE HANDLER =====
-
-
   input?.addEventListener("keypress", function (e) {
     if (e.key !== "Enter") return;
     const raw = input.value.trim();
@@ -225,16 +145,12 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // mapping: nếu quét "key" thì cộng 0.1 vào barcode mục tiêu
+    // mapping: nếu quét “key” thì cộng 0.1 vào barcode mục tiêu
     const targetBarcode = BARCODE_MAP_POINT_ONE[raw];
     if (targetBarcode) {
       updateQty(targetBarcode, 0.1);
-    } else if (isProductBarcode(raw)) {
-      // Nếu là barcode sản phẩm, cập nhật số lượng
-      updateQty(raw, 1);
     } else {
-      // Nếu không là barcode sản phẩm, coi là package barcode - tạo kiện từ các sản phẩm hoàn tất
-      handlePackageBarcode(raw);
+      updateQty(raw, 1);
     }
 
     input.value = "";

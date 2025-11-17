@@ -1,4 +1,3 @@
-
 {
     "name": "Custom Barcode Pack Scan",
     "version": "1.0",
