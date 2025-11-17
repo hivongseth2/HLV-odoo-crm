@@ -377,28 +377,33 @@ class ProductionOperation(models.Model):
                 if record.source_location_id not in accessible_locations:
                     raise ValidationError(_('Bạn không có quyền truy cập vào vị trí nguồn đã chọn: %s') % record.source_location_id.display_name)
     
+    # def _get_user_accessible_locations(self):
+    #     """Get locations that current user has access to"""
+    #     current_user = self.env.user
+        
+    #     # Check if user has warehouse access configuration
+    #     warehouse_config = self.env['warehouse.access.config'].search([
+    #         ('user_id', '=', current_user.id)
+    #     ], limit=1)
+        
+    #     if warehouse_config:
+    #         # Return configured locations and warehouse locations
+    #         accessible_locations = warehouse_config.location_ids
+            
+    #         # Add warehouse locations if configured
+    #         for warehouse in warehouse_config.warehouse_ids:
+    #             accessible_locations |= warehouse.lot_stock_id
+    #             accessible_locations |= warehouse.view_location_id.child_ids
+            
+    #         return accessible_locations
+    #     else:
+    #         # If no configuration, return all internal locations (default behavior)
+    #         return self.env['stock.location'].search([
+    #             ('usage', '=', 'internal'),
+    #             ('company_id', '=', self.company_id.id or self.env.company.id)
+    #         ])
+    
     def _get_user_accessible_locations(self):
-        """Get locations that current user has access to"""
-        current_user = self.env.user
-        
-        # Check if user has warehouse access configuration
-        warehouse_config = self.env['warehouse.access.config'].search([
-            ('user_id', '=', current_user.id)
-        ], limit=1)
-        
-        if warehouse_config:
-            # Return configured locations and warehouse locations
-            accessible_locations = warehouse_config.location_ids
-            
-            # Add warehouse locations if configured
-            for warehouse in warehouse_config.warehouse_ids:
-                accessible_locations |= warehouse.lot_stock_id
-                accessible_locations |= warehouse.view_location_id.child_ids
-            
-            return accessible_locations
-        else:
-            # If no configuration, return all internal locations (default behavior)
-            return self.env['stock.location'].search([
-                ('usage', '=', 'internal'),
-                ('company_id', '=', self.company_id.id or self.env.company.id)
-            ])
+        """Lấy danh sách vị trí mà user hiện tại được phép truy cập, dùng lại config model."""
+        warehouse_config_model = self.env['warehouse.access.config']
+        return warehouse_config_model.get_accessible_locations(self.env.user.id)

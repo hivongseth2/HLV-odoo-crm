@@ -78,22 +78,45 @@ class ProductionOperationLine(models.Model):
         help="Available quantity in source location (for assembly operations)"
     )
     
+    # def _compute_available_location_ids(self):
+    #     """Compute available locations based on operation type and user access"""
+    #     warehouse_config = self.env['warehouse.access.config']
+        
+    #     for line in self:
+    #         if line.operation_type == 'assembly' and line.product_id:
+    #             # For assembly: only show locations where the product has stock and user has access
+    #             locations = warehouse_config.get_locations_with_stock(line.product_id.id, self.env.user.id)
+    #             line.available_location_ids = locations
+    #         elif line.operation_type == 'disassembly':
+    #             # For disassembly: show accessible internal locations
+    #             accessible_locations = warehouse_config.get_accessible_locations(self.env.user.id)
+    #             line.available_location_ids = accessible_locations
+    #         else:
+    #             # Return empty recordset for other cases
+    #             line.available_location_ids = self.env['stock.location']
+    
+    
     def _compute_available_location_ids(self):
         """Compute available locations based on operation type and user access"""
         warehouse_config = self.env['warehouse.access.config']
         
         for line in self:
             if line.operation_type == 'assembly' and line.product_id:
-                # For assembly: only show locations where the product has stock and user has access
-                locations = warehouse_config.get_locations_with_stock(line.product_id.id, self.env.user.id)
+                # Chỉ vị trí có tồn và user được phép truy cập
+                locations = warehouse_config.get_locations_with_stock(
+                    line.product_id.id,
+                    self.env.user.id
+                )
                 line.available_location_ids = locations
             elif line.operation_type == 'disassembly':
-                # For disassembly: show accessible internal locations
-                accessible_locations = warehouse_config.get_accessible_locations(self.env.user.id)
+                # Tất cả vị trí internal/transit mà user được phép
+                accessible_locations = warehouse_config.get_accessible_locations(
+                    self.env.user.id
+                )
                 line.available_location_ids = accessible_locations
             else:
-                # Return empty recordset for other cases
                 line.available_location_ids = self.env['stock.location']
+
 
     @api.depends('product_id', 'source_location_id', 'operation_type')
     def _compute_available_qty(self):

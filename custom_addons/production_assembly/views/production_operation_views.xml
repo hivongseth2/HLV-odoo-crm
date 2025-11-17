@@ -60,7 +60,10 @@
                                string="Vị trí đích" 
                                readonly="state != 'draft'" 
                                invisible="operation_type == 'disassembly'"
-                               domain="[('id', 'in', available_destination_location_ids)]"/>
+                               domain="[('id', 'in', available_destination_location_ids)]"
+                               
+                               
+                               />
                         <field name="source_location_id" 
                                string="Vị trí nguồn" 
                                readonly="state != 'draft'" 
