@@ -22,8 +22,8 @@
           <div class="right">
             <span t-if="drive_connected" class="badge badge-ok">Drive đã kết nối</span>
             <span t-if="not drive_connected" class="badge badge-warn">Chưa kết nối Drive</span>
-            <button id="btnPrintLabel" class="btn-secondary" title="In nhãn dán sản phẩm">🖨️ In nhãn</button>
-            <button id="btnPartialPack" class="btn-secondary" title="Tạo partial pack">📦 Partial Pack</button>
+            <button id="btnPrintLabel" class="btn-secondary" title="In nhãn dán sản phẩm">In nhãn</button>
+            <button id="btnPartialPack" class="btn-secondary" title="Tạo partial pack">Pack 1 phần</button>
             <button id="btnDriveSwitch" class="btn-secondary">↻ Đổi tài khoản Drive</button>
           </div>
         </div>
