@@ -158,31 +158,27 @@ class ProductionOperation(models.Model):
         moves._action_confirm()
         moves._action_assign()
         
-        # Process moves with available quantities
-        for move in moves:
-            # Ensure move is assigned
-            if move.state not in ('assigned', 'partially_available'):
-                move._action_assign()
-            
-            # Set quantity on move lines (Odoo 18 uses 'quantity' field)
-            if move.move_line_ids:
-                for move_line in move.move_line_ids:
-                    move_line.quantity = move.product_uom_qty
-            else:
-                # If no move lines, create them manually
-                move_line_vals = {
-                    'move_id': move.id,
-                    'product_id': move.product_id.id,
-                    'product_uom_id': move.product_uom.id,
-                    'quantity': move.product_uom_qty,
-                    'location_id': move.location_id.id,
-                    'location_dest_id': move.location_dest_id.id,
-                    'company_id': move.company_id.id,
-                }
-                self.env['stock.move.line'].create(move_line_vals)
-            
-            # Complete the move with context to bypass some validations
-            move.with_context(skip_backorder=True, skip_sms=True)._action_done()
+        # Create a temporary picking to handle the moves properly
+        picking_vals = {
+            'location_id': moves[0].location_id.id,
+            'location_dest_id': moves[0].location_dest_id.id,
+            'picking_type_id': self.env.ref('stock.picking_type_internal').id,
+            'immediate_transfer': True,
+            'move_ids': [(6, 0, moves.ids)],
+        }
+        
+        picking = self.env['stock.picking'].create(picking_vals)
+        
+        # Assign the picking
+        picking.action_assign()
+        
+        # Set quantities on move lines
+        for move in picking.move_ids:
+            for move_line in move.move_line_ids:
+                move_line.qty_done = move.product_uom_qty
+        
+        # Validate the picking (this should complete all moves)
+        picking.button_validate()
         
         self.state = 'done'
         
