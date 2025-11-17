@@ -117,10 +117,20 @@ class WordPressOrderWebhook(http.Controller):
                     status=400
                 )
             
-            # Lấy access token từ Shared Token Manager
-            token_manager = request.env['hlv.zalo.shared.token'].sudo()
-            access_token = token_manager._get_shared_token()
-            
+            # # Lấy access token từ Shared Token Manager
+            # token_manager = request.env['hlv.zalo.shared.token'].sudo()
+            # access_token = token_manager._get_shared_token()
+            config = self.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
+
+            try:
+                access_token = config.get_valid_access_token()
+                if not access_token:
+                    _logger.error("Zalo Config for picking %s has no valid access_token. Please authorize first.", self.name)
+                    return
+            except Exception as e:
+                _logger.exception("Error getting access token for picking %s: %s", self.name, e)
+                return
+                
             if not access_token:
                 _logger.error("WordPress webhook - No active Zalo token found (order_id: %s)", 
                             data.get('order_id', 'N/A'))
