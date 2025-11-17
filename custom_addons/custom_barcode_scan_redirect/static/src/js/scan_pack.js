@@ -209,8 +209,9 @@ document.addEventListener("DOMContentLoaded", function () {
         setFocus();
         return;
       }
-      toast.success(`✅ Tạo kiện thành công! ${completedItems.length} sản phẩm`, { ms: 2000 });
+      toast.success(`✅ Tạo gói hàng ${result.package_name} thành công! ${completedItems.length} sản phẩm`, { ms: 2000 });
       playSuccess();
+      // Reload để hiển thị các move_line đã được gán vào package
       setTimeout(() => { window.location.reload(); }, 1500);
     } catch (err) {
       toast.error("❌ Lỗi kết nối: " + err.message, { ms: 2500 });

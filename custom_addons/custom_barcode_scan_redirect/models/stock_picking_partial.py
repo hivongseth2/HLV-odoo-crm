@@ -28,72 +28,40 @@ class StockPickingPartial(models.Model):
 
     def create_partial_pack(self, move_line_data):
         """
-        Tạo partial pack từ dữ liệu move_line_ids
+        Tạo gói hàng (package) từ các move_line hoàn tất
         move_line_data: [
             {'move_line_id': int, 'qty': float},
             ...
         ]
+        Cơ chế: Không tạo phiếu mới, chỉ tạo stock.quant.package và gán vào result_package_id
         """
         self.ensure_one()
         
         if self.state not in ['assigned', 'confirmed', 'in_progress']:
-            raise ValidationError("Chỉ có thể tạo partial pack từ các phiếu đã xác nhận hoặc đang làm!")
+            raise ValidationError("Chỉ có thể tạo gói từ các phiếu đã xác nhận hoặc đang làm!")
         
-        # Tạo picking tương tự
-        new_picking = self.copy({
-            'name': f"{self.name}-PARTIAL-{len(self.partial_pack_ids) + 1}",
-            'state': 'draft',
-            'partial_pack_id': self.id,
+        # Tạo package mới (stock.quant.package)
+        Package = self.env['stock.quant.package']
+        new_package = Package.create({
+            'name': f"{self.name}-PKG-{len(self.move_line_ids.mapped('result_package_id')) + 1}",
         })
         
-        # Clear move_ids từ bản copy
-        new_picking.move_ids.unlink()
-        
-        # Map để lưu move_id mới theo product
-        product_move_map = {}
-        
-        # Tạo move lines mới cho partial pack
+        # Cập nhật result_package_id cho các move_line hoàn tất
         for data in move_line_data:
             move_line_id = data.get('move_line_id')
-            qty = data.get('qty', 0)
             
-            if qty <= 0:
-                continue
-                
             move_line = self.env['stock.move.line'].sudo().browse(move_line_id)
             if not move_line.exists():
                 continue
             
-            product = move_line.product_id
-            
-            # Tạo hoặc lấy move mới từ move gốc
-            if product.id not in product_move_map:
-                new_move = move_line.move_id.copy({
-                    'picking_id': new_picking.id,
-                    'product_uom_qty': qty,
-                })
-                product_move_map[product.id] = new_move
-            else:
-                new_move = product_move_map[product.id]
-                # Cộng qty
-                new_move.product_uom_qty += qty
-            
-            # Tạo move_line mới
-            new_move_line = move_line.copy({
-                'move_id': new_move.id,
-                'qty_done': qty,
-                'original_move_line_id': move_line.id,
-            })
-            
-            # Cập nhật qty_done của move_line gốc
-            move_line.qty_done -= qty
+            # Gán package cho move_line này
+            move_line.result_package_id = new_package.id
         
-        # Xác nhận picking
-        new_picking.action_confirm()
-        new_picking.action_assign()
-        new_picking.button_validate()
-        
-        return new_picking
+        return {
+            'package_id': new_package.id,
+            'package_name': new_package.name,
+        }
+
 
     def unpack_partial(self):
         """

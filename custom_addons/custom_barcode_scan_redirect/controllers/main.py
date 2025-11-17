@@ -608,7 +608,7 @@ class CustomBarcodeScanController(http.Controller):
     @http.route('/pack_scan/create_partial_pack', type='json', auth='user', csrf=False)
     def create_partial_pack(self, **kwargs):
         """
-        Tạo partial pack từ picking hiện tại
+        Tạo gói hàng từ các move_line hoàn tất trong picking
         move_line_data: [{'move_line_id': int, 'qty': float}, ...]
         """
         picking_id = kwargs.get("picking_id")
@@ -622,14 +622,14 @@ class CustomBarcodeScanController(http.Controller):
             return {"error": "Phiếu không tồn tại"}
         
         try:
-            # Tạo partial pack
-            new_picking = picking.create_partial_pack(move_line_data)
-            _logger.info(f"CREATE_PARTIAL_PACK: Success! New picking: {new_picking.name} (ID: {new_picking.id})")
+            # Tạo gói hàng (package)
+            result = picking.create_partial_pack(move_line_data)
+            _logger.info(f"CREATE_PARTIAL_PACK: Success! New package: {result['package_name']} (ID: {result['package_id']})")
             return {
                 "success": True,
-                "new_pack_id": new_picking.id,
-                "new_pack_name": new_picking.name,
-                "message": f"✅ Tạo partial pack {new_picking.name} thành công!"
+                "package_id": result['package_id'],
+                "package_name": result['package_name'],
+                "message": f"✅ Tạo gói hàng {result['package_name']} thành công!"
             }
         except Exception as e:
             _logger.exception("CREATE_PARTIAL_PACK error")
