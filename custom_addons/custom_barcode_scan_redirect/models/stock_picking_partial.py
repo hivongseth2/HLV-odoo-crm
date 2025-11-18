@@ -73,19 +73,15 @@ class StockPickingPartial(models.Model):
                 # không còn qty_done trên dòng nguồn; skip
                 continue
 
-            # Nếu take_qty == src_done: có thể gán trực tiếp move_line vào package
-            if abs(take_qty - src_done) < 1e-6 and not move_line.result_package_id:
-                move_line.sudo().write({'result_package_id': new_package.id})
-            else:
-                # Tạo copy move_line cho package với qty = take_qty
-                move_line.sudo().copy({
-                    'qty_done': take_qty,
-                    'result_package_id': new_package.id,
-                })
+            # Luôn tạo move_line mới cho package, không gán trực tiếp move_line nguồn vào package
+            move_line.sudo().copy({
+                'qty_done': take_qty,
+                'result_package_id': new_package.id,
+            })
 
-                # Giảm qty_done trên dòng nguồn
-                remaining = src_done - take_qty
-                move_line.sudo().write({'qty_done': remaining})
+            # Giảm qty_done trên dòng nguồn
+            remaining = src_done - take_qty
+            move_line.sudo().write({'qty_done': remaining})
         
         return {
             'package_id': new_package.id,
