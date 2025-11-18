@@ -2,6 +2,66 @@
 <odoo>
     <data>
         
+        <!-- Access Denied Template -->
+        <template id="access_denied" name="Access Denied">
+            <t t-call="web.layout">
+                <t t-set="head_website">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+                    <style>
+                        .access-denied-container {
+                            max-width: 600px;
+                            margin: 50px auto;
+                            padding: 40px 20px;
+                            text-align: center;
+                            background: #ffffff;
+                            border-radius: 8px;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        }
+                        .access-denied-icon {
+                            font-size: 64px;
+                            color: #dc3545;
+                            margin-bottom: 20px;
+                        }
+                        .access-denied-title {
+                            font-size: 24px;
+                            font-weight: 600;
+                            color: #2c3e50;
+                            margin-bottom: 16px;
+                        }
+                        .access-denied-message {
+                            font-size: 16px;
+                            color: #6c757d;
+                            margin-bottom: 24px;
+                            line-height: 1.5;
+                        }
+                        .access-denied-btn {
+                            display: inline-block;
+                            padding: 12px 24px;
+                            background-color: #007bff;
+                            color: white;
+                            text-decoration: none;
+                            border-radius: 6px;
+                            font-weight: 500;
+                        }
+                        .access-denied-btn:hover {
+                            background-color: #0056b3;
+                            color: white;
+                        }
+                    </style>
+                </t>
+                
+                <div class="access-denied-container">
+                    <div class="access-denied-icon">🚫</div>
+                    <h1 class="access-denied-title">Access Denied</h1>
+                    <p class="access-denied-message">
+                        You don't have permission to access the Shipper Scanner.<br/>
+                        Please contact your administrator to get "Shipper" access rights.
+                    </p>
+                    <a href="/web" class="access-denied-btn">← Back to Odoo</a>
+                </div>
+            </t>
+        </template>
+        
         <!-- Mobile Shipper Interface Template -->
         <template id="shipper_interface" name="Shipper Barcode Interface">
             <t t-call="web.layout">

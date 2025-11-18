@@ -453,14 +453,17 @@ class BarcodeShipperController(http.Controller):
                 'error': 'System error occurred'
             }
 
-    @http.route('/barcode/shipper', type='http', auth='user', website=True)
+    @http.route('/barcode/shipper', type='http', auth='user', website=False)
     def shipper_interface(self, **kwargs):
         """
         Main shipper interface page
         """
         # Check if user has shipper access
         if not request.env.user.has_group('hlv_barcode_shipper.group_shipper'):
-            return request.render('web.access_denied')
+            # Return a simple access denied page instead of using web.access_denied
+            return request.render('hlv_barcode_shipper.access_denied', {
+                'user': request.env.user,
+            })
         
         return request.render('hlv_barcode_shipper.shipper_interface', {
             'user': request.env.user,
