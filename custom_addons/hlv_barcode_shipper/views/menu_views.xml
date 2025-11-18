@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        
+        <!-- Main Menu -->
+        <menuitem id="menu_barcode_shipper_root"
+                  name="Shipper Scanner"
+                  sequence="50"
+                  groups="group_shipper"/>
+        
+        <!-- Barcode Scanner Menu -->
+        <menuitem id="menu_barcode_scanner"
+                  name="📱 Barcode Scanner"
+                  parent="menu_barcode_shipper_root"
+                  action="base.action_open_website"
+                  sequence="10"
+                  groups="group_shipper"/>
+        
+        <!-- Set the URL for barcode scanner -->
+        <record id="menu_barcode_scanner" model="ir.ui.menu">
+            <field name="action">base.action_open_website</field>
+        </record>
+        
+        <!-- Alternative: Direct URL action for barcode scanner -->
+        <record id="action_barcode_scanner_url" model="ir.actions.act_url">
+            <field name="name">Barcode Scanner</field>
+            <field name="url">/barcode/shipper</field>
+            <field name="target">self</field>
+        </record>
+        
+        <menuitem id="menu_barcode_scanner_direct"
+                  name="📱 Mobile Scanner"
+                  parent="menu_barcode_shipper_root"
+                  action="action_barcode_scanner_url"
+                  sequence="10"
+                  groups="group_shipper"/>
+        
+        <!-- Delivery Orders Menu -->
+        <menuitem id="menu_delivery_orders"
+                  name="📦 Delivery Orders"
+                  parent="menu_barcode_shipper_root"
+                  action="stock_picking_action_shipper"
+                  sequence="20"
+                  groups="group_shipper"/>
+        
+        <!-- Manager Menus -->
+        <menuitem id="menu_shipper_management"
+                  name="📊 Management"
+                  parent="menu_barcode_shipper_root"
+                  sequence="30"
+                  groups="group_shipper_manager"/>
+        
+        <!-- Scan Logs Menu -->
+        <menuitem id="menu_scan_logs"
+                  name="📋 Scan Logs"
+                  parent="menu_shipper_management"
+                  action="barcode_scan_log_action"
+                  sequence="10"
+                  groups="group_shipper_manager"/>
+        
+        <!-- Stock Picking Menu for Managers -->
+        <menuitem id="menu_stock_picking_manager"
+                  name="📦 All Pickings"
+                  parent="menu_shipper_management"
+                  action="stock.action_picking_tree_all"
+                  sequence="20"
+                  groups="group_shipper_manager"/>
+        
+        <!-- Settings Menu -->
+        <menuitem id="menu_shipper_settings"
+                  name="⚙️ Settings"
+                  parent="menu_barcode_shipper_root"
+                  sequence="40"
+                  groups="group_shipper_manager"/>
+        
+        <!-- Users & Access Rights -->
+        <menuitem id="menu_shipper_users"
+                  name="👥 Shipper Users"
+                  parent="menu_shipper_settings"
+                  action="base.action_res_users"
+                  sequence="10"
+                  groups="group_shipper_manager"/>
+        
+    </data>
+</odoo>

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        
+        <!-- Barcode Scan Log Tree View -->
+        <record id="barcode_scan_log_tree" model="ir.ui.view">
+            <field name="name">barcode.scan.log.tree</field>
+            <field name="model">barcode.scan.log</field>
+            <field name="arch" type="xml">
+                <tree string="Barcode Scan Logs" default_order="scan_time desc">
+                    <field name="scan_time"/>
+                    <field name="user_id"/>
+                    <field name="barcode"/>
+                    <field name="scan_type"/>
+                    <field name="status" decoration-success="status == 'success'" decoration-danger="status == 'error'" decoration-warning="status == 'warning'"/>
+                    <field name="picking_id" optional="show"/>
+                    <field name="package_id" optional="hide"/>
+                    <field name="product_id" optional="hide"/>
+                    <field name="message" optional="hide"/>
+                    <field name="session_id" optional="hide"/>
+                </tree>
+            </field>
+        </record>
+        
+        <!-- Barcode Scan Log Form View -->
+        <record id="barcode_scan_log_form" model="ir.ui.view">
+            <field name="name">barcode.scan.log.form</field>
+            <field name="model">barcode.scan.log</field>
+            <field name="arch" type="xml">
+                <form string="Barcode Scan Log" create="false" edit="false">
+                    <sheet>
+                        <group>
+                            <group string="Scan Information">
+                                <field name="barcode"/>
+                                <field name="scan_type"/>
+                                <field name="scan_time"/>
+                                <field name="user_id"/>
+                                <field name="status"/>
+                                <field name="session_id"/>
+                            </group>
+                            <group string="Related Records">
+                                <field name="picking_id"/>
+                                <field name="package_id"/>
+                                <field name="product_id"/>
+                            </group>
+                        </group>
+                        <group string="Message">
+                            <field name="message" nolabel="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+        
+        <!-- Barcode Scan Log Search View -->
+        <record id="barcode_scan_log_search" model="ir.ui.view">
+            <field name="name">barcode.scan.log.search</field>
+            <field name="model">barcode.scan.log</field>
+            <field name="arch" type="xml">
+                <search string="Search Barcode Scan Logs">
+                    <field name="barcode"/>
+                    <field name="user_id"/>
+                    <field name="picking_id"/>
+                    <field name="package_id"/>
+                    <field name="product_id"/>
+                    <field name="session_id"/>
+                    
+                    <filter string="Today" name="today" 
+                            domain="[('scan_time', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                    <filter string="This Week" name="this_week" 
+                            domain="[('scan_time', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                    <filter string="This Month" name="this_month" 
+                            domain="[('scan_time', '&gt;=', (context_today().replace(day=1)).strftime('%Y-%m-%d'))]"/>
+                    
+                    <separator/>
+                    <filter string="Success" name="success" domain="[('status', '=', 'success')]"/>
+                    <filter string="Error" name="error" domain="[('status', '=', 'error')]"/>
+                    <filter string="Warning" name="warning" domain="[('status', '=', 'warning')]"/>
+                    
+                    <separator/>
+                    <filter string="PICK Scans" name="pick_scans" domain="[('scan_type', '=', 'pick')]"/>
+                    <filter string="Package Scans" name="package_scans" domain="[('scan_type', '=', 'package')]"/>
+                    <filter string="Product Scans" name="product_scans" domain="[('scan_type', '=', 'product')]"/>
+                    <filter string="Complete Scans" name="complete_scans" domain="[('scan_type', '=', 'complete')]"/>
+                    
+                    <separator/>
+                    <filter string="My Scans" name="my_scans" domain="[('user_id', '=', uid)]"/>
+                    
+                    <group expand="0" string="Group By">
+                        <filter string="User" name="group_user" context="{'group_by': 'user_id'}"/>
+                        <filter string="Scan Type" name="group_scan_type" context="{'group_by': 'scan_type'}"/>
+                        <filter string="Status" name="group_status" context="{'group_by': 'status'}"/>
+                        <filter string="Picking" name="group_picking" context="{'group_by': 'picking_id'}"/>
+                        <filter string="Date" name="group_date" context="{'group_by': 'scan_time:day'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+        
+        <!-- Barcode Scan Log Action -->
+        <record id="barcode_scan_log_action" model="ir.actions.act_window">
+            <field name="name">Barcode Scan Logs</field>
+            <field name="res_model">barcode.scan.log</field>
+            <field name="view_mode">tree,form</field>
+            <field name="search_view_id" ref="barcode_scan_log_search"/>
+            <field name="context">{'search_default_today': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No barcode scan logs found!
+                </p>
+                <p>
+                    Scan logs will appear here when shippers use the barcode scanner interface.
+                </p>
+            </field>
+        </record>
+        
+    </data>
+</odoo>
