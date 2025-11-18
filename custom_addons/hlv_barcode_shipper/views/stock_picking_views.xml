@@ -15,9 +15,10 @@
                     <field name="origin"/>
                     <field name="state" decoration-info="state == 'draft'" decoration-warning="state in ('waiting', 'confirmed')" decoration-success="state == 'assigned'" decoration-muted="state in ('done', 'cancel')"/>
                     <field name="shipper_scanned" optional="show"/>
-                    <field name="packages_scanned_count" optional="show"/>
-                    <field name="total_packages_count" optional="show"/>
-                    <field name="all_packages_scanned" optional="show"/>
+                    <!-- Temporarily commented - fields disabled in model -->
+                    <!-- <field name="packages_scanned_count" optional="show"/> -->
+                    <!-- <field name="total_packages_count" optional="show"/> -->
+                    <!-- <field name="all_packages_scanned" optional="show"/> -->
                 </list>
             </field>
         </record>
