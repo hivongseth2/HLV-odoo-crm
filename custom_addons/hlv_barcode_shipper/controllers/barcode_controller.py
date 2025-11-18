@@ -639,42 +639,53 @@ class BarcodeShipperController(http.Controller):
                     <div class="user-info">👤 {request.env.user.name}</div>
                 </div>
                 
-                <div class="section">
+                <!-- Step 1: Scan PICK Order -->
+                <div class="section" id="step-1">
                     <h3>🔍 Step 1: Scan PICK Order</h3>
                     <p>Scan the PICK order barcode to find delivery order</p>
                     <div class="form-group">
-                        <input type="text" id="pick-barcode" class="form-control" placeholder="Scan or enter PICK barcode" />
+                        <input type="text" id="pick-barcode" class="form-control" placeholder="Scan or enter PICK barcode (e.g., PICK00001)" />
                     </div>
                     <button class="btn btn-primary" onclick="scanPick()">📱 Scan PICK</button>
+                    <div id="pick-result" class="alert" style="display: none;"></div>
                 </div>
                 
-                <div class="section">
-                    <h3>📦 Step 2: Scan Items</h3>
-                    <p>Scan each package or product barcode in the delivery order</p>
-                    <div class="form-group">
-                        <input type="text" id="item-barcode" class="form-control" placeholder="Scan package or product" disabled />
+                <!-- Step 2: Order Info (Hidden initially) -->
+                <div class="section" id="step-2" style="display: none;">
+                    <h3>📋 Order Information</h3>
+                    <div id="order-info">
+                        <!-- Order details will be loaded here -->
                     </div>
-                    <div class="progress-info">0 / 0 items scanned</div>
-                    <div class="progress">
-                        <div class="progress-bar" id="progress-bar"></div>
-                    </div>
-                    <button class="btn btn-secondary" onclick="scanItem()" disabled>📦 Scan Item</button>
+                    <button class="btn btn-success" onclick="proceedToScan()">Continue to Scanning</button>
                     <button class="btn btn-secondary" onclick="startOver()">🔄 Start Over</button>
                 </div>
                 
-                <div class="section">
-                    <h3>✅ Delivery Completed</h3>
-                    <button class="btn btn-success" onclick="completeDelivery()" disabled>🚚 Complete Delivery</button>
-                    <button class="btn btn-secondary" onclick="newDelivery()">📋 New Delivery</button>
-                    <button class="btn btn-secondary" onclick="viewHistory()">📊 View History</button>
-                    <button class="btn btn-secondary" onclick="showHelp()">❓ Help</button>
+                <!-- Step 3: Scan Items (Hidden initially) -->
+                <div class="section" id="step-3" style="display: none;">
+                    <h3>📦 Step 2: Scan Items</h3>
+                    <p>Scan each package or product barcode in the delivery order</p>
+                    <div class="form-group">
+                        <input type="text" id="item-barcode" class="form-control" placeholder="Scan package or product barcode" />
+                    </div>
+                    <div class="progress-info" id="progress-info">0 / 0 items scanned</div>
+                    <div class="progress">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                    <button class="btn btn-primary" onclick="scanItem()">📦 Scan Item</button>
+                    <button class="btn btn-secondary" onclick="startOver()">🔄 Start Over</button>
+                    
+                    <!-- Items List -->
+                    <div id="items-list" style="margin-top: 20px;">
+                        <!-- Items will be loaded here -->
+                    </div>
                 </div>
                 
-                <div class="section">
-                    <h3>📋 Scan History</h3>
-                    <div id="scan-history">
-                        <p>Loading...</p>
-                    </div>
+                <!-- Step 4: Complete Delivery (Hidden initially) -->
+                <div class="section" id="step-4" style="display: none;">
+                    <h3>✅ Ready to Complete</h3>
+                    <p>All items have been scanned successfully!</p>
+                    <button class="btn btn-success" onclick="completeDelivery()">🚚 Complete Delivery</button>
+                    <button class="btn btn-secondary" onclick="startOver()">📋 New Delivery</button>
                 </div>
                 
                 <div class="section">
@@ -698,17 +709,109 @@ class BarcodeShipperController(http.Controller):
                 let currentOutId = null;
                 let totalItems = 0;
                 let scannedItems = 0;
+                let itemsList = [];
+                
+                // Show only specific step
+                function showStep(stepNumber) {{
+                    // Hide all steps
+                    for (let i = 1; i <= 4; i++) {{
+                        const step = document.getElementById('step-' + i);
+                        if (step) step.style.display = 'none';
+                    }}
+                    
+                    // Show requested step
+                    const targetStep = document.getElementById('step-' + stepNumber);
+                    if (targetStep) targetStep.style.display = 'block';
+                }}
                 
                 function scanPick() {{
                     const barcode = document.getElementById('pick-barcode').value.trim();
                     if (!barcode) {{
-                        alert('Please enter a PICK barcode');
+                        showAlert('pick-result', 'Please enter a PICK barcode', 'danger');
                         return;
                     }}
                     
-                    // Simulate API call
-                    console.log('Scanning PICK:', barcode);
-                    alert('PICK scan functionality will be implemented with backend API');
+                    // Show loading
+                    showAlert('pick-result', 'Searching for delivery order...', 'info');
+                    
+                    // Simulate API call to scan PICK
+                    fetch('/api/barcode/scan_pick', {{
+                        method: 'POST',
+                        headers: {{
+                            'Content-Type': 'application/json',
+                        }},
+                        body: JSON.stringify({{ barcode: barcode }})
+                    }})
+                    .then(response => response.json())
+                    .then(data => {{
+                        if (data.success) {{
+                            // Show success and order info
+                            showAlert('pick-result', 'PICK order found! Loading delivery details...', 'success');
+                            loadOrderInfo(data);
+                        }} else {{
+                            showAlert('pick-result', data.error || 'PICK order not found', 'danger');
+                        }}
+                    }})
+                    .catch(error => {{
+                        console.error('Error:', error);
+                        showAlert('pick-result', 'Error connecting to server', 'danger');
+                    }});
+                }}
+                
+                function loadOrderInfo(data) {{
+                    // Populate order information
+                    const orderInfo = document.getElementById('order-info');
+                    orderInfo.innerHTML = `
+                        <div class="alert alert-info">
+                            <strong>📋 Order Details:</strong><br>
+                            <strong>PICK:</strong> ${{data.pick_name}}<br>
+                            <strong>OUT:</strong> ${{data.out_name}}<br>
+                            <strong>Customer:</strong> ${{data.customer_name}}<br>
+                            <strong>Items:</strong> ${{data.total_items}} items to scan
+                        </div>
+                    `;
+                    
+                    // Store data
+                    currentOutId = data.out_id;
+                    totalItems = data.total_items;
+                    itemsList = data.items || [];
+                    scannedItems = 0;
+                    
+                    // Show step 2
+                    showStep(2);
+                }}
+                
+                function proceedToScan() {{
+                    // Load items list
+                    loadItemsList();
+                    // Show step 3
+                    showStep(3);
+                    // Focus on item barcode input
+                    document.getElementById('item-barcode').focus();
+                }}
+                
+                function loadItemsList() {{
+                    const itemsListDiv = document.getElementById('items-list');
+                    if (itemsList.length === 0) {{
+                        itemsListDiv.innerHTML = '<p>No items to scan</p>';
+                        return;
+                    }}
+                    
+                    let html = '<h4>Items to Scan:</h4><ul class="items-list">';
+                    itemsList.forEach((item, index) => {{
+                        const status = item.scanned ? 'scanned' : 'pending';
+                        const icon = item.scanned ? '✅' : '⏳';
+                        html += `
+                            <li class="${{status}}" id="item-${{index}}">
+                                <span>${{icon}} ${{item.name}} - ${{item.barcode || 'No barcode'}}</span>
+                                <span class="scan-status ${{status}}">${{item.scanned ? 'Scanned' : 'Pending'}}</span>
+                            </li>
+                        `;
+                    }});
+                    html += '</ul>';
+                    itemsListDiv.innerHTML = html;
+                    
+                    updateProgress();
                 }}
                 
                 function scanItem() {{
@@ -718,35 +821,150 @@ class BarcodeShipperController(http.Controller):
                         return;
                     }}
                     
-                    console.log('Scanning item:', barcode);
-                    alert('Item scan functionality will be implemented with backend API');
+                    if (!currentOutId) {{
+                        alert('Please scan a PICK order first');
+                        return;
+                    }}
+                    
+                    // Call API to scan item
+                    fetch('/api/barcode/scan_package', {{
+                        method: 'POST',
+                        headers: {{
+                            'Content-Type': 'application/json',
+                        }},
+                        body: JSON.stringify({{ 
+                            out_id: currentOutId,
+                            barcode: barcode 
+                        }})
+                    }})
+                    .then(response => response.json())
+                    .then(data => {{
+                        if (data.success) {{
+                            // Mark item as scanned
+                            markItemScanned(barcode);
+                            document.getElementById('item-barcode').value = '';
+                            
+                            // Check if all items scanned
+                            if (scannedItems >= totalItems) {{
+                                showStep(4);
+                            }}
+                        }} else {{
+                            alert(data.error || 'Item not found or already scanned');
+                        }}
+                    }})
+                    .catch(error => {{
+                        console.error('Error:', error);
+                        alert('Error scanning item');
+                    }});
+                }}
+                
+                function markItemScanned(barcode) {{
+                    // Find and mark item as scanned
+                    itemsList.forEach((item, index) => {{
+                        if (item.barcode === barcode && !item.scanned) {{
+                            item.scanned = true;
+                            scannedItems++;
+                            
+                            // Update UI
+                            const itemElement = document.getElementById('item-' + index);
+                            if (itemElement) {{
+                                itemElement.className = 'scanned';
+                                itemElement.querySelector('span').innerHTML = '✅ ' + item.name + ' - ' + item.barcode;
+                                itemElement.querySelector('.scan-status').innerHTML = 'Scanned';
+                                itemElement.querySelector('.scan-status').className = 'scan-status scanned';
+                            }}
+                            return;
+                        }}
+                    }});
+                    
+                    updateProgress();
+                }}
+                
+                function updateProgress() {{
+                    const progressInfo = document.getElementById('progress-info');
+                    const progressBar = document.getElementById('progress-bar');
+                    
+                    progressInfo.textContent = `${{scannedItems}} / ${{totalItems}} items scanned`;
+                    const percentage = totalItems > 0 ? (scannedItems / totalItems) * 100 : 0;
+                    progressBar.style.width = percentage + '%';
                 }}
                 
                 function completeDelivery() {{
-                    if (confirm('Complete this delivery?')) {{
-                        alert('Delivery completion will be implemented with backend API');
+                    if (!currentOutId) {{
+                        alert('No delivery to complete');
+                        return;
+                    }}
+                    
+                    if (confirm('Complete this delivery? This action cannot be undone.')) {{
+                        fetch('/api/barcode/complete_out', {{
+                            method: 'POST',
+                            headers: {{
+                                'Content-Type': 'application/json',
+                            }},
+                            body: JSON.stringify({{ out_id: currentOutId }})
+                        }})
+                        .then(response => response.json())
+                        .then(data => {{
+                            if (data.success) {{
+                                alert('✅ Delivery completed successfully!');
+                                startOver();
+                            }} else {{
+                                alert('❌ Error completing delivery: ' + (data.error || 'Unknown error'));
+                            }}
+                        }})
+                        .catch(error => {{
+                            console.error('Error:', error);
+                            alert('Error completing delivery');
+                        }});
                     }}
                 }}
                 
                 function startOver() {{
+                    // Reset all data
+                    currentOutId = null;
+                    totalItems = 0;
+                    scannedItems = 0;
+                    itemsList = [];
+                    
+                    // Clear inputs
                     document.getElementById('pick-barcode').value = '';
                     document.getElementById('item-barcode').value = '';
-                    document.getElementById('item-barcode').disabled = true;
-                    document.querySelector('.progress-info').textContent = '0 / 0 items scanned';
-                    document.getElementById('progress-bar').style.width = '0%';
+                    
+                    // Hide alerts
+                    document.getElementById('pick-result').style.display = 'none';
+                    
+                    // Show step 1
+                    showStep(1);
+                    
+                    // Focus on pick barcode input
+                    document.getElementById('pick-barcode').focus();
                 }}
                 
-                function newDelivery() {{
-                    startOver();
+                function showAlert(elementId, message, type) {{
+                    const alertElement = document.getElementById(elementId);
+                    alertElement.className = 'alert alert-' + type;
+                    alertElement.textContent = message;
+                    alertElement.style.display = 'block';
                 }}
                 
-                function viewHistory() {{
-                    alert('History view will be implemented');
-                }}
+                // Initialize on page load
+                document.addEventListener('DOMContentLoaded', function() {{
+                    showStep(1);
+                    document.getElementById('pick-barcode').focus();
+                }});
                 
-                function showHelp() {{
-                    alert('Help documentation will be implemented');
-                }}
+                // Handle Enter key
+                document.getElementById('pick-barcode').addEventListener('keypress', function(e) {{
+                    if (e.key === 'Enter') {{
+                        scanPick();
+                    }}
+                }});
+                
+                document.getElementById('item-barcode').addEventListener('keypress', function(e) {{
+                    if (e.key === 'Enter') {{
+                        scanItem();
+                    }}
+                }});
             </script>
         </body>
         </html>
