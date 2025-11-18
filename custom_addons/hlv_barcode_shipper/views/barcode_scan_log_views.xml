@@ -67,11 +67,11 @@
                     <field name="session_id"/>
                     
                     <filter string="Today" name="today" 
-                            domain="[('scan_time', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                            domain="[('scan_time', '&gt;=', context_today())]"/>
                     <filter string="This Week" name="this_week" 
-                            domain="[('scan_time', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                            domain="[('scan_time', '&gt;=', (context_today() - datetime.timedelta(days=7)))]"/>
                     <filter string="This Month" name="this_month" 
-                            domain="[('scan_time', '&gt;=', (context_today().replace(day=1)).strftime('%Y-%m-%d'))]"/>
+                            domain="[('scan_time', '&gt;=', context_today().replace(day=1))]"/>
                     
                     <separator/>
                     <filter string="Success" name="success" domain="[('status', '=', 'success')]"/>

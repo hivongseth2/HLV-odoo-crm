@@ -42,9 +42,9 @@
                     
                     <separator/>
                     <filter string="Today" name="today" 
-                            domain="[('scheduled_date', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                            domain="[('scheduled_date', '&gt;=', context_today())]"/>
                     <filter string="This Week" name="this_week" 
-                            domain="[('scheduled_date', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                            domain="[('scheduled_date', '&gt;=', (context_today() - datetime.timedelta(days=7)))]"/>
                     
                     <group expand="0" string="Group By">
                         <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
