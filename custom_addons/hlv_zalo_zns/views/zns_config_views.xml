@@ -15,7 +15,8 @@
               <field name="name"/>
               <field name="use_shared_token" 
                      help="Khuyến nghị BẬT để sử dụng Shared Token Manager (dễ quản lý hơn)"/>
-              <field name="template_id"/>
+              <field name="template_id" string="Template ZNS mặc định"/>
+              <field name="wp_template_id" string="Template ZNS cho đơn WordPress"/>
               <field name="oa_id"/>
             </group>
           </group>
@@ -78,7 +79,9 @@
         <field name="name"/>
         <field name="app_id"/>
         <field name="oa_id"/>
-        <field name="template_id"/>
+        <!-- <field name="template_id"/> -->
+        <field name="template_id" string="Template mặc định"/>
+        <field name="wp_template_id" string="Template WordPress"/>
         <field name="token_expires_at"/>
       </list>
     </field>
