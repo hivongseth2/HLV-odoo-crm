@@ -6,7 +6,7 @@
         <menuitem id="menu_barcode_shipper_root"
                   name="Shipper Scanner"
                   sequence="50"
-                  groups="group_shipper"/>
+                  groups="hlv_barcode_shipper.group_shipper"/>
         
         <!-- Barcode Scanner Menu -->
         <menuitem id="menu_barcode_scanner"
@@ -14,7 +14,7 @@
                   parent="menu_barcode_shipper_root"
                   action="base.action_open_website"
                   sequence="10"
-                  groups="group_shipper"/>
+                  groups="hlv_barcode_shipper.group_shipper"/>
         
         <!-- Set the URL for barcode scanner -->
         <record id="menu_barcode_scanner" model="ir.ui.menu">
@@ -33,7 +33,7 @@
                   parent="menu_barcode_shipper_root"
                   action="action_barcode_scanner_url"
                   sequence="10"
-                  groups="group_shipper"/>
+                  groups="hlv_barcode_shipper.group_shipper"/>
         
         <!-- Delivery Orders Menu -->
         <menuitem id="menu_delivery_orders"
@@ -41,14 +41,14 @@
                   parent="menu_barcode_shipper_root"
                   action="stock_picking_action_shipper"
                   sequence="20"
-                  groups="group_shipper"/>
+                  groups="hlv_barcode_shipper.group_shipper"/>
         
         <!-- Manager Menus -->
         <menuitem id="menu_shipper_management"
                   name="📊 Management"
                   parent="menu_barcode_shipper_root"
                   sequence="30"
-                  groups="group_shipper_manager"/>
+                  groups="hlv_barcode_shipper.group_shipper_manager"/>
         
         <!-- Scan Logs Menu -->
         <menuitem id="menu_scan_logs"
@@ -56,7 +56,7 @@
                   parent="menu_shipper_management"
                   action="barcode_scan_log_action"
                   sequence="10"
-                  groups="group_shipper_manager"/>
+                  groups="hlv_barcode_shipper.group_shipper_manager"/>
         
         <!-- Stock Picking Menu for Managers -->
         <menuitem id="menu_stock_picking_manager"
@@ -64,14 +64,14 @@
                   parent="menu_shipper_management"
                   action="stock.action_picking_tree_all"
                   sequence="20"
-                  groups="group_shipper_manager"/>
+                  groups="hlv_barcode_shipper.group_shipper_manager"/>
         
         <!-- Settings Menu -->
         <menuitem id="menu_shipper_settings"
                   name="⚙️ Settings"
                   parent="menu_barcode_shipper_root"
                   sequence="40"
-                  groups="group_shipper_manager"/>
+                  groups="hlv_barcode_shipper.group_shipper_manager"/>
         
         <!-- Users & Access Rights -->
         <menuitem id="menu_shipper_users"
@@ -79,7 +79,7 @@
                   parent="menu_shipper_settings"
                   action="base.action_res_users"
                   sequence="10"
-                  groups="group_shipper_manager"/>
+                  groups="hlv_barcode_shipper.group_shipper_manager"/>
         
     </data>
 </odoo>
