@@ -111,7 +111,7 @@
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h3>📋 Scan History</h3>
-                                <span class="close">&times;</span>
+                                <span class="close">×</span>
                             </div>
                             <div id="history-content" class="modal-body">
                                 Loading...
@@ -124,7 +124,7 @@
                         <div class="modal-content">
                             <div class="modal-header">
                                 <h3>❓ How to Use</h3>
-                                <span class="close">&times;</span>
+                                <span class="close">×</span>
                             </div>
                             <div class="modal-body">
                                 <ol>
