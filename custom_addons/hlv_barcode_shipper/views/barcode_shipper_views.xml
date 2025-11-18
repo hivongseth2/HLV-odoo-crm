@@ -163,15 +163,14 @@
             <field name="name">stock.picking.form.shipper</field>
             <field name="model">stock.picking</field>
             <field name="inherit_id" ref="stock.view_picking_form"/>
-            <field name="groups_id" eval="[(4, ref('hlv_barcode_shipper.group_shipper_manager'))]"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='state']" position="after">
-                    <field name="shipper_scanned" readonly="1"/>
-                    <field name="shipper_scan_time" readonly="1" attrs="{'invisible': [('shipper_scanned', '=', False)]}"/>
-                    <field name="shipper_user_id" readonly="1" attrs="{'invisible': [('shipper_scanned', '=', False)]}"/>
+                    <field name="shipper_scanned" readonly="1" groups="hlv_barcode_shipper.group_shipper_manager"/>
+                    <field name="shipper_scan_time" readonly="1" attrs="{'invisible': [('shipper_scanned', '=', False)]}" groups="hlv_barcode_shipper.group_shipper_manager"/>
+                    <field name="shipper_user_id" readonly="1" attrs="{'invisible': [('shipper_scanned', '=', False)]}" groups="hlv_barcode_shipper.group_shipper_manager"/>
                 </xpath>
                 <xpath expr="//page[@name='operations']" position="after">
-                    <page string="Shipper Info" attrs="{'invisible': [('picking_type_code', '!=', 'outgoing')]}">
+                    <page string="Shipper Info" attrs="{'invisible': [('picking_type_code', '!=', 'outgoing')]}" groups="hlv_barcode_shipper.group_shipper_manager">
                         <group>
                             <group string="Scan Status">
                                 <field name="packages_scanned_count" readonly="1"/>
@@ -199,12 +198,11 @@
             <field name="name">stock.package.level.form.shipper</field>
             <field name="model">stock.package_level</field>
             <field name="inherit_id" ref="stock.stock_package_level_form_edit"/>
-            <field name="groups_id" eval="[(4, ref('hlv_barcode_shipper.group_shipper_manager'))]"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='is_done']" position="after">
-                    <field name="scanned"/>
-                    <field name="scan_time" attrs="{'invisible': [('scanned', '=', False)]}"/>
-                    <field name="scanned_by" attrs="{'invisible': [('scanned', '=', False)]}"/>
+                    <field name="scanned" groups="hlv_barcode_shipper.group_shipper_manager"/>
+                    <field name="scan_time" attrs="{'invisible': [('scanned', '=', False)]}" groups="hlv_barcode_shipper.group_shipper_manager"/>
+                    <field name="scanned_by" attrs="{'invisible': [('scanned', '=', False)]}" groups="hlv_barcode_shipper.group_shipper_manager"/>
                 </xpath>
             </field>
         </record>
@@ -214,12 +212,11 @@
             <field name="name">stock.move.line.tree.shipper</field>
             <field name="model">stock.move.line</field>
             <field name="inherit_id" ref="stock.view_move_line_tree"/>
-            <field name="groups_id" eval="[(4, ref('hlv_barcode_shipper.group_shipper_manager'))]"/>
             <field name="arch" type="xml">
                 <xpath expr="//field[@name='quantity']" position="after">
-                    <field name="scanned" optional="hide"/>
-                    <field name="scan_time" optional="hide"/>
-                    <field name="scanned_by" optional="hide"/>
+                    <field name="scanned" optional="hide" groups="hlv_barcode_shipper.group_shipper_manager"/>
+                    <field name="scan_time" optional="hide" groups="hlv_barcode_shipper.group_shipper_manager"/>
+                    <field name="scanned_by" optional="hide" groups="hlv_barcode_shipper.group_shipper_manager"/>
                 </xpath>
             </field>
         </record>
