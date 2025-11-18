@@ -10,7 +10,8 @@
                     <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
                 </t>
                 
-                <div class="shipper-container">
+                <div class="hlv-barcode-shipper">
+                    <div class="shipper-container">
                     <!-- Header -->
                     <div class="shipper-header">
                         <h2>📦 Shipper Scanner</h2>
@@ -143,6 +144,7 @@
                         </div>
                     </div>
                     
+                    </div>
                 </div>
                 
                 <!-- JavaScript -->
