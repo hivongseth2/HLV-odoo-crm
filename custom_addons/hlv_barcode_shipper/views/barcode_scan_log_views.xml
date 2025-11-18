@@ -2,10 +2,11 @@
 <odoo>
     <data>
         
-        <!-- Barcode Scan Log Tree View -->
+        <!-- Barcode Scan Log List View -->
         <record id="barcode_scan_log_tree" model="ir.ui.view">
-            <field name="name">barcode.scan.log.tree</field>
+            <field name="name">barcode.scan.log.list</field>
             <field name="model">barcode.scan.log</field>
+            <field name="type">list</field>
             <field name="arch" type="xml">
                 <tree string="Barcode Scan Logs" default_order="scan_time desc">
                     <field name="scan_time"/>

@@ -2,10 +2,11 @@
 <odoo>
     <data>
         
-        <!-- Stock Picking Tree View for Shippers -->
+        <!-- Stock Picking List View for Shippers -->
         <record id="stock_picking_tree_shipper" model="ir.ui.view">
-            <field name="name">stock.picking.tree.shipper</field>
+            <field name="name">stock.picking.list.shipper</field>
             <field name="model">stock.picking</field>
+            <field name="type">list</field>
             <field name="arch" type="xml">
                 <tree string="Delivery Orders" default_order="scheduled_date desc">
                     <field name="name"/>
