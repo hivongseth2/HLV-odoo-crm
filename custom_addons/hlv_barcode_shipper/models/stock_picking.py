@@ -24,23 +24,24 @@ class StockPicking(models.Model):
         help='User who scanned this picking'
     )
     
-    packages_scanned_count = fields.Integer(
-        string='Packages Scanned',
-        compute='_compute_packages_scanned_count',
-        help='Number of packages that have been scanned'
-    )
+    # Temporarily commented to prevent workflow interference
+    # packages_scanned_count = fields.Integer(
+    #     string='Packages Scanned',
+    #     compute='_compute_packages_scanned_count',
+    #     help='Number of packages that have been scanned'
+    # )
     
-    total_packages_count = fields.Integer(
-        string='Total Packages',
-        compute='_compute_total_packages_count',
-        help='Total number of packages in this picking'
-    )
+    # total_packages_count = fields.Integer(
+    #     string='Total Packages',
+    #     compute='_compute_total_packages_count',
+    #     help='Total number of packages in this picking'
+    # )
     
-    all_packages_scanned = fields.Boolean(
-        string='All Packages Scanned',
-        compute='_compute_all_packages_scanned',
-        help='True if all packages have been scanned'
-    )
+    # all_packages_scanned = fields.Boolean(
+    #     string='All Packages Scanned',
+    #     compute='_compute_all_packages_scanned',
+    #     help='True if all packages have been scanned'
+    # )
     
     scan_log_ids = fields.One2many(
         'barcode.scan.log',
@@ -49,30 +50,36 @@ class StockPicking(models.Model):
         help='Barcode scan logs for this picking'
     )
 
-    @api.depends('package_level_ids.scanned')
-    def _compute_packages_scanned_count(self):
-        for picking in self:
-            picking.packages_scanned_count = len(
-                picking.package_level_ids.filtered('scanned')
-            )
+    # Temporarily commented to prevent workflow interference
+    # @api.depends('package_level_ids.scanned')
+    # def _compute_packages_scanned_count(self):
+    #     for picking in self:
+    #         picking.packages_scanned_count = len(
+    #             picking.package_level_ids.filtered('scanned')
+    #         )
 
-    @api.depends('package_level_ids')
-    def _compute_total_packages_count(self):
-        for picking in self:
-            picking.total_packages_count = len(picking.package_level_ids)
+    # @api.depends('package_level_ids')
+    # def _compute_total_packages_count(self):
+    #     for picking in self:
+    #         picking.total_packages_count = len(picking.package_level_ids)
 
-    @api.depends('packages_scanned_count', 'total_packages_count')
-    def _compute_all_packages_scanned(self):
-        for picking in self:
-            if picking.total_packages_count > 0:
-                picking.all_packages_scanned = (
-                    picking.packages_scanned_count == picking.total_packages_count
-                )
-            else:
-                # If no packages, check if all move lines are scanned
-                picking.all_packages_scanned = all(
-                    line.scanned for line in picking.move_line_ids
-                )
+    # @api.depends('packages_scanned_count', 'total_packages_count')
+    # def _compute_all_packages_scanned(self):
+    #     for picking in self:
+    #         if picking.total_packages_count > 0:
+    #             picking.all_packages_scanned = (
+    #                 picking.packages_scanned_count == picking.total_packages_count
+    #             )
+    #         else:
+    #             # If no packages, only check scanned status if shipper has started scanning
+    #             # This prevents interference with normal Odoo workflow
+    #             if picking.shipper_scanned:
+    #                 picking.all_packages_scanned = all(
+    #                     line.scanned for line in picking.move_line_ids
+    #                 )
+    #             else:
+    #                 # Default to False if shipper hasn't started scanning yet
+    #                 picking.all_packages_scanned = False
 
     @api.model
     def find_out_picking_by_pick_name(self, pick_name):

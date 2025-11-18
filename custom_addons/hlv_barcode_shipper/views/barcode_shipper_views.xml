@@ -2,15 +2,255 @@
 <odoo>
     <data>
         
+        <!-- Access Denied Template -->
+        <template id="access_denied" name="Access Denied">
+            <t t-call="web.layout">
+                <t t-set="head_website">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+                    <style>
+                        .access-denied-container {
+                            max-width: 600px;
+                            margin: 50px auto;
+                            padding: 40px 20px;
+                            text-align: center;
+                            background: #ffffff;
+                            border-radius: 8px;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                        }
+                        .access-denied-icon {
+                            font-size: 64px;
+                            color: #dc3545;
+                            margin-bottom: 20px;
+                        }
+                        .access-denied-title {
+                            font-size: 24px;
+                            font-weight: 600;
+                            color: #2c3e50;
+                            margin-bottom: 16px;
+                        }
+                        .access-denied-message {
+                            font-size: 16px;
+                            color: #6c757d;
+                            margin-bottom: 24px;
+                            line-height: 1.5;
+                        }
+                        .access-denied-btn {
+                            display: inline-block;
+                            padding: 12px 24px;
+                            background-color: #007bff;
+                            color: white;
+                            text-decoration: none;
+                            border-radius: 6px;
+                            font-weight: 500;
+                        }
+                        .access-denied-btn:hover {
+                            background-color: #0056b3;
+                            color: white;
+                        }
+                    </style>
+                </t>
+                
+                <div class="access-denied-container">
+                    <div class="access-denied-icon">🚫</div>
+                    <h1 class="access-denied-title">Access Denied</h1>
+                    <p class="access-denied-message">
+                        You don't have permission to access the Shipper Scanner.<br/>
+                        Please contact your administrator to get "Shipper" access rights.
+                    </p>
+                    <a href="/web" class="access-denied-btn">← Back to Odoo</a>
+                </div>
+            </t>
+        </template>
+        
         <!-- Mobile Shipper Interface Template -->
         <template id="shipper_interface" name="Shipper Barcode Interface">
             <t t-call="web.layout">
                 <t t-set="head_website">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
                     <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
+                    <style>
+                        /* Inline CSS để đảm bảo styling được load */
+                        .hlv-barcode-shipper {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                            font-size: 16px;
+                            line-height: 1.5;
+                            color: #2c3e50;
+                            background-color: #f8f9fa;
+                            min-height: 100vh;
+                            box-sizing: border-box;
+                        }
+                        .hlv-barcode-shipper .shipper-container {
+                            max-width: 800px;
+                            margin: 0 auto;
+                            padding: 20px;
+                        }
+                        .hlv-barcode-shipper .shipper-header {
+                            background: #ffffff;
+                            border-radius: 8px;
+                            padding: 20px;
+                            margin-bottom: 20px;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                            text-align: center;
+                        }
+                        .hlv-barcode-shipper .shipper-header h1 {
+                            margin: 0 0 10px 0;
+                            color: #2c3e50;
+                            font-size: 24px;
+                            font-weight: 600;
+                        }
+                        .hlv-barcode-shipper .user-info {
+                            color: #6c757d;
+                            font-size: 14px;
+                        }
+                        .hlv-barcode-shipper .scan-section {
+                            background: #ffffff;
+                            border-radius: 8px;
+                            padding: 20px;
+                            margin-bottom: 20px;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        }
+                        .hlv-barcode-shipper .section-title {
+                            font-size: 18px;
+                            font-weight: 600;
+                            color: #2c3e50;
+                            margin: 0 0 15px 0;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        }
+                        .hlv-barcode-shipper .form-group {
+                            margin-bottom: 15px;
+                        }
+                        .hlv-barcode-shipper .form-control {
+                            width: 100%;
+                            padding: 12px 16px;
+                            border: 2px solid #e9ecef;
+                            border-radius: 6px;
+                            font-size: 16px;
+                            transition: border-color 0.15s ease-in-out;
+                        }
+                        .hlv-barcode-shipper .form-control:focus {
+                            outline: none;
+                            border-color: #007bff;
+                            box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+                        }
+                        .hlv-barcode-shipper .btn {
+                            display: inline-block;
+                            padding: 12px 24px;
+                            font-size: 16px;
+                            font-weight: 500;
+                            text-align: center;
+                            text-decoration: none;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            transition: all 0.15s ease-in-out;
+                            margin: 4px;
+                        }
+                        .hlv-barcode-shipper .btn-primary {
+                            background-color: #007bff;
+                            color: #ffffff;
+                        }
+                        .hlv-barcode-shipper .btn-primary:hover {
+                            background-color: #0056b3;
+                        }
+                        .hlv-barcode-shipper .btn-success {
+                            background-color: #28a745;
+                            color: #ffffff;
+                        }
+                        .hlv-barcode-shipper .btn-success:hover {
+                            background-color: #1e7e34;
+                        }
+                        .hlv-barcode-shipper .btn-secondary {
+                            background-color: #6c757d;
+                            color: #ffffff;
+                        }
+                        .hlv-barcode-shipper .btn-secondary:hover {
+                            background-color: #545b62;
+                        }
+                        .hlv-barcode-shipper .progress-info {
+                            font-size: 14px;
+                            color: #6c757d;
+                            margin-bottom: 10px;
+                        }
+                        .hlv-barcode-shipper .progress {
+                            height: 8px;
+                            background-color: #e9ecef;
+                            border-radius: 4px;
+                            overflow: hidden;
+                            margin-bottom: 15px;
+                        }
+                        .hlv-barcode-shipper .progress-bar {
+                            height: 100%;
+                            background-color: #28a745;
+                            transition: width 0.3s ease;
+                        }
+                        .hlv-barcode-shipper .alert {
+                            padding: 12px 16px;
+                            border-radius: 6px;
+                            margin-bottom: 15px;
+                        }
+                        .hlv-barcode-shipper .alert-success {
+                            background-color: #d4edda;
+                            border: 1px solid #c3e6cb;
+                            color: #155724;
+                        }
+                        .hlv-barcode-shipper .alert-danger {
+                            background-color: #f8d7da;
+                            border: 1px solid #f5c6cb;
+                            color: #721c24;
+                        }
+                        .hlv-barcode-shipper .alert-info {
+                            background-color: #d1ecf1;
+                            border: 1px solid #bee5eb;
+                            color: #0c5460;
+                        }
+                        .hlv-barcode-shipper .item-list {
+                            list-style: none;
+                            padding: 0;
+                            margin: 0;
+                        }
+                        .hlv-barcode-shipper .item-list li {
+                            padding: 12px;
+                            border: 1px solid #e9ecef;
+                            border-radius: 6px;
+                            margin-bottom: 8px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        }
+                        .hlv-barcode-shipper .item-list li.scanned {
+                            background-color: #d4edda;
+                            border-color: #c3e6cb;
+                            color: #155724;
+                        }
+                        .hlv-barcode-shipper .scan-status {
+                            font-weight: 600;
+                        }
+                        .hlv-barcode-shipper .scan-status.scanned {
+                            color: #28a745;
+                        }
+                        .hlv-barcode-shipper .scan-status.pending {
+                            color: #6c757d;
+                        }
+                        /* Mobile responsive */
+                        @media (max-width: 768px) {
+                            .hlv-barcode-shipper .shipper-container {
+                                padding: 10px;
+                            }
+                            .hlv-barcode-shipper .scan-section {
+                                padding: 15px;
+                            }
+                            .hlv-barcode-shipper .btn {
+                                width: 100%;
+                                margin: 4px 0;
+                            }
+                        }
+                    </style>
                 </t>
                 
-                <div class="shipper-container">
+                <div class="hlv-barcode-shipper">
+                    <div class="shipper-container">
                     <!-- Header -->
                     <div class="shipper-header">
                         <h2>📦 Shipper Scanner</h2>
@@ -143,6 +383,7 @@
                         </div>
                     </div>
                     
+                    </div>
                 </div>
                 
                 <!-- JavaScript -->

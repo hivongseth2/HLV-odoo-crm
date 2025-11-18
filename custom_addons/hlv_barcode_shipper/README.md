@@ -1,184 +1,163 @@
-# HLV Barcode Shipper Module
+# HLV Barcode Shipper - Hướng Dẫn Sử Dụng
 
-## Mô tả
-Module Odoo 18 cho phép shipper sử dụng điện thoại để quét mã vạch và xử lý phiếu giao hàng một cách hiệu quả.
+## 📱 Module Quét Mã Vạch Cho Shipper
 
-## Tính năng chính
+Module này giúp shipper sử dụng điện thoại để quét mã phiếu pick và xử lý phiếu giao hàng (OUT) tương ứng.
 
-### 🔍 Quét mã PICK
-- Shipper quét mã phiếu PICK (PICKxxxxx)
-- Hệ thống tự động tìm phiếu OUT liên quan
-- Hiển thị thông tin đơn hàng và khách hàng
+## 🚀 Cách Cài Đặt
 
-### 📦 Quét kiện hàng
-- Hiển thị danh sách kiện hàng (PACKxxx) hoặc sản phẩm
-- Theo dõi trạng thái quét của từng kiện (scanned = true/false)
-- Thanh tiến độ hiển thị số kiện đã quét
+1. **Cài đặt module:**
+   - Vào Apps → tìm "HLV Barcode Shipper" 
+   - Click Install
 
-### ✅ Hoàn tất giao hàng
-- Nút "Hoàn tất giao hàng" xuất hiện khi quét đủ kiện
-- Tự động gọi picking.button_validate() để DONE phiếu OUT
-- Có thể quét lại mã PICK để hoàn tất nhanh
+2. **Phân quyền:**
+   - Vào Settings → Users & Companies → Users
+   - Chọn user shipper → tab Access Rights
+   - Thêm group "Shipper" hoặc "Shipper Manager"
 
-### 📱 Giao diện di động
-- Tối ưu cho điện thoại và tablet
-- Hỗ trợ quét bằng camera hoặc nhập thủ công
-- Giao diện thân thiện với người dùng
+## 🎯 Cách Sử Dụng
 
-## Cài đặt
+### 📍 Truy Cập Giao Diện
 
-1. Copy module vào thư mục `custom_addons`
-2. Cập nhật danh sách module trong Odoo
-3. Cài đặt module "HLV Barcode Shipper"
-4. Cấu hình quyền người dùng
+**Có 3 cách để truy cập:**
 
-## Cấu hình quyền
+1. **Từ Menu Odoo:**
+   - Đăng nhập Odoo → Menu "Shipper Scanner" → "📱 Barcode Scanner"
 
-### Nhóm Shipper
-- Quyền quét mã vạch và xử lý phiếu giao hàng
-- Chỉ xem được phiếu OUT ở trạng thái sẵn sàng
-- Không thể tạo/xóa phiếu
+2. **Truy cập trực tiếp:**
+   - Mở trình duyệt → nhập: `https://your-odoo-domain.com/barcode/shipper`
+   - Ví dụ: `https://your-company.odoo.com/barcode/shipper`
 
-### Nhóm Shipper Manager
-- Tất cả quyền của Shipper
-- Xem được tất cả log quét mã
-- Quản lý người dùng shipper
+3. **Từ ứng dụng mobile:**
+   - Tạo bookmark/shortcut đến URL trên
 
-## Sử dụng
+### 📋 Quy Trình Làm Việc
 
-### Bước 1: Truy cập giao diện
-- Vào menu "Shipper Scanner" > "📱 Mobile Scanner"
-- Hoặc truy cập trực tiếp: `/barcode/shipper`
+#### **Bước 1: Quét Mã PICK**
+1. Mở giao diện scanner
+2. Quét mã phiếu PICK (ví dụ: PICK00001)
+3. Hệ thống tự động tìm phiếu OUT liên quan
+4. Hiển thị thông tin đơn hàng và danh sách kiện/sản phẩm
 
-### Bước 2: Quét mã PICK
-1. Nhập hoặc quét mã phiếu PICK (ví dụ: PICK00001)
-2. Hệ thống tìm phiếu OUT liên quan
-3. Hiển thị thông tin đơn hàng
+#### **Bước 2: Quét Từng Kiện/Sản phẩm**
+1. Quét từng mã PACK (ví dụ: PACK00001) hoặc mã sản phẩm
+2. Mỗi item được quét sẽ chuyển sang màu xanh ✅
+3. Thanh tiến độ hiển thị % hoàn thành
 
-### Bước 3: Quét kiện hàng
-1. Quét từng kiện hàng (PACKxxx) hoặc sản phẩm
-2. Theo dõi tiến độ trên thanh progress
-3. Kiện đã quét sẽ có dấu ✅
+#### **Bước 3: Hoàn Tất Giao Hàng**
+1. **Cách 1:** Khi quét đủ tất cả → nút "🚚 Hoàn Tất Giao Hàng" xuất hiện
+2. **Cách 2:** Quét lại mã PICK để hoàn tất trực tiếp
+3. Hệ thống gọi `picking.button_validate()` → chuyển phiếu OUT sang DONE
 
-### Bước 4: Hoàn tất
-1. Khi quét đủ kiện, nhấn "Hoàn tất giao hàng"
-2. Hoặc quét lại mã PICK để hoàn tất nhanh
-3. Phiếu OUT sẽ chuyển sang trạng thái DONE
+## 🔧 Tính Năng
 
-## API Endpoints
+### ✅ Giao Diện Mobile-First
+- Thiết kế responsive, tối ưu cho điện thoại
+- CSS chuyên nghiệp, không ảnh hưởng giao diện Odoo khác
+- Hỗ trợ cả portrait và landscape
 
-### POST /api/barcode/scan_pick
-Quét mã phiếu PICK
-```json
+### ✅ API Endpoints
+- `POST /scan_pick` - Quét mã PICK
+- `GET /get_out/<pick_name>` - Lấy thông tin phiếu OUT
+- `POST /scan_package` - Quét mã kiện/sản phẩm  
+- `POST /complete_out` - Hoàn tất giao hàng
+
+### ✅ Quản Lý & Báo Cáo
+- **Scan Logs:** Ghi lại tất cả hoạt động quét mã
+- **Delivery Orders:** Xem danh sách phiếu giao hàng
+- **User Management:** Quản lý quyền shipper
+
+### ✅ Bảo Mật
+- Phân quyền theo nhóm: Shipper, Shipper Manager
+- Chỉ shipper mới truy cập được giao diện
+- Log đầy đủ hoạt động để audit
+
+## 📊 Menu & Quyền
+
+### 👤 Shipper (Nhân viên giao hàng)
+- **📱 Barcode Scanner:** Giao diện quét mã chính
+- **📦 Delivery Orders:** Xem phiếu giao hàng của mình
+
+### 👨‍💼 Shipper Manager (Quản lý)
+- **📊 Management:** Quản lý tổng thể
+  - **📋 Scan Logs:** Xem log quét mã của tất cả shipper
+  - **📦 All Pickings:** Xem tất cả phiếu pick/out
+- **⚙️ Settings:** Cài đặt hệ thống
+  - **👥 Shipper Users:** Quản lý user shipper
+
+## 🎨 Thiết Kế CSS
+
+CSS được thiết kế **chuyên nghiệp và tối giản:**
+
+- ✅ **Scoped CSS:** Chỉ áp dụng cho module này (`.hlv-barcode-shipper`)
+- ✅ **Không màu mè:** Sử dụng màu sắc Bootstrap chuẩn
+- ✅ **Professional:** Thiết kế clean, dễ sử dụng
+- ✅ **Mobile-first:** Tối ưu cho thiết bị di động
+- ✅ **Accessibility:** Hỗ trợ focus, keyboard navigation
+
+## 🔍 Troubleshooting
+
+### ❌ Không tìm thấy phiếu OUT
+- Kiểm tra phiếu PICK có tồn tại không
+- Đảm bảo có phiếu OUT liên quan (cùng sale order/group)
+- Phiếu OUT phải ở trạng thái "Ready" hoặc "Partially Available"
+
+### ❌ Không quét được mã
+- Kiểm tra camera có hoạt động không
+- Đảm bảo có đủ ánh sáng
+- Thử nhập mã thủ công
+
+### ❌ Không có quyền truy cập
+- Kiểm tra user có group "Shipper" không
+- Đảm bảo module đã được cài đặt đúng
+
+## 🔗 API Documentation
+
+### Scan PICK Order
+```bash
+POST /scan_pick
+Content-Type: application/json
+
 {
     "barcode": "PICK00001"
 }
 ```
 
-### POST /api/barcode/get_out
-Lấy thông tin phiếu OUT
-```json
+### Get OUT Order Info  
+```bash
+GET /get_out/PICK00001
+```
+
+### Scan Package/Product
+```bash
+POST /scan_package
+Content-Type: application/json
+
 {
-    "picking_id": 123
+    "out_id": 123,
+    "barcode": "PACK00001"
 }
 ```
 
-### POST /api/barcode/scan_package
-Quét kiện hàng/sản phẩm
-```json
+### Complete Delivery
+```bash
+POST /complete_out
+Content-Type: application/json
+
 {
-    "picking_id": 123,
-    "barcode": "PACK001"
+    "out_id": 123
 }
 ```
 
-### POST /api/barcode/complete_out
-Hoàn tất giao hàng
-```json
-{
-    "picking_id": 123
-}
-```
+## 📞 Hỗ Trợ
 
-### POST /api/barcode/scan_history
-Xem lịch sử quét
-```json
-{
-    "picking_id": 123,
-    "limit": 50
-}
-```
+Nếu gặp vấn đề, vui lòng:
+1. Kiểm tra Scan Logs để xem lỗi chi tiết
+2. Đảm bảo quyền truy cập đúng
+3. Liên hệ admin hệ thống
 
-## Cấu trúc Module
+---
 
-```
-hlv_barcode_shipper/
-├── __init__.py
-├── __manifest__.py
-├── README.md
-├── controllers/
-│   ├── __init__.py
-│   └── barcode_controller.py
-├── models/
-│   ├── __init__.py
-│   ├── barcode_scan_log.py
-│   ├── stock_picking.py
-│   └── stock_package_level.py
-├── security/
-│   ├── security.xml
-│   └── ir.model.access.csv
-├── static/src/
-│   ├── css/
-│   │   └── barcode_shipper.css
-│   └── js/
-│       ├── barcode_scanner.js
-│       └── sw.js
-└── views/
-    ├── barcode_shipper_views.xml
-    ├── barcode_scan_log_views.xml
-    ├── stock_picking_views.xml
-    └── menu_views.xml
-```
-
-## Models
-
-### barcode.scan.log
-- Ghi log tất cả hoạt động quét mã
-- Theo dõi người dùng, thời gian, trạng thái
-- Hỗ trợ audit trail
-
-### stock.picking (extend)
-- Thêm trường shipper_scanned, shipper_scan_time
-- Tính toán số kiện đã quét
-- Phương thức tìm phiếu OUT từ PICK
-
-### stock.package.level (extend)
-- Thêm trường scanned, scan_time
-- Theo dõi trạng thái quét của từng kiện
-
-### stock.move.line (extend)
-- Thêm trường scanned cho sản phẩm
-- Hỗ trợ quét sản phẩm khi không có kiện
-
-## Bảo mật
-
-- Sử dụng CSRF protection cho API
-- Kiểm tra quyền truy cập cho mọi endpoint
-- Record rules hạn chế dữ liệu theo nhóm người dùng
-- Log tất cả hoạt động quét mã
-
-## Tương thích
-
-- Odoo 18.0+
-- Hỗ trợ mobile browsers
-- Tương thích với module stock chuẩn
-- Không xung đột với module barcode có sẵn
-
-## Hỗ trợ
-
-Liên hệ: HLV Development Team
-Website: https://hoanglongvu.com
-
-## License
-
-LGPL-3
+**Phiên bản:** 1.0.0  
+**Tương thích:** Odoo 18.0  
+**Tác giả:** HLV Team
