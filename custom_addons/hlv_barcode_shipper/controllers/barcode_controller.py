@@ -13,7 +13,7 @@ class BarcodeShipperController(http.Controller):
 
     def _check_shipper_access(self):
         """
-        Check if current user has shipper access
+        Check if current user has shipper access 123123
         """
         if not request.env.user.has_group('hlv_barcode_shipper.group_shipper'):
             return {
