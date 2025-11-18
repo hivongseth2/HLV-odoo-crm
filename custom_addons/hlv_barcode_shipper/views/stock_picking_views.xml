@@ -39,7 +39,6 @@
                     <separator/>
                     <filter string="Scanned by Shipper" name="scanned" domain="[('shipper_scanned', '=', True)]"/>
                     <filter string="Not Scanned" name="not_scanned" domain="[('shipper_scanned', '=', False)]"/>
-                    <filter string="All Items Scanned" name="all_scanned" domain="[('all_packages_scanned', '=', True)]"/>
                     
                     <separator/>
                     <filter string="Today" name="today" 
