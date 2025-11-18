@@ -118,6 +118,22 @@
                             placeholder="Zalo User ID kế toán xử lý TẤT CẢ phiếu nhập kho" />
                     </group>
 
+                                        <!-- NEW: Mapping MISA saler_code -> Zalo OA User ID -->
+                    <group string="📤 Thông báo trực tiếp cho Nhân Viên Sale (phiếu XUẤT)">
+                        <field name="saler_mapping_text" widget="text"
+                               placeholder="Ví dụ:&#10;DUONGTHIHA:4954993286556475779&#10;NGUYENVANA:1111111111111111111,2222222222222222222" />
+                        <div class="alert alert-info" role="alert" style="margin-top: 8px;">
+                            <p style="margin: 0;">
+                                Mỗi dòng 1 cấu hình: <code>MISA_SALER_CODE:ID1,ID2,...</code><br/>
+                                Ví dụ: <code>DUONGTHIHA:4954993286556475779,</code><br/>
+                                Khi phiếu XUẤT kho thuộc nhân viên đó (theo
+                                <code>Sale Order.x_studio_misa_saler_code</code>) hệ thống sẽ
+                                gửi thêm thông báo tới các Zalo User ID ở đây.
+                            </p>
+                        </div>
+                    </group>
+
+
                     <!-- COMMENT: Warehouse mapping - tạm thời không sử dụng -->
                     <!-- <group string="Cấu Hình Người Nhận Thông Báo Theo Kho">
                         <field name="warehouse_recipient_ids" nolabel="1" />

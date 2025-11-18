@@ -113,6 +113,78 @@ class ZaloStockNotificationConfig(models.Model):
         help='Map mã nhân viên sale (BACHTHIKIMTHUY, ...) với danh sách user_id nhận thông báo'
     )
     
+    
+        # ===================== Mapping saler_code -> Zalo User IDs =====================
+    saler_mapping_text = fields.Text(
+        'Mapping MISA saler_code → Zalo User ID',
+        help=(
+            "Danh sách mapping giữa mã nhân viên sale MISA (x_studio_misa_saler_code) "
+            "và Zalo OA user_id.\n"
+            "Mỗi dòng 1 cấu hình, dạng: MISA_CODE:ID1,ID2,...\n"
+            "Ví dụ:\n"
+            "DUONGTHIHA:4954993286556475779\n"
+            "NGUYENVANA:1111111111111111111,2222222222222222222"
+        ),
+    )
+
+    def _parse_saler_mapping_text(self):
+        """
+        Parse text saler_mapping_text thành dict:
+        {
+          'DUONGTHIHA': ['4954993286556475779'],
+          'NGUYENVANA': ['1111...', '2222...']
+        }
+        """
+        self.ensure_one()
+        mapping = {}
+        if not self.saler_mapping_text:
+            return mapping
+
+        for raw_line in self.saler_mapping_text.splitlines():
+            line = (raw_line or '').strip()
+            if not line:
+                continue
+
+            # Cho phép có dấu phẩy ở cuối dòng
+            if line.endswith(','):
+                line = line[:-1].strip()
+
+            if ':' not in line:
+                _logger.debug("Skip invalid saler mapping line: %s", line)
+                continue
+
+            code_part, ids_part = line.split(':', 1)
+            code = (code_part or '').strip().upper()
+            if not code:
+                continue
+
+            # Cho phép phân cách ID bằng ',' hoặc ';'
+            ids_raw = (ids_part or '').replace(';', ',')
+            user_ids = []
+            for chunk in ids_raw.split(','):
+                uid = chunk.strip().strip("'").strip('"')
+                if uid:
+                    user_ids.append(uid)
+
+            if user_ids:
+                mapping[code] = user_ids
+
+        return mapping
+
+    def get_saler_user_ids_from_mapping(self, saler_code):
+        """
+        Lấy danh sách user_id Zalo từ field saler_mapping_text
+        theo mã MISA saler_code.
+        """
+        self.ensure_one()
+        if not saler_code:
+            return []
+
+        norm_code = str(saler_code).strip().upper()
+        mapping = self._parse_saler_mapping_text()
+        return mapping.get(norm_code, [])
+
+    
     # ===== NEW: Cơ chế saler online/offline =====
     # Danh sách mã saler online (mỗi dòng một mã)
     online_saler_codes = fields.Text(
