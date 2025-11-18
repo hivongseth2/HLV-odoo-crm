@@ -37,10 +37,6 @@
                     <filter string="Done" name="done" domain="[('state', '=', 'done')]"/>
                     
                     <separator/>
-                    <filter string="Scanned by Shipper" name="scanned" domain="[('shipper_scanned', '=', True)]"/>
-                    <filter string="Not Scanned" name="not_scanned" domain="[('shipper_scanned', '=', False)]"/>
-                    
-                    <separator/>
                     <filter string="Today" name="today" 
                             domain="[('scheduled_date', '&gt;=', context_today())]"/>
                     <filter string="This Week" name="this_week" 
@@ -50,7 +46,6 @@
                         <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
                         <filter string="Customer" name="group_partner" context="{'group_by': 'partner_id'}"/>
                         <filter string="Scheduled Date" name="group_date" context="{'group_by': 'scheduled_date:day'}"/>
-                        <filter string="Shipper" name="group_shipper" context="{'group_by': 'shipper_user_id'}"/>
                     </group>
                 </search>
             </field>
