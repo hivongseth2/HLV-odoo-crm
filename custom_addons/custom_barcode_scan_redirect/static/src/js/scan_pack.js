@@ -145,24 +145,22 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // mapping: nếu quét “key” thì cộng 0.1 vào barcode mục tiêu
+    // mapping: nếu quét "key" thì cộng 0.1 vào barcode mục tiêu
     const targetBarcode = BARCODE_MAP_POINT_ONE[raw];
     if (targetBarcode) {
       updateQty(targetBarcode, 0.1);
-    } else if (isProductBarcode(raw)) {
-      updateQty(raw, 1);
     } else {
-      handlePackageBarcode(raw);
+      updateQty(raw, 1);
     }
 
     input.value = "";
   });
 
-  function isProductBarcode(barcode) {
-    const exists = [...document.querySelectorAll('[data-barcode]')]
-      .some(el => normalizeCode(el.dataset.barcode) === normalizeCode(barcode));
-    return exists;
-  }
+  // function isProductBarcode(barcode) {
+  //   const exists = [...document.querySelectorAll('[data-barcode]')]
+  //     .some(el => normalizeCode(el.dataset.barcode) === normalizeCode(barcode));
+  //   return exists;
+  // }
 
   async function handlePackageBarcode(packageBarcode) {
     const items = document.querySelectorAll("#product_list .product-item");
