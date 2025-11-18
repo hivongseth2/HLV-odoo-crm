@@ -723,24 +723,40 @@ async function openPackageEditModal(event) {
         li.querySelector('.btn-qty-increase').addEventListener('click', () => {
           const display = li.querySelector('.pkg-item-qty-display');
           const cur = parseFloat(display.innerText) || 0;
-          
+
           // Get original move item data to check max allowed
           const orig = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
           if (!orig) return;
-          
-          // Calculate remaining available in move line
-          const moveItem = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
-          if (moveItem && moveItem.qty_done) {
-            // Get the original qty_done before package (stored in data)
-            const oldQtyStored = parseFloat(display.dataset.oldQty) || 0;
-            const maxAllowed = moveItem.qty_done + oldQtyStored; // Original value
-            
-            if (cur >= maxAllowed) {
-              toast.warn(`Không thể tăng thêm. Tối đa: ${maxAllowed}`, { ms: 2000 });
-              return;
+
+          // Get the original qty_done before package (stored in data)
+          const oldQtyStored = parseFloat(display.dataset.oldQty) || 0;
+
+          // Calculate total available qty for this product from all move_lines
+          const allProductItems = currentPackageData.all_items || [];
+          const availableItems = allProductItems.filter(i => i.product_name === item.product_name);
+          let totalAvailable = 0;
+          availableItems.forEach(ai => {
+            totalAvailable += ai.qty_available || 0;
+          });
+
+          // Calculate current qty in all packages for this product
+          const currentPackageItems = currentPackageData.items || [];
+          let totalInPackages = 0;
+          currentPackageItems.forEach(ci => {
+            if (ci.product_name === item.product_name) {
+              totalInPackages += parseFloat(ci.qty_done) || 0;
             }
+          });
+
+          // Calculate max allowed for this item
+          const maxAllowed = totalAvailable;
+          const currentTotalForProduct = totalInPackages + (cur - oldQtyStored);
+
+          if (currentTotalForProduct >= maxAllowed) {
+            toast.warn(`Không thể tăng thêm. Đã đạt giới hạn tối đa (${maxAllowed}) cho sản phẩm này`, { ms: 2000 });
+            return;
           }
-          
+
           const newQty = cur + 1;
           display.innerText = String(newQty);
           if (currentPackageData && Array.isArray(currentPackageData.items)) {
@@ -942,7 +958,7 @@ async function savePackageChanges() {
 // }
 
 function openTransferModalForItem(moveLineId, currentQty, productName) {
-  const packs = (currentPackageData && currentPackageData.other_packs) || [];
+  const packs = (currentPackageData && currentPackageData.other_packages) || [];
   if (!packs.length) {
     toast.warn('Không có gói mục tiêu để chuyển. Vui lòng tạo gói khác trước.');
     return;
