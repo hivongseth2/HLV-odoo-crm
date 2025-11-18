@@ -415,10 +415,10 @@
                     <page string="Shipper Info" attrs="{'invisible': [('picking_type_code', '!=', 'outgoing')]}" groups="hlv_barcode_shipper.group_shipper_manager">
                         <group>
                             <group string="Scan Status">
-                            
-                                <field name="packages_scanned_count" readonly="1"/> 
-                                <field name="total_packages_count" readonly="1"/> 
-                                <field name="all_packages_scanned" readonly="1"/> 
+                                [Temporarily commented - fields disabled in model]
+                                [field name="packages_scanned_count" readonly="1"]
+                                [field name="total_packages_count" readonly="1"]
+                                [field name="all_packages_scanned" readonly="1"]
                             </group>
                         </group>
                         <field name="scan_log_ids" readonly="1">
