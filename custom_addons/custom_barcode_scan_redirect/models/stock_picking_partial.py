@@ -43,18 +43,9 @@ class StockPickingPartial(models.Model):
         # Tạo package mới (stock.quant.package) với tên từ sequence hoặc tên cung cấp
         Package = self.env['stock.quant.package']
 
-        # nếu caller truyền package_name (ví dụ scan mã kiện), dùng nó
-        # nhưng nếu package_name là AUTO-PKG... (JS auto-generated), thì IGNORE và dùng sequence
-        use_pkg_name = None
+        # nếu caller truyền package_name (ví dụ scan mã kiện), dùng nó; ngược lại try sequence
         if package_name:
-            pn = str(package_name).strip()
-            if pn.upper().startswith('AUTO-PKG'):
-                use_pkg_name = None
-            else:
-                use_pkg_name = pn
-
-        if use_pkg_name:
-            pkg_name = use_pkg_name
+            pkg_name = package_name
         else:
             try:
                 pkg_name = self.env['ir.sequence'].next_by_code('stock.quant.package')
