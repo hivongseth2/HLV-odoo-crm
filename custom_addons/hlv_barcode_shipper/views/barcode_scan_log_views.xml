@@ -8,7 +8,7 @@
             <field name="model">barcode.scan.log</field>
             <field name="type">list</field>
             <field name="arch" type="xml">
-                <tree string="Barcode Scan Logs" default_order="scan_time desc">
+                <list string="Barcode Scan Logs" default_order="scan_time desc">
                     <field name="scan_time"/>
                     <field name="user_id"/>
                     <field name="barcode"/>
@@ -19,7 +19,7 @@
                     <field name="product_id" optional="hide"/>
                     <field name="message" optional="hide"/>
                     <field name="session_id" optional="hide"/>
-                </tree>
+                </list>
             </field>
         </record>
         

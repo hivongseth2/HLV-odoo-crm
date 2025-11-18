@@ -8,7 +8,7 @@
             <field name="model">stock.picking</field>
             <field name="type">list</field>
             <field name="arch" type="xml">
-                <tree string="Delivery Orders" default_order="scheduled_date desc">
+                <list string="Delivery Orders" default_order="scheduled_date desc">
                     <field name="name"/>
                     <field name="partner_id"/>
                     <field name="scheduled_date"/>
@@ -18,7 +18,7 @@
                     <field name="packages_scanned_count" optional="show"/>
                     <field name="total_packages_count" optional="show"/>
                     <field name="all_packages_scanned" optional="show"/>
-                </tree>
+                </list>
             </field>
         </record>
         
