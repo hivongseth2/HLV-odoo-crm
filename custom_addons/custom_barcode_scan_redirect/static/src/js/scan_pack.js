@@ -178,7 +178,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
     if (completedItems.length === 0) {
-      toast.warn("⚠️ Không có sản phẩm nào được quét để tạo kiện", { ms: 2500 });
+      toast.warn("Không có sản phẩm nào được quét để tạo kiện", { ms: 2500 });
       playError();
       setFocus();
       return;
@@ -198,23 +198,23 @@ document.addEventListener("DOMContentLoaded", function () {
       console.log("API Response:", response);
       console.log("Result:", result);
       if (result?.error) {
-        toast.error("❌ " + result.error, { ms: 2500 });
+        toast.error(result.error, { ms: 2500 });
         playError();
         setFocus();
         return;
       }
       if (!result?.success) {
-        toast.error("❌ API response không hợp lệ: " + JSON.stringify(result), { ms: 2500 });
+        toast.error("API response không hợp lệ: " + JSON.stringify(result), { ms: 2500 });
         playError();
         setFocus();
         return;
       }
-      toast.success(`✅ Tạo gói hàng ${result.package_name} thành công! ${completedItems.length} sản phẩm`, { ms: 2000 });
+      toast.success(`Tạo gói hàng ${result.package_name} thành công! ${completedItems.length} sản phẩm`, { ms: 2000 });
       playSuccess();
       // Reload để hiển thị các move_line đã được gán vào package
       setTimeout(() => { window.location.reload(); }, 1500);
     } catch (err) {
-      toast.error("❌ Lỗi kết nối: " + err.message, { ms: 2500 });
+      toast.error("Lỗi kết nối: " + err.message, { ms: 2500 });
       playError();
       setFocus();
     }
@@ -244,7 +244,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     if (!isValid) {
-      toast.warn("❌ Chưa quét đủ:\n- " + missingProducts.join("\n- "), { ms: 3500 });
+      toast.warn("Chưa quét đủ:\n- " + missingProducts.join("\n- "), { ms: 3500 });
       return;
     }
 
@@ -256,7 +256,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
     const response = await res.json();
     if (response.error || response.result?.error) {
-      const msg = response.error?.message || response.result?.error || "❌ Có lỗi xảy ra!";
+      const msg = response.error?.message || response.result?.error || "Có lỗi xảy ra!";
       toast.error(msg, { ms: 1800 })
 
       return;
@@ -265,7 +265,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // dừng ghi (sẽ tự upload trong onstop)
     await stopRecording();
 
-    toast.success("✅ Phiếu đã hoàn tất! Đang chuyển trang...", { ms: 1200 });
+    toast.success("Phiếu đã hoàn tất! Đang chuyển trang...", { ms: 1200 });
     setTimeout(() => { window.location.href = "/custom_barcode_scan/ui"; }, 600);
   });
 
@@ -741,33 +741,61 @@ async function openPackageEditModal(event) {
     currentPackageData = result;
     document.getElementById('modalPackageName').innerText = result.package_name;
     
+    // Update item count badge
+    const itemCountBadge = document.getElementById('itemCountBadge');
+    if (itemCountBadge) {
+      itemCountBadge.innerText = result.items.length;
+    }
+    
     // Render items list
     const itemsList = document.getElementById('packageItemsList');
     itemsList.innerHTML = '';
     
-    result.items.forEach(item => {
-      const li = document.createElement('li');
-      li.style.cssText = 'display:flex; gap:8px; padding:8px; margin-bottom:8px; background:#f3f4f6; border-radius:6px; align-items:center;';
-      li.innerHTML = `
-        <div style="flex:1;">
-          <div style="font-weight:600; font-size:14px;">${item.product_name}</div>
-          <div style="font-size:12px; color:#6b7280;">Số lượng: <strong>${item.qty_done}</strong> ${item.uom}</div>
+    if (result.items.length === 0) {
+      itemsList.innerHTML = `
+        <div class="pkg-empty-state">
+          <div class="pkg-empty-state-title">Chưa có sản phẩm</div>
+          <div class="pkg-empty-state-desc">Thêm sản phẩm để quản lý gói hàng</div>
         </div>
-        <input type="number" min="0" value="${item.qty_done}" data-move-line-id="${item.move_line_id}" class="item-qty-input" 
-               style="width:60px; padding:4px; border:1px solid #d1d5db; border-radius:4px;" />
-        <button class="btn-remove-item" data-move-line-id="${item.move_line_id}" 
-                style="background:#ef4444; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:12px;">🗑️ Xoá</button>
       `;
-      
-      // Remove button handler
-      li.querySelector('.btn-remove-item').addEventListener('click', async () => {
-        if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
-          await removePackageItem(item.move_line_id);
-        }
+    } else {
+      result.items.forEach(item => {
+        const li = document.createElement('div');
+        li.className = 'pkg-item-row';
+        li.innerHTML = `
+          <div class="pkg-item-info">
+            <span class="pkg-item-name">${item.product_name}</span>
+            <span class="pkg-item-sku">${item.product_sku || 'N/A'}</span>
+          </div>
+          <div class="pkg-item-qty-section">
+            <button class="pkg-item-qty-btn btn-qty-decrease" data-move-line-id="${item.move_line_id}">−</button>
+            <div class="pkg-item-qty-display" data-move-line-id="${item.move_line_id}">${item.qty_done}</div>
+            <button class="pkg-item-qty-btn btn-qty-increase" data-move-line-id="${item.move_line_id}">+</button>
+          </div>
+          <button class="pkg-item-remove" data-move-line-id="${item.move_line_id}" title="Xóa khỏi gói">×</button>
+        `;
+        
+        // Qty control buttons
+        li.querySelector('.btn-qty-decrease').addEventListener('click', async () => {
+          const newQty = Math.max(0, item.qty_done - 1);
+          await updatePackageItemQtyUI(item.move_line_id, newQty, li);
+        });
+        
+        li.querySelector('.btn-qty-increase').addEventListener('click', async () => {
+          const newQty = item.qty_done + 1;
+          await updatePackageItemQtyUI(item.move_line_id, newQty, li);
+        });
+        
+        // Remove button handler
+        li.querySelector('.pkg-item-remove').addEventListener('click', async () => {
+          if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
+            await removePackageItem(item.move_line_id);
+          }
+        });
+        
+        itemsList.appendChild(li);
       });
-      
-      itemsList.appendChild(li);
-    });
+    }
     
     // Populate add item select
     const addItemSelect = document.getElementById('addItemSelect');
@@ -782,8 +810,10 @@ async function openPackageEditModal(event) {
       });
     }
     
-    // Show modal
-    document.getElementById('packageEditModal').style.display = 'flex';
+    // Show modal with animation
+    const modal = document.getElementById('packageEditModal');
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
     
   } catch (err) {
     toast.error("❌ Lỗi kết nối: " + err.message);
@@ -791,8 +821,19 @@ async function openPackageEditModal(event) {
 }
 
 function closePackageEditModal() {
-  document.getElementById('packageEditModal').style.display = 'none';
+  const modal = document.getElementById('packageEditModal');
+  modal.classList.remove('active');
+  document.body.style.overflow = 'auto';
   currentPackageData = null;
+}
+
+async function updatePackageItemQtyUI(moveLineId, newQty, liElement) {
+  const display = liElement.querySelector(`[data-move-line-id="${moveLineId}"].pkg-item-qty-display`);
+  if (display) {
+    display.innerText = newQty;
+    const item = currentPackageData.items.find(i => i.move_line_id === moveLineId);
+    if (item) item.qty_done = newQty;
+  }
 }
 
 async function removePackageItem(moveLineId) {
@@ -817,16 +858,16 @@ async function removePackageItem(moveLineId) {
     const result = response.result || response;
     
     if (result?.error) {
-      toast.error("❌ " + result.error);
+      toast.error(result.error);
       return;
     }
     
-    toast.success("✅ Đã xoá sản phẩm!");
+    toast.success("Đã xoá sản phẩm!", { ms: 1500 });
     // Reload modal to refresh
     openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
     
   } catch (err) {
-    toast.error("❌ Lỗi kết nối: " + err.message);
+    toast.error("Lỗi kết nối: " + err.message);
   }
 }
 
@@ -836,7 +877,7 @@ async function addItemToPackage() {
   const qty = parseFloat(document.getElementById('addItemQty').value);
   
   if (!moveLineId || qty <= 0) {
-    toast.warn("⚠️ Vui lòng chọn sản phẩm và nhập số lượng");
+    toast.warn("Vui lòng chọn sản phẩm và nhập số lượng");
     return;
   }
   
@@ -860,74 +901,79 @@ async function addItemToPackage() {
     const result = response.result || response;
     
     if (result?.error) {
-      toast.error("❌ " + result.error);
+      toast.error(result.error);
       return;
     }
     
-    toast.success("✅ " + result.message);
+    toast.success(result.message, { ms: 1500 });
     document.getElementById('addItemSelect').value = '';
     document.getElementById('addItemQty').value = '1';
     // Reload modal
     openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
     
   } catch (err) {
-    toast.error("❌ Lỗi kết nối: " + err.message);
+    toast.error("Lỗi kết nối: " + err.message);
   }
 }
 
 async function savePackageChanges() {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
-  const inputs = document.querySelectorAll('.item-qty-input');
+  const displayElements = document.querySelectorAll('.pkg-item-qty-display');
   
   let hasChanges = false;
+  const changes = [];
   
-  for (let input of inputs) {
-    const moveLineId = parseInt(input.dataset.moveLineId);
-    const newQty = parseFloat(input.value);
+  for (let display of displayElements) {
+    const moveLineId = parseInt(display.dataset.moveLineId);
+    const newQty = parseFloat(display.innerText);
     
     // Tìm qty cũ
     const oldQty = currentPackageData.items.find(i => i.move_line_id === moveLineId)?.qty_done;
     
     if (newQty !== oldQty) {
       hasChanges = true;
-      
-      try {
-        const res = await fetch("/pack_scan/update_package_item_qty", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
-          body: JSON.stringify({
-            jsonrpc: "2.0",
-            method: "call",
-            params: { 
-              picking_id: pickingId, 
-              package_id: currentPackageData.package_id,
-              move_line_id: moveLineId,
-              new_qty: newQty
-            }
-          })
-        });
-        
-        const response = await res.json();
-        const result = response.result || response;
-        
-        if (result?.error) {
-          toast.error("❌ " + result.error);
-          return;
-        }
-        
-      } catch (err) {
-        toast.error("❌ Lỗi kết nối: " + err.message);
-        return;
-      }
+      changes.push({ moveLineId, newQty });
     }
   }
   
   if (!hasChanges) {
-    toast.info("ℹ️ Không có thay đổi nào");
+    toast.info("Không có thay đổi nào");
     return;
   }
   
-  toast.success("✅ Đã lưu thay đổi! Tải lại trang...");
+  // Gửi tất cả thay đổi
+  for (let change of changes) {
+    try {
+      const res = await fetch("/pack_scan/update_package_item_qty", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "call",
+          params: { 
+            picking_id: pickingId, 
+            package_id: currentPackageData.package_id,
+            move_line_id: change.moveLineId,
+            new_qty: change.newQty
+          }
+        })
+      });
+      
+      const response = await res.json();
+      const result = response.result || response;
+      
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+      
+    } catch (err) {
+      toast.error("Lỗi kết nối: " + err.message);
+      return;
+    }
+  }
+  
+  toast.success("Đã lưu thay đổi! Tải lại trang...", { ms: 1500 });
   setTimeout(() => window.location.reload(), 1500);
 }
 
@@ -944,13 +990,13 @@ async function splitPackageFromModal() {
     const response = await res.json();
     const result = response.result || response;
     if (result?.error) {
-      toast.error('❌ ' + result.error);
+      toast.error(result.error);
       return;
     }
-    toast.success('✅ ' + result.message);
+    toast.success(result.message, { ms: 1500 });
     // Open new picking view
     setTimeout(() => { window.location.href = '/custom_barcode_scan/pack_view/' + result.new_picking_id; }, 1000);
   } catch (err) {
-    toast.error('❌ Lỗi kết nối: ' + err.message);
+    toast.error("Lỗi kết nối: " + err.message);
   }
 }
