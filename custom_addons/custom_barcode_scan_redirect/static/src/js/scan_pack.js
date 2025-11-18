@@ -654,6 +654,11 @@ async function openPackageEditModal(event) {
     }
     
     currentPackageData = result;
+    // Ensure other_packages is an array for the transfer modal
+    if (!Array.isArray(currentPackageData.other_packages)) {
+      currentPackageData.other_packages = [];
+    }
+    
     document.getElementById('modalPackageName').innerText = result.package_name;
     
     const itemCountBadge = document.getElementById('itemCountBadge');
@@ -718,6 +723,24 @@ async function openPackageEditModal(event) {
         li.querySelector('.btn-qty-increase').addEventListener('click', () => {
           const display = li.querySelector('.pkg-item-qty-display');
           const cur = parseFloat(display.innerText) || 0;
+          
+          // Get original move item data to check max allowed
+          const orig = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
+          if (!orig) return;
+          
+          // Calculate remaining available in move line
+          const moveItem = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
+          if (moveItem && moveItem.qty_done) {
+            // Get the original qty_done before package (stored in data)
+            const oldQtyStored = parseFloat(display.dataset.oldQty) || 0;
+            const maxAllowed = moveItem.qty_done + oldQtyStored; // Original value
+            
+            if (cur >= maxAllowed) {
+              toast.warn(`Không thể tăng thêm. Tối đa: ${maxAllowed}`, { ms: 2000 });
+              return;
+            }
+          }
+          
           const newQty = cur + 1;
           display.innerText = String(newQty);
           if (currentPackageData && Array.isArray(currentPackageData.items)) {

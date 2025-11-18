@@ -831,14 +831,14 @@ class CustomBarcodeScanController(http.Controller):
             _logger.exception("REMOVE_PACKAGE_ITEM error")
             return {"error": str(e)}
 
-    @http.route('/pack_scan/transfer_package_item', type='json', auth='user', csrf=False)
-    def transfer_package_item(self, **kwargs):
+    @http.route('/pack_scan/transfer_item_between_packs', type='json', auth='user', csrf=False)
+    def transfer_item_between_packs(self, **kwargs):
         """
         Chuyển 1 sản phẩm từ package này sang package khác
         """
         picking_id = kwargs.get("picking_id")
-        from_package_id = kwargs.get("from_package_id")
-        to_package_id = kwargs.get("to_package_id")
+        source_package_id = kwargs.get("source_package_id")
+        target_package_id = kwargs.get("target_package_id")
         move_line_id = kwargs.get("move_line_id")
         qty = kwargs.get("qty", 0)
         
@@ -847,10 +847,10 @@ class CustomBarcodeScanController(http.Controller):
             return {"error": "Phiếu không tồn tại"}
         
         try:
-            result = picking.transfer_package_item(from_package_id, to_package_id, move_line_id, qty)
+            result = picking.transfer_package_item(source_package_id, target_package_id, move_line_id, qty)
             return result
         except Exception as e:
-            _logger.exception("TRANSFER_PACKAGE_ITEM error")
+            _logger.exception("TRANSFER_ITEM_BETWEEN_PACKS error")
             return {"error": str(e)}
 
     @http.route('/pack_scan/add_item_to_package', type='json', auth='user', csrf=False)
