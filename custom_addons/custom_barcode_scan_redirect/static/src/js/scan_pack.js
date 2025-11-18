@@ -1000,3 +1000,15 @@ async function splitPackageFromModal() {
     toast.error("Lỗi kết nối: " + err.message);
   }
 }
+
+// ===================== PANEL VISIBILITY TOGGLE =====================
+function togglePanelVisibility(button) {
+  const panel = button.closest('.pack-side-panel');
+  if (!panel) return;
+  
+  // Toggle collapsed state
+  const isCollapsed = panel.classList.toggle('collapsed');
+  
+  // Update button text
+  button.textContent = isCollapsed ? 'Hiện' : 'Ẩn';
+}

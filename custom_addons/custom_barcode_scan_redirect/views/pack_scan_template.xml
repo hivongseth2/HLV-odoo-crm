@@ -86,7 +86,7 @@
 <div class="pack-side-panel">
   <div class="panel-header">
     <div class="panel-title">Gói hàng cùng đơn</div>
-    <button type="button" onclick="this.closest('.pack-side-panel').classList.toggle('collapsed')" class="panel-toggle-btn">
+    <button type="button" onclick="togglePanelVisibility(this)" class="panel-toggle-btn">
       Ẩn
     </button>
   </div>
