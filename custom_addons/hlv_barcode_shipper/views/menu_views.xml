@@ -8,28 +8,16 @@
                   sequence="50"
                   groups="hlv_barcode_shipper.group_shipper"/>
         
-        <!-- Barcode Scanner Menu -->
-        <menuitem id="menu_barcode_scanner"
-                  name="📱 Barcode Scanner"
-                  parent="menu_barcode_shipper_root"
-                  action="base.action_open_website"
-                  sequence="10"
-                  groups="hlv_barcode_shipper.group_shipper"/>
-        
-        <!-- Set the URL for barcode scanner -->
-        <record id="menu_barcode_scanner" model="ir.ui.menu">
-            <field name="action">base.action_open_website</field>
-        </record>
-        
-        <!-- Alternative: Direct URL action for barcode scanner -->
+        <!-- URL action for barcode scanner -->
         <record id="action_barcode_scanner_url" model="ir.actions.act_url">
             <field name="name">Barcode Scanner</field>
             <field name="url">/barcode/shipper</field>
             <field name="target">self</field>
         </record>
         
-        <menuitem id="menu_barcode_scanner_direct"
-                  name="📱 Mobile Scanner"
+        <!-- Barcode Scanner Menu -->
+        <menuitem id="menu_barcode_scanner"
+                  name="📱 Barcode Scanner"
                   parent="menu_barcode_shipper_root"
                   action="action_barcode_scanner_url"
                   sequence="10"

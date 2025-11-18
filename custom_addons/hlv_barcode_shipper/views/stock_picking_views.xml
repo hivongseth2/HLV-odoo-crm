@@ -2,12 +2,13 @@
 <odoo>
     <data>
         
-        <!-- Stock Picking Tree View for Shippers -->
+        <!-- Stock Picking List View for Shippers -->
         <record id="stock_picking_tree_shipper" model="ir.ui.view">
-            <field name="name">stock.picking.tree.shipper</field>
+            <field name="name">stock.picking.list.shipper</field>
             <field name="model">stock.picking</field>
+            <field name="type">list</field>
             <field name="arch" type="xml">
-                <tree string="Delivery Orders" default_order="scheduled_date desc">
+                <list string="Delivery Orders" default_order="scheduled_date desc">
                     <field name="name"/>
                     <field name="partner_id"/>
                     <field name="scheduled_date"/>
@@ -17,11 +18,12 @@
                     <field name="packages_scanned_count" optional="show"/>
                     <field name="total_packages_count" optional="show"/>
                     <field name="all_packages_scanned" optional="show"/>
-                </tree>
+                </list>
             </field>
         </record>
         
-        <!-- Stock Picking Search View for Shippers -->
+        <!-- Stock Picking Search View for Shippers - Temporarily disabled for installation -->
+        <!--
         <record id="stock_picking_search_shipper" model="ir.ui.view">
             <field name="name">stock.picking.search.shipper</field>
             <field name="model">stock.picking</field>
@@ -36,25 +38,20 @@
                     <filter string="Done" name="done" domain="[('state', '=', 'done')]"/>
                     
                     <separator/>
-                    <filter string="Scanned by Shipper" name="scanned" domain="[('shipper_scanned', '=', True)]"/>
-                    <filter string="Not Scanned" name="not_scanned" domain="[('shipper_scanned', '=', False)]"/>
-                    <filter string="All Items Scanned" name="all_scanned" domain="[('all_packages_scanned', '=', True)]"/>
-                    
-                    <separator/>
                     <filter string="Today" name="today" 
-                            domain="[('scheduled_date', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                            domain="[('scheduled_date', '&gt;=', context_today())]"/>
                     <filter string="This Week" name="this_week" 
-                            domain="[('scheduled_date', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                            domain="[('scheduled_date', '&gt;=', (context_today() - datetime.timedelta(days=7)))]"/>
                     
                     <group expand="0" string="Group By">
                         <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
                         <filter string="Customer" name="group_partner" context="{'group_by': 'partner_id'}"/>
                         <filter string="Scheduled Date" name="group_date" context="{'group_by': 'scheduled_date:day'}"/>
-                        <filter string="Shipper" name="group_shipper" context="{'group_by': 'shipper_user_id'}"/>
                     </group>
                 </search>
             </field>
         </record>
+        -->
         
         <!-- Stock Picking Action for Shippers -->
         <record id="stock_picking_action_shipper" model="ir.actions.act_window">
@@ -62,9 +59,7 @@
             <field name="res_model">stock.picking</field>
             <field name="view_mode">list,form</field>
             <field name="view_id" ref="stock_picking_tree_shipper"/>
-            <field name="search_view_id" ref="stock_picking_search_shipper"/>
             <field name="domain">[('picking_type_id.code', '=', 'outgoing')]</field>
-            <field name="context">{'search_default_ready': 1}</field>
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">
                     No delivery orders found!

@@ -2,12 +2,13 @@
 <odoo>
     <data>
         
-        <!-- Barcode Scan Log Tree View -->
+        <!-- Barcode Scan Log List View -->
         <record id="barcode_scan_log_tree" model="ir.ui.view">
-            <field name="name">barcode.scan.log.tree</field>
+            <field name="name">barcode.scan.log.list</field>
             <field name="model">barcode.scan.log</field>
+            <field name="type">list</field>
             <field name="arch" type="xml">
-                <tree string="Barcode Scan Logs" default_order="scan_time desc">
+                <list string="Barcode Scan Logs" default_order="scan_time desc">
                     <field name="scan_time"/>
                     <field name="user_id"/>
                     <field name="barcode"/>
@@ -18,7 +19,7 @@
                     <field name="product_id" optional="hide"/>
                     <field name="message" optional="hide"/>
                     <field name="session_id" optional="hide"/>
-                </tree>
+                </list>
             </field>
         </record>
         
@@ -66,11 +67,11 @@
                     <field name="session_id"/>
                     
                     <filter string="Today" name="today" 
-                            domain="[('scan_time', '&gt;=', datetime.datetime.combine(context_today(), datetime.time(0,0,0)))]"/>
+                            domain="[('scan_time', '&gt;=', context_today())]"/>
                     <filter string="This Week" name="this_week" 
-                            domain="[('scan_time', '&gt;=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                            domain="[('scan_time', '&gt;=', (context_today() - datetime.timedelta(days=7)))]"/>
                     <filter string="This Month" name="this_month" 
-                            domain="[('scan_time', '&gt;=', (context_today().replace(day=1)).strftime('%Y-%m-%d'))]"/>
+                            domain="[('scan_time', '&gt;=', context_today().replace(day=1))]"/>
                     
                     <separator/>
                     <filter string="Success" name="success" domain="[('status', '=', 'success')]"/>
