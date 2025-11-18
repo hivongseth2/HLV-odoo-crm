@@ -478,6 +478,281 @@ class BarcodeShipperController(http.Controller):
             'user': request.env.user,
         })
 
+    @http.route('/barcode/shipper/simple', type='http', auth='user', website=False)
+    def shipper_interface_simple(self, **kwargs):
+        """
+        Simple shipper interface with embedded CSS for testing
+        """
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Shipper Scanner</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background-color: #f8f9fa;
+                    color: #2c3e50;
+                }}
+                .container {{
+                    max-width: 800px;
+                    margin: 0 auto;
+                }}
+                .header {{
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }}
+                .header h1 {{
+                    margin: 0 0 10px 0;
+                    color: #2c3e50;
+                    font-size: 24px;
+                }}
+                .user-info {{
+                    color: #6c757d;
+                    font-size: 14px;
+                }}
+                .section {{
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }}
+                .section h3 {{
+                    margin: 0 0 15px 0;
+                    color: #2c3e50;
+                    font-size: 18px;
+                }}
+                .form-group {{
+                    margin-bottom: 15px;
+                }}
+                .form-control {{
+                    width: 100%;
+                    padding: 12px 16px;
+                    border: 2px solid #e9ecef;
+                    border-radius: 6px;
+                    font-size: 16px;
+                    box-sizing: border-box;
+                }}
+                .form-control:focus {{
+                    outline: none;
+                    border-color: #007bff;
+                    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+                }}
+                .btn {{
+                    display: inline-block;
+                    padding: 12px 24px;
+                    font-size: 16px;
+                    font-weight: 500;
+                    text-align: center;
+                    text-decoration: none;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    margin: 4px;
+                    transition: all 0.15s ease-in-out;
+                }}
+                .btn-primary {{
+                    background-color: #007bff;
+                    color: white;
+                }}
+                .btn-primary:hover {{
+                    background-color: #0056b3;
+                }}
+                .btn-success {{
+                    background-color: #28a745;
+                    color: white;
+                }}
+                .btn-success:hover {{
+                    background-color: #1e7e34;
+                }}
+                .btn-secondary {{
+                    background-color: #6c757d;
+                    color: white;
+                }}
+                .btn-secondary:hover {{
+                    background-color: #545b62;
+                }}
+                .progress-info {{
+                    font-size: 14px;
+                    color: #6c757d;
+                    margin-bottom: 10px;
+                }}
+                .progress {{
+                    height: 8px;
+                    background-color: #e9ecef;
+                    border-radius: 4px;
+                    overflow: hidden;
+                    margin-bottom: 15px;
+                }}
+                .progress-bar {{
+                    height: 100%;
+                    background-color: #28a745;
+                    width: 0%;
+                    transition: width 0.3s ease;
+                }}
+                .alert {{
+                    padding: 12px 16px;
+                    border-radius: 6px;
+                    margin-bottom: 15px;
+                }}
+                .alert-success {{
+                    background-color: #d4edda;
+                    border: 1px solid #c3e6cb;
+                    color: #155724;
+                }}
+                .alert-danger {{
+                    background-color: #f8d7da;
+                    border: 1px solid #f5c6cb;
+                    color: #721c24;
+                }}
+                .alert-info {{
+                    background-color: #d1ecf1;
+                    border: 1px solid #bee5eb;
+                    color: #0c5460;
+                }}
+                @media (max-width: 768px) {{
+                    body {{
+                        padding: 10px;
+                    }}
+                    .section {{
+                        padding: 15px;
+                    }}
+                    .btn {{
+                        width: 100%;
+                        margin: 4px 0;
+                    }}
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📱 Shipper Scanner</h1>
+                    <div class="user-info">👤 {request.env.user.name}</div>
+                </div>
+                
+                <div class="section">
+                    <h3>🔍 Step 1: Scan PICK Order</h3>
+                    <p>Scan the PICK order barcode to find delivery order</p>
+                    <div class="form-group">
+                        <input type="text" id="pick-barcode" class="form-control" placeholder="Scan or enter PICK barcode" />
+                    </div>
+                    <button class="btn btn-primary" onclick="scanPick()">📱 Scan PICK</button>
+                </div>
+                
+                <div class="section">
+                    <h3>📦 Step 2: Scan Items</h3>
+                    <p>Scan each package or product barcode in the delivery order</p>
+                    <div class="form-group">
+                        <input type="text" id="item-barcode" class="form-control" placeholder="Scan package or product" disabled />
+                    </div>
+                    <div class="progress-info">0 / 0 items scanned</div>
+                    <div class="progress">
+                        <div class="progress-bar" id="progress-bar"></div>
+                    </div>
+                    <button class="btn btn-secondary" onclick="scanItem()" disabled>📦 Scan Item</button>
+                    <button class="btn btn-secondary" onclick="startOver()">🔄 Start Over</button>
+                </div>
+                
+                <div class="section">
+                    <h3>✅ Delivery Completed</h3>
+                    <button class="btn btn-success" onclick="completeDelivery()" disabled>🚚 Complete Delivery</button>
+                    <button class="btn btn-secondary" onclick="newDelivery()">📋 New Delivery</button>
+                    <button class="btn btn-secondary" onclick="viewHistory()">📊 View History</button>
+                    <button class="btn btn-secondary" onclick="showHelp()">❓ Help</button>
+                </div>
+                
+                <div class="section">
+                    <h3>📋 Scan History</h3>
+                    <div id="scan-history">
+                        <p>Loading...</p>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>❓ How to Use</h3>
+                    <ol>
+                        <li><strong>Scan PICK Order:</strong> Use your device camera or type the PICK barcode (e.g., PICK00001)</li>
+                        <li><strong>Scan Items:</strong> Scan each package (PACK) or product barcode in the delivery order</li>
+                        <li><strong>Complete:</strong> When all items are scanned, tap "Complete Delivery"</li>
+                        <li><strong>Alternative:</strong> You can re-scan the PICK barcode to complete directly</li>
+                    </ol>
+                    <h4>Tips:</h4>
+                    <ul>
+                        <li>Make sure your camera has good lighting</li>
+                        <li>Hold the barcode steady in the camera view</li>
+                        <li>You can also type barcodes manually if needed</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <script>
+                let currentOutId = null;
+                let totalItems = 0;
+                let scannedItems = 0;
+                
+                function scanPick() {{
+                    const barcode = document.getElementById('pick-barcode').value.trim();
+                    if (!barcode) {{
+                        alert('Please enter a PICK barcode');
+                        return;
+                    }}
+                    
+                    // Simulate API call
+                    console.log('Scanning PICK:', barcode);
+                    alert('PICK scan functionality will be implemented with backend API');
+                }}
+                
+                function scanItem() {{
+                    const barcode = document.getElementById('item-barcode').value.trim();
+                    if (!barcode) {{
+                        alert('Please enter an item barcode');
+                        return;
+                    }}
+                    
+                    console.log('Scanning item:', barcode);
+                    alert('Item scan functionality will be implemented with backend API');
+                }}
+                
+                function completeDelivery() {{
+                    if (confirm('Complete this delivery?')) {{
+                        alert('Delivery completion will be implemented with backend API');
+                    }}
+                }}
+                
+                function startOver() {{
+                    document.getElementById('pick-barcode').value = '';
+                    document.getElementById('item-barcode').value = '';
+                    document.getElementById('item-barcode').disabled = true;
+                    document.querySelector('.progress-info').textContent = '0 / 0 items scanned';
+                    document.getElementById('progress-bar').style.width = '0%';
+                }}
+                
+                function newDelivery() {{
+                    startOver();
+                }}
+                
+                function viewHistory() {{
+                    alert('History view will be implemented');
+                }}
+                
+                function showHelp() {{
+                    alert('Help documentation will be implemented');
+                }}
+            </script>
+        </body>
+        </html>
+        """
+        return html_content
+
     @http.route('/barcode/shipper/grant_access', type='http', auth='user', website=False)
     def grant_shipper_access(self, **kwargs):
         """
