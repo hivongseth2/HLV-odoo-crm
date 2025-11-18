@@ -212,6 +212,10 @@ class StockPickingPartial(models.Model):
             'items': [
                 {'move_line_id': int, 'product_id': int, 'product_name': str, 'qty_done': float, 'uom': str},
                 ...
+            ],
+            'other_packages': [
+                {'package_id': int, 'package_name': str},
+                ...
             ]
         }
         """
@@ -239,10 +243,23 @@ class StockPickingPartial(models.Model):
                 'uom': ml.product_uom_id.name,
             })
         
+        # Lấy tất cả packages khác của picking này
+        all_package_ids = self.move_line_ids.mapped('result_package_id').ids
+        other_packages = []
+        if all_package_ids:
+            packages = Package.sudo().browse(all_package_ids)
+            for pkg in packages:
+                if pkg.id != package_id:
+                    other_packages.append({
+                        'package_id': pkg.id,
+                        'package_name': pkg.name
+                    })
+        
         return {
             'package_id': package.id,
             'package_name': package.name,
             'items': items,
+            'other_packages': other_packages,
         }
 
     def update_package_item_qty(self, package_id, move_line_id, new_qty):
@@ -260,6 +277,18 @@ class StockPickingPartial(models.Model):
         
         if new_qty < 0:
             raise ValidationError("Số lượng không được âm!")
+        
+        # Lấy move gốc để kiểm tra qty_done tối đa
+        original_move = move_line.move_id
+        if original_move:
+            # Tính tổng qty_done hiện tại từ tất cả move_line của move gốc
+            total_current_done = sum(ml.qty_done for ml in original_move.move_line_ids)
+            # Tính qty available (khôi phục lại qty_done cũ của line này để so sánh)
+            old_qty = move_line.qty_done
+            available_qty = original_move.product_uom_qty - (total_current_done - old_qty)
+            
+            if new_qty > available_qty:
+                raise ValidationError(f"⚠️ Số lượng không được vượt quá {available_qty:.2f} (tối đa cho sản phẩm này)")
         
         old_qty = move_line.qty_done
         move_line.qty_done = new_qty
@@ -299,6 +328,10 @@ class StockPickingPartial(models.Model):
         """
         self.ensure_one()
         
+        # Kiểm tra to_package_id khác from_package_id
+        if from_package_id == to_package_id:
+            raise ValidationError("Gói nguồn và gói đích phải khác nhau!")
+        
         move_line = self.env['stock.move.line'].sudo().browse(move_line_id)
         if not move_line.exists() or move_line.picking_id.id != self.id:
             raise ValidationError("Move line không tồn tại!")
@@ -308,6 +341,18 @@ class StockPickingPartial(models.Model):
         
         if qty <= 0 or qty > move_line.qty_done:
             raise ValidationError("Số lượng chuyển không hợp lệ!")
+        
+        # Kiểm tra to_package_id có tồn tại và thuộc cùng picking không
+        to_package = self.env['stock.quant.package'].sudo().browse(to_package_id)
+        if not to_package.exists():
+            raise ValidationError("Gói đích không tồn tại!")
+        
+        to_ml_exists = self.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', self.id),
+            ('result_package_id', '=', to_package_id)
+        ], limit=1)
+        if not to_ml_exists:
+            raise ValidationError("Gói đích không có trong phiếu này hoặc không hợp lệ!")
         
         # Cập nhật package hiện tại
         move_line.qty_done -= qty
@@ -350,6 +395,21 @@ class StockPickingPartial(models.Model):
         if qty <= 0:
             raise ValidationError("Số lượng thêm phải > 0!")
         
+        # Kiểm tra qty_done của move_line này không âm
+        if move_line.qty_done < 0:
+            raise ValidationError("⚠️ Không được phép dự trữ số lượng nhỏ hơn 0")
+        
+        # Kiểm tra qty thêm có vượt quá qty_done hiện tại không
+        if qty > move_line.qty_done:
+            raise ValidationError(f"Số lượng thêm vào ({qty}) không được vượt quá số lượng đã quét ({move_line.qty_done})")
+        
+        # Lấy move gốc để kiểm tra qty tổng
+        original_move = move_line.move_id
+        if original_move:
+            # Kiểm tra move_line này có trong unpackaged chưa
+            if move_line.result_package_id:
+                raise ValidationError("Sản phẩm này đã được gán vào một gói khác rồi!")
+        
         # Kiểm tra có chỗ trống có sẵn không
         existing_in_target = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
@@ -361,11 +421,16 @@ class StockPickingPartial(models.Model):
             # Cộng vào sản phẩm hiện có
             existing_in_target.qty_done += qty
             move_line.qty_done -= qty
+            if move_line.qty_done < 0:
+                move_line.qty_done = 0
             if move_line.qty_done == 0:
                 move_line.result_package_id = None
         else:
             # Tạo move_line mới hoặc di chuyển
             move_line.qty_done -= qty
+            if move_line.qty_done < 0:
+                move_line.qty_done = 0
+            
             new_move_line = move_line.copy({
                 'result_package_id': package_id,
                 'qty_done': qty,
