@@ -469,6 +469,60 @@ class BarcodeShipperController(http.Controller):
             'user': request.env.user,
         })
 
+    @http.route('/barcode/shipper/demo', type='http', auth='user', website=False)
+    def shipper_interface_demo(self, **kwargs):
+        """
+        Demo shipper interface page - bypasses permission check for testing
+        """
+        return request.render('hlv_barcode_shipper.shipper_interface', {
+            'user': request.env.user,
+        })
+
+    @http.route('/barcode/shipper/grant_access', type='http', auth='user', website=False)
+    def grant_shipper_access(self, **kwargs):
+        """
+        Grant shipper access to current user (for testing/setup)
+        """
+        try:
+            # Get the shipper group
+            shipper_group = request.env.ref('hlv_barcode_shipper.group_shipper')
+            
+            # Add current user to shipper group
+            current_user = request.env.user
+            current_user.write({
+                'groups_id': [(4, shipper_group.id)]
+            })
+            
+            return f"""
+            <html>
+                <head>
+                    <title>Access Granted</title>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+                        .success {{ color: #28a745; font-size: 24px; margin-bottom: 20px; }}
+                        .btn {{ display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 6px; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="success">✅ Shipper Access Granted!</div>
+                    <p>User <strong>{current_user.name}</strong> now has Shipper permissions.</p>
+                    <a href="/barcode/shipper" class="btn">Go to Shipper Scanner</a>
+                </body>
+            </html>
+            """
+        except Exception as e:
+            return f"""
+            <html>
+                <head><title>Error</title></head>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2 style="color: #dc3545;">❌ Error</h2>
+                    <p>Could not grant access: {str(e)}</p>
+                    <p>Please contact your administrator.</p>
+                    <a href="/web" style="display: inline-block; padding: 12px 24px; background: #007bff; color: white; text-decoration: none; border-radius: 6px;">Back to Odoo</a>
+                </body>
+            </html>
+            """
+
     @http.route('/api/barcode/reset_scan', type='json', auth='user', methods=['POST'], csrf=False)
     def reset_scan_status(self, **kwargs):
         """
