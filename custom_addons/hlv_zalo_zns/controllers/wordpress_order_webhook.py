@@ -181,6 +181,7 @@ class WordPressOrderWebhook(http.Controller):
                                 "order_code": data.get('order_id', ''),
                                 "price": price_value,
                                 "date": today_str,
+                                "status": "Đặt hàng thành công", 
                                 "phone_number": customer_phone,
                                 "address": data.get('customer_address', '') or '',
                             }
