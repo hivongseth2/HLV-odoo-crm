@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <data>
+    <!-- Access Denied -->
+    <template id="access_denied" name="Access Denied">
+      <t t-call="web.layout">
+        <t t-set="head_website">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        </t>
+        <div class="hlv-barcode-shipper">
+          <div class="shipper-container">
+            <div class="shipper-header">
+              <h2>🚫 Access Denied</h2>
+              <p>You don't have permission to access the Shipper Scanner.<br/>
+                 Please contact your administrator to get "Shipper" access rights.</p>
+              <a class="btn btn-primary" href="/web">← Back to Odoo</a>
+            </div>
+          </div>
+        </div>
+      </t>
+    </template>
+
+    <!-- Main mobile interface -->
+    <template id="shipper_interface" name="Shipper Barcode Interface">
+      <t t-call="web.layout">
+        <t t-set="head_website">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+          <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
+        </t>
+
+        <div class="hlv-barcode-shipper">
+          <div class="shipper-container">
+            <!-- Header -->
+            <div class="shipper-header">
+              <h2>📦 Shipper Scanner</h2>
+              <div class="user-info">
+                👤 <t t-esc="user.name"/>
+              </div>
+            </div>
+
+            <!-- Step 1: scan PICK -->
+            <div id="step-scan-pick" class="scan-step active">
+              <div class="step-header">
+                <h3>🔍 Step 1: Scan PICK Order</h3>
+                <p>Scan PICK barcode (PICKxxxxx) to find delivery order.</p>
+              </div>
+              <div class="barcode-input-group">
+                <input id="pick-barcode-input"
+                       class="barcode-input"
+                       type="text"
+                       placeholder="Scan or enter PICK barcode..."
+                       autocomplete="off"/>
+                <button id="scan-pick-btn" class="btn btn-primary">📱 Scan PICK</button>
+              </div>
+              <div id="pick-result" class="result-message"></div>
+            </div>
+
+            <!-- Step 2: scan items -->
+            <div id="step-scan-items" class="scan-step">
+              <div class="step-header">
+                <h3>📦 Step 2: Scan Items</h3>
+                <div id="order-info" class="order-info"></div>
+              </div>
+
+              <div class="barcode-input-group">
+                <input id="item-barcode-input"
+                       class="barcode-input"
+                       type="text"
+                       placeholder="Scan package (PACK) or product..."
+                       autocomplete="off"/>
+                <button id="scan-item-btn" class="btn btn-secondary">📦 Scan Item</button>
+              </div>
+
+              <div id="item-result" class="result-message"></div>
+
+              <div id="items-list" class="items-list"></div>
+
+              <div id="scan-progress" class="progress-container">
+                <div class="progress-bar">
+                  <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <div id="progress-text" class="progress-text">0 / 0 items scanned</div>
+              </div>
+
+              <button id="complete-delivery-btn" class="btn btn-success btn-large" style="display:none;">
+                ✅ Complete Delivery
+              </button>
+              <button id="reset-scan-btn" class="btn btn-warning">
+                🔄 Start Over
+              </button>
+            </div>
+
+            <!-- Step 3: done -->
+            <div id="step-complete" class="scan-step">
+              <div class="step-header">
+                <h3>✅ Delivery Completed</h3>
+              </div>
+              <div id="completion-result" class="result-message"></div>
+              <button id="new-delivery-btn" class="btn btn-primary btn-large">
+                🚚 New Delivery
+              </button>
+            </div>
+
+            <!-- Footer -->
+            <div class="shipper-footer">
+              <button id="show-history-btn" class="btn btn-link">📋 View History</button>
+              <button id="help-btn" class="btn btn-link">❓ Help</button>
+            </div>
+
+            <!-- History Modal -->
+            <div id="history-modal" class="modal">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h3>📋 Scan History</h3>
+                  <span class="close">×</span>
+                </div>
+                <div id="history-content" class="modal-body">
+                  Loading...
+                </div>
+              </div>
+            </div>
+
+            <!-- Help Modal -->
+            <div id="help-modal" class="modal">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h3>❓ How to Use</h3>
+                  <span class="close">×</span>
+                </div>
+                <div class="modal-body">
+                  <ol>
+                    <li>Scan <strong>PICK</strong> barcode để tìm phiếu OUT.</li>
+                    <li>Scan từng kiện <strong>PACK</strong> hoặc barcode sản phẩm.</li>
+                    <li>Khi đủ, nút <strong>Complete Delivery</strong> sẽ hiện.</li>
+                    <li>Có thể scan lại PICK để hoàn tất thay vì bấm nút.</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <script src="/hlv_barcode_shipper/static/src/js/barcode_scanner.js"></script>
+      </t>
+    </template>
+  </data>
+</odoo>
