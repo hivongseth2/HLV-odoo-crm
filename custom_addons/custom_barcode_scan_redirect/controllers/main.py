@@ -626,6 +626,7 @@ class CustomBarcodeScanController(http.Controller):
         """
         picking_id = kwargs.get("picking_id")
         move_line_data = kwargs.get("move_line_data", [])
+        package_barcode = kwargs.get('package_barcode')
         
         _logger.info(f"CREATE_PARTIAL_PACK: picking_id={picking_id}, items={len(move_line_data)}")
         
@@ -636,7 +637,7 @@ class CustomBarcodeScanController(http.Controller):
         
         try:
             # Tạo gói hàng (package)
-            result = picking.create_partial_pack(move_line_data)
+            result = picking.create_partial_pack(move_line_data, package_name=package_barcode)
             _logger.info(f"CREATE_PARTIAL_PACK: Success! New package: {result['package_name']} (ID: {result['package_id']})")
             return {
                 "success": True,

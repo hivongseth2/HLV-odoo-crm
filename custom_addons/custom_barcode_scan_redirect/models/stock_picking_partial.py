@@ -26,7 +26,7 @@ class StockPickingPartial(models.Model):
         help="True nếu picking đã được partial pack (hoàn tất một phần)"
     )
 
-    def create_partial_pack(self, move_line_data):
+    def create_partial_pack(self, move_line_data, package_name=None):
         """
         Tạo gói hàng (package) từ các move_line hoàn tất
         move_line_data: [
@@ -40,31 +40,52 @@ class StockPickingPartial(models.Model):
         if self.state not in ['assigned', 'confirmed', 'in_progress']:
             raise ValidationError("Chỉ có thể tạo gói từ các phiếu đã xác nhận hoặc đang làm!")
         
-        # Tạo package mới (stock.quant.package) với tên từ sequence
+        # Tạo package mới (stock.quant.package) với tên từ sequence hoặc tên cung cấp
         Package = self.env['stock.quant.package']
-        
-        # Lấy tên package từ ir.sequence hoặc tạo tên mặc định
-        try:
-            package_name = self.env['ir.sequence'].next_by_code('stock.quant.package')
-        except:
-            # Fallback: nếu sequence không tồn tại, dùng định dạng PACK + số
-            count = Package.search_count([])
-            package_name = f"PACK{count + 1:07d}"
-        
-        new_package = Package.create({
-            'name': package_name,
-        })
-        
-        # Cập nhật result_package_id cho các move_line hoàn tất
+
+        # nếu caller truyền package_name (ví dụ scan mã kiện), dùng nó; ngược lại try sequence
+        if package_name:
+            pkg_name = package_name
+        else:
+            try:
+                pkg_name = self.env['ir.sequence'].next_by_code('stock.quant.package')
+            except Exception:
+                count = Package.search_count([])
+                pkg_name = f"PACK{count + 1:07d}"
+
+        new_package = Package.create({'name': pkg_name})
+
+        # Xử lý từng move_line: tạo move_line mới cho phần được pack (qty),
+        # giảm qty_done trên move_line nguồn để giữ phần còn lại cho các pack tiếp theo.
         for data in move_line_data:
             move_line_id = data.get('move_line_id')
-            
+            qty = float(data.get('qty', 0) or 0)
+
             move_line = self.env['stock.move.line'].sudo().browse(move_line_id)
-            if not move_line.exists():
+            if not move_line.exists() or qty <= 0:
                 continue
-            
-            # Gán package cho move_line này
-            move_line.result_package_id = new_package.id
+
+            # Nếu source move_line có đủ qty_done để tách
+            src_done = float(move_line.qty_done or 0.0)
+            take_qty = min(qty, src_done)
+
+            if take_qty <= 0:
+                # không còn qty_done trên dòng nguồn; skip
+                continue
+
+            # Nếu take_qty == src_done: có thể gán trực tiếp move_line vào package
+            if abs(take_qty - src_done) < 1e-6 and not move_line.result_package_id:
+                move_line.sudo().write({'result_package_id': new_package.id})
+            else:
+                # Tạo copy move_line cho package với qty = take_qty
+                move_line.sudo().copy({
+                    'qty_done': take_qty,
+                    'result_package_id': new_package.id,
+                })
+
+                # Giảm qty_done trên dòng nguồn
+                remaining = src_done - take_qty
+                move_line.sudo().write({'qty_done': remaining})
         
         return {
             'package_id': new_package.id,
