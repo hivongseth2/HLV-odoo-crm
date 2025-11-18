@@ -158,7 +158,8 @@
             </t>
         </template>
         
-        <!-- Stock Picking Form View Extension -->
+        <!-- Stock Picking Form View Extension - Temporarily commented out for debugging -->
+        <!--
         <record id="stock_picking_form_shipper" model="ir.ui.view">
             <field name="name">stock.picking.form.shipper</field>
             <field name="model">stock.picking</field>
@@ -192,8 +193,10 @@
                 </xpath>
             </field>
         </record>
+        -->
         
-        <!-- Stock Package Level Form View Extension -->
+        <!-- Stock Package Level Form View Extension - Temporarily commented out for debugging -->
+        <!--
         <record id="stock_package_level_form_shipper" model="ir.ui.view">
             <field name="name">stock.package.level.form.shipper</field>
             <field name="model">stock.package_level</field>
@@ -206,8 +209,10 @@
                 </xpath>
             </field>
         </record>
+        -->
         
-        <!-- Stock Move Line Tree View Extension -->
+        <!-- Stock Move Line Tree View Extension - Temporarily commented out for debugging -->
+        <!--
         <record id="stock_move_line_tree_shipper" model="ir.ui.view">
             <field name="name">stock.move.line.tree.shipper</field>
             <field name="model">stock.move.line</field>
@@ -220,6 +225,7 @@
                 </xpath>
             </field>
         </record>
+        -->
         
     </data>
 </odoo>
