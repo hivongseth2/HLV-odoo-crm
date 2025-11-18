@@ -43,15 +43,12 @@ class StockPickingPartial(models.Model):
         # Tạo package mới (stock.quant.package) với tên từ sequence hoặc tên cung cấp
         Package = self.env['stock.quant.package']
 
-        # nếu caller truyền package_name (ví dụ scan mã kiện), dùng nó; ngược lại try sequence
-        if package_name:
-            pkg_name = package_name
-        else:
-            try:
-                pkg_name = self.env['ir.sequence'].next_by_code('stock.quant.package')
-            except Exception:
-                count = Package.search_count([])
-                pkg_name = f"PACK{count + 1:07d}"
+        # Luôn dùng tên từ sequence, bỏ qua AUTO-PKG hoặc bất kỳ tên truyền từ JS
+        try:
+            pkg_name = self.env['ir.sequence'].next_by_code('stock.quant.package')
+        except Exception:
+            count = Package.search_count([])
+            pkg_name = f"PACK{count + 1:07d}"
 
         new_package = Package.create({'name': pkg_name})
 
