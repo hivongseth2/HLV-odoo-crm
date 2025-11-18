@@ -201,7 +201,7 @@
             Hủy
           </button>
           <button onclick="splitPackageFromModal()" class="pkg-btn pkg-btn-warning">
-            Tách gói
+            Tách đơn
           </button>
           <button onclick="savePackageChanges()" class="pkg-btn pkg-btn-primary">
             Lưu thay đổi
