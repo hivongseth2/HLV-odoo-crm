@@ -161,12 +161,6 @@ document.addEventListener("DOMContentLoaded", function () {
     input.value = "";
   });
 
-  // function isProductBarcode(barcode) {
-  //   const exists = [...document.querySelectorAll('[data-barcode]')]
-  //     .some(el => normalizeCode(el.dataset.barcode) === normalizeCode(barcode));
-  //   return exists;
-  // }
-
   async function handlePackageBarcode(packageBarcode) {
     const items = document.querySelectorAll("#product_list .product-item");
     const completedItems = [];
@@ -320,12 +314,10 @@ document.addEventListener("DOMContentLoaded", function () {
   diag();
   setTimeout(startRecording, 400);
 });
-// ======
 
-
+// ====== Upload Session Management ======
 let uploadId = null;
 let chunkIndex = 0;
-// let chunkBusy = Promise.resolve();
 let finishing = false;
 
 async function startServerUploadSession() {
@@ -356,13 +348,12 @@ async function finishServerUploadSession() {
   finishing = true;
 
   try { await chunkBusy; } catch { }
-  if (!uploadId) return;  // chưa start thì bỏ qua
+  if (!uploadId) return;
 
   try {
     await fetch('/pack_scan/finish_upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      // keepalive để vẫn gửi khi tab đóng
       keepalive: true,
       body: JSON.stringify({ upload_id: uploadId, picking_id: pickingId })
     });
@@ -371,8 +362,7 @@ async function finishServerUploadSession() {
   }
 }
 
-// ====== Recording module ======
-// ====== Recording module (đổi toàn bộ block này) ======
+// ====== Recording Module ======
 let mediaStream = null;
 let mediaRecorder = null;
 let isRecording = false;
@@ -397,7 +387,6 @@ async function startRecording() {
   const preview = document.getElementById('recPreview');
   if (!statusText || !preview) return;
 
-  // 1) getUserMedia (ưu tiên có audio, fail thì tắt audio)
   const constraints = {
     video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 24 } },
     audio: { echoCancellation: true, noiseSuppression: true }
@@ -411,7 +400,6 @@ async function startRecording() {
     return;
   }
 
-  // 2) Chuẩn bị canvas overlay & vẽ NGAY (tránh màn hình đen)
   const vTrack = mediaStream.getVideoTracks()[0];
   const s = vTrack.getSettings ? vTrack.getSettings() : {};
   const W = s.width || 1280, H = s.height || 720;
@@ -427,7 +415,6 @@ async function startRecording() {
   rawVideo.autoplay = true;
   try { await rawVideo.play(); } catch { }
 
-  // set end time & bắt đầu đếm ngược ngay
   endAt = Date.now() + MAX_DURATION_MS;
   updateCountdownLabel();
   clearInterval(countdownTimer);
@@ -436,8 +423,6 @@ async function startRecording() {
   function drawOverlay() {
     if (!overlayCtx) return;
     overlayCtx.drawImage(rawVideo, 0, 0, W, H);
-
-    // dải nền + text
     overlayCtx.fillStyle = 'rgba(0,0,0,0.5)';
     overlayCtx.fillRect(0, H - 52, W, 52);
 
@@ -451,9 +436,8 @@ async function startRecording() {
 
     drawRAF = requestAnimationFrame(drawOverlay);
   }
-  drawOverlay(); // ← vẽ ngay để preview có khung hình
+  drawOverlay();
 
-  // 3) stream từ canvas + audio để preview & ghi
   const canvasStream = overlayCanvas.captureStream(24);
   const tracks = [canvasStream.getVideoTracks()[0]];
   const a = mediaStream.getAudioTracks()[0];
@@ -463,10 +447,8 @@ async function startRecording() {
   preview.srcObject = mixedStream;
   try { await preview.play(); } catch { }
 
-  // 4) khởi tạo phiên upload
   await startServerUploadSession();
 
-  // 5) MediaRecorder
   let mimeType = '';
   if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) mimeType = 'video/webm;codecs=vp9,opus';
   else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) mimeType = 'video/webm;codecs=vp8,opus';
@@ -504,7 +486,7 @@ async function startRecording() {
   };
 
   try {
-    mediaRecorder.start(5000); // chia chunk 5s
+    mediaRecorder.start(5000);
   } catch (err) {
     console.error('[REC] mediaRecorder.start failed:', err);
     statusText.textContent = 'Không thể bắt đầu ghi hình.';
@@ -513,56 +495,6 @@ async function startRecording() {
 
 function stopRecording() {
   if (mediaRecorder && isRecording) { try { mediaRecorder.stop(); } catch { } }
-}
-
-
-async function uploadRecording() {
-  if (!recordedChunks.length) return;
-  const blob = new Blob(recordedChunks, { type: recordedChunks[0].type || 'video/webm' });
-  const fileName = `PACK_${parseInt(window.location.pathname.split("/").pop())}_${Date.now()}.webm`;
-
-  if (blob.size > 24 * 1024 * 1024) {
-    console.warn('[REC] blob ~', (blob.size / 1024 / 1024).toFixed(1), 'MB');
-  }
-
-  const formData = new FormData();
-  formData.append('file', blob, fileName);
-  formData.append('picking_id', String(parseInt(window.location.pathname.split("/").pop())));
-
-  try {
-    const resp = await fetch('/pack_scan/upload_video', {
-      method: 'POST',
-      body: formData,
-      credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    });
-    const txt = await resp.text().catch(() => '');
-    if (!resp.ok) {
-      if (resp.status === 413) toast.error('Video quá lớn (413). Hãy quay ngắn hơn/hạ chất lượng.', { ms: 4000 });
-      else toast.error(`Tải video lên thất bại (${resp.status}). ${txt || ''}`, { ms: 4000 });
-    } else {
-      toast.success('Đã tải video lên.', { ms: 1800 });
-    }
-
-  } catch (e) {
-    console.error('[REC] upload error:', e);
-    // alert('Không thể tải video lên. Kiểm tra mạng.');
-    toast.error('Không thể tải video lên. Kiểm tra mạng.', { ms: 3500 });
-
-  } finally {
-    recordedChunks = [];
-  }
-}
-
-function attachRetryButton() {
-  if (document.getElementById('recRetryBtn')) return;
-  const btn = document.createElement('button');
-  btn.id = 'recRetryBtn';
-  btn.textContent = '🔁 Thử bật camera lại';
-  btn.style.marginLeft = '8px';
-  btn.addEventListener('click', startRecording);
-  const recText = document.getElementById('recText');
-  recText?.parentNode?.insertBefore(btn, recText.nextSibling);
 }
 
 async function diag() {
@@ -580,8 +512,7 @@ async function diag() {
 
 window.addEventListener('beforeunload', () => { try { mediaRecorder && mediaRecorder.stop(); } catch { } });
 
-// ===================== PARTIAL PACK MANAGEMENT =====================
-// Hàm tạo modal dialog
+// ===================== UTILITIES =====================
 function createModal(title, content, buttons = []) {
   const modal = document.createElement('div');
   modal.className = 'modal-overlay';
@@ -639,33 +570,12 @@ function createModal(title, content, buttons = []) {
   return modal;
 }
 
-// In nhãn
-document.getElementById('btnPrintLabel')?.addEventListener('click', async function() {
-  const res = await fetch('/pack_scan/print_label', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'call',
-      params: { picking_id: pickingId }
-    })
-  });
-  const response = await res.json();
-  const result = response.result || response;
-  
-  if (result?.success) {
-    toast.success(result.message, { ms: 1500 });
-    window.open(result.report_url, '_blank');
-  } else {
-    toast.error(result?.error || 'Không thể in nhãn', { ms: 2000 });
-  }
-});
-
-// Action buttons cho sibling packs
+// ===================== SIBLING PACK ACTIONS (COMMENTED OUT SPLIT FUNCTIONALITY) =====================
 document.addEventListener('click', async function(e) {
   const unpackBtn = e.target.closest('.btn-unpack');
   const editBtn = e.target.closest('.btn-edit');
-  const transferBtn = e.target.closest('.btn-transfer');
+  // COMMENTED OUT: Transfer button for splitting package into separate picking
+  // const transferBtn = e.target.closest('.btn-transfer');
   
   if (unpackBtn) {
     const packId = parseInt(unpackBtn.dataset.packId);
@@ -693,33 +603,26 @@ document.addEventListener('click', async function(e) {
   
   if (editBtn) {
     const packId = parseInt(editBtn.dataset.packId);
-    // Mở trang edit của pack đó
     window.location.href = `/custom_barcode_scan/pack_view/${packId}`;
   }
   
-  if (transferBtn) {
-    const sourcePack = parseInt(transferBtn.dataset.packId);
-    const targetPack = pickingId;
-    
-    createModal(
-      '↔️ Chuyển sản phẩm',
-      'Tính năng chuyển sản phẩm giữa các pack. Chọn sản phẩm để chuyển.',
-      [
-        {
-          label: 'Hủy',
-          color: '#999',
-          onclick: () => {}
-        },
-        {
-          label: 'Chuyển',
-          color: '#ffa500',
-          onclick: async () => {
-            toast.info('Tính năng này sẽ được hoàn thiện trong phiên bản tiếp theo', { ms: 2000 });
-          }
-        }
-      ]
-    );
-  }
+  // COMMENTED OUT: Transfer functionality between sibling packs (tách đơn)
+  // if (transferBtn) {
+  //   const sourcePack = parseInt(transferBtn.dataset.packId);
+  //   const targetPack = pickingId;
+  //   
+  //   createModal(
+  //     '↔️ Chuyển sản phẩm',
+  //     'Tính năng chuyển sản phẩm giữa các pack. Chọn sản phẩm để chuyển.',
+  //     [
+  //       { label: 'Hủy', color: '#999', onclick: () => {} },
+  //       { label: 'Chuyển', color: '#ffa500', onclick: async () => {
+  //           toast.info('Tính năng này sẽ được hoàn thiện trong phiên bản tiếp theo', { ms: 2000 });
+  //         }
+  //       }
+  //     ]
+  //   );
+  // }
 });
 
 // ===================== PACKAGE EDIT MODAL FUNCTIONS =====================
@@ -753,13 +656,11 @@ async function openPackageEditModal(event) {
     currentPackageData = result;
     document.getElementById('modalPackageName').innerText = result.package_name;
     
-    // Update item count badge
     const itemCountBadge = document.getElementById('itemCountBadge');
     if (itemCountBadge) {
       itemCountBadge.innerText = result.items.length;
     }
     
-    // Render items list
     const itemsList = document.getElementById('packageItemsList');
     itemsList.innerHTML = '';
     
@@ -771,58 +672,77 @@ async function openPackageEditModal(event) {
         </div>
       `;
     } else {
-        // Deduplicate items by move_line_id in case server returns duplicates
-        const uniqueById = {};
-        result.items.forEach(it => { uniqueById[String(it.move_line_id)] = it; });
-        const uniqueItems = Object.values(uniqueById);
+      // Deduplicate items by move_line_id
+      const uniqueById = {};
+      result.items.forEach(it => { 
+        const key = String(it.move_line_id);
+        if (!uniqueById[key]) {
+          uniqueById[key] = it;
+        }
+      });
+      const uniqueItems = Object.values(uniqueById);
 
-        uniqueItems.forEach(item => {
-          const li = document.createElement('div');
-          li.className = 'pkg-item-row';
-          li.innerHTML = `
-            <div class="pkg-item-info">
-              <span class="pkg-item-name">${item.product_name}</span>
-              <span class="pkg-item-sku">${item.product_sku || 'N/A'}</span>
-            </div>
-            <div class="pkg-item-qty-section">
-              <button class="pkg-item-qty-btn btn-qty-decrease" data-move-line-id="${item.move_line_id}">−</button>
-              <div class="pkg-item-qty-display" data-move-line-id="${item.move_line_id}" data-old-qty="${item.qty_done}">${item.qty_done}</div>
-              <button class="pkg-item-qty-btn btn-qty-increase" data-move-line-id="${item.move_line_id}">+</button>
-            </div>
-            <div class="pkg-item-actions">
-              <button class="pkg-item-remove" data-move-line-id="${item.move_line_id}" title="Xóa khỏi gói">×</button>
-              <button class="pkg-item-transfer" data-move-line-id="${item.move_line_id}" title="Chuyển sang gói khác">Chuyển</button>
-            </div>
-          `;
+      uniqueItems.forEach(item => {
+        const li = document.createElement('div');
+        li.className = 'pkg-item-row';
+        li.setAttribute('data-move-line-id', item.move_line_id);
+        li.innerHTML = `
+          <div class="pkg-item-info">
+            <span class="pkg-item-name">${item.product_name}</span>
+            <span class="pkg-item-sku">${item.product_sku || 'N/A'}</span>
+          </div>
+          <div class="pkg-item-qty-section">
+            <button class="pkg-item-qty-btn btn-qty-decrease" data-move-line-id="${item.move_line_id}">−</button>
+            <div class="pkg-item-qty-display" data-move-line-id="${item.move_line_id}" data-old-qty="${item.qty_done}">${item.qty_done}</div>
+            <button class="pkg-item-qty-btn btn-qty-increase" data-move-line-id="${item.move_line_id}">+</button>
+          </div>
+          <div class="pkg-item-actions">
+            <button class="pkg-item-remove" data-move-line-id="${item.move_line_id}" title="Xóa khỏi gói">×</button>
+            <button class="pkg-item-transfer" data-move-line-id="${item.move_line_id}" title="Chuyển sang gói khác">↔</button>
+          </div>
+        `;
 
-          // Qty control buttons
-          li.querySelector('.btn-qty-decrease').addEventListener('click', async () => {
-            const cur = parseFloat(li.querySelector('.pkg-item-qty-display').innerText) || 0;
-            const newQty = Math.max(0, cur - 1);
-            await updatePackageItemQtyUI(item.move_line_id, newQty, li);
-          });
-
-          li.querySelector('.btn-qty-increase').addEventListener('click', async () => {
-            const cur = parseFloat(li.querySelector('.pkg-item-qty-display').innerText) || 0;
-            const newQty = cur + 1;
-            await updatePackageItemQtyUI(item.move_line_id, newQty, li);
-          });
-
-          // Remove button handler
-          li.querySelector('.pkg-item-remove').addEventListener('click', async () => {
-            if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
-              await removePackageItem(item.move_line_id);
-            }
-          });
-
-          // Transfer button handler
-          li.querySelector('.pkg-item-transfer').addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            openTransferModalForItem(item.move_line_id, item.qty_done, item.product_name);
-          });
-
-          itemsList.appendChild(li);
+        // Qty decrease button
+        li.querySelector('.btn-qty-decrease').addEventListener('click', () => {
+          const display = li.querySelector('.pkg-item-qty-display');
+          const cur = parseFloat(display.innerText) || 0;
+          const newQty = Math.max(0, cur - 1);
+          display.innerText = String(newQty);
+          if (currentPackageData && Array.isArray(currentPackageData.items)) {
+            const foundItem = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
+            if (foundItem) foundItem.qty_done = newQty;
+          }
         });
+
+        // Qty increase button
+        li.querySelector('.btn-qty-increase').addEventListener('click', () => {
+          const display = li.querySelector('.pkg-item-qty-display');
+          const cur = parseFloat(display.innerText) || 0;
+          const newQty = cur + 1;
+          display.innerText = String(newQty);
+          if (currentPackageData && Array.isArray(currentPackageData.items)) {
+            const foundItem = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
+            if (foundItem) foundItem.qty_done = newQty;
+          }
+        });
+
+        // Remove button
+        li.querySelector('.pkg-item-remove').addEventListener('click', async () => {
+          if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
+            await removePackageItem(item.move_line_id);
+          }
+        });
+
+        // Transfer button - chuyển sản phẩm sang pack khác
+        li.querySelector('.pkg-item-transfer').addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const display = li.querySelector('.pkg-item-qty-display');
+          const currentQty = parseFloat(display.innerText) || item.qty_done;
+          openTransferModalForItem(item.move_line_id, currentQty, item.product_name);
+        });
+
+        itemsList.appendChild(li);
+      });
     }
     
     // Populate add item select
@@ -838,7 +758,7 @@ async function openPackageEditModal(event) {
       });
     }
     
-    // Show modal with animation
+    // Show modal
     const modal = document.getElementById('packageEditModal');
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
@@ -853,19 +773,6 @@ function closePackageEditModal() {
   modal.classList.remove('active');
   document.body.style.overflow = 'auto';
   currentPackageData = null;
-}
-
-async function updatePackageItemQtyUI(moveLineId, newQty, liElement) {
-  const display = liElement.querySelector(`[data-move-line-id="${moveLineId}"].pkg-item-qty-display`);
-  if (display) {
-    display.innerText = String(newQty);
-    // update old-qty marker used to detect changes
-    display.dataset.oldQty = String(newQty);
-    if (currentPackageData && Array.isArray(currentPackageData.items)) {
-      const item = currentPackageData.items.find(i => Number(i.move_line_id) === Number(moveLineId));
-      if (item) item.qty_done = newQty;
-    }
-  }
 }
 
 async function removePackageItem(moveLineId) {
@@ -895,7 +802,6 @@ async function removePackageItem(moveLineId) {
     }
     
     toast.success("Đã xoá sản phẩm!", { ms: 1500 });
-    // Reload modal to refresh
     openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
     
   } catch (err) {
@@ -940,7 +846,6 @@ async function addItemToPackage() {
     toast.success(result.message, { ms: 1500 });
     document.getElementById('addItemSelect').value = '';
     document.getElementById('addItemQty').value = '1';
-    // Reload modal
     openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
     
   } catch (err) {
@@ -958,16 +863,9 @@ async function savePackageChanges() {
   for (let display of displayElements) {
     const moveLineId = parseInt(display.dataset.moveLineId);
     const newQty = parseFloat(display.innerText);
+    const oldQty = parseFloat(display.dataset.oldQty);
     
-    // Tìm qty cũ: ưu tiên dùng data-old-qty (được gán khi render hoặc khi thay đổi)
-    let oldQty = null;
-    if (display.dataset.oldQty !== undefined) {
-      oldQty = parseFloat(display.dataset.oldQty);
-    } else if (currentPackageData && Array.isArray(currentPackageData.items)) {
-      oldQty = currentPackageData.items.find(i => Number(i.move_line_id) === Number(moveLineId))?.qty_done;
-    }
-
-    if (Number(newQty) !== Number(oldQty)) {
+    if (!isNaN(newQty) && !isNaN(oldQty) && newQty !== oldQty) {
       hasChanges = true;
       changes.push({ moveLineId, newQty });
     }
@@ -978,7 +876,7 @@ async function savePackageChanges() {
     return;
   }
   
-  // Gửi tất cả thay đổi
+  // Send all changes
   for (let change of changes) {
     try {
       const res = await fetch("/pack_scan/update_package_item_qty", {
@@ -1014,15 +912,13 @@ async function savePackageChanges() {
   setTimeout(() => window.location.reload(), 1500);
 }
 
-async function splitPackageFromModal() {
-  // Split package feature is temporarily disabled.
-  console.warn('splitPackageFromModal is disabled.');
-  toast.info('Tách gói tạm thời chưa khả dụng.', { ms: 2000 });
-}
+// COMMENTED OUT: Split package functionality (tách gói thành đơn riêng)
+// async function splitPackageFromModal() {
+//   console.warn('splitPackageFromModal is disabled - feature under development');
+//   toast.info('Tách gói tạm thời chưa khả dụng.', { ms: 2000 });
+// }
 
-// Open modal to transfer item (or qty) to another pack
 function openTransferModalForItem(moveLineId, currentQty, productName) {
-  // We expect currentPackageData.other_packs to be an array of { package_id, package_name }
   const packs = (currentPackageData && currentPackageData.other_packs) || [];
   if (!packs.length) {
     toast.warn('Không có gói mục tiêu để chuyển. Vui lòng tạo gói khác trước.');
@@ -1031,35 +927,61 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
 
   const content = document.createElement('div');
   content.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:8px;">
-      <div><strong>Sản phẩm:</strong> ${productName}</div>
-      <label>Gói đích:</label>
-      <select id="transferTargetSelect" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:6px;">
-        ${packs.map(p => `<option value="${p.package_id}">${p.package_name}</option>`).join('')}
-      </select>
-      <label>Số lượng chuyển (tối đa ${currentQty}):</label>
-      <input id="transferQtyInput" type="number" min="1" max="${currentQty}" value="${Math.min(1, currentQty)}" style="padding:6px;border:1px solid #ddd;border-radius:6px;" />
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="padding:10px;background:#f0f9ff;border-radius:6px;border-left:3px solid #0ea5e9;">
+        <strong>Sản phẩm:</strong> ${productName}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="font-weight:600;color:#374151;">Chọn gói đích:</label>
+        <select id="transferTargetSelect" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+          ${packs.map(p => `<option value="${p.package_id}">${p.package_name}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="font-weight:600;color:#374151;">Số lượng chuyển (tối đa ${currentQty}):</label>
+        <input id="transferQtyInput" type="number" min="1" max="${currentQty}" value="${Math.min(1, currentQty)}" 
+          style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;" />
+      </div>
     </div>
   `;
 
-  createModal('Chuyển sản phẩm sang gói khác', content, [
-    { label: 'Hủy', color: '#999', onclick: () => {} },
-    { label: 'Chuyển', color: '#0b74de', onclick: async () => {
+  createModal('↔️ Chuyển sản phẩm sang gói khác', content, [
+    { label: 'Hủy', color: '#6b7280', onclick: () => {} },
+    { label: 'Chuyển', color: '#0ea5e9', onclick: async () => {
         const targetPack = document.getElementById('transferTargetSelect').value;
         const qty = parseFloat(document.getElementById('transferQtyInput').value);
-        if (!targetPack || !qty || qty <= 0) { toast.warn('Vui lòng chọn gói đích và số lượng hợp lệ'); return; }
+        if (!targetPack || !qty || qty <= 0) { 
+          toast.warn('Vui lòng chọn gói đích và số lượng hợp lệ'); 
+          return; 
+        }
+        if (qty > currentQty) {
+          toast.warn(`Số lượng không được vượt quá ${currentQty}`);
+          return;
+        }
         try {
           const pickingId = parseInt(window.location.pathname.split("/").pop());
           const res = await fetch('/pack_scan/transfer_item_between_packs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ jsonrpc: '2.0', method: 'call', params: { picking_id: pickingId, source_package_id: currentPackageData.package_id, target_package_id: parseInt(targetPack), move_line_id: parseInt(moveLineId), qty: qty } })
+            body: JSON.stringify({ 
+              jsonrpc: '2.0', 
+              method: 'call', 
+              params: { 
+                picking_id: pickingId, 
+                source_package_id: currentPackageData.package_id, 
+                target_package_id: parseInt(targetPack), 
+                move_line_id: parseInt(moveLineId), 
+                qty: qty 
+              } 
+            })
           });
           const response = await res.json();
           const result = response.result || response;
-          if (result?.error) { toast.error(result.error); return; }
-          toast.success(result.message || 'Đã chuyển!', { ms: 1500 });
-          // reload modal to refresh contents
+          if (result?.error) { 
+            toast.error(result.error); 
+            return; 
+          }
+          toast.success(result.message || 'Đã chuyển sản phẩm!', { ms: 1500 });
           openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
         } catch (err) {
           toast.error('Lỗi kết nối: ' + err.message);
@@ -1073,9 +995,6 @@ function togglePanelVisibility(button) {
   const panel = button.closest('.pack-side-panel');
   if (!panel) return;
   
-  // Toggle collapsed state
   const isCollapsed = panel.classList.toggle('collapsed');
-  
-  // Update button text
   button.textContent = isCollapsed ? 'Hiện' : 'Ẩn';
 }
