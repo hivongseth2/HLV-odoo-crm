@@ -200,9 +200,8 @@
           <button onclick="closePackageEditModal()" class="pkg-btn pkg-btn-secondary">
             Hủy
           </button>
-          <button onclick="splitPackageFromModal()" class="pkg-btn pkg-btn-warning">
-            Tách đơn
-          </button>
+          <!-- Tách đơn tạm thời disable (chức năng chưa dùng) -->
+          <!-- <button onclick="splitPackageFromModal()" class="pkg-btn pkg-btn-warning">Tách đơn</button> -->
           <button onclick="savePackageChanges()" class="pkg-btn pkg-btn-primary">
             Lưu thay đổi
           </button>
