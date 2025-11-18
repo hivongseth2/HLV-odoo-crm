@@ -1,0 +1,16 @@
+<!-- hlv_barcode_shipper/security/hlv_barcode_shipper_security.xml -->
+<odoo>
+    <data noupdate="1">
+        <!-- Groups -->
+        <record id="group_shipper" model="res.groups">
+            <field name="name">Shipper</field>
+            <field name="category_id" ref="base.module_category_inventory"/>
+        </record>
+
+        <record id="group_shipper_manager" model="res.groups">
+            <field name="name">Shipper Manager</field>
+            <field name="category_id" ref="base.module_category_inventory"/>
+            <field name="implied_ids" eval="[(4, ref('group_shipper'))]"/>
+        </record>
+    </data>
+</odoo>
