@@ -345,8 +345,24 @@ class BarcodeShipper {
             body: JSON.stringify(data),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
+
+        const json = await res.json();
+
+        // Odoo type="json" → bọc trong { jsonrpc, id, result }
+        if (json && typeof json === 'object') {
+            if (Object.prototype.hasOwnProperty.call(json, 'result')) {
+                return json.result;
+            }
+            if (Object.prototype.hasOwnProperty.call(json, 'error')) {
+                // phòng khi sau này backend dùng error của jsonrpc
+                throw new Error(json.error.message || 'JSON-RPC error');
+            }
+        }
+
+        // fallback: nếu sau này đổi sang type="http" trả json thuần
+        return json;
     }
+
 }
 
 // Auto-init
