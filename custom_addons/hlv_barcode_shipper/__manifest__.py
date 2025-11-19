@@ -15,7 +15,7 @@
         "security/ir.model.access.csv",
         "views/barcode_scan_log_views.xml",
         "views/stock_picking_views.xml",
-        "views/barcode_shipper_templates.xml",
+        "views/barcode_shipper_views.xml",
     ],
     "assets": {
         "web.assets_frontend": [
