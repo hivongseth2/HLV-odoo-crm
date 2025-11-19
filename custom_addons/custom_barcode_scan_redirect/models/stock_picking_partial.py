@@ -279,6 +279,7 @@ class StockPickingPartial(models.Model):
                 })
 
         # ⭐ Bước 6: Lấy all_items - sản phẩm có thể thêm vào package
+        # ⭐ Bước 6: Lấy all_items - sản phẩm có thể thêm vào package
         all_items = []
         product_map = {}
 
@@ -340,6 +341,7 @@ class StockPickingPartial(models.Model):
                 if ml_id:
                     all_items.append({
                         'move_line_id': ml_id,
+                        'product_id': pid, # Thêm product_id
                         'product_name': data['product_name'],
                         'qty_available': qty_available
                     })
