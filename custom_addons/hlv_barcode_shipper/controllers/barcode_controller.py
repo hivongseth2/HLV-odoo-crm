@@ -33,6 +33,147 @@ class BarcodeShipperController(http.Controller):
         except Exception as e:
             _logger.warning("Failed to log scan: %s", e)
 
+    # ===== Helper: tìm OUT từ PICK – KHÔNG ở model, chỉ ở controller =====
+    def _find_out_picking_by_pick_name(self, pick_name):
+        Picking = request.env["stock.picking"].sudo()
+
+        # 1) tìm phiếu PICK (nội bộ)
+        pick = Picking.search(
+            [
+                ("name", "=", pick_name),
+                ("picking_type_id.code", "=", "internal"),
+            ],
+            limit=1,
+        )
+        if not pick:
+            # fallback ilike
+            pick = Picking.search(
+                [
+                    ("name", "ilike", pick_name),
+                    ("picking_type_id.code", "=", "internal"),
+                ],
+                limit=1,
+            )
+
+        if not pick:
+            raise UserError(f"PICK order {pick_name} not found")
+
+        # 2) tìm phiếu OUT cùng group/origin/sale
+        out = False
+        if pick.group_id:
+            out = Picking.search(
+                [
+                    ("group_id", "=", pick.group_id.id),
+                    ("picking_type_id.code", "=", "outgoing"),
+                    ("state", "in", ["assigned", "partially_available"]),
+                ],
+                limit=1,
+            )
+
+        if not out and pick.origin:
+            out = Picking.search(
+                [
+                    ("origin", "=", pick.origin),
+                    ("picking_type_id.code", "=", "outgoing"),
+                    ("state", "in", ["assigned", "partially_available"]),
+                ],
+                limit=1,
+            )
+
+        if not out and pick.sale_id:
+            out = Picking.search(
+                [
+                    ("sale_id", "=", pick.sale_id.id),
+                    ("picking_type_id.code", "=", "outgoing"),
+                    ("state", "in", ["assigned", "partially_available"]),
+                ],
+                limit=1,
+            )
+
+        if not out:
+            raise UserError(f"No related OUT order found for PICK {pick_name}")
+
+        return out
+
+    def _get_packages_info(self, picking):
+        """
+        Đọc danh sách kiện / sản phẩm từ phiếu OUT.
+        KHÔNG sửa dữ liệu, KHÔNG thêm field.
+        """
+        items = []
+
+        # Nếu có package_level -> lấy PACK
+        if picking.package_level_ids:
+            for pl in picking.package_level_ids:
+                if not pl.package_id:
+                    continue
+                items.append(
+                    {
+                        "type": "package",
+                        "id": pl.id,
+                        "name": pl.package_id.name,
+                        "barcode": pl.package_id.name,  # dùng name làm barcode kiện
+                        "qty": pl.move_line_ids and sum(pl.move_line_ids.mapped("quantity")) or 0,
+                    }
+                )
+        else:
+            # Không có PACK -> dùng move_line
+            for ml in picking.move_line_ids:
+                items.append(
+                    {
+                        "type": "product",
+                        "id": ml.id,
+                        "name": ml.product_id.display_name,
+                        "barcode": ml.product_id.barcode
+                        or ml.product_id.default_code
+                        or "",
+                        "qty": ml.quantity,
+                    }
+                )
+
+        return items
+
+    def _scan_package_in_picking(self, picking, barcode):
+        """
+        Kiểm tra barcode có nằm trong picking không.
+        Không ghi DB, chỉ trả kết quả để JS xử lý.
+        """
+        barcode = (barcode or "").strip()
+        if not barcode:
+            return {"success": False, "error": "Empty barcode"}
+
+        # Ưu tiên PACK (package_level)
+        for pl in picking.package_level_ids:
+            if pl.package_id and pl.package_id.name == barcode:
+                return {
+                    "success": True,
+                    "type": "package",
+                    "name": pl.package_id.name,
+                    "message": f"Package {barcode} found",
+                }
+
+        # Product barcode / default_code
+        lines = picking.move_line_ids.filtered(
+            lambda ml: ml.product_id
+            and (
+                (ml.product_id.barcode and ml.product_id.barcode == barcode)
+                or (ml.product_id.default_code and ml.product_id.default_code == barcode)
+            )
+        )
+        if lines:
+            prod = lines[0].product_id
+            return {
+                "success": True,
+                "type": "product",
+                "name": prod.display_name,
+                "message": f"Product {barcode} found",
+            }
+
+        return {
+            "success": False,
+            "error": f"Barcode {barcode} not found in this picking",
+        }
+
     # ===== API: scan PICK =====
     @http.route(
         "/api/barcode/scan_pick",
@@ -50,7 +191,6 @@ class BarcodeShipperController(http.Controller):
         """
         barcode = ""
         try:
-            # Check access
             access = self._check_shipper_access()
             if not access["success"]:
                 return access
@@ -61,11 +201,7 @@ class BarcodeShipperController(http.Controller):
             if not barcode:
                 return {"success": False, "error": "Barcode is required"}
 
-            picking_obj = request.env["stock.picking"]
-            out_picking = picking_obj.find_out_picking_by_pick_name(barcode)
-
-            # Mark shipper scanned
-            out_picking.mark_shipper_scanned()
+            out_picking = self._find_out_picking_by_pick_name(barcode)
 
             # Log
             self._log_scan(
@@ -127,14 +263,12 @@ class BarcodeShipperController(http.Controller):
             if not picking_id:
                 return {"success": False, "error": "Picking ID is required"}
 
-            picking = request.env["stock.picking"].browse(picking_id)
+            picking = request.env["stock.picking"].sudo().browse(picking_id)
             if not picking.exists():
                 return {"success": False, "error": "Picking not found"}
 
-            items = picking.get_packages_info()
+            items = self._get_packages_info(picking)
             total = len(items)
-            scanned = len([i for i in items if i.get("scanned")])
-            all_scanned = total > 0 and scanned == total
 
             return {
                 "success": True,
@@ -148,8 +282,8 @@ class BarcodeShipperController(http.Controller):
                 "items": items,
                 "summary": {
                     "total_items": total,
-                    "scanned_items": scanned,
-                    "all_scanned": all_scanned,
+                    "scanned_items": 0,      # scan client-side
+                    "all_scanned": False,    # scan client-side
                 },
             }
         except Exception as e:
@@ -187,12 +321,11 @@ class BarcodeShipperController(http.Controller):
                     "error": "Picking ID and barcode are required",
                 }
 
-            picking = request.env["stock.picking"].browse(picking_id)
+            picking = request.env["stock.picking"].sudo().browse(picking_id)
             if not picking.exists():
                 return {"success": False, "error": "Picking not found"}
 
-            # Thực hiện logic ở model
-            result = picking.scan_package_or_product(barcode)
+            result = self._scan_package_in_picking(picking, barcode)
 
             status = "success" if result.get("success") else "error"
             self._log_scan(
@@ -203,23 +336,9 @@ class BarcodeShipperController(http.Controller):
                 message=result.get("message") or result.get("error"),
             )
 
-            # Tính lại summary
-            items = picking.get_packages_info()
-            total = len(items)
-            scanned = len([i for i in items if i.get("scanned")])
-            all_scanned = total > 0 and scanned == total
-
-            if result.get("success"):
-                result.update(
-                    {
-                        "summary": {
-                            "total_items": total,
-                            "scanned_items": scanned,
-                            "all_scanned": all_scanned,
-                        }
-                    }
-                )
+            # TẠM THỜI: không trả summary, để JS tự đếm trên client
             return result
+
         except Exception as e:
             _logger.exception("Error in scan_package_or_product")
             self._log_scan(
@@ -256,7 +375,7 @@ class BarcodeShipperController(http.Controller):
             if not picking_id:
                 return {"success": False, "error": "Picking ID is required"}
 
-            picking = request.env["stock.picking"].browse(picking_id)
+            picking = request.env["stock.picking"].sudo().browse(picking_id)
             if not picking.exists():
                 return {"success": False, "error": "Picking not found"}
 
@@ -266,8 +385,8 @@ class BarcodeShipperController(http.Controller):
                     "error": "Only OUT pickings can be completed here",
                 }
 
-            # Gọi luồng chuẩn Odoo, dùng sudo để shipper không cần quyền validate
-            picking.sudo().button_validate()
+            # GỌI LUỒNG CHUẨN – KHÔNG OVERRIDE GÌ CẢ
+            picking.button_validate()
 
             self._log_scan(
                 barcode=picking.name,
@@ -338,5 +457,9 @@ class BarcodeShipperController(http.Controller):
     def shipper_interface(self, **kwargs):
         """Main shipper interface page."""
         if not request.env.user.has_group("hlv_barcode_shipper.group_shipper"):
-            return request.render("hlv_barcode_shipper.access_denied", {"user": request.env.user})
-        return request.render("hlv_barcode_shipper.shipper_interface", {"user": request.env.user})
+            return request.render(
+                "hlv_barcode_shipper.access_denied", {"user": request.env.user}
+            )
+        return request.render(
+            "hlv_barcode_shipper.shipper_interface", {"user": request.env.user}
+        )

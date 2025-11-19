@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-        
+
         <!-- Access Denied Template -->
         <template id="access_denied" name="Access Denied">
             <t t-call="web.layout">
@@ -49,7 +49,7 @@
                         }
                     </style>
                 </t>
-                
+
                 <div class="access-denied-container">
                     <div class="access-denied-icon">🚫</div>
                     <h1 class="access-denied-title">Access Denied</h1>
@@ -61,7 +61,7 @@
                 </div>
             </t>
         </template>
-        
+
         <!-- Mobile Shipper Interface Template -->
         <template id="shipper_interface" name="Shipper Barcode Interface">
             <t t-call="web.layout">
@@ -69,7 +69,7 @@
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
                     <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
                     <style>
-                        /* Inline CSS để đảm bảo styling được load */
+                        /* Base layout */
                         .hlv-barcode-shipper {
                             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
                             font-size: 16px;
@@ -92,7 +92,7 @@
                             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                             text-align: center;
                         }
-                        .hlv-barcode-shipper .shipper-header h1 {
+                        .hlv-barcode-shipper .shipper-header h2 {
                             margin: 0 0 10px 0;
                             color: #2c3e50;
                             font-size: 24px;
@@ -102,372 +102,337 @@
                             color: #6c757d;
                             font-size: 14px;
                         }
-                        .hlv-barcode-shipper .scan-section {
+
+                        /* Steps */
+                        .scan-step {
+                            display: none;
                             background: #ffffff;
                             border-radius: 8px;
                             padding: 20px;
                             margin-bottom: 20px;
                             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                         }
-                        .hlv-barcode-shipper .section-title {
+                        .scan-step.active {
+                            display: block;
+                        }
+                        .step-header h3 {
+                            margin: 0 0 6px 0;
                             font-size: 18px;
                             font-weight: 600;
-                            color: #2c3e50;
-                            margin: 0 0 15px 0;
+                        }
+                        .step-header p {
+                            color: #6c757d;
+                            margin: 0 0 10px 0;
+                            font-size: 14px;
+                        }
+
+                        /* Inputs + buttons */
+                        .barcode-input-group {
                             display: flex;
-                            align-items: center;
                             gap: 8px;
+                            margin-bottom: 12px;
                         }
-                        .hlv-barcode-shipper .form-group {
-                            margin-bottom: 15px;
-                        }
-                        .hlv-barcode-shipper .form-control {
-                            width: 100%;
+                        .barcode-input {
+                            flex: 1;
                             padding: 12px 16px;
                             border: 2px solid #e9ecef;
                             border-radius: 6px;
                             font-size: 16px;
-                            transition: border-color 0.15s ease-in-out;
                         }
-                        .hlv-barcode-shipper .form-control:focus {
+                        .barcode-input:focus {
                             outline: none;
                             border-color: #007bff;
                             box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
                         }
-                        .hlv-barcode-shipper .btn {
+
+                        .btn {
                             display: inline-block;
-                            padding: 12px 24px;
+                            padding: 12px 16px;
                             font-size: 16px;
                             font-weight: 500;
-                            text-align: center;
-                            text-decoration: none;
-                            border: none;
                             border-radius: 6px;
+                            border: none;
                             cursor: pointer;
                             transition: all 0.15s ease-in-out;
-                            margin: 4px;
+                            text-decoration: none;
+                            margin: 2px;
                         }
-                        .hlv-barcode-shipper .btn-primary {
-                            background-color: #007bff;
-                            color: #ffffff;
+                        .btn-primary { background-color: #007bff; color: #fff; }
+                        .btn-primary:hover { background-color: #0056b3; }
+                        .btn-success { background-color: #28a745; color: #fff; }
+                        .btn-success:hover { background-color: #1e7e34; }
+                        .btn-secondary { background-color: #6c757d; color: #fff; }
+                        .btn-secondary:hover { background-color: #545b62; }
+                        .btn-warning { background-color: #ffc107; color: #212529; }
+                        .btn-warning:hover { background-color: #e0a800; }
+                        .btn-link {
+                            background: none;
+                            border: none;
+                            color: #007bff;
+                            padding: 0;
                         }
-                        .hlv-barcode-shipper .btn-primary:hover {
-                            background-color: #0056b3;
-                        }
-                        .hlv-barcode-shipper .btn-success {
-                            background-color: #28a745;
-                            color: #ffffff;
-                        }
-                        .hlv-barcode-shipper .btn-success:hover {
-                            background-color: #1e7e34;
-                        }
-                        .hlv-barcode-shipper .btn-secondary {
-                            background-color: #6c757d;
-                            color: #ffffff;
-                        }
-                        .hlv-barcode-shipper .btn-secondary:hover {
-                            background-color: #545b62;
-                        }
-                        .hlv-barcode-shipper .progress-info {
-                            font-size: 14px;
-                            color: #6c757d;
+
+                        /* Messages */
+                        .result-message {
+                            display: none;
                             margin-bottom: 10px;
-                        }
-                        .hlv-barcode-shipper .progress {
-                            height: 8px;
-                            background-color: #e9ecef;
-                            border-radius: 4px;
-                            overflow: hidden;
-                            margin-bottom: 15px;
-                        }
-                        .hlv-barcode-shipper .progress-bar {
-                            height: 100%;
-                            background-color: #28a745;
-                            transition: width 0.3s ease;
-                        }
-                        .hlv-barcode-shipper .alert {
-                            padding: 12px 16px;
+                            padding: 10px 12px;
                             border-radius: 6px;
-                            margin-bottom: 15px;
+                            font-size: 14px;
                         }
-                        .hlv-barcode-shipper .alert-success {
+                        .result-message.show { display: block; }
+                        .result-message.success {
                             background-color: #d4edda;
                             border: 1px solid #c3e6cb;
                             color: #155724;
                         }
-                        .hlv-barcode-shipper .alert-danger {
+                        .result-message.error {
                             background-color: #f8d7da;
                             border: 1px solid #f5c6cb;
                             color: #721c24;
                         }
-                        .hlv-barcode-shipper .alert-info {
-                            background-color: #d1ecf1;
-                            border: 1px solid #bee5eb;
-                            color: #0c5460;
+                        .result-message.warning {
+                            background-color: #fff3cd;
+                            border: 1px solid #ffeeba;
+                            color: #856404;
                         }
-                        .hlv-barcode-shipper .item-list {
-                            list-style: none;
-                            padding: 0;
-                            margin: 0;
+
+                        /* Items list + progress */
+                        .items-list {
+                            margin-top: 10px;
                         }
-                        .hlv-barcode-shipper .item-list li {
-                            padding: 12px;
-                            border: 1px solid #e9ecef;
-                            border-radius: 6px;
-                            margin-bottom: 8px;
+                        .item-card {
                             display: flex;
                             justify-content: space-between;
                             align-items: center;
+                            padding: 10px 12px;
+                            border-radius: 6px;
+                            border: 1px solid #e9ecef;
+                            margin-bottom: 6px;
+                            background: #fff;
                         }
-                        .hlv-barcode-shipper .item-list li.scanned {
-                            background-color: #d4edda;
-                            border-color: #c3e6cb;
-                            color: #155724;
+                        .item-name {
+                            font-weight: 500;
                         }
-                        .hlv-barcode-shipper .scan-status {
-                            font-weight: 600;
-                        }
-                        .hlv-barcode-shipper .scan-status.scanned {
-                            color: #28a745;
-                        }
-                        .hlv-barcode-shipper .scan-status.pending {
+                        .item-barcode {
+                            font-size: 13px;
                             color: #6c757d;
                         }
-                        /* Mobile responsive */
+                        .item-qty {
+                            font-size: 13px;
+                            color: #6c757d;
+                        }
+
+                        .progress-container {
+                            margin-top: 10px;
+                        }
+                        .progress-bar {
+                            height: 8px;
+                            background-color: #e9ecef;
+                            border-radius: 4px;
+                            overflow: hidden;
+                        }
+                        .progress-fill {
+                            height: 100%;
+                            width: 0;
+                            background-color: #28a745;
+                            transition: width 0.3s ease;
+                        }
+                        .progress-text {
+                            font-size: 13px;
+                            color: #6c757d;
+                            margin-top: 4px;
+                        }
+
+                        /* Footer + modals */
+                        .shipper-footer {
+                            display: flex;
+                            justify-content: space-between;
+                            padding: 8px 0 20px 0;
+                        }
+
+                        .modal {
+                            display: none;
+                            position: fixed;
+                            inset: 0;
+                            background: rgba(0,0,0,0.4);
+                            z-index: 9999;
+                            align-items: center;
+                            justify-content: center;
+                        }
+                        .modal.show {
+                            display: flex;
+                        }
+                        .modal-content {
+                            background: #fff;
+                            border-radius: 8px;
+                            max-width: 600px;
+                            width: 90%;
+                            max-height: 80vh;
+                            overflow: auto;
+                            padding: 16px;
+                        }
+                        .modal-header {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 8px;
+                        }
+                        .modal-header .close {
+                            cursor: pointer;
+                            font-size: 20px;
+                        }
+
                         @media (max-width: 768px) {
-                            .hlv-barcode-shipper .shipper-container {
-                                padding: 10px;
-                            }
-                            .hlv-barcode-shipper .scan-section {
-                                padding: 15px;
-                            }
-                            .hlv-barcode-shipper .btn {
-                                width: 100%;
-                                margin: 4px 0;
-                            }
+                            .hlv-barcode-shipper .shipper-container { padding: 10px; }
+                            .scan-step { padding: 15px; }
+                            .barcode-input-group { flex-direction: column; }
+                            .btn { width: 100%; margin: 4px 0; }
                         }
                     </style>
                 </t>
-                
+
                 <div class="hlv-barcode-shipper">
                     <div class="shipper-container">
-                    <!-- Header -->
-                    <div class="shipper-header">
-                        <h2>📦 Shipper Scanner</h2>
-                        <div class="user-info">
-                            <span>👤 <t t-esc="user.name"/></span>
+                        <!-- Header -->
+                        <div class="shipper-header">
+                            <h2>📦 Shipper Scanner</h2>
+                            <div class="user-info">
+                                <span>👤 <t t-esc="user.name"/></span>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <!-- Main Content -->
-                    <div class="shipper-content">
-                        
-                        <!-- Step 1: Scan PICK Order -->
-                        <div id="step-scan-pick" class="scan-step active">
-                            <div class="step-header">
-                                <h3>🔍 Step 1: Scan PICK Order</h3>
-                                <p>Scan the PICK order barcode to find delivery order</p>
-                            </div>
-                            
-                            <div class="barcode-input-group">
-                                <input type="text" 
-                                       id="pick-barcode-input" 
-                                       class="barcode-input" 
-                                       placeholder="Scan or enter PICK barcode..."
-                                       autocomplete="off"/>
-                                <button id="scan-pick-btn" class="btn btn-primary">
-                                    📱 Scan PICK
-                                </button>
-                            </div>
-                            
-                            <div id="pick-result" class="result-message"></div>
-                        </div>
-                        
-                        <!-- Step 2: Scan Packages/Products -->
-                        <div id="step-scan-items" class="scan-step">
-                            <div class="step-header">
-                                <h3>📦 Step 2: Scan Items</h3>
-                                <div id="order-info" class="order-info"></div>
-                            </div>
-                            
-                            <div class="barcode-input-group">
-                                <input type="text" 
-                                       id="item-barcode-input" 
-                                       class="barcode-input" 
-                                       placeholder="Scan package or product..."
-                                       autocomplete="off"/>
-                                <button id="scan-item-btn" class="btn btn-secondary">
-                                    📦 Scan Item
-                                </button>
-                            </div>
-                            
-                            <div id="item-result" class="result-message"></div>
-                            
-                            <!-- Items List -->
-                            <div id="items-list" class="items-list"></div>
-                            
-                            <!-- Progress -->
-                            <div id="scan-progress" class="progress-container">
-                                <div class="progress-bar">
-                                    <div id="progress-fill" class="progress-fill"></div>
+
+                        <!-- Main Content -->
+                        <div class="shipper-content">
+
+                            <!-- Step 1: Scan PICK Order -->
+                            <div id="step-scan-pick" class="scan-step active">
+                                <div class="step-header">
+                                    <h3>🔍 Step 1: Scan PICK Order</h3>
+                                    <p>Scan the PICK order barcode to find delivery order</p>
                                 </div>
-                                <div id="progress-text" class="progress-text">0 / 0 items scanned</div>
+
+                                <div class="barcode-input-group">
+                                    <input type="text"
+                                           id="pick-barcode-input"
+                                           class="barcode-input"
+                                           placeholder="Scan or enter PICK barcode..."
+                                           autocomplete="off"/>
+                                    <button id="scan-pick-btn" class="btn btn-primary">
+                                        📱 Scan PICK
+                                    </button>
+                                </div>
+
+                                <div id="pick-result" class="result-message"></div>
                             </div>
-                            
-                            <!-- Complete Button -->
-                            <button id="complete-delivery-btn" class="btn btn-success btn-large" style="display: none;">
-                                ✅ Complete Delivery
-                            </button>
-                            
-                            <!-- Reset Button -->
-                            <button id="reset-scan-btn" class="btn btn-warning">
-                                🔄 Start Over
-                            </button>
+
+                            <!-- Step 2: Scan Packages/Products -->
+                            <div id="step-scan-items" class="scan-step">
+                                <div class="step-header">
+                                    <h3>📦 Step 2: Scan Items</h3>
+                                    <div id="order-info" class="order-info"></div>
+                                </div>
+
+                                <div class="barcode-input-group">
+                                    <input type="text"
+                                           id="item-barcode-input"
+                                           class="barcode-input"
+                                           placeholder="Scan package or product..."
+                                           autocomplete="off"/>
+                                    <button id="scan-item-btn" class="btn btn-secondary">
+                                        📦 Scan Item
+                                    </button>
+                                </div>
+
+                                <div id="item-result" class="result-message"></div>
+
+                                <!-- Items List -->
+                                <div id="items-list" class="items-list"></div>
+
+                                <!-- Progress -->
+                                <div id="scan-progress" class="progress-container">
+                                    <div class="progress-bar">
+                                        <div id="progress-fill" class="progress-fill"></div>
+                                    </div>
+                                    <div id="progress-text" class="progress-text">0 / 0 items scanned</div>
+                                </div>
+
+                                <!-- Complete Button -->
+                                <button id="complete-delivery-btn" class="btn btn-success btn-large" style="display: none;">
+                                    ✅ Complete Delivery
+                                </button>
+
+                                <!-- Reset Button -->
+                                <button id="reset-scan-btn" class="btn btn-warning">
+                                    🔄 Start Over
+                                </button>
+                            </div>
+
+                            <!-- Step 3: Completion -->
+                            <div id="step-complete" class="scan-step">
+                                <div class="step-header">
+                                    <h3>✅ Delivery Completed</h3>
+                                </div>
+
+                                <div id="completion-result" class="result-message"></div>
+
+                                <button id="new-delivery-btn" class="btn btn-primary btn-large">
+                                    🚚 New Delivery
+                                </button>
+                            </div>
+
                         </div>
-                        
-                        <!-- Step 3: Completion -->
-                        <div id="step-complete" class="scan-step">
-                            <div class="step-header">
-                                <h3>✅ Delivery Completed</h3>
-                            </div>
-                            
-                            <div id="completion-result" class="result-message"></div>
-                            
-                            <button id="new-delivery-btn" class="btn btn-primary btn-large">
-                                🚚 New Delivery
-                            </button>
+
+                        <!-- Footer -->
+                        <div class="shipper-footer">
+                            <button id="show-history-btn" class="btn btn-link">📋 View History</button>
+                            <button id="help-btn" class="btn btn-link">❓ Help</button>
                         </div>
-                        
-                    </div>
-                    
-                    <!-- Footer -->
-                    <div class="shipper-footer">
-                        <button id="show-history-btn" class="btn btn-link">📋 View History</button>
-                        <button id="help-btn" class="btn btn-link">❓ Help</button>
-                    </div>
-                    
-                    <!-- History Modal -->
-                    <div id="history-modal" class="modal">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h3>📋 Scan History</h3>
-                                <span class="close">×</span>
-                            </div>
-                            <div id="history-content" class="modal-body">
-                                Loading...
+
+                        <!-- History Modal -->
+                        <div id="history-modal" class="modal">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h3>📋 Scan History</h3>
+                                    <span class="close">×</span>
+                                </div>
+                                <div id="history-content" class="modal-body">
+                                    Loading...
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Help Modal -->
-                    <div id="help-modal" class="modal">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h3>❓ How to Use</h3>
-                                <span class="close">×</span>
-                            </div>
-                            <div class="modal-body">
-                                <ol>
-                                    <li><strong>Scan PICK Order:</strong> Use your device camera or type the PICK barcode (e.g., PICK00001)</li>
-                                    <li><strong>Scan Items:</strong> Scan each package (PACK) or product barcode in the delivery order</li>
-                                    <li><strong>Complete:</strong> When all items are scanned, tap "Complete Delivery"</li>
-                                    <li><strong>Alternative:</strong> You can re-scan the PICK barcode to complete directly</li>
-                                </ol>
-                                <p><strong>Tips:</strong></p>
-                                <ul>
-                                    <li>Make sure your camera has good lighting</li>
-                                    <li>Hold the barcode steady in the camera view</li>
-                                    <li>You can also type barcodes manually if needed</li>
-                                </ul>
+
+                        <!-- Help Modal -->
+                        <div id="help-modal" class="modal">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h3>❓ How to Use</h3>
+                                    <span class="close">×</span>
+                                </div>
+                                <div class="modal-body">
+                                    <ol>
+                                        <li><strong>Scan PICK Order:</strong> Use your device camera or type the PICK barcode (e.g., PICK00001)</li>
+                                        <li><strong>Scan Items:</strong> Scan each package (PACK) or product barcode in the delivery order</li>
+                                        <li><strong>Complete:</strong> When all items are scanned, tap "Complete Delivery"</li>
+                                        <li><strong>Alternative:</strong> You can re-scan the PICK barcode to complete directly</li>
+                                    </ol>
+                                    <p><strong>Tips:</strong></p>
+                                    <ul>
+                                        <li>Make sure your camera has good lighting</li>
+                                        <li>Hold the barcode steady in the camera view</li>
+                                        <li>You can also type barcodes manually if needed</li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    
+
                     </div>
                 </div>
-                
+
                 <!-- JavaScript -->
                 <script src="/hlv_barcode_shipper/static/src/js/barcode_scanner.js"></script>
-                <script>
-                    // Initialize the barcode scanner when page loads
-                    document.addEventListener('DOMContentLoaded', function() {
-                        if (typeof BarcodeShipper !== 'undefined') {
-                            window.barcodeShipper = new BarcodeShipper();
-                        }
-                    });
-                </script>
             </t>
         </template>
-        
-        <!-- Stock Picking Form View Extension - Temporarily commented out for debugging -->
-        <!--
-        <record id="stock_picking_form_shipper" model="ir.ui.view">
-            <field name="name">stock.picking.form.shipper</field>
-            <field name="model">stock.picking</field>
-            <field name="inherit_id" ref="stock.view_picking_form"/>
-            <field name="arch" type="xml">
-                <xpath expr="//field[@name='state']" position="after">
-                    <field name="shipper_scanned" readonly="1" groups="hlv_barcode_shipper.group_shipper_manager"/>
-                    <field name="shipper_scan_time" readonly="1" attrs="{'invisible': [('shipper_scanned', '=', False)]}" groups="hlv_barcode_shipper.group_shipper_manager"/>
-                    <field name="shipper_user_id" readonly="1" attrs="{'invisible': [('shipper_scanned', '=', False)]}" groups="hlv_barcode_shipper.group_shipper_manager"/>
-                </xpath>
-                <xpath expr="//page[@name='operations']" position="after">
-                    <page string="Shipper Info" attrs="{'invisible': [('picking_type_code', '!=', 'outgoing')]}" groups="hlv_barcode_shipper.group_shipper_manager">
-                        <group>
-                            <group string="Scan Status">
-                                [Temporarily commented - fields disabled in model]
-                                [field name="packages_scanned_count" readonly="1"]
-                                [field name="total_packages_count" readonly="1"]
-                                [field name="all_packages_scanned" readonly="1"]
-                            </group>
-                        </group>
-                        <field name="scan_log_ids" readonly="1">
-                            <tree>
-                                <field name="scan_time"/>
-                                <field name="user_id"/>
-                                <field name="barcode"/>
-                                <field name="scan_type"/>
-                                <field name="status"/>
-                                <field name="message"/>
-                            </tree>
-                        </field>
-                    </page>
-                </xpath>
-            </field>
-        </record>
-        -->
-        
-        <!-- Stock Package Level Form View Extension - Temporarily commented out for debugging -->
-        <!--
-        <record id="stock_package_level_form_shipper" model="ir.ui.view">
-            <field name="name">stock.package.level.form.shipper</field>
-            <field name="model">stock.package_level</field>
-            <field name="inherit_id" ref="stock.stock_package_level_form_edit"/>
-            <field name="arch" type="xml">
-                <xpath expr="//field[@name='is_done']" position="after">
-                    <field name="scanned" groups="hlv_barcode_shipper.group_shipper_manager"/>
-                    <field name="scan_time" attrs="{'invisible': [('scanned', '=', False)]}" groups="hlv_barcode_shipper.group_shipper_manager"/>
-                    <field name="scanned_by" attrs="{'invisible': [('scanned', '=', False)]}" groups="hlv_barcode_shipper.group_shipper_manager"/>
-                </xpath>
-            </field>
-        </record>
-        -->
-        
-        <!-- Stock Move Line Tree View Extension - Temporarily commented out for debugging -->
-        <!--
-        <record id="stock_move_line_tree_shipper" model="ir.ui.view">
-            <field name="name">stock.move.line.tree.shipper</field>
-            <field name="model">stock.move.line</field>
-            <field name="inherit_id" ref="stock.view_move_line_tree"/>
-            <field name="arch" type="xml">
-                <xpath expr="//field[@name='quantity']" position="after">
-                    <field name="scanned" optional="hide" groups="hlv_barcode_shipper.group_shipper_manager"/>
-                    <field name="scan_time" optional="hide" groups="hlv_barcode_shipper.group_shipper_manager"/>
-                    <field name="scanned_by" optional="hide" groups="hlv_barcode_shipper.group_shipper_manager"/>
-                </xpath>
-            </field>
-        </record>
-        -->
-        
+
     </data>
 </odoo>

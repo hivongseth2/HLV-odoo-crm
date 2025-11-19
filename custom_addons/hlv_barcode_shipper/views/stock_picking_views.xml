@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
-        <!-- List view cho shipper -->
+        <!-- List view cho shipper (KHÔNG thêm field custom) -->
         <record id="stock_picking_list_shipper" model="ir.ui.view">
             <field name="name">stock.picking.list.shipper</field>
             <field name="model">stock.picking</field>
@@ -16,7 +16,6 @@
                            decoration-warning="state in ('waiting', 'confirmed')"
                            decoration-success="state == 'assigned'"
                            decoration-muted="state in ('done','cancel')"/>
-                    <field name="shipper_scanned" optional="show"/>
                 </list>
             </field>
         </record>
