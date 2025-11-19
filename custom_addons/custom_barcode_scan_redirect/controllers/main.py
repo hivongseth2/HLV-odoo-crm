@@ -763,8 +763,8 @@ class CustomBarcodeScanController(http.Controller):
             if package_ids:
                 packages = request.env['stock.quant.package'].sudo().browse(package_ids)
                 other_packages = [{
-                    'id': pkg.id,
-                    'name': pkg.name
+                    'package_id': pkg.id,      # ✅ Đúng field name
+                    'package_name': pkg.name   # ✅ Đúng field name
                 } for pkg in packages if pkg.id != package_id]
             
             result['other_packages'] = other_packages
