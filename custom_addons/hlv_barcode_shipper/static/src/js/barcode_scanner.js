@@ -184,7 +184,6 @@ class BarcodeShipper {
         if (text) text.textContent = `${scanned} / ${total} items scanned`;
         if (btn) btn.style.display = summary?.all_scanned && total ? 'block' : 'none';
     }
-
     async scanItem() {
         const input = document.getElementById('item-barcode-input');
         const barcode = (input?.value || '').trim();
@@ -209,6 +208,10 @@ class BarcodeShipper {
                 picking_id: this.currentPickingId,
                 barcode,
             });
+
+            // THÊM DÒNG LOG NÀY ĐỂ DỄ DEBUG
+            console.log('scan_package result:', res);
+
             if (res.success) {
                 this.showMessage('item-result', res.message, 'success');
                 if (res.summary) this.updateProgress(res.summary);
@@ -334,7 +337,6 @@ class BarcodeShipper {
         modal.classList.remove('show');
         document.body.style.overflow = '';
     }
-
     async apiCall(endpoint, data) {
         const res = await fetch(endpoint, {
             method: 'POST',
@@ -344,22 +346,22 @@ class BarcodeShipper {
             },
             body: JSON.stringify(data),
         });
+
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
         const json = await res.json();
 
-        // Odoo type="json" → bọc trong { jsonrpc, id, result }
+        // Odoo type="json" → { jsonrpc, id, result }
         if (json && typeof json === 'object') {
             if (Object.prototype.hasOwnProperty.call(json, 'result')) {
-                return json.result;
+                return json.result; // <-- từ giờ phía trên xài res.success, res.message bình thường
             }
             if (Object.prototype.hasOwnProperty.call(json, 'error')) {
-                // phòng khi sau này backend dùng error của jsonrpc
                 throw new Error(json.error.message || 'JSON-RPC error');
             }
         }
 
-        // fallback: nếu sau này đổi sang type="http" trả json thuần
+        // fallback nếu sau này đổi sang type="http" trả JSON thuần
         return json;
     }
 
