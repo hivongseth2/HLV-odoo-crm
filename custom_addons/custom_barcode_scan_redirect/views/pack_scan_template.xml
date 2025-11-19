@@ -104,10 +104,25 @@
               <span class="package-item-qty"><t t-esc="pkg['qty']"/> SP</span>
             </div>
             <div class="package-items-preview">
-              <t t-foreach="pkg['items']" t-as="item">
-                <div class="preview-item">
-                  <span class="preview-item-name" t-esc="item['product_name']"/>
-                  <span class="preview-item-qty">×<t t-esc="item['qty_done']"/></span>
+              <t t-if="pkg.get('package_lines')">
+                <t t-foreach="pkg['package_lines']" t-as="line">
+                  <div class="preview-item">
+                    <span class="preview-item-name" t-esc="line['product_name']"/>
+                    <span class="preview-item-qty">×<t t-esc="line['product_qty']"/></span>
+                  </div>
+                </t>
+              </t>
+              <t t-elif="pkg.get('move_line_ids')">
+                <t t-foreach="pkg['move_line_ids']" t-as="line">
+                  <div class="preview-item">
+                    <span class="preview-item-name" t-esc="line['product_name']"/>
+                    <span class="preview-item-qty">×<t t-esc="line['product_qty']"/></span>
+                  </div>
+                </t>
+              </t>
+              <t t-else="">
+                <div class="preview-empty">
+                  <span class="preview-item-name">Chưa có chi tiết sản phẩm</span>
                 </div>
               </t>
             </div>

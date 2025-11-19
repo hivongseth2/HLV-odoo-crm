@@ -979,6 +979,14 @@
   flex-shrink: 0;
 }
 
+.preview-empty {
+  padding: 8px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 12px;
+  font-style: italic;
+}
+
 .package-item-header {
   display: flex;
   align-items: center;
