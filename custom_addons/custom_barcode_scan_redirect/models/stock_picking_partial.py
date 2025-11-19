@@ -279,7 +279,6 @@ class StockPickingPartial(models.Model):
                 })
 
         # ⭐ Bước 6: Lấy all_items - sản phẩm có thể thêm vào package
-        # ⭐ Bước 6: Lấy all_items - sản phẩm có thể thêm vào package
         all_items = []
         product_map = {}
 
@@ -317,11 +316,10 @@ class StockPickingPartial(models.Model):
                 }
 
         # ⭐ Tính qty available cho mỗi sản phẩm
-        # Logic mới: Available = (Demand - Total Scanned) + Unassigned Scanned
-        # Tức là: Lượng chưa quét + Lượng đã quét nhưng chưa vào gói nào
+        # Logic MỚI (User Request): Chỉ lấy từ Unassigned Scanned (đã quét nhưng chưa vào gói)
+        # KHÔNG lấy từ Unscanned nữa.
         for pid, data in product_map.items():
-            unscanned = max(0, data['demand'] - data['total_scanned'])
-            qty_available = unscanned + data['unassigned_scanned']
+            qty_available = data['unassigned_scanned']
 
             # ⭐ CHỈ show nếu còn qty available > 0
             if qty_available > 0:
@@ -477,9 +475,8 @@ class StockPickingPartial(models.Model):
         """
         Thêm sản phẩm vào package (bổ sung sau, quét thêm)
         Logic MỚI: 
-        1. Ưu tiên lấy từ Unassigned Scanned (đã quét nhưng chưa vào gói)
-        2. Nếu thiếu, lấy từ Unscanned (tăng qty_done lên), miễn là không vượt quá Demand
-        3. KHÔNG tự động rút từ package khác (tránh stealing)
+        1. CHỈ lấy từ Unassigned Scanned (đã quét nhưng chưa vào gói)
+        2. KHÔNG tự động quét thêm (không lấy từ Unscanned)
         """
         self.ensure_one()
 
@@ -498,38 +495,26 @@ class StockPickingPartial(models.Model):
             ('product_id', '=', product.id),
         ])
 
-        total_scanned_qty = sum(float(ml.qty_done or 0) for ml in all_product_lines)
-        
-        # Tính demand
-        demand = sum(m.product_uom_qty for m in self.move_ids_without_package if m.product_id.id == product.id)
-        
         # Tính unassigned scanned
         unassigned_lines = all_product_lines.filtered(lambda ml: not ml.result_package_id and ml.qty_done > 0)
         total_unassigned = sum(float(ml.qty_done or 0) for ml in unassigned_lines)
         
-        # Tính unscanned
-        unscanned = max(0, demand - total_scanned_qty)
-        
-        # Tổng khả dụng để thêm (không tính hàng trong package khác)
-        qty_available = total_unassigned + unscanned
+        # Tổng khả dụng để thêm = chỉ tính hàng đã quét chưa đóng gói
+        qty_available = total_unassigned
 
         # ⭐ Bước 2: Validate
         if qty > qty_available:
             raise ValidationError(
                 f"⚠️ Không thể thêm {qty} vào package.\n"
-                f"• Chưa đóng gói: {total_unassigned}\n"
-                f"• Chưa quét: {unscanned}\n"
-                f"• Tổng có thể thêm: {qty_available}\n\n"
-                f"💡 Nếu muốn lấy từ gói khác, vui lòng dùng tính năng 'Chuyển' trên sản phẩm đó."
+                f"• Chưa đóng gói (đã quét): {total_unassigned}\n"
+                f"• Yêu cầu: Bạn phải quét sản phẩm ở màn hình chính trước khi thêm vào gói!"
             )
 
         # ⭐ Bước 3: Thực hiện thêm
         remaining_qty_to_add = qty
         
-        # 3.1: Lấy từ Unassigned Scanned trước
+        # 3.1: Lấy từ Unassigned Scanned
         if total_unassigned > 0:
-            # Sắp xếp: ưu tiên line có qty nhỏ để dọn dẹp, hoặc line lớn? 
-            # Lấy line nào cũng được, ưu tiên line hiện tại nếu nó unassigned
             sorted_unassigned = unassigned_lines.sorted(key=lambda l: l.id)
             
             for ml in sorted_unassigned:
@@ -538,10 +523,6 @@ class StockPickingPartial(models.Model):
                 
                 available = float(ml.qty_done or 0)
                 take = min(remaining_qty_to_add, available)
-                
-                # Chuyển vào package
-                # Nếu line này chưa có package, gán luôn package vào nó
-                # Nhưng cần check xem trong package đích đã có dòng cho product này chưa để merge
                 
                 # Tìm dòng trong package đích
                 dest_line = all_product_lines.filtered(lambda l: l.result_package_id.id == package_id and l.id != ml.id)
@@ -556,12 +537,11 @@ class StockPickingPartial(models.Model):
                     else:
                         ml.qty_done -= take
                 else:
-                    # Không có dòng đích, biến dòng này thành dòng đích (hoặc tách ra)
+                    # Không có dòng đích
                     if take == available:
                         ml.result_package_id = package_id
                     else:
-                        # Tách dòng: giữ lại phần thừa ở unassigned, phần take chuyển sang package
-                        # Hoặc: giảm dòng hiện tại, tạo dòng mới trong package
+                        # Tách dòng
                         ml.qty_done -= take
                         ml.copy({
                             'qty_done': take,
@@ -569,23 +549,6 @@ class StockPickingPartial(models.Model):
                         })
                 
                 remaining_qty_to_add -= take
-
-        # 3.2: Nếu vẫn thiếu, lấy từ Unscanned (Tăng qty_done)
-        if remaining_qty_to_add > 0:
-            # Tìm dòng trong package đích để cộng thêm
-            dest_line = all_product_lines.filtered(lambda l: l.result_package_id.id == package_id)
-            
-            if dest_line:
-                dest_line[0].qty_done += remaining_qty_to_add
-            else:
-                # Tạo dòng mới trong package
-                # Dùng move_line_id làm mẫu
-                move_line.copy({
-                    'qty_done': remaining_qty_to_add,
-                    'result_package_id': package_id
-                })
-            
-            # Không cần giảm ở đâu cả vì đây là "quét mới"
 
         return {
             'success': True,

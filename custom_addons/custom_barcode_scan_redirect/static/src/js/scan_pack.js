@@ -77,143 +77,57 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     return null; // tất cả đã đủ
   }
-  function updateQty(barcode, delta = 1, lineId = null) {
+
+  async function updateQty(barcode, delta = 1, lineId = null) {
     if (!lineId) {
       lineId = findLineToUpdate(barcode);
     }
-    fetch("/pack_scan/scan_item", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "call",
-        params: {
-          picking_id: pickingId,
-          barcode,
-          delta,
-          line_id: lineId
-
-        }
-      })
-    })
-      .then(res => res.json())
-      .then(response => {
-        const result = response.result;
-
-        if (result?.error) { toast.error(result.error); playError(); setFocus(); return; }
-        if (!result?.scanned?.length) { toast.warn('Không có dòng nào được cập nhật'); playError(); setFocus(); return; }
-
-
-        result.scanned.forEach(item => {
-
-          // cố gắng tìm theo line_id, nếu không có thì rớt về tìm theo barcode
-          let el = document.querySelector(`[data-line-id="${item.line_id}"]`);
-          if (!el && item.barcode) {
-            const code = normalizeCode(item.barcode);
-            el = [...document.querySelectorAll('#product_list li.product-item')]
-              .find(e => normalizeCode(e.dataset.barcode) === code) || null;
-            if (el && item.line_id) el.dataset.lineId = String(item.line_id); // gắn lại cho những lần sau
-          }
-          if (!el) { console.warn('No DOM line for', item); return; }
-
-          const doneEl = el.querySelector('.done');
-          const requiredEl = el.querySelectorAll('span')[1];
-          const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
-
-          doneEl.innerText = item.done_qty;
-          if (item.done_qty >= required) el.classList.add("completed");
-          else el.classList.remove("completed");
-        });
-
-        playSuccess(); setFocus();
-      });
-
-  }
-
-  input?.addEventListener("keypress", function (e) {
-    if (e.key !== "Enter") return;
-    const raw = input.value.trim();
-    if (!raw) return;
-
-    // nếu trùng tên pick để auto hoàn tất
-    if (typeof originPickName !== 'undefined' && raw === originPickName) {
-      completeBtn?.click();
-      input.value = "";
-      return;
-    }
-
-    // mapping: nếu quét "key" thì cộng 0.1 vào barcode mục tiêu
-    const targetBarcode = BARCODE_MAP_POINT_ONE[raw];
-    if (targetBarcode) {
-      updateQty(targetBarcode, 0.1);
-    } else {
-      // If scanned a generated package barcode, treat as package action
-      if (raw.startsWith('AUTO-PKG-') || raw.startsWith('PKG-')) {
-        handlePackageBarcode(raw);
-      } else {
-        updateQty(raw, 1);
-      }
-    }
-
-    input.value = "";
-  });
-
-  async function handlePackageBarcode(packageBarcode) {
-    const items = document.querySelectorAll("#product_list .product-item");
-    const completedItems = [];
-    items.forEach(item => {
-      const doneEl = item.querySelector(".done");
-      const requiredEl = item.querySelectorAll("span")[1];
-      const done = parseFloat(doneEl?.innerText || 0);
-      const required = parseFloat(requiredEl?.innerText || 0);
-      const lineId = item.dataset.lineId;
-      // Cho phép pack sản phẩm bất kể done >= required hay chưa
-      // Chỉ cần done > 0 là được pack (quét 1 phần hay đủ đều được)
-      if (done > 0 && required > 0) {
-        completedItems.push({ move_line_id: parseInt(lineId), qty: done });
-      }
-    });
-    if (completedItems.length === 0) {
-      toast.warn("Không có sản phẩm nào được quét để tạo kiện", { ms: 2500 });
-      playError();
-      setFocus();
-      return;
-    }
     try {
-      const res = await fetch("/pack_scan/create_partial_pack", {
+      const res = await fetch("/pack_scan/scan_item", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest"
+        },
         body: JSON.stringify({
           jsonrpc: "2.0",
           method: "call",
-          params: { picking_id: pickingId, package_barcode: packageBarcode, move_line_data: completedItems }
+          params: {
+            picking_id: pickingId,
+            barcode,
+            delta,
+            line_id: lineId
+          }
         })
       });
       const response = await res.json();
-      const result = response.result || response;
-      console.log("API Response:", response);
-      console.log("Result:", result);
-      if (result?.error) {
-        toast.error(result.error, { ms: 2500 });
-        playError();
-        setFocus();
-        return;
-      }
-      if (!result?.success) {
-        toast.error("API response không hợp lệ: " + JSON.stringify(result), { ms: 2500 });
-        playError();
-        setFocus();
-        return;
-      }
-      toast.success(`Tạo gói hàng ${result.package_name} thành công! ${completedItems.length} sản phẩm`, { ms: 2000 });
-      playSuccess();
-      // Reload để hiển thị các move_line đã được gán vào package
-      setTimeout(() => { window.location.reload(); }, 1500);
+      const result = response.result;
+
+      if (result?.error) { toast.error(result.error); playError(); setFocus(); return; }
+      if (!result?.scanned?.length) { toast.warn('Không có dòng nào được cập nhật'); playError(); setFocus(); return; }
+
+      result.scanned.forEach(item => {
+        // cố gắng tìm theo line_id, nếu không có thì rớt về tìm theo barcode
+        let el = document.querySelector(`[data-line-id="${item.line_id}"]`);
+        if (!el && item.barcode) {
+          const code = normalizeCode(item.barcode);
+          el = [...document.querySelectorAll('#product_list li.product-item')]
+            .find(e => normalizeCode(e.dataset.barcode) === code) || null;
+          if (el && item.line_id) el.dataset.lineId = String(item.line_id); // gắn lại cho những lần sau
+        }
+        if (!el) { console.warn('No DOM line for', item); return; }
+
+        const doneEl = el.querySelector('.done');
+        const requiredEl = el.querySelectorAll('span')[1];
+        const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
+
+        doneEl.innerText = item.done_qty;
+        if (item.done_qty >= required) el.classList.add("completed");
+        else el.classList.remove("completed");
+      });
+
     } catch (err) {
-      toast.error("Lỗi kết nối: " + err.message, { ms: 2500 });
+      toast.error("Lỗi kết nối: " + err.message);
       playError();
       setFocus();
     }
@@ -277,7 +191,7 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Nút Partial Pack - tạo mã barcode tự động (người dùng có thể scan mã này để đóng gói)
-  document.getElementById('btnPartialPack')?.addEventListener('click', function() {
+  document.getElementById('btnPartialPack')?.addEventListener('click', function () {
     const autoPackageBarcode = `AUTO-PKG-${Date.now()}`;
     // Put barcode into input (so user can scan it later) and copy to clipboard
     const inputEl = document.getElementById('pack_barcode_input');
@@ -286,11 +200,11 @@ document.addEventListener("DOMContentLoaded", function () {
       inputEl.focus();
       try { navigator.clipboard.writeText(autoPackageBarcode); } catch (e) { }
     }
-    toast.info(`Mã barcode tạo: ${autoPackageBarcode} (đã copy)` , { ms: 4000 });
+    toast.info(`Mã barcode tạo: ${autoPackageBarcode} (đã copy)`, { ms: 4000 });
   });
 
   // Nút In nhãn
-  document.getElementById('btnPrintLabel')?.addEventListener('click', async function() {
+  document.getElementById('btnPrintLabel')?.addEventListener('click', async function () {
     const res = await fetch('/pack_scan/print_label', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -521,18 +435,18 @@ function createModal(title, content, buttons = []) {
     background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
     z-index: 10000;
   `;
-  
+
   const modalContent = document.createElement('div');
   modalContent.style.cssText = `
     background: #fff; border-radius: 12px; padding: 20px; max-width: 600px;
     width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
   `;
-  
+
   const titleEl = document.createElement('h2');
   titleEl.textContent = title;
   titleEl.style.margin = '0 0 16px 0';
   modalContent.appendChild(titleEl);
-  
+
   if (typeof content === 'string') {
     const contentDiv = document.createElement('div');
     contentDiv.innerHTML = content;
@@ -540,10 +454,10 @@ function createModal(title, content, buttons = []) {
   } else {
     modalContent.appendChild(content);
   }
-  
+
   const buttonContainer = document.createElement('div');
   buttonContainer.style.cssText = 'display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end;';
-  
+
   buttons.forEach(btn => {
     const button = document.createElement('button');
     button.textContent = btn.label;
@@ -558,25 +472,25 @@ function createModal(title, content, buttons = []) {
     });
     buttonContainer.appendChild(button);
   });
-  
+
   modalContent.appendChild(buttonContainer);
   modal.appendChild(modalContent);
-  
+
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.remove();
   });
-  
+
   document.body.appendChild(modal);
   return modal;
 }
 
 // ===================== SIBLING PACK ACTIONS (COMMENTED OUT SPLIT FUNCTIONALITY) =====================
-document.addEventListener('click', async function(e) {
+document.addEventListener('click', async function (e) {
   const unpackBtn = e.target.closest('.btn-unpack');
   const editBtn = e.target.closest('.btn-edit');
   // COMMENTED OUT: Transfer button for splitting package into separate picking
   // const transferBtn = e.target.closest('.btn-transfer');
-  
+
   if (unpackBtn) {
     const packId = parseInt(unpackBtn.dataset.packId);
     if (confirm('Bạn chắc chắn muốn unpack kiện này?')) {
@@ -591,7 +505,7 @@ document.addEventListener('click', async function(e) {
       });
       const response = await res.json();
       const result = response.result || response;
-      
+
       if (result?.success) {
         toast.success(result.message, { ms: 2000 });
         setTimeout(() => window.location.reload(), 1000);
@@ -600,12 +514,12 @@ document.addEventListener('click', async function(e) {
       }
     }
   }
-  
+
   if (editBtn) {
     const packId = parseInt(editBtn.dataset.packId);
     window.location.href = `/custom_barcode_scan/pack_view/${packId}`;
   }
-  
+
   // COMMENTED OUT: Transfer functionality between sibling packs (tách đơn)
   // if (transferBtn) {
   //   const sourcePack = parseInt(transferBtn.dataset.packId);
@@ -630,10 +544,10 @@ let currentPackageData = null;
 
 async function openPackageEditModal(event) {
   event.stopPropagation();
-  
+
   const packageId = event.currentTarget.dataset.packageId;
   const pickingId = parseInt(window.location.pathname.split("/").pop());
-  
+
   try {
     const res = await fetch("/pack_scan/get_package_details", {
       method: "POST",
@@ -644,15 +558,15 @@ async function openPackageEditModal(event) {
         params: { picking_id: pickingId, package_id: parseInt(packageId) }
       })
     });
-    
+
     const response = await res.json();
     const result = response.result || response;
-    
+
     if (result?.error) {
       toast.error("❌ " + result.error);
       return;
     }
-    
+
     currentPackageData = result;
 
     // Ensure other_packages is an array
@@ -670,17 +584,17 @@ async function openPackageEditModal(event) {
       all_items_count: currentPackageData.all_items?.length || 0,
       all_items_detail: currentPackageData.all_items
     });
-    
+
     document.getElementById('modalPackageName').innerText = result.package_name;
-    
+
     const itemCountBadge = document.getElementById('itemCountBadge');
     if (itemCountBadge) {
       itemCountBadge.innerText = result.items.length;
     }
-    
+
     const itemsList = document.getElementById('packageItemsList');
     itemsList.innerHTML = '';
-    
+
     if (result.items.length === 0) {
       itemsList.innerHTML = `
         <div class="empty-state">
@@ -798,11 +712,11 @@ async function openPackageEditModal(event) {
         itemsList.appendChild(li);
       });
     }
-    
+
     // Populate add item select
     const addItemSelect = document.getElementById('addItemSelect');
     addItemSelect.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
-    
+
     if (result.all_items && result.all_items.length > 0) {
       result.all_items.forEach(item => {
         const option = document.createElement('option');
@@ -811,12 +725,12 @@ async function openPackageEditModal(event) {
         addItemSelect.appendChild(option);
       });
     }
-    
+
     // Show modal
     const modal = document.getElementById('packageEditModal');
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    
+
   } catch (err) {
     toast.error("❌ Lỗi kết nối: " + err.message);
   }
@@ -831,7 +745,7 @@ function closePackageEditModal() {
 
 async function removePackageItem(moveLineId) {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
-  
+
   try {
     const res = await fetch("/pack_scan/remove_package_item", {
       method: "POST",
@@ -839,25 +753,25 @@ async function removePackageItem(moveLineId) {
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "call",
-        params: { 
-          picking_id: pickingId, 
+        params: {
+          picking_id: pickingId,
           package_id: currentPackageData.package_id,
           move_line_id: moveLineId
         }
       })
     });
-    
+
     const response = await res.json();
     const result = response.result || response;
-    
+
     if (result?.error) {
       toast.error(result.error);
       return;
     }
-    
+
     toast.success("Đã xoá sản phẩm!", { ms: 1500 });
-    openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
-    
+    openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
+
   } catch (err) {
     toast.error("Lỗi kết nối: " + err.message);
   }
@@ -867,12 +781,12 @@ async function addItemToPackage() {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
   const moveLineId = parseInt(document.getElementById('addItemSelect').value);
   const qty = parseFloat(document.getElementById('addItemQty').value);
-  
+
   if (!moveLineId || qty <= 0) {
     toast.warn("Vui lòng chọn sản phẩm và nhập số lượng");
     return;
   }
-  
+
   try {
     const res = await fetch("/pack_scan/add_item_to_package", {
       method: "POST",
@@ -880,28 +794,28 @@ async function addItemToPackage() {
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "call",
-        params: { 
-          picking_id: pickingId, 
+        params: {
+          picking_id: pickingId,
           package_id: currentPackageData.package_id,
           move_line_id: moveLineId,
           qty: qty
         }
       })
     });
-    
+
     const response = await res.json();
     const result = response.result || response;
-    
+
     if (result?.error) {
       toast.error(result.error);
       return;
     }
-    
+
     toast.success(result.message, { ms: 1500 });
     document.getElementById('addItemSelect').value = '';
     document.getElementById('addItemQty').value = '1';
-    openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
-    
+    openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
+
   } catch (err) {
     toast.error("Lỗi kết nối: " + err.message);
   }
@@ -929,7 +843,7 @@ async function savePackageChanges() {
     toast.info("Không có thay đổi nào");
     return;
   }
-  
+
   // Send all changes
   for (let change of changes) {
     try {
@@ -939,29 +853,29 @@ async function savePackageChanges() {
         body: JSON.stringify({
           jsonrpc: "2.0",
           method: "call",
-          params: { 
-            picking_id: pickingId, 
+          params: {
+            picking_id: pickingId,
             package_id: currentPackageData.package_id,
             move_line_id: change.moveLineId,
             new_qty: change.newQty
           }
         })
       });
-      
+
       const response = await res.json();
       const result = response.result || response;
-      
+
       if (result?.error) {
         toast.error(result.error);
         return;
       }
-      
+
     } catch (err) {
       toast.error("Lỗi kết nối: " + err.message);
       return;
     }
   }
-  
+
   toast.success("Đã lưu thay đổi! Tải lại trang...", { ms: 1500 });
   setTimeout(() => window.location.reload(), 1500);
 }
@@ -1020,8 +934,9 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
   `;
 
   createModal('↔️ Chuyển sản phẩm sang gói khác', content, [
-    { label: 'Hủy', color: '#6b7280', onclick: () => {} },
-    { label: 'Chuyển', color: '#0ea5e9', onclick: async () => {
+    { label: 'Hủy', color: '#6b7280', onclick: () => { } },
+    {
+      label: 'Chuyển', color: '#0ea5e9', onclick: async () => {
         const targetPack = document.getElementById('transferTargetSelect').value;
         const qty = parseFloat(document.getElementById('transferQtyInput').value);
 
@@ -1084,13 +999,14 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
           // Refresh modal
           openPackageEditModal({
             currentTarget: { dataset: { packageId: currentPackageData.package_id } },
-            stopPropagation: () => {}
+            stopPropagation: () => { }
           });
         } catch (err) {
           console.error('❌ Transfer error:', err);
           toast.error('Lỗi kết nối: ' + err.message);
         }
-    } }
+      }
+    }
   ]);
 }
 
@@ -1098,7 +1014,7 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
 function togglePanelVisibility(button) {
   const panel = button.closest('.pack-side-panel');
   if (!panel) return;
-  
+
   const isCollapsed = panel.classList.toggle('collapsed');
   button.textContent = isCollapsed ? 'Hiện' : 'Ẩn';
 }
