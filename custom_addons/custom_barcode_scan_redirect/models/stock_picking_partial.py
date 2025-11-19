@@ -238,21 +238,27 @@ class StockPickingPartial(models.Model):
             ('result_package_id', '=', package_id)
         ])
 
-        # Lấy tất cả các move_lines có qty_done > 0 (bao gồm cả đã và chưa gán package)
+        # ⭐ Lấy TẤT CẢ move_lines của picking (không search với qty_done)
         all_move_lines = self.env['stock.move.line'].sudo().search([
-            ('picking_id', '=', self.id),
-            ('qty_done', '>', 0)
+            ('picking_id', '=', self.id)
         ])
 
-        # Tạo dict để track qty đã được gán vào package HIỆN TẠI
+        # ⭐ Tạo dict để track qty đã được gán vào package HIỆN TẠI
         product_packaged_qty = {}
         for ml in move_lines:
+            qty = float(ml.qty_done or 0)
+            if qty <= 0:
+                continue
             if ml.product_id.id not in product_packaged_qty:
                 product_packaged_qty[ml.product_id.id] = 0
-            product_packaged_qty[ml.product_id.id] += ml.qty_done
+            product_packaged_qty[ml.product_id.id] += qty
 
         items = []
         for ml in move_lines:
+            # ⭐ Filter bằng Python - chỉ xử lý lines có qty_done > 0
+            qty = float(ml.qty_done or 0)
+            if qty <= 0:
+                continue
             # Lấy SKU từ product barcode hoặc default_code
             product_sku = ml.product_id.barcode or ml.product_id.default_code or 'N/A'
 
@@ -261,7 +267,7 @@ class StockPickingPartial(models.Model):
                 'product_id': ml.product_id.id,
                 'product_name': ml.product_id.name,
                 'product_sku': product_sku,
-                'qty_done': ml.qty_done,
+                'qty_done': qty,
                 'uom': ml.product_uom_id.name,
             })
 
@@ -286,6 +292,8 @@ class StockPickingPartial(models.Model):
         import logging
         _logger = logging.getLogger(__name__)
         _logger.info(f"📦 Package {package_id} - Other packages: {other_packages}")
+
+        _logger.info(f"📦 Package {package_id} - all_items count: {len(all_items)}")
 
         # ⭐ FIX: Lấy all_items - chỉ lấy sản phẩm CHƯA có trong package HIỆN TẠI
         all_items = []
@@ -482,6 +490,16 @@ class StockPickingPartial(models.Model):
         # ⭐ Tính tổng qty chưa pack (đọc qty_done, không search bằng nó)
         total_unassigned_qty = sum(float(ml.qty_done or 0) for ml in unassigned_lines)
 
+        # 🔍 DEBUG: Log chi tiết
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.info(f"🔍 DEBUG add_item_to_package:")
+        _logger.info(f"  - product: {product.name}")
+        _logger.info(f"  - unassigned_lines count: {len(unassigned_lines)}")
+        for ml in unassigned_lines:
+            _logger.info(f"    ML#{ml.id}: qty_done={ml.qty_done}, package={ml.result_package_id.name if ml.result_package_id else 'None'}")
+        _logger.info(f"  - total_unassigned_qty: {total_unassigned_qty}")
+
         # Bước 2: Tính qty đã có trong package HIỆN TẠI
         current_package_lines = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
@@ -561,9 +579,8 @@ class StockPickingPartial(models.Model):
         unassigned_lines = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('product_id', '=', product.id),
-            ('result_package_id', '=', False),
-            ('qty_done', '>', 0)
-        ], order='qty_done desc')
+            ('result_package_id', '=', False)
+        ], order='id desc')
 
         remaining_qty = qty_to_reduce
 
@@ -571,7 +588,12 @@ class StockPickingPartial(models.Model):
             if remaining_qty <= 0:
                 break
 
-            reduce_qty = min(remaining_qty, line.qty_done)
+            # ⭐ Filter bằng Python - chỉ xử lý lines có qty_done > 0
+            qty_done = float(line.qty_done or 0)
+            if qty_done <= 0:
+                continue
+
+            reduce_qty = min(remaining_qty, qty_done)
             line.qty_done -= reduce_qty
             remaining_qty -= reduce_qty
 
@@ -580,15 +602,19 @@ class StockPickingPartial(models.Model):
             other_package_lines = self.env['stock.move.line'].sudo().search([
                 ('picking_id', '=', self.id),
                 ('product_id', '=', product.id),
-                ('result_package_id', '!=', False),
-                ('qty_done', '>', 0)
-            ], order='qty_done desc')
+                ('result_package_id', '!=', False)
+            ], order='id desc')
 
             for line in other_package_lines:
                 if remaining_qty <= 0:
                     break
 
-                reduce_qty = min(remaining_qty, line.qty_done)
+                # ⭐ Filter bằng Python - chỉ xử lý lines có qty_done > 0
+                qty_done = float(line.qty_done or 0)
+                if qty_done <= 0:
+                    continue
+
+                reduce_qty = min(remaining_qty, qty_done)
                 line.qty_done -= reduce_qty
                 remaining_qty -= reduce_qty
 
