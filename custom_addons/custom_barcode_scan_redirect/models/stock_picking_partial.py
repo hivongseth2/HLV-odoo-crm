@@ -306,8 +306,8 @@ class StockPickingPartial(models.Model):
                     'product_name': ml.product_id.name,
                     'move_line_id': ml.id
                 }
-            # Dùng product_uom_qty thay vì qty_done
-            product_qty_map[pid]['total_qty'] += ml.product_uom_qty
+            # ⭐ Dùng product_qty thay vì qty_done
+            product_qty_map[pid]['total_qty'] += ml.product_qty
 
         # Bước 2: Chỉ lấy sản phẩm CHƯA có trong package hiện tại
         for pid, data in product_qty_map.items():
@@ -476,8 +476,8 @@ class StockPickingPartial(models.Model):
             ('result_package_id', '=', False),  # Chưa được pack
         ])
         # ⚠️ QUAN TRỌNG: Không dùng qty_done vì nó là non-stored field
-        # Thay vào đó, tính từ product_uom_qty
-        total_unassigned_qty = sum(ml.product_uom_qty for ml in unassigned_lines)
+        # Thay vào đó, tính từ product_qty
+        total_unassigned_qty = sum(ml.product_qty for ml in unassigned_lines)
 
         # Bước 2: Tính qty đã có trong package HIỆN TẠI
         current_package_lines = self.env['stock.move.line'].sudo().search([
@@ -485,7 +485,7 @@ class StockPickingPartial(models.Model):
             ('product_id', '=', product.id),
             ('result_package_id', '=', package_id)
         ])
-        current_package_qty = sum(ml.product_uom_qty for ml in current_package_lines)
+        current_package_qty = sum(ml.product_qty for ml in current_package_lines)
 
         # Bước 3: Validate - chỉ cần check có đủ qty chưa pack không
         if qty > total_unassigned_qty:
@@ -498,7 +498,7 @@ class StockPickingPartial(models.Model):
             lines_detail = []
             for ml in all_lines:
                 pkg_name = ml.result_package_id.name if ml.result_package_id else 'Chưa pack'
-                lines_detail.append(f"  • Move line #{ml.id}: qty={ml.product_uom_qty}, package={pkg_name}")
+                lines_detail.append(f"  • Move line #{ml.id}: qty={ml.product_qty}, package={pkg_name}")
 
             raise ValidationError(
                 f"⚠️ Không thể thêm {qty} vào package.\n\n"
@@ -515,12 +515,12 @@ class StockPickingPartial(models.Model):
 
         if existing_in_target:
             # Cộng vào sản phẩm hiện có
-            existing_in_target.write({'product_uom_qty': existing_in_target.product_uom_qty + qty})
+            existing_in_target.write({'product_qty': existing_in_target.product_qty + qty})
         else:
             # Tạo move_line mới cho package
             move_line.copy({
                 'result_package_id': package_id,
-                'product_uom_qty': qty,
+                'product_qty': qty,
                 'qty_done': 0,  # Reset qty_done, sẽ được tính lại sau
             })
 
@@ -530,7 +530,7 @@ class StockPickingPartial(models.Model):
             if remaining_qty <= 0:
                 break
 
-            available = ml.product_uom_qty
+            available = ml.product_qty
             take = min(remaining_qty, available)
 
             new_qty = available - take
@@ -539,7 +539,7 @@ class StockPickingPartial(models.Model):
                 ml.unlink()
             else:
                 # Giảm qty
-                ml.write({'product_uom_qty': new_qty})
+                ml.write({'product_qty': new_qty})
 
             remaining_qty -= take
 
