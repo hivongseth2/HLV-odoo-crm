@@ -37,28 +37,33 @@ class BarcodeShipperController(http.Controller):
     def _find_out_picking_by_pick_name(self, pick_name):
         Picking = request.env["stock.picking"].sudo()
 
-        # 1) tìm phiếu PICK (nội bộ)
-        pick = Picking.search(
+        # 0) Thử luôn: có phải đã là phiếu OUT không?
+        out_direct = Picking.search(
             [
                 ("name", "=", pick_name),
-                ("picking_type_id.code", "=", "internal"),
+                ("picking_type_id.code", "=", "outgoing"),
+                ("state", "in", ["assigned", "partially_available"]),
             ],
             limit=1,
         )
+        if out_direct:
+            return out_direct
+
+        # 1) tìm phiếu PICK theo name (bất kể code gì)
+        pick = Picking.search(
+            [("name", "=", pick_name)],
+            limit=1,
+        )
         if not pick:
-            # fallback ilike
             pick = Picking.search(
-                [
-                    ("name", "ilike", pick_name),
-                    ("picking_type_id.code", "=", "internal"),
-                ],
+                [("name", "ilike", pick_name)],
                 limit=1,
             )
 
         if not pick:
             raise UserError(f"PICK order {pick_name} not found")
 
-        # 2) tìm phiếu OUT cùng group/origin/sale
+        # 2) thử theo group_id
         out = False
         if pick.group_id:
             out = Picking.search(
@@ -70,6 +75,7 @@ class BarcodeShipperController(http.Controller):
                 limit=1,
             )
 
+        # 3) fallback theo origin
         if not out and pick.origin:
             out = Picking.search(
                 [
@@ -80,18 +86,8 @@ class BarcodeShipperController(http.Controller):
                 limit=1,
             )
 
-        if not out and pick.sale_id:
-            out = Picking.search(
-                [
-                    ("sale_id", "=", pick.sale_id.id),
-                    ("picking_type_id.code", "=", "outgoing"),
-                    ("state", "in", ["assigned", "partially_available"]),
-                ],
-                limit=1,
-            )
-
         if not out:
-            raise UserError(f"No related OUT order found for PICK {pick_name}")
+            raise UserError(f"No related OUT order found for {pick_name}")
 
         return out
 
