@@ -762,33 +762,7 @@ class CustomBarcodeScanController(http.Controller):
         try:
             result = picking.get_package_details(package_id)
             
-            # Lấy danh sách các package khác của cùng picking (để chuyển sang)
-            other_packages = []
-            package_ids = picking.move_line_ids.mapped('result_package_id').ids
-            if package_ids:
-                packages = request.env['stock.quant.package'].sudo().browse(package_ids)
-                other_packages = [{
-                    'package_id': pkg.id,      # ✅ Đúng field name
-                    'package_name': pkg.name   # ✅ Đúng field name
-                } for pkg in packages if pkg.id != package_id]
-            
-            result['other_packages'] = other_packages
-            
-            # Lấy tất cả items chưa gán vào package nào (để thêm vào)
-            all_items = []
-            unpackaged_lines = picking.move_line_ids.filtered(lambda ml: not ml.result_package_id)
-            for ml in unpackaged_lines:
-                # Lấy move để tính qty available
-                move = ml.move_id
-                available = move.product_uom_qty - sum(move.move_line_ids.mapped('qty_done'))
-                if available > 0:
-                    all_items.append({
-                        'move_line_id': ml.id,
-                        'product_name': ml.product_id.name,
-                        'qty_available': available
-                    })
-            
-            result['all_items'] = all_items
+
             
             return result
         except Exception as e:
