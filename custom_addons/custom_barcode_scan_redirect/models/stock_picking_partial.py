@@ -293,23 +293,18 @@ class StockPickingPartial(models.Model):
         _logger = logging.getLogger(__name__)
         _logger.info(f"📦 Package {package_id} - Other packages: {other_packages}")
 
-        # ⭐ FIX: Lấy all_items - chỉ lấy sản phẩm CHƯA có trong package HIỆN TẠI
+        # ⭐ Bước 6: Lấy all_items - sản phẩm có thể thêm vào package
         all_items = []
         product_qty_map = {}
 
-        # Bước 1: Lấy tất cả move_lines CHƯA ĐƯỢC PACK (result_package_id = False)
-        unassigned_lines = self.env['stock.move.line'].sudo().search([
-            ('picking_id', '=', self.id),
-            ('result_package_id', '=', False),
-        ])
-
-        # Bước 2: Tính tổng qty cho mỗi product (dùng qty_done - đọc giá trị, không search)
-        for ml in unassigned_lines:
-            pid = ml.product_id.id
-            qty = float(ml.qty_done or 0)  # ⭐ Đọc giá trị, không search
-
+        # Duyệt TẤT CẢ move_lines của picking
+        for ml in all_move_lines:
+            # ⭐ CHỈ lấy move_lines ĐÃ SCAN (qty_done > 0)
+            qty = float(ml.qty_done or 0)
             if qty <= 0:
                 continue
+
+            pid = ml.product_id.id
 
             if pid not in product_qty_map:
                 product_qty_map[pid] = {
@@ -319,15 +314,16 @@ class StockPickingPartial(models.Model):
                 }
             product_qty_map[pid]['total_qty'] += qty
 
-        # Bước 3: Chỉ lấy sản phẩm CHƯA có trong package hiện tại
+        # ⭐ Tính qty available cho mỗi sản phẩm
+        # Công thức: available = total_scanned - qty_in_current_package
         for pid, data in product_qty_map.items():
-            # Bỏ qua nếu đã có trong package hiện tại
-            if pid in product_packaged_qty:
-                continue
+            # Qty đã có trong package hiện tại
+            qty_in_current = product_packaged_qty.get(pid, 0)
 
-            qty_available = data['total_qty']
+            # Qty available để thêm
+            qty_available = data['total_qty'] - qty_in_current
 
-            # Chỉ thêm nếu còn qty > 0
+            # ⭐ CHỈ show nếu còn qty available > 0
             if qty_available > 0:
                 all_items.append({
                     'move_line_id': data['move_line_id'],
@@ -335,7 +331,7 @@ class StockPickingPartial(models.Model):
                     'qty_available': qty_available
                 })
 
-        _logger.info(f"📦 Package {package_id} - all_items count: {len(all_items)}")
+        _logger.info(f"📦 Package {package_id} - all_items: {all_items}")
 
         return {
             'package_id': package.id,
