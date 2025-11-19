@@ -179,49 +179,50 @@
 
     <!-- MODAL: Edit Package -->
     <div id="packageEditModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(3px); z-index: 9999; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-      <div class="modal-container" style="background: white; width: 95%; max-width: 600px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); overflow: hidden; display: flex; flex-direction: column; max-height: 90vh; animation: modalFadeIn 0.2s ease-out;">
+      <div class="modal-container" style="background: #f8f9fa; width: 95%; max-width: 550px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); overflow: hidden; display: flex; flex-direction: column; max-height: 90vh; animation: modalFadeIn 0.2s ease-out;">
         <!-- Header -->
-        <div class="modal-header" style="padding: 1.5rem; border-bottom: 1px solid #f1f3f5; display: flex; justify-content: space-between; align-items: flex-start; background: #fff;">
+        <div class="modal-header" style="padding: 1.25rem 1.5rem; background: white; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: flex-start; flex-shrink: 0;">
           <div class="modal-title-section">
-            <h2 class="modal-title" style="margin: 0; font-size: 1.4rem; font-weight: 700; color: #212529; line-height: 1.2;">
+            <h2 class="modal-title" style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #212529;">
               <span id="modalPackageName">PACK...</span>
             </h2>
-            <p class="modal-subtitle" style="margin: 0.25rem 0 0; font-size: 0.9rem; color: #868e96;">Quản lý sản phẩm trong gói hàng</p>
+            <p class="modal-subtitle" style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #868e96;">Quản lý sản phẩm trong gói hàng</p>
           </div>
-          <button onclick="closePackageEditModal()" class="modal-close" style="background: #f8f9fa; border: none; color: #868e96; cursor: pointer; padding: 0.5rem; border-radius: 50%; transition: all 0.2s; display: flex; align-items: center; justify-content: center;">
+          <button onclick="closePackageEditModal()" class="modal-close" style="background: transparent; border: none; color: #adb5bd; cursor: pointer; padding: 0.5rem; border-radius: 50%; transition: all 0.2s; display: flex; align-items: center; justify-content: center;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
 
         <!-- Content -->
-        <div class="modal-content" style="padding: 0; overflow-y: auto; flex: 1;">
-          <!-- Current Items Section -->
-          <div class="modal-section" style="padding: 1.5rem;">
-            <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-              <h3 class="section-title" style="margin: 0; font-size: 1rem; font-weight: 600; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Sản phẩm hiện có</h3>
-              <span class="item-count-badge" id="itemCountBadge" style="background: #e7f5ff; color: #1971c2; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.85rem; font-weight: 700;">0</span>
+        <div class="modal-content" style="padding: 1.5rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1rem;">
+          
+          <!-- Current Items Card -->
+          <div class="modal-card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f1f3f5; padding: 1.25rem; width: 100%; box-sizing: border-box;">
+            <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
+              <h3 class="section-title" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Sản phẩm hiện có</h3>
+              <span class="item-count-badge" id="itemCountBadge" style="background: #e7f5ff; color: #1971c2; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.8rem; font-weight: 700;">0</span>
             </div>
             <div id="packageItemsList" class="items-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
               <!-- Items will be populated by JavaScript -->
             </div>
           </div>
 
-          <!-- Add Items Section -->
-          <div class="modal-section add-section" style="padding: 1.5rem; background: #f8f9fa; border-top: 1px solid #f1f3f5;">
-            <div class="section-header" style="margin-bottom: 1rem;">
-              <h3 class="section-title" style="margin: 0; font-size: 1rem; font-weight: 600; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Thêm sản phẩm mới</h3>
+          <!-- Add Items Card -->
+          <div class="modal-card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f1f3f5; padding: 1.25rem; width: 100%; box-sizing: border-box;">
+            <div class="section-header" style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
+              <h3 class="section-title" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Thêm sản phẩm mới</h3>
             </div>
-            <div class="add-form" style="background: white; padding: 1rem; border-radius: 10px; border: 1px solid #e9ecef; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-              <div class="form-grid" style="display: grid; grid-template-columns: 1fr 80px; gap: 1rem; margin-bottom: 1rem;">
+            <div class="add-form">
+              <div class="form-grid" style="display: grid; grid-template-columns: 1fr 100px; gap: 1rem; margin-bottom: 1rem;">
                 <div class="form-group">
-                  <label class="form-label" style="display: block; font-size: 0.85rem; font-weight: 600; color: #495057; margin-bottom: 0.4rem;">Chọn sản phẩm</label>
-                  <select id="addItemSelect" class="form-select" style="width: 100%; padding: 0.6rem; border: 1px solid #dee2e6; border-radius: 6px; font-size: 0.95rem; color: #212529; background-color: #fff;">
+                  <label class="form-label" style="display: block; font-size: 0.8rem; font-weight: 600; color: #868e96; margin-bottom: 0.4rem; text-transform: uppercase;">Chọn sản phẩm</label>
+                  <select id="addItemSelect" class="form-select" style="width: 100%; padding: 0.6rem; border: 1px solid #dee2e6; border-radius: 8px; font-size: 0.95rem; color: #212529; background-color: #fff; height: 42px; box-sizing: border-box;">
                     <option value="">-- Chọn sản phẩm --</option>
                   </select>
                 </div>
                 <div class="form-group form-group-qty">
-                  <label class="form-label" style="display: block; font-size: 0.85rem; font-weight: 600; color: #495057; margin-bottom: 0.4rem;">Số lượng</label>
-                  <input id="addItemQty" type="number" min="1" value="1" class="form-input-qty" style="width: 100%; padding: 0.6rem; border: 1px solid #dee2e6; border-radius: 6px; font-size: 0.95rem; text-align: center; color: #212529;"/>
+                  <label class="form-label" style="display: block; font-size: 0.8rem; font-weight: 600; color: #868e96; margin-bottom: 0.4rem; text-transform: uppercase;">Số lượng</label>
+                  <input id="addItemQty" type="number" min="1" value="1" class="form-input-qty" style="width: 100%; padding: 0.6rem; border: 1px solid #dee2e6; border-radius: 8px; font-size: 0.95rem; text-align: center; color: #212529; height: 42px; box-sizing: border-box;"/>
                 </div>
               </div>
               <button onclick="addItemToPackage()" class="btn-add" style="width: 100%; padding: 0.75rem; background: #228be6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: background 0.2s; font-size: 0.95rem;">
@@ -230,14 +231,15 @@
               </button>
             </div>
           </div>
+
         </div>
 
         <!-- Footer Actions -->
-        <div class="modal-footer" style="padding: 1.25rem 1.5rem; border-top: 1px solid #f1f3f5; display: flex; justify-content: flex-end; gap: 1rem; background: white;">
-          <button onclick="closePackageEditModal()" class="btn btn-secondary" style="padding: 0.75rem 1.5rem; background: white; border: 1px solid #dee2e6; color: #495057; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+        <div class="modal-footer" style="padding: 1.25rem 1.5rem; background: white; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.75rem; flex-shrink: 0;">
+          <button onclick="closePackageEditModal()" class="btn btn-secondary" style="padding: 0.6rem 1.25rem; background: white; border: 1px solid #dee2e6; color: #495057; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-size: 0.9rem;">
             Hủy
           </button>
-          <button onclick="savePackageChanges()" class="btn btn-primary" style="padding: 0.75rem 1.5rem; background: #12b886; border: none; color: white; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(18, 184, 134, 0.25); transition: all 0.2s;">
+          <button onclick="savePackageChanges()" class="btn btn-primary" style="padding: 0.6rem 1.25rem; background: #12b886; border: none; color: white; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(18, 184, 134, 0.25); transition: all 0.2s; font-size: 0.9rem;">
             Lưu thay đổi
           </button>
         </div>
