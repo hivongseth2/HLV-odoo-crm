@@ -244,7 +244,7 @@ class StockPickingPartial(models.Model):
             ('qty_done', '>', 0)
         ])
 
-        # Tạo dict để track qty đã được gán vào package
+        # Tạo dict để track qty đã được gán vào package HIỆN TẠI
         product_packaged_qty = {}
         for ml in move_lines:
             if ml.product_id.id not in product_packaged_qty:
@@ -265,48 +265,67 @@ class StockPickingPartial(models.Model):
                 'uom': ml.product_uom_id.name,
             })
 
-        # Lấy tất cả packages khác của picking này
-        all_package_lines = self.env['stock.move.line'].sudo().search([
+        # FIX: Lấy tất cả packages CỦA PICKING NÀY (không chỉ từ move_lines)
+        all_packages_in_picking = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('result_package_id', '!=', False)
-        ])
-        all_package_ids = list(set(all_package_lines.mapped('result_package_id').ids))
-
+        ]).mapped('result_package_id')
+        
+        # Loại bỏ package hiện tại và tạo danh sách other_packages
         other_packages = []
-        if all_package_ids:
-            packages = Package.sudo().browse(all_package_ids)
-            for pkg in packages:
-                if pkg.id != package_id:
-                    other_packages.append({
-                        'package_id': pkg.id,
-                        'package_name': pkg.name
-                    })
+        for pkg in all_packages_in_picking:
+            if pkg.id != package_id:
+                other_packages.append({
+                    'package_id': pkg.id,
+                    'package_name': pkg.name
+                })
 
-        # Lấy tất cả items có thể thêm vào package (chỉ lấy sản phẩm chưa có trong package hiện tại)
+        # FIX: Lấy all_items - chỉ lấy UNIQUE products theo product_id
+        # và chỉ lấy sản phẩm CHƯA có trong package HIỆN TẠI
         all_items = []
-        processed_products = set()  # Để tránh duplicate
-
+        product_qty_map = {}  # {product_id: total_qty_available}
+        
+        # Tính tổng qty_done cho mỗi product từ TẤT CẢ move_lines
         for ml in all_move_lines:
-            product_id = ml.product_id.id
-
-            # Nếu sản phẩm này đã có trong package hiện tại, bỏ qua
-            if product_id in product_packaged_qty:
-                continue
-
-            # Nếu đã xử lý sản phẩm này rồi, bỏ qua để tránh duplicate
-            if product_id in processed_products:
-                continue
-
-            # Tính tổng qty cho sản phẩm này từ tất cả move_lines
-            total_qty_for_product = sum(m.qty_done for m in all_move_lines if m.product_id.id == product_id)
-
-            processed_products.add(product_id)
-
-            if total_qty_for_product > 0:
-                all_items.append({
-                    'move_line_id': ml.id,  # Lấy một move_line_id làm đại diện
+            pid = ml.product_id.id
+            if pid not in product_qty_map:
+                product_qty_map[pid] = {
+                    'total_qty': 0,
                     'product_name': ml.product_id.name,
-                    'qty_available': total_qty_for_product
+                    'move_line_id': ml.id  # Lấy move_line_id đại diện
+                }
+            product_qty_map[pid]['total_qty'] += ml.qty_done
+
+        # Tính qty đã được gán vào TẤT CẢ packages (bao gồm cả package hiện tại)
+        all_packaged_lines = self.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', self.id),
+            ('result_package_id', '!=', False),
+            ('qty_done', '>', 0)
+        ])
+        
+        product_in_all_packages = {}  # {product_id: total_qty_in_all_packages}
+        for ml in all_packaged_lines:
+            pid = ml.product_id.id
+            if pid not in product_in_all_packages:
+                product_in_all_packages[pid] = 0
+            product_in_all_packages[pid] += ml.qty_done
+
+        # Chỉ lấy sản phẩm có qty_available > 0 (chưa được pack hết)
+        # HOẶC sản phẩm chưa có trong package hiện tại
+        for pid, data in product_qty_map.items():
+            # Qty đã pack (toàn bộ)
+            qty_packed = product_in_all_packages.get(pid, 0)
+            
+            # Qty available = total - qty_packed
+            qty_available = data['total_qty'] - qty_packed
+            
+            # Nếu sản phẩm này CHƯA có trong package hiện tại
+            # VÀ còn qty available > 0
+            if pid not in product_packaged_qty and qty_available > 0:
+                all_items.append({
+                    'move_line_id': data['move_line_id'],
+                    'product_name': data['product_name'],
+                    'qty_available': qty_available
                 })
 
         return {
