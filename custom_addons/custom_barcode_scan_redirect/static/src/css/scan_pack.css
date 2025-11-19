@@ -17,6 +17,64 @@
 .text-brand { color: #1663f1; }
 .pack-topbar .right { display:flex; align-items:center; gap:10px; }
 
+/* Topbar action buttons - original design */
+#btnPrintLabel, #btnPartialPack, #btnDriveSwitch {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+#btnPrintLabel:hover, #btnPartialPack:hover, #btnDriveSwitch:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+#btnPrintLabel {
+  background: #0b69d7;
+  color: #fff;
+}
+
+#btnPartialPack {
+  background: #0b69d7;
+  color: #fff;
+}
+
+#btnDriveSwitch {
+  background: #0b69d7;
+  color: #fff;
+}
+
+/* Complete pack button - original design */
+#complete_pack_btn {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .2s;
+  background: #0b69d7;
+  color: #fff;
+  width: 100%;
+  min-height: 44px;
+}
+
+#complete_pack_btn:hover {
+  background: #0957b5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(11, 105, 215, 0.3);
+}
+
+#complete_pack_btn:active {
+  transform: translateY(0);
+}
+
 /* Grid */
 .pack-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
 @media (max-width: 1024px) { .pack-grid { grid-template-columns: 1fr; } }

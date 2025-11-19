@@ -365,6 +365,11 @@ class CustomBarcodeScanController(http.Controller):
                 'id': pkg.id,
                 'name': pkg.name,
                 'qty': sum(ml.qty_done for ml in picking.move_line_ids.filtered(lambda ml: ml.result_package_id.id == pkg.id)),
+                'package_lines': [{
+                    'product_name': ml.product_id.display_name,
+                    'product_qty': ml.qty_done,
+                    'product_uom': ml.product_uom_id.name,
+                } for ml in picking.move_line_ids.filtered(lambda ml: ml.result_package_id.id == pkg.id)],
             } for pkg in packages]
 
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {

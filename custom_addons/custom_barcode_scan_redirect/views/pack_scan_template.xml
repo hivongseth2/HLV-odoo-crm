@@ -22,9 +22,9 @@
           <div class="right">
             <span t-if="drive_connected" class="badge badge-ok">Drive đã kết nối</span>
             <span t-if="not drive_connected" class="badge badge-warn">Chưa kết nối Drive</span>
-            <button id="btnPrintLabel" class="btn-secondary" title="In nhãn dán sản phẩm">In nhãn</button>
-            <button id="btnPartialPack" class="btn-secondary" title="Tạo partial pack">Pack 1 phần</button>
-            <button id="btnDriveSwitch" class="btn-secondary">Đổi tài khoản Drive</button>
+            <button id="btnPrintLabel" title="In nhãn dán sản phẩm">In nhãn</button>
+            <button id="btnPartialPack" title="Tạo partial pack">Gói hàng 1 phần</button>
+            <button id="btnDriveSwitch">Đổi tài khoản Drive</button>
           </div>
         </div>
 
@@ -56,7 +56,7 @@
 
         </ul>
             <div class="actions">
-              <button id="complete_pack_btn" class="btn-primary">Hoàn tất</button>
+              <button id="complete_pack_btn">Hoàn tất</button>
             </div>
           </div>
 
@@ -83,50 +83,58 @@
         <script src="/custom_barcode_scan_redirect/static/src/js/scan_pack.js"></script>
       </div>
       <!-- PANEL danh sách PACK khác (góc phải) -->
-<div class="pack-side-panel">
-  <div class="panel-header">
-    <div class="panel-title">Gói hàng cùng đơn</div>
-    <button type="button" onclick="togglePanelVisibility(this)" class="panel-toggle-btn">
-      Ẩn
+<div class="pack-side-panel" style="background: #f8f9fa; border-left: 1px solid #e9ecef; display: flex; flex-direction: column; height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <div class="panel-header" style="padding: 1rem 1.25rem; background: white; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); z-index: 10;">
+    <div class="panel-title" style="font-weight: 700; font-size: 1.1rem; color: #343a40; display: flex; align-items: center; gap: 0.5rem;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #228be6;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+      Gói hàng
+    </div>
+    <button type="button" onclick="togglePanelVisibility(this)" class="panel-toggle-btn" style="border: none; background: transparent; color: #adb5bd; cursor: pointer; padding: 0.5rem; border-radius: 4px; transition: all 0.2s;" title="Ẩn panel">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
     </button>
   </div>
-  <div class="panel-body">
+
+  <div class="panel-body" style="flex: 1; overflow-y: auto; padding: 1.25rem;">
     <!-- Section 1: Current Picking Packages -->
     <t t-if="picking_packages">
-      <div class="panel-section">
-        <div class="panel-section-title">Gói hàng đơn này</div>
-      </div>
-      <ul class="panel-packages-list">
+      <div class="panel-section-title" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.6px; color: #868e96; margin-bottom: 0.75rem; font-weight: 700;">Gói hàng hiện tại</div>
+      <ul class="panel-packages-list" style="list-style: none; padding: 0; margin: 0;">
         <t t-foreach="picking_packages" t-as="pkg">
-          <li class="package-item-card" t-att-data-package-id="pkg['id']">
-            <div class="package-item-header">
-              <strong class="package-item-name" t-esc="pkg['name']"/>
-              <span class="package-item-qty"><t t-esc="pkg['qty']"/> SP</span>
+          <li class="package-item-card" t-att-data-package-id="pkg['id']" style="background: white; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; transition: transform 0.2s ease, box-shadow 0.2s ease;">
+            <div class="package-item-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
+              <strong class="package-item-name" t-esc="pkg['name']" style="font-size: 0.95rem; color: #212529; font-weight: 600;"/>
+              <span class="badge" style="background: #e7f5ff; color: #1c7ed6; padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+                <t t-esc="pkg['qty']"/>
+              </span>
             </div>
-            <div class="package-items-preview">
+            
+            <div class="package-items-preview" style="margin-bottom: 1rem; font-size: 0.85rem; color: #495057;">
               <t t-if="pkg.get('package_lines')">
                 <t t-foreach="pkg['package_lines']" t-as="line">
-                  <div class="preview-item">
-                    <span class="preview-item-name" t-esc="line['product_name']"/>
-                    <span class="preview-item-qty">×<t t-esc="line['product_qty']"/></span>
+                  <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
+                    <span class="preview-item-name" t-esc="line['product_name']" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;"/>
+                    <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x<t t-esc="line['product_qty']"/></span>
                   </div>
                 </t>
               </t>
               <t t-elif="pkg.get('move_line_ids')">
                 <t t-foreach="pkg['move_line_ids']" t-as="line">
-                  <div class="preview-item">
-                    <span class="preview-item-name" t-esc="line['product_name']"/>
-                    <span class="preview-item-qty">×<t t-esc="line['product_qty']"/></span>
+                  <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
+                    <span class="preview-item-name" t-esc="line['product_name']" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;"/>
+                    <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x<t t-esc="line['product_qty']"/></span>
                   </div>
                 </t>
               </t>
               <t t-else="">
-                <div class="preview-empty">
-                  <span class="preview-item-name">Chưa có chi tiết sản phẩm</span>
+                <div class="preview-empty" style="text-align: center; color: #adb5bd; font-style: italic; padding: 0.5rem;">
+                  Chưa có chi tiết sản phẩm
                 </div>
               </t>
             </div>
-            <button class="btn-package-edit" t-att-data-package-id="pkg['id']" onclick="openPackageEditModal(event)">
+
+            <button class="btn-package-edit" t-att-data-package-id="pkg['id']" onclick="openPackageEditModal(event)" style="width: 100%; padding: 0.6rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; color: #495057; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
               Chỉnh sửa
             </button>
           </li>
@@ -136,102 +144,102 @@
     
     <!-- Empty state for current picking -->
     <t t-if="not picking_packages">
-      <div class="panel-section">
-        <div class="panel-section-title">Gói hàng đơn này</div>
-      </div>
-      <div class="panel-empty-state">
-        Chưa có gói hàng. Quét sản phẩm và nhấn "Pack 1 phần" để tạo.
+      <div class="panel-section-title" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.6px; color: #868e96; margin-bottom: 0.75rem; font-weight: 700;">Gói hàng hiện tại</div>
+      <div class="panel-empty-state" style="text-align: center; padding: 3rem 1rem; color: #adb5bd; background: white; border-radius: 10px; border: 1px dashed #dee2e6;">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 1rem; color: #ced4da;"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+        <p style="margin: 0; font-size: 0.9rem; line-height: 1.5;">Chưa có gói hàng.<br/>Quét sản phẩm và nhấn <strong style="color: #495057;">"Pack 1 phần"</strong> để tạo.</p>
       </div>
     </t>
     
     <!-- Section 2: Related Pickings/Sibling Packs -->
     <t t-if="sibling_packs">
-      <div class="panel-section panel-section-related">
-        <div class="panel-section-title">Đơn hàng khác cùng order</div>
-      </div>
-      <ul class="panel-packages-list">
-        <t t-foreach="sibling_packs" t-as="sp">
-          <li class="sibling-package-item" t-att-data-package-id="sp['id']">
-            <div class="sibling-package-header">
-              <a t-att-href="'/custom_barcode_scan/pack_view/%s' % sp['id']" class="sibling-package-name">
-                <t t-esc="sp['name']"/>
-              </a>
-              <span t-attf-class="package-status #{'status-ready' if sp['state'] in ['assigned','in_progress'] else ('status-pending' if sp['state'] in ['waiting','confirmed'] else 'status-done')}">
+      <div class="panel-section panel-section-related" style="margin-top: 2rem;">
+        <div class="panel-section-title" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.6px; color: #868e96; margin-bottom: 0.75rem; font-weight: 700;">Đơn hàng khác cùng Order</div>
+        <ul class="panel-packages-list" style="list-style: none; padding: 0; margin: 0;">
+          <t t-foreach="sibling_packs" t-as="sp">
+            <li class="sibling-package-item" t-att-data-package-id="sp['id']" style="background: white; border-radius: 8px; padding: 0.85rem 1rem; margin-bottom: 0.75rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02); border: 1px solid #f1f3f5; display: flex; justify-content: space-between; align-items: center;">
+              <div class="sibling-package-header" style="display: flex; align-items: center; gap: 0.75rem; flex: 1;">
+                <div class="icon-wrapper" style="background: #f8f9fa; padding: 0.4rem; border-radius: 6px; color: #868e96;">
+                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                </div>
+                <a t-att-href="'/custom_barcode_scan/pack_view/%s' % sp['id']" class="sibling-package-name" style="text-decoration: none; color: #495057; font-weight: 500; font-size: 0.9rem; transition: color 0.2s;">
+                  <t t-esc="sp['name']"/>
+                </a>
+              </div>
+              <span t-attf-class="package-status #{'status-ready' if sp['state'] in ['assigned','in_progress'] else ('status-pending' if sp['state'] in ['waiting','confirmed'] else 'status-done')}" style="font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.6rem; border-radius: 20px; text-transform: capitalize;">
                 <t t-esc="sp['state_label']"/>
               </span>
-            </div>
-          </li>
-        </t>
-      </ul>
+            </li>
+          </t>
+        </ul>
+      </div>
     </t>
   </div>
 </div>
 
     <!-- MODAL: Edit Package -->
-    <div id="packageEditModal" class="modal-overlay">
-      <div class="modal-container">
+    <div id="packageEditModal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(3px); z-index: 9999; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+      <div class="modal-container" style="background: #f8f9fa; width: 95%; max-width: 550px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); overflow: hidden; display: flex; flex-direction: column; max-height: 90vh; animation: modalFadeIn 0.2s ease-out;">
         <!-- Header -->
-        <div class="modal-header">
+        <div class="modal-header" style="padding: 1.25rem 1.5rem; background: white; border-bottom: 1px solid #e9ecef; display: flex; justify-content: space-between; align-items: flex-start; flex-shrink: 0;">
           <div class="modal-title-section">
-            <h2 class="modal-title">
-              <span id="modalPackageName">PACK0000001</span>
+            <h2 class="modal-title" style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #212529;">
+              <span id="modalPackageName">PACK...</span>
             </h2>
-            <p class="modal-subtitle">Quản lý sản phẩm trong gói hàng</p>
+            <p class="modal-subtitle" style="margin: 0.25rem 0 0; font-size: 0.85rem; color: #868e96;">Quản lý sản phẩm trong gói hàng</p>
           </div>
-          <button onclick="closePackageEditModal()" class="modal-close">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/>
-            </svg>
+          <button onclick="closePackageEditModal()" class="modal-close" style="background: transparent; border: none; color: #adb5bd; cursor: pointer; padding: 0.5rem; border-radius: 50%; transition: all 0.2s; display: flex; align-items: center; justify-content: center;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
 
         <!-- Content -->
-        <div class="modal-content">
-          <!-- Current Items Section -->
-          <div class="modal-section">
-            <div class="section-header">
-              <h3 class="section-title">Sản phẩm hiện có</h3>
-              <span class="item-count-badge" id="itemCountBadge">0</span>
+        <div class="modal-content" style="padding: 1.5rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1rem;">
+          
+          <!-- Current Items Card -->
+          <div class="modal-card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f1f3f5; padding: 1.25rem; width: 100%; box-sizing: border-box;">
+            <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
+              <h3 class="section-title" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Sản phẩm hiện có</h3>
+              <span class="item-count-badge" id="itemCountBadge" style="background: #e7f5ff; color: #1971c2; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.8rem; font-weight: 700;">0</span>
             </div>
-            <div id="packageItemsList" class="items-list">
+            <div id="packageItemsList" class="items-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
               <!-- Items will be populated by JavaScript -->
             </div>
           </div>
 
-          <!-- Add Items Section -->
-          <div class="modal-section add-section">
-            <div class="section-header">
-              <h3 class="section-title">Thêm sản phẩm mới</h3>
+          <!-- Add Items Card -->
+          <div class="modal-card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f1f3f5; padding: 1.25rem; width: 100%; box-sizing: border-box;">
+            <div class="section-header" style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
+              <h3 class="section-title" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Thêm sản phẩm mới</h3>
             </div>
             <div class="add-form">
-              <div class="form-grid">
+              <div class="form-grid" style="display: grid; grid-template-columns: 1fr 100px; gap: 1rem; margin-bottom: 1rem;">
                 <div class="form-group">
-                  <label class="form-label">Chọn sản phẩm</label>
-                  <select id="addItemSelect" class="form-select">
+                  <label class="form-label" style="display: block; font-size: 0.8rem; font-weight: 600; color: #868e96; margin-bottom: 0.4rem; text-transform: uppercase;">Chọn sản phẩm</label>
+                  <select id="addItemSelect" class="form-select" style="width: 100%; padding: 0.6rem; border: 1px solid #dee2e6; border-radius: 8px; font-size: 0.95rem; color: #212529; background-color: #fff; height: 42px; box-sizing: border-box;">
                     <option value="">-- Chọn sản phẩm --</option>
                   </select>
                 </div>
                 <div class="form-group form-group-qty">
-                  <label class="form-label">Số lượng</label>
-                  <input id="addItemQty" type="number" min="1" value="1" class="form-input-qty"/>
+                  <label class="form-label" style="display: block; font-size: 0.8rem; font-weight: 600; color: #868e96; margin-bottom: 0.4rem; text-transform: uppercase;">Số lượng</label>
+                  <input id="addItemQty" type="number" min="1" value="1" class="form-input-qty" style="width: 100%; padding: 0.6rem; border: 1px solid #dee2e6; border-radius: 8px; font-size: 0.95rem; text-align: center; color: #212529; height: 42px; box-sizing: border-box;"/>
                 </div>
               </div>
-              <button onclick="addItemToPackage()" class="btn-add">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M8 0a.75.75 0 01.75.75v6.5h6.5a.75.75 0 010 1.5h-6.5v6.5a.75.75 0 01-1.5 0v-6.5H.75a.75.75 0 010-1.5h6.5V.75A.75.75 0 018 0z"/>
-                </svg>
+              <button onclick="addItemToPackage()" class="btn-add" style="width: 100%; padding: 0.75rem; background: #228be6; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: background 0.2s; font-size: 0.95rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 Thêm vào gói
               </button>
             </div>
           </div>
+
         </div>
 
         <!-- Footer Actions -->
-        <div class="modal-footer">
-          <button onclick="closePackageEditModal()" class="btn btn-secondary">
+        <div class="modal-footer" style="padding: 1.25rem 1.5rem; background: white; border-top: 1px solid #e9ecef; display: flex; justify-content: flex-end; gap: 0.75rem; flex-shrink: 0;">
+          <button onclick="closePackageEditModal()" class="btn btn-secondary" style="padding: 0.6rem 1.25rem; background: white; border: 1px solid #dee2e6; color: #495057; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-size: 0.9rem;">
             Hủy
           </button>
-          <button onclick="savePackageChanges()" class="btn btn-primary">
+          <button onclick="savePackageChanges()" class="btn btn-primary" style="padding: 0.6rem 1.25rem; background: #12b886; border: none; color: white; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(18, 184, 134, 0.25); transition: all 0.2s; font-size: 0.9rem;">
             Lưu thay đổi
           </button>
         </div>
