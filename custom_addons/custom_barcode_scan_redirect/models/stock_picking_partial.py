@@ -265,28 +265,40 @@ class StockPickingPartial(models.Model):
                 'uom': ml.product_uom_id.name,
             })
 
-        # FIX: Lấy tất cả packages CỦA PICKING NÀY (không chỉ từ move_lines)
+        # FIX: Lấy tất cả packages CỦA PICKING NÀY
         all_packages_in_picking = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('result_package_id', '!=', False)
         ]).mapped('result_package_id')
-        
+
         # Loại bỏ package hiện tại và tạo danh sách other_packages
         other_packages = []
         for pkg in all_packages_in_picking:
             if pkg.id != package_id:
+                # Đảm bảo package có name
+                pkg_name = pkg.name if pkg.name else f"PACK{pkg.id}"
                 other_packages.append({
                     'package_id': pkg.id,
-                    'package_name': pkg.name
+                    'package_name': pkg_name
                 })
+
+        # DEBUG: Log để check
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.info(f"📦 Package {package_id} - Other packages: {other_packages}")
 
         # FIX: Lấy all_items - chỉ lấy UNIQUE products theo product_id
         # CHỈ lấy sản phẩm CHƯA có trong package HIỆN TẠI
         all_items = []
-        product_qty_map = {}  # {product_id: total_qty_available}
+        product_qty_map = {}
 
-        # Bước 1: Tính tổng qty_done cho mỗi product từ TẤT CẢ move_lines
-        for ml in all_move_lines:
+        # Bước 1: Tính tổng qty CHƯA ĐƯỢC PACK (result_package_id = False)
+        unassigned_lines = self.env['stock.move.line'].sudo().search([
+            ('picking_id', '=', self.id),
+            ('result_package_id', '=', False),
+        ])
+
+        for ml in unassigned_lines:
             pid = ml.product_id.id
             if pid not in product_qty_map:
                 product_qty_map[pid] = {
@@ -294,34 +306,16 @@ class StockPickingPartial(models.Model):
                     'product_name': ml.product_id.name,
                     'move_line_id': ml.id
                 }
-            product_qty_map[pid]['total_qty'] += ml.qty_done
+            # Dùng product_uom_qty thay vì qty_done
+            product_qty_map[pid]['total_qty'] += ml.product_uom_qty
 
-        # Bước 2: Tính qty đã được gán vào CÁC PACKAGES KHÁC (không bao gồm package hiện tại)
-        other_packaged_lines = self.env['stock.move.line'].sudo().search([
-            ('picking_id', '=', self.id),
-            ('result_package_id', '!=', False),
-            ('result_package_id', '!=', package_id),  # ⭐ KEY: Loại trừ package hiện tại
-            ('qty_done', '>', 0)
-        ])
-
-        product_in_other_packages = {}
-        for ml in other_packaged_lines:
-            pid = ml.product_id.id
-            if pid not in product_in_other_packages:
-                product_in_other_packages[pid] = 0
-            product_in_other_packages[pid] += ml.qty_done
-
-        # Bước 3: Chỉ lấy sản phẩm CHƯA có trong package hiện tại
+        # Bước 2: Chỉ lấy sản phẩm CHƯA có trong package hiện tại
         for pid, data in product_qty_map.items():
             # Bỏ qua nếu đã có trong package hiện tại
             if pid in product_packaged_qty:
                 continue
 
-            # Qty đã pack vào CÁC PACKAGE KHÁC (không tính package hiện tại)
-            qty_in_others = product_in_other_packages.get(pid, 0)
-
-            # ⭐ Công thức đúng: qty_available = total_qty - qty_in_others
-            qty_available = data['total_qty'] - qty_in_others
+            qty_available = data['total_qty']
 
             # Chỉ thêm nếu còn qty > 0
             if qty_available > 0:
@@ -475,63 +469,79 @@ class StockPickingPartial(models.Model):
         # Lấy product từ move_line
         product = move_line.product_id
 
-        # Bước 1: Tính tổng qty_done của tất cả move_line cho sản phẩm này
-        product_move_lines = self.env['stock.move.line'].sudo().search([
+        # Bước 1: Tính tổng qty có SẴN để pack (chưa được gán vào package nào)
+        unassigned_lines = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('product_id', '=', product.id),
-            ('qty_done', '>', 0)
+            ('result_package_id', '=', False),  # Chưa được pack
         ])
-        total_qty_done = sum(ml.qty_done for ml in product_move_lines)
+        # ⚠️ QUAN TRỌNG: Không dùng qty_done vì nó là non-stored field
+        # Thay vào đó, tính từ product_uom_qty
+        total_unassigned_qty = sum(ml.product_uom_qty for ml in unassigned_lines)
 
-        # Bước 2: Tính qty đã có trong CÁC PACKAGES KHÁC (không tính package hiện tại)
-        other_package_lines = self.env['stock.move.line'].sudo().search([
-            ('picking_id', '=', self.id),
-            ('product_id', '=', product.id),
-            ('result_package_id', '!=', False),
-            ('result_package_id', '!=', package_id)
-        ])
-        other_packages_qty = sum(ml.qty_done for ml in other_package_lines)
-
-        # Bước 3: Tính qty đã có trong package HIỆN TẠI
+        # Bước 2: Tính qty đã có trong package HIỆN TẠI
         current_package_lines = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('product_id', '=', product.id),
             ('result_package_id', '=', package_id)
         ])
-        current_package_qty = sum(ml.qty_done for ml in current_package_lines)
+        current_package_qty = sum(ml.product_uom_qty for ml in current_package_lines)
 
-        # Bước 4: Tính qty available để thêm vào package hiện tại
-        # Công thức: qty_available = total_qty_done - other_packages_qty - current_package_qty
-        qty_available = total_qty_done - other_packages_qty - current_package_qty
+        # Bước 3: Validate - chỉ cần check có đủ qty chưa pack không
+        if qty > total_unassigned_qty:
+            # Lấy thêm thông tin để debug
+            all_lines = self.env['stock.move.line'].sudo().search([
+                ('picking_id', '=', self.id),
+                ('product_id', '=', product.id),
+            ])
 
-        # Bước 5: Validate
-        if qty > qty_available:
+            lines_detail = []
+            for ml in all_lines:
+                pkg_name = ml.result_package_id.name if ml.result_package_id else 'Chưa pack'
+                lines_detail.append(f"  • Move line #{ml.id}: qty={ml.product_uom_qty}, package={pkg_name}")
+
             raise ValidationError(
                 f"⚠️ Không thể thêm {qty} vào package.\n\n"
                 f"📊 Thống kê sản phẩm '{product.name}':\n"
-                f"• Tổng qty đã quét: {total_qty_done}\n"
-                f"• Đã có trong các gói khác: {other_packages_qty}\n"
+                f"• Số lượng chưa được pack: {total_unassigned_qty}\n"
                 f"• Đã có trong gói này: {current_package_qty}\n"
-                f"• Còn lại có thể thêm: {qty_available}\n\n"
-                f"💡 Gợi ý: Hãy thêm tối đa {qty_available} hoặc quét thêm sản phẩm trước."
+                f"• Yêu cầu thêm: {qty}\n\n"
+                f"📋 Chi tiết các move lines:\n" + "\n".join(lines_detail) + "\n\n"
+                f"💡 Gợi ý: Chỉ có thể thêm tối đa {total_unassigned_qty}"
             )
 
-        # Bước 6: Thực hiện thêm vào package
+        # Bước 4: Thực hiện thêm vào package
         existing_in_target = current_package_lines[:1]
 
         if existing_in_target:
             # Cộng vào sản phẩm hiện có
-            existing_in_target.qty_done += qty
+            existing_in_target.write({'product_uom_qty': existing_in_target.product_uom_qty + qty})
         else:
             # Tạo move_line mới cho package
-            new_move_line = move_line.copy({
+            move_line.copy({
                 'result_package_id': package_id,
-                'qty_done': qty,
-                'original_move_line_id': move_line.id,
+                'product_uom_qty': qty,
+                'qty_done': 0,  # Reset qty_done, sẽ được tính lại sau
             })
 
-        # Bước 7: Giảm qty từ các dòng chưa được package
-        self._reduce_unassigned_qty(product, qty)
+        # Bước 5: Giảm qty từ các dòng chưa được package
+        remaining_qty = qty
+        for ml in unassigned_lines:
+            if remaining_qty <= 0:
+                break
+
+            available = ml.product_uom_qty
+            take = min(remaining_qty, available)
+
+            new_qty = available - take
+            if new_qty <= 0:
+                # Xóa move_line nếu hết qty
+                ml.unlink()
+            else:
+                # Giảm qty
+                ml.write({'product_uom_qty': new_qty})
+
+            remaining_qty -= take
 
         return {
             'success': True,
