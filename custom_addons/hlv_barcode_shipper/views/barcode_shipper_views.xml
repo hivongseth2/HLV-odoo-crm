@@ -5,7 +5,7 @@
         <!-- Access Denied Template -->
         <template id="access_denied" name="Access Denied">
             <t t-call="web.layout">
-                <t t-set="head_website">
+                <t t-set="head">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
                     <style>
                         .access-denied-container {
@@ -65,7 +65,7 @@
         <!-- Mobile Shipper Interface Template -->
         <template id="shipper_interface" name="Shipper Barcode Interface">
             <t t-call="web.layout">
-                <t t-set="head_website">
+                <t t-set="head">
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
                     <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
                     <style>
