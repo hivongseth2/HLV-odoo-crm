@@ -293,8 +293,6 @@ class StockPickingPartial(models.Model):
         _logger = logging.getLogger(__name__)
         _logger.info(f"📦 Package {package_id} - Other packages: {other_packages}")
 
-        _logger.info(f"📦 Package {package_id} - all_items count: {len(all_items)}")
-
         # ⭐ FIX: Lấy all_items - chỉ lấy sản phẩm CHƯA có trong package HIỆN TẠI
         all_items = []
         product_qty_map = {}
@@ -336,6 +334,8 @@ class StockPickingPartial(models.Model):
                     'product_name': data['product_name'],
                     'qty_available': qty_available
                 })
+
+        _logger.info(f"📦 Package {package_id} - all_items count: {len(all_items)}")
 
         return {
             'package_id': package.id,
