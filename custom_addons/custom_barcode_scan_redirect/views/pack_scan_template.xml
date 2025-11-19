@@ -145,66 +145,45 @@
 </div>
 
     <!-- MODAL: Edit Package -->
-    <div id="packageEditModal" class="pkg-modal-overlay">
-      <div class="pkg-modal-container">
-        <!-- Modal Header -->
-        <div class="pkg-modal-header">
-          <div class="pkg-modal-title-section">
-            <h2 class="pkg-modal-title">
-              <span id="modalPackageName">PACK0000001</span>
-            </h2>
-            <p class="pkg-modal-subtitle">Quản lý sản phẩm trong gói hàng</p>
-          </div>
-          <button onclick="closePackageEditModal()" class="pkg-modal-close">
-            <span>✕</span>
-          </button>
+    <div id="packageEditModal" class="simple-modal-overlay">
+      <div class="simple-modal">
+        <!-- Header -->
+        <div class="simple-modal-header">
+          <h2 class="simple-modal-title">
+            <span id="modalPackageName">PACK0000001</span>
+          </h2>
+          <button onclick="closePackageEditModal()" class="simple-modal-close">×</button>
         </div>
-        
-        <!-- Modal Body -->
-        <div class="pkg-modal-body">
-          <!-- Items in Package Section -->
-          <div class="pkg-modal-section">
-            <div class="pkg-section-header">
-              <h3 class="pkg-section-title">Sản phẩm hiện có</h3>
-              <span class="pkg-item-count" id="itemCountBadge">0</span>
-            </div>
-            <div id="packageItemsList" class="pkg-items-list">
+
+        <!-- Content -->
+        <div class="simple-modal-content">
+          <!-- Current Items -->
+          <div class="simple-section">
+            <h3 class="simple-section-title">Sản phẩm trong gói (<span id="itemCountBadge">0</span>)</h3>
+            <div id="packageItemsList" class="simple-items-list">
               <!-- Items will be populated by JavaScript -->
             </div>
           </div>
-          
-          <!-- Add More Items Section -->
-          <div class="pkg-modal-section pkg-add-section">
-            <div class="pkg-section-header">
-              <h3 class="pkg-section-title">Thêm sản phẩm mới</h3>
-            </div>
-            <div class="pkg-add-form">
-              <div class="pkg-form-group">
-                <label class="pkg-form-label">Chọn sản phẩm</label>
-                <select id="addItemSelect" class="pkg-form-select">
+
+          <!-- Add New Items -->
+          <div class="simple-section simple-section-add">
+            <h3 class="simple-section-title">Thêm sản phẩm</h3>
+            <div class="simple-add-form">
+              <div class="simple-form-row">
+                <select id="addItemSelect" class="simple-select">
                   <option value="">-- Chọn sản phẩm --</option>
-                  <!-- Options will be populated by JavaScript -->
                 </select>
+                <input id="addItemQty" type="number" min="1" value="1" class="simple-input-qty" placeholder="SL"/>
+                <button onclick="addItemToPackage()" class="simple-btn-add">+</button>
               </div>
-              <div class="pkg-form-group-compact">
-                <label class="pkg-form-label">Số lượng</label>
-                <input id="addItemQty" type="number" min="1" value="1" class="pkg-form-input-qty"/>
-              </div>
-              <button onclick="addItemToPackage()" class="pkg-btn-add">Thêm vào gói</button>
             </div>
           </div>
         </div>
-        
-        <!-- Modal Footer -->
-        <div class="pkg-modal-footer">
-          <button onclick="closePackageEditModal()" class="pkg-btn pkg-btn-secondary">
-            Hủy
-          </button>
-          <!-- Tách đơn tạm thời disable (chức năng chưa dùng) -->
-          <!-- <button onclick="splitPackageFromModal()" class="pkg-btn pkg-btn-warning">Tách đơn</button> -->
-          <button onclick="savePackageChanges()" class="pkg-btn pkg-btn-primary">
-            Lưu thay đổi
-          </button>
+
+        <!-- Actions -->
+        <div class="simple-modal-actions">
+          <button onclick="closePackageEditModal()" class="simple-btn simple-btn-cancel">Đóng</button>
+          <button onclick="savePackageChanges()" class="simple-btn simple-btn-save">Lưu</button>
         </div>
       </div>
     </div>

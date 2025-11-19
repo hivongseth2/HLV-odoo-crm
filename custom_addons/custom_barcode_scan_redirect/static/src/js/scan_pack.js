@@ -683,15 +683,14 @@ async function openPackageEditModal(event) {
     
     if (result.items.length === 0) {
       itemsList.innerHTML = `
-        <div class="pkg-empty-state">
-          <div class="pkg-empty-state-title">Chưa có sản phẩm</div>
-          <div class="pkg-empty-state-desc">Thêm sản phẩm để quản lý gói hàng</div>
+        <div class="simple-empty">
+          <p>Chưa có sản phẩm nào trong gói</p>
         </div>
       `;
     } else {
       // Deduplicate items by move_line_id
       const uniqueById = {};
-      result.items.forEach(it => { 
+      result.items.forEach(it => {
         const key = String(it.move_line_id);
         if (!uniqueById[key]) {
           uniqueById[key] = it;
@@ -701,27 +700,27 @@ async function openPackageEditModal(event) {
 
       uniqueItems.forEach(item => {
         const li = document.createElement('div');
-        li.className = 'pkg-item-row';
+        li.className = 'simple-item';
         li.setAttribute('data-move-line-id', item.move_line_id);
         li.innerHTML = `
-          <div class="pkg-item-info">
-            <span class="pkg-item-name">${item.product_name}</span>
-            <span class="pkg-item-sku">${item.product_sku || 'N/A'}</span>
+          <div class="simple-item-info">
+            <div class="simple-item-name">${item.product_name}</div>
+            <div class="simple-item-sku">${item.product_sku || 'N/A'}</div>
           </div>
-          <div class="pkg-item-qty-section">
-            <button class="pkg-item-qty-btn btn-qty-decrease" data-move-line-id="${item.move_line_id}">−</button>
-            <div class="pkg-item-qty-display" data-move-line-id="${item.move_line_id}" data-old-qty="${item.qty_done}">${item.qty_done}</div>
-            <button class="pkg-item-qty-btn btn-qty-increase" data-move-line-id="${item.move_line_id}">+</button>
+          <div class="simple-item-qty">
+            <button class="simple-qty-btn simple-qty-minus" data-move-line-id="${item.move_line_id}">−</button>
+            <div class="simple-qty-value" data-move-line-id="${item.move_line_id}" data-old-qty="${item.qty_done}">${item.qty_done}</div>
+            <button class="simple-qty-btn simple-qty-plus" data-move-line-id="${item.move_line_id}">+</button>
           </div>
-          <div class="pkg-item-actions">
-            <button class="pkg-item-remove" data-move-line-id="${item.move_line_id}" title="Xóa khỏi gói">×</button>
-            <button class="pkg-item-transfer" data-move-line-id="${item.move_line_id}" title="Chuyển sang gói khác">↔</button>
+          <div class="simple-item-actions">
+            <button class="simple-action-btn simple-remove" data-move-line-id="${item.move_line_id}" title="Xóa">×</button>
+            <button class="simple-action-btn simple-transfer" data-move-line-id="${item.move_line_id}" title="Chuyển">→</button>
           </div>
         `;
 
         // Qty decrease button
-        li.querySelector('.btn-qty-decrease').addEventListener('click', () => {
-          const display = li.querySelector('.pkg-item-qty-display');
+        li.querySelector('.simple-qty-minus').addEventListener('click', () => {
+          const display = li.querySelector('.simple-qty-value');
           const cur = parseFloat(display.innerText) || 0;
           const newQty = Math.max(0, cur - 1);
           display.innerText = String(newQty);
@@ -732,8 +731,8 @@ async function openPackageEditModal(event) {
         });
 
         // Qty increase button
-        li.querySelector('.btn-qty-increase').addEventListener('click', () => {
-          const display = li.querySelector('.pkg-item-qty-display');
+        li.querySelector('.simple-qty-plus').addEventListener('click', () => {
+          const display = li.querySelector('.simple-qty-value');
           const cur = parseFloat(display.innerText) || 0;
 
           // Get original move item data to check max allowed
@@ -778,16 +777,16 @@ async function openPackageEditModal(event) {
         });
 
         // Remove button
-        li.querySelector('.pkg-item-remove').addEventListener('click', async () => {
+        li.querySelector('.simple-remove').addEventListener('click', async () => {
           if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
             await removePackageItem(item.move_line_id);
           }
         });
 
         // Transfer button - chuyển sản phẩm sang pack khác
-        li.querySelector('.pkg-item-transfer').addEventListener('click', (ev) => {
+        li.querySelector('.simple-transfer').addEventListener('click', (ev) => {
           ev.stopPropagation();
-          const display = li.querySelector('.pkg-item-qty-display');
+          const display = li.querySelector('.simple-qty-value');
           const currentQty = parseFloat(display.innerText) || item.qty_done;
           openTransferModalForItem(item.move_line_id, currentQty, item.product_name);
         });
@@ -811,7 +810,7 @@ async function openPackageEditModal(event) {
     
     // Show modal
     const modal = document.getElementById('packageEditModal');
-    modal.classList.add('active');
+    modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     
   } catch (err) {
@@ -821,7 +820,7 @@ async function openPackageEditModal(event) {
 
 function closePackageEditModal() {
   const modal = document.getElementById('packageEditModal');
-  modal.classList.remove('active');
+  modal.style.display = 'none';
   document.body.style.overflow = 'auto';
   currentPackageData = null;
 }
@@ -906,16 +905,16 @@ async function addItemToPackage() {
 
 async function savePackageChanges() {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
-  const displayElements = document.querySelectorAll('.pkg-item-qty-display');
-  
+  const displayElements = document.querySelectorAll('.simple-qty-value');
+
   let hasChanges = false;
   const changes = [];
-  
+
   for (let display of displayElements) {
     const moveLineId = parseInt(display.dataset.moveLineId);
     const newQty = parseFloat(display.innerText);
     const oldQty = parseFloat(display.dataset.oldQty);
-    
+
     if (!isNaN(newQty) && !isNaN(oldQty) && newQty !== oldQty) {
       hasChanges = true;
       changes.push({ moveLineId, newQty });
