@@ -287,29 +287,33 @@ class StockPickingPartial(models.Model):
         _logger = logging.getLogger(__name__)
         _logger.info(f"📦 Package {package_id} - Other packages: {other_packages}")
 
-        # FIX: Lấy all_items - chỉ lấy UNIQUE products theo product_id
-        # CHỈ lấy sản phẩm CHƯA có trong package HIỆN TẠI
+        # ⭐ FIX: Lấy all_items - chỉ lấy sản phẩm CHƯA có trong package HIỆN TẠI
         all_items = []
         product_qty_map = {}
 
-        # Bước 1: Tính tổng qty CHƯA ĐƯỢC PACK (result_package_id = False)
+        # Bước 1: Lấy tất cả move_lines CHƯA ĐƯỢC PACK (result_package_id = False)
         unassigned_lines = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('result_package_id', '=', False),
         ])
 
+        # Bước 2: Tính tổng qty cho mỗi product (dùng qty_done - đọc giá trị, không search)
         for ml in unassigned_lines:
             pid = ml.product_id.id
+            qty = float(ml.qty_done or 0)  # ⭐ Đọc giá trị, không search
+
+            if qty <= 0:
+                continue
+
             if pid not in product_qty_map:
                 product_qty_map[pid] = {
                     'total_qty': 0,
                     'product_name': ml.product_id.name,
                     'move_line_id': ml.id
                 }
-            # ⭐ Dùng product_qty thay vì qty_done
-            product_qty_map[pid]['total_qty'] += ml.product_qty
+            product_qty_map[pid]['total_qty'] += qty
 
-        # Bước 2: Chỉ lấy sản phẩm CHƯA có trong package hiện tại
+        # Bước 3: Chỉ lấy sản phẩm CHƯA có trong package hiện tại
         for pid, data in product_qty_map.items():
             # Bỏ qua nếu đã có trong package hiện tại
             if pid in product_packaged_qty:
@@ -475,9 +479,8 @@ class StockPickingPartial(models.Model):
             ('product_id', '=', product.id),
             ('result_package_id', '=', False),  # Chưa được pack
         ])
-        # ⚠️ QUAN TRỌNG: Không dùng qty_done vì nó là non-stored field
-        # Thay vào đó, tính từ product_qty
-        total_unassigned_qty = sum(ml.product_qty for ml in unassigned_lines)
+        # ⭐ Tính tổng qty chưa pack (đọc qty_done, không search bằng nó)
+        total_unassigned_qty = sum(float(ml.qty_done or 0) for ml in unassigned_lines)
 
         # Bước 2: Tính qty đã có trong package HIỆN TẠI
         current_package_lines = self.env['stock.move.line'].sudo().search([
@@ -485,7 +488,7 @@ class StockPickingPartial(models.Model):
             ('product_id', '=', product.id),
             ('result_package_id', '=', package_id)
         ])
-        current_package_qty = sum(ml.product_qty for ml in current_package_lines)
+        current_package_qty = sum(float(ml.qty_done or 0) for ml in current_package_lines)
 
         # Bước 3: Validate - chỉ cần check có đủ qty chưa pack không
         if qty > total_unassigned_qty:
@@ -498,7 +501,7 @@ class StockPickingPartial(models.Model):
             lines_detail = []
             for ml in all_lines:
                 pkg_name = ml.result_package_id.name if ml.result_package_id else 'Chưa pack'
-                lines_detail.append(f"  • Move line #{ml.id}: qty={ml.product_qty}, package={pkg_name}")
+                lines_detail.append(f"  • ML#{ml.id}: qty_done={ml.qty_done}, package={pkg_name}")
 
             raise ValidationError(
                 f"⚠️ Không thể thêm {qty} vào package.\n\n"
@@ -515,13 +518,13 @@ class StockPickingPartial(models.Model):
 
         if existing_in_target:
             # Cộng vào sản phẩm hiện có
-            existing_in_target.write({'product_qty': existing_in_target.product_qty + qty})
+            new_qty = float(existing_in_target.qty_done or 0) + qty
+            existing_in_target.sudo().write({'qty_done': new_qty})
         else:
             # Tạo move_line mới cho package
-            move_line.copy({
+            move_line.sudo().copy({
                 'result_package_id': package_id,
-                'product_qty': qty,
-                'qty_done': 0,  # Reset qty_done, sẽ được tính lại sau
+                'qty_done': qty,
             })
 
         # Bước 5: Giảm qty từ các dòng chưa được package
@@ -530,16 +533,18 @@ class StockPickingPartial(models.Model):
             if remaining_qty <= 0:
                 break
 
-            available = ml.product_qty
+            available = float(ml.qty_done or 0)
+            if available <= 0:
+                continue
             take = min(remaining_qty, available)
 
             new_qty = available - take
             if new_qty <= 0:
                 # Xóa move_line nếu hết qty
-                ml.unlink()
+                ml.sudo().unlink()
             else:
-                # Giảm qty
-                ml.write({'product_qty': new_qty})
+                # Giảm qty_done
+                ml.sudo().write({'qty_done': new_qty})
 
             remaining_qty -= take
 
