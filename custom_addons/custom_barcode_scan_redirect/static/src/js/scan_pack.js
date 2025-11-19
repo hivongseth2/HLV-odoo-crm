@@ -958,7 +958,17 @@ async function savePackageChanges() {
 // }
 
 function openTransferModalForItem(moveLineId, currentQty, productName) {
+  // Debug thông tin
+  console.log('openTransferModalForItem called', {
+    currentPackageData: currentPackageData,
+    moveLineId: moveLineId,
+    currentQty: currentQty,
+    productName: productName
+  });
+
   const packs = (currentPackageData && currentPackageData.other_packages) || [];
+  console.log('Available packs:', packs);
+
   if (!packs.length) {
     toast.warn('Không có gói mục tiêu để chuyển. Vui lòng tạo gói khác trước.');
     return;
@@ -999,30 +1009,43 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
         }
         try {
           const pickingId = parseInt(window.location.pathname.split("/").pop());
+          console.log('Sending transfer request:', {
+            picking_id: pickingId,
+            source_package_id: currentPackageData.package_id,
+            target_package_id: parseInt(targetPack),
+            move_line_id: parseInt(moveLineId),
+            qty: qty
+          });
+
           const res = await fetch('/pack_scan/transfer_item_between_packs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ 
-              jsonrpc: '2.0', 
-              method: 'call', 
-              params: { 
-                picking_id: pickingId, 
-                source_package_id: currentPackageData.package_id, 
-                target_package_id: parseInt(targetPack), 
-                move_line_id: parseInt(moveLineId), 
-                qty: qty 
-              } 
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'call',
+              params: {
+                picking_id: pickingId,
+                source_package_id: currentPackageData.package_id,
+                target_package_id: parseInt(targetPack),
+                move_line_id: parseInt(moveLineId),
+                qty: qty
+              }
             })
           });
+
+          console.log('Response status:', res.status);
           const response = await res.json();
+          console.log('Response data:', response);
+
           const result = response.result || response;
-          if (result?.error) { 
-            toast.error(result.error); 
-            return; 
+          if (result?.error) {
+            toast.error(result.error);
+            return;
           }
           toast.success(result.message || 'Đã chuyển sản phẩm!', { ms: 1500 });
           openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => {} });
         } catch (err) {
+          console.error('Transfer error:', err);
           toast.error('Lỗi kết nối: ' + err.message);
         }
     } }

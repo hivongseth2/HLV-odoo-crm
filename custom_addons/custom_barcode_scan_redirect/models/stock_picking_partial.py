@@ -238,7 +238,7 @@ class StockPickingPartial(models.Model):
             ('result_package_id', '=', package_id)
         ])
 
-        # Lấy tất cả các move_lines chưa được gán package hoặc có qty_available > 0
+        # Lấy tất cả các move_lines có qty_done > 0 (bao gồm cả đã và chưa gán package)
         all_move_lines = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('qty_done', '>', 0)
@@ -282,31 +282,31 @@ class StockPickingPartial(models.Model):
                         'package_name': pkg.name
                     })
 
-        # Lấy tất cả items có thể thêm vào package (group by product)
-        product_available_qty = {}  # {product_id: {'move_line_id': first_ml_id, 'product_name': name, 'total_available': qty}}
+        # Lấy tất cả items có thể thêm vào package (chỉ lấy sản phẩm chưa có trong package hiện tại)
+        all_items = []
+        processed_products = set()  # Để tránh duplicate
 
-        # Tính tổng qty cho mỗi sản phẩm
         for ml in all_move_lines:
             product_id = ml.product_id.id
-            if product_id not in product_available_qty:
-                product_available_qty[product_id] = {
-                    'move_line_id': ml.id,
-                    'product_name': ml.product_id.name,
-                    'total_available': 0
-                }
-            product_available_qty[product_id]['total_available'] += ml.qty_done
 
-        # Trừ đi qty đã có trong package hiện tại
-        all_items = []
-        for product_id, data in product_available_qty.items():
-            packaged_qty = product_packaged_qty.get(product_id, 0)
-            available_qty = data['total_available'] - packaged_qty
+            # Nếu sản phẩm này đã có trong package hiện tại, bỏ qua
+            if product_id in product_packaged_qty:
+                continue
 
-            if available_qty > 0:
+            # Nếu đã xử lý sản phẩm này rồi, bỏ qua để tránh duplicate
+            if product_id in processed_products:
+                continue
+
+            # Tính tổng qty cho sản phẩm này từ tất cả move_lines
+            total_qty_for_product = sum(m.qty_done for m in all_move_lines if m.product_id.id == product_id)
+
+            processed_products.add(product_id)
+
+            if total_qty_for_product > 0:
                 all_items.append({
-                    'move_line_id': data['move_line_id'],  # Lấy một move_line_id làm đại diện
-                    'product_name': data['product_name'],
-                    'qty_available': available_qty
+                    'move_line_id': ml.id,  # Lấy một move_line_id làm đại diện
+                    'product_name': ml.product_id.name,
+                    'qty_available': total_qty_for_product
                 })
 
         return {
