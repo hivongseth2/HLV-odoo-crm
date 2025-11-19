@@ -7,6 +7,8 @@ class BarcodeShipper {
     constructor() {
         this.currentPickingId = null;
         this.currentItems = [];
+        this.scannedBarcodes = new Set();   // <-- THÊM
+
         this.sessionId = this.generateSessionId();
         this.init();
     }
@@ -133,15 +135,29 @@ class BarcodeShipper {
                 this.showMessage('item-result', res.error || 'Không tải được dữ liệu', 'error');
                 return;
             }
-            this.currentItems = res.items || [];
+
+            // Gắn cờ scanned theo các barcode đã quét trước đó
+            this.currentItems = (res.items || []).map(item => {
+                const scanned = item.barcode && this.scannedBarcodes.has(item.barcode);
+                return { ...item, scanned };
+            });
+
             this.updateOrderInfo(res.picking);
+
+            const total = this.currentItems.length;
+            const scannedCount = this.currentItems.filter(i => i.scanned).length;
             this.updateItemsList(this.currentItems);
-            this.updateProgress(res.summary);
+            this.updateProgress({
+                total_items: total,
+                scanned_items: scannedCount,
+                all_scanned: total > 0 && scannedCount === total,
+            });
         } catch (e) {
             console.error(e);
             this.showMessage('item-result', 'Lỗi mạng, thử lại.', 'error');
         }
     }
+
 
     updateOrderInfo(p) {
         const el = document.getElementById('order-info');
@@ -184,6 +200,50 @@ class BarcodeShipper {
         if (text) text.textContent = `${scanned} / ${total} items scanned`;
         if (btn) btn.style.display = summary?.all_scanned && total ? 'block' : 'none';
     }
+    // async scanItem() {
+    //     const input = document.getElementById('item-barcode-input');
+    //     const barcode = (input?.value || '').trim();
+    //     if (!barcode) {
+    //         this.showMessage('item-result', 'Vui lòng nhập barcode kiện / sản phẩm', 'error');
+    //         return;
+    //     }
+    //     if (!this.currentPickingId) {
+    //         this.showMessage('item-result', 'Chưa có đơn hoạt động. Hãy scan PICK trước.', 'error');
+    //         return;
+    //     }
+
+    //     // nếu lỡ scan lại PICK -> coi như complete
+    //     if (barcode.toUpperCase().startsWith('PICK')) {
+    //         await this.completeDelivery();
+    //         return;
+    //     }
+
+    //     this.showMessage('item-result', 'Đang kiểm tra barcode...', 'warning');
+    //     try {
+    //         const res = await this.apiCall('/api/barcode/scan_package', {
+    //             picking_id: this.currentPickingId,
+    //             barcode,
+    //         });
+
+    //         // THÊM DÒNG LOG NÀY ĐỂ DỄ DEBUG
+    //         console.log('scan_package result:', res);
+
+    //         if (res.success) {
+    //             this.showMessage('item-result', res.message, 'success');
+    //             if (res.summary) this.updateProgress(res.summary);
+    //             await this.loadOutOrderDetails();
+    //             if (input) {
+    //                 input.value = '';
+    //                 input.focus();
+    //             }
+    //         } else {
+    //             this.showMessage('item-result', res.error || 'Không tìm thấy', 'error');
+    //         }
+    //     } catch (e) {
+    //         console.error(e);
+    //         this.showMessage('item-result', 'Lỗi mạng, thử lại.', 'error');
+    //     }
+    // }
     async scanItem() {
         const input = document.getElementById('item-barcode-input');
         const barcode = (input?.value || '').trim();
@@ -209,13 +269,33 @@ class BarcodeShipper {
                 barcode,
             });
 
-            // THÊM DÒNG LOG NÀY ĐỂ DỄ DEBUG
             console.log('scan_package result:', res);
 
             if (res.success) {
                 this.showMessage('item-result', res.message, 'success');
-                if (res.summary) this.updateProgress(res.summary);
-                await this.loadOutOrderDetails();
+
+                // Lưu barcode này vào danh sách đã quét
+                if (barcode) this.scannedBarcodes.add(barcode);
+
+                // Đánh dấu scanned cho item tương ứng trong currentItems
+                this.currentItems = (this.currentItems || []).map(item => {
+                    if (!item.barcode) return item;
+                    if (item.barcode === barcode) {
+                        return { ...item, scanned: true };
+                    }
+                    return item;
+                });
+
+                // Tính lại progress
+                const total = this.currentItems.length;
+                const scannedCount = this.currentItems.filter(i => i.scanned).length;
+                this.updateItemsList(this.currentItems);
+                this.updateProgress({
+                    total_items: total,
+                    scanned_items: scannedCount,
+                    all_scanned: total > 0 && scannedCount === total,
+                });
+
                 if (input) {
                     input.value = '';
                     input.focus();
@@ -228,6 +308,7 @@ class BarcodeShipper {
             this.showMessage('item-result', 'Lỗi mạng, thử lại.', 'error');
         }
     }
+
 
     async completeDelivery() {
         if (!this.currentPickingId) {
@@ -264,6 +345,8 @@ class BarcodeShipper {
     startNewDelivery() {
         this.currentPickingId = null;
         this.currentItems = [];
+        this.scannedBarcodes = new Set();   // <-- THÊM
+
         this.sessionId = this.generateSessionId();
 
         const pickInput = document.getElementById('pick-barcode-input');
