@@ -103,6 +103,29 @@
               <strong class="package-item-name" t-esc="pkg['name']"/>
               <span class="package-item-qty"><t t-esc="pkg['qty']"/> SP</span>
             </div>
+            <div class="package-items-preview">
+              <t t-if="pkg.get('package_lines')">
+                <t t-foreach="pkg['package_lines']" t-as="line">
+                  <div class="preview-item">
+                    <span class="preview-item-name" t-esc="line['product_name']"/>
+                    <span class="preview-item-qty">×<t t-esc="line['product_qty']"/></span>
+                  </div>
+                </t>
+              </t>
+              <t t-elif="pkg.get('move_line_ids')">
+                <t t-foreach="pkg['move_line_ids']" t-as="line">
+                  <div class="preview-item">
+                    <span class="preview-item-name" t-esc="line['product_name']"/>
+                    <span class="preview-item-qty">×<t t-esc="line['product_qty']"/></span>
+                  </div>
+                </t>
+              </t>
+              <t t-else="">
+                <div class="preview-empty">
+                  <span class="preview-item-name">Chưa có chi tiết sản phẩm</span>
+                </div>
+              </t>
+            </div>
             <button class="btn-package-edit" t-att-data-package-id="pkg['id']" onclick="openPackageEditModal(event)">
               Chỉnh sửa
             </button>
@@ -145,64 +168,70 @@
 </div>
 
     <!-- MODAL: Edit Package -->
-    <div id="packageEditModal" class="pkg-modal-overlay">
-      <div class="pkg-modal-container">
-        <!-- Modal Header -->
-        <div class="pkg-modal-header">
-          <div class="pkg-modal-title-section">
-            <h2 class="pkg-modal-title">
+    <div id="packageEditModal" class="modal-overlay">
+      <div class="modal-container">
+        <!-- Header -->
+        <div class="modal-header">
+          <div class="modal-title-section">
+            <h2 class="modal-title">
               <span id="modalPackageName">PACK0000001</span>
             </h2>
-            <p class="pkg-modal-subtitle">Quản lý sản phẩm trong gói hàng</p>
+            <p class="modal-subtitle">Quản lý sản phẩm trong gói hàng</p>
           </div>
-          <button onclick="closePackageEditModal()" class="pkg-modal-close">
-            <span>✕</span>
+          <button onclick="closePackageEditModal()" class="modal-close">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/>
+            </svg>
           </button>
         </div>
-        
-        <!-- Modal Body -->
-        <div class="pkg-modal-body">
-          <!-- Items in Package Section -->
-          <div class="pkg-modal-section">
-            <div class="pkg-section-header">
-              <h3 class="pkg-section-title">Sản phẩm hiện có</h3>
-              <span class="pkg-item-count" id="itemCountBadge">0</span>
+
+        <!-- Content -->
+        <div class="modal-content">
+          <!-- Current Items Section -->
+          <div class="modal-section">
+            <div class="section-header">
+              <h3 class="section-title">Sản phẩm hiện có</h3>
+              <span class="item-count-badge" id="itemCountBadge">0</span>
             </div>
-            <div id="packageItemsList" class="pkg-items-list">
+            <div id="packageItemsList" class="items-list">
               <!-- Items will be populated by JavaScript -->
             </div>
           </div>
-          
-          <!-- Add More Items Section -->
-          <div class="pkg-modal-section pkg-add-section">
-            <div class="pkg-section-header">
-              <h3 class="pkg-section-title">Thêm sản phẩm mới</h3>
+
+          <!-- Add Items Section -->
+          <div class="modal-section add-section">
+            <div class="section-header">
+              <h3 class="section-title">Thêm sản phẩm mới</h3>
             </div>
-            <div class="pkg-add-form">
-              <div class="pkg-form-group">
-                <label class="pkg-form-label">Chọn sản phẩm</label>
-                <select id="addItemSelect" class="pkg-form-select">
-                  <option value="">-- Chọn sản phẩm --</option>
-                  <!-- Options will be populated by JavaScript -->
-                </select>
+            <div class="add-form">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Chọn sản phẩm</label>
+                  <select id="addItemSelect" class="form-select">
+                    <option value="">-- Chọn sản phẩm --</option>
+                  </select>
+                </div>
+                <div class="form-group form-group-qty">
+                  <label class="form-label">Số lượng</label>
+                  <input id="addItemQty" type="number" min="1" value="1" class="form-input-qty"/>
+                </div>
               </div>
-              <div class="pkg-form-group-compact">
-                <label class="pkg-form-label">Số lượng</label>
-                <input id="addItemQty" type="number" min="1" value="1" class="pkg-form-input-qty"/>
-              </div>
-              <button onclick="addItemToPackage()" class="pkg-btn-add">Thêm vào gói</button>
+              <button onclick="addItemToPackage()" class="btn-add">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 0a.75.75 0 01.75.75v6.5h6.5a.75.75 0 010 1.5h-6.5v6.5a.75.75 0 01-1.5 0v-6.5H.75a.75.75 0 010-1.5h6.5V.75A.75.75 0 018 0z"/>
+                </svg>
+                Thêm vào gói
+              </button>
             </div>
           </div>
         </div>
-        
-        <!-- Modal Footer -->
-        <div class="pkg-modal-footer">
-          <button onclick="closePackageEditModal()" class="pkg-btn pkg-btn-secondary">
+
+        <!-- Footer Actions -->
+        <div class="modal-footer">
+          <button onclick="closePackageEditModal()" class="btn btn-secondary">
             Hủy
           </button>
-          <!-- Tách đơn tạm thời disable (chức năng chưa dùng) -->
-          <!-- <button onclick="splitPackageFromModal()" class="pkg-btn pkg-btn-warning">Tách đơn</button> -->
-          <button onclick="savePackageChanges()" class="pkg-btn pkg-btn-primary">
+          <button onclick="savePackageChanges()" class="btn btn-primary">
             Lưu thay đổi
           </button>
         </div>
