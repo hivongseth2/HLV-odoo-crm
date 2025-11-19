@@ -144,176 +144,67 @@
   </div>
 </div>
 
-    <!-- MODAL: Edit Package - Modern Design -->
-    <div id="packageEditModal" class="modern-modal-overlay">
-      <div class="modern-modal-backdrop"></div>
-      <div class="modern-modal-container">
-        <!-- Modal Header with Glass Effect -->
-        <div class="modern-modal-header">
-          <div class="modal-header-content">
-            <div class="modal-icon-area">
-              <div class="modal-package-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                </svg>
-              </div>
-              <div class="modal-icon-glow"></div>
-            </div>
-            <div class="modal-title-area">
-              <h1 class="modern-modal-title">
-                <span id="modalPackageName">PACK0000001</span>
-              </h1>
-              <p class="modern-modal-subtitle">Quản lý sản phẩm trong gói hàng</p>
-            </div>
+    <!-- MODAL: Edit Package -->
+    <div id="packageEditModal" class="pkg-modal-overlay">
+      <div class="pkg-modal-container">
+        <!-- Modal Header -->
+        <div class="pkg-modal-header">
+          <div class="pkg-modal-title-section">
+            <h2 class="pkg-modal-title">
+              <span id="modalPackageName">PACK0000001</span>
+            </h2>
+            <p class="pkg-modal-subtitle">Quản lý sản phẩm trong gói hàng</p>
           </div>
-          <button onclick="closePackageEditModal()" class="modern-modal-close">
-            <span class="close-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </span>
-            <div class="close-ripple"></div>
+          <button onclick="closePackageEditModal()" class="pkg-modal-close">
+            <span>✕</span>
           </button>
         </div>
-
-        <!-- Modal Body with Modern Sections -->
-        <div class="modern-modal-body">
-          <!-- Current Items Section -->
-          <div class="modern-section current-items-section">
-            <div class="section-header-modern">
-              <div class="section-title-area">
-                <h2 class="modern-section-title">
-                  <span class="title-icon">📦</span>
-                  Sản phẩm hiện có
-                </h2>
-                <div class="section-accent-line"></div>
-              </div>
-              <div class="items-counter-modern" id="itemCountBadge">
-                <span class="counter-number">0</span>
-                <span class="counter-label">items</span>
-              </div>
+        
+        <!-- Modal Body -->
+        <div class="pkg-modal-body">
+          <!-- Items in Package Section -->
+          <div class="pkg-modal-section">
+            <div class="pkg-section-header">
+              <h3 class="pkg-section-title">Sản phẩm hiện có</h3>
+              <span class="pkg-item-count" id="itemCountBadge">0</span>
             </div>
-
-            <div class="items-container-modern">
-              <div id="packageItemsList" class="modern-items-grid">
-                <!-- Items will be populated by JavaScript -->
-              </div>
-
-              <!-- Empty State -->
-              <div id="emptyStateItems" class="modern-empty-state" style="display: none;">
-                <div class="empty-icon">
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
-                    <line x1="7" y1="7" x2="7.01" y2="7"></line>
-                  </svg>
-                </div>
-                <h3>Chưa có sản phẩm nào</h3>
-                <p>Thêm sản phẩm vào gói hàng bên dưới</p>
-              </div>
+            <div id="packageItemsList" class="pkg-items-list">
+              <!-- Items will be populated by JavaScript -->
             </div>
           </div>
-
-          <!-- Add Items Section -->
-          <div class="modern-section add-items-section">
-            <div class="section-header-modern">
-              <div class="section-title-area">
-                <h2 class="modern-section-title">
-                  <span class="title-icon">➕</span>
-                  Thêm sản phẩm mới
-                </h2>
-                <div class="section-accent-line accent-add"></div>
-              </div>
+          
+          <!-- Add More Items Section -->
+          <div class="pkg-modal-section pkg-add-section">
+            <div class="pkg-section-header">
+              <h3 class="pkg-section-title">Thêm sản phẩm mới</h3>
             </div>
-
-            <div class="add-form-modern">
-              <div class="form-row">
-                <div class="form-group-modern">
-                  <label class="modern-label">Chọn sản phẩm</label>
-                  <div class="select-wrapper">
-                    <select id="addItemSelect" class="modern-select">
-                      <option value="">-- Chọn sản phẩm --</option>
-                      <!-- Options will be populated by JavaScript -->
-                    </select>
-                    <div class="select-arrow">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="form-group-modern qty-group">
-                  <label class="modern-label">Số lượng</label>
-                  <div class="qty-input-wrapper">
-                    <button type="button" class="qty-btn qty-minus" onclick="adjustQty(-1)">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                      </svg>
-                    </button>
-                    <input id="addItemQty" type="number" min="1" value="1" class="modern-qty-input"/>
-                    <button type="button" class="qty-btn qty-plus" onclick="adjustQty(1)">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+            <div class="pkg-add-form">
+              <div class="pkg-form-group">
+                <label class="pkg-form-label">Chọn sản phẩm</label>
+                <select id="addItemSelect" class="pkg-form-select">
+                  <option value="">-- Chọn sản phẩm --</option>
+                  <!-- Options will be populated by JavaScript -->
+                </select>
               </div>
-
-              <button onclick="addItemToPackage()" class="modern-add-btn">
-                <span class="btn-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                  </svg>
-                </span>
-                <span class="btn-text">Thêm vào gói</span>
-                <div class="btn-shine"></div>
-              </button>
+              <div class="pkg-form-group-compact">
+                <label class="pkg-form-label">Số lượng</label>
+                <input id="addItemQty" type="number" min="1" value="1" class="pkg-form-input-qty"/>
+              </div>
+              <button onclick="addItemToPackage()" class="pkg-btn-add">Thêm vào gói</button>
             </div>
           </div>
         </div>
-
-        <!-- Modal Footer with Modern Actions -->
-        <div class="modern-modal-footer">
-          <div class="footer-actions">
-            <button onclick="closePackageEditModal()" class="modern-btn modern-btn-secondary">
-              <span class="btn-content">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-                <span>Hủy</span>
-              </span>
-            </button>
-
-            <!-- Tách đơn tạm thời disable (chức năng chưa dùng) -->
-            <!-- <button onclick="splitPackageFromModal()" class="modern-btn modern-btn-warning">
-              <span class="btn-content">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                </svg>
-                <span>Tách đơn</span>
-              </span>
-            </button> -->
-
-            <button onclick="savePackageChanges()" class="modern-btn modern-btn-primary">
-              <span class="btn-content">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                  <polyline points="7 3 7 8 15 8"></polyline>
-                </svg>
-                <span>Lưu thay đổi</span>
-              </span>
-              <div class="btn-glow"></div>
-            </button>
-          </div>
+        
+        <!-- Modal Footer -->
+        <div class="pkg-modal-footer">
+          <button onclick="closePackageEditModal()" class="pkg-btn pkg-btn-secondary">
+            Hủy
+          </button>
+          <!-- Tách đơn tạm thời disable (chức năng chưa dùng) -->
+          <!-- <button onclick="splitPackageFromModal()" class="pkg-btn pkg-btn-warning">Tách đơn</button> -->
+          <button onclick="savePackageChanges()" class="pkg-btn pkg-btn-primary">
+            Lưu thay đổi
+          </button>
         </div>
       </div>
     </div>
