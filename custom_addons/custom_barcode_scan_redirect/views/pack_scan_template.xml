@@ -103,6 +103,14 @@
               <strong class="package-item-name" t-esc="pkg['name']"/>
               <span class="package-item-qty"><t t-esc="pkg['qty']"/> SP</span>
             </div>
+            <div class="package-items-preview">
+              <t t-foreach="pkg['items']" t-as="item">
+                <div class="preview-item">
+                  <span class="preview-item-name" t-esc="item['product_name']"/>
+                  <span class="preview-item-qty">×<t t-esc="item['qty_done']"/></span>
+                </div>
+              </t>
+            </div>
             <button class="btn-package-edit" t-att-data-package-id="pkg['id']" onclick="openPackageEditModal(event)">
               Chỉnh sửa
             </button>
