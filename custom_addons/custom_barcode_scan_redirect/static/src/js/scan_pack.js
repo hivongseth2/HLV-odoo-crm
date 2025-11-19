@@ -970,7 +970,6 @@ async function savePackageChanges() {
 // }
 
 function openTransferModalForItem(moveLineId, currentQty, productName) {
-  // Debug thông tin
   console.log('🔍 openTransferModalForItem called:', {
     currentPackageData: currentPackageData,
     moveLineId: moveLineId,
@@ -981,8 +980,18 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
   const packs = (currentPackageData && currentPackageData.other_packages) || [];
   console.log('📦 Available packs:', packs);
 
+  // ⭐ Validate packages data structure
   if (!packs.length) {
     toast.warn('Không có gói mục tiêu để chuyển. Vui lòng tạo gói khác trước.');
+    return;
+  }
+
+  // ⭐ Check xem packages có đúng structure không
+  const invalidPacks = packs.filter(p => !p.package_id || !p.package_name);
+  if (invalidPacks.length > 0) {
+    console.error('❌ Invalid package structure detected:', invalidPacks);
+    console.error('📦 Full packages data:', packs);
+    toast.error('Lỗi: Dữ liệu package không hợp lệ. Vui lòng reload trang.');
     return;
   }
 
@@ -995,11 +1004,8 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
       <div style="display:flex;flex-direction:column;gap:6px;">
         <label style="font-weight:600;color:#374151;">Chọn gói đích:</label>
         <select id="transferTargetSelect" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
-          ${packs.map(p => {
-            const pkgId = p.package_id || '';
-            const pkgName = p.package_name || 'Gói không xác định';
-            return `<option value="${pkgId}">${pkgName}</option>`;
-          }).join('')}
+          <option value="">-- Chọn gói đích --</option>
+          ${packs.map(p => `<option value="${p.package_id}">${p.package_name}</option>`).join('')}
         </select>
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;">
@@ -1018,16 +1024,33 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
 
         console.log('📤 Transfer request:', { targetPack, qty, moveLineId });
 
-        if (!targetPack || !qty || qty <= 0) {
-          toast.warn('Vui lòng chọn gói đích và số lượng hợp lệ');
+        // ⭐ Validate input
+        if (!targetPack) {
+          toast.warn('Vui lòng chọn gói đích');
           return;
         }
+
+        if (!qty || qty <= 0) {
+          toast.warn('Vui lòng nhập số lượng hợp lệ');
+          return;
+        }
+
         if (qty > currentQty) {
           toast.warn(`Số lượng không được vượt quá ${currentQty}`);
           return;
         }
+
         try {
           const pickingId = parseInt(window.location.pathname.split("/").pop());
+
+          console.log('📤 Sending transfer request:', {
+            picking_id: pickingId,
+            source_package_id: currentPackageData.package_id,
+            target_package_id: parseInt(targetPack),
+            move_line_id: parseInt(moveLineId),
+            qty: qty
+          });
+
           const res = await fetch('/pack_scan/transfer_item_between_packs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -1052,7 +1075,9 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
             toast.error(result.error);
             return;
           }
+
           toast.success(result.message || 'Đã chuyển sản phẩm!', { ms: 1500 });
+
           // Refresh modal
           openPackageEditModal({
             currentTarget: { dataset: { packageId: currentPackageData.package_id } },
