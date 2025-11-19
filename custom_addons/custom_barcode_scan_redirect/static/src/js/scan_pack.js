@@ -683,8 +683,10 @@ async function openPackageEditModal(event) {
     
     if (result.items.length === 0) {
       itemsList.innerHTML = `
-        <div class="simple-empty">
-          <p>Chưa có sản phẩm nào trong gói</p>
+        <div class="empty-state">
+          <div class="empty-icon">📦</div>
+          <h4 class="empty-title">Chưa có sản phẩm nào</h4>
+          <p class="empty-desc">Thêm sản phẩm để quản lý gói hàng</p>
         </div>
       `;
     } else {
@@ -700,27 +702,47 @@ async function openPackageEditModal(event) {
 
       uniqueItems.forEach(item => {
         const li = document.createElement('div');
-        li.className = 'simple-item';
+        li.className = 'item-card';
         li.setAttribute('data-move-line-id', item.move_line_id);
         li.innerHTML = `
-          <div class="simple-item-info">
-            <div class="simple-item-name">${item.product_name}</div>
-            <div class="simple-item-sku">${item.product_sku || 'N/A'}</div>
+          <div class="item-info">
+            <div class="item-details">
+              <h4 class="item-name">${item.product_name}</h4>
+              <span class="item-sku">${item.product_sku || 'N/A'}</span>
+            </div>
           </div>
-          <div class="simple-item-qty">
-            <button class="simple-qty-btn simple-qty-minus" data-move-line-id="${item.move_line_id}">−</button>
-            <div class="simple-qty-value" data-move-line-id="${item.move_line_id}" data-old-qty="${item.qty_done}">${item.qty_done}</div>
-            <button class="simple-qty-btn simple-qty-plus" data-move-line-id="${item.move_line_id}">+</button>
+          <div class="item-qty-control">
+            <button class="qty-btn qty-decrease" data-move-line-id="${item.move_line_id}">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M3.5 8a.5.5 0 01.5-.5h8a.5.5 0 010 1H4a.5.5 0 01-.5-.5z"/>
+              </svg>
+            </button>
+            <div class="qty-display" data-move-line-id="${item.move_line_id}" data-old-qty="${item.qty_done}">${item.qty_done}</div>
+            <button class="qty-btn qty-increase" data-move-line-id="${item.move_line_id}">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0a.5.5 0 01.5.5v7h7a.5.5 0 010 1h-7v7a.5.5 0 01-1 0v-7h-7a.5.5 0 010-1h7v-7A.5.5 0 018 0z"/>
+              </svg>
+            </button>
           </div>
-          <div class="simple-item-actions">
-            <button class="simple-action-btn simple-remove" data-move-line-id="${item.move_line_id}" title="Xóa">×</button>
-            <button class="simple-action-btn simple-transfer" data-move-line-id="${item.move_line_id}" title="Chuyển">→</button>
+          <div class="item-actions">
+            <button class="action-btn action-remove" data-move-line-id="${item.move_line_id}" title="Xóa sản phẩm">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M5.5 5.5A.5.5 0 016 6v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm2.5 0a.5.5 0 01.5.5v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm3 .5a.5.5 0 00-1 0v6a.5.5 0 001 0V6z"/>
+                <path fill-rule="evenodd" d="M14.5 3a1 1 0 01-1 1H13v9a2 2 0 01-2 2H5a2 2 0 01-2-2V4h-.5a1 1 0 01-1-1V2a1 1 0 011-1H6a1 1 0 011-1h2a1 1 0 011 1h3.5a1 1 0 011 1v1zM4.118 4L4 4.059V13a1 1 0 001 1h6a1 1 0 001-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+              </svg>
+            </button>
+            <button class="action-btn action-transfer" data-move-line-id="${item.move_line_id}" title="Chuyển sản phẩm">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path fill-rule="evenodd" d="M10.146 6.646a.5.5 0 01.708 0l3 3a.5.5 0 010 .708l-3 3a.5.5 0 01-.708-.708L12.293 10H5.5a.5.5 0 010-1h6.793l-2.147-2.146a.5.5 0 010-.708z"/>
+                <path d="M2.5 10a.5.5 0 01-.5-.5v-4a.5.5 0 011 0v4a.5.5 0 01-.5.5z"/>
+              </svg>
+            </button>
           </div>
         `;
 
         // Qty decrease button
-        li.querySelector('.simple-qty-minus').addEventListener('click', () => {
-          const display = li.querySelector('.simple-qty-value');
+        li.querySelector('.qty-decrease').addEventListener('click', () => {
+          const display = li.querySelector('.qty-display');
           const cur = parseFloat(display.innerText) || 0;
           const newQty = Math.max(0, cur - 1);
           display.innerText = String(newQty);
@@ -731,8 +753,8 @@ async function openPackageEditModal(event) {
         });
 
         // Qty increase button
-        li.querySelector('.simple-qty-plus').addEventListener('click', () => {
-          const display = li.querySelector('.simple-qty-value');
+        li.querySelector('.qty-increase').addEventListener('click', () => {
+          const display = li.querySelector('.qty-display');
           const cur = parseFloat(display.innerText) || 0;
 
           // Get original move item data to check max allowed
@@ -777,16 +799,16 @@ async function openPackageEditModal(event) {
         });
 
         // Remove button
-        li.querySelector('.simple-remove').addEventListener('click', async () => {
+        li.querySelector('.action-remove').addEventListener('click', async () => {
           if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
             await removePackageItem(item.move_line_id);
           }
         });
 
         // Transfer button - chuyển sản phẩm sang pack khác
-        li.querySelector('.simple-transfer').addEventListener('click', (ev) => {
+        li.querySelector('.action-transfer').addEventListener('click', (ev) => {
           ev.stopPropagation();
-          const display = li.querySelector('.simple-qty-value');
+          const display = li.querySelector('.qty-display');
           const currentQty = parseFloat(display.innerText) || item.qty_done;
           openTransferModalForItem(item.move_line_id, currentQty, item.product_name);
         });
@@ -905,7 +927,7 @@ async function addItemToPackage() {
 
 async function savePackageChanges() {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
-  const displayElements = document.querySelectorAll('.simple-qty-value');
+  const displayElements = document.querySelectorAll('.qty-display');
 
   let hasChanges = false;
   const changes = [];
