@@ -98,7 +98,7 @@ class BarcodeShipperController(http.Controller):
         """
         items = []
 
-        # Nếu có package_level -> lấy PACK
+        # 1. Lấy danh sách Packages (nếu có)
         if picking.package_level_ids:
             for pl in picking.package_level_ids:
                 if not pl.package_id:
@@ -112,20 +112,27 @@ class BarcodeShipperController(http.Controller):
                         "qty": pl.move_line_ids and sum(pl.move_line_ids.mapped("quantity")) or 0,
                     }
                 )
-        else:
-            # Không có PACK -> dùng move_line
-            for ml in picking.move_line_ids:
-                items.append(
-                    {
-                        "type": "product",
-                        "id": ml.id,
-                        "name": ml.product_id.display_name,
-                        "barcode": ml.product_id.barcode
-                        or ml.product_id.default_code
-                        or "",
-                        "qty": ml.quantity,
-                    }
-                )
+
+        # 2. Lấy danh sách Products KHÔNG thuộc package nào (loose products)
+        # Những move_line có result_package_id=False và package_id=False (hoặc tùy logic đóng gói)
+        # Ở đây ta lấy tất cả move_line chưa được gán vào package_level (hoặc đơn giản là không có result_package_id)
+        # Tuy nhiên, để đơn giản và tránh duplicate với package_level, ta chỉ lấy những line không nằm trong package_level đã lấy.
+        
+        # Cách đơn giản nhất: Lấy những move_line mà result_package_id là False.
+        loose_lines = picking.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+        
+        for ml in loose_lines:
+            items.append(
+                {
+                    "type": "product",
+                    "id": ml.id,
+                    "name": ml.product_id.display_name,
+                    "barcode": ml.product_id.barcode
+                    or ml.product_id.default_code
+                    or "",
+                    "qty": ml.quantity,
+                }
+            )
 
         return items
 

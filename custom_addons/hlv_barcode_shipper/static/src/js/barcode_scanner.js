@@ -7,7 +7,9 @@ class BarcodeShipper {
     constructor() {
         this.currentPickingId = null;
         this.currentItems = [];
-        this.scannedBarcodes = new Set();   // <-- THÊM
+        this.scannedBarcodes = new Set();
+        this.html5QrCode = null;
+        this.isCameraRunning = false;
 
         this.sessionId = this.generateSessionId();
         this.init();
@@ -21,9 +23,18 @@ class BarcodeShipper {
         this.bindEvents();
         this.setupBarcodeInputs();
         this.showStep('step-scan-pick');
+
+        // Reload warning
+        window.addEventListener('beforeunload', (e) => {
+            if (this.currentPickingId && this.currentItems.length > 0) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
     }
 
     bindEvents() {
+        // Buttons
         document.getElementById('scan-pick-btn')?.addEventListener('click', () => this.scanPickOrder());
         document.getElementById('scan-item-btn')?.addEventListener('click', () => this.scanItem());
         document.getElementById('complete-delivery-btn')?.addEventListener('click', () => this.completeDelivery());
@@ -32,11 +43,16 @@ class BarcodeShipper {
         document.getElementById('show-history-btn')?.addEventListener('click', () => this.showHistory());
         document.getElementById('help-btn')?.addEventListener('click', () => this.showHelp());
 
-        document.querySelectorAll('.modal .close').forEach(btn => {
-            btn.addEventListener('click', e => this.closeModal(e.target.closest('.modal')));
+        // Camera Buttons
+        document.getElementById('btn-open-camera-pick')?.addEventListener('click', () => this.startCamera('camera-pick', 'reader-pick', 'pick'));
+        document.getElementById('btn-open-camera-item')?.addEventListener('click', () => this.startCamera('camera-item', 'reader-item', 'item'));
+
+        // Modals
+        document.querySelectorAll('.modal-close').forEach(btn => {
+            btn.addEventListener('click', e => this.closeModal(e.target.closest('.modal-overlay')));
         });
 
-        document.querySelectorAll('.modal').forEach(modal => {
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
             modal.addEventListener('click', e => {
                 if (e.target === modal) this.closeModal(modal);
             });
@@ -71,7 +87,7 @@ class BarcodeShipper {
     focusCurrentInput() {
         setTimeout(() => {
             const step = document.querySelector('.scan-step.active');
-            const input = step && step.querySelector('.barcode-input');
+            const input = step && step.querySelector('.form-control');
             if (input) input.focus();
         }, 100);
     }
@@ -83,13 +99,14 @@ class BarcodeShipper {
             step.classList.add('active');
             this.focusCurrentInput();
         }
+        this.stopCamera(); // Stop camera when switching steps
     }
 
     showMessage(id, message, type = 'success') {
         const el = document.getElementById(id);
         if (!el) return;
         el.textContent = message;
-        el.className = `result-message show ${type}`;
+        el.className = `alert show alert-${type}`; // Use Bootstrap-like classes
         if (type === 'success') {
             setTimeout(() => el.classList.remove('show'), 4000);
         }
@@ -100,15 +117,99 @@ class BarcodeShipper {
         if (el) el.classList.remove('show');
     }
 
+    // --- Camera Logic ---
+    async startCamera(sectionId, readerId, mode) {
+        if (this.isCameraRunning) {
+            await this.stopCamera();
+        }
+
+        const section = document.getElementById(sectionId);
+        if (section) section.classList.add('active');
+
+        this.html5QrCode = new Html5Qrcode(readerId);
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+        // Support Code 128 and QR Code
+        const formatsToSupport = [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.EAN_13
+        ];
+
+        try {
+            await this.html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                (decodedText, decodedResult) => {
+                    // Success callback
+                    this.onScanSuccess(decodedText, mode);
+                },
+                (errorMessage) => {
+                    // parse error, ignore
+                }
+            );
+            this.isCameraRunning = true;
+        } catch (err) {
+            console.error("Error starting camera", err);
+            alert("Không thể mở camera. Vui lòng kiểm tra quyền truy cập.");
+            section.classList.remove('active');
+        }
+    }
+
+    async stopCamera() {
+        if (this.html5QrCode && this.isCameraRunning) {
+            try {
+                await this.html5QrCode.stop();
+                this.html5QrCode.clear();
+                this.isCameraRunning = false;
+            } catch (e) {
+                console.error("Failed to stop camera", e);
+            }
+        }
+        document.querySelectorAll('.camera-section').forEach(el => el.classList.remove('active'));
+    }
+
+    onScanSuccess(decodedText, mode) {
+        // Play beep sound
+        // const audio = new Audio('/hlv_barcode_shipper/static/src/sounds/beep.mp3'); // If we had one
+        // audio.play().catch(e => {});
+
+        if (mode === 'pick') {
+            const input = document.getElementById('pick-barcode-input');
+            if (input) {
+                input.value = decodedText;
+                this.scanPickOrder();
+                this.stopCamera();
+            }
+        } else if (mode === 'item') {
+            const input = document.getElementById('item-barcode-input');
+            if (input) {
+                input.value = decodedText;
+                this.scanItem();
+                // Don't stop camera immediately for items to allow continuous scanning? 
+                // User preference. Let's stop for now to avoid double scans, or add a delay.
+                // For now, stop to be safe.
+                // this.stopCamera(); 
+
+                // Better UX: Pause scanning briefly
+                this.html5QrCode.pause();
+                setTimeout(() => this.html5QrCode.resume(), 1500);
+            }
+        }
+    }
+
+    // --- API Calls ---
+
     async scanPickOrder() {
         const input = document.getElementById('pick-barcode-input');
         const barcode = (input?.value || '').trim();
         if (!barcode) {
-            this.showMessage('pick-result', 'Vui lòng nhập barcode PICK', 'error');
+            this.showMessage('pick-result', 'Vui lòng nhập mã PICK', 'danger');
             return;
         }
 
-        this.showMessage('pick-result', 'Đang tìm phiếu OUT...', 'warning');
+        this.showMessage('pick-result', 'Đang tìm phiếu giao hàng...', 'warning');
         try {
             const res = await this.apiCall('/api/barcode/scan_pick', { barcode });
             if (res.success) {
@@ -117,11 +218,11 @@ class BarcodeShipper {
                 await this.loadOutOrderDetails();
                 setTimeout(() => this.showStep('step-scan-items'), 1000);
             } else {
-                this.showMessage('pick-result', res.error || 'Không tìm thấy', 'error');
+                this.showMessage('pick-result', res.error || 'Không tìm thấy', 'danger');
             }
         } catch (e) {
             console.error(e);
-            this.showMessage('pick-result', 'Lỗi mạng, thử lại.', 'error');
+            this.showMessage('pick-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
         }
     }
 
@@ -132,7 +233,7 @@ class BarcodeShipper {
                 picking_id: this.currentPickingId,
             });
             if (!res.success) {
-                this.showMessage('item-result', res.error || 'Không tải được dữ liệu', 'error');
+                this.showMessage('item-result', res.error || 'Không tải được dữ liệu', 'danger');
                 return;
             }
 
@@ -154,7 +255,7 @@ class BarcodeShipper {
             });
         } catch (e) {
             console.error(e);
-            this.showMessage('item-result', 'Lỗi mạng, thử lại.', 'error');
+            this.showMessage('item-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
         }
     }
 
@@ -163,10 +264,20 @@ class BarcodeShipper {
         const el = document.getElementById('order-info');
         if (!el || !p) return;
         el.innerHTML = `
-            <h4>📦 ${p.name}</h4>
-            <p><strong>Customer:</strong> ${p.partner_name || ''}</p>
-            <p><strong>Origin:</strong> ${p.origin || ''}</p>
-            <p><strong>Status:</strong> ${p.state}</p>
+            <div class="order-details">
+                <div class="detail-row">
+                    <span class="detail-label">Mã đơn:</span>
+                    <span class="detail-value">${p.name}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Khách hàng:</span>
+                    <span class="detail-value">${p.partner_name || 'N/A'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Nguồn:</span>
+                    <span class="detail-value">${p.origin || 'N/A'}</span>
+                </div>
+            </div>
         `;
     }
 
@@ -181,9 +292,8 @@ class BarcodeShipper {
                 <div class="item-info">
                     <div class="item-name">${item.name || ''}</div>
                     <div class="item-barcode">${item.barcode || ''}</div>
-                    ${item.qty ? `<div class="item-qty">Qty: ${item.qty}</div>` : ''}
                 </div>
-                <div class="item-status">${item.scanned ? '✅' : '⏳'}</div>
+                <div class="item-status-icon">${item.scanned ? '✅' : '📦'}</div>
             `;
             list.appendChild(div);
         });
@@ -197,72 +307,36 @@ class BarcodeShipper {
         const scanned = summary?.scanned_items || 0;
         const percent = total ? (scanned / total) * 100 : 0;
         if (fill) fill.style.width = `${percent}%`;
-        if (text) text.textContent = `${scanned} / ${total} items scanned`;
+        if (text) text.textContent = `${scanned} / ${total} đã quét`;
         if (btn) btn.style.display = summary?.all_scanned && total ? 'block' : 'none';
     }
-    // async scanItem() {
-    //     const input = document.getElementById('item-barcode-input');
-    //     const barcode = (input?.value || '').trim();
-    //     if (!barcode) {
-    //         this.showMessage('item-result', 'Vui lòng nhập barcode kiện / sản phẩm', 'error');
-    //         return;
-    //     }
-    //     if (!this.currentPickingId) {
-    //         this.showMessage('item-result', 'Chưa có đơn hoạt động. Hãy scan PICK trước.', 'error');
-    //         return;
-    //     }
 
-    //     // nếu lỡ scan lại PICK -> coi như complete
-    //     if (barcode.toUpperCase().startsWith('PICK')) {
-    //         await this.completeDelivery();
-    //         return;
-    //     }
-
-    //     this.showMessage('item-result', 'Đang kiểm tra barcode...', 'warning');
-    //     try {
-    //         const res = await this.apiCall('/api/barcode/scan_package', {
-    //             picking_id: this.currentPickingId,
-    //             barcode,
-    //         });
-
-    //         // THÊM DÒNG LOG NÀY ĐỂ DỄ DEBUG
-    //         console.log('scan_package result:', res);
-
-    //         if (res.success) {
-    //             this.showMessage('item-result', res.message, 'success');
-    //             if (res.summary) this.updateProgress(res.summary);
-    //             await this.loadOutOrderDetails();
-    //             if (input) {
-    //                 input.value = '';
-    //                 input.focus();
-    //             }
-    //         } else {
-    //             this.showMessage('item-result', res.error || 'Không tìm thấy', 'error');
-    //         }
-    //     } catch (e) {
-    //         console.error(e);
-    //         this.showMessage('item-result', 'Lỗi mạng, thử lại.', 'error');
-    //     }
-    // }
     async scanItem() {
         const input = document.getElementById('item-barcode-input');
         const barcode = (input?.value || '').trim();
         if (!barcode) {
-            this.showMessage('item-result', 'Vui lòng nhập barcode kiện / sản phẩm', 'error');
+            this.showMessage('item-result', 'Vui lòng nhập mã kiện / sản phẩm', 'danger');
             return;
         }
         if (!this.currentPickingId) {
-            this.showMessage('item-result', 'Chưa có đơn hoạt động. Hãy scan PICK trước.', 'error');
+            this.showMessage('item-result', 'Chưa có đơn hoạt động. Hãy quét PICK trước.', 'danger');
             return;
         }
 
-        // nếu lỡ scan lại PICK -> coi như complete
+        // nếu lỡ scan lại PICK -> coi như complete (nếu đủ điều kiện)
         if (barcode.toUpperCase().startsWith('PICK')) {
-            await this.completeDelivery();
+            // Check if all scanned first? Or just try to complete
+            // Let's just try to complete, backend will validate or we validate frontend
+            const allScanned = this.currentItems.every(i => i.scanned);
+            if (allScanned) {
+                await this.completeDelivery();
+            } else {
+                this.showMessage('item-result', 'Chưa quét đủ hàng hóa!', 'warning');
+            }
             return;
         }
 
-        this.showMessage('item-result', 'Đang kiểm tra barcode...', 'warning');
+        this.showMessage('item-result', 'Đang kiểm tra...', 'warning');
         try {
             const res = await this.apiCall('/api/barcode/scan_package', {
                 picking_id: this.currentPickingId,
@@ -278,46 +352,58 @@ class BarcodeShipper {
                 if (barcode) this.scannedBarcodes.add(barcode);
 
                 // Đánh dấu scanned cho item tương ứng trong currentItems
+                // Logic: Find item with matching barcode. If found, mark scanned.
+                let found = false;
                 this.currentItems = (this.currentItems || []).map(item => {
                     if (!item.barcode) return item;
                     if (item.barcode === barcode) {
+                        found = true;
                         return { ...item, scanned: true };
                     }
                     return item;
                 });
 
-                // Tính lại progress
-                const total = this.currentItems.length;
-                const scannedCount = this.currentItems.filter(i => i.scanned).length;
-                this.updateItemsList(this.currentItems);
-                this.updateProgress({
-                    total_items: total,
-                    scanned_items: scannedCount,
-                    all_scanned: total > 0 && scannedCount === total,
-                });
+                if (!found) {
+                    // Warning if scanned something not in list?
+                    // The backend said success, so it might be a product inside a package?
+                    // For now, trust backend success but if not in list, maybe reload list?
+                    // Or maybe the backend matched a product code that is different from display name?
+                    // Let's reload details to be safe if we didn't find it in our simple list match
+                    await this.loadOutOrderDetails();
+                } else {
+                    // Update UI locally
+                    const total = this.currentItems.length;
+                    const scannedCount = this.currentItems.filter(i => i.scanned).length;
+                    this.updateItemsList(this.currentItems);
+                    this.updateProgress({
+                        total_items: total,
+                        scanned_items: scannedCount,
+                        all_scanned: total > 0 && scannedCount === total,
+                    });
+                }
 
                 if (input) {
                     input.value = '';
                     input.focus();
                 }
             } else {
-                this.showMessage('item-result', res.error || 'Không tìm thấy', 'error');
+                this.showMessage('item-result', res.error || 'Không tìm thấy mã này', 'danger');
             }
         } catch (e) {
             console.error(e);
-            this.showMessage('item-result', 'Lỗi mạng, thử lại.', 'error');
+            this.showMessage('item-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
         }
     }
 
 
     async completeDelivery() {
         if (!this.currentPickingId) {
-            this.showMessage('item-result', 'Không có đơn nào để hoàn tất.', 'error');
+            this.showMessage('item-result', 'Không có đơn nào để hoàn tất.', 'danger');
             return;
         }
-        if (!confirm('Hoàn tất giao hàng cho phiếu OUT này?')) return;
+        if (!confirm('Xác nhận hoàn tất giao hàng?')) return;
 
-        this.showMessage('item-result', 'Đang hoàn tất...', 'warning');
+        this.showMessage('item-result', 'Đang xử lý...', 'warning');
         try {
             const res = await this.apiCall('/api/barcode/complete_out', {
                 picking_id: this.currentPickingId,
@@ -327,17 +413,18 @@ class BarcodeShipper {
                 this.showMessage('completion-result', res.message, 'success');
                 this.currentPickingId = null;
                 this.currentItems = [];
+                this.scannedBarcodes.clear();
             } else {
-                this.showMessage('item-result', res.error || 'Không hoàn tất được', 'error');
+                this.showMessage('item-result', res.error || 'Không hoàn tất được', 'danger');
             }
         } catch (e) {
             console.error(e);
-            this.showMessage('item-result', 'Lỗi mạng, thử lại.', 'error');
+            this.showMessage('item-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
         }
     }
 
     resetScan() {
-        if (confirm('Bắt đầu lại? Tiến trình quét hiện tại sẽ mất.')) {
+        if (confirm('Bạn có chắc muốn làm lại từ đầu? Dữ liệu quét hiện tại sẽ mất.')) {
             this.startNewDelivery();
         }
     }
@@ -345,7 +432,7 @@ class BarcodeShipper {
     startNewDelivery() {
         this.currentPickingId = null;
         this.currentItems = [];
-        this.scannedBarcodes = new Set();   // <-- THÊM
+        this.scannedBarcodes = new Set();
 
         this.sessionId = this.generateSessionId();
 
@@ -367,7 +454,7 @@ class BarcodeShipper {
         if (list) list.innerHTML = '';
         if (info) info.innerHTML = '';
         if (fill) fill.style.width = '0%';
-        if (text) text.textContent = '0 / 0 items scanned';
+        if (text) text.textContent = '0 / 0 đã quét';
         if (btn) btn.style.display = 'none';
 
         this.showStep('step-scan-pick');
@@ -377,7 +464,7 @@ class BarcodeShipper {
         const modal = document.getElementById('history-modal');
         const content = document.getElementById('history-content');
         if (!modal || !content) return;
-        content.innerHTML = 'Loading...';
+        content.innerHTML = 'Đang tải...';
         this.showModal(modal);
         try {
             const res = await this.apiCall('/api/barcode/scan_history', {
@@ -388,21 +475,23 @@ class BarcodeShipper {
                 content.innerHTML = res.history
                     .map(
                         log => `
-                    <div class="history-item">
-                        <div class="history-time">${log.scan_time}</div>
-                        <div class="history-barcode">${log.barcode}</div>
-                        <span class="history-type ${log.scan_type}">${log.scan_type}</span>
-                        <span class="history-status ${log.status}">${log.status}</span>
-                        ${log.message ? `<div class="history-message">${log.message}</div>` : ''}
+                    <div style="border-bottom: 1px solid #eee; padding: 8px 0;">
+                        <div style="font-size: 12px; color: #888;">${log.scan_time}</div>
+                        <div style="font-weight: 600;">${log.barcode}</div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                            <span class="${log.scan_type}">${log.scan_type}</span>
+                            <span class="${log.status}" style="color: ${log.status === 'success' ? 'green' : 'red'}">${log.status}</span>
+                        </div>
+                        ${log.message ? `<div style="font-size: 12px; color: #666;">${log.message}</div>` : ''}
                     </div>`
                     )
                     .join('');
             } else {
-                content.innerHTML = 'No scan history found';
+                content.innerHTML = 'Chưa có lịch sử quét.';
             }
         } catch (e) {
             console.error(e);
-            content.innerHTML = 'Error loading history';
+            content.innerHTML = 'Lỗi tải lịch sử.';
         }
     }
 
@@ -437,14 +526,13 @@ class BarcodeShipper {
         // Odoo type="json" → { jsonrpc, id, result }
         if (json && typeof json === 'object') {
             if (Object.prototype.hasOwnProperty.call(json, 'result')) {
-                return json.result; // <-- từ giờ phía trên xài res.success, res.message bình thường
+                return json.result;
             }
             if (Object.prototype.hasOwnProperty.call(json, 'error')) {
                 throw new Error(json.error.message || 'JSON-RPC error');
             }
         }
 
-        // fallback nếu sau này đổi sang type="http" trả JSON thuần
         return json;
     }
 
@@ -457,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Đăng ký service worker (optional)
+// Service Worker (Optional)
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker
