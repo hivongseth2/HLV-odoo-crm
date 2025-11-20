@@ -198,9 +198,8 @@ document.addEventListener("DOMContentLoaded", function () {
     if (inputEl) {
       inputEl.value = autoPackageBarcode;
       inputEl.focus();
-      try { navigator.clipboard.writeText(autoPackageBarcode); } catch (e) { }
     }
-    toast.info(`Mã barcode tạo: ${autoPackageBarcode} (đã copy)`, { ms: 4000 });
+    toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 4000 });
   });
 
   // Handle Barcode Input (Enter/Scan)
