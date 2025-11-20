@@ -204,7 +204,9 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   // Handle Barcode Input (Enter/Scan)
-  input?.addEventListener("change", async function () {
+  input?.addEventListener("keypress", async function (event) {
+    // Only process when Enter key is pressed
+    if (event.key !== "Enter" && event.keyCode !== 13) return;
     const barcode = this.value.trim();
     if (!barcode) return;
     this.value = ""; // Clear input
