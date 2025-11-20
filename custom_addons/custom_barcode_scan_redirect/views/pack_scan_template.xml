@@ -22,9 +22,16 @@
           <div class="right">
             <span t-if="drive_connected" class="badge badge-ok">Drive đã kết nối</span>
             <span t-if="not drive_connected" class="badge badge-warn">Chưa kết nối Drive</span>
-            <button id="btnPrintLabel" title="In nhãn dán sản phẩm" style="font-weight: 700; padding: 8px 16px; border-radius: 6px; border: 1px solid #bdc3c7; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer;">In nhãn</button>
-            <button id="btnPartialPack" title="Tạo partial pack" style="font-weight: 700; padding: 8px 16px; border-radius: 6px; border: 1px solid #bdc3c7; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer;">Pack 1 phần</button>
-            <button id="btnDriveSwitch" style="font-weight: 700; padding: 8px 16px; border-radius: 6px; border: 1px solid #bdc3c7; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer;">Đổi tài khoản Drive</button>
+            <button id="btnPrintLabel" title="In nhãn dán sản phẩm">In nhãn</button>
+            
+            <!-- Command Barcode Display -->
+            <div class="cmd-barcode-display" style="display: flex; flex-direction: column; align-items: center; margin: 0 10px; background: white; padding: 2px 8px; border-radius: 4px; border: 1px solid #ccc;">
+                <span style="font-size: 0.65rem; color: #666; font-weight: bold;">QUÉT ĐỂ ĐÓNG GÓI</span>
+                <strong style="font-family: monospace; font-size: 1rem; letter-spacing: 1px;">CMD-PACK-NOW</strong>
+            </div>
+
+            <button id="btnPartialPack" title="Tạo partial pack">Gói hàng 1 phần</button>
+            <button id="btnDriveSwitch">Đổi tài khoản Drive</button>
           </div>
         </div>
 
