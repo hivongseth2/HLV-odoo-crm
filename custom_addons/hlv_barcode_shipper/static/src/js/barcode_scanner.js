@@ -127,7 +127,7 @@ class BarcodeShipper {
         if (section) section.classList.add('active');
 
         this.html5QrCode = new Html5Qrcode(readerId);
-        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        const config = { fps: 10, qrbox: { width: 280, height: 150 } };
 
         // Support Code 128 and QR Code
         const formatsToSupport = [

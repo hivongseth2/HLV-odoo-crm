@@ -66,9 +66,11 @@
         <template id="shipper_interface" name="Shipper Barcode Interface">
             <t t-call="web.layout">
                 <t t-set="head">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
                     <!-- Camera Library -->
                     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+                    <!-- FontAwesome -->
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"/>
                     
                     <link rel="stylesheet" href="/hlv_barcode_shipper/static/src/css/barcode_shipper.css"/>
                 </t>
@@ -78,85 +80,109 @@
                         
                         <!-- Header -->
                         <div class="shipper-header">
-                            <h2>📦 Giao Hàng (Shipper)</h2>
+                            <div class="header-title">
+                                <i class="fa fa-shipping-fast"></i> Giao Hàng
+                            </div>
                             <div class="user-info">
-                                👤 <t t-esc="user.name"/>
+                                <i class="fa fa-user-circle"></i> <t t-esc="user.name"/>
                             </div>
                         </div>
 
                         <!-- Step 1: Scan PICK -->
                         <div id="step-scan-pick" class="scan-step active">
-                            <div class="card">
-                                <div class="step-title">🔍 Bước 1: Quét Phiếu PICK</div>
-                                <p class="step-desc">Quét mã vạch trên phiếu PICK để tìm đơn giao hàng tương ứng.</p>
+                            <div class="card-box">
+                                <div class="step-header">
+                                    <div class="step-icon"><i class="fa fa-search"></i></div>
+                                    <div class="step-info">
+                                        <div class="step-title">Bước 1: Quét Phiếu PICK</div>
+                                        <p class="step-desc">Quét mã vạch trên phiếu PICK để bắt đầu.</p>
+                                    </div>
+                                </div>
                                 
                                 <div id="pick-result" class="alert"></div>
 
                                 <div class="camera-section" id="camera-pick">
-                                    <div id="reader-pick"></div>
+                                    <div id="reader-pick" class="camera-reader"></div>
                                     <div class="camera-controls">
-                                        <button class="btn btn-secondary btn-sm" onclick="window.barcodeShipper.stopCamera()">❌ Đóng Camera</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="window.barcodeShipper.stopCamera()">
+                                            <i class="fa fa-times"></i> Đóng Camera
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div class="input-group">
-                                    <input type="text" id="pick-barcode-input" class="form-control" placeholder="Nhập mã PICK..." autocomplete="off"/>
+                                <div class="action-area">
+                                    <button id="btn-open-camera-pick" class="btn btn-primary btn-lg btn-block mb-3">
+                                        <i class="fa fa-camera"></i> Mở Camera Quét Mã
+                                    </button>
+
+                                    <div class="separator">hoặc nhập thủ công</div>
+
+                                    <div class="input-group-row">
+                                        <input type="text" id="pick-barcode-input" class="form-control" placeholder="Nhập mã PICK (VD: PICK001)..." autocomplete="off"/>
+                                        <button id="scan-pick-btn" class="btn btn-secondary">
+                                            <i class="fa fa-arrow-right"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                
-                                <button id="btn-open-camera-pick" class="btn btn-primary btn-block">
-                                    📷 Mở Camera
-                                </button>
-                                <button id="scan-pick-btn" class="btn btn-outline btn-block">
-                                    👉 Xác nhận mã
-                                </button>
                             </div>
                         </div>
 
                         <!-- Step 2: Scan Items -->
                         <div id="step-scan-items" class="scan-step">
-                            <div class="card">
-                                <div class="step-title">📦 Bước 2: Quét Hàng Hóa</div>
-                                <div id="order-info"></div>
+                            <div class="card-box">
+                                <div class="step-header">
+                                    <div class="step-icon"><i class="fa fa-box-open"></i></div>
+                                    <div class="step-info">
+                                        <div class="step-title">Bước 2: Quét Hàng Hóa</div>
+                                        <div id="order-info" class="order-summary"></div>
+                                    </div>
+                                </div>
 
                                 <div id="item-result" class="alert"></div>
 
                                 <div class="camera-section" id="camera-item">
-                                    <div id="reader-item"></div>
+                                    <div id="reader-item" class="camera-reader"></div>
                                     <div class="camera-controls">
-                                        <button class="btn btn-secondary btn-sm" onclick="window.barcodeShipper.stopCamera()">❌ Đóng Camera</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="window.barcodeShipper.stopCamera()">
+                                            <i class="fa fa-times"></i> Đóng Camera
+                                        </button>
                                     </div>
                                 </div>
 
-                                <div class="input-group">
-                                    <input type="text" id="item-barcode-input" class="form-control" placeholder="Quét kiện hoặc sản phẩm..." autocomplete="off"/>
-                                </div>
+                                <div class="action-area">
+                                    <button id="btn-open-camera-item" class="btn btn-primary btn-lg btn-block mb-3">
+                                        <i class="fa fa-camera"></i> Quét Kiện / Sản Phẩm
+                                    </button>
 
-                                <button id="btn-open-camera-item" class="btn btn-primary btn-block">
-                                    📷 Mở Camera
-                                </button>
-                                <button id="scan-item-btn" class="btn btn-outline btn-block">
-                                    👉 Xác nhận mã
-                                </button>
+                                    <div class="input-group-row">
+                                        <input type="text" id="item-barcode-input" class="form-control" placeholder="Nhập mã vạch..." autocomplete="off"/>
+                                        <button id="scan-item-btn" class="btn btn-secondary">
+                                            <i class="fa fa-check"></i>
+                                        </button>
+                                    </div>
+                                </div>
 
                                 <!-- Progress -->
                                 <div class="progress-wrapper">
-                                    <div id="progress-fill" class="progress-fill"></div>
-                                </div>
-                                <div class="progress-stats">
-                                    <span>Tiến độ:</span>
-                                    <span id="progress-text">0 / 0</span>
+                                    <div class="progress-stats">
+                                        <span>Tiến độ</span>
+                                        <span id="progress-text">0 / 0</span>
+                                    </div>
+                                    <div class="progress">
+                                        <div id="progress-fill" class="progress-bar"></div>
+                                    </div>
                                 </div>
 
                                 <!-- List -->
                                 <div id="items-list" class="items-list"></div>
 
                                 <!-- Actions -->
-                                <div style="margin-top: 20px; display: flex; gap: 10px;">
-                                    <button id="complete-delivery-btn" class="btn btn-success" style="flex: 1; display: none;">
-                                        ✅ Hoàn tất
+                                <div class="bottom-actions">
+                                    <button id="complete-delivery-btn" class="btn btn-success btn-lg btn-block" style="display: none;">
+                                        <i class="fa fa-check-circle"></i> Hoàn tất đơn hàng
                                     </button>
-                                    <button id="reset-scan-btn" class="btn btn-warning" style="flex: 1;">
-                                        🔄 Làm lại
+                                    <button id="reset-scan-btn" class="btn btn-outline btn-block mt-2">
+                                        <i class="fa fa-redo"></i> Làm lại
                                     </button>
                                 </div>
                             </div>
@@ -164,22 +190,22 @@
 
                         <!-- Step 3: Complete -->
                         <div id="step-complete" class="scan-step">
-                            <div class="card" style="text-align: center; padding: 40px 20px;">
-                                <div style="font-size: 60px; margin-bottom: 20px;">🎉</div>
-                                <h3 style="color: var(--success-color); margin-bottom: 10px;">Giao Hàng Thành Công!</h3>
-                                <div id="completion-result" class="alert alert-success show" style="display: inline-block; margin-bottom: 30px;">
+                            <div class="card-box text-center success-card">
+                                <div class="success-icon"><i class="fa fa-check-circle"></i></div>
+                                <h3 class="success-title">Giao Hàng Thành Công!</h3>
+                                <div id="completion-result" class="alert alert-success show mb-4">
                                     Đơn hàng đã được xác nhận.
                                 </div>
-                                <button id="new-delivery-btn" class="btn btn-primary btn-block">
-                                    🚚 Giao đơn tiếp theo
+                                <button id="new-delivery-btn" class="btn btn-primary btn-lg btn-block">
+                                    <i class="fa fa-truck"></i> Giao đơn tiếp theo
                                 </button>
                             </div>
                         </div>
 
                         <!-- Footer -->
-                        <div style="text-align: center; margin-top: 20px;">
-                            <button id="show-history-btn" class="btn btn-outline btn-sm">📋 Lịch sử quét</button>
-                            <button id="help-btn" class="btn btn-outline btn-sm">❓ Hướng dẫn</button>
+                        <div class="shipper-footer">
+                            <button id="show-history-btn" class="btn btn-text"><i class="fa fa-history"></i> Lịch sử</button>
+                            <button id="help-btn" class="btn btn-text"><i class="fa fa-question-circle"></i> Hướng dẫn</button>
                         </div>
 
                     </div>
@@ -187,30 +213,42 @@
 
                 <!-- Modals -->
                 <div id="history-modal" class="modal-overlay">
-                    <div class="modal-box">
+                    <div class="modal-content">
                         <div class="modal-header">
-                            <div class="modal-title">Lịch sử quét</div>
-                            <div class="modal-close">×</div>
+                            <div class="modal-title"><i class="fa fa-history"></i> Lịch sử quét</div>
+                            <button class="modal-close"><i class="fa fa-times"></i></button>
                         </div>
                         <div id="history-content" class="modal-body">Loading...</div>
                     </div>
                 </div>
 
                 <div id="help-modal" class="modal-overlay">
-                    <div class="modal-box">
+                    <div class="modal-content">
                         <div class="modal-header">
-                            <div class="modal-title">Hướng dẫn sử dụng</div>
-                            <div class="modal-close">×</div>
+                            <div class="modal-title"><i class="fa fa-info-circle"></i> Hướng dẫn sử dụng</div>
+                            <button class="modal-close"><i class="fa fa-times"></i></button>
                         </div>
                         <div class="modal-body">
-                            <ol style="padding-left: 20px; line-height: 1.6;">
-                                <li><strong>Bước 1:</strong> Quét mã vạch trên phiếu PICK (ví dụ: PICK001).</li>
-                                <li><strong>Bước 2:</strong> Hệ thống hiển thị danh sách kiện và sản phẩm cần giao.</li>
-                                <li><strong>Bước 3:</strong> Dùng Camera hoặc máy quét để quét từng mã vạch (Code 128 hoặc QR).</li>
-                                <li><strong>Bước 4:</strong> Khi quét đủ 100%, nút "Hoàn tất" sẽ hiện ra. Nhấn để xác nhận.</li>
-                            </ol>
-                            <div class="alert alert-warning show" style="margin-top: 10px;">
-                                ⚠️ <strong>Lưu ý:</strong> Không tải lại trang khi đang quét dở để tránh mất dữ liệu.
+                            <div class="help-steps">
+                                <div class="help-step">
+                                    <span class="step-num">1</span>
+                                    <span>Quét mã vạch trên phiếu PICK (ví dụ: PICK001).</span>
+                                </div>
+                                <div class="help-step">
+                                    <span class="step-num">2</span>
+                                    <span>Hệ thống hiển thị danh sách kiện và sản phẩm cần giao.</span>
+                                </div>
+                                <div class="help-step">
+                                    <span class="step-num">3</span>
+                                    <span>Dùng Camera để quét mã vạch trên từng kiện hàng.</span>
+                                </div>
+                                <div class="help-step">
+                                    <span class="step-num">4</span>
+                                    <span>Khi quét đủ 100%, nhấn "Hoàn tất" để xác nhận.</span>
+                                </div>
+                            </div>
+                            <div class="alert alert-warning show mt-3">
+                                <i class="fa fa-exclamation-triangle"></i> <strong>Lưu ý:</strong> Không tải lại trang khi đang quét dở để tránh mất dữ liệu.
                             </div>
                         </div>
                     </div>
