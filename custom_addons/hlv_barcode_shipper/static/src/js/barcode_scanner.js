@@ -26,9 +26,11 @@ class BarcodeShipper {
 
         // Reload warning
         window.addEventListener('beforeunload', (e) => {
-            if (this.currentPickingId && this.currentItems.length > 0) {
+            if (this.currentPickingId) {
+                const msg = '⚠️ CẢNH BÁO: Bạn đang có đơn hàng chưa hoàn tất!\n\nNếu tải lại trang, tiến độ quét sẽ bị MẤT.\nBạn có chắc chắn muốn rời đi không?';
                 e.preventDefault();
-                e.returnValue = '';
+                e.returnValue = msg;
+                return msg;
             }
         });
     }
@@ -288,12 +290,26 @@ class BarcodeShipper {
         (items || []).forEach(item => {
             const div = document.createElement('div');
             div.className = `item-card ${item.scanned ? 'scanned' : ''}`;
+
+            // Determine icon
+            let icon = '';
+            if (item.scanned) {
+                icon = '<i class="fa fa-check-circle" style="color: var(--success-color);"></i>';
+            } else {
+                icon = item.type === 'package'
+                    ? '<i class="fa fa-box" style="color: var(--secondary-color);"></i>'
+                    : '<i class="fa fa-cube" style="color: var(--secondary-color);"></i>';
+            }
+
             div.innerHTML = `
                 <div class="item-info">
                     <div class="item-name">${item.name || ''}</div>
-                    <div class="item-barcode">${item.barcode || ''}</div>
+                    <div class="item-details" style="display: flex; gap: 15px; font-size: 0.85rem; color: #6c757d; margin-top: 4px;">
+                        <span class="item-barcode"><i class="fa fa-barcode"></i> ${item.barcode || ''}</span>
+                        <span class="item-qty"><i class="fa fa-layer-group"></i> SL: ${item.qty || 0}</span>
+                    </div>
                 </div>
-                <div class="item-status-icon">${item.scanned ? '✅' : '📦'}</div>
+                <div class="item-status-icon" style="font-size: 1.5rem;">${icon}</div>
             `;
             list.appendChild(div);
         });
@@ -424,7 +440,7 @@ class BarcodeShipper {
     }
 
     resetScan() {
-        if (confirm('Bạn có chắc muốn làm lại từ đầu? Dữ liệu quét hiện tại sẽ mất.')) {
+        if (confirm('⚠️ CẢNH BÁO: Dữ liệu quét hiện tại sẽ bị MẤT.\nBạn có chắc chắn muốn làm lại từ đầu không?')) {
             this.startNewDelivery();
         }
     }
