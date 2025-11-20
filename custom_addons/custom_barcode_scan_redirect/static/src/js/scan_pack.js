@@ -211,7 +211,7 @@ document.addEventListener("DOMContentLoaded", function () {
     this.value = ""; // Clear input
 
     // 1. Check if it is a Package Creation Barcode
-    if (barcode.startsWith("AUTO-PKG-") || barcode === "PACK") {
+    if (barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
       const items = [];
       document.querySelectorAll("#product_list .product-item").forEach(el => {
         const lineId = parseInt(el.dataset.lineId);

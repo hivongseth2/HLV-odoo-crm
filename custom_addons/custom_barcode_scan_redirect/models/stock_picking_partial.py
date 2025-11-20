@@ -33,24 +33,36 @@ class StockPickingPartial(models.Model):
             {'move_line_id': int, 'qty': float},
             ...
         ]
-        Cơ chế: Không tạo phiếu mới, chỉ tạo stock.quant.package và gán vào result_package_id
+        Cơ chế: 
+        - Nếu package_name là mã của package đã tồn tại → thêm sản phẩm vào package đó
+        - Nếu không tồn tại → tạo package mới với tên từ sequence
         """
         self.ensure_one()
         
         if self.state not in ['assigned', 'confirmed', 'in_progress']:
             raise ValidationError("Chỉ có thể tạo gói từ các phiếu đã xác nhận hoặc đang làm!")
         
-        # Tạo package mới (stock.quant.package) với tên từ sequence hoặc tên cung cấp
         Package = self.env['stock.quant.package']
-
-        # Luôn dùng tên từ sequence, bỏ qua AUTO-PKG hoặc bất kỳ tên truyền từ JS
-        try:
-            pkg_name = self.env['ir.sequence'].next_by_code('stock.quant.package')
-        except Exception:
-            count = Package.search_count([])
-            pkg_name = f"PACK{count + 1:07d}"
-
-        new_package = Package.create({'name': pkg_name})
+        
+        # ⭐ NEW: Kiểm tra xem package_name có tồn tại không
+        existing_package = None
+        if package_name and package_name.startswith("PACK"):
+            # Tìm package theo tên
+            existing_package = Package.sudo().search([
+                ('name', '=', package_name)
+            ], limit=1)
+        
+        # Nếu package đã tồn tại, sử dụng package đó
+        if existing_package:
+            new_package = existing_package
+        else:
+            # Tạo package mới với tên từ sequence
+            try:
+                pkg_name = self.env['ir.sequence'].next_by_code('stock.quant.package')
+            except Exception:
+                count = Package.search_count([])
+                pkg_name = f"PACK{count + 1:07d}"
+            new_package = Package.create({'name': pkg_name})
 
         # Xử lý từng move_line: tạo move_line mới cho phần được pack (qty),
         # giảm qty_done trên move_line nguồn để giữ phần còn lại cho các pack tiếp theo.
