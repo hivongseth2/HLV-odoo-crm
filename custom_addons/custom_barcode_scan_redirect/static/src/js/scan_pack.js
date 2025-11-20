@@ -203,6 +203,66 @@ document.addEventListener("DOMContentLoaded", function () {
     toast.info(`Mã barcode tạo: ${autoPackageBarcode} (đã copy)`, { ms: 4000 });
   });
 
+  // Handle Barcode Input (Enter/Scan)
+  input?.addEventListener("change", async function () {
+    const barcode = this.value.trim();
+    if (!barcode) return;
+    this.value = ""; // Clear input
+
+    // 1. Check if it is a Package Creation Barcode
+    if (barcode.startsWith("AUTO-PKG-") || barcode === "PACK") {
+      const items = [];
+      document.querySelectorAll("#product_list .product-item").forEach(el => {
+        const lineId = parseInt(el.dataset.lineId);
+        const done = parseFloat(el.querySelector(".done")?.innerText || 0);
+        if (lineId && done > 0) {
+          items.push({ move_line_id: lineId, qty: done });
+        }
+      });
+
+      if (items.length === 0) {
+        toast.warn("Chưa có sản phẩm nào được quét để đóng gói!");
+        playError();
+        return;
+      }
+
+      try {
+        const res = await fetch('/pack_scan/create_partial_pack', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'call',
+            params: {
+              picking_id: pickingId,
+              move_line_data: items,
+              package_barcode: barcode
+            }
+          })
+        });
+        const response = await res.json();
+        const result = response.result || response;
+
+        if (result?.success) {
+          toast.success(result.message);
+          playSuccess();
+          // Reload to reflect changes (items moved to package)
+          setTimeout(() => window.location.reload(), 1000);
+        } else {
+          toast.error(result?.error || "Lỗi tạo gói hàng");
+          playError();
+        }
+      } catch (e) {
+        toast.error("Lỗi kết nối: " + e.message);
+        playError();
+      }
+
+    } else {
+      // 2. Normal Product Scanning
+      await updateQty(barcode);
+    }
+  });
+
   // Nút In nhãn
   document.getElementById('btnPrintLabel')?.addEventListener('click', async function () {
     const res = await fetch('/pack_scan/print_label', {
