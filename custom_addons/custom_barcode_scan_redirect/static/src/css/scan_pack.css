@@ -1065,7 +1065,7 @@
 /* NEW: Side Panel Styles */
 .pack-side-panel {
   position: fixed;
-  right: 18px;
+  left: 18px; /* Đổi từ right sang left */
   bottom: 18px;
   width: 340px;
   background: white;
@@ -1076,7 +1076,7 @@
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  max-height: 70vh;
+  max-height: 60vh;
   transition: all 0.3s ease;
 }
 
@@ -1392,8 +1392,8 @@
 
 @media (max-width: 768px) {
   .pack-side-panel {
-    width: 300px;
-    right: 12px;
+    width: 360px;
+    left: 12px; /* Đổi từ right sang left cho mobile luôn */
     bottom: 12px;
   }
 }
