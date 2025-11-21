@@ -993,3 +993,10 @@ function togglePanelVisibility(button) {
   const isCollapsed = panel.classList.toggle('collapsed');
   button.textContent = isCollapsed ? 'Hiện' : 'Ẩn';
 }
+
+// Expose functions to global scope for HTML onclick attributes
+window.openPackageEditModal = openPackageEditModal;
+window.closePackageEditModal = closePackageEditModal;
+window.togglePanelVisibility = togglePanelVisibility;
+window.addItemToPackage = addItemToPackage;
+window.savePackageChanges = savePackageChanges;
