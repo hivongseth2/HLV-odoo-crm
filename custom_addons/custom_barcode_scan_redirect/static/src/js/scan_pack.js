@@ -840,7 +840,7 @@ async function openPackageEditModal(event) {
           const currentTotalForProduct = totalInPackages + (cur - oldQtyStored);
 
           if (currentTotalForProduct >= maxAllowed) {
-            toast.warn(`Không thể tăng thêm. Đã đạt giới hạn tối đa (${maxAllowed}) cho sản phẩm này`, { ms: 2000 });
+            toast.warn(`Không thể tăng thêm. Đã đạt giới hạn tối đa cho sản phẩm này, vui lòng quét thêm sản phẩm nếu muốn tăng thêm`, { ms: 2000 });
             return;
           }
 
