@@ -283,7 +283,7 @@ class MisaApiUtils(models.AbstractModel):
             }
             headers_token = {
                 "Content-Type": "application/x-www-form-urlencoded",
-                "x-device": "8804504fb43582f8ecc80ecc3e3b47fe"
+                "x-device": "693017cdc24074e96e4756afbf2b6ab6"
             }
 
             response2 = session.post(token_url, data=form_data, headers=headers_token)

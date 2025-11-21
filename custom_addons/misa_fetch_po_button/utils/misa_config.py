@@ -43,7 +43,7 @@ class MisaConfig(models.AbstractModel):
             "X-MISA-BranchID": context['BranchId'],
             "X-MISA-Language": "vi",
             "X-MISA-WorkingBook": "0",
-            "X-Device": "8804504fb43582f8ecc80ecc3e3b47fe",  # Device ID từ browser
+            "X-Device": "f32be43d99071befa62cab0562947494",  # Device ID từ browser
             "Cookie": "; ".join(cookie_parts),  # ← QUAN TRỌNG: Cookies session
             "Referer": "https://actapp.misa.vn/app/SA/Return",
             "Origin": "https://actapp.misa.vn",
