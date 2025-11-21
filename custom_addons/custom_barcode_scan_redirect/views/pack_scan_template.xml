@@ -41,6 +41,10 @@
             <li t-att-data-barcode="line.product_id.barcode" class="product-item" t-att-data-line-id="ml.id">
               <div style="flex: 1; max-width: 70%;">
                 <strong><t t-esc="line.product_id.display_name"/></strong>
+                <div style="font-size: 0.85rem; color: #666; margin-top: 2px;">
+                  Barcode: <span t-if="line.product_id.barcode" t-esc="line.product_id.barcode"/>
+                  <span t-else="" style="color: #dc3545; font-style: italic;">Không có</span>
+                </div>
               </div>
               <div style="display: flex; align-items: center; gap: 5px;">
                 <button class="btn-minus" 
@@ -200,7 +204,7 @@
           <!-- Current Items Card -->
           <div class="modal-card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f1f3f5; padding: 1.25rem; width: 100%; box-sizing: border-box;">
             <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
-              <h3 class="section-title" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Sản phẩm hiện có</h3>
+              <h3 class="section-title" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Sản phẩm hiện có trong kiện</h3>
               <span class="item-count-badge" id="itemCountBadge" style="background: #e7f5ff; color: #1971c2; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.8rem; font-weight: 700;">0</span>
             </div>
             <div id="packageItemsList" class="items-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
@@ -211,7 +215,7 @@
           <!-- Add Items Card -->
           <div class="modal-card" style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #f1f3f5; padding: 1.25rem; width: 100%; box-sizing: border-box;">
             <div class="section-header" style="margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
-              <h3 class="section-title" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Thêm sản phẩm mới</h3>
+              <h3 class="section-title" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: #495057; text-transform: uppercase; letter-spacing: 0.5px;">Thêm sản phẩm chưa đóng gói</h3>
             </div>
             <div class="add-form">
               <div class="form-grid" style="display: grid; grid-template-columns: 1fr 100px; gap: 1rem; margin-bottom: 1rem;">

@@ -251,8 +251,6 @@ document.addEventListener("DOMContentLoaded", function () {
         if (result?.success) {
           toast.success(result.message);
           playSuccess();
-          // Reload to reflect changes
-          setTimeout(() => window.location.reload(), 1000);
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
           playError();
@@ -302,8 +300,6 @@ document.addEventListener("DOMContentLoaded", function () {
         if (result?.success) {
           toast.success(result.message);
           playSuccess();
-          // Reload to reflect changes (items moved to package)
-          setTimeout(() => window.location.reload(), 1000);
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
           playError();
