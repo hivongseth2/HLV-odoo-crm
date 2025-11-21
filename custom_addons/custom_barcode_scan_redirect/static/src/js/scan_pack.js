@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const completeBtn = document.getElementById("complete_pack_btn");
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
-const BARCODE_MAP_POINT_ONE = {
+  const BARCODE_MAP_POINT_ONE = {
     "452424752161": "045242475216",//4361
     "452424752301": "045242475230", //4364
   };
@@ -203,52 +203,61 @@ const BARCODE_MAP_POINT_ONE = {
   });
 
 
-  // Handle Barcode Input (Enter/Scan)
   input?.addEventListener("keypress", async function (event) {
 
-    // Only process when Enter key is pressed
+    // Chỉ xử lý khi nhấn Enter
     if (event.key !== "Enter" && event.keyCode !== 13) return;
+
     const raw = this.value.trim();
     if (!raw) return;
-    this.value = ""; // Clear input
+    this.value = ""; // Clear input ngay sau khi nhận
 
-    // Kiểm tra nếu trùng tên pick để auto hoàn tất
+    // A. Kiểm tra Auto-Complete Picking
     if (typeof originPickName !== 'undefined' && raw === originPickName) {
       completeBtn?.click();
       return;
     }
 
-    // Mapping: nếu quét "key" thì cộng 0.1 vào barcode mục tiêu
+    // B. Mapping Barcode đặc biệt (nếu có)
     const targetBarcode = BARCODE_MAP_POINT_ONE[raw];
     if (targetBarcode) {
       await updateQty(targetBarcode, 0.1);
       return;
     }
 
-    // Normalize barcode for further processing
+    // Chuẩn hóa barcode
     const barcode = raw;
 
-    // --- LOGIC MỚI: Quét mã 'createpacked' để tự động đóng gói ---
-    if (barcode === 'CMD-CREATE-PACK') {
-      const autoPackageBarcode = `AUTO-PKG-${Date.now()}`;
+    // C. LOGIC MỚI: Xử lý mã lệnh tạo gói (CMD-CREATE-PACK hoặc AUTO-PKG-...)
+    if (barcode === 'CMD-CREATE-PACK' || barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
 
+      // 1. Thu thập các dòng đã quét (qty > 0) ở danh sách bên trái
       const items = [];
       document.querySelectorAll("#product_list .product-item").forEach(el => {
         const lineId = parseInt(el.dataset.lineId);
         const done = parseFloat(el.querySelector(".done")?.innerText || 0);
+        // Chỉ lấy những dòng đã quét số lượng
         if (lineId && done > 0) {
           items.push({ move_line_id: lineId, qty: done });
         }
       });
 
+      // 2. Validate: Nếu chưa quét gì thì báo lỗi
       if (items.length === 0) {
         toast.warn("Chưa có sản phẩm nào được quét để đóng gói!");
         playError();
         return;
       }
 
+      // 3. Tạo mã gói (nếu là lệnh CMD thì sinh mã tự động, ngược lại dùng mã vừa quét)
+      const pkgCode = (barcode === 'CMD-CREATE-PACK') ? `AUTO-PKG-${Date.now()}` : barcode;
+
+      if (barcode === 'CMD-CREATE-PACK') {
+        toast.info(`Đang tạo gói hàng tự động...`, { ms: 2000 });
+      }
+
       try {
-        toast.info(`Đang tạo gói hàng tự động: ${autoPackageBarcode}...`, { ms: 2000 });
+        // 4. Gọi API tạo Partial Pack
         const res = await fetch('/pack_scan/create_partial_pack', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -258,7 +267,7 @@ const BARCODE_MAP_POINT_ONE = {
             params: {
               picking_id: pickingId,
               move_line_data: items,
-              package_barcode: autoPackageBarcode
+              package_barcode: pkgCode
             }
           })
         });
@@ -268,6 +277,28 @@ const BARCODE_MAP_POINT_ONE = {
         if (result?.success) {
           toast.success(result.message);
           playSuccess();
+
+          // 5. CẬP NHẬT UI: Thêm gói mới vào Side Panel ngay lập tức
+          renderNewPackageToPanel(result.package_id, result.package_name, items);
+
+          // 6. CẬP NHẬT UI: Reset số lượng đã quét ở danh sách trái về 0
+          // (Vì hàng đã được chuyển vào gói, nên danh sách chờ đóng gói sẽ giảm đi)
+          items.forEach(i => {
+            const el = document.querySelector(`[data-line-id="${i.move_line_id}"]`);
+            if (el) {
+              const doneEl = el.querySelector('.done');
+              const reqEl = el.querySelectorAll('span')[1];
+
+              if (doneEl) {
+                // Trừ số lượng đã đóng gói khỏi số lượng đang hiển thị
+                // (Logic Python: split dòng -> giảm qty_done dòng gốc -> trả về remaining)
+                // Ở đây ta giả định reset về 0 để quét tiếp cho gói sau
+                doneEl.innerText = "0";
+                el.classList.remove("completed");
+              }
+            }
+          });
+
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
           playError();
@@ -278,60 +309,10 @@ const BARCODE_MAP_POINT_ONE = {
       }
       return;
     }
-    // -----------------------------------------------------------
 
-    // 1. Check if it is a Package Creation Barcode (Manual scan of generated code)
-    if (barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
-      const items = [];
-      document.querySelectorAll("#product_list .product-item").forEach(el => {
-        const lineId = parseInt(el.dataset.lineId);
-        const done = parseFloat(el.querySelector(".done")?.innerText || 0);
-        if (lineId && done > 0) {
-          items.push({ move_line_id: lineId, qty: done });
-        }
-      });
-
-      if (items.length === 0) {
-        toast.warn("Chưa có sản phẩm nào được quét để đóng gói!");
-        playError();
-        return;
-      }
-
-      try {
-        const res = await fetch('/pack_scan/create_partial_pack', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'call',
-            params: {
-              picking_id: pickingId,
-              move_line_data: items,
-              package_barcode: barcode
-            }
-          })
-        });
-        const response = await res.json();
-        const result = response.result || response;
-
-        if (result?.success) {
-          toast.success(result.message);
-          playSuccess();
-        } else {
-          toast.error(result?.error || "Lỗi tạo gói hàng");
-          playError();
-        }
-      } catch (e) {
-        toast.error("Lỗi kết nối: " + e.message);
-        playError();
-      }
-
-    } else {
-      // 2. Normal Product Scanning
-      await updateQty(barcode);
-    }
+    // D. Logic quét sản phẩm thông thường (Cộng dồn số lượng)
+    await updateQty(barcode);
   });
-
   // Nút In nhãn
   document.getElementById('btnPrintLabel')?.addEventListener('click', async function () {
     const res = await fetch('/pack_scan/print_label', {
@@ -1186,6 +1167,78 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
   ]);
 }
 
+
+
+function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
+  // 1. Tìm list container
+  let list = document.querySelector('.panel-packages-list');
+  const emptyState = document.querySelector('.panel-empty-state');
+
+  // Nếu chưa có list (đang empty state), tạo list mới và xóa empty state
+  if (!list) {
+    if (emptyState) emptyState.remove();
+    list = document.createElement('ul');
+    list.className = 'panel-packages-list';
+    list.style.cssText = "list-style: none; padding: 0; margin: 0;";
+    // Chèn list vào panel body (sau title)
+    const panelBody = document.querySelector('.pack-side-panel .panel-body');
+    const title = panelBody.querySelector('.panel-section-title');
+    if (title) {
+      title.after(list);
+    } else {
+      panelBody.prepend(list);
+    }
+  }
+
+  // 2. Tính tổng qty
+  const totalQty = itemsData.reduce((sum, i) => sum + i.qty, 0);
+
+  // 3. Tạo HTML Preview Items
+  let previewHtml = '';
+  itemsData.forEach(item => {
+    // Lấy tên sản phẩm từ DOM hiện tại để hiển thị (vì API create chỉ trả về ID pack)
+    const lineEl = document.querySelector(`[data-line-id="${item.move_line_id}"]`);
+    const prodName = lineEl ? lineEl.querySelector('strong').innerText : 'Sản phẩm...';
+
+    previewHtml += `
+        <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
+          <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;">${prodName}</span>
+          <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${item.qty}</span>
+        </div>
+      `;
+  });
+
+  // 4. Tạo thẻ LI mới (Copy style từ template XML)
+  const li = document.createElement('li');
+  li.className = 'package-item-card';
+  li.dataset.packageId = pkgId;
+  li.style.cssText = "background: white; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; transition: transform 0.2s ease, box-shadow 0.2s ease; animation: fadeIn 0.5s ease;";
+
+  li.innerHTML = `
+      <div class="package-item-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
+        <strong class="package-item-name" style="font-size: 0.95rem; color: #212529; font-weight: 600;">${pkgName}</strong>
+        <span class="badge" style="background: #e7f5ff; color: #1c7ed6; padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+          ${totalQty}
+        </span>
+      </div>
+      
+      <div class="package-items-preview" style="margin-bottom: 1rem; font-size: 0.85rem; color: #495057;">
+        ${previewHtml}
+      </div>
+
+      <button class="btn-package-edit" data-package-id="${pkgId}" style="width: 100%; padding: 0.6rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; color: #495057; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        Chỉnh sửa
+      </button>
+    `;
+
+  // Gắn sự kiện click cho nút Edit vừa tạo
+  li.querySelector('.btn-package-edit').addEventListener('click', openPackageEditModal);
+
+  // Append lên đầu danh sách
+  list.prepend(li);
+}
 // ===================== PANEL VISIBILITY TOGGLE =====================
 function togglePanelVisibility(button) {
   const panel = button.closest('.pack-side-panel');
