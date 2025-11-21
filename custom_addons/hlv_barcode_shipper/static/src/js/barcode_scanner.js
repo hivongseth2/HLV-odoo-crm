@@ -10,6 +10,7 @@ class BarcodeShipper {
         this.scannedBarcodes = new Set();
         this.html5QrCode = null;
         this.isCameraRunning = false;
+        this.currentCameraSection = null;
 
         this.sessionId = this.generateSessionId();
         this.init();
@@ -45,7 +46,7 @@ class BarcodeShipper {
         document.getElementById('show-history-btn')?.addEventListener('click', () => this.showHistory());
         document.getElementById('help-btn')?.addEventListener('click', () => this.showHelp());
 
-        // Camera Buttons
+        // Camera Buttons (Manual)
         document.getElementById('btn-open-camera-pick')?.addEventListener('click', () => this.startCamera('camera-pick', 'reader-pick', 'pick'));
         document.getElementById('btn-open-camera-item')?.addEventListener('click', () => this.startCamera('camera-item', 'reader-item', 'item'));
 
@@ -100,8 +101,18 @@ class BarcodeShipper {
         if (step) {
             step.classList.add('active');
             this.focusCurrentInput();
+
+            // Auto-start camera based on step
+            if (id === 'step-scan-pick') {
+                this.startCamera('camera-pick', 'reader-pick', 'pick');
+            } else if (id === 'step-scan-items') {
+                this.startCamera('camera-item', 'reader-item', 'item');
+            } else {
+                this.stopCamera();
+            }
+        } else {
+            this.stopCamera();
         }
-        this.stopCamera(); // Stop camera when switching steps
     }
 
     showMessage(id, message, type = 'success') {
@@ -121,12 +132,27 @@ class BarcodeShipper {
 
     // --- Camera Logic ---
     async startCamera(sectionId, readerId, mode) {
+        // If already running for the same section, do nothing
+        if (this.isCameraRunning && this.currentCameraSection === sectionId) {
+            return;
+        }
+
         if (this.isCameraRunning) {
             await this.stopCamera();
         }
 
         const section = document.getElementById(sectionId);
         if (section) section.classList.add('active');
+        this.currentCameraSection = sectionId;
+
+        // Hide manual button if auto-started
+        if (mode === 'pick') {
+            const btn = document.getElementById('btn-open-camera-pick');
+            if (btn) btn.style.display = 'none';
+        } else if (mode === 'item') {
+            const btn = document.getElementById('btn-open-camera-item');
+            if (btn) btn.style.display = 'none';
+        }
 
         this.html5QrCode = new Html5Qrcode(readerId);
         const config = { fps: 10, qrbox: { width: 280, height: 150 } };
@@ -154,7 +180,15 @@ class BarcodeShipper {
             this.isCameraRunning = true;
         } catch (err) {
             console.error("Error starting camera", err);
-            alert("Không thể mở camera. Vui lòng kiểm tra quyền truy cập.");
+            // Show manual button if camera fails
+            if (mode === 'pick') {
+                const btn = document.getElementById('btn-open-camera-pick');
+                if (btn) btn.style.display = 'block';
+            } else if (mode === 'item') {
+                const btn = document.getElementById('btn-open-camera-item');
+                if (btn) btn.style.display = 'block';
+            }
+            // alert("Không thể mở camera. Vui lòng kiểm tra quyền truy cập.");
             section.classList.remove('active');
         }
     }
@@ -165,11 +199,18 @@ class BarcodeShipper {
                 await this.html5QrCode.stop();
                 this.html5QrCode.clear();
                 this.isCameraRunning = false;
+                this.currentCameraSection = null;
             } catch (e) {
                 console.error("Failed to stop camera", e);
             }
         }
         document.querySelectorAll('.camera-section').forEach(el => el.classList.remove('active'));
+
+        // Restore buttons
+        const btnPick = document.getElementById('btn-open-camera-pick');
+        const btnItem = document.getElementById('btn-open-camera-item');
+        if (btnPick) btnPick.style.display = 'block';
+        if (btnItem) btnItem.style.display = 'block';
     }
 
     onScanSuccess(decodedText, mode) {
@@ -182,6 +223,7 @@ class BarcodeShipper {
             if (input) {
                 input.value = decodedText;
                 this.scanPickOrder();
+                // For pick, we stop camera because we switch steps
                 this.stopCamera();
             }
         } else if (mode === 'item') {
@@ -189,12 +231,9 @@ class BarcodeShipper {
             if (input) {
                 input.value = decodedText;
                 this.scanItem();
-                // Don't stop camera immediately for items to allow continuous scanning? 
-                // User preference. Let's stop for now to avoid double scans, or add a delay.
-                // For now, stop to be safe.
-                // this.stopCamera(); 
 
-                // Better UX: Pause scanning briefly
+                // Continuous scanning: DO NOT stop camera.
+                // Just pause briefly to avoid double scans
                 this.html5QrCode.pause();
                 setTimeout(() => this.html5QrCode.resume(), 1500);
             }
@@ -239,21 +278,23 @@ class BarcodeShipper {
                 return;
             }
 
-            // Gắn cờ scanned theo các barcode đã quét trước đó
+            // Initialize items with scanned_qty = 0
             this.currentItems = (res.items || []).map(item => {
-                const scanned = item.barcode && this.scannedBarcodes.has(item.barcode);
-                return { ...item, scanned };
+                return { ...item, scanned_qty: 0 };
             });
 
             this.updateOrderInfo(res.picking);
 
-            const total = this.currentItems.length;
-            const scannedCount = this.currentItems.filter(i => i.scanned).length;
+            const total = this.currentItems.length; // Total unique items
+            // For progress, maybe we want total quantity?
+            // Let's sum up quantities
+            const totalQty = this.currentItems.reduce((sum, i) => sum + (i.qty || 0), 0);
+
             this.updateItemsList(this.currentItems);
             this.updateProgress({
-                total_items: total,
-                scanned_items: scannedCount,
-                all_scanned: total > 0 && scannedCount === total,
+                total_qty: totalQty,
+                scanned_qty: 0,
+                all_scanned: false,
             });
         } catch (e) {
             console.error(e);
@@ -289,11 +330,12 @@ class BarcodeShipper {
         list.innerHTML = '';
         (items || []).forEach(item => {
             const div = document.createElement('div');
-            div.className = `item-card ${item.scanned ? 'scanned' : ''}`;
+            const isFullyScanned = (item.scanned_qty || 0) >= (item.qty || 0);
+            div.className = `item-card ${isFullyScanned ? 'scanned' : ''}`;
 
             // Determine icon
             let icon = '';
-            if (item.scanned) {
+            if (isFullyScanned) {
                 icon = '<i class="fa fa-check-circle" style="color: var(--success-color);"></i>';
             } else {
                 icon = item.type === 'package'
@@ -306,7 +348,7 @@ class BarcodeShipper {
                     <div class="item-name">${item.name || ''}</div>
                     <div class="item-details" style="display: flex; gap: 15px; font-size: 0.85rem; color: #6c757d; margin-top: 4px;">
                         <span class="item-barcode"><i class="fa fa-barcode"></i> ${item.barcode || ''}</span>
-                        <span class="item-qty"><i class="fa fa-layer-group"></i> SL: ${item.qty || 0}</span>
+                        <span class="item-qty"><i class="fa fa-layer-group"></i> SL: ${item.scanned_qty || 0} / ${item.qty || 0}</span>
                     </div>
                 </div>
                 <div class="item-status-icon" style="font-size: 1.5rem;">${icon}</div>
@@ -319,11 +361,13 @@ class BarcodeShipper {
         const fill = document.getElementById('progress-fill');
         const text = document.getElementById('progress-text');
         const btn = document.getElementById('complete-delivery-btn');
-        const total = summary?.total_items || 0;
-        const scanned = summary?.scanned_items || 0;
+
+        const total = summary?.total_qty || 0;
+        const scanned = summary?.scanned_qty || 0;
+
         const percent = total ? (scanned / total) * 100 : 0;
         if (fill) fill.style.width = `${percent}%`;
-        if (text) text.textContent = `${scanned} / ${total} đã quét`;
+        if (text) text.textContent = `${scanned} / ${total} sản phẩm`;
         if (btn) btn.style.display = summary?.all_scanned && total ? 'block' : 'none';
     }
 
@@ -341,9 +385,7 @@ class BarcodeShipper {
 
         // nếu lỡ scan lại PICK -> coi như complete (nếu đủ điều kiện)
         if (barcode.toUpperCase().startsWith('PICK')) {
-            // Check if all scanned first? Or just try to complete
-            // Let's just try to complete, backend will validate or we validate frontend
-            const allScanned = this.currentItems.every(i => i.scanned);
+            const allScanned = this.currentItems.every(i => (i.scanned_qty || 0) >= (i.qty || 0));
             if (allScanned) {
                 await this.completeDelivery();
             } else {
@@ -364,37 +406,51 @@ class BarcodeShipper {
             if (res.success) {
                 this.showMessage('item-result', res.message, 'success');
 
-                // Lưu barcode này vào danh sách đã quét
-                if (barcode) this.scannedBarcodes.add(barcode);
-
-                // Đánh dấu scanned cho item tương ứng trong currentItems
-                // Logic: Find item with matching barcode. If found, mark scanned.
+                // Find item in local list
                 let found = false;
                 this.currentItems = (this.currentItems || []).map(item => {
                     if (!item.barcode) return item;
                     if (item.barcode === barcode) {
                         found = true;
-                        return { ...item, scanned: true };
+                        let newQty = (item.scanned_qty || 0);
+
+                        // Logic: Package -> Mark full. Product -> Increment.
+                        if (item.type === 'package') {
+                            newQty = item.qty; // Scan package once = full
+                        } else {
+                            newQty += 1;
+                        }
+
+                        // Optional: Cap at max qty?
+                        if (newQty > item.qty) {
+                            // Warn user? Or just allow overscan?
+                            // For now, allow but maybe show warning?
+                            // Or cap it? Let's cap it for visual, but maybe warn.
+                            // this.showMessage('item-result', 'Đã quét đủ số lượng!', 'warning');
+                            // newQty = item.qty; 
+                            // User requirement: "quét nhiều lần tương đương số lượng".
+                            // If I have 2 items, I scan twice.
+                        }
+
+                        return { ...item, scanned_qty: newQty };
                     }
                     return item;
                 });
 
                 if (!found) {
-                    // Warning if scanned something not in list?
-                    // The backend said success, so it might be a product inside a package?
-                    // For now, trust backend success but if not in list, maybe reload list?
-                    // Or maybe the backend matched a product code that is different from display name?
-                    // Let's reload details to be safe if we didn't find it in our simple list match
-                    await this.loadOutOrderDetails();
+                    // Item not in list (maybe extra item?)
+                    this.showMessage('item-result', 'Mã này không có trong danh sách đơn hàng!', 'warning');
                 } else {
                     // Update UI locally
-                    const total = this.currentItems.length;
-                    const scannedCount = this.currentItems.filter(i => i.scanned).length;
+                    const totalQty = this.currentItems.reduce((sum, i) => sum + (i.qty || 0), 0);
+                    const scannedQty = this.currentItems.reduce((sum, i) => sum + (i.scanned_qty || 0), 0);
+                    const allScanned = this.currentItems.every(i => (i.scanned_qty || 0) >= (i.qty || 0));
+
                     this.updateItemsList(this.currentItems);
                     this.updateProgress({
-                        total_items: total,
-                        scanned_items: scannedCount,
-                        all_scanned: total > 0 && scannedCount === total,
+                        total_qty: totalQty,
+                        scanned_qty: scannedQty,
+                        all_scanned: allScanned,
                     });
                 }
 
@@ -417,7 +473,8 @@ class BarcodeShipper {
             this.showMessage('item-result', 'Không có đơn nào để hoàn tất.', 'danger');
             return;
         }
-        if (!confirm('Xác nhận hoàn tất giao hàng?')) return;
+        // REMOVED CONFIRMATION
+        // if (!confirm('Xác nhận hoàn tất giao hàng?')) return;
 
         this.showMessage('item-result', 'Đang xử lý...', 'warning');
         try {
@@ -425,11 +482,11 @@ class BarcodeShipper {
                 picking_id: this.currentPickingId,
             });
             if (res.success) {
-                this.showStep('step-complete');
-                this.showMessage('completion-result', res.message, 'success');
-                this.currentPickingId = null;
-                this.currentItems = [];
-                this.scannedBarcodes.clear();
+                // Show success briefly then reset
+                this.showMessage('pick-result', '✅ Giao hàng thành công! Đã sẵn sàng cho đơn tiếp theo.', 'success');
+
+                // Reset immediately to Step 1
+                this.startNewDelivery();
             } else {
                 this.showMessage('item-result', res.error || 'Không hoàn tất được', 'danger');
             }
@@ -470,7 +527,7 @@ class BarcodeShipper {
         if (list) list.innerHTML = '';
         if (info) info.innerHTML = '';
         if (fill) fill.style.width = '0%';
-        if (text) text.textContent = '0 / 0 đã quét';
+        if (text) text.textContent = '0 / 0 sản phẩm';
         if (btn) btn.style.display = 'none';
 
         this.showStep('step-scan-pick');
