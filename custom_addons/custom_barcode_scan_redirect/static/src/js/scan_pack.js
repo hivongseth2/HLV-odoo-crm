@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const completeBtn = document.getElementById("complete_pack_btn");
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
-  const BARCODE_MAP_POINT_ONE = {
+const BARCODE_MAP_POINT_ONE = {
     "452424752161": "045242475216",//4361
     "452424752301": "045242475230", //4364
   };
@@ -202,30 +202,31 @@ document.addEventListener("DOMContentLoaded", function () {
     toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 4000 });
   });
 
+
   // Handle Barcode Input (Enter/Scan)
   input?.addEventListener("keypress", async function (event) {
 
     // Only process when Enter key is pressed
     if (event.key !== "Enter" && event.keyCode !== 13) return;
-    const barcode = this.value.trim();
-    if (!barcode) return;
+    const raw = this.value.trim();
+    if (!raw) return;
+    this.value = ""; // Clear input
 
-    // nếu trùng tên pick để auto hoàn tất
-    if (typeof originPickName !== 'undefined' && barcode === originPickName) {
+    // Kiểm tra nếu trùng tên pick để auto hoàn tất
+    if (typeof originPickName !== 'undefined' && raw === originPickName) {
       completeBtn?.click();
-      this.value = "";
       return;
     }
 
-    // mapping: nếu quét “key” thì cộng 0.1 vào barcode mục tiêu
-    const targetBarcode = BARCODE_MAP_POINT_ONE[barcode];
+    // Mapping: nếu quét "key" thì cộng 0.1 vào barcode mục tiêu
+    const targetBarcode = BARCODE_MAP_POINT_ONE[raw];
     if (targetBarcode) {
-      this.value = "";
       await updateQty(targetBarcode, 0.1);
       return;
     }
 
-    this.value = ""; // Clear input
+    // Normalize barcode for further processing
+    const barcode = raw;
 
     // --- LOGIC MỚI: Quét mã 'createpacked' để tự động đóng gói ---
     if (barcode === 'CMD-CREATE-PACK') {
