@@ -130,6 +130,17 @@ class BarcodeShipper {
         if (el) el.classList.remove('show');
     }
 
+    playSound(type = 'success') {
+        try {
+            const soundPath = type === 'success' 
+                ? '/custom_barcode_scan_redirect/static/src/sound/success.mp3'
+                : '/custom_barcode_scan_redirect/static/src/sound/error.mp3';
+            new Audio(soundPath).play().catch(() => {});
+        } catch (e) {
+            console.warn('Sound play failed:', e);
+        }
+    }
+
     // --- Camera Logic ---
     async startCamera(sectionId, readerId, mode) {
         // If already running for the same section, do nothing
@@ -188,7 +199,6 @@ class BarcodeShipper {
                 const btn = document.getElementById('btn-open-camera-item');
                 if (btn) btn.style.display = 'block';
             }
-            // alert("Không thể mở camera. Vui lòng kiểm tra quyền truy cập.");
             section.classList.remove('active');
         }
     }
@@ -214,10 +224,6 @@ class BarcodeShipper {
     }
 
     onScanSuccess(decodedText, mode) {
-        // Play beep sound
-        // const audio = new Audio('/hlv_barcode_shipper/static/src/sounds/beep.mp3'); // If we had one
-        // audio.play().catch(e => {});
-
         if (mode === 'pick') {
             const input = document.getElementById('pick-barcode-input');
             if (input) {
@@ -256,14 +262,17 @@ class BarcodeShipper {
             if (res.success) {
                 this.currentPickingId = res.out_picking_id;
                 this.showMessage('pick-result', res.message, 'success');
+                this.playSound('success');
                 await this.loadOutOrderDetails();
                 setTimeout(() => this.showStep('step-scan-items'), 1000);
             } else {
                 this.showMessage('pick-result', res.error || 'Không tìm thấy', 'danger');
+                this.playSound('error');
             }
         } catch (e) {
             console.error(e);
             this.showMessage('pick-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
+            this.playSound('error');
         }
     }
 
@@ -286,8 +295,6 @@ class BarcodeShipper {
             this.updateOrderInfo(res.picking);
 
             const total = this.currentItems.length; // Total unique items
-            // For progress, maybe we want total quantity?
-            // Let's sum up quantities
             const totalQty = this.currentItems.reduce((sum, i) => sum + (i.qty || 0), 0);
 
             this.updateItemsList(this.currentItems);
@@ -301,7 +308,6 @@ class BarcodeShipper {
             this.showMessage('item-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
         }
     }
-
 
     updateOrderInfo(p) {
         const el = document.getElementById('order-info');
@@ -390,6 +396,7 @@ class BarcodeShipper {
                 await this.completeDelivery();
             } else {
                 this.showMessage('item-result', 'Chưa quét đủ hàng hóa!', 'warning');
+                this.playSound('error');
             }
             return;
         }
@@ -404,32 +411,33 @@ class BarcodeShipper {
             console.log('scan_package result:', res);
 
             if (res.success) {
-                this.showMessage('item-result', res.message, 'success');
-
                 // Find item in local list
                 let found = false;
+                let alreadyFull = false;
+                
                 this.currentItems = (this.currentItems || []).map(item => {
                     if (!item.barcode) return item;
                     if (item.barcode === barcode) {
                         found = true;
                         let newQty = (item.scanned_qty || 0);
+                        const maxQty = item.qty || 0;
+
+                        // ⭐ FIX: Kiểm tra đã quét đủ chưa
+                        if (newQty >= maxQty) {
+                            alreadyFull = true;
+                            return item; // Không cho quét thêm
+                        }
 
                         // Logic: Package -> Mark full. Product -> Increment.
                         if (item.type === 'package') {
-                            newQty = item.qty; // Scan package once = full
+                            newQty = maxQty; // Scan package once = full
                         } else {
                             newQty += 1;
-                        }
-
-                        // Optional: Cap at max qty?
-                        if (newQty > item.qty) {
-                            // Warn user? Or just allow overscan?
-                            // For now, allow but maybe show warning?
-                            // Or cap it? Let's cap it for visual, but maybe warn.
-                            // this.showMessage('item-result', 'Đã quét đủ số lượng!', 'warning');
-                            // newQty = item.qty; 
-                            // User requirement: "quét nhiều lần tương đương số lượng".
-                            // If I have 2 items, I scan twice.
+                            // ⭐ FIX: Giới hạn không vượt quá số lượng yêu cầu
+                            if (newQty > maxQty) {
+                                newQty = maxQty;
+                                alreadyFull = true;
+                            }
                         }
 
                         return { ...item, scanned_qty: newQty };
@@ -439,9 +447,17 @@ class BarcodeShipper {
 
                 if (!found) {
                     // Item not in list (maybe extra item?)
-                    this.showMessage('item-result', 'Mã này không có trong danh sách đơn hàng!', 'warning');
+                    this.showMessage('item-result', '⚠️ Mã này không có trong danh sách đơn hàng!', 'warning');
+                    this.playSound('error');
+                } else if (alreadyFull) {
+                    // ⭐ FIX: Cảnh báo khi đã quét đủ
+                    this.showMessage('item-result', '⚠️ Sản phẩm này đã quét đủ số lượng!', 'warning');
+                    this.playSound('error');
                 } else {
-                    // Update UI locally
+                    // Success - update UI
+                    this.showMessage('item-result', res.message, 'success');
+                    this.playSound('success');
+                    
                     const totalQty = this.currentItems.reduce((sum, i) => sum + (i.qty || 0), 0);
                     const scannedQty = this.currentItems.reduce((sum, i) => sum + (i.scanned_qty || 0), 0);
                     const allScanned = this.currentItems.every(i => (i.scanned_qty || 0) >= (i.qty || 0));
@@ -460,21 +476,20 @@ class BarcodeShipper {
                 }
             } else {
                 this.showMessage('item-result', res.error || 'Không tìm thấy mã này', 'danger');
+                this.playSound('error');
             }
         } catch (e) {
             console.error(e);
             this.showMessage('item-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
+            this.playSound('error');
         }
     }
-
 
     async completeDelivery() {
         if (!this.currentPickingId) {
             this.showMessage('item-result', 'Không có đơn nào để hoàn tất.', 'danger');
             return;
         }
-        // REMOVED CONFIRMATION
-        // if (!confirm('Xác nhận hoàn tất giao hàng?')) return;
 
         this.showMessage('item-result', 'Đang xử lý...', 'warning');
         try {
@@ -482,17 +497,19 @@ class BarcodeShipper {
                 picking_id: this.currentPickingId,
             });
             if (res.success) {
-                // Show success briefly then reset
                 this.showMessage('pick-result', '✅ Giao hàng thành công! Đã sẵn sàng cho đơn tiếp theo.', 'success');
-
+                this.playSound('success');
+                
                 // Reset immediately to Step 1
                 this.startNewDelivery();
             } else {
                 this.showMessage('item-result', res.error || 'Không hoàn tất được', 'danger');
+                this.playSound('error');
             }
         } catch (e) {
             console.error(e);
             this.showMessage('item-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
+            this.playSound('error');
         }
     }
 
@@ -582,6 +599,7 @@ class BarcodeShipper {
         modal.classList.remove('show');
         document.body.style.overflow = '';
     }
+
     async apiCall(endpoint, data) {
         const res = await fetch(endpoint, {
             method: 'POST',
@@ -608,7 +626,6 @@ class BarcodeShipper {
 
         return json;
     }
-
 }
 
 // Auto-init
