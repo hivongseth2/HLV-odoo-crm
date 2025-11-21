@@ -111,6 +111,8 @@ class MisaTransferFetch(models.TransientModel):
         }
         
         _logger.info("🔁payloade='%s' ", payload)
+        _logger.info("header----='%s' ", headers)
+
 
         
         page_index = 1
