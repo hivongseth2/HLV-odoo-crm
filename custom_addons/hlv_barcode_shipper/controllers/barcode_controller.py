@@ -18,7 +18,7 @@ class BarcodeShipperController(http.Controller):
         if not request.env.user.has_group("hlv_barcode_shipper.group_shipper"):
             return {
                 "success": False,
-                "error": "Access denied. Shipper permissions required.",
+                "error": "Truy cập bị từ chối. Bạn cần quyền 'Shipper'.",
             }
         return {"success": True}
 
@@ -61,7 +61,7 @@ class BarcodeShipperController(http.Controller):
             )
 
         if not pick:
-            raise UserError(f"PICK order {pick_name} not found")
+            raise UserError(f"Không tìm thấy phiếu {pick_name}")
 
         # 2) thử theo group_id
         out = False
@@ -87,7 +87,7 @@ class BarcodeShipperController(http.Controller):
             )
 
         if not out:
-            raise UserError(f"No related OUT order found for {pick_name}")
+            raise UserError(f"Không tìm thấy phiếu xuất kho (OUT) nào liên quan đến {pick_name}")
 
         return out
 
@@ -143,7 +143,7 @@ class BarcodeShipperController(http.Controller):
         """
         barcode = (barcode or "").strip()
         if not barcode:
-            return {"success": False, "error": "Empty barcode"}
+            return {"success": False, "error": "Mã vạch trống"}
 
         # Ưu tiên PACK (package_level)
         for pl in picking.package_level_ids:
@@ -152,7 +152,7 @@ class BarcodeShipperController(http.Controller):
                     "success": True,
                     "type": "package",
                     "name": pl.package_id.name,
-                    "message": f"Package {barcode} found",
+                    "message": f"Đã tìm thấy kiện {barcode}",
                 }
 
         # Product barcode / default_code
@@ -169,12 +169,12 @@ class BarcodeShipperController(http.Controller):
                 "success": True,
                 "type": "product",
                 "name": prod.display_name,
-                "message": f"Product {barcode} found",
+                "message": f"Đã tìm thấy sản phẩm {barcode}",
             }
 
         return {
             "success": False,
-            "error": f"Barcode {barcode} not found in this picking",
+            "error": f"Không tìm thấy mã {barcode} trong đơn này",
         }
 
     # ===== API: scan PICK =====
@@ -202,7 +202,7 @@ class BarcodeShipperController(http.Controller):
             barcode = data.get("barcode", "").strip()
 
             if not barcode:
-                return {"success": False, "error": "Barcode is required"}
+                return {"success": False, "error": "Vui lòng nhập mã vạch"}
 
             out_picking = self._find_out_picking_by_pick_name(barcode)
 
@@ -212,14 +212,14 @@ class BarcodeShipperController(http.Controller):
                 scan_type="pick",
                 picking_id=out_picking.id,
                 status="success",
-                message=f"Found OUT order {out_picking.name}",
+                message=f"Tìm thấy đơn xuất kho {out_picking.name}",
             )
 
             return {
                 "success": True,
                 "out_picking_id": out_picking.id,
                 "out_picking_name": out_picking.name,
-                "message": f"Found delivery order {out_picking.name}",
+                "message": f"Đã tìm thấy đơn giao hàng {out_picking.name}",
             }
 
         except UserError as e:
@@ -236,9 +236,9 @@ class BarcodeShipperController(http.Controller):
                 barcode=barcode,
                 scan_type="pick",
                 status="error",
-                message=f"System error: {e}",
+                message=f"Lỗi hệ thống: {e}",
             )
-            return {"success": False, "error": "System error occurred"}
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
 
     # ===== API: get OUT details =====
     @http.route(
@@ -264,11 +264,11 @@ class BarcodeShipperController(http.Controller):
             picking_id = data.get("picking_id")
 
             if not picking_id:
-                return {"success": False, "error": "Picking ID is required"}
+                return {"success": False, "error": "Thiếu Picking ID"}
 
             picking = request.env["stock.picking"].sudo().browse(picking_id)
             if not picking.exists():
-                return {"success": False, "error": "Picking not found"}
+                return {"success": False, "error": "Không tìm thấy phiếu kho"}
 
             items = self._get_packages_info(picking)
             total = len(items)
@@ -291,7 +291,7 @@ class BarcodeShipperController(http.Controller):
             }
         except Exception as e:
             _logger.exception("Error in get_out_order_details")
-            return {"success": False, "error": "System error occurred"}
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
 
     # ===== API: scan package/product =====
     @http.route(
@@ -321,12 +321,12 @@ class BarcodeShipperController(http.Controller):
             if not picking_id or not barcode:
                 return {
                     "success": False,
-                    "error": "Picking ID and barcode are required",
+                    "error": "Thiếu Picking ID hoặc mã vạch",
                 }
 
             picking = request.env["stock.picking"].sudo().browse(picking_id)
             if not picking.exists():
-                return {"success": False, "error": "Picking not found"}
+                return {"success": False, "error": "Không tìm thấy phiếu kho"}
 
             result = self._scan_package_in_picking(picking, barcode)
 
@@ -348,9 +348,9 @@ class BarcodeShipperController(http.Controller):
                 barcode=barcode,
                 scan_type="package",
                 status="error",
-                message=f"System error: {e}",
+                message=f"Lỗi hệ thống: {e}",
             )
-            return {"success": False, "error": "System error occurred"}
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
 
     # ===== API: complete OUT (DONE) =====
     @http.route(
@@ -376,16 +376,16 @@ class BarcodeShipperController(http.Controller):
             picking_id = data.get("picking_id")
 
             if not picking_id:
-                return {"success": False, "error": "Picking ID is required"}
+                return {"success": False, "error": "Thiếu Picking ID"}
 
             picking = request.env["stock.picking"].sudo().browse(picking_id)
             if not picking.exists():
-                return {"success": False, "error": "Picking not found"}
+                return {"success": False, "error": "Không tìm thấy phiếu kho"}
 
             if picking.picking_type_id.code != "outgoing":
                 return {
                     "success": False,
-                    "error": "Only OUT pickings can be completed here",
+                    "error": "Chỉ có thể hoàn tất phiếu xuất kho (OUT) tại đây",
                 }
 
             # GỌI LUỒNG CHUẨN – KHÔNG OVERRIDE GÌ CẢ
@@ -396,16 +396,16 @@ class BarcodeShipperController(http.Controller):
                 scan_type="complete",
                 picking_id=picking.id,
                 status="success",
-                message="Picking completed by shipper",
+                message="Đơn hàng đã được Shipper hoàn tất",
             )
 
             return {
                 "success": True,
-                "message": f"Delivery {picking.name} completed",
+                "message": f"Đơn hàng {picking.name} đã hoàn tất",
             }
         except Exception as e:
             _logger.exception("Error in complete_out")
-            return {"success": False, "error": "System error occurred"}
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
 
     # ===== API: history =====
     @http.route(
@@ -453,7 +453,7 @@ class BarcodeShipperController(http.Controller):
             return {"success": True, "history": history}
         except Exception as e:
             _logger.exception("Error in scan_history")
-            return {"success": False, "error": "System error occurred"}
+            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
 
     # ===== Web UI: /barcode/shipper =====
     @http.route("/barcode/shipper", type="http", auth="user", website=False)
