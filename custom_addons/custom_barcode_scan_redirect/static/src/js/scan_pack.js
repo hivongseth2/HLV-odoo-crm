@@ -792,9 +792,14 @@ async function openPackageEditModal(event) {
         // Qty decrease button
         li.querySelector('.qty-decrease').addEventListener('click', () => {
           const display = li.querySelector('.qty-display');
-          const cur = parseFloat(display.innerText) || 0;
+          let cur = parseFloat(display.innerText) || 0; // Lấy giá trị hiện tại
+
+          // [FIX] Giảm đi 1 đơn vị, nhưng không nhỏ hơn 0
           const newQty = Math.max(0, cur - 1);
-          display.innerText = String(newQty);
+
+          display.innerText = String(newQty); // Cập nhật hiển thị
+
+          // Cập nhật vào biến tạm currentPackageData để đồng bộ
           if (currentPackageData && Array.isArray(currentPackageData.items)) {
             const foundItem = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
             if (foundItem) foundItem.qty_done = newQty;
