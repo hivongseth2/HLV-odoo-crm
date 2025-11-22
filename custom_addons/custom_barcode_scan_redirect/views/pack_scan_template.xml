@@ -185,12 +185,32 @@
               <div id="packageItemsList" class="items-list" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
             </div>
 
-            <div class="modal-card" style="background: white; border-radius: 12px; padding: 1rem; border: 1px solid #eee;">
-              <h3 class="section-title" style="margin: 0 0 0.5rem 0; font-size: 0.9rem; color: #666;">THÊM SẢN PHẨM</h3>
-              <div class="add-form" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <select id="addItemSelect" class="form-select" style="flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;"></select>
-                <input id="addItemQty" type="number" min="1" value="1" class="form-input-qty" style="width: 60px; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px; text-align: center;"/>
-                <button onclick="addItemToPackage()" class="btn-add" style="padding: 0.5rem 1rem; background: #228be6; color: white; border: none; border-radius: 6px; cursor: pointer;">Thêm</button>
+            <div class="modal-card" style="background: white; border-radius: 12px; padding: 1.25rem; border: 1px solid #e9ecef; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-top: 0.5rem;">
+              
+              <h3 class="section-title" style="margin: 0 0 1rem 0; font-size: 0.85rem; color: #868e96; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                Thêm sản phẩm vào gói
+              </h3>
+              
+              <div class="add-form" style="display: grid; grid-template-columns: 1fr 80px auto; gap: 10px; align-items: center;">
+                
+                <div style="position: relative;">
+                  <select id="addItemSelect" class="form-select" style="width: 100%; height: 42px; padding: 0 12px; border: 1px solid #ced4da; border-radius: 8px; font-size: 14px; color: #495057; background-color: #fff; outline: none; cursor: pointer; transition: border-color 0.2s;">
+                    <option value="">-- Chọn sản phẩm --</option>
+                  </select>
+                </div>
+
+                <div style="position: relative;">
+                  <input id="addItemQty" type="number" min="1" value="1" placeholder="SL" class="form-input-qty" 
+                         style="width: 100%; height: 42px; padding: 0 10px; border: 1px solid #ced4da; border-radius: 8px; text-align: center; font-weight: 600; font-size: 14px; outline: none; transition: border-color 0.2s; box-sizing: border-box;"/>
+                </div>
+
+                <button onclick="addItemToPackage()" class="btn-add" 
+                        style="height: 42px; padding: 0 1.5rem; background: #228be6; color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Thêm
+                </button>
+
               </div>
             </div>
           </div>

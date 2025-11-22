@@ -789,17 +789,17 @@ async function openPackageEditModal(event) {
           </div>
         `;
 
-        // Qty decrease button
+        // --- NÚT GIẢM SỐ LƯỢNG (FIX LỖI CỘNG DỒN) ---
         li.querySelector('.qty-decrease').addEventListener('click', () => {
           const display = li.querySelector('.qty-display');
-          let cur = parseFloat(display.innerText) || 0; // Lấy giá trị hiện tại
+          let cur = parseFloat(display.innerText) || 0;
 
-          // [FIX] Giảm đi 1 đơn vị, nhưng không nhỏ hơn 0
+          // Logic chuẩn: Lấy số hiện tại TRỪ đi 1 (tối thiểu là 0)
           const newQty = Math.max(0, cur - 1);
 
-          display.innerText = String(newQty); // Cập nhật hiển thị
+          display.innerText = String(newQty);
 
-          // Cập nhật vào biến tạm currentPackageData để đồng bộ
+          // Cập nhật dữ liệu vào biến tạm
           if (currentPackageData && Array.isArray(currentPackageData.items)) {
             const foundItem = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
             if (foundItem) foundItem.qty_done = newQty;
