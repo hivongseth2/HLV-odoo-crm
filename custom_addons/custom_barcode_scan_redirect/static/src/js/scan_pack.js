@@ -1298,13 +1298,14 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
       lineEl.setAttribute('data-packed-qty', currentPacked + item.qty);
       prodName = lineEl.querySelector('strong')?.innerText || prodName;
     }
-
-    previewHtml += `
+    if (item.qty > 0) {
+      previewHtml += `
         <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
           <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;">${prodName}</span>
           <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #dbe4ff; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">+${item.qty}</span>
         </div>
       `;
+    }
   });
 
   // --- [FIX] KIỂM TRA XEM GÓI NÀY ĐÃ CÓ TRÊN MÀN HÌNH CHƯA ---

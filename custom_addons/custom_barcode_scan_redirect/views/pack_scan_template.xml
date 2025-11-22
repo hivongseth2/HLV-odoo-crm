@@ -105,15 +105,15 @@
                         <div class="package-items-preview" style="margin-bottom: 1rem; font-size: 0.85rem; color: #495057; max-height: 100px; overflow-y: auto;">
                           <t t-if="pkg.get('package_lines')">
                             <t t-foreach="pkg['package_lines']" t-as="line">
-                              <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                              <div class="preview-item" t-if="line['product_qty'] > 0" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
                                 <span class="preview-item-name" t-esc="line['product_name']" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;"/>
                                 <span class="preview-item-qty" style="font-weight: 600; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px;">x<t t-esc="line['product_qty']"/></span>
                               </div>
                             </t>
                           </t>
-                          <t t-elif="pkg.get('move_line_ids')">
-                             <t t-foreach="pkg['move_line_ids']" t-as="line">
-                              <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                         <t t-elif="pkg.get('move_line_ids')">
+                            <t t-foreach="pkg['move_line_ids']" t-as="line">
+                              <div class="preview-item" t-if="line['product_qty'] > 0" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
                                 <span class="preview-item-name" t-esc="line['product_name']" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;"/>
                                 <span class="preview-item-qty" style="font-weight: 600; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px;">x<t t-esc="line['product_qty']"/></span>
                               </div>
