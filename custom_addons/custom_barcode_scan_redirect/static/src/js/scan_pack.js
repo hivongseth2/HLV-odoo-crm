@@ -333,6 +333,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   setFocus();
   diag();
+  setTimeout(optimizePackageUI, 100); // Delay nhẹ 100ms để đảm bảo DOM đã render xong
   setTimeout(startRecording, 400);
 });
 
@@ -590,7 +591,80 @@ function createModal(title, content, buttons = []) {
   document.body.appendChild(modal);
   return modal;
 }
+// ============================================================
+// HÀM DỌN DẸP UI KHI VỪA F5 (GỘP DÒNG & FORMAT TÊN)
+// ============================================================
+function optimizePackageUI() {
+  const packageCards = document.querySelectorAll('.package-item-card');
 
+  packageCards.forEach(card => {
+    const previewContainer = card.querySelector('.package-items-preview');
+    if (!previewContainer) return;
+
+    const items = previewContainer.querySelectorAll('.preview-item');
+    const aggregated = {}; // Dùng để gom nhóm
+
+    // 1. Duyệt qua các dòng hiện có để gom nhóm
+    items.forEach(item => {
+      let name = item.querySelector('.preview-item-name').innerText.trim();
+      let qtyText = item.querySelector('.preview-item-qty').innerText.toLowerCase().replace('x', '');
+      let qty = parseFloat(qtyText) || 0;
+
+      if (qty <= 0) {
+        item.remove(); // Xóa dòng rác số lượng 0
+        return;
+      }
+
+      // [FIX NAME] Nếu tên chưa có Barcode, thử tìm trong danh sách chính để ghép vào
+      if (!name.startsWith('[')) {
+        // Tìm dòng sản phẩm bên trái có tên khớp (tương đối)
+        const allMainItems = document.querySelectorAll('#product_list .product-item');
+        for (let mainItem of allMainItems) {
+          const mainName = mainItem.querySelector('strong')?.innerText.trim() || '';
+          if (mainName === name || mainName.includes(name) || name.includes(mainName)) {
+            const barcode = mainItem.getAttribute('data-barcode');
+            if (barcode) {
+              name = `[${barcode}] ${mainName}`; // Cập nhật tên chuẩn
+            }
+            break;
+          }
+        }
+      }
+
+      // Gom nhóm
+      if (aggregated[name]) {
+        aggregated[name].qty += qty;
+        aggregated[name].elementsToRemove.push(item); // Đánh dấu để xóa dòng thừa
+      } else {
+        aggregated[name] = {
+          qty: qty,
+          mainElement: item,
+          elementsToRemove: []
+        };
+      }
+    });
+
+    // 2. Cập nhật lại DOM sau khi gom
+    for (const [name, data] of Object.entries(aggregated)) {
+      // Xóa các dòng thừa
+      data.elementsToRemove.forEach(el => el.remove());
+
+      // Cập nhật dòng chính (Dòng đầu tiên tìm thấy)
+      const mainEl = data.mainElement;
+      const nameEl = mainEl.querySelector('.preview-item-name');
+      const qtyEl = mainEl.querySelector('.preview-item-qty');
+
+      // Update tên (đã có barcode)
+      nameEl.innerText = name;
+      nameEl.style.fontSize = "0.85rem"; // Đảm bảo font size đẹp
+      nameEl.style.color = "#495057";
+
+      // Update số lượng (Format: xSố, màu xám)
+      qtyEl.innerText = `x${data.qty}`;
+      qtyEl.style.cssText = "font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;";
+    }
+  });
+}
 // ===================== SIBLING PACK ACTIONS (COMMENTED OUT SPLIT FUNCTIONALITY) =====================
 document.addEventListener('click', async function (e) {
   const unpackBtn = e.target.closest('.btn-unpack');
@@ -1504,6 +1578,8 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
     list.prepend(li);
   }
 }
+
+
 // ===================== PANEL VISIBILITY TOGGLE =====================
 function togglePanelVisibility(button) {
   const panel = button.closest('.pack-side-panel');
