@@ -36,7 +36,10 @@
               <t t-foreach="lines" t-as="line">
                 <t t-set="unassigned_mls" t-value="line.move_line_ids.filtered(lambda x: not x.result_package_id)"/>
                 <t t-set="ml" t-value="unassigned_mls and unassigned_mls[0] or (line.move_line_ids and line.move_line_ids[0])"/>
-                <li t-att-data-barcode="line.product_id.barcode" class="product-item" t-att-data-line-id="ml.id">
+                <li t-att-data-barcode="line.product_id.barcode" 
+                  class="product-item" 
+                  t-att-data-line-id="ml.id"
+                  t-att-data-packed-qty="sum(line.move_line_ids.filtered(lambda x: x.result_package_id).mapped('qty_done'))"> 
                   <div style="flex: 1; max-width: 70%;">
                     <strong><t t-esc="line.product_id.display_name"/></strong>
                     <div style="font-size: 0.85rem; color: #666; margin-top: 2px;">
@@ -192,7 +195,10 @@
             </div>
           </div>
 
-        
+          <div class="modal-footer" style="padding: 1rem; background: white; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 0.5rem;">
+            <button onclick="closePackageEditModal()" class="btn btn-secondary">Hủy</button>
+            <button onclick="savePackageChanges()" class="btn btn-primary">Lưu thay đổi</button>
+          </div>
         </div>
       </div>
 

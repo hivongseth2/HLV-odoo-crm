@@ -235,16 +235,21 @@ document.addEventListener("DOMContentLoaded", function () {
       const items = [];
       document.querySelectorAll("#product_list .product-item").forEach(el => {
         const lineId = parseInt(el.dataset.lineId);
-        const done = parseFloat(el.querySelector(".done")?.innerText || 0);
-        // Chỉ lấy những dòng đã quét số lượng
-        if (lineId && done > 0) {
-          items.push({ move_line_id: lineId, qty: done });
+        const currentDone = parseFloat(el.querySelector(".done")?.innerText || 0);
+        const alreadyPacked = parseFloat(el.dataset.packedQty || 0); // Lấy số đã đóng gói từ data attribute
+
+        // Tính số lượng trôi nổi (chưa vào gói)
+        const qtyToPack = currentDone - alreadyPacked;
+
+        // Chỉ lấy nếu còn hàng chưa đóng gói
+        if (lineId && qtyToPack > 0) {
+          items.push({ move_line_id: lineId, qty: qtyToPack });
         }
       });
 
-      // 2. Validate: Nếu chưa quét gì thì báo lỗi
+      // 2. Validate: Nếu items rỗng nghĩa là tất cả đã vào gói hết rồi
       if (items.length === 0) {
-        toast.warn("Chưa có sản phẩm nào được quét để đóng gói!");
+        toast.warn("Không có sản phẩm nào mới để đóng gói (Tất cả đã nằm trong gói).");
         playError();
         return;
       }
@@ -918,14 +923,17 @@ async function removePackageItem(moveLineId) {
     if (qtyToRemove > 0) {
       const mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${moveLineId}"]`);
       if (mainListEl) {
+        // 1. Giảm số lượng hiển thị (Done) - Như logic bạn yêu cầu: Xóa gói = Trả hàng
         const doneEl = mainListEl.querySelector('.done');
         const currentDone = parseFloat(doneEl.innerText || 0);
-        // Trừ đi số lượng vừa xóa khỏi gói
         const newDone = Math.max(0, currentDone - qtyToRemove);
-
         doneEl.innerText = newDone;
 
-        // Cập nhật màu sắc trạng thái (bỏ class completed nếu không còn đủ)
+        // 2. Giảm số lượng đã đóng gói (Packed Qty) để đồng bộ logic tính toán
+        const currentPacked = parseFloat(mainListEl.dataset.packedQty || 0);
+        mainListEl.dataset.packedQty = Math.max(0, currentPacked - qtyToRemove);
+
+        // 3. Cập nhật màu sắc
         const requiredEl = mainListEl.querySelectorAll('span')[1];
         const required = parseFloat(requiredEl?.innerText || 0);
         if (newDone >= required && required > 0) mainListEl.classList.add("completed");
@@ -1228,6 +1236,12 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
   itemsData.forEach(item => {
     // Lấy tên sản phẩm từ DOM hiện tại để hiển thị (vì API create chỉ trả về ID pack)
     const lineEl = document.querySelector(`[data-line-id="${item.move_line_id}"]`);
+
+    if (lineEl) {
+      const currentPacked = parseFloat(lineEl.dataset.packedQty || 0);
+      // Cộng dồn số lượng vừa đóng vào biến đã đóng
+      lineEl.dataset.packedQty = currentPacked + item.qty;
+    }
     const prodName = lineEl ? lineEl.querySelector('strong').innerText : 'Sản phẩm...';
 
     previewHtml += `
