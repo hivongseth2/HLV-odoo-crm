@@ -898,8 +898,12 @@ function closePackageEditModal() {
 async function removePackageItem(moveLineId) {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
-  // 1. Lấy số lượng sắp xóa từ giao diện Modal (trước khi gọi API)
-  const itemInModal = document.querySelector(`.qty-display[data-move-line-id="${moveLineId}"]`);
+  // Chuyển về string để query selector chính xác hơn
+  const strLineId = String(moveLineId);
+
+  // 1. Lấy số lượng sắp xóa từ Modal (trước khi gọi API xóa)
+  // Tìm element trong modal dựa trên move-line-id
+  const itemInModal = document.querySelector(`.qty-display[data-move-line-id="${strLineId}"]`);
   const qtyToRemove = itemInModal ? parseFloat(itemInModal.innerText) : 0;
 
   try {
@@ -912,7 +916,7 @@ async function removePackageItem(moveLineId) {
         params: {
           picking_id: pickingId,
           package_id: currentPackageData.package_id,
-          move_line_id: moveLineId
+          move_line_id: moveLineId // API nhận int hoặc string đều được
         }
       })
     });
@@ -927,32 +931,42 @@ async function removePackageItem(moveLineId) {
 
     toast.success("Đã xoá sản phẩm khỏi gói!", { ms: 1000 });
 
-    // [FIX] Cập nhật lại danh sách sản phẩm chính (bên trái)
+    // [FIX QUAN TRỌNG] Cập nhật lại giao diện danh sách chính (Cột trái)
     if (qtyToRemove > 0) {
-      // Tìm dòng sản phẩm tương ứng ở danh sách ngoài
-      const mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${moveLineId}"]`);
+      // Tìm dòng sản phẩm ở danh sách chính (Product List)
+      const mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${strLineId}"]`);
 
       if (mainListEl) {
-        // a. Giảm số lượng hiển thị (Done)
+        // a. Giảm số lượng hiển thị (Done) -> Để thấy ngay trên màn hình
         const doneEl = mainListEl.querySelector('.done');
         const currentDone = parseFloat(doneEl.innerText || 0);
         const newDone = Math.max(0, currentDone - qtyToRemove);
         doneEl.innerText = newDone;
 
-        // b. Giảm số lượng đã đóng gói (Packed Qty - dữ liệu ngầm) [QUAN TRỌNG]
-        const currentPacked = parseFloat(mainListEl.dataset.packedQty || 0);
-        mainListEl.dataset.packedQty = Math.max(0, currentPacked - qtyToRemove);
+        // b. Giảm số lượng "Đã đóng gói" (Packed Qty - dữ liệu ẩn trong thẻ li)
+        // Bước này cực quan trọng: Nếu không giảm cái này, lần sau bấm đóng gói nó sẽ tính sai
+        const currentPacked = parseFloat(mainListEl.getAttribute('data-packed-qty') || 0);
+        const newPacked = Math.max(0, currentPacked - qtyToRemove);
+        mainListEl.setAttribute('data-packed-qty', newPacked);
 
-        // c. Cập nhật màu sắc (bỏ tick xanh nếu thiếu)
+        // c. Cập nhật màu sắc (Nếu newDone < Required -> Bỏ class completed)
         const requiredEl = mainListEl.querySelectorAll('span')[1];
         const required = parseFloat(requiredEl?.innerText || 0);
-        if (newDone >= required && required > 0) mainListEl.classList.add("completed");
-        else mainListEl.classList.remove("completed");
+
+        if (newDone >= required && required > 0) {
+          mainListEl.classList.add("completed");
+        } else {
+          mainListEl.classList.remove("completed");
+        }
+      } else {
+        console.warn("Không tìm thấy dòng sản phẩm trong danh sách chính với ID:", strLineId);
       }
     }
 
-    // Reload lại modal để cập nhật danh sách bên trong gói
-    openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
+    // Render lại modal (để dòng sản phẩm đó biến mất khỏi modal)
+    if (currentPackageData && currentPackageData.package_id) {
+      openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
+    }
 
   } catch (err) {
     toast.error("Lỗi kết nối: " + err.message);
