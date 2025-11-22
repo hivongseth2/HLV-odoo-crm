@@ -198,6 +198,15 @@ document.addEventListener("DOMContentLoaded", function () {
     if (inputEl) {
       inputEl.value = autoPackageBarcode;
       inputEl.focus();
+
+      const enterEvent = new KeyboardEvent('keypress', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true
+      });
+      inputEl.dispatchEvent(enterEvent);
     }
     toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 4000 });
   });
@@ -889,8 +898,7 @@ function closePackageEditModal() {
 async function removePackageItem(moveLineId) {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
-  // [FIX] 1. Lấy số lượng đang có trong gói (trước khi xóa)
-  // Phải lấy từ DOM trong modal vì sau khi API chạy xong có thể ta không biết nãy nó là bao nhiêu
+  // 1. Lấy số lượng sắp xóa từ giao diện Modal (trước khi gọi API)
   const itemInModal = document.querySelector(`.qty-display[data-move-line-id="${moveLineId}"]`);
   const qtyToRemove = itemInModal ? parseFloat(itemInModal.innerText) : 0;
 
@@ -917,23 +925,25 @@ async function removePackageItem(moveLineId) {
       return;
     }
 
-    toast.success("Đã xoá sản phẩm khỏi gói!", { ms: 1500 });
+    toast.success("Đã xoá sản phẩm khỏi gói!", { ms: 1000 });
 
-    // [FIX] 2. Đồng bộ giảm số lượng ở màn hình chính (product_list)
+    // [FIX] Cập nhật lại danh sách sản phẩm chính (bên trái)
     if (qtyToRemove > 0) {
+      // Tìm dòng sản phẩm tương ứng ở danh sách ngoài
       const mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${moveLineId}"]`);
+
       if (mainListEl) {
-        // 1. Giảm số lượng hiển thị (Done) - Như logic bạn yêu cầu: Xóa gói = Trả hàng
+        // a. Giảm số lượng hiển thị (Done)
         const doneEl = mainListEl.querySelector('.done');
         const currentDone = parseFloat(doneEl.innerText || 0);
         const newDone = Math.max(0, currentDone - qtyToRemove);
         doneEl.innerText = newDone;
 
-        // 2. Giảm số lượng đã đóng gói (Packed Qty) để đồng bộ logic tính toán
+        // b. Giảm số lượng đã đóng gói (Packed Qty - dữ liệu ngầm) [QUAN TRỌNG]
         const currentPacked = parseFloat(mainListEl.dataset.packedQty || 0);
         mainListEl.dataset.packedQty = Math.max(0, currentPacked - qtyToRemove);
 
-        // 3. Cập nhật màu sắc
+        // c. Cập nhật màu sắc (bỏ tick xanh nếu thiếu)
         const requiredEl = mainListEl.querySelectorAll('span')[1];
         const required = parseFloat(requiredEl?.innerText || 0);
         if (newDone >= required && required > 0) mainListEl.classList.add("completed");
@@ -941,10 +951,8 @@ async function removePackageItem(moveLineId) {
       }
     }
 
-    // Render lại modal để mất dòng đó đi
-    if (currentPackageData && currentPackageData.package_id) {
-      openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
-    }
+    // Reload lại modal để cập nhật danh sách bên trong gói
+    openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
 
   } catch (err) {
     toast.error("Lỗi kết nối: " + err.message);
