@@ -19,7 +19,7 @@ class MisaSyncController(http.Controller):
 
     === REQUEST BODY ===
     {
-        "order_name": "SO00123",
+        "picking_name": "WH/OUT/00001",
         "sync_status": true
     }
 
@@ -27,7 +27,7 @@ class MisaSyncController(http.Controller):
     {
         "success": true,
         "message": "MISA sync status updated successfully",
-        "order_id": 12345
+        "picking_id": 12345
     }
 
     === BẢO MẬT ===
@@ -38,7 +38,7 @@ class MisaSyncController(http.Controller):
     @http.route('/api/misa/sync/update', type='http', auth='public', methods=['POST'], csrf=False, cors='*')
     def update_misa_sync_status(self, **kwargs):
         """
-        Cập nhật trạng thái MISA sync cho đơn hàng
+        Cập nhật trạng thái MISA sync cho phiếu giao hàng
 
         :param kwargs: Dữ liệu từ request body
         :return: JSON response với kết quả
@@ -89,7 +89,7 @@ class MisaSyncController(http.Controller):
             _logger.debug("MISA Sync API - API key validated successfully")
 
             # Validate required fields
-            required_fields = ['order_name', 'sync_status']
+            required_fields = ['picking_name', 'sync_status']
             missing_fields = [field for field in required_fields if field not in data]
 
             if missing_fields:
@@ -100,45 +100,30 @@ class MisaSyncController(http.Controller):
                     status=400
                 )
 
-            order_name = data.get('order_name', '').strip()
+            picking_name = data.get('picking_name', '').strip()
             sync_status = data.get('sync_status', False)
 
-            if not order_name:
+            if not picking_name:
                 return Response(
-                    json.dumps({'success': False, 'error': 'order_name cannot be empty'}),
+                    json.dumps({'success': False, 'error': 'picking_name cannot be empty'}),
                     content_type='application/json',
                     status=400
                 )
 
-            # Tìm đơn hàng trong Odoo
-            # Ưu tiên tìm theo Sale Order name trước
-            sale_order = request.env['sale.order'].sudo().search([('name', '=', order_name)], limit=1)
+            # Tìm phiếu giao hàng trong Odoo
+            picking = request.env['stock.picking'].sudo().search([('name', '=', picking_name)], limit=1)
 
-            if not sale_order:
-                # Nếu không tìm thấy SO, tìm theo Stock Picking name
-                picking = request.env['stock.picking'].sudo().search([('name', '=', order_name)], limit=1)
-                if picking:
-                    # Tìm SO liên kết với picking này
-                    if picking.sale_id:
-                        sale_order = picking.sale_id
-                    else:
-                        # Tìm SO qua picking's move lines
-                        for move in picking.move_ids_without_package:
-                            if move.sale_line_id and move.sale_line_id.order_id:
-                                sale_order = move.sale_line_id.order_id
-                                break
-
-            if not sale_order:
-                _logger.warning("MISA Sync API - Order not found: %s", order_name)
+            if not picking:
+                _logger.warning("MISA Sync API - Picking not found: %s", picking_name)
                 return Response(
-                    json.dumps({'success': False, 'error': f'Order not found: {order_name}'}),
+                    json.dumps({'success': False, 'error': f'Picking not found: {picking_name}'}),
                     content_type='application/json',
                     status=404
                 )
 
             # Kiểm tra trường x_studio_misa_sav có tồn tại không
-            if not hasattr(sale_order, 'x_studio_misa_sav'):
-                _logger.error("MISA Sync API - Field x_studio_misa_sav not found on sale.order")
+            if not hasattr(picking, 'x_studio_misa_sav'):
+                _logger.error("MISA Sync API - Field x_studio_misa_sav not found on stock.picking")
                 return Response(
                     json.dumps({'success': False, 'error': 'MISA sync field not available'}),
                     content_type='application/json',
@@ -146,29 +131,29 @@ class MisaSyncController(http.Controller):
                 )
 
             # Cập nhật trạng thái MISA sync
-            current_status = getattr(sale_order, 'x_studio_misa_sav', False)
+            current_status = getattr(picking, 'x_studio_misa_sav', False)
 
             # Chỉ cập nhật nếu trạng thái mới khác với trạng thái hiện tại
             if current_status != bool(sync_status):
-                sale_order.sudo().write({'x_studio_misa_sav': bool(sync_status)})
-                _logger.info("MISA Sync API - Updated MISA sync status for order %s: %s -> %s",
-                           order_name, current_status, bool(sync_status))
+                picking.sudo().write({'x_studio_misa_sav': bool(sync_status)})
+                _logger.info("MISA Sync API - Updated MISA sync status for picking %s: %s -> %s",
+                           picking_name, current_status, bool(sync_status))
 
-                # Ghi chú trên đơn hàng
+                # Ghi chú trên phiếu giao hàng
                 action = "Enabled" if bool(sync_status) else "Disabled"
-                sale_order.sudo().message_post(
+                picking.sudo().message_post(
                     body=f"MISA sync status updated via API: {action}"
                 )
             else:
-                _logger.info("MISA Sync API - No status change needed for order %s: %s",
-                           order_name, current_status)
+                _logger.info("MISA Sync API - No status change needed for picking %s: %s",
+                           picking_name, current_status)
 
             response_data = {
                 'success': True,
                 'message': 'MISA sync status updated successfully',
-                'order_id': sale_order.id,
-                'order_name': sale_order.name,
-                'sync_status': getattr(sale_order, 'x_studio_misa_sav', False)
+                'picking_id': picking.id,
+                'picking_name': picking.name,
+                'sync_status': getattr(picking, 'x_studio_misa_sav', False)
             }
 
             return Response(
@@ -188,10 +173,10 @@ class MisaSyncController(http.Controller):
     @http.route('/api/misa/sync/status', type='http', auth='public', methods=['GET'], csrf=False, cors='*')
     def get_misa_sync_status(self, **kwargs):
         """
-        Lấy trạng thái MISA sync của đơn hàng (dùng để test)
+        Lấy trạng thái MISA sync của phiếu giao hàng (dùng để test)
 
         Query parameters:
-        - order_name: Tên đơn hàng
+        - picking_name: Tên phiếu giao hàng
 
         :return: JSON response với trạng thái hiện tại
         """
@@ -216,42 +201,31 @@ class MisaSyncController(http.Controller):
                     status=401
                 )
 
-            # Lấy order_name từ query parameter
-            order_name = request.httprequest.args.get('order_name', '').strip()
+            # Lấy picking_name từ query parameter
+            picking_name = request.httprequest.args.get('picking_name', '').strip()
 
-            if not order_name:
+            if not picking_name:
                 return Response(
-                    json.dumps({'success': False, 'error': 'order_name parameter is required'}),
+                    json.dumps({'success': False, 'error': 'picking_name parameter is required'}),
                     content_type='application/json',
                     status=400
                 )
 
-            # Tìm đơn hàng
-            sale_order = request.env['sale.order'].sudo().search([('name', '=', order_name)], limit=1)
+            # Tìm phiếu giao hàng
+            picking = request.env['stock.picking'].sudo().search([('name', '=', picking_name)], limit=1)
 
-            if not sale_order:
-                # Thử tìm qua picking
-                picking = request.env['stock.picking'].sudo().search([('name', '=', order_name)], limit=1)
-                if picking and picking.sale_id:
-                    sale_order = picking.sale_id
-                elif picking:
-                    for move in picking.move_ids_without_package:
-                        if move.sale_line_id and move.sale_line_id.order_id:
-                            sale_order = move.sale_line_id.order_id
-                            break
-
-            if not sale_order:
+            if not picking:
                 return Response(
-                    json.dumps({'success': False, 'error': f'Order not found: {order_name}'}),
+                    json.dumps({'success': False, 'error': f'Picking not found: {picking_name}'}),
                     content_type='application/json',
                     status=404
                 )
 
             response_data = {
                 'success': True,
-                'order_id': sale_order.id,
-                'order_name': sale_order.name,
-                'sync_status': getattr(sale_order, 'x_studio_misa_sav', False),
+                'picking_id': picking.id,
+                'picking_name': picking.name,
+                'sync_status': getattr(picking, 'x_studio_misa_sav', False),
                 'message': 'Status retrieved successfully'
             }
 
