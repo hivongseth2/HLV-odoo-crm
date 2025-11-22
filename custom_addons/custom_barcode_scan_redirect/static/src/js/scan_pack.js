@@ -1230,6 +1230,22 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
           // --- [FIX UI] 1. Cập nhật Gói Đích (Target Package) ở Side Panel ---
           const targetCard = document.querySelector(`.package-item-card[data-package-id="${targetPackId}"]`);
           if (targetCard) {
+
+
+            // [THÊM MỚI] Logic tạo tên hiển thị chuẩn: [Barcode] Tên sản phẩm
+            let displayName = productName;
+            const lineEl = document.querySelector(`#product_list .product-item[data-line-id="${moveLineId}"]`);
+            if (lineEl) {
+              const barcode = lineEl.getAttribute('data-barcode') || '';
+              const rawName = lineEl.querySelector('strong')?.innerText.trim() || productName;
+
+              // Nếu chưa có [...] thì ghép barcode vào
+              if (barcode && !rawName.startsWith('[')) {
+                displayName = `[${barcode}] ${rawName}`;
+              } else {
+                displayName = rawName;
+              }
+            }
             // a. Cập nhật Badge số lượng của gói đích
             const badge = targetCard.querySelector('.badge');
             if (badge) {
@@ -1248,10 +1264,11 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
               if (emptyEl) emptyEl.remove();
 
               // Tạo html item mới
+              // [SỬA LẠI] HTML item mới: Dùng displayName, màu xám (#f1f3f5), chữ x
               const newItemHtml = `
                 <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center; animation: fadeIn 0.5s;">
-                  <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;">${productName}</span>
-                  <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #dbe4ff; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">+${qty}</span>
+                  <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057; font-size: 0.85rem;">${displayName}</span>
+                  <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${qty}</span>
                 </div>
                `;
               previewContainer.insertAdjacentHTML('afterbegin', newItemHtml);
