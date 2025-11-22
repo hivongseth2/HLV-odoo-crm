@@ -1449,9 +1449,10 @@
 
 /* Cột phải: Video Recording (Box 3 trong hình) */
 .recording-pane.card {
-  height: 100%;
+  height: 40vh;
   display: flex;
   flex-direction: column;
+
   background: #1f2937; /* Màu tối cho giống khu vực camera chuyên nghiệp */
   border: 1px solid #374151;
   color: white;
