@@ -1296,13 +1296,24 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
     if (lineEl) {
       const currentPacked = parseFloat(lineEl.getAttribute('data-packed-qty') || 0);
       lineEl.setAttribute('data-packed-qty', currentPacked + item.qty);
-      prodName = lineEl.querySelector('strong')?.innerText || prodName;
+      // prodName = lineEl.querySelector('strong')?.innerText || prodName;
+      // --- ĐOẠN CODE MỚI ---
+      const rawName = lineEl.querySelector('strong')?.innerText.trim() || '';
+      const barcode = lineEl.getAttribute('data-barcode') || '';
+
+      // Nếu tên chưa có dấu [ ở đầu và có barcode thì tự ghép vào
+      if (rawName && !rawName.startsWith('[') && barcode) {
+        prodName = `[${barcode}] ${rawName}`;
+      } else {
+        prodName = rawName || prodName;
+      }
+      // ---------------------
     }
     if (item.qty > 0) {
       previewHtml += `
         <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
           <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;">${prodName}</span>
-          <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #dbe4ff; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">+${item.qty}</span>
+         <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${item.qty}</span>
         </div>
       `;
     }
