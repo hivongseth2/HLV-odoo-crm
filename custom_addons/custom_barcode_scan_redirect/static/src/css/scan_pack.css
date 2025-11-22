@@ -1064,7 +1064,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding:0px;
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
@@ -1369,13 +1369,7 @@
   }
 }
 
-.pack-grid {
-  display: grid;
-  grid-template-columns: 2fr 1.2fr; /* Cột trái rộng hơn */
-  gap: 20px;
-  height: calc(100vh - 100px); /* Chiều cao full màn hình trừ header */
-  min-height: 600px;
-}
+
 
 @media (max-width: 1024px) {
   .pack-grid {
@@ -1390,16 +1384,10 @@
   display: grid;
   grid-template-columns: 2fr 1.2fr; /* Cột trái rộng hơn */
   gap: 20px;
-  height: calc(100vh - 100px); /* Chiều cao full màn hình trừ header */
+  height: calc(100vh - 200px); /* Chiều cao full màn hình trừ header */
   min-height: 600px;
 }
 
-@media (max-width: 1024px) {
-  .pack-grid {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-}
 
 /* Cột trái: Wrapper chứa Input, List và Actions */
 /* Chúng ta làm wrapper trong suốt để các con bên trong tách thành các card riêng */

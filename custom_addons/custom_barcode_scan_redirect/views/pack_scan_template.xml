@@ -87,15 +87,14 @@
                 </button>
               </div>
 
-              <div class="panel-body" style="flex: 1; overflow-y: auto; padding: 1.25rem;">
+              <div class="panel-body" style="flex: 1; overflow-y: auto;">
                 <t t-if="picking_packages">
-                  <div class="panel-section-title" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.6px; color: #868e96; margin-bottom: 0.75rem; font-weight: 700;">Gói hàng hiện tại</div>
                   <ul class="panel-packages-list" style="list-style: none; padding: 0; margin: 0;">
                     <t t-foreach="picking_packages" t-as="pkg">
-                      <li class="package-item-card" t-att-data-package-id="pkg['id']" style="background: white; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid #f1f3f5;">
-                        <div class="package-item-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
+                      <li class="package-item-card" t-att-data-package-id="pkg['id']" style="background: white; border-radius: 10px;; margin-bottom: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid #f1f3f5;">
+                        <div class="package-item-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;  border-bottom: 1px solid #f8f9fa;">
                           <strong class="package-item-name" t-esc="pkg['name']" style="font-size: 0.95rem; color: #212529; font-weight: 600;"/>
-                          <span class="badge" style="background: #e7f5ff; color: #1c7ed6; padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
+                          <span class="badge" style="background: #e7f5ff; color: #1c7ed6; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
                             <t t-esc="pkg['qty']"/>
                           </span>
                         </div>
