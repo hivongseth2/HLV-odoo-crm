@@ -897,12 +897,9 @@ function closePackageEditModal() {
 }
 async function removePackageItem(moveLineId) {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
-
-  // Chuyển về string để query selector chính xác hơn
   const strLineId = String(moveLineId);
 
-  // 1. Lấy số lượng sắp xóa từ Modal (trước khi gọi API xóa)
-  // Tìm element trong modal dựa trên move-line-id
+  // 1. Lấy số lượng sắp xóa từ Modal
   const itemInModal = document.querySelector(`.qty-display[data-move-line-id="${strLineId}"]`);
   const qtyToRemove = itemInModal ? parseFloat(itemInModal.innerText) : 0;
 
@@ -916,7 +913,7 @@ async function removePackageItem(moveLineId) {
         params: {
           picking_id: pickingId,
           package_id: currentPackageData.package_id,
-          move_line_id: moveLineId // API nhận int hoặc string đều được
+          move_line_id: moveLineId
         }
       })
     });
@@ -931,39 +928,59 @@ async function removePackageItem(moveLineId) {
 
     toast.success("Đã xoá sản phẩm khỏi gói!", { ms: 1000 });
 
-    // [FIX QUAN TRỌNG] Cập nhật lại giao diện danh sách chính (Cột trái)
+    // [FIX QUAN TRỌNG] Cập nhật giao diện danh sách chính
     if (qtyToRemove > 0) {
-      // Tìm dòng sản phẩm ở danh sách chính (Product List)
-      const mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${strLineId}"]`);
+      // Bước A: Cố tìm theo ID dòng (Trường hợp ID không đổi)
+      let mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${strLineId}"]`);
 
+      // Bước B: Nếu không tìm thấy theo ID (do Odoo đã tách dòng làm đổi ID), tìm theo Tên Sản Phẩm
+      if (!mainListEl && currentPackageData?.items) {
+        // Lấy thông tin tên sản phẩm từ dữ liệu gói hiện tại
+        const itemDetail = currentPackageData.items.find(i => String(i.move_line_id) === strLineId);
+
+        if (itemDetail) {
+          const allItems = document.querySelectorAll('#product_list .product-item');
+          for (const el of allItems) {
+            // So sánh tên sản phẩm: Tìm dòng nào chứa tên sản phẩm vừa xóa
+            // (Dùng includes vì tên hiển thị có thể chứa cả mã [SKU])
+            const prodNameEl = el.querySelector('strong');
+            if (prodNameEl && prodNameEl.innerText.includes(itemDetail.product_name)) {
+              mainListEl = el;
+              break; // Đã tìm thấy đúng dòng sản phẩm bên trái
+            }
+          }
+        }
+      }
+
+      // Bước C: Thực hiện cập nhật số liệu nếu tìm thấy dòng tương ứng
       if (mainListEl) {
-        // a. Giảm số lượng hiển thị (Done) -> Để thấy ngay trên màn hình
+        // 1. Giảm số lượng hiển thị (Done)
         const doneEl = mainListEl.querySelector('.done');
         const currentDone = parseFloat(doneEl.innerText || 0);
         const newDone = Math.max(0, currentDone - qtyToRemove);
         doneEl.innerText = newDone;
 
-        // b. Giảm số lượng "Đã đóng gói" (Packed Qty - dữ liệu ẩn trong thẻ li)
-        // Bước này cực quan trọng: Nếu không giảm cái này, lần sau bấm đóng gói nó sẽ tính sai
+        // 2. Giảm số lượng "Đã đóng gói" (Packed Qty - dữ liệu ẩn)
         const currentPacked = parseFloat(mainListEl.getAttribute('data-packed-qty') || 0);
         const newPacked = Math.max(0, currentPacked - qtyToRemove);
         mainListEl.setAttribute('data-packed-qty', newPacked);
 
-        // c. Cập nhật màu sắc (Nếu newDone < Required -> Bỏ class completed)
+        // 3. Cập nhật màu sắc (xanh/đen)
         const requiredEl = mainListEl.querySelectorAll('span')[1];
         const required = parseFloat(requiredEl?.innerText || 0);
-
         if (newDone >= required && required > 0) {
           mainListEl.classList.add("completed");
         } else {
           mainListEl.classList.remove("completed");
         }
-      } else {
-        console.warn("Không tìm thấy dòng sản phẩm trong danh sách chính với ID:", strLineId);
+
+        // Highlight nhẹ dòng vừa update để user dễ thấy
+        mainListEl.style.backgroundColor = "#fff3cd";
+        setTimeout(() => mainListEl.style.backgroundColor = "", 1000);
       }
     }
 
-    // Render lại modal (để dòng sản phẩm đó biến mất khỏi modal)
+    // Render lại modal
     if (currentPackageData && currentPackageData.package_id) {
       openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
     }
