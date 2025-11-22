@@ -1719,3 +1719,90 @@ class SaleOrder(models.Model):
             'name': so_new.name,
             'detail': 'created_then_resynced',
         }
+
+    def action_fetch_misa_voucher_paging(self):
+        """
+        Kéo dữ liệu từ api https://actapp.misa.vn/g1/api/sa/v1/sa_voucher_get/get_paging_detail
+        Update x_studio_misa_sav = True cho các picking liên quan đến order_code tìm thấy.
+        """
+        misa_utils = self.env['misa.api.utils']
+        misa_config = self.env['misa.config']
+        
+        # 1. Get Token & Headers (ACT API)
+        try:
+            token = misa_utils._get_misa_token()
+            headers = misa_config.get_default_headers(token)
+        except Exception as e:
+            raise UserError(_("Không thể lấy token MISA ACT: %s") % e)
+        
+        # 2. API Call
+        url = "https://actapp.misa.vn/g1/api/sa/v1/sa_voucher_get/get_paging_detail"
+        payload = {
+            "columns": [2157, 1355, 4670, 3295, 2161, 5683, 5274, 3870, 1195, 1065, 5279, 5281, 308, 34, 5364, 283, 5350, 5347, 1122, 1124, 3404, 5476, 2358],
+            "sort": '[{"property":4555,"desc":false,"data_type":4,"operand":1}]',
+            "filter": [{"property": 3993, "operator": 7, "operand": 1, "value": "33c1ac4b-65e6-421e-a5dc-beeee463502d", "data_type": 10}],
+            "pageIndex": 1,
+            "pageSize": 20,
+            "useSp": False,
+            "view": 96,
+            "summaryColumns": [3870, 3488, 308, 283, 5350],
+            "loadMode": 2
+        }
+        
+        _logger.info("🚀 Fetching MISA Voucher Paging: %s", url)
+        try:
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            _logger.error("❌ Lỗi gọi API MISA Voucher: %s", e)
+            raise UserError(_("Lỗi gọi API MISA: %s") % e)
+            
+        if not data.get("Success"):
+            _logger.error("❌ MISA API Error: %s", data)
+            raise UserError(_("MISA API trả về lỗi: %s") % data.get("ErrorsMessage"))
+            
+        page_data = data.get("Data", {}).get("PageData", [])
+        _logger.info("📦 Received %d items from MISA Voucher Paging", len(page_data))
+        
+        # 3. Process Data
+        updated_count = 0
+        not_found_codes = set()
+        
+        for item in page_data:
+            order_code = item.get("order_code")
+            if not order_code:
+                continue
+                
+            # Tìm đơn bán hàng (Sale Order) theo tên
+            so = self.search([('name', '=', order_code)], limit=1)
+            
+            if so:
+                # Check vào trường boolean x_studio_misa_sav của stock.picking
+                pickings = so.picking_ids
+                for picking in pickings:
+                    try:
+                        picking.write({'x_studio_misa_sav': True})
+                        updated_count += 1
+                        _logger.info("✅ Updated picking %s (SO: %s) -> x_studio_misa_sav=True", picking.name, order_code)
+                    except Exception as e:
+                        _logger.warning("⚠️ Không thể update picking %s: %s", picking.name, e)
+            else:
+                not_found_codes.add(order_code)
+        
+        if not_found_codes:
+            _logger.info("⚠️ Không tìm thấy SO cho các order_code: %s", not_found_codes)
+            
+        msg = _("Đã cập nhật %s phiếu kho.") % updated_count
+        if not_found_codes:
+            msg += _(" Không tìm thấy SO cho %d mã.") % len(not_found_codes)
+            
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Đồng bộ Voucher MISA"),
+                'message': msg,
+                'type': 'success',
+            }
+        }
