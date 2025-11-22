@@ -1339,92 +1339,133 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
     }
   ]);
 }
+
 function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
   // 1. Tìm list container
   let list = document.querySelector('.panel-packages-list');
   const emptyState = document.querySelector('.panel-empty-state');
 
-  // 2. Tính số lượng các sản phẩm VỪA MỚI quét thêm vào
+  // 2. Tính tổng số lượng item mới
   const newItemsQty = itemsData.reduce((sum, i) => sum + i.qty, 0);
 
-  // 3. Tạo HTML cho các dòng sản phẩm mới (để dùng cho cả 2 trường hợp: thêm mới hoặc update)
-  let previewHtml = '';
-  itemsData.forEach(item => {
-    // Cập nhật dữ liệu ngầm packedQty bên danh sách trái (để tính toán logic trừ lùi)
+  // ============================================================
+  // HELPER: Hàm lấy tên chuẩn [Barcode] Tên và cập nhật data ẩn
+  // ============================================================
+  const getProductInfo = (item) => {
     const lineEl = document.querySelector(`[data-line-id="${item.move_line_id}"]`);
-    let prodName = 'Sản phẩm...';
+    let finalName = 'Sản phẩm...';
 
     if (lineEl) {
+      // Cập nhật packed-qty ẩn
       const currentPacked = parseFloat(lineEl.getAttribute('data-packed-qty') || 0);
       lineEl.setAttribute('data-packed-qty', currentPacked + item.qty);
-      // prodName = lineEl.querySelector('strong')?.innerText || prodName;
-      // --- ĐOẠN CODE MỚI ---
+
+      // Logic lấy tên và barcode
       const rawName = lineEl.querySelector('strong')?.innerText.trim() || '';
       const barcode = lineEl.getAttribute('data-barcode') || '';
 
-      // Nếu tên chưa có dấu [ ở đầu và có barcode thì tự ghép vào
       if (rawName && !rawName.startsWith('[') && barcode) {
-        prodName = `[${barcode}] ${rawName}`;
+        finalName = `[${barcode}] ${rawName}`;
       } else {
-        prodName = rawName || prodName;
+        finalName = rawName || finalName;
       }
-      // ---------------------
     }
-    if (item.qty > 0) {
-      previewHtml += `
-        <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
-          <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;">${prodName}</span>
-         <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${item.qty}</span>
-        </div>
-      `;
-    }
-  });
+    return finalName;
+  };
 
-  // --- [FIX] KIỂM TRA XEM GÓI NÀY ĐÃ CÓ TRÊN MÀN HÌNH CHƯA ---
-  // Lưu ý: pkgId cần chuyển về string để so sánh chính xác trong selector
+  // 3. Kiểm tra xem gói đã tồn tại chưa
   const existingCard = document.querySelector(`.package-item-card[data-package-id="${pkgId}"]`);
 
   if (existingCard) {
-    // === TRƯỜNG HỢP A: ĐÃ CÓ GÓI -> CẬP NHẬT (GỘP) ===
+    // === TRƯỜNG HỢP A: ĐÃ CÓ GÓI -> CẬP NHẬT (MERGE) ===
 
-    // 1. Cập nhật Badge số lượng tổng
+    // a. Cập nhật Badge tổng
     const badge = existingCard.querySelector('.badge');
     if (badge) {
-      // Lấy text hiện tại (VD: " 10"), xóa khoảng trắng, ép kiểu số
-      // Clone node để lấy text thuần mà không lấy icon svg
-      const currentText = badge.textContent.trim();
-      const currentTotal = parseFloat(currentText) || 0;
-      const updatedTotal = currentTotal + newItemsQty;
-
+      const currentTotal = parseFloat(badge.textContent.trim()) || 0;
       badge.innerHTML = `
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
-          ${updatedTotal}
+          ${currentTotal + newItemsQty}
       `;
     }
 
-    // 2. Chèn thêm dòng preview vào đầu danh sách cũ
+    // b. Xử lý từng item: Tìm xem đã có dòng đó chưa để cộng dồn
     const previewContainer = existingCard.querySelector('.package-items-preview');
     if (previewContainer) {
-      // Xóa thông báo "empty" nếu có
-      const emptyPreview = previewContainer.querySelector('.preview-empty');
-      if (emptyPreview) emptyPreview.remove();
+      const emptyEl = previewContainer.querySelector('.preview-empty');
+      if (emptyEl) emptyEl.remove();
 
-      // Chèn nội dung mới lên đầu (prepend)
-      previewContainer.insertAdjacentHTML('afterbegin', previewHtml);
+      itemsData.forEach(item => {
+        if (item.qty <= 0) return;
+        const name = getProductInfo(item);
+
+        // Tìm dòng cũ trùng tên
+        let foundRow = null;
+        // Duyệt qua các dòng hiện có để tìm
+        for (let row of previewContainer.querySelectorAll('.preview-item')) {
+          if (row.querySelector('.preview-item-name').innerText === name) {
+            foundRow = row;
+            break;
+          }
+        }
+
+        if (foundRow) {
+          // Nếu có rồi: Cộng dồn số lượng
+          const qtyEl = foundRow.querySelector('.preview-item-qty');
+          const oldQty = parseFloat(qtyEl.innerText.replace('x', '')) || 0;
+          qtyEl.innerText = `x${oldQty + item.qty}`;
+
+          // Nháy màu
+          foundRow.style.transition = 'background 0.3s';
+          foundRow.style.backgroundColor = '#fff3cd';
+          setTimeout(() => foundRow.style.backgroundColor = 'transparent', 500);
+        } else {
+          // Nếu chưa có: Thêm mới lên đầu
+          const newHtml = `
+              <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center; animation: fadeIn 0.5s;">
+                <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057; font-size: 0.85rem;">${name}</span>
+                <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${item.qty}</span>
+              </div>`;
+          previewContainer.insertAdjacentHTML('afterbegin', newHtml);
+        }
+      });
     }
 
-    // 3. Hiệu ứng nháy sáng báo hiệu vừa update
+    // Hiệu ứng card
     existingCard.style.transition = 'background-color 0.5s ease';
-    existingCard.style.backgroundColor = '#fff9db'; // Màu vàng nhạt
+    existingCard.style.backgroundColor = '#e7f5ff';
     setTimeout(() => { existingCard.style.backgroundColor = 'white'; }, 800);
-
-    // 4. Di chuyển card lên đầu danh sách (để dễ thấy nhất)
     existingCard.parentElement.prepend(existingCard);
 
   } else {
-    // === TRƯỜNG HỢP B: CHƯA CÓ GÓI -> TẠO MỚI ===
+    // === TRƯỜNG HỢP B: TẠO GÓI MỚI (CREATE) ===
 
-    // Nếu chưa có list container (đang empty state) thì tạo mới
+    // a. Gộp các item trùng tên trong danh sách itemsData trước khi render (Aggregation)
+    // Ví dụ: Input có 2 dòng "Sản phẩm A" qty 1 -> Gộp thành 1 dòng qty 2
+    const aggregatedItems = {};
+
+    itemsData.forEach(item => {
+      if (item.qty <= 0) return;
+      const name = getProductInfo(item);
+      if (aggregatedItems[name]) {
+        aggregatedItems[name] += item.qty;
+      } else {
+        aggregatedItems[name] = item.qty;
+      }
+    });
+
+    // b. Tạo HTML từ danh sách đã gộp
+    let previewHtml = '';
+    for (const [name, qty] of Object.entries(aggregatedItems)) {
+      previewHtml += `
+          <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
+            <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057; font-size: 0.85rem;">${name}</span>
+            <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${qty}</span>
+          </div>
+        `;
+    }
+
+    // c. Tạo khung thẻ
     if (!list) {
       if (emptyState) emptyState.remove();
       list = document.createElement('ul');
@@ -1437,7 +1478,7 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
 
     const li = document.createElement('li');
     li.className = 'package-item-card';
-    li.dataset.packageId = pkgId; // Gán ID để lần sau tìm thấy
+    li.dataset.packageId = pkgId;
     li.style.cssText = "background: white; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; transition: all 0.2s ease; animation: fadeIn 0.5s ease;";
 
     li.innerHTML = `
@@ -1459,10 +1500,7 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
         </button>
       `;
 
-    // Gán lại sự kiện click cho nút chỉnh sửa của thẻ mới
     li.querySelector('.btn-package-edit').addEventListener('click', openPackageEditModal);
-
-    // Thêm thẻ mới vào đầu danh sách
     list.prepend(li);
   }
 }
