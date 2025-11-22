@@ -281,23 +281,6 @@ document.addEventListener("DOMContentLoaded", function () {
           // 5. CẬP NHẬT UI: Thêm gói mới vào Side Panel ngay lập tức
           renderNewPackageToPanel(result.package_id, result.package_name, items);
 
-          // 6. CẬP NHẬT UI: Reset số lượng đã quét ở danh sách trái về 0
-          // (Vì hàng đã được chuyển vào gói, nên danh sách chờ đóng gói sẽ giảm đi)
-          items.forEach(i => {
-            const el = document.querySelector(`[data-line-id="${i.move_line_id}"]`);
-            if (el) {
-              const doneEl = el.querySelector('.done');
-              const reqEl = el.querySelectorAll('span')[1];
-
-              if (doneEl) {
-                // Trừ số lượng đã đóng gói khỏi số lượng đang hiển thị
-                // (Logic Python: split dòng -> giảm qty_done dòng gốc -> trả về remaining)
-                // Ở đây ta giả định reset về 0 để quét tiếp cho gói sau
-                doneEl.innerText = "0";
-                el.classList.remove("completed");
-              }
-            }
-          });
 
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
