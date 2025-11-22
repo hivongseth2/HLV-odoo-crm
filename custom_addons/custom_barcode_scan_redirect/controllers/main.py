@@ -382,6 +382,7 @@ class CustomBarcodeScanController(http.Controller):
         })
 
 
+
     @http.route('/pack_scan/scan_item', type='json', auth='user')
     def scan_pack_item(self, **kwargs):
         picking_id = kwargs.get("picking_id")
@@ -389,69 +390,97 @@ class CustomBarcodeScanController(http.Controller):
         delta = float(kwargs.get("delta", 1))
         line_id = kwargs.get("line_id")
         _logger = logging.getLogger(__name__)
-
         picking = request.env['stock.picking'].sudo().browse(picking_id)
+        # Tìm move dựa trên barcode
         moves = picking.move_ids_without_package.filtered(lambda m: m.product_id.barcode == barcode)
-
         if not moves:
             return {"error": "❌ Mã sản phẩm không khớp trong phiếu!"}
-
+        # Tính tổng quát để check xem đã đủ hết chưa
         total_required = sum(m.product_uom_qty for m in moves)
         total_done = sum(sum(ml.qty_done for ml in m.move_line_ids) for m in moves)
-
         if delta > 0 and total_done >= total_required:
             return {"error": "⚠️ Sản phẩm này đã được quét đủ!"}
-
         updated_lines = []
         
-
-        for move in moves:
-            if line_id:
-                target_ml = move.move_line_ids.filtered(lambda ml: ml.id == int(line_id))
+        # --- LOGIC MỚI: Xử lý tìm line_id tự động nếu FE gửi lên null ---
+        target_ml = None
+        
+        # Nếu có line_id cụ thể từ FE
+        if line_id:
+            target_ml = request.env['stock.move.line'].sudo().browse(int(line_id))
+            if not target_ml.exists():
+                target_ml = None # Fallback nếu ID sai
+        # Nếu chưa xác định được target_ml (do line_id null hoặc sai), tự động tìm dòng phù hợp
+        if not target_ml:
+            for move in moves:
+                for ml in move.move_line_ids:
+                    # Nếu đang cộng: tìm dòng chưa đủ
+                    if delta > 0:
+                        if ml.qty_done < move.product_uom_qty: # (logic đơn giản, có thể chỉnh theo demand của line)
+                            # So sánh với reserved hoặc logic phân bổ của bạn. 
+                            # Ở đây giả định muốn fill vào dòng chưa full
+                            remaining = move.product_uom_qty - sum(l.qty_done for l in move.move_line_ids)
+                            if remaining > 0:
+                                target_ml = ml
+                                break
+                    # Nếu đang trừ: tìm dòng có qty_done > 0
+                    elif delta < 0:
+                        if ml.qty_done > 0:
+                            target_ml = ml
+                            break
                 if target_ml:
-                    ml = target_ml[0]
-                    # current_qty = ml.qty_done
-                    ml = ml.sudo().browse(ml.id)  # Ép load lại bản mới
-                    current_qty = ml.qty_done
-                    total_done = sum(l.qty_done for l in move.move_line_ids)
-                    remain_qty = max(0, move.product_uom_qty - total_done)
-
-                    if delta > 0 and remain_qty > 0:
-                        # add_qty = min(delta, remain_qty)
-                        add_qty = min(delta, remain_qty) if delta > 0 else 0.0
-
-                        new_qty = current_qty + add_qty
-                        ml.write({'qty_done': new_qty})
-                        new_total_done = total_done - current_qty + new_qty
+                    break
+        
+        # --- THỰC HIỆN CẬP NHẬT ---
+        if target_ml:
+            # Reload để đảm bảo data mới nhất
+            ml = target_ml
+            current_qty = ml.qty_done
+            
+            # Tính toán lại giới hạn trên move cha của line này
+            move = ml.move_id
+            move_total_done = sum(l.qty_done for l in move.move_line_ids)
+            move_remain = max(0, move.product_uom_qty - move_total_done)
+            if delta > 0:
+                # Chỉ cộng phần còn thiếu của move này
+                add_qty = min(delta, move_remain) if delta > 0 else 0.0
+                
+                if add_qty > 0:
+                    new_qty = current_qty + add_qty
+                    ml.write({'qty_done': new_qty})
                     
-                        updated_lines.append({
-                            "line_id": ml.id,
-                            "product": move.product_id.display_name,
-                            "done_qty": new_total_done,
-                            "required_qty": move.product_uom_qty
-                        })
-                        break
-                    elif delta < 0 and total_done > 0:
-                        reduce_qty = min(abs(delta), current_qty)
-   
-                        new_qty = current_qty - reduce_qty
-                        ml.write({'qty_done': new_qty})
-                        new_total_done = total_done - current_qty + new_qty
-                        
-                        updated_lines.append({
-                            "barcode": move.product_id.barcode,
-                            "line_id": ml.id,
-                            "product": move.product_id.display_name,
-                            "done_qty": new_total_done ,
-                            "required_qty": move.product_uom_qty
-                        })
-                        break
-
-
+                    # Tính lại tổng done để trả về FE
+                    new_total_done = move_total_done - current_qty + new_qty
+                    
+                    updated_lines.append({
+                        "line_id": ml.id,
+                        "product": move.product_id.display_name,
+                        "done_qty": new_total_done,
+                        "required_qty": move.product_uom_qty,
+                        "barcode": move.product_id.barcode # Trả về barcode để FE map lại nếu cần
+                    })
+            
+            elif delta < 0:
+                reduce_qty = min(abs(delta), current_qty)
+                if reduce_qty > 0:
+                    new_qty = current_qty - reduce_qty
+                    ml.write({'qty_done': new_qty})
+                    
+                    new_total_done = move_total_done - current_qty + new_qty
+                    
+                    updated_lines.append({
+                        "line_id": ml.id,
+                        "product": move.product_id.display_name,
+                        "done_qty": new_total_done,
+                        "required_qty": move.product_uom_qty,
+                        "barcode": move.product_id.barcode
+                    })
         if not updated_lines:
-            return {"error": "⚠️ Không có dòng nào để cập nhật!"}
-
+            # Trường hợp delta > 0 nhưng không tìm thấy dòng nào còn thiếu (dù check tổng ở trên đã pass)
+            # Có thể do logic phân bổ move_line phức tạp, ta báo lỗi hoặc ignore
+            return {"error": "⚠️ Không tìm thấy dòng sản phẩm phù hợp để cập nhật!"}
         return {"scanned": updated_lines}
+
 
     @http.route('/pack_scan/complete_picking', type='json', auth='user')
     def complete_pack_picking(self, **kwargs):
