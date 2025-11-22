@@ -881,13 +881,13 @@ function closePackageEditModal() {
   document.body.style.overflow = 'auto';
   currentPackageData = null;
 }
-
 async function removePackageItem(moveLineId) {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
-  // [FIX] 1. Lấy số lượng hiện tại đang hiển thị trong Modal trước khi xóa để tí nữa trừ đi ở danh sách chính
-  const qtyDisplayEl = document.querySelector(`.qty-display[data-move-line-id="${moveLineId}"]`);
-  const qtyToRemove = qtyDisplayEl ? parseFloat(qtyDisplayEl.innerText) : 0;
+  // [FIX] 1. Lấy số lượng đang có trong gói (trước khi xóa)
+  // Phải lấy từ DOM trong modal vì sau khi API chạy xong có thể ta không biết nãy nó là bao nhiêu
+  const itemInModal = document.querySelector(`.qty-display[data-move-line-id="${moveLineId}"]`);
+  const qtyToRemove = itemInModal ? parseFloat(itemInModal.innerText) : 0;
 
   try {
     const res = await fetch("/pack_scan/remove_package_item", {
@@ -912,29 +912,28 @@ async function removePackageItem(moveLineId) {
       return;
     }
 
-    // [FIX] 2. Cập nhật ngay lập tức số lượng ở Danh sách sản phẩm chính (Cột trái)
-    // Giúp người dùng thấy số lượng "Done" giảm xuống mà không cần F5
+    toast.success("Đã xoá sản phẩm khỏi gói!", { ms: 1500 });
+
+    // [FIX] 2. Đồng bộ giảm số lượng ở màn hình chính (product_list)
     if (qtyToRemove > 0) {
       const mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${moveLineId}"]`);
       if (mainListEl) {
         const doneEl = mainListEl.querySelector('.done');
         const currentDone = parseFloat(doneEl.innerText || 0);
+        // Trừ đi số lượng vừa xóa khỏi gói
         const newDone = Math.max(0, currentDone - qtyToRemove);
 
-        // Cập nhật số hiển thị
         doneEl.innerText = newDone;
 
-        // Cập nhật trạng thái màu sắc (completed hay chưa)
+        // Cập nhật màu sắc trạng thái (bỏ class completed nếu không còn đủ)
         const requiredEl = mainListEl.querySelectorAll('span')[1];
         const required = parseFloat(requiredEl?.innerText || 0);
-        if (newDone >= required) mainListEl.classList.add("completed");
+        if (newDone >= required && required > 0) mainListEl.classList.add("completed");
         else mainListEl.classList.remove("completed");
       }
     }
 
-    toast.success("Đã xoá sản phẩm!", { ms: 1500 });
-
-    // 3. Gọi lại modal để render lại danh sách trong gói (giữ nguyên logic cũ)
+    // Render lại modal để mất dòng đó đi
     if (currentPackageData && currentPackageData.package_id) {
       openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
     }
@@ -987,7 +986,6 @@ async function addItemToPackage() {
     toast.error("Lỗi kết nối: " + err.message);
   }
 }
-
 async function savePackageChanges() {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
   const displayElements = document.querySelectorAll('.qty-display');
@@ -995,14 +993,15 @@ async function savePackageChanges() {
   let hasChanges = false;
   const changes = [];
 
+  // Thu thập các thay đổi
   for (let display of displayElements) {
     const moveLineId = parseInt(display.dataset.moveLineId);
     const newQty = parseFloat(display.innerText);
-    const oldQty = parseFloat(display.dataset.oldQty);
+    const oldQty = parseFloat(display.dataset.oldQty); // Số lượng lúc mới mở modal
 
     if (!isNaN(newQty) && !isNaN(oldQty) && newQty !== oldQty) {
       hasChanges = true;
-      changes.push({ moveLineId, newQty });
+      changes.push({ moveLineId, newQty, oldQty });
     }
   }
 
@@ -1011,7 +1010,7 @@ async function savePackageChanges() {
     return;
   }
 
-  // Send all changes
+  // Gửi API cập nhật từng dòng
   for (let change of changes) {
     try {
       const res = await fetch("/pack_scan/update_package_item_qty", {
@@ -1034,7 +1033,27 @@ async function savePackageChanges() {
 
       if (result?.error) {
         toast.error(result.error);
-        return;
+        return; // Dừng nếu có lỗi
+      }
+
+      // [FIX] Đồng bộ sang màn hình chính ngay khi API thành công
+      const delta = change.newQty - change.oldQty;
+      // Nếu delta > 0: Tăng thêm vào Done (nghĩa là người dùng tăng số lượng trong gói -> coi như quét thêm)
+      // Nếu delta < 0: Giảm bớt Done (nghĩa là người dùng bớt hàng khỏi gói -> coi như trả lại chưa quét)
+
+      const mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${change.moveLineId}"]`);
+      if (mainListEl) {
+        const doneEl = mainListEl.querySelector('.done');
+        const currentDone = parseFloat(doneEl.innerText || 0);
+        const newDone = Math.max(0, currentDone + delta); // Cộng delta (lưu ý delta có thể âm)
+
+        doneEl.innerText = newDone;
+
+        // Check lại trạng thái completed
+        const requiredEl = mainListEl.querySelectorAll('span')[1];
+        const required = parseFloat(requiredEl?.innerText || 0);
+        if (newDone >= required && required > 0) mainListEl.classList.add("completed");
+        else mainListEl.classList.remove("completed");
       }
 
     } catch (err) {
@@ -1044,7 +1063,7 @@ async function savePackageChanges() {
   }
 
   toast.success("Đã lưu thay đổi!", { ms: 1500 });
-  updateSidePanelUI(currentPackageData);
+  updateSidePanelUI(currentPackageData); // Cập nhật lại số tổng trên thẻ gói bên phải
   closePackageEditModal();
 }
 
