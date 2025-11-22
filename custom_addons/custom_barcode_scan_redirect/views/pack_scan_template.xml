@@ -192,10 +192,7 @@
             </div>
           </div>
 
-          <div class="modal-footer" style="padding: 1rem; background: white; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 0.5rem;">
-            <button onclick="closePackageEditModal()" class="btn btn-secondary">Hủy</button>
-            <button onclick="savePackageChanges()" class="btn btn-primary">Lưu thay đổi</button>
-          </div>
+        
         </div>
       </div>
 

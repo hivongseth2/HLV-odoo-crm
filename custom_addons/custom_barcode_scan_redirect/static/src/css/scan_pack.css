@@ -1,6 +1,5 @@
 /* Layout */
 .pack-screen {
-  padding: 16px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   color: #1f2937;
 }
@@ -10,7 +9,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 20px;
+  padding: 10px 20px;
   border-radius: 14px;
   background: #f8fafc;
   border: 1px solid #e5e7eb;
@@ -797,17 +796,11 @@
 }
 
 .add-form {
-  display: flex;
-  flex-direction: column;
+  display: grid !important;
+  grid-template-columns:1fr auto;
   gap: 16px;
 }
 
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 120px;
-  gap: 16px;
-  align-items: end;
-}
 
 .form-group {
   display: flex;
@@ -864,7 +857,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  justify-self: start;
+  justify-self: end;
   box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
 }
 
@@ -985,10 +978,7 @@
     order: 1;
   }
 
-  .form-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
+
 
   .form-group-qty {
     grid-row: 2;
@@ -1064,7 +1054,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding:0px;
+  padding:0px !important;
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;

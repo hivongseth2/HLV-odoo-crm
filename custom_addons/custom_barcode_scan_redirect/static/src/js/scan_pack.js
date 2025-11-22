@@ -885,6 +885,10 @@ function closePackageEditModal() {
 async function removePackageItem(moveLineId) {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
+  // [FIX] 1. Lấy số lượng hiện tại đang hiển thị trong Modal trước khi xóa để tí nữa trừ đi ở danh sách chính
+  const qtyDisplayEl = document.querySelector(`.qty-display[data-move-line-id="${moveLineId}"]`);
+  const qtyToRemove = qtyDisplayEl ? parseFloat(qtyDisplayEl.innerText) : 0;
+
   try {
     const res = await fetch("/pack_scan/remove_package_item", {
       method: "POST",
@@ -908,8 +912,32 @@ async function removePackageItem(moveLineId) {
       return;
     }
 
+    // [FIX] 2. Cập nhật ngay lập tức số lượng ở Danh sách sản phẩm chính (Cột trái)
+    // Giúp người dùng thấy số lượng "Done" giảm xuống mà không cần F5
+    if (qtyToRemove > 0) {
+      const mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${moveLineId}"]`);
+      if (mainListEl) {
+        const doneEl = mainListEl.querySelector('.done');
+        const currentDone = parseFloat(doneEl.innerText || 0);
+        const newDone = Math.max(0, currentDone - qtyToRemove);
+
+        // Cập nhật số hiển thị
+        doneEl.innerText = newDone;
+
+        // Cập nhật trạng thái màu sắc (completed hay chưa)
+        const requiredEl = mainListEl.querySelectorAll('span')[1];
+        const required = parseFloat(requiredEl?.innerText || 0);
+        if (newDone >= required) mainListEl.classList.add("completed");
+        else mainListEl.classList.remove("completed");
+      }
+    }
+
     toast.success("Đã xoá sản phẩm!", { ms: 1500 });
-    openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
+
+    // 3. Gọi lại modal để render lại danh sách trong gói (giữ nguyên logic cũ)
+    if (currentPackageData && currentPackageData.package_id) {
+      openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
+    }
 
   } catch (err) {
     toast.error("Lỗi kết nối: " + err.message);
