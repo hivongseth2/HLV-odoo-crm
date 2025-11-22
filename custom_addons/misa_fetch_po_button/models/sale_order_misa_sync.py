@@ -1723,18 +1723,19 @@ class SaleOrder(models.Model):
     def action_fetch_misa_voucher_paging(self):
         """
         Kéo dữ liệu từ api https://actapp.misa.vn/g1/api/sa/v1/sa_voucher_get/get_paging_detail
-        Update x_studio_misa_sav = True cho các picking liên quan đến order_code tìm thấy.
+        - Đồng bộ đầy đủ dữ liệu cho cả đơn đã tồn tại và đơn mới
+        - Update x_studio_misa_sav = True cho các picking liên quan đến order_code tìm thấy.
         """
         misa_utils = self.env['misa.api.utils']
         misa_config = self.env['misa.config']
-        
+
         # 1. Get Token & Headers (ACT API)
         try:
             token = misa_utils._get_misa_token()
             headers = misa_config.get_default_headers(token)
         except Exception as e:
             raise UserError(_("Không thể lấy token MISA ACT: %s") % e)
-        
+
         # 2. API Call
         url = "https://actapp.misa.vn/g1/api/sa/v1/sa_voucher_get/get_paging_detail"
         payload = {
@@ -1748,7 +1749,7 @@ class SaleOrder(models.Model):
             "summaryColumns": [3870, 3488, 308, 283, 5350],
             "loadMode": 2
         }
-        
+
         _logger.info("🚀 Fetching MISA Voucher Paging: %s", url)
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -1757,52 +1758,120 @@ class SaleOrder(models.Model):
         except Exception as e:
             _logger.error("❌ Lỗi gọi API MISA Voucher: %s", e)
             raise UserError(_("Lỗi gọi API MISA: %s") % e)
-            
+
         if not data.get("Success"):
             _logger.error("❌ MISA API Error: %s", data)
             raise UserError(_("MISA API trả về lỗi: %s") % data.get("ErrorsMessage"))
-            
+
         page_data = data.get("Data", {}).get("PageData", [])
         _logger.info("📦 Received %d items from MISA Voucher Paging", len(page_data))
-        
+
         # 3. Process Data
         updated_count = 0
+        resynced_count = 0
+        created_count = 0
         not_found_codes = set()
-        
+        picking_updated_count = 0
+
         for item in page_data:
             order_code = item.get("order_code")
-            if not order_code:
+            misa_order_id = item.get("ID") or item.get("CustomID")
+
+            if not order_code and not misa_order_id:
                 continue
-                
-            # Tìm đơn bán hàng (Sale Order) theo tên
-            so = self.search([('name', '=', order_code)], limit=1)
-            
+
+            # Ưu tiên tìm theo misa_id trước, sau đó mới tìm theo name
+            so = None
+            if misa_order_id:
+                so = self.search([('misa_id', '=', misa_order_id)], limit=1)
+
+            if not so and order_code:
+                so = self.search([('name', '=', order_code)], limit=1)
+
             if so:
-                # Check vào trường boolean x_studio_misa_sav của stock.picking
-                pickings = so.picking_ids
-                for picking in pickings:
-                    try:
-                        picking.write({'x_studio_misa_sav': True})
-                        updated_count += 1
-                        _logger.info("✅ Updated picking %s (SO: %s) -> x_studio_misa_sav=True", picking.name, order_code)
-                    except Exception as e:
-                        _logger.warning("⚠️ Không thể update picking %s: %s", picking.name, e)
+                # Đơn đã tồn tại: thực hiện đồng bộ đầy đủ
+                try:
+                    _logger.info("🔄 Resyncing existing SO %s (MISA ID: %s)", so.name, misa_order_id)
+                    so.action_resync_from_misa_hard()
+                    resynced_count += 1
+
+                    # Update x_studio_misa_sav cho các picking
+                    pickings = so.picking_ids
+                    for picking in pickings:
+                        try:
+                            picking.write({'x_studio_misa_sav': True})
+                            picking_updated_count += 1
+                            _logger.info("✅ Updated picking %s (SO: %s) -> x_studio_misa_sav=True", picking.name, so.name)
+                        except Exception as e:
+                            _logger.warning("⚠️ Không thể update picking %s: %s", picking.name, e)
+
+                except Exception as e:
+                    _logger.error("❌ Không thể resync SO %s: %s", so.name, e)
+                    # Fallback: chỉ update picking flag
+                    pickings = so.picking_ids
+                    for picking in pickings:
+                        try:
+                            picking.write({'x_studio_misa_sav': True})
+                            picking_updated_count += 1
+                            _logger.info("⚠️ Fallback: Updated picking %s (SO: %s) -> x_studio_misa_sav=True", picking.name, so.name)
+                        except Exception as pe:
+                            _logger.warning("⚠️ Không thể update picking %s: %s", picking.name, pe)
+
+            elif misa_order_id:
+                # Đơn chưa tồn tại và có MISA ID: tạo mới và đồng bộ
+                try:
+                    _logger.info("🆕 Creating new SO for MISA ID: %s (Order Code: %s)", misa_order_id, order_code or 'N/A')
+                    result = self.api_resync_by_misa(misa_order_id, create_when_missing=True)
+                    if result.get('ok'):
+                        created_count += 1
+                        so_new = self.browse(result['res_id'])
+                        _logger.info("✅ Created new SO %s from MISA ID %s", so_new.name, misa_order_id)
+
+                        # Update x_studio_misa_sav cho các picking của SO mới
+                        pickings = so_new.picking_ids
+                        for picking in pickings:
+                            try:
+                                picking.write({'x_studio_misa_sav': True})
+                                picking_updated_count += 1
+                                _logger.info("✅ Updated picking %s (New SO: %s) -> x_studio_misa_sav=True", picking.name, so_new.name)
+                            except Exception as e:
+                                _logger.warning("⚠️ Không thể update picking %s: %s", picking.name, e)
+                    else:
+                        _logger.warning("⚠️ Không thể tạo SO cho MISA ID %s: %s", misa_order_id, result.get('detail'))
+                        not_found_codes.add(order_code or misa_order_id)
+
+                except Exception as e:
+                    _logger.error("❌ Không thể tạo SO cho MISA ID %s: %s", misa_order_id, e)
+                    not_found_codes.add(order_code or misa_order_id)
             else:
-                not_found_codes.add(order_code)
-        
+                # Không có đủ thông tin để xử lý
+                not_found_codes.add(order_code or 'Unknown')
+
+        # 4. Build result message
+        success_parts = []
+        if resynced_count > 0:
+            success_parts.append(_("đã đồng bộ lại %d đơn có sẵn") % resynced_count)
+        if created_count > 0:
+            success_parts.append(_("tạo mới %d đơn") % created_count)
+        if picking_updated_count > 0:
+            success_parts.append(_("cập nhật %d phiếu kho") % picking_updated_count)
+
+        msg = ""
+        if success_parts:
+            msg = _("Đã %s.") % ", ".join(success_parts)
+        else:
+            msg = _("Không có đơn nào được xử lý.")
+
         if not_found_codes:
-            _logger.info("⚠️ Không tìm thấy SO cho các order_code: %s", not_found_codes)
-            
-        msg = _("Đã cập nhật %s phiếu kho.") % updated_count
-        if not_found_codes:
-            msg += _(" Không tìm thấy SO cho %d mã.") % len(not_found_codes)
-            
+            msg += _(" Không xử lý được %d mã: %s") % (len(not_found_codes), ", ".join(list(not_found_codes)[:5]) + ("..." if len(not_found_codes) > 5 else ""))
+
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _("Đồng bộ Voucher MISA"),
                 'message': msg,
-                'type': 'success',
+                'type': 'success' if (resynced_count > 0 or created_count > 0) else 'warning',
+                'sticky': True,
             }
         }
