@@ -1249,83 +1249,120 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
   ]);
 }
 
-
-
 function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
   // 1. Tìm list container
   let list = document.querySelector('.panel-packages-list');
   const emptyState = document.querySelector('.panel-empty-state');
 
-  // Nếu chưa có list (đang empty state), tạo list mới và xóa empty state
-  if (!list) {
-    if (emptyState) emptyState.remove();
-    list = document.createElement('ul');
-    list.className = 'panel-packages-list';
-    list.style.cssText = "list-style: none; padding: 0; margin: 0;";
-    // Chèn list vào panel body (sau title)
-    const panelBody = document.querySelector('.pack-side-panel .panel-body');
-    const title = panelBody.querySelector('.panel-section-title');
-    if (title) {
-      title.after(list);
-    } else {
-      panelBody.prepend(list);
-    }
-  }
+  // 2. Tính số lượng các sản phẩm VỪA MỚI quét thêm vào
+  const newItemsQty = itemsData.reduce((sum, i) => sum + i.qty, 0);
 
-  // 2. Tính tổng qty
-  const totalQty = itemsData.reduce((sum, i) => sum + i.qty, 0);
-
-  // 3. Tạo HTML Preview Items
+  // 3. Tạo HTML cho các dòng sản phẩm mới (để dùng cho cả 2 trường hợp: thêm mới hoặc update)
   let previewHtml = '';
   itemsData.forEach(item => {
-    // Lấy tên sản phẩm từ DOM hiện tại để hiển thị (vì API create chỉ trả về ID pack)
+    // Cập nhật dữ liệu ngầm packedQty bên danh sách trái (để tính toán logic trừ lùi)
     const lineEl = document.querySelector(`[data-line-id="${item.move_line_id}"]`);
+    let prodName = 'Sản phẩm...';
 
     if (lineEl) {
-      const currentPacked = parseFloat(lineEl.dataset.packedQty || 0);
-      // Cộng dồn số lượng vừa đóng vào biến đã đóng
-      lineEl.dataset.packedQty = currentPacked + item.qty;
+      const currentPacked = parseFloat(lineEl.getAttribute('data-packed-qty') || 0);
+      lineEl.setAttribute('data-packed-qty', currentPacked + item.qty);
+      prodName = lineEl.querySelector('strong')?.innerText || prodName;
     }
-    const prodName = lineEl ? lineEl.querySelector('strong').innerText : 'Sản phẩm...';
 
     previewHtml += `
         <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
           <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;">${prodName}</span>
-          <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${item.qty}</span>
+          <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #dbe4ff; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">+${item.qty}</span>
         </div>
       `;
   });
 
-  // 4. Tạo thẻ LI mới (Copy style từ template XML)
-  const li = document.createElement('li');
-  li.className = 'package-item-card';
-  li.dataset.packageId = pkgId;
-  li.style.cssText = "background: white; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; transition: transform 0.2s ease, box-shadow 0.2s ease; animation: fadeIn 0.5s ease;";
+  // --- [FIX] KIỂM TRA XEM GÓI NÀY ĐÃ CÓ TRÊN MÀN HÌNH CHƯA ---
+  // Lưu ý: pkgId cần chuyển về string để so sánh chính xác trong selector
+  const existingCard = document.querySelector(`.package-item-card[data-package-id="${pkgId}"]`);
 
-  li.innerHTML = `
-      <div class="package-item-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
-        <strong class="package-item-name" style="font-size: 0.95rem; color: #212529; font-weight: 600;">${pkgName}</strong>
-        <span class="badge" style="background: #e7f5ff; color: #1c7ed6; padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
+  if (existingCard) {
+    // === TRƯỜNG HỢP A: ĐÃ CÓ GÓI -> CẬP NHẬT (GỘP) ===
+
+    // 1. Cập nhật Badge số lượng tổng
+    const badge = existingCard.querySelector('.badge');
+    if (badge) {
+      // Lấy text hiện tại (VD: " 10"), xóa khoảng trắng, ép kiểu số
+      // Clone node để lấy text thuần mà không lấy icon svg
+      const currentText = badge.textContent.trim();
+      const currentTotal = parseFloat(currentText) || 0;
+      const updatedTotal = currentTotal + newItemsQty;
+
+      badge.innerHTML = `
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
-          ${totalQty}
-        </span>
-      </div>
-      
-      <div class="package-items-preview" style="margin-bottom: 1rem; font-size: 0.85rem; color: #495057;">
-        ${previewHtml}
-      </div>
+          ${updatedTotal}
+      `;
+    }
 
-      <button class="btn-package-edit" data-package-id="${pkgId}" style="width: 100%; padding: 0.6rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; color: #495057; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-        Chỉnh sửa
-      </button>
-    `;
+    // 2. Chèn thêm dòng preview vào đầu danh sách cũ
+    const previewContainer = existingCard.querySelector('.package-items-preview');
+    if (previewContainer) {
+      // Xóa thông báo "empty" nếu có
+      const emptyPreview = previewContainer.querySelector('.preview-empty');
+      if (emptyPreview) emptyPreview.remove();
 
-  // Gắn sự kiện click cho nút Edit vừa tạo
-  li.querySelector('.btn-package-edit').addEventListener('click', openPackageEditModal);
+      // Chèn nội dung mới lên đầu (prepend)
+      previewContainer.insertAdjacentHTML('afterbegin', previewHtml);
+    }
 
-  // Append lên đầu danh sách
-  list.prepend(li);
+    // 3. Hiệu ứng nháy sáng báo hiệu vừa update
+    existingCard.style.transition = 'background-color 0.5s ease';
+    existingCard.style.backgroundColor = '#fff9db'; // Màu vàng nhạt
+    setTimeout(() => { existingCard.style.backgroundColor = 'white'; }, 800);
+
+    // 4. Di chuyển card lên đầu danh sách (để dễ thấy nhất)
+    existingCard.parentElement.prepend(existingCard);
+
+  } else {
+    // === TRƯỜNG HỢP B: CHƯA CÓ GÓI -> TẠO MỚI ===
+
+    // Nếu chưa có list container (đang empty state) thì tạo mới
+    if (!list) {
+      if (emptyState) emptyState.remove();
+      list = document.createElement('ul');
+      list.className = 'panel-packages-list';
+      list.style.cssText = "list-style: none; padding: 0; margin: 0;";
+      const panelBody = document.querySelector('.pack-side-panel .panel-body');
+      const title = panelBody.querySelector('.panel-section-title');
+      if (title) title.after(list); else panelBody.prepend(list);
+    }
+
+    const li = document.createElement('li');
+    li.className = 'package-item-card';
+    li.dataset.packageId = pkgId; // Gán ID để lần sau tìm thấy
+    li.style.cssText = "background: white; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; transition: all 0.2s ease; animation: fadeIn 0.5s ease;";
+
+    li.innerHTML = `
+        <div class="package-item-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1px solid #f8f9fa;">
+          <strong class="package-item-name" style="font-size: 0.95rem; color: #212529; font-weight: 600;">${pkgName}</strong>
+          <span class="badge" style="background: #e7f5ff; color: #1c7ed6; padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+            ${newItemsQty}
+          </span>
+        </div>
+        
+        <div class="package-items-preview" style="margin-bottom: 1rem; font-size: 0.85rem; color: #495057;">
+          ${previewHtml}
+        </div>
+
+        <button class="btn-package-edit" data-package-id="${pkgId}" style="width: 100%; padding: 0.6rem; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; color: #495057; font-weight: 600; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          Chỉnh sửa
+        </button>
+      `;
+
+    // Gán lại sự kiện click cho nút chỉnh sửa của thẻ mới
+    li.querySelector('.btn-package-edit').addEventListener('click', openPackageEditModal);
+
+    // Thêm thẻ mới vào đầu danh sách
+    list.prepend(li);
+  }
 }
 // ===================== PANEL VISIBILITY TOGGLE =====================
 function togglePanelVisibility(button) {
