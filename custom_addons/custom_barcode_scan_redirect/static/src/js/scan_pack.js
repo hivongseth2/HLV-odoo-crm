@@ -728,9 +728,8 @@ document.addEventListener('click', async function (e) {
 
 // ===================== PACKAGE EDIT MODAL FUNCTIONS =====================
 let currentPackageData = null;
-function updateSidePanelUI(packageData) {
-  console.log(packageData); // Debug nếu cần
 
+function updateSidePanelUI(packageData) {
   if (!packageData || !packageData.package_id) return;
   const card = document.querySelector(`.package-item-card[data-package-id="${packageData.package_id}"]`);
   if (!card) return;
@@ -739,14 +738,12 @@ function updateSidePanelUI(packageData) {
   const badge = card.querySelector('.badge');
   if (badge) {
     const totalQty = (packageData.items || []).reduce((sum, item) => sum + (parseFloat(item.qty_done) || 0), 0);
-
-    // Icon SVG cứng để tránh lỗi querySelector null
+    // Icon SVG cứng
     const iconSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>`;
-
     badge.innerHTML = `${iconSvg} ${totalQty}`;
   }
 
-  // 2. Cập nhật Preview List (Gộp dòng & Format tên chuẩn)
+  // 2. Cập nhật Preview List
   const preview = card.querySelector('.package-items-preview');
   if (preview) {
     if (!packageData.items || packageData.items.length === 0) {
@@ -760,23 +757,31 @@ function updateSidePanelUI(packageData) {
         const qty = parseFloat(item.qty_done) || 0;
         if (qty <= 0) return;
 
-        // --- B. TẠO TÊN CHUẨN [BARCODE] TÊN ---
+        // --- B. [FIX] LẤY DEFAULT CODE TỪ DOM BÊN TRÁI ---
+        // Mặc định lấy tên từ API
         let displayName = item.product_name || '';
 
-        // Ưu tiên 1: Lấy barcode từ API nếu có
-        if (item.product_barcode && !displayName.startsWith('[')) {
-          displayName = `[${item.product_barcode}] ${displayName}`;
-        }
-        // Ưu tiên 2: Nếu API thiếu barcode, thử tìm "ké" từ danh sách bên trái (DOM)
-        else if (!displayName.startsWith('[')) {
-          const lineEl = document.querySelector(`#product_list .product-item[data-line-id="${item.move_line_id}"]`);
-          if (lineEl) {
-            const barcode = lineEl.getAttribute('data-barcode');
-            if (barcode) displayName = `[${barcode}] ${displayName}`;
+        // Tìm dòng tương ứng ở danh sách chính (cột trái)
+        const lineEl = document.querySelector(`#product_list .product-item[data-line-id="${item.move_line_id}"]`);
+
+        if (lineEl) {
+          // Odoo thường render [Default Code] Tên Sản Phẩm trong thẻ strong
+          const textOnScreen = lineEl.querySelector('strong')?.innerText.trim();
+
+          // Nếu trên màn hình có dạng [ABC]... thì lấy luôn cái đó (vì đó là default_code)
+          if (textOnScreen && textOnScreen.startsWith('[')) {
+            displayName = textOnScreen;
+          }
+          // Nếu trên màn hình không có [], nhưng API có trả về default_code (phòng hờ backend sửa)
+          else if (item.default_code || item.product_default_code) {
+            const code = item.default_code || item.product_default_code;
+            if (!displayName.startsWith('[')) {
+              displayName = `[${code}] ${displayName}`;
+            }
           }
         }
 
-        // Cộng dồn số lượng
+        // Cộng dồn số lượng vào map
         if (aggregatedItems[displayName]) {
           aggregatedItems[displayName] += qty;
         } else {
@@ -1206,14 +1211,12 @@ async function savePackageChanges() {
       let mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${strLineId}"]`);
 
       // B. Nếu không tìm thấy theo ID (do Odoo tách dòng), tìm theo Tên sản phẩm
-      // (Logic này cực quan trọng để fix lỗi bạn đang gặp)
       if (!mainListEl && currentPackageData?.items) {
         const itemDetail = currentPackageData.items.find(i => String(i.move_line_id) === strLineId);
         if (itemDetail) {
           const allItems = document.querySelectorAll('#product_list .product-item');
           for (const el of allItems) {
             const nameEl = el.querySelector('strong');
-            // So sánh tên (dùng includes để khớp tương đối)
             if (nameEl && nameEl.innerText.includes(itemDetail.product_name)) {
               mainListEl = el;
               break;
