@@ -1356,6 +1356,8 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
                 const barcode = lineEl.getAttribute('data-barcode') || '';
                 const rawName = lineEl.querySelector('strong')?.innerText.trim() || productName;
 
+                console.log(lineEl)
+
                 // Nếu tên chưa có [...] và có barcode thì ghép vào
                 if (barcode && !rawName.startsWith('[')) {
                   finalName = `[${barcode}] ${rawName}`;
