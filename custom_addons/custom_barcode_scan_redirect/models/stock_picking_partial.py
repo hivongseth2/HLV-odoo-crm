@@ -214,27 +214,12 @@ class StockPickingPartial(models.Model):
                     'qty_done': qty,
                     'original_move_line_id': move_line.original_move_line_id,
                 })
-
+                
+                
+                
     def get_package_details(self, package_id):
         """
         Lấy chi tiết sản phẩm trong 1 package để hiển thị modal edit
-        Returns: {
-            'package_id': int,
-            'package_name': str,
-            'items': [
-                {'move_line_id': int, 'product_id': int, 'product_name': str, 'qty_done': float,
-                 'product_sku': str, 'qty_available': float, 'uom': str},
-                ...
-            ],
-            'other_packages': [
-                {'package_id': int, 'package_name': str},
-                ...
-            ],
-            'all_items': [
-                {'move_line_id': int, 'product_name': str, 'qty_available': float},
-                ...
-            ]
-        }
         """
         self.ensure_one()
 
@@ -244,63 +229,69 @@ class StockPickingPartial(models.Model):
         if not package.exists():
             raise ValidationError("Gói hàng không tồn tại!")
 
-        # Lấy tất cả move_lines của picking này và package này
+        # Lấy move_lines của package này
         move_lines = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('result_package_id', '=', package_id)
         ])
 
-        # ⭐ Lấy TẤT CẢ move_lines của picking (không search với qty_done)
+        # Lấy TẤT CẢ move_lines của picking
         all_move_lines = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id)
         ])
 
+        # --- 1. XỬ LÝ ITEMS TRONG GÓI ---
         items = []
         for ml in move_lines:
-            # ⭐ Filter bằng Python - chỉ xử lý lines có qty_done > 0
             qty = float(ml.qty_done or 0)
             if qty <= 0:
                 continue
-            # Lấy SKU từ product barcode hoặc default_code
-            product_sku = ml.product_id.barcode or ml.product_id.default_code or 'N/A'
+            
+            # Lấy thông tin mã
+            # Note: Nên dùng '' thay vì 'N/A' để JS check if(code) chuẩn hơn
+            product_barcode = ml.product_id.barcode or ''
+            product_sku = ml.product_id.default_code or ''
 
             items.append({
                 'move_line_id': ml.id,
                 'product_id': ml.product_id.id,
                 'product_name': ml.product_id.name,
-                'product_sku': product_sku,
+                'product_sku': product_sku,         # Default Code
+                'product_barcode': product_barcode, # Barcode
                 'qty_done': qty,
                 'uom': ml.product_uom_id.name,
             })
 
-        # FIX: Lấy tất cả packages CỦA PICKING NÀY
+        # --- 2. XỬ LÝ DANH SÁCH GÓI KHÁC ---
         all_packages_in_picking = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('result_package_id', '!=', False)
         ]).mapped('result_package_id')
 
-        # Loại bỏ package hiện tại và tạo danh sách other_packages
         other_packages = []
         for pkg in all_packages_in_picking:
             if pkg.id != package_id:
-                # Đảm bảo package có name
                 pkg_name = pkg.name if pkg.name else f"PACK{pkg.id}"
                 other_packages.append({
                     'package_id': pkg.id,
                     'package_name': pkg_name
                 })
 
-        # ⭐ Bước 6: Lấy all_items - sản phẩm có thể thêm vào package
+        # --- 3. XỬ LÝ ALL ITEMS (DROPDOWN THÊM SẢN PHẨM) ---
         all_items = []
         product_map = {}
 
-        # Gom nhóm move_lines theo sản phẩm
+        # A. Quét từ Move Lines
         for ml in all_move_lines:
             pid = ml.product_id.id
             if pid not in product_map:
                 product_map[pid] = {
                     'product_name': ml.product_id.name,
-                    'move_line_id': ml.id, # Dùng ID của line đầu tiên tìm thấy làm đại diện
+                    # [FIX QUAN TRỌNG] Thêm 2 dòng này để tránh KeyError
+                    'product_sku': ml.product_id.default_code or '', 
+                    'product_barcode': ml.product_id.barcode or '',
+                    # ------------------------------------------------
+                    'move_line_id': ml.id,
                     'total_scanned': 0.0,
                     'unassigned_scanned': 0.0,
                     'demand': 0.0
@@ -312,35 +303,29 @@ class StockPickingPartial(models.Model):
             if not ml.result_package_id and qty > 0:
                 product_map[pid]['unassigned_scanned'] += qty
 
-        # Lấy demand từ move_ids_without_package (hoặc move_ids)
+        # B. Quét từ Demand (Moves without package)
         for move in self.move_ids_without_package:
              pid = move.product_id.id
              if pid in product_map:
                  product_map[pid]['demand'] += move.product_uom_qty
              elif pid not in product_map:
-                 # Trường hợp chưa có move_line nào nhưng có demand
                  product_map[pid] = {
                     'product_name': move.product_id.name,
+                    'product_sku': move.product_id.default_code or '',
+                    'product_barcode': move.product_id.barcode or '',
                     'move_line_id': False, 
                     'total_scanned': 0.0,
                     'unassigned_scanned': 0.0,
                     'demand': move.product_uom_qty
                 }
 
-        # ⭐ Tính qty available cho mỗi sản phẩm
-        # Logic MỚI (User Request): Chỉ lấy từ Unassigned Scanned (đã quét nhưng chưa vào gói)
-        # KHÔNG lấy từ Unscanned nữa.
+        # C. Tổng hợp lại thành list
         for pid, data in product_map.items():
             qty_available = data['unassigned_scanned']
 
-            # ⭐ CHỈ show nếu còn qty available > 0
             if qty_available > 0:
-                # Nếu chưa có move_line_id (do chưa scan dòng nào), tìm move_line ảo hoặc tạo
-                # Ở đây ta cần 1 move_line_id để FE gửi lên. 
-                # Nếu data['move_line_id'] có giá trị thì dùng, nếu không thì tìm 1 line bất kỳ của product
                 ml_id = data['move_line_id']
                 if not ml_id:
-                    # Tìm 1 line bất kỳ thuộc picking và product này
                     tmp_ml = self.env['stock.move.line'].sudo().search([
                         ('picking_id', '=', self.id),
                         ('product_id', '=', pid)
@@ -351,8 +336,11 @@ class StockPickingPartial(models.Model):
                 if ml_id:
                     all_items.append({
                         'move_line_id': ml_id,
-                        'product_id': pid, # Thêm product_id
+                        'product_id': pid,
                         'product_name': data['product_name'],
+                        # Bây giờ data[] đã có đủ key nên không bị lỗi nữa
+                        'product_sku': data['product_sku'],         
+                        'product_barcode': data['product_barcode'],
                         'qty_available': qty_available
                     })
 
@@ -363,7 +351,6 @@ class StockPickingPartial(models.Model):
             'other_packages': other_packages,
             'all_items': all_items
         }
-
     def update_package_item_qty(self, package_id, move_line_id, new_qty):
         """
         Cập nhật số lượng của 1 sản phẩm trong package

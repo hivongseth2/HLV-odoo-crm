@@ -978,8 +978,10 @@ async function openPackageEditModal(event) {
         result.all_items.forEach(item => {
           // Thêm [Barcode] vào dropdown cho dễ tìm
           let label = item.product_name;
-          if (item.product_barcode && !label.startsWith('[')) {
-            label = `[${item.product_barcode}] ${label}`;
+
+          const code = item.product_sku || item.product_barcode || '';
+          if (code && !label.startsWith('[')) {
+            label = `[${code}] ${label}`;
           }
           const option = document.createElement('option');
           option.value = item.move_line_id;
