@@ -597,12 +597,18 @@ function createModal(title, content, buttons = []) {
 
 function optimizePackageUI() {
   const packageCards = document.querySelectorAll('.package-item-card');
+  console.log('600', packageCards);
+
 
   packageCards.forEach(card => {
     const previewContainer = card.querySelector('.package-items-preview');
+    console.log('previewContainer', previewContainer);
+
     if (!previewContainer) return;
 
     const items = previewContainer.querySelectorAll('.preview-item');
+    console.log('.preview-item', items);
+
     const aggregated = {}; // Dùng để gom nhóm
 
     // 1. Duyệt qua các dòng hiện có để gom nhóm
