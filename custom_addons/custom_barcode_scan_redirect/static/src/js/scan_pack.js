@@ -390,7 +390,7 @@ let mediaRecorder = null;
 let isRecording = false;
 let chunkBusy = Promise.resolve();
 
-const MAX_DURATION_MS = 5 * 60 * 1000; // 5 phút
+const MAX_DURATION_MS = 15 * 60 * 1000; // 5 phút
 let stopTimer = null, countdownTimer = null, endAt = 0;
 let overlayCanvas = null, overlayCtx = null, drawRAF = 0;
 
@@ -593,38 +593,53 @@ function createModal(title, content, buttons = []) {
 }
 // ============================================================
 // HÀM DỌN DẸP UI KHI VỪA F5 (GỘP DÒNG & FORMAT TÊN)
-// ============================================================
+
 function optimizePackageUI() {
   const packageCards = document.querySelectorAll('.package-item-card');
+  const allMainItems = document.querySelectorAll('#product_list .product-item');
 
   packageCards.forEach(card => {
     const previewContainer = card.querySelector('.package-items-preview');
     if (!previewContainer) return;
 
     const items = previewContainer.querySelectorAll('.preview-item');
-    const aggregated = {}; // Dùng để gom nhóm
+    const aggregated = {};
 
-    // 1. Duyệt qua các dòng hiện có để gom nhóm
     items.forEach(item => {
-      let name = item.querySelector('.preview-item-name').innerText.trim();
+      // Lấy tên gốc và làm sạch
+      let originalName = item.querySelector('.preview-item-name').innerText.trim();
+      let compareName = originalName.toLowerCase();
+
       let qtyText = item.querySelector('.preview-item-qty').innerText.toLowerCase().replace('x', '');
       let qty = parseFloat(qtyText) || 0;
 
       if (qty <= 0) {
-        item.remove(); // Xóa dòng rác số lượng 0
+        item.remove();
         return;
       }
 
-      // [FIX NAME] Nếu tên chưa có Barcode, thử tìm trong danh sách chính để ghép vào
-      if (!name.startsWith('[')) {
-        // Tìm dòng sản phẩm bên trái có tên khớp (tương đối)
-        const allMainItems = document.querySelectorAll('#product_list .product-item');
+      // --- LOGIC TÌM MÃ (SỬA ĐỂ ƯU TIÊN DEFAULT CODE) ---
+      let finalName = originalName;
+
+      // Nếu tên chưa có [...], đi tìm mã
+      if (!originalName.startsWith('[')) {
         for (let mainItem of allMainItems) {
-          const mainName = mainItem.querySelector('strong')?.innerText.trim() || '';
-          if (mainName === name || mainName.includes(name) || name.includes(mainName)) {
-            const barcode = mainItem.getAttribute('data-barcode');
-            if (barcode) {
-              name = `[${barcode}] ${mainName}`; // Cập nhật tên chuẩn
+          const mainRawText = mainItem.querySelector('strong')?.innerText || '';
+          const mainCompare = mainRawText.toLowerCase().trim();
+
+          // So sánh tương đối
+          if (mainCompare.includes(compareName) || compareName.includes(mainCompare)) {
+
+            // 👇 SỬA Ở ĐÂY: Lấy data-default-code trước
+            const code = mainItem.getAttribute('data-default-code') || mainItem.getAttribute('data-barcode');
+
+            if (code) {
+              finalName = `[${code}] ${originalName}`;
+            } else {
+              // Fallback: Nếu không có attribute, lấy luôn text gốc bên trái nếu nó có dạng [Mã]
+              if (mainRawText.trim().startsWith('[')) {
+                finalName = mainRawText.trim();
+              }
             }
             break;
           }
@@ -632,11 +647,11 @@ function optimizePackageUI() {
       }
 
       // Gom nhóm
-      if (aggregated[name]) {
-        aggregated[name].qty += qty;
-        aggregated[name].elementsToRemove.push(item); // Đánh dấu để xóa dòng thừa
+      if (aggregated[finalName]) {
+        aggregated[finalName].qty += qty;
+        aggregated[finalName].elementsToRemove.push(item);
       } else {
-        aggregated[name] = {
+        aggregated[finalName] = {
           qty: qty,
           mainElement: item,
           elementsToRemove: []
@@ -644,24 +659,25 @@ function optimizePackageUI() {
       }
     });
 
-    // 2. Cập nhật lại DOM sau khi gom
+    // Render lại DOM
     for (const [name, data] of Object.entries(aggregated)) {
-      // Xóa các dòng thừa
       data.elementsToRemove.forEach(el => el.remove());
 
-      // Cập nhật dòng chính (Dòng đầu tiên tìm thấy)
       const mainEl = data.mainElement;
       const nameEl = mainEl.querySelector('.preview-item-name');
       const qtyEl = mainEl.querySelector('.preview-item-qty');
 
-      // Update tên (đã có barcode)
       nameEl.innerText = name;
-      nameEl.style.fontSize = "0.85rem"; // Đảm bảo font size đẹp
       nameEl.style.color = "#495057";
+      nameEl.style.fontSize = "0.85rem";
 
-      // Update số lượng (Format: xSố, màu xám)
       qtyEl.innerText = `x${data.qty}`;
       qtyEl.style.cssText = "font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;";
+
+      mainEl.style.display = 'flex';
+      mainEl.style.justifyContent = 'space-between';
+      mainEl.style.marginBottom = '0.35rem';
+      mainEl.style.alignItems = 'center';
     }
   });
 }
@@ -729,44 +745,76 @@ document.addEventListener('click', async function (e) {
 // ===================== PACKAGE EDIT MODAL FUNCTIONS =====================
 let currentPackageData = null;
 
+
 function updateSidePanelUI(packageData) {
   if (!packageData || !packageData.package_id) return;
   const card = document.querySelector(`.package-item-card[data-package-id="${packageData.package_id}"]`);
   if (!card) return;
 
-  // Update Qty Badge
+  // 1. Cập nhật Badge
   const badge = card.querySelector('.badge');
   if (badge) {
     const totalQty = (packageData.items || []).reduce((sum, item) => sum + (parseFloat(item.qty_done) || 0), 0);
-    badge.innerHTML = `
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 0 0 1-8 0"></path></svg>
-      ${totalQty}
-    `;
+    const iconSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>`;
+    badge.innerHTML = `${iconSvg} ${totalQty}`;
   }
 
-  // Update Preview List
+  // 2. Cập nhật Preview List
   const preview = card.querySelector('.package-items-preview');
   if (preview) {
     if (!packageData.items || packageData.items.length === 0) {
       preview.innerHTML = `<div class="preview-empty" style="text-align: center; color: #adb5bd; font-style: italic; padding: 0.5rem;">Chưa có chi tiết sản phẩm</div>`;
     } else {
-      let html = '';
-      // Group items by product name to match the preview style if needed, 
-      // but listing items is also fine.
+
+      const aggregatedItems = {};
+
       packageData.items.forEach(item => {
-        if (item.qty_done > 0) {
-          html += `
-            <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
-              <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;">${item.product_name}</span>
-              <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${item.qty_done}</span>
-            </div>
-          `;
+        const qty = parseFloat(item.qty_done) || 0;
+        if (qty <= 0) return;
+
+        // --- CÁCH MỚI: LẤY MÃ TỪ DATA ATTRIBUTE (SẠCH & CHUẨN) ---
+        let displayName = item.product_name || '';
+
+        // Tìm dòng sản phẩm bên trái để lấy data-default-code
+        const lineEl = document.querySelector(`#product_list .product-item[data-line-id="${item.move_line_id}"]`);
+
+        if (lineEl) {
+          // Lấy mã nội bộ trực tiếp từ attribute chúng ta vừa thêm ở XML
+          const defaultCode = lineEl.getAttribute('data-default-code');
+
+          // Nếu có mã và tên chưa có [...] thì ghép vào
+          if (defaultCode && !displayName.startsWith('[')) {
+            displayName = `[${defaultCode}] ${displayName}`;
+          }
+        }
+        // Fallback: Nếu không tìm thấy DOM (hiếm), giữ nguyên tên gốc
+
+        // Cộng dồn
+        if (aggregatedItems[displayName]) {
+          aggregatedItems[displayName] += qty;
+        } else {
+          aggregatedItems[displayName] = qty;
         }
       });
+
+
+      console.log('786', aggregatedItems);
+
+
+      let html = '';
+      for (const [name, qty] of Object.entries(aggregatedItems)) {
+        html += `
+          <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
+            <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057; font-size: 0.85rem;">${name}</span>
+            <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${qty}</span>
+          </div>
+        `;
+      }
       preview.innerHTML = html;
     }
   }
 }
+
 
 async function openPackageEditModal(event) {
   event.stopPropagation();
@@ -796,178 +844,184 @@ async function openPackageEditModal(event) {
     currentPackageData = result;
     updateSidePanelUI(currentPackageData);
 
-    // Ensure other_packages is an array
+    // Xử lý các trường null/undefined
     if (!Array.isArray(currentPackageData.other_packages)) {
       currentPackageData.other_packages = [];
     }
 
-    // ⭐ DEBUG: Log để kiểm tra structure
-    console.log('✅ Package data loaded:', {
-      package_id: currentPackageData.package_id,
-      package_name: currentPackageData.package_name,
-      items_count: currentPackageData.items?.length || 0,
-      other_packages_count: currentPackageData.other_packages?.length || 0,
-      other_packages_detail: currentPackageData.other_packages,
-      all_items_count: currentPackageData.all_items?.length || 0,
-      all_items_detail: currentPackageData.all_items
+    // Cập nhật Tiêu đề Modal
+    const titleEl = document.getElementById('modalPackageName');
+    if (titleEl) titleEl.innerText = result.package_name;
+
+    // ============================================================
+    // BƯỚC 1: GỘP CÁC DÒNG TRÙNG SẢN PHẨM (AGGREGATION)
+    // ============================================================
+    const aggregatedMap = {};
+
+    result.items.forEach(item => {
+      // Dùng product_id để định danh sản phẩm trùng
+      const key = item.product_id || item.product_name;
+
+      if (aggregatedMap[key]) {
+        // Đã có -> Cộng dồn số lượng
+        aggregatedMap[key].qty_done += parseFloat(item.qty_done) || 0;
+        // move_line_id giữ nguyên của dòng đầu tiên để làm ID đại diện thao tác
+      } else {
+        // Chưa có -> Tạo mới (Clone object để không ảnh hưởng data gốc)
+        aggregatedMap[key] = { ...item };
+        aggregatedMap[key].qty_done = parseFloat(item.qty_done) || 0;
+      }
     });
 
-    document.getElementById('modalPackageName').innerText = result.package_name;
+    // Chuyển Map thành Mảng để render
+    const mergedItems = Object.values(aggregatedMap);
 
-    const itemCountBadge = document.getElementById('itemCountBadge');
-    if (itemCountBadge) {
-      itemCountBadge.innerText = result.items.length;
-    }
+    // Cập nhật Badge số lượng loại sản phẩm (Unique products)
+    const badgeEl = document.getElementById('itemCountBadge');
+    if (badgeEl) badgeEl.innerText = mergedItems.length;
 
+    // ============================================================
+    // BƯỚC 2: RENDER DANH SÁCH ĐÃ GỘP
+    // ============================================================
     const itemsList = document.getElementById('packageItemsList');
-    itemsList.innerHTML = '';
+    if (itemsList) {
+      itemsList.innerHTML = ''; // Xóa list cũ
 
-    if (result.items.length === 0) {
-      itemsList.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">📦</div>
-          <h4 class="empty-title">Chưa có sản phẩm nào</h4>
-          <p class="empty-desc">Thêm sản phẩm để quản lý gói hàng</p>
-        </div>
-      `;
-    } else {
-      // Deduplicate items by move_line_id
-      const uniqueById = {};
-      result.items.forEach(it => {
-        const key = String(it.move_line_id);
-        if (!uniqueById[key]) {
-          uniqueById[key] = it;
-        }
-      });
-      const uniqueItems = Object.values(uniqueById);
-
-      uniqueItems.forEach(item => {
-        const li = document.createElement('div');
-        li.className = 'item-card';
-        li.setAttribute('data-move-line-id', item.move_line_id);
-        li.innerHTML = `
-          <div class="item-info">
-            <div class="item-details">
-              <h4 class="item-name">${item.product_name}</h4>
-              <span class="item-sku">${item.product_sku || 'N/A'}</span>
-            </div>
-          </div>
-          <div class="item-qty-control">
-            <button class="qty-btn qty-decrease" data-move-line-id="${item.move_line_id}">−</button>
-            <div class="qty-display" data-move-line-id="${item.move_line_id}" data-old-qty="${item.qty_done}">${item.qty_done}</div>
-            <button class="qty-btn qty-increase" data-move-line-id="${item.move_line_id}">+</button>
-          </div>
-          <div class="item-actions">
-            <button class="action-btn action-remove" data-move-line-id="${item.move_line_id}" title="Xóa sản phẩm">Xóa</button>
-            <button class="action-btn action-transfer" data-move-line-id="${item.move_line_id}" title="Chuyển sản phẩm">Chuyển</button>
+      if (mergedItems.length === 0) {
+        itemsList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📦</div>
+            <h4 class="empty-title">Chưa có sản phẩm nào</h4>
+            <p class="empty-desc">Thêm sản phẩm để quản lý gói hàng</p>
           </div>
         `;
+      } else {
+        mergedItems.forEach(item => {
+          const li = document.createElement('div');
+          li.className = 'item-card';
+          li.setAttribute('data-move-line-id', item.move_line_id);
 
-        // --- NÚT GIẢM SỐ LƯỢNG (FIX LỖI CỘNG DỒN) ---
-        li.querySelector('.qty-decrease').addEventListener('click', () => {
-          const display = li.querySelector('.qty-display');
-          let cur = parseFloat(display.innerText) || 0;
-
-          // Logic chuẩn: Lấy số hiện tại TRỪ đi 1 (tối thiểu là 0)
-          const newQty = Math.max(0, cur - 1);
-
-          display.innerText = String(newQty);
-
-          // Cập nhật dữ liệu vào biến tạm
-          if (currentPackageData && Array.isArray(currentPackageData.items)) {
-            const foundItem = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
-            if (foundItem) foundItem.qty_done = newQty;
+          // [FIX NAME] Logic hiển thị tên có [Barcode] trong Modal
+          let displayName = item.product_name;
+          if (item.product_barcode && !displayName.startsWith('[')) {
+            displayName = `[${item.product_barcode}] ${displayName}`;
           }
-        });
 
-        // Qty increase button
-        li.querySelector('.qty-increase').addEventListener('click', () => {
-          const display = li.querySelector('.qty-display');
-          const cur = parseFloat(display.innerText) || 0;
+          li.innerHTML = `
+            <div class="item-info">
+              <div class="item-details">
+                <h4 class="item-name">${displayName}</h4>
+                <span class="item-sku">${item.product_sku || 'N/A'}</span>
+              </div>
+            </div>
+            <div class="item-qty-control">
+              <button class="qty-btn qty-decrease" data-move-line-id="${item.move_line_id}">−</button>
+              <div class="qty-display" data-move-line-id="${item.move_line_id}" data-old-qty="${item.qty_done}">${item.qty_done}</div>
+              <button class="qty-btn qty-increase" data-move-line-id="${item.move_line_id}">+</button>
+            </div>
+            <div class="item-actions">
+              <button class="action-btn action-remove" data-move-line-id="${item.move_line_id}" title="Xóa sản phẩm">Xóa</button>
+              <button class="action-btn action-transfer" data-move-line-id="${item.move_line_id}" title="Chuyển sản phẩm">Chuyển</button>
+            </div>
+          `;
 
-          // Get original move item data to check max allowed
-          const orig = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
-          if (!orig) return;
+          // --- GÁN SỰ KIỆN NÚT BẤM (GIỮ NGUYÊN LOGIC CŨ) ---
 
-          // Get the original qty_done before package (stored in data)
-          const oldQtyStored = parseFloat(display.dataset.oldQty) || 0;
-
-          // Calculate total available qty for this product from all move_lines
-          const allProductItems = currentPackageData.all_items || [];
-          const availableItems = allProductItems.filter(i => i.product_name === item.product_name);
-          let totalAvailable = 0;
-          availableItems.forEach(ai => {
-            totalAvailable += ai.qty_available || 0;
+          // 1. Decrease
+          li.querySelector('.qty-decrease').addEventListener('click', () => {
+            const display = li.querySelector('.qty-display');
+            let cur = parseFloat(display.innerText) || 0;
+            const newQty = Math.max(0, cur - 1);
+            display.innerText = String(newQty);
+            // Cập nhật biến tạm (lưu ý: cập nhật vào item gộp này)
+            item.qty_done = newQty;
           });
 
-          // Calculate current qty in all packages for this product
-          const currentPackageItems = currentPackageData.items || [];
-          let totalInPackages = 0;
-          currentPackageItems.forEach(ci => {
-            if (ci.product_name === item.product_name) {
-              totalInPackages += parseFloat(ci.qty_done) || 0;
+          // 2. Increase
+          li.querySelector('.qty-increase').addEventListener('click', () => {
+            const display = li.querySelector('.qty-display');
+            const cur = parseFloat(display.innerText) || 0;
+
+            // Logic check max available (tính tổng toàn bộ items gốc của server)
+            const allProductItems = currentPackageData.all_items || [];
+            const availableItems = allProductItems.filter(i => i.product_name === item.product_name);
+            let totalAvailable = 0;
+            availableItems.forEach(ai => { totalAvailable += ai.qty_available || 0; });
+
+            // Tính tổng đã đóng gói (từ danh sách gốc server, không phải danh sách gộp UI)
+            const currentPackageItems = currentPackageData.items || [];
+            let totalInPackages = 0;
+            currentPackageItems.forEach(ci => {
+              if (ci.product_name === item.product_name) {
+                totalInPackages += parseFloat(ci.qty_done) || 0;
+              }
+            });
+
+            const oldQtyStored = parseFloat(display.dataset.oldQty) || 0;
+            const currentTotalForProduct = totalInPackages + (cur - oldQtyStored);
+
+            if (currentTotalForProduct >= totalAvailable) {
+              toast.warn(`Đã đạt giới hạn tối đa (${totalAvailable})`);
+              return;
+            }
+
+            const newQty = cur + 1;
+            display.innerText = String(newQty);
+            item.qty_done = newQty;
+          });
+
+          // 3. Remove
+          li.querySelector('.action-remove').addEventListener('click', async () => {
+            if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
+              await removePackageItem(item.move_line_id);
             }
           });
 
-          // Calculate max allowed for this item
-          const maxAllowed = totalAvailable;
-          const currentTotalForProduct = totalInPackages + (cur - oldQtyStored);
+          // 4. Transfer
+          li.querySelector('.action-transfer').addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const display = li.querySelector('.qty-display');
+            const currentQty = parseFloat(display.innerText) || item.qty_done;
+            openTransferModalForItem(item.move_line_id, currentQty, item.product_name);
+          });
 
-          if (currentTotalForProduct >= maxAllowed) {
-            toast.warn(`Không thể tăng thêm. Đã đạt giới hạn tối đa cho sản phẩm này, vui lòng quét thêm sản phẩm nếu muốn tăng thêm`, { ms: 2000 });
-            return;
-          }
-
-          const newQty = cur + 1;
-          display.innerText = String(newQty);
-          if (currentPackageData && Array.isArray(currentPackageData.items)) {
-            const foundItem = currentPackageData.items.find(i => Number(i.move_line_id) === Number(item.move_line_id));
-            if (foundItem) foundItem.qty_done = newQty;
-          }
+          itemsList.appendChild(li);
         });
-
-        // Remove button
-        li.querySelector('.action-remove').addEventListener('click', async () => {
-          if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
-            await removePackageItem(item.move_line_id);
-          }
-        });
-
-        // Transfer button - chuyển sản phẩm sang pack khác
-        li.querySelector('.action-transfer').addEventListener('click', (ev) => {
-          ev.stopPropagation();
-          const display = li.querySelector('.qty-display');
-          const currentQty = parseFloat(display.innerText) || item.qty_done;
-          openTransferModalForItem(item.move_line_id, currentQty, item.product_name);
-        });
-
-        itemsList.appendChild(li);
-      });
+      }
     }
 
     // Populate add item select
     const addItemSelect = document.getElementById('addItemSelect');
-    addItemSelect.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
+    if (addItemSelect) {
+      addItemSelect.innerHTML = '<option value="">-- Chọn sản phẩm --</option>';
+      if (result.all_items && result.all_items.length > 0) {
+        result.all_items.forEach(item => {
+          // Thêm [Barcode] vào dropdown cho dễ tìm
+          let label = item.product_name;
 
-    if (result.all_items && result.all_items.length > 0) {
-      result.all_items.forEach(item => {
-        const option = document.createElement('option');
-        option.value = item.move_line_id;
-        option.innerText = `${item.product_name} (Còn: ${item.qty_available})`;
-        addItemSelect.appendChild(option);
-      });
+          const code = item.product_sku || item.product_barcode || '';
+          if (code && !label.startsWith('[')) {
+            label = `[${code}] ${label}`;
+          }
+          const option = document.createElement('option');
+          option.value = item.move_line_id;
+          option.innerText = `${label} (Còn: ${item.qty_available})`;
+          addItemSelect.appendChild(option);
+        });
+      }
     }
 
     // Show modal
     const modal = document.getElementById('packageEditModal');
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
+    if (modal) {
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
 
   } catch (err) {
     toast.error("❌ Lỗi kết nối: " + err.message);
   }
 }
-
 function closePackageEditModal() {
   const modal = document.getElementById('packageEditModal');
   modal.style.display = 'none';
@@ -1172,14 +1226,12 @@ async function savePackageChanges() {
       let mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${strLineId}"]`);
 
       // B. Nếu không tìm thấy theo ID (do Odoo tách dòng), tìm theo Tên sản phẩm
-      // (Logic này cực quan trọng để fix lỗi bạn đang gặp)
       if (!mainListEl && currentPackageData?.items) {
         const itemDetail = currentPackageData.items.find(i => String(i.move_line_id) === strLineId);
         if (itemDetail) {
           const allItems = document.querySelectorAll('#product_list .product-item');
           for (const el of allItems) {
             const nameEl = el.querySelector('strong');
-            // So sánh tên (dùng includes để khớp tương đối)
             if (nameEl && nameEl.innerText.includes(itemDetail.product_name)) {
               mainListEl = el;
               break;
@@ -1234,8 +1286,22 @@ async function savePackageChanges() {
 // }
 function openTransferModalForItem(moveLineId, currentQty, productName) {
   // Lấy danh sách các gói khác để chuyển sang
-  const packs = (currentPackageData && currentPackageData.other_packages) || [];
+  // const packs = (currentPackageData && currentPackageData.other_packages) || [];
+  const packs = [];
+  const currentPackId = currentPackageData.package_id;
 
+  document.querySelectorAll('.package-item-card').forEach(card => {
+    const pId = parseInt(card.dataset.packageId);
+
+    // Chỉ lấy gói khác với gói hiện tại (không chuyển cho chính nó)
+    if (pId && pId !== currentPackId) {
+      const pName = card.querySelector('.package-item-name')?.innerText.trim() || `Pack ${pId}`;
+      packs.push({
+        package_id: pId,
+        package_name: pName
+      });
+    }
+  });
   // Validate: Nếu không có gói nào khác thì báo lỗi
   if (!packs.length) {
     toast.warn('Không có gói nào khác để chuyển sang.');
@@ -1338,6 +1404,8 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
               if (lineEl) {
                 const barcode = lineEl.getAttribute('data-barcode') || '';
                 const rawName = lineEl.querySelector('strong')?.innerText.trim() || productName;
+
+                console.log(lineEl)
 
                 // Nếu tên chưa có [...] và có barcode thì ghép vào
                 if (barcode && !rawName.startsWith('[')) {
@@ -1483,17 +1551,23 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
           }
         }
 
+
+
+
         if (foundRow) {
           // Nếu có rồi: Cộng dồn số lượng
           const qtyEl = foundRow.querySelector('.preview-item-qty');
           const oldQty = parseFloat(qtyEl.innerText.replace('x', '')) || 0;
           qtyEl.innerText = `x${oldQty + item.qty}`;
+          console.log('1541', foundRow);
 
           // Nháy màu
           foundRow.style.transition = 'background 0.3s';
           foundRow.style.backgroundColor = '#fff3cd';
           setTimeout(() => foundRow.style.backgroundColor = 'transparent', 500);
         } else {
+          console.log('1555', name);
+
           // Nếu chưa có: Thêm mới lên đầu
           const newHtml = `
               <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center; animation: fadeIn 0.5s;">
