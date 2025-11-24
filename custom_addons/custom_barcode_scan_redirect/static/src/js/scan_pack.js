@@ -594,63 +594,64 @@ function createModal(title, content, buttons = []) {
 // ============================================================
 // HÀM DỌN DẸP UI KHI VỪA F5 (GỘP DÒNG & FORMAT TÊN)
 
-
 function optimizePackageUI() {
   const packageCards = document.querySelectorAll('.package-item-card');
-  console.log('600', packageCards);
-
+  const allMainItems = document.querySelectorAll('#product_list .product-item');
 
   packageCards.forEach(card => {
     const previewContainer = card.querySelector('.package-items-preview');
-    console.log('previewContainer', previewContainer);
-
     if (!previewContainer) return;
 
     const items = previewContainer.querySelectorAll('.preview-item');
-    console.log('.preview-item', items);
+    const aggregated = {};
 
-    const aggregated = {}; // Dùng để gom nhóm
-
-    // 1. Duyệt qua các dòng hiện có để gom nhóm
     items.forEach(item => {
-      let name = item.querySelector('.preview-item-name').innerText.trim();
+      // Lấy tên gốc và làm sạch
+      let originalName = item.querySelector('.preview-item-name').innerText.trim();
+      let compareName = originalName.toLowerCase();
+
       let qtyText = item.querySelector('.preview-item-qty').innerText.toLowerCase().replace('x', '');
       let qty = parseFloat(qtyText) || 0;
 
       if (qty <= 0) {
-        item.remove(); // Xóa dòng rác số lượng 0
+        item.remove();
         return;
       }
 
-      // [FIX NAME] Nếu tên chưa có [Mã], tìm trong danh sách chính để lấy Default Code ghép vào
-      if (!name.startsWith('[')) {
-        // Tìm dòng sản phẩm bên trái có tên khớp
-        const allMainItems = document.querySelectorAll('#product_list .product-item');
-        for (let mainItem of allMainItems) {
-          const mainName = mainItem.querySelector('strong')?.innerText.trim() || '';
+      // --- LOGIC TÌM MÃ (SỬA ĐỂ ƯU TIÊN DEFAULT CODE) ---
+      let finalName = originalName;
 
-          // So sánh tên (tương đối)
-          if (mainName.includes(name) || name.includes(mainName)) {
-            // Ưu tiên lấy Default Code (đã thêm ở bước XML), nếu không có thì lấy Barcode
+      // Nếu tên chưa có [...], đi tìm mã
+      if (!originalName.startsWith('[')) {
+        for (let mainItem of allMainItems) {
+          const mainRawText = mainItem.querySelector('strong')?.innerText || '';
+          const mainCompare = mainRawText.toLowerCase().trim();
+
+          // So sánh tương đối
+          if (mainCompare.includes(compareName) || compareName.includes(mainCompare)) {
+
+            // 👇 SỬA Ở ĐÂY: Lấy data-default-code trước
             const code = mainItem.getAttribute('data-default-code') || mainItem.getAttribute('data-barcode');
 
             if (code) {
-              name = `[${code}] ${name}`; // Cập nhật tên chuẩn format
-            } else if (mainName.startsWith('[')) {
-              // Fallback: Nếu không lấy được attribute nhưng tên bên trái có dạng [ABC].. thì lấy luôn tên bên trái
-              name = mainName;
+              finalName = `[${code}] ${originalName}`;
+            } else {
+              // Fallback: Nếu không có attribute, lấy luôn text gốc bên trái nếu nó có dạng [Mã]
+              if (mainRawText.trim().startsWith('[')) {
+                finalName = mainRawText.trim();
+              }
             }
             break;
           }
         }
       }
 
-      // Gom nhóm (Cộng dồn số lượng nếu trùng tên sau khi đã fix)
-      if (aggregated[name]) {
-        aggregated[name].qty += qty;
-        aggregated[name].elementsToRemove.push(item); // Đánh dấu để xóa dòng thừa
+      // Gom nhóm
+      if (aggregated[finalName]) {
+        aggregated[finalName].qty += qty;
+        aggregated[finalName].elementsToRemove.push(item);
       } else {
-        aggregated[name] = {
+        aggregated[finalName] = {
           qty: qty,
           mainElement: item,
           elementsToRemove: []
@@ -658,26 +659,21 @@ function optimizePackageUI() {
       }
     });
 
-    // 2. Cập nhật lại DOM sau khi gom
+    // Render lại DOM
     for (const [name, data] of Object.entries(aggregated)) {
-      // Xóa các dòng thừa (các dòng bị tách lẻ)
       data.elementsToRemove.forEach(el => el.remove());
 
-      // Cập nhật dòng chính (Dòng giữ lại)
       const mainEl = data.mainElement;
       const nameEl = mainEl.querySelector('.preview-item-name');
       const qtyEl = mainEl.querySelector('.preview-item-qty');
 
-      // Update Tên (đã có mã)
       nameEl.innerText = name;
       nameEl.style.color = "#495057";
       nameEl.style.fontSize = "0.85rem";
 
-      // Update Số lượng (Format chuẩn: xSố, màu xám #f1f3f5)
       qtyEl.innerText = `x${data.qty}`;
       qtyEl.style.cssText = "font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;";
 
-      // Reset lại hiệu ứng flex để đảm bảo thẳng hàng
       mainEl.style.display = 'flex';
       mainEl.style.justifyContent = 'space-between';
       mainEl.style.marginBottom = '0.35rem';
@@ -685,7 +681,6 @@ function optimizePackageUI() {
     }
   });
 }
-
 // ===================== SIBLING PACK ACTIONS (COMMENTED OUT SPLIT FUNCTIONALITY) =====================
 document.addEventListener('click', async function (e) {
   const unpackBtn = e.target.closest('.btn-unpack');
