@@ -1234,8 +1234,22 @@ async function savePackageChanges() {
 // }
 function openTransferModalForItem(moveLineId, currentQty, productName) {
   // Lấy danh sách các gói khác để chuyển sang
-  const packs = (currentPackageData && currentPackageData.other_packages) || [];
+  // const packs = (currentPackageData && currentPackageData.other_packages) || [];
+  const packs = [];
+  const currentPackId = currentPackageData.package_id;
 
+  document.querySelectorAll('.package-item-card').forEach(card => {
+    const pId = parseInt(card.dataset.packageId);
+
+    // Chỉ lấy gói khác với gói hiện tại (không chuyển cho chính nó)
+    if (pId && pId !== currentPackId) {
+      const pName = card.querySelector('.package-item-name')?.innerText.trim() || `Pack ${pId}`;
+      packs.push({
+        package_id: pId,
+        package_name: pName
+      });
+    }
+  });
   // Validate: Nếu không có gói nào khác thì báo lỗi
   if (!packs.length) {
     toast.warn('Không có gói nào khác để chuyển sang.');
