@@ -730,6 +730,9 @@ document.addEventListener('click', async function (e) {
 let currentPackageData = null;
 
 function updateSidePanelUI(packageData) {
+
+  console.log(packageData);
+
   if (!packageData || !packageData.package_id) return;
   const card = document.querySelector(`.package-item-card[data-package-id="${packageData.package_id}"]`);
   if (!card) return;
