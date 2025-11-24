@@ -143,7 +143,7 @@ class WordPressOrderWebhook(http.Controller):
             
             # gửi tin cho khách hàng
             
-            if order_status != 'cancelled':
+            if status != 'cancelled':
                 
                             # ===== GỬI ZNS XÁC NHẬN ĐƠN HÀNG CHO KHÁCH HÀNG =====
                 customer_phone = (data.get('customer_phone') or '').strip()
