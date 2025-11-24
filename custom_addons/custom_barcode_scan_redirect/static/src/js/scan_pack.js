@@ -390,7 +390,7 @@ let mediaRecorder = null;
 let isRecording = false;
 let chunkBusy = Promise.resolve();
 
-const MAX_DURATION_MS = 5 * 60 * 1000; // 5 phút
+const MAX_DURATION_MS = 15 * 60 * 1000; // 5 phút
 let stopTimer = null, countdownTimer = null, endAt = 0;
 let overlayCanvas = null, overlayCtx = null, drawRAF = 0;
 
