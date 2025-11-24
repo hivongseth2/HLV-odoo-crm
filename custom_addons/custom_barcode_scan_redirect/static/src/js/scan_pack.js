@@ -728,44 +728,72 @@ document.addEventListener('click', async function (e) {
 
 // ===================== PACKAGE EDIT MODAL FUNCTIONS =====================
 let currentPackageData = null;
-
 function updateSidePanelUI(packageData) {
-
-  console.log(packageData);
+  // console.log(packageData); // Debug nếu cần
 
   if (!packageData || !packageData.package_id) return;
   const card = document.querySelector(`.package-item-card[data-package-id="${packageData.package_id}"]`);
   if (!card) return;
 
-  // Update Qty Badge
+  // 1. Cập nhật Badge (Tổng số lượng)
   const badge = card.querySelector('.badge');
   if (badge) {
     const totalQty = (packageData.items || []).reduce((sum, item) => sum + (parseFloat(item.qty_done) || 0), 0);
-    badge.innerHTML = `
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 0 0 1-8 0"></path></svg>
-      ${totalQty}
-    `;
+
+    // Icon SVG cứng để tránh lỗi querySelector null
+    const iconSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>`;
+
+    badge.innerHTML = `${iconSvg} ${totalQty}`;
   }
 
-  // Update Preview List
+  // 2. Cập nhật Preview List (Gộp dòng & Format tên chuẩn)
   const preview = card.querySelector('.package-items-preview');
   if (preview) {
     if (!packageData.items || packageData.items.length === 0) {
       preview.innerHTML = `<div class="preview-empty" style="text-align: center; color: #adb5bd; font-style: italic; padding: 0.5rem;">Chưa có chi tiết sản phẩm</div>`;
     } else {
-      let html = '';
-      // Group items by product name to match the preview style if needed, 
-      // but listing items is also fine.
+
+      // --- A. GỘP CÁC DÒNG TRÙNG TÊN (AGGREGATION) ---
+      const aggregatedItems = {};
+
       packageData.items.forEach(item => {
-        if (item.qty_done > 0) {
-          html += `
-            <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
-              <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057;">${item.product_name}</span>
-              <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${item.qty_done}</span>
-            </div>
-          `;
+        const qty = parseFloat(item.qty_done) || 0;
+        if (qty <= 0) return;
+
+        // --- B. TẠO TÊN CHUẨN [BARCODE] TÊN ---
+        let displayName = item.product_name || '';
+
+        // Ưu tiên 1: Lấy barcode từ API nếu có
+        if (item.product_barcode && !displayName.startsWith('[')) {
+          displayName = `[${item.product_barcode}] ${displayName}`;
+        }
+        // Ưu tiên 2: Nếu API thiếu barcode, thử tìm "ké" từ danh sách bên trái (DOM)
+        else if (!displayName.startsWith('[')) {
+          const lineEl = document.querySelector(`#product_list .product-item[data-line-id="${item.move_line_id}"]`);
+          if (lineEl) {
+            const barcode = lineEl.getAttribute('data-barcode');
+            if (barcode) displayName = `[${barcode}] ${displayName}`;
+          }
+        }
+
+        // Cộng dồn số lượng
+        if (aggregatedItems[displayName]) {
+          aggregatedItems[displayName] += qty;
+        } else {
+          aggregatedItems[displayName] = qty;
         }
       });
+
+      // --- C. RENDER HTML ---
+      let html = '';
+      for (const [name, qty] of Object.entries(aggregatedItems)) {
+        html += `
+          <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center;">
+            <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057; font-size: 0.85rem;">${name}</span>
+            <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${qty}</span>
+          </div>
+        `;
+      }
       preview.innerHTML = html;
     }
   }
