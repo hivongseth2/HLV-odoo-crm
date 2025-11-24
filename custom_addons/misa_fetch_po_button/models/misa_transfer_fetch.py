@@ -109,7 +109,12 @@ class MisaTransferFetch(models.TransientModel):
             "pageIndex": 1, "pageSize": 100, "useSp": False, "view": 62,
             "summaryColumns": [5042], "loadMode": 2,
         }
+        
+        _logger.info("🔁payloade='%s' ", payload)
+        _logger.info("header----='%s' ", headers)
 
+
+        
         page_index = 1
         while True:
             payload["pageIndex"] = page_index
