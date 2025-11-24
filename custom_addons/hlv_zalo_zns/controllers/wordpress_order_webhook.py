@@ -143,79 +143,81 @@ class WordPressOrderWebhook(http.Controller):
             
             # gửi tin cho khách hàng
             
-                        # ===== GỬI ZNS XÁC NHẬN ĐƠN HÀNG CHO KHÁCH HÀNG =====
-            customer_phone = (data.get('customer_phone') or '').strip()
-            if customer_phone:
-                # Chuẩn hoá số điện thoại
-                msisdn = _vn_msisdn(customer_phone)
+            if order_status != 'cancelled':
+                
+                            # ===== GỬI ZNS XÁC NHẬN ĐƠN HÀNG CHO KHÁCH HÀNG =====
+                customer_phone = (data.get('customer_phone') or '').strip()
+                if customer_phone:
+                    # Chuẩn hoá số điện thoại
+                    msisdn = _vn_msisdn(customer_phone)
 
-                if msisdn:
-                    # Lấy config ZNS (bộ cấu hình hlv.zalo.zns)
-                    zns_config = request.env['hlv.zalo.zns'].sudo().search([], limit=1)
-                    if not zns_config:
-                        _logger.warning(
-                            "WordPress webhook - No ZNS config found, skip sending ZNS to customer (order_id: %s)",
-                            data.get('order_id', 'N/A'),
-                        )
-                    else:
-                        # Chọn template cho WordPress: ưu tiên wp_template_id, fallback template_id
-                        zns_template_id = zns_config.wp_template_id or zns_config.template_id
-                        if not zns_template_id:
+                    if msisdn:
+                        # Lấy config ZNS (bộ cấu hình hlv.zalo.zns)
+                        zns_config = request.env['hlv.zalo.zns'].sudo().search([], limit=1)
+                        if not zns_config:
                             _logger.warning(
-                                "WordPress webhook - ZNS config missing template_id/wp_template_id, skip ZNS to customer (order_id: %s)",
+                                "WordPress webhook - No ZNS config found, skip sending ZNS to customer (order_id: %s)",
                                 data.get('order_id', 'N/A'),
                             )
                         else:
-                            # Build template_data cho ZNS (tuỳ template của bạn mà map field)
-                            import re
-                            total_raw = (data.get('total') or '').strip()
-                            # Lấy số từ chuỗi "500,000₫" -> 500000
-                            digits = re.sub(r'\D', '', total_raw)
-                            price_value = int(digits) if digits else 0
-
-                            from odoo.fields import Date
-                            today_str = Date.context_today(request.env.user).strftime("%d/%m/%Y")
-
-                            zns_params = {
-                                "name": data.get('customer_name', ''),
-                                "order_code": data.get('order_id', ''),
-                                "price": price_value,
-                                "date": today_str,
-                                "status": "Đặt hàng thành công", 
-                                "phone_number": customer_phone,
-                                "address": data.get('customer_address', '') or '',
-                            }
-
-                            try:
-                                resp_zns = zns_config.send_zns(
-                                    msisdn,
-                                    zns_params,
-                                    template_id_override=zns_template_id,
-                                )
-                                _logger.info(
-                                    "WordPress webhook - Sent ZNS to customer %s (order_id: %s), resp=%s",
-                                    msisdn,
+                            # Chọn template cho WordPress: ưu tiên wp_template_id, fallback template_id
+                            zns_template_id = zns_config.wp_template_id or zns_config.template_id
+                            if not zns_template_id:
+                                _logger.warning(
+                                    "WordPress webhook - ZNS config missing template_id/wp_template_id, skip ZNS to customer (order_id: %s)",
                                     data.get('order_id', 'N/A'),
-                                    resp_zns,
                                 )
-                            except Exception as e:
-                                _logger.exception(
-                                    "WordPress webhook - Failed to send ZNS to customer %s (order_id: %s): %s",
-                                    msisdn,
-                                    data.get('order_id', 'N/A'),
-                                    e,
-                                )
+                            else:
+                                # Build template_data cho ZNS (tuỳ template của bạn mà map field)
+                                import re
+                                total_raw = (data.get('total') or '').strip()
+                                # Lấy số từ chuỗi "500,000₫" -> 500000
+                                digits = re.sub(r'\D', '', total_raw)
+                                price_value = int(digits) if digits else 0
+
+                                from odoo.fields import Date
+                                today_str = Date.context_today(request.env.user).strftime("%d/%m/%Y")
+
+                                zns_params = {
+                                    "name": data.get('customer_name', ''),
+                                    "order_code": data.get('order_id', ''),
+                                    "price": price_value,
+                                    "date": today_str,
+                                    "status": "Đặt hàng thành công", 
+                                    "phone_number": customer_phone,
+                                    "address": data.get('customer_address', '') or '',
+                                }
+
+                                try:
+                                    resp_zns = zns_config.send_zns(
+                                        msisdn,
+                                        zns_params,
+                                        template_id_override=zns_template_id,
+                                    )
+                                    _logger.info(
+                                        "WordPress webhook - Sent ZNS to customer %s (order_id: %s), resp=%s",
+                                        msisdn,
+                                        data.get('order_id', 'N/A'),
+                                        resp_zns,
+                                    )
+                                except Exception as e:
+                                    _logger.exception(
+                                        "WordPress webhook - Failed to send ZNS to customer %s (order_id: %s): %s",
+                                        msisdn,
+                                        data.get('order_id', 'N/A'),
+                                        e,
+                                    )
+                    else:
+                        _logger.warning(
+                            "WordPress webhook - Cannot normalize customer_phone '%s' (order_id: %s)",
+                            customer_phone,
+                            data.get('order_id', 'N/A'),
+                        )
                 else:
-                    _logger.warning(
-                        "WordPress webhook - Cannot normalize customer_phone '%s' (order_id: %s)",
-                        customer_phone,
+                    _logger.info(
+                        "WordPress webhook - No customer_phone provided, skip ZNS to customer (order_id: %s)",
                         data.get('order_id', 'N/A'),
                     )
-            else:
-                _logger.info(
-                    "WordPress webhook - No customer_phone provided, skip ZNS to customer (order_id: %s)",
-                    data.get('order_id', 'N/A'),
-                )
 
 
             # Lấy config qua request.env (KHÔNG dùng self.env trong controller)
