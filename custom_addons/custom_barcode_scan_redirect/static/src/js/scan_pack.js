@@ -729,7 +729,7 @@ document.addEventListener('click', async function (e) {
 // ===================== PACKAGE EDIT MODAL FUNCTIONS =====================
 let currentPackageData = null;
 function updateSidePanelUI(packageData) {
-  // console.log(packageData); // Debug nếu cần
+  console.log(packageData); // Debug nếu cần
 
   if (!packageData || !packageData.package_id) return;
   const card = document.querySelector(`.package-item-card[data-package-id="${packageData.package_id}"]`);
