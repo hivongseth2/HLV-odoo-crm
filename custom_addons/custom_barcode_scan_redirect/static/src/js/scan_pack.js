@@ -729,16 +729,16 @@ document.addEventListener('click', async function (e) {
 // ===================== PACKAGE EDIT MODAL FUNCTIONS =====================
 let currentPackageData = null;
 
+
 function updateSidePanelUI(packageData) {
   if (!packageData || !packageData.package_id) return;
   const card = document.querySelector(`.package-item-card[data-package-id="${packageData.package_id}"]`);
   if (!card) return;
 
-  // 1. Cập nhật Badge (Tổng số lượng)
+  // 1. Cập nhật Badge
   const badge = card.querySelector('.badge');
   if (badge) {
     const totalQty = (packageData.items || []).reduce((sum, item) => sum + (parseFloat(item.qty_done) || 0), 0);
-    // Icon SVG cứng
     const iconSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>`;
     badge.innerHTML = `${iconSvg} ${totalQty}`;
   }
@@ -750,38 +750,30 @@ function updateSidePanelUI(packageData) {
       preview.innerHTML = `<div class="preview-empty" style="text-align: center; color: #adb5bd; font-style: italic; padding: 0.5rem;">Chưa có chi tiết sản phẩm</div>`;
     } else {
 
-      // --- A. GỘP CÁC DÒNG TRÙNG TÊN (AGGREGATION) ---
       const aggregatedItems = {};
 
       packageData.items.forEach(item => {
         const qty = parseFloat(item.qty_done) || 0;
         if (qty <= 0) return;
 
-        // --- B. [FIX] LẤY DEFAULT CODE TỪ DOM BÊN TRÁI ---
-        // Mặc định lấy tên từ API
+        // --- CÁCH MỚI: LẤY MÃ TỪ DATA ATTRIBUTE (SẠCH & CHUẨN) ---
         let displayName = item.product_name || '';
 
-        // Tìm dòng tương ứng ở danh sách chính (cột trái)
+        // Tìm dòng sản phẩm bên trái để lấy data-default-code
         const lineEl = document.querySelector(`#product_list .product-item[data-line-id="${item.move_line_id}"]`);
 
         if (lineEl) {
-          // Odoo thường render [Default Code] Tên Sản Phẩm trong thẻ strong
-          const textOnScreen = lineEl.querySelector('strong')?.innerText.trim();
+          // Lấy mã nội bộ trực tiếp từ attribute chúng ta vừa thêm ở XML
+          const defaultCode = lineEl.getAttribute('data-default-code');
 
-          // Nếu trên màn hình có dạng [ABC]... thì lấy luôn cái đó (vì đó là default_code)
-          if (textOnScreen && textOnScreen.startsWith('[')) {
-            displayName = textOnScreen;
-          }
-          // Nếu trên màn hình không có [], nhưng API có trả về default_code (phòng hờ backend sửa)
-          else if (item.default_code || item.product_default_code) {
-            const code = item.default_code || item.product_default_code;
-            if (!displayName.startsWith('[')) {
-              displayName = `[${code}] ${displayName}`;
-            }
+          // Nếu có mã và tên chưa có [...] thì ghép vào
+          if (defaultCode && !displayName.startsWith('[')) {
+            displayName = `[${defaultCode}] ${displayName}`;
           }
         }
+        // Fallback: Nếu không tìm thấy DOM (hiếm), giữ nguyên tên gốc
 
-        // Cộng dồn số lượng vào map
+        // Cộng dồn
         if (aggregatedItems[displayName]) {
           aggregatedItems[displayName] += qty;
         } else {
@@ -789,7 +781,6 @@ function updateSidePanelUI(packageData) {
         }
       });
 
-      // --- C. RENDER HTML ---
       let html = '';
       for (const [name, qty] of Object.entries(aggregatedItems)) {
         html += `
@@ -803,6 +794,8 @@ function updateSidePanelUI(packageData) {
     }
   }
 }
+
+
 async function openPackageEditModal(event) {
   event.stopPropagation();
 
