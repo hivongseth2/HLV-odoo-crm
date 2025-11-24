@@ -134,6 +134,9 @@ class StockPicking(models.Model):
                 record.action_toggle_is_locked()
 
     def button_validate(self):
+        # Lưu thông tin để tạo phiếu bước 2 SAU khi đã validate và tách kiện
+        pickings_need_second_transfer = []
+
         for picking in self:
             # Auto chỉ khi: Internal + chưa tạo lần nào + không phải phiếu con + ĐÍCH là transit
             if (
@@ -166,9 +169,12 @@ class StockPicking(models.Model):
                 if not next_operation.default_location_dest_id:
                     raise UserError(_("Loại hoạt động '%s' chưa có Vị trí đích mặc định.") % next_operation.display_name)
 
-                picking.create_second_transfer_wizard(
-                    next_operation.default_location_dest_id, next_operation
-                )
+                # Lưu thông tin để tạo SAU khi đã validate
+                pickings_need_second_transfer.append({
+                    'picking': picking,
+                    'final_dest_location_id': next_operation.default_location_dest_id,
+                    'next_operation': next_operation,
+                })
 
             # Ràng buộc: phiếu 2 chỉ chứa SP có trong phiếu nguồn
             if picking.source_transfer_id:
@@ -181,4 +187,19 @@ class StockPicking(models.Model):
                             _("Không thể xác nhận phiếu vì sản phẩm %s không có trong phiếu nguồn.")
                             % move.product_id.display_name
                         )
-        return super().button_validate()
+
+        # Gọi validate gốc - nơi Odoo xử lý backorder/tách kiện
+        result = super().button_validate()
+
+        # SAU KHI đã validate và tách kiện (nếu có), mới tạo phiếu bước 2
+        for info in pickings_need_second_transfer:
+            picking = info['picking']
+            # Chỉ tạo phiếu bước 2 cho phiếu đã validate (state = done)
+            # Nếu có tách kiện, picking gốc là phiếu đã validate, backorder là phiếu chờ
+            if picking.state == 'done':
+                picking.create_second_transfer_wizard(
+                    info['final_dest_location_id'],
+                    info['next_operation']
+                )
+
+        return result
