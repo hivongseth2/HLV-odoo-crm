@@ -593,7 +593,8 @@ function createModal(title, content, buttons = []) {
 }
 // ============================================================
 // HÀM DỌN DẸP UI KHI VỪA F5 (GỘP DÒNG & FORMAT TÊN)
-// ============================================================
+
+
 function optimizePackageUI() {
   const packageCards = document.querySelectorAll('.package-item-card');
 
@@ -615,23 +616,30 @@ function optimizePackageUI() {
         return;
       }
 
-      // [FIX NAME] Nếu tên chưa có Barcode, thử tìm trong danh sách chính để ghép vào
+      // [FIX NAME] Nếu tên chưa có [Mã], tìm trong danh sách chính để lấy Default Code ghép vào
       if (!name.startsWith('[')) {
-        // Tìm dòng sản phẩm bên trái có tên khớp (tương đối)
+        // Tìm dòng sản phẩm bên trái có tên khớp
         const allMainItems = document.querySelectorAll('#product_list .product-item');
         for (let mainItem of allMainItems) {
           const mainName = mainItem.querySelector('strong')?.innerText.trim() || '';
-          if (mainName === name || mainName.includes(name) || name.includes(mainName)) {
-            const barcode = mainItem.getAttribute('data-barcode');
-            if (barcode) {
-              name = `[${barcode}] ${mainName}`; // Cập nhật tên chuẩn
+
+          // So sánh tên (tương đối)
+          if (mainName.includes(name) || name.includes(mainName)) {
+            // Ưu tiên lấy Default Code (đã thêm ở bước XML), nếu không có thì lấy Barcode
+            const code = mainItem.getAttribute('data-default-code') || mainItem.getAttribute('data-barcode');
+
+            if (code) {
+              name = `[${code}] ${name}`; // Cập nhật tên chuẩn format
+            } else if (mainName.startsWith('[')) {
+              // Fallback: Nếu không lấy được attribute nhưng tên bên trái có dạng [ABC].. thì lấy luôn tên bên trái
+              name = mainName;
             }
             break;
           }
         }
       }
 
-      // Gom nhóm
+      // Gom nhóm (Cộng dồn số lượng nếu trùng tên sau khi đã fix)
       if (aggregated[name]) {
         aggregated[name].qty += qty;
         aggregated[name].elementsToRemove.push(item); // Đánh dấu để xóa dòng thừa
@@ -646,27 +654,32 @@ function optimizePackageUI() {
 
     // 2. Cập nhật lại DOM sau khi gom
     for (const [name, data] of Object.entries(aggregated)) {
-      // Xóa các dòng thừa
+      // Xóa các dòng thừa (các dòng bị tách lẻ)
       data.elementsToRemove.forEach(el => el.remove());
 
-      // Cập nhật dòng chính (Dòng đầu tiên tìm thấy)
+      // Cập nhật dòng chính (Dòng giữ lại)
       const mainEl = data.mainElement;
-      console.log('654', mainEl);
-
       const nameEl = mainEl.querySelector('.preview-item-name');
       const qtyEl = mainEl.querySelector('.preview-item-qty');
 
-      // Update tên (đã có barcode)
+      // Update Tên (đã có mã)
       nameEl.innerText = name;
-      nameEl.style.fontSize = "0.85rem"; // Đảm bảo font size đẹp
       nameEl.style.color = "#495057";
+      nameEl.style.fontSize = "0.85rem";
 
-      // Update số lượng (Format: xSố, màu xám)
+      // Update Số lượng (Format chuẩn: xSố, màu xám #f1f3f5)
       qtyEl.innerText = `x${data.qty}`;
       qtyEl.style.cssText = "font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;";
+
+      // Reset lại hiệu ứng flex để đảm bảo thẳng hàng
+      mainEl.style.display = 'flex';
+      mainEl.style.justifyContent = 'space-between';
+      mainEl.style.marginBottom = '0.35rem';
+      mainEl.style.alignItems = 'center';
     }
   });
 }
+
 // ===================== SIBLING PACK ACTIONS (COMMENTED OUT SPLIT FUNCTIONALITY) =====================
 document.addEventListener('click', async function (e) {
   const unpackBtn = e.target.closest('.btn-unpack');
