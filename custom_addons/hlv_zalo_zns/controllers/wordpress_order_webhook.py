@@ -142,8 +142,8 @@ class WordPressOrderWebhook(http.Controller):
             # access_token = token_manager._get_shared_token()
             
             # gửi tin cho khách hàng
-            
-            if status != 'cancelled':
+            order_status = str(data.get('order_status', '')).lower()
+            if order_status != 'cancelled':
                 
                             # ===== GỬI ZNS XÁC NHẬN ĐƠN HÀNG CHO KHÁCH HÀNG =====
                 customer_phone = (data.get('customer_phone') or '').strip()
