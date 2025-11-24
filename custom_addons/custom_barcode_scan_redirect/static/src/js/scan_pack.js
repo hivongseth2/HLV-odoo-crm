@@ -651,6 +651,8 @@ function optimizePackageUI() {
 
       // Cập nhật dòng chính (Dòng đầu tiên tìm thấy)
       const mainEl = data.mainElement;
+      console.log('654', mainEl);
+
       const nameEl = mainEl.querySelector('.preview-item-name');
       const qtyEl = mainEl.querySelector('.preview-item-qty');
 
@@ -780,6 +782,10 @@ function updateSidePanelUI(packageData) {
           aggregatedItems[displayName] = qty;
         }
       });
+
+
+      console.log('786', aggregatedItems);
+
 
       let html = '';
       for (const [name, qty] of Object.entries(aggregatedItems)) {
@@ -1531,17 +1537,23 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
           }
         }
 
+
+
+
         if (foundRow) {
           // Nếu có rồi: Cộng dồn số lượng
           const qtyEl = foundRow.querySelector('.preview-item-qty');
           const oldQty = parseFloat(qtyEl.innerText.replace('x', '')) || 0;
           qtyEl.innerText = `x${oldQty + item.qty}`;
+          console.log('1541', foundRow);
 
           // Nháy màu
           foundRow.style.transition = 'background 0.3s';
           foundRow.style.backgroundColor = '#fff3cd';
           setTimeout(() => foundRow.style.backgroundColor = 'transparent', 500);
         } else {
+          console.log('1555', name);
+
           // Nếu chưa có: Thêm mới lên đầu
           const newHtml = `
               <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center; animation: fadeIn 0.5s;">
