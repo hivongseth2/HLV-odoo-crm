@@ -1236,18 +1236,24 @@ async function savePackageChanges() {
 //   toast.info('Tách gói tạm thời chưa khả dụng.', { ms: 2000 });
 // }
 function openTransferModalForItem(moveLineId, currentQty, productName) {
-  // Lấy danh sách gói từ giao diện
+  // Lấy danh sách các gói khác để chuyển sang
+  // const packs = (currentPackageData && currentPackageData.other_packages) || [];
   const packs = [];
   const currentPackId = currentPackageData.package_id;
 
   document.querySelectorAll('.package-item-card').forEach(card => {
     const pId = parseInt(card.dataset.packageId);
+
+    // Chỉ lấy gói khác với gói hiện tại (không chuyển cho chính nó)
     if (pId && pId !== currentPackId) {
       const pName = card.querySelector('.package-item-name')?.innerText.trim() || `Pack ${pId}`;
-      packs.push({ package_id: pId, package_name: pName });
+      packs.push({
+        package_id: pId,
+        package_name: pName
+      });
     }
   });
-
+  // Validate: Nếu không có gói nào khác thì báo lỗi
   if (!packs.length) {
     toast.warn('Không có gói nào khác để chuyển sang.');
     return;
@@ -1275,6 +1281,7 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
     </div>
   `;
 
+  // Gọi Modal
   createModal('↔️ Chuyển sản phẩm', content, [
     { label: 'Hủy', color: '#6b7280', onclick: () => { } },
     {
@@ -1283,6 +1290,7 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
         const targetPackId = targetPackSelect.value;
         const qty = parseFloat(document.getElementById('transferQtyInput').value);
 
+        // Validate Input
         if (!targetPackId) { toast.warn('Vui lòng chọn gói đích'); return; }
         if (!qty || qty <= 0) { toast.warn('Vui lòng nhập số lượng hợp lệ'); return; }
         if (qty > currentQty) { toast.warn(`Số lượng không được vượt quá ${currentQty}`); return; }
@@ -1290,11 +1298,13 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
         try {
           const pickingId = parseInt(window.location.pathname.split("/").pop());
 
+          // Gọi API Chuyển
           const res = await fetch('/pack_scan/transfer_item_between_packs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             body: JSON.stringify({
-              jsonrpc: '2.0', method: 'call',
+              jsonrpc: '2.0',
+              method: 'call',
               params: {
                 picking_id: pickingId,
                 source_package_id: currentPackageData.package_id,
@@ -1307,117 +1317,107 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
 
           const response = await res.json();
           const result = response.result || response;
-          if (result?.error) { toast.error(result.error); return; }
+
+          if (result?.error) {
+            toast.error(result.error);
+            return;
+          }
 
           toast.success('Đã chuyển sản phẩm!', { ms: 1000 });
 
-          // Helper lấy tên chuẩn
-          const getDisplayName = () => {
-            let finalName = productName;
-            let lineEl = document.querySelector(`#product_list .product-item[data-line-id="${moveLineId}"]`);
-            if (!lineEl) {
-              const allItems = document.querySelectorAll('#product_list .product-item');
-              for (let item of allItems) {
-                if (item.querySelector('strong')?.innerText.includes(productName)) {
-                  lineEl = item; break;
-                }
-              }
-            }
-            if (lineEl) {
-              const barcode = lineEl.getAttribute('data-barcode') || '';
-              const rawName = lineEl.querySelector('strong')?.innerText.trim() || productName;
-              if (barcode && !rawName.startsWith('[')) {
-                finalName = `[${barcode}] ${rawName}`;
-              } else {
-                finalName = rawName;
-              }
-            }
-            return finalName;
-          };
-
-          const displayName = getDisplayName();
-
-          // [FIX] Khai báo chuỗi SVG cố định để tránh lỗi null khi querySelector
-          const boxIconSvg = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>`;
-
-          // 1. CẬP NHẬT GÓI ĐÍCH (TARGET)
+          // ============================================================
+          // [FIX UI] CẬP NHẬT GIAO DIỆN GÓI ĐÍCH (TARGET PACKAGE)
+          // ============================================================
           const targetCard = document.querySelector(`.package-item-card[data-package-id="${targetPackId}"]`);
+
           if (targetCard) {
-            // Update Badge
+            // 1. Cập nhật Badge (Tổng số lượng bên ngoài thẻ)
             const badge = targetCard.querySelector('.badge');
             if (badge) {
               const currentTotal = parseFloat(badge.textContent.trim()) || 0;
-              // [FIX] Dùng boxIconSvg thay vì querySelector
-              badge.innerHTML = `${boxIconSvg} ${currentTotal + qty}`;
+              badge.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+                ${currentTotal + qty}
+              `;
             }
 
-            // Update List Items
+            // 2. Xử lý danh sách sản phẩm Preview (Gộp dòng & Fix tên & Style)
             const previewContainer = targetCard.querySelector('.package-items-preview');
             if (previewContainer) {
+              // Xóa chữ "empty" nếu có
               const emptyEl = previewContainer.querySelector('.preview-empty');
               if (emptyEl) emptyEl.remove();
 
-              let found = false;
-              for (let item of previewContainer.querySelectorAll('.preview-item')) {
+              // --- A. TẠO TÊN CHUẨN: [Barcode] Tên ---
+              let finalName = productName;
+              // Tìm lại dòng gốc trong danh sách chính để lấy barcode
+              const lineEl = document.querySelector(`#product_list .product-item[data-line-id="${moveLineId}"]`);
+              if (lineEl) {
+                const barcode = lineEl.getAttribute('data-barcode') || '';
+                const rawName = lineEl.querySelector('strong')?.innerText.trim() || productName;
+
+                // Nếu tên chưa có [...] và có barcode thì ghép vào
+                if (barcode && !rawName.startsWith('[')) {
+                  finalName = `[${barcode}] ${rawName}`;
+                } else {
+                  finalName = rawName;
+                }
+              }
+
+              // --- B. KIỂM TRA XEM ĐÃ CÓ DÒNG NÀY CHƯA ĐỂ GỘP ---
+              let foundItem = null;
+              const existingItems = previewContainer.querySelectorAll('.preview-item');
+
+              for (let item of existingItems) {
                 const nameEl = item.querySelector('.preview-item-name');
-                if (nameEl.innerText.includes(productName) || displayName.includes(nameEl.innerText)) {
-                  const qtyEl = item.querySelector('.preview-item-qty');
-                  const oldQ = parseFloat(qtyEl.innerText.replace('x', '')) || 0;
-                  qtyEl.innerText = `x${oldQ + qty}`;
-                  nameEl.innerText = displayName;
-                  found = true;
-                  item.style.backgroundColor = '#e7f5ff';
-                  setTimeout(() => item.style.backgroundColor = 'transparent', 500);
+                const currentName = nameEl.innerText;
+
+                // So sánh tương đối để tìm dòng trùng (bất kể có mã hay chưa)
+                if (currentName.includes(productName) || finalName.includes(currentName)) {
+                  foundItem = item;
                   break;
                 }
               }
 
-              if (!found) {
+              if (foundItem) {
+                // === TRƯỜNG HỢP 1: ĐÃ CÓ -> CỘNG DỒN SỐ LƯỢNG ===
+                const qtyEl = foundItem.querySelector('.preview-item-qty');
+                // Lấy số hiện tại (bỏ chữ x đi)
+                const currentQtyVal = parseFloat(qtyEl.innerText.toLowerCase().replace('x', '')) || 0;
+                const newTotalQty = currentQtyVal + qty;
+
+                // Cập nhật số lượng mới (Format: xSố)
+                qtyEl.innerText = `x${newTotalQty}`;
+
+                // Cập nhật luôn cái tên chuẩn (có barcode) cho dòng cũ
+                const nameEl = foundItem.querySelector('.preview-item-name');
+                nameEl.innerText = finalName;
+
+                // Hiệu ứng nháy dòng đó (Vàng nhạt)
+                foundItem.style.transition = 'background 0.3s';
+                foundItem.style.backgroundColor = '#fff3cd';
+                setTimeout(() => foundItem.style.backgroundColor = 'transparent', 500);
+
+              } else {
+                // === TRƯỜNG HỢP 2: CHƯA CÓ -> THÊM DÒNG MỚI (PREPEND) ===
                 const newItemHtml = `
                     <div class="preview-item" style="display: flex; justify-content: space-between; margin-bottom: 0.35rem; align-items: center; animation: fadeIn 0.5s;">
-                      <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057; font-size: 0.85rem;">${displayName}</span>
+                      <span class="preview-item-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; color: #495057; font-size: 0.85rem;">${finalName}</span>
                       <span class="preview-item-qty" style="font-weight: 600; color: #343a40; background: #f1f3f5; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.75rem;">x${qty}</span>
-                    </div>`;
+                    </div>
+                   `;
                 previewContainer.insertAdjacentHTML('afterbegin', newItemHtml);
               }
             }
+
+            // Hiệu ứng nháy sáng thẻ Package Đích
+            targetCard.style.transition = 'background-color 0.5s';
+            targetCard.style.backgroundColor = '#e7f5ff';
+            setTimeout(() => targetCard.style.backgroundColor = 'white', 1000);
           }
 
-          // 2. CẬP NHẬT GÓI NGUỒN (SOURCE)
-          const sourceCard = document.querySelector(`.package-item-card[data-package-id="${currentPackageData.package_id}"]`);
-          if (sourceCard) {
-            // Update Badge
-            const badge = sourceCard.querySelector('.badge');
-            if (badge) {
-              const currentTotal = parseFloat(badge.textContent.trim()) || 0;
-              // [FIX] Dùng boxIconSvg thay vì querySelector
-              badge.innerHTML = `${boxIconSvg} ${Math.max(0, currentTotal - qty)}`;
-            }
-
-            // Update List Items
-            const previewContainer = sourceCard.querySelector('.package-items-preview');
-            if (previewContainer) {
-              for (let item of previewContainer.querySelectorAll('.preview-item')) {
-                const nameEl = item.querySelector('.preview-item-name');
-                if (nameEl.innerText.includes(productName) || displayName.includes(nameEl.innerText)) {
-                  const qtyEl = item.querySelector('.preview-item-qty');
-                  const oldQ = parseFloat(qtyEl.innerText.replace('x', '')) || 0;
-                  const newQ = oldQ - qty;
-
-                  if (newQ <= 0) {
-                    item.remove();
-                  } else {
-                    qtyEl.innerText = `x${newQ}`;
-                    nameEl.innerText = displayName;
-                    item.style.backgroundColor = '#fff5f5';
-                    setTimeout(() => item.style.backgroundColor = 'transparent', 500);
-                  }
-                  break;
-                }
-              }
-            }
-          }
-
+          // --- 3. Reload Modal Gói Nguồn (Source Package) ---
+          // Để cập nhật lại số lượng đã bị trừ đi ở gói hiện tại
           openPackageEditModal({
             currentTarget: { dataset: { packageId: currentPackageData.package_id } },
             stopPropagation: () => { }
@@ -1430,6 +1430,7 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
     }
   ]);
 }
+
 function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
   // 1. Tìm list container
   let list = document.querySelector('.panel-packages-list');
