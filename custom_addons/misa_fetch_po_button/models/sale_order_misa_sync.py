@@ -608,8 +608,6 @@ class SaleOrder(models.Model):
         data = self._misa_fetch_order()
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
-        
-
          # === THÊM MỚI: Kiểm tra trạng thái "Từ chối ghi" ===
         revenue_status_id = data.get("RevenueStatusID")
         revenue_status_text = (data.get("RevenueStatusIDText") or "").strip().lower()
@@ -689,56 +687,52 @@ class SaleOrder(models.Model):
         if self.invoice_ids.filtered(lambda m: m.state == 'posted'):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
 
-        # ===== XÁC ĐỊNH KHO DỰA TRÊN e_accounts =====
-        # Khách hàng thuộc e_accounts → TSN/Stock
-        # Còn lại → KBC/Tồn kho
-        e_accounts = {
-            "TIKTOK HOÀNG LONG VŨ",
-            "SHOPEE TRANG MILWAUKEE",
-            "SHOPEE TRANG TBCN HLV",
-            "SHOPEE TRANG DEWALT STANLEY",
-            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE STANLEY",
-            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE",
-            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
-            "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK",
-            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
-            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
-            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
-            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
-            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
-            "TOOL DEWALT",
-            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY"
+        # Lưu info trước khi xoá
+        # Ưu tiên lấy warehouse từ picking đầu tiên (giải quyết vấn đề combo không có kho ở dòng cha)
+        # old_wh = self.warehouse_id
+        # if not old_wh and self.picking_ids:
+        #     # Nếu SO không có warehouse, lấy từ picking đầu tiên
+        #     first_pick = self.picking_ids.filtered(lambda p: p.picking_type_id and p.picking_type_id.warehouse_id)[:1]
+        #     if first_pick:
+        #         old_wh = first_pick.picking_type_id.warehouse_id
+        # order_no_fallback = self.name
+        
+                # ===== Xác định warehouse theo dòng đầu tiên có StockIDText =====
+        stock_mapping = {
+            "HCM": "TSN/Stock",
+            "BENCAM": "KBC/Tồn kho",
+            "HIENDUC": "KHD/Tồn kho",
+            "HCM_SHOWROOM": "TSNSR/Stock",
         }
-        
-        # Lấy tên khách hàng từ data MISA trước tiên, nếu không có lấy từ partner hiện tại
-        partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText") or ""
-        customer_name = partner_name or self.partner_id.name or ""
-        
-        if customer_name in e_accounts:
-            location_name = "TSN/Stock"
+
+        old_wh = None
+        stock_id = None
+        zns = False
+
+
+        # Tìm dòng đầu tiên có StockIDText hợp lệ
+        for l in (lines or []):
+            sid = (l.get("StockIDText") or "").strip()
+            if sid:
+                stock_id = sid
+                break
+
+        if stock_id and stock_id in stock_mapping:
+            location_name = stock_mapping[stock_id]
+            location = self.env['stock.location'].search([
+                ('complete_name', '=', location_name)
+            ], limit=1)
+
+            if location and location.warehouse_id:
+                old_wh = location.warehouse_id
+                _logger.info("🏭 Lấy warehouse từ dòng MISA: %s → %s", stock_id, old_wh.name)
+            else:
+                _logger.warning("⚠️ Không tìm thấy location/warehouse cho %s", location_name)
         else:
-            location_name = "KBC/Tồn kho"
-        
-        location = self.env['stock.location'].search([
-            ('complete_name', '=', location_name)
-        ], limit=1)
-        
-        if not location:
-            raise UserError(_("❌ Không tìm thấy location '%s' cho khách hàng '%s'") % (location_name, customer_name))
-        
-        old_wh = self.env['stock.warehouse'].search([
-            ('view_location_id', '=', location.location_id.id)
-        ], limit=1)
-        
-        if not old_wh:
-            raise UserError(_("❌ Không tìm thấy warehouse cho location '%s'") % location_name)
-        
-        _logger.info("✅ Hard sync SO %s: Khách hàng '%s' → Location '%s' (Warehouse: %s)", 
-                    self.name, customer_name, location_name, old_wh.name)
-        
-        zns = bool(data.get("CustomField23", False))
+            _logger.warning("⚠️ Không xác định được StockIDText hợp lệ, fallback warehouse None")
 
         order_no_fallback = self.name
+
 
         # ===== 3) HỦY PICKINGS CHƯA DONE (unreserve -> cancel move -> cancel picking) =====
         picks_open = self.picking_ids.sudo().filtered(lambda p: p.state not in ('done', 'cancel'))
@@ -844,7 +838,7 @@ class SaleOrder(models.Model):
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
         delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
-        shipping_addr = data.get("BillingAddress") or ''
+        shipping_addr = data.get("ShippingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
 
         # Fetch OwnerIDText and SaleOrderDate from MISA
@@ -869,9 +863,6 @@ class SaleOrder(models.Model):
             
         zns = bool(data.get("CustomField23", False))
 
-        # Get delivery tracking number (prioritize OtherSysOrderCode over DeliveryOrderNumber)
-        delivery_order_number = (data.get('OtherSysOrderCode') or data.get('DeliveryOrderNumber') or '').strip()
-
         vals_create = {
             'name': order_no,
             'partner_id': partner.id,
@@ -880,14 +871,7 @@ class SaleOrder(models.Model):
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'partner_shipping_id': shipping_id,
             'x_studio_zns': zns
-
         }
-        
-        # Add tracking number from MISA if available
-        if delivery_order_number:
-            vals_create['tracking_number'] = delivery_order_number
-            _logger.info(f"📦 Setting tracking_number: {delivery_order_number} for recreated order {order_no}")
-        
         if book_date:
             from dateutil.parser import parse as dtparse
             try:
