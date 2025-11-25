@@ -6,7 +6,7 @@ _logger = logging.getLogger(__name__)
 
 class ZaloSheetWebhook(http.Controller):
 
-    @http.route('/hlv_zalo/webhook/sheet_append', type='json', auth='public', methods=['POST'], csrf=False)
+    @http.route('/hlv_zalo/webhook/sheet_append', type='http', auth='public', methods=['POST'], csrf=False,cors='*')
     def receive_sheet_data(self, **kwargs):
         """
         API nhận dữ liệu từ Google Sheet và gửi Zalo
