@@ -347,11 +347,11 @@ class WordPressOrderWebhook(http.Controller):
         # Header theo trạng thái đơn
         if status == 'cancelled':
             # === ĐƠN HỦY ===
-            message = "🆘🆘🆘 HỦY ĐƠN HÀNG (hoanglongvu.com)\n"
+            message = "🆘🆘🆘 HỦY ĐƠN HÀNG WEB\n"
             if cancel_reason:
                 message += f"🔥LÝ DO: {cancel_reason}\n\n"
             else:
-                message += "🔥LÝ DO: (không có ghi chú)\n"
+                message += "🔥LÝ DO: (không có ghi chú)\n\n"
         else:
             # === ĐƠN BÌNH THƯỜNG (MỚI / ĐANG XỬ LÝ / HOÀN THÀNH) ===
             message = "🌐 THÔNG BÁO CÓ ĐƠN HÀNG WEB\n \n"
@@ -382,7 +382,7 @@ class WordPressOrderWebhook(http.Controller):
 
         # 💰 Tổng
         if data.get('total'):
-            message += f"💰 Tổng: {data['total']}"
+            message += f"- Tổng: {data['total']}"
 
         return message
 

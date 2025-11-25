@@ -177,7 +177,7 @@ class StockPicking(models.Model):
         # Build message
         message = f"🔔 ĐƠN HÀNG {action_type}\n"
         message += f"  • Số đơn hàng: {order_code}\n"
-        message += f"  • Số phiếu {label_type} kho Odoo: {self.name}\n"
+        # message += f"  • Số phiếu {label_type} kho Odoo: {self.name}\n"
         message += f"  • Kho {label_type}: {warehouse_name}\n"
         message += f"  • Trạng thái: {label_type} {completion_status}\n"
         
