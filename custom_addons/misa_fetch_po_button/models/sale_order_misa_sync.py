@@ -168,10 +168,11 @@ class SaleOrder(models.Model):
         # 1) Lấy header từ FormDataNew
         data = self._misa_fetch_order()
         # Một số key phổ biến cần dùng (tùy chỉnh theo thực tế):
-        # DeliveryOrderNumber, SaleOrderNo, ListOrderNumber, AccountIDText, BookDate, DeliveryDate, BillingAddress, v.v.
+        # OtherSysOrderCode, DeliveryOrderNumber, SaleOrderNo, ListOrderNumber, AccountIDText, BookDate, DeliveryDate, BillingAddress, v.v.
         partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText")
         order_no     = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo")
-        delivery_no  = data.get("DeliveryOrderNumber") or order_no
+        # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
+        delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress")  # hoặc gọi API địa chỉ chi tiết của bạn
         revenue_status_id = data.get("RevenueStatusID")
@@ -826,7 +827,8 @@ class SaleOrder(models.Model):
         partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         partner       = odoo_utils._get_or_create_partner(partner_name)
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
-        delivery_no   = data.get("DeliveryOrderNumber") or order_no
+        # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
+        delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("ShippingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
