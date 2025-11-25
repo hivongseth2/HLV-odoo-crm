@@ -351,10 +351,10 @@ class WordPressOrderWebhook(http.Controller):
             if cancel_reason:
                 message += f"🔥LÝ DO: {cancel_reason}\n\n"
             else:
-                message += "🔥LÝ DO: (không có ghi chú)\n\n"
+                message += "🔥LÝ DO: (không có ghi chú)\n"
         else:
             # === ĐƠN BÌNH THƯỜNG (MỚI / ĐANG XỬ LÝ / HOÀN THÀNH) ===
-            message = "Đơn hàng mới (hoanglongvu.com)\n"
+            message = "🌐 THÔNG BÁO CÓ ĐƠN HÀNG WEB\n \n"
 
         # 👤 Khách hàng
         message += f"👤 Khách hàng: {data.get('customer_name', 'Không rõ')}\n"
@@ -366,19 +366,19 @@ class WordPressOrderWebhook(http.Controller):
             for product in products:
                 name = product.get('name', 'Unknown')
                 quantity = product.get('quantity', 0)
-                message += f"• {name}    SL: {quantity}\n"
+                message += f"  • {name}    SL: {quantity}\n"
 
-        # 🏠 Địa chỉ
-        if data.get('customer_address'):
-            message += f"🏠 Địa chỉ: {data['customer_address']}\n"
+        # # 🏠 Địa chỉ
+        # if data.get('customer_address'):
+        #     message += f"🏠 Địa chỉ: {data['customer_address']}\n"
 
-        # 📞 SĐT
-        if data.get('customer_phone'):
-            message += f"📞 SĐT: {data['customer_phone']}\n"
+        # # 📞 SĐT
+        # if data.get('customer_phone'):
+        #     message += f"📞 SĐT: {data['customer_phone']}\n"
 
-        # 📧 Email
-        if data.get('customer_email'):
-            message += f"📧 Email: {data['customer_email']}\n"
+        # # 📧 Email
+        # if data.get('customer_email'):
+        #     message += f"📧 Email: {data['customer_email']}\n"
 
         # 💰 Tổng
         if data.get('total'):

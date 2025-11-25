@@ -151,7 +151,7 @@ class StockPicking(models.Model):
         
         # Xác định loại đơn
         if self.picking_type_code == 'outgoing':
-            action_type = 'XUẤT'
+            action_type = 'XUẤT KHO GIAO KHÁCH'
             label_type = 'xuất'
         elif self.picking_type_code == 'incoming':
             action_type = 'NHẬP'
@@ -175,7 +175,7 @@ class StockPicking(models.Model):
             _logger.debug("Picking %s warehouse: %s", self.name, warehouse_name)
         
         # Build message
-        message = f"🔔 THÔNG BÁO ĐƠN HÀNG {action_type}\n"
+        message = f"🔔 ĐƠN HÀNG {action_type}\n"
         message += f"  • Số đơn hàng: {order_code}\n"
         message += f"  • Số phiếu {label_type} kho Odoo: {self.name}\n"
         message += f"  • Kho {label_type}: {warehouse_name}\n"
