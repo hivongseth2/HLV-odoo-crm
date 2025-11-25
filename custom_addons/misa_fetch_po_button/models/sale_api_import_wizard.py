@@ -780,8 +780,31 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.info("⏭️ SO %s là 'Bản nháp' và không thuộc e_accounts => bỏ qua", order.get("SaleOrderNo"))
                     continue
 
-                # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-                pick_code = order.get('OtherSysOrderCode') or order.get('DeliveryOrderNumber')
+                # --- Lấy chi tiết dòng hàng ---
+                order_id = order.get("ID")
+                misa_id_str = str(order_id) if order_id else False  # ### NEW
+                payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
+                product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)
+
+                shipping_address_str = misa_utils.get_shipping_address(
+                    sale_order_id=order_id,
+                    order_ref=order.get("SaleOrderNo"),
+                    token=crm_token
+                )
+                # NEW: fetch OwnerIDText, SaleOrderDate, OtherSysOrderCode, DeliveryOrderNumber from FormDataNew
+                owner_date = {}
+                try:
+                    owner_date = misa_utils.get_saleorder_owner_and_date(order_id, sale_headers) or {}
+                except Exception as _e:
+                    _logger.warning("Không lấy được thông tin từ FormDataNew cho SO=%s: %s", order_id, _e)
+
+                # Ưu tiên lấy OtherSysOrderCode từ FormDataNew, fallback về DeliveryOrderNumber từ FormDataNew, rồi mới tới Grid
+                pick_code = (
+                    owner_date.get('other_sys_order_code')
+                    or owner_date.get('delivery_order_number')
+                    or order.get('OtherSysOrderCode')
+                    or order.get('DeliveryOrderNumber')
+                )
                 if customer_name in e_accounts and not pick_code:
                     continue
 
@@ -789,24 +812,6 @@ class SaleApiImportWizard(models.TransientModel):
                     base_pick_name = pick_code
                 else:
                     base_pick_name = order.get('SaleOrderNo')
-
-                # --- Lấy chi tiết dòng hàng ---
-                order_id = order.get("ID")
-                misa_id_str = str(order_id) if order_id else False  # ### NEW
-                payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
-                product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)             
-                
-                shipping_address_str = misa_utils.get_shipping_address(
-                    sale_order_id=order_id,
-                    order_ref=order.get("SaleOrderNo"),
-                    token=crm_token
-                )
-                # NEW: fetch OwnerIDText and SaleOrderDate from FormDataNew
-                owner_date = {}
-                try:
-                    owner_date = misa_utils.get_saleorder_owner_and_date(order_id, sale_headers) or {}
-                except Exception as _e:
-                    _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", order_id, _e)
                 # tỉnh/thành để map state/city
                 province_text = (
                     order.get("ShippingProvinceIDCustomText")
@@ -925,8 +930,14 @@ class SaleApiImportWizard(models.TransientModel):
                         if owner_date.get('misa_delivery'):
                             upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
                         # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
-                        # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-                        delivery_order_number = (order.get('OtherSysOrderCode') or order.get('DeliveryOrderNumber') or '').strip()
+                        # Ưu tiên lấy từ FormDataNew (OtherSysOrderCode → DeliveryOrderNumber), fallback về Grid
+                        delivery_order_number = (
+                            owner_date.get('other_sys_order_code')
+                            or owner_date.get('delivery_order_number')
+                            or order.get('OtherSysOrderCode')
+                            or order.get('DeliveryOrderNumber')
+                            or ''
+                        ).strip()
                         if delivery_order_number and not existing_order.tracking_number:
                             upd['tracking_number'] = delivery_order_number
                             _logger.info(f"📦 Updating tracking_number: {delivery_order_number} for existing order {order_ref}")
@@ -939,8 +950,14 @@ class SaleApiImportWizard(models.TransientModel):
 
                 group_total = sum(line_subtotal(l) for l in grouped_lines)
 
-                # Get delivery tracking number (prioritize OtherSysOrderCode over DeliveryOrderNumber)
-                delivery_order_number = (order.get('OtherSysOrderCode') or order.get('DeliveryOrderNumber') or '').strip()
+                # Get delivery tracking number (prioritize FormDataNew: OtherSysOrderCode → DeliveryOrderNumber, fallback to Grid)
+                delivery_order_number = (
+                    owner_date.get('other_sys_order_code')
+                    or owner_date.get('delivery_order_number')
+                    or order.get('OtherSysOrderCode')
+                    or order.get('DeliveryOrderNumber')
+                    or ''
+                ).strip()
                 
                 sale_vals = {
                     'name': order_ref,
