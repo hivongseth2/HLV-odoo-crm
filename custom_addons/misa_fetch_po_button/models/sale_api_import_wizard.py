@@ -780,11 +780,13 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.info("⏭️ SO %s là 'Bản nháp' và không thuộc e_accounts => bỏ qua", order.get("SaleOrderNo"))
                     continue
 
-                if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
+                # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
+                pick_code = order.get('OtherSysOrderCode') or order.get('DeliveryOrderNumber')
+                if customer_name in e_accounts and not pick_code:
                     continue
 
                 if customer_name in e_accounts:
-                    base_pick_name = order.get('DeliveryOrderNumber')
+                    base_pick_name = pick_code
                 else:
                     base_pick_name = order.get('SaleOrderNo')
 
@@ -923,7 +925,8 @@ class SaleApiImportWizard(models.TransientModel):
                         if owner_date.get('misa_delivery'):
                             upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
                         # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
-                        delivery_order_number = (order.get('DeliveryOrderNumber') or '').strip()
+                        # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
+                        delivery_order_number = (order.get('OtherSysOrderCode') or order.get('DeliveryOrderNumber') or '').strip()
                         if delivery_order_number and not existing_order.tracking_number:
                             upd['tracking_number'] = delivery_order_number
                             _logger.info(f"📦 Updating tracking_number: {delivery_order_number} for existing order {order_ref}")
@@ -935,9 +938,9 @@ class SaleApiImportWizard(models.TransientModel):
                         continue
 
                 group_total = sum(line_subtotal(l) for l in grouped_lines)
-                
-                # Get DeliveryOrderNumber for tracking
-                delivery_order_number = (order.get('DeliveryOrderNumber') or '').strip()
+
+                # Get delivery tracking number (prioritize OtherSysOrderCode over DeliveryOrderNumber)
+                delivery_order_number = (order.get('OtherSysOrderCode') or order.get('DeliveryOrderNumber') or '').strip()
                 
                 sale_vals = {
                     'name': order_ref,

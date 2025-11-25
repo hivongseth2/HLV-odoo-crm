@@ -168,10 +168,11 @@ class SaleOrder(models.Model):
         # 1) Lấy header từ FormDataNew
         data = self._misa_fetch_order()
         # Một số key phổ biến cần dùng (tùy chỉnh theo thực tế):
-        # DeliveryOrderNumber, SaleOrderNo, ListOrderNumber, AccountIDText, BookDate, DeliveryDate, BillingAddress, v.v.
+        # OtherSysOrderCode, DeliveryOrderNumber, SaleOrderNo, ListOrderNumber, AccountIDText, BookDate, DeliveryDate, BillingAddress, v.v.
         partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText")
         order_no     = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo")
-        delivery_no  = data.get("DeliveryOrderNumber") or order_no
+        # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
+        delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress")  # hoặc gọi API địa chỉ chi tiết của bạn
         revenue_status_id = data.get("RevenueStatusID")
@@ -280,7 +281,8 @@ class SaleOrder(models.Model):
         if owner_date.get('misa_delivery'):
             vals_upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
         # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
-        delivery_order_number = (data.get('DeliveryOrderNumber') or '').strip()
+        # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
+        delivery_order_number = (data.get('OtherSysOrderCode') or data.get('DeliveryOrderNumber') or '').strip()
         if delivery_order_number and not self.tracking_number:
             vals_upd['tracking_number'] = delivery_order_number
             _logger.info(f"📦 Updating tracking_number: {delivery_order_number} for order {self.name}")
@@ -839,7 +841,8 @@ class SaleOrder(models.Model):
         partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         partner       = odoo_utils._get_or_create_partner(partner_name)
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
-        delivery_no   = data.get("DeliveryOrderNumber") or order_no
+        # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
+        delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
@@ -866,8 +869,8 @@ class SaleOrder(models.Model):
             
         zns = bool(data.get("CustomField23", False))
 
-        # Get DeliveryOrderNumber for tracking
-        delivery_order_number = (data.get('DeliveryOrderNumber') or '').strip()
+        # Get delivery tracking number (prioritize OtherSysOrderCode over DeliveryOrderNumber)
+        delivery_order_number = (data.get('OtherSysOrderCode') or data.get('DeliveryOrderNumber') or '').strip()
 
         vals_create = {
             'name': order_no,
