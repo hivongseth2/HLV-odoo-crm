@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_warehouse_dashboard_kanban" model="ir.ui.view">
+        <field name="name">stock.warehouse.dashboard.kanban</field>
+        <field name="model">stock.warehouse</field>
+        <field name="arch" type="xml">
+            <kanban create="0" class="o_kanban_dashboard">
+                <field name="id"/>
+                <field name="name"/>
+                <field name="warehouse_dashboard_data"/>
+
+                <templates>
+                    <t t-name="kanban-box">
+                        <div class="oe_kanban_global_click p-0">
+                            <div class="o_kanban_card_header p-2 bg-100 border-bottom d-flex justify-content-between align-items-center">
+                                <h3 class="mb-0 fw-bold text-uppercase"><field name="name"/></h3>
+                                <a type="edit" class="btn btn-sm btn-link"><i class="fa fa-gear"/></a>
+                            </div>
+
+                            <div class="p-2">
+                                <t t-set="dashboard_data" t-value="JSON.parse(record.warehouse_dashboard_data.value || '[]')"/>
+                                
+                                <table class="table table-sm table-borderless mb-0">
+                                    <thead class="text-muted" style="font-size: 0.85rem;">
+                                        <tr>
+                                            <th>Hoạt động</th>
+                                            <th class="text-center">Cần làm</th>
+                                            <th class="text-end">Trạng thái</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="dashboard_data" t-as="op" class="border-bottom">
+                                            <td class="align-middle">
+                                                <a type="action" 
+                                                   name="%(stock.stock_picking_type_action)d" 
+                                                   t-att-data-context="'{&quot;search_default_picking_type_id&quot;: ' + op.id + '}'"
+                                                   class="fw-bold text-dark text-decoration-none">
+                                                    <t t-esc="op.name"/>
+                                                </a>
+                                            </td>
+
+                                            <td class="align-middle text-center">
+                                                <a t-if="op.count_ready > 0" 
+                                                   type="object" name="get_action_picking_tree_ready"
+                                                   t-att-context="'{&quot;active_id&quot;: ' + op.id + '}'" 
+                                                   t-attf-class="btn btn-sm #{op.code == 'incoming' ? 'btn-primary' : (op.code == 'outgoing' ? 'btn-success' : 'btn-warning')} rounded-pill px-3">
+                                                    <t t-esc="op.count_ready"/>
+                                                </a>
+                                                <span t-else="" class="text-muted opacity-50">-</span>
+                                            </td>
+
+                                            <td class="align-middle text-end" style="font-size: 0.85rem;">
+                                                <div t-if="op.count_late > 0" class="text-danger fw-bold">
+                                                    <t t-esc="op.count_late"/> Trễ
+                                                </div>
+                                                <div t-if="op.count_waiting > 0" class="text-muted">
+                                                    <t t-esc="op.count_waiting"/> Đang chờ
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                
+                                <div t-if="dashboard_data.length === 0" class="text-center text-muted fst-italic py-3">
+                                    Không có loại hoạt động nào
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <record id="action_warehouse_dashboard" model="ir.actions.act_window">
+        <field name="name">Tổng quan Kho (Gộp)</field>
+        <field name="res_model">stock.warehouse</field>
+        <field name="view_mode">kanban,form</field>
+        <field name="view_id" ref="view_warehouse_dashboard_kanban"/>
+    </record>
+
+    <menuitem id="menu_warehouse_dashboard_combined"
+              name="Tổng quan kho (Mới)"
+              parent="stock.menu_stock_root"
+              action="action_warehouse_dashboard"
+              sequence="0"/>
+</odoo>
