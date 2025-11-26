@@ -931,6 +931,10 @@ class SaleApiImportWizard(models.TransientModel):
                             upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
                         if owner_date.get('misa_delivery'):
                             upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
+                        if owner_date.get('httt'):
+                            upd['x_studio_httt'] = owner_date['httt']
+                        if owner_date.get('htgh'):
+                            upd['x_studio_htgh'] = owner_date['htgh']
                         # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
                         # Ưu tiên lấy từ FormDataNew (OtherSysOrderCode → DeliveryOrderNumber), fallback về Grid
                         delivery_order_number = (
@@ -985,6 +989,10 @@ class SaleApiImportWizard(models.TransientModel):
                     sale_vals['x_studio_misa_order_date'] = owner_date['sale_order_date']
                 if owner_date.get('misa_delivery'):
                     sale_vals['x_studio_misa_delivery'] = owner_date['misa_delivery']
+                if owner_date.get('httt'):
+                    sale_vals['x_studio_httt'] = owner_date['httt']
+                if owner_date.get('htgh'):
+                    sale_vals['x_studio_htgh'] = owner_date['htgh']
 
                 sale_order = self.env['sale.order'].create(sale_vals)
                 
