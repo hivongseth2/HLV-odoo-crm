@@ -8,7 +8,6 @@
                 <field name="id"/>
                 <field name="name"/>
                 <field name="warehouse_dashboard_data"/>
-
                 <templates>
                     <t t-name="kanban-box">
                         <div class="oe_kanban_global_click p-0">
@@ -31,9 +30,9 @@
                                     <tbody>
                                         <tr t-foreach="dashboard_data" t-as="op" class="border-bottom">
                                             <td class="align-middle">
-                                                <a type="action" 
-                                                   name="%(stock.stock_picking_type_action)d" 
-                                                   t-att-data-context="'{&quot;search_default_picking_type_id&quot;: ' + op.id + '}'"
+                                                <a type="object" 
+                                                   name="open_picking_type_view" 
+                                                   t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;all&quot;}'"
                                                    class="fw-bold text-dark text-decoration-none">
                                                     <t t-esc="op.name"/>
                                                 </a>
@@ -41,8 +40,9 @@
 
                                             <td class="align-middle text-center">
                                                 <a t-if="op.count_ready > 0" 
-                                                   type="object" name="get_action_picking_tree_ready"
-                                                   t-att-context="'{&quot;active_id&quot;: ' + op.id + '}'" 
+                                                   type="object" 
+                                                   name="open_picking_type_view"
+                                                   t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;ready&quot;}'" 
                                                    t-attf-class="btn btn-sm #{op.code == 'incoming' ? 'btn-primary' : (op.code == 'outgoing' ? 'btn-success' : 'btn-warning')} rounded-pill px-3">
                                                     <t t-esc="op.count_ready"/>
                                                 </a>
@@ -60,10 +60,6 @@
                                         </tr>
                                     </tbody>
                                 </table>
-                                
-                                <div t-if="dashboard_data.length === 0" class="text-center text-muted fst-italic py-3">
-                                    Không có loại hoạt động nào
-                                </div>
                             </div>
                         </div>
                     </t>
