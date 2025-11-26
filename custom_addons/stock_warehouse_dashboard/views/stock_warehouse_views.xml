@@ -77,4 +77,16 @@
             </kanban>
         </field>
     </record>
+    <record id="action_warehouse_dashboard" model="ir.actions.act_window">
+        <field name="name">Tổng quan Kho (Mới)</field>
+        <field name="res_model">stock.warehouse</field>
+        <field name="view_mode">kanban,form</field>
+        <field name="view_id" ref="view_warehouse_dashboard_kanban"/>
+    </record>
+
+    <menuitem id="menu_warehouse_dashboard_combined"
+              name="Tổng quan (Mới)"
+              parent="stock.menu_stock_root"
+              action="action_warehouse_dashboard"
+              sequence="1"/>
 </odoo>
