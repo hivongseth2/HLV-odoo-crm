@@ -172,7 +172,8 @@ class SaleOrder(models.Model):
         partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText")
         order_no     = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo")
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-        delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
+        delivery_no  = data.get("DeliveryOrderNumber") or order_no
+        # delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress")  # hoặc gọi API địa chỉ chi tiết của bạn
         revenue_status_id = data.get("RevenueStatusID")
@@ -828,7 +829,8 @@ class SaleOrder(models.Model):
         partner       = odoo_utils._get_or_create_partner(partner_name)
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-        delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
+        delivery_no   = data.get("DeliveryOrderNumber") or order_no
+        # delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("ShippingAddress") or ''
         origin        = data.get("SaleOrderName") or ''

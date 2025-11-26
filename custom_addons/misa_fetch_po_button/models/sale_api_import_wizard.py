@@ -791,7 +791,17 @@ class SaleApiImportWizard(models.TransientModel):
                 order_id = order.get("ID")
                 misa_id_str = str(order_id) if order_id else False  # ### NEW
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
+                
+                
+                if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
+                    continue
+
+                if customer_name in e_accounts:
+                    base_pick_name = order.get('DeliveryOrderNumber')
+                else:
+                    base_pick_name = order.get('SaleOrderNo')
                 product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, sale_headers, payload_detail)
+                
 
                 shipping_address_str = misa_utils.get_shipping_address(
                     sale_order_id=order_id,
@@ -806,19 +816,19 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.warning("Không lấy được thông tin từ FormDataNew cho SO=%s: %s", order_id, _e)
 
                 # Ưu tiên lấy OtherSysOrderCode từ FormDataNew, fallback về DeliveryOrderNumber từ FormDataNew, rồi mới tới Grid
-                pick_code = (
-                    owner_date.get('other_sys_order_code')
-                    or owner_date.get('delivery_order_number')
-                    or order.get('OtherSysOrderCode')
-                    or order.get('DeliveryOrderNumber')
-                )
-                if customer_name in e_accounts and not pick_code:
-                    continue
+                # pick_code = (
+                #     owner_date.get('other_sys_order_code')
+                #     or owner_date.get('delivery_order_number')
+                #     or order.get('OtherSysOrderCode')
+                #     or order.get('DeliveryOrderNumber')
+                # )
+                # if customer_name in e_accounts and not pick_code:
+                #     continue
 
-                if customer_name in e_accounts:
-                    base_pick_name = pick_code
-                else:
-                    base_pick_name = order.get('SaleOrderNo')
+                # if customer_name in e_accounts:
+                #     base_pick_name = pick_code
+                # else:
+                #     base_pick_name = order.get('SaleOrderNo')
                 # tỉnh/thành để map state/city
                 province_text = (
                     order.get("ShippingProvinceIDCustomText")
