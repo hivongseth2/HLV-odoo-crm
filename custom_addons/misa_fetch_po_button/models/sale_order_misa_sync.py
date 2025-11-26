@@ -251,17 +251,22 @@ class SaleOrder(models.Model):
             except Exception as e:
                 raise UserError(_("Không thể hủy phiếu khi đồng bộ: %s") % e)
 
-        # 2) Lấy lines từ DataSubPaging
+        # 2) Lấy misa_order_id để fetch thông tin chi tiết
         misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
-        lines = self._misa_fetch_lines(misa_order_id)
 
-        # Fetch OwnerIDText and SaleOrderDate from MISA
+        # Fetch OwnerIDText, SaleOrderDate, ShippingContactIDText, httt, htgh từ MISA
         headers, _crm_token = self._misa_headers()
         owner_date = {}
         try:
             owner_date = self.env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
         except Exception as _e:
-            _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", misa_order_id, _e)
+            _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
+
+        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
+        partner_name = owner_date.get('shipping_contact') or partner_name
+
+        # Lấy lines từ DataSubPaging
+        lines = self._misa_fetch_lines(misa_order_id)
 
         # 3) Upsert header
         partner = odoo_utils._get_or_create_partner(partner_name or _("Khách hàng MISA"))
@@ -274,11 +279,15 @@ class SaleOrder(models.Model):
                 vals_upd['date_order'] = dtparse(book_date).replace(tzinfo=None)
             except Exception:
                 pass
-        # Sync x_studio_misa_saler_code and x_studio_misa_order_date
+        # Sync x_studio_misa_saler_code, x_studio_misa_order_date, httt, htgh
         if owner_date.get('owner_code'):
             vals_upd['x_studio_misa_saler_code'] = owner_date['owner_code']
         if owner_date.get('sale_order_date'):
             vals_upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+        if owner_date.get('httt'):
+            vals_upd['x_studio_httt'] = owner_date['httt']
+        if owner_date.get('htgh'):
+            vals_upd['x_studio_htgh'] = owner_date['htgh']
         # Gán lại địa chỉ giao nếu bạn có helper build contact giao hàng
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
@@ -825,7 +834,15 @@ class SaleOrder(models.Model):
         self.sudo().unlink()
 
         # ===== 8) TẠO LẠI TỪ MISA =====
-        partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        # Fetch OwnerIDText, SaleOrderDate, ShippingContactIDText, httt, htgh từ MISA
+        owner_date = {}
+        try:
+            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
+        except Exception as _e:
+            _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
+
+        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
+        partner_name  = owner_date.get('shipping_contact') or data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         partner       = odoo_utils._get_or_create_partner(partner_name)
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
@@ -835,13 +852,6 @@ class SaleOrder(models.Model):
         deadline_date_raw = data.get("DeadlineDate")
         shipping_addr = data.get("ShippingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
-
-        # Fetch OwnerIDText and SaleOrderDate from MISA
-        owner_date = {}
-        try:
-            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
-        except Exception as _e:
-            _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", misa_order_id, _e)
 
         # địa chỉ giao hàng
         try:
@@ -879,13 +889,17 @@ class SaleOrder(models.Model):
                         vals_create['commitment_date'] = dtparse(deadline_date_raw).replace(tzinfo=None)
                     except Exception:
                         pass
-        # Sync x_studio_misa_saler_code and x_studio_misa_order_date
+        # Sync x_studio_misa_saler_code, x_studio_misa_order_date, misa_delivery, httt, htgh
         if owner_date.get('owner_code'):
             vals_create['x_studio_misa_saler_code'] = owner_date['owner_code']
         if owner_date.get('sale_order_date'):
             vals_create['x_studio_misa_order_date'] = owner_date['sale_order_date']
         if owner_date.get('misa_delivery'):
             vals_create['x_studio_misa_delivery'] = owner_date['misa_delivery']
+        if owner_date.get('httt'):
+            vals_create['x_studio_httt'] = owner_date['httt']
+        if owner_date.get('htgh'):
+            vals_create['x_studio_htgh'] = owner_date['htgh']
 
         new_so = env['sale.order'].create(vals_create)
 
