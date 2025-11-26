@@ -1018,6 +1018,12 @@ class SaleApiImportWizard(models.TransientModel):
                         sale_vals['x_studio_misa_saler_code'] = owner_date['owner_code']
                     if owner_date.get('sale_order_date'):
                         sale_vals['x_studio_misa_order_date'] = owner_date['sale_order_date']
+                    if owner_date.get('misa_delivery'):
+                        sale_vals['x_studio_misa_delivery'] = owner_date['misa_delivery']
+                    if owner_date.get('httt'):
+                        sale_vals['x_studio_httt'] = owner_date['httt']
+                    if owner_date.get('htgh'):
+                        sale_vals['x_studio_htgh'] = owner_date['htgh']
 
                     sale_order = self.env['sale.order'].create(sale_vals)
                     
