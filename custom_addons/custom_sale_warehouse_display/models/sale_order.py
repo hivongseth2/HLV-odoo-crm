@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
-from datetime import datetime, time
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
@@ -15,25 +14,27 @@ class SaleOrder(models.Model):
     def _compute_effective_warehouse_names(self):
         for order in self:
             warehouse_codes = set()
+            # Chỉ lấy phiếu kho không bị hủy
             valid_pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
             for picking in valid_pickings:
                 if picking.location_id and picking.location_id.warehouse_id:
                     warehouse_codes.add(picking.location_id.warehouse_id.code)
             
             if warehouse_codes:
+                # Sắp xếp để hiển thị nhất quán (VD: KBC, TSN)
                 order.effective_warehouse_names = ", ".join(sorted(list(warehouse_codes)))
             else:
+                # Fallback về kho mặc định của đơn hàng nếu chưa có phiếu xuất
                 order.effective_warehouse_names = order.warehouse_id.code if order.warehouse_id else ""
 
-    # --- HÀM MỚI THÊM: Action cho nút xem sản phẩm ---
     def action_view_order_lines_popup(self):
         self.ensure_one()
         return {
-            'name': f'Sản phẩm của {self.name}',
+            'name': f'Chi tiết sản phẩm - {self.name}',
             'type': 'ir.actions.act_window',
             'res_model': 'sale.order.line',
-            'view_mode': 'list', # Chỉ hiện dạng danh sách
-            'domain': [('order_id', '=', self.id)], # Lọc theo đơn hàng hiện tại
-            'target': 'new', # Mở dạng popup
-            'context': {'create': False, 'edit': False} # Chỉ xem, không cho sửa nhanh để tránh lỗi
+            'view_mode': 'list', # Odoo 18 python vẫn gọi là view_mode='list' (hoặc tree vẫn hiểu)
+            'domain': [('order_id', '=', self.id)],
+            'target': 'new',
+            'context': {'create': False, 'edit': False}
         }

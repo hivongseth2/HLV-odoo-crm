@@ -6,17 +6,18 @@
         <field name="inherit_id" ref="sale.view_order_tree"/>
         <field name="arch" type="xml">
             
-            <xpath expr="//field[@name='partner_id']" position="after">
-                <field name="effective_warehouse_names" string="Kho xuất" optional="show" decoration-bf="1"/>
-            </xpath>
-
-            <xpath expr="//tree" position="inside">
+            <xpath expr="//list" position="inside">
                 <button name="action_view_order_lines_popup" 
                         type="object" 
                         string="Xem SP" 
                         icon="fa-list-ul" 
                         title="Xem danh sách sản phẩm"/>
             </xpath>
+
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="effective_warehouse_names" string="Kho xuất" optional="show" decoration-bf="1"/>
+            </xpath>
+
         </field>
     </record>
 
@@ -27,7 +28,7 @@
         <field name="arch" type="xml">
             
             <xpath expr="//field[@name='name']" position="after">
-                <field name="effective_warehouse_names" string="Kho hàng (TSN, KBC...)" filter_domain="[('effective_warehouse_names', 'ilike', self)]"/>
+                <field name="effective_warehouse_names" string="Kho hàng" filter_domain="[('effective_warehouse_names', 'ilike', self)]"/>
             </xpath>
 
             <xpath expr="//filter[@name='my_sale_orders_filter']" position="after">
@@ -36,6 +37,10 @@
                         domain="[('picking_ids.date_done', '&gt;=', context_today().strftime('%Y-%m-%d 00:00:00')), 
                                  ('picking_ids.date_done', '&lt;=', context_today().strftime('%Y-%m-%d 23:59:59'))]"/>
                 <separator/>
+            </xpath>
+
+            <xpath expr="//group" position="inside">
+                <filter string="Kho xuất hàng" name="groupby_warehouse" context="{'group_by': 'effective_warehouse_names'}"/>
             </xpath>
 
         </field>
