@@ -867,6 +867,16 @@ class SaleApiImportWizard(models.TransientModel):
 
                 order_ref_base = order.get("SaleOrderNo")
                 order_date = parse(order.get("SaleOrderDate")).replace(tzinfo=None)
+                # Thêm mới
+                deadline_date_raw = order.get("DeadlineDate")
+                commitment_date = False
+                if deadline_date_raw:
+                    try:
+                        # Parse và bỏ timezone để lưu vào Odoo (Odoo lưu UTC naive hoặc theo context server)
+                        commitment_date = parse(deadline_date_raw).replace(tzinfo=None)
+                    except Exception:
+                        commitment_date = False
+                
                 if not order_ref_base or not customer_name:
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
                     continue
@@ -935,6 +945,10 @@ class SaleApiImportWizard(models.TransientModel):
                             upd['x_studio_httt'] = owner_date['httt']
                         if owner_date.get('htgh'):
                             upd['x_studio_htgh'] = owner_date['htgh']
+                            
+                            
+                        if commitment_date:
+                             upd['commitment_date'] = commitment_date
                         # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
                         # Ưu tiên lấy từ FormDataNew (OtherSysOrderCode → DeliveryOrderNumber), fallback về Grid
                         delivery_order_number = (
@@ -970,6 +984,7 @@ class SaleApiImportWizard(models.TransientModel):
                     'partner_id': partner.id,
                     'date_order': order_date,
                     'amount_total': group_total,
+                    'commitment_date': commitment_date,
                     'partner_shipping_id': delivery_contact.id, 
                     'origin': origin,
                     'warehouse_id': warehouse.id,
@@ -995,6 +1010,8 @@ class SaleApiImportWizard(models.TransientModel):
                     sale_vals['x_studio_htgh'] = owner_date['htgh']
 
                 sale_order = self.env['sale.order'].create(sale_vals)
+                
+                
                 
                 # ===== BUILD MAP: COMBO CHILD -> PARENT CODE (HYBRID) =====
                 combo_parent_map = {}  # {misa_line_id: parent_code} - DÙNG LINE ID
