@@ -912,7 +912,9 @@ class SaleApiImportWizard(models.TransientModel):
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
                     continue
 
-                partner = odoo_utils._get_or_create_partner(customer_name)
+                # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
+                partner_name_for_so = owner_date.get('shipping_contact') or customer_name
+                partner = odoo_utils._get_or_create_partner(partner_name_for_so)
                 
                 try:
                     if account_id:
