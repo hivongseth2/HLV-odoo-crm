@@ -4,23 +4,19 @@ from odoo import models, fields, api
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    # 1. Cột hiển thị KẾ HOẠCH (Phiếu này sẽ lấy ở những kho nào?)
-    warehouse_plan_names = fields.Char(
-        string="Kho dự kiến",
+    # 1. BIẾN CŨ (Giữ nguyên tên để không lỗi): Dùng làm "Kho dự kiến"
+    effective_warehouse_names = fields.Char(
+        string="Kho dự kiến", 
         compute='_compute_warehouse_info',
-        store=True,
-        help="Hiển thị tất cả các kho có trong kế hoạch giao hàng (chưa hủy)"
+        store=True
     )
 
-    # 2. Cột hiển thị THỰC TẾ (Kho nào ĐÃ xuất xong?)
+    # 2. BIẾN MỚI: Dùng làm "Kho đã xuất"
     warehouse_done_names = fields.Char(
         string="Kho đã xuất",
         compute='_compute_warehouse_info',
-        store=True,
-        help="Chỉ hiển thị các kho đã hoàn thành phiếu xuất"
+        store=True
     )
-    
-    effective_warehouse_names = fields.Char(related='warehouse_done_names', string="Kho cũ (Sắp xóa)")
 
     @api.depends('picking_ids', 'picking_ids.state', 'picking_ids.location_id', 'picking_ids.date_done')
     def _compute_warehouse_info(self):
@@ -28,25 +24,24 @@ class SaleOrder(models.Model):
             plan_codes = set()
             done_codes = set()
             
-            # Lấy tất cả phiếu kho không bị hủy
+            # Lấy các phiếu không hủy
             valid_pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
             
             for picking in valid_pickings:
                 if picking.location_id and picking.location_id.warehouse_id:
                     code = picking.location_id.warehouse_id.code
                     
-                    # Logic 1: Luôn thêm vào danh sách Kế hoạch
+                    # Logic cũ: Tất cả các kho có trong phiếu -> Là Kế hoạch
                     plan_codes.add(code)
                     
-                    # Logic 2: Chỉ thêm vào danh sách Đã xuất nếu phiếu đã Done
+                    # Logic mới: Chỉ phiếu đã xong -> Là Thực tế
                     if picking.state == 'done':
                         done_codes.add(code)
             
-            # Gán dữ liệu (Sắp xếp A-Z cho đẹp)
-            order.warehouse_plan_names = ", ".join(sorted(list(plan_codes))) if plan_codes else ""
+            # Gán dữ liệu
+            order.effective_warehouse_names = ", ".join(sorted(list(plan_codes))) if plan_codes else ""
             order.warehouse_done_names = ", ".join(sorted(list(done_codes))) if done_codes else ""
 
-    # Hàm mở popup xem sản phẩm (giữ nguyên)
     def action_view_order_lines_popup(self):
         self.ensure_one()
         return {

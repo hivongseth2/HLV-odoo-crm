@@ -11,7 +11,8 @@
             </xpath>
 
             <xpath expr="//field[@name='partner_id']" position="after">
-                <field name="warehouse_plan_names" string="Kho dự kiến" optional="show" decoration-info="1"/>
+                <field name="effective_warehouse_names" string="Kho dự kiến" optional="show" decoration-info="1"/>
+                
                 <field name="warehouse_done_names" string="Kho đã xuất" optional="show" decoration-bf="1" decoration-success="warehouse_done_names != ''"/>
             </xpath>
 
@@ -25,7 +26,8 @@
         <field name="arch" type="xml">
             
             <xpath expr="//field[@name='name']" position="after">
-                <field name="warehouse_done_names" string="Tìm kho đã xuất" filter_domain="[('warehouse_done_names', 'ilike', self)]"/>
+                <field name="effective_warehouse_names" string="Kho dự kiến" filter_domain="[('effective_warehouse_names', 'ilike', self)]"/>
+                <field name="warehouse_done_names" string="Kho đã xuất" filter_domain="[('warehouse_done_names', 'ilike', self)]"/>
             </xpath>
 
             <xpath expr="//filter[@name='my_sale_orders_filter']" position="after">
