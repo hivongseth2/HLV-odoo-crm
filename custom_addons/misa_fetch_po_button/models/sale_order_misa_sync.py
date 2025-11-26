@@ -169,7 +169,20 @@ class SaleOrder(models.Model):
         data = self._misa_fetch_order()
         # Một số key phổ biến cần dùng (tùy chỉnh theo thực tế):
         # OtherSysOrderCode, DeliveryOrderNumber, SaleOrderNo, ListOrderNumber, AccountIDText, BookDate, DeliveryDate, BillingAddress, v.v.
-        partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText")
+
+        # Lấy misa_order_id để fetch thông tin chi tiết
+        misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
+
+        # Fetch OwnerIDText, SaleOrderDate, và ShippingContactIDText từ MISA
+        headers, _crm_token = self._misa_headers()
+        owner_date_early = {}
+        try:
+            owner_date_early = self.env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
+        except Exception as _e:
+            _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
+
+        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
+        partner_name = owner_date_early.get('shipping_contact') or data.get("AccountIDText") or data.get("BillingAccountIDText")
         order_no     = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo")
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
         delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
@@ -251,16 +264,10 @@ class SaleOrder(models.Model):
                 raise UserError(_("Không thể hủy phiếu khi đồng bộ: %s") % e)
 
         # 2) Lấy lines từ DataSubPaging
-        misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
         lines = self._misa_fetch_lines(misa_order_id)
 
-        # Fetch OwnerIDText and SaleOrderDate from MISA
-        headers, _crm_token = self._misa_headers()
-        owner_date = {}
-        try:
-            owner_date = self.env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
-        except Exception as _e:
-            _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", misa_order_id, _e)
+        # owner_date đã được fetch ở trên (owner_date_early), dùng lại
+        owner_date = owner_date_early
 
         # 3) Upsert header
         partner = odoo_utils._get_or_create_partner(partner_name or _("Khách hàng MISA"))
@@ -280,6 +287,10 @@ class SaleOrder(models.Model):
             vals_upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
         if owner_date.get('misa_delivery'):
             vals_upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
+        if owner_date.get('httt'):
+            vals_upd['x_studio_httt'] = owner_date['httt']
+        if owner_date.get('htgh'):
+            vals_upd['x_studio_htgh'] = owner_date['htgh']
         # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
         delivery_order_number = (data.get('OtherSysOrderCode') or data.get('DeliveryOrderNumber') or '').strip()
@@ -832,7 +843,15 @@ class SaleOrder(models.Model):
         self.sudo().unlink()
 
         # ===== 8) TẠO LẠI TỪ MISA =====
-        partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        # Fetch OwnerIDText, SaleOrderDate, và ShippingContactIDText từ MISA
+        owner_date = {}
+        try:
+            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
+        except Exception as _e:
+            _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
+
+        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
+        partner_name  = owner_date.get('shipping_contact') or data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         partner       = odoo_utils._get_or_create_partner(partner_name)
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
@@ -840,13 +859,6 @@ class SaleOrder(models.Model):
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("ShippingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
-
-        # Fetch OwnerIDText and SaleOrderDate from MISA
-        owner_date = {}
-        try:
-            owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
-        except Exception as _e:
-            _logger.warning("Không lấy được OwnerIDText/SaleOrderDate cho SO=%s: %s", misa_order_id, _e)
 
         # địa chỉ giao hàng
         try:
@@ -886,6 +898,10 @@ class SaleOrder(models.Model):
             vals_create['x_studio_misa_order_date'] = owner_date['sale_order_date']
         if owner_date.get('misa_delivery'):
             vals_create['x_studio_misa_delivery'] = owner_date['misa_delivery']
+        if owner_date.get('httt'):
+            vals_create['x_studio_httt'] = owner_date['httt']
+        if owner_date.get('htgh'):
+            vals_create['x_studio_htgh'] = owner_date['htgh']
 
         new_so = env['sale.order'].create(vals_create)
 
