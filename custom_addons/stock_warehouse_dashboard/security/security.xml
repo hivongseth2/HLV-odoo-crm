@@ -9,12 +9,7 @@
         <record id="rule_restrict_warehouse_view" model="ir.rule">
             <field name="name">Stock Warehouse: Restrict by User Config</field>
             <field name="model_id" ref="stock.model_stock_warehouse"/>
-            <field name="domain_force">
-                ['|', 
-                 ('id', 'in', user.allowed_warehouse_ids.ids), 
-                 (1, '=', 1) if user.has_group('stock.group_stock_manager') else (0, '=', 1)
-                ]
-            </field>
+            <field name="domain_force">[('id', 'in', user.allowed_warehouse_ids.ids)]</field>
             <field name="groups" eval="[(4, ref('group_restrict_warehouse_view'))]"/>
         </record>
     </data>
