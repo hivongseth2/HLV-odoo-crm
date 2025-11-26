@@ -859,7 +859,7 @@ class SaleOrder(models.Model):
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("ShippingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
-
+        deadline_date_raw = data.get("DeadlineDate") # <--- [NEW] Lấy DeadlineDate
         # địa chỉ giao hàng
         try:
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
@@ -884,10 +884,17 @@ class SaleOrder(models.Model):
             'partner_shipping_id': shipping_id,
             'x_studio_zns': zns
         }
+        from dateutil.parser import parse as dtparse
+
         if book_date:
-            from dateutil.parser import parse as dtparse
             try:
                 vals_create['date_order'] = dtparse(book_date).replace(tzinfo=None)
+            except Exception:
+                pass
+            
+        if deadline_date_raw:
+            try:
+                vals_create['commitment_date'] = dtparse(deadline_date_raw).replace(tzinfo=None)
             except Exception:
                 pass
 
