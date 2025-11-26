@@ -10,26 +10,22 @@
                 <field name="warehouse_dashboard_data"/>
                 <templates>
                     <t t-name="kanban-box">
-                        <div class="oe_kanban_global_click p-0">
-                            <div class="o_kanban_card_header p-2 bg-100 border-bottom d-flex justify-content-between align-items-center">
-                                <h3 class="mb-0 fw-bold text-uppercase"><field name="name"/></h3>
-                                <a type="edit" class="btn btn-sm btn-link"><i class="fa fa-gear"/></a>
-                            </div>
+                        <div class="oe_kanban_global_click p-0 d-flex flex-column">
+                            
+                            <div class="o_kanban_card_header p-2 bg-100 border-bottom">
+                                <a type="object" name="open_warehouse_operations" class="fw-bold text-uppercase text-dark text-decoration-none d-block">
+                                    <h3 class="mb-0 fs-5"><field name="name"/></h3>
+                                </a>
+                                </div>
 
-                            <div class="p-2">
+                            <div class="p-0 flex-grow-1">
                                 <t t-set="dashboard_data" t-value="JSON.parse(record.warehouse_dashboard_data.value || '[]')"/>
                                 
-                                <table class="table table-sm table-borderless mb-0">
-                                    <thead class="text-muted" style="font-size: 0.85rem;">
-                                        <tr>
-                                            <th>Hoạt động</th>
-                                            <th class="text-center">Cần làm</th>
-                                            <th class="text-end">Trạng thái</th>
-                                        </tr>
-                                    </thead>
+                                <table class="table table-sm table-striped table-hover mb-0" style="font-size: 0.85rem;">
                                     <tbody>
-                                        <tr t-foreach="dashboard_data" t-as="op" class="border-bottom">
-                                            <td class="align-middle">
+                                        <tr t-foreach="dashboard_data" t-as="op">
+                                            
+                                            <td class="align-middle ps-2" style="width: 40%;">
                                                 <a type="object" 
                                                    name="open_picking_type_view" 
                                                    t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;all&quot;}'"
@@ -38,28 +34,58 @@
                                                 </a>
                                             </td>
 
-                                            <td class="align-middle text-center">
+                                            <td class="align-middle text-center" style="width: 25%;">
                                                 <a t-if="op.count_ready > 0" 
                                                    type="object" 
                                                    name="open_picking_type_view"
                                                    t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;ready&quot;}'" 
-                                                   t-attf-class="btn btn-sm #{op.code == 'incoming' ? 'btn-primary' : (op.code == 'outgoing' ? 'btn-success' : 'btn-warning')} rounded-pill px-3">
+                                                   t-attf-class="btn btn-sm #{op.btn_color} text-white fw-bold rounded-pill px-3 py-0"
+                                                   style="font-size: 0.8rem;">
                                                     <t t-esc="op.count_ready"/>
                                                 </a>
-                                                <span t-else="" class="text-muted opacity-50">-</span>
+                                                <span t-else="" class="text-muted opacity-25">-</span>
                                             </td>
 
-                                            <td class="align-middle text-end" style="font-size: 0.85rem;">
-                                                <div t-if="op.count_late > 0" class="text-danger fw-bold">
-                                                    <t t-esc="op.count_late"/> Trễ
-                                                </div>
-                                                <div t-if="op.count_waiting > 0" class="text-muted">
-                                                    <t t-esc="op.count_waiting"/> Đang chờ
+                                            <td class="align-middle text-end pe-2" style="width: 35%;">
+                                                <div class="d-flex flex-column align-items-end" style="line-height: 1.2;">
+                                                    
+                                                    <a t-if="op.count_late > 0" 
+                                                       type="object" name="open_picking_type_view"
+                                                       t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;late&quot;}'"
+                                                       class="text-danger fw-bold text-decoration-none" style="font-size: 0.75rem;">
+                                                        <t t-esc="op.count_late"/> Trễ
+                                                    </a>
+
+                                                    <a t-if="op.count_waiting > 0" 
+                                                       type="object" name="open_picking_type_view"
+                                                       t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;waiting&quot;}'"
+                                                       class="text-warning text-decoration-none" style="font-size: 0.75rem;">
+                                                        <t t-esc="op.count_waiting"/> Chờ
+                                                    </a>
+
+                                                    <div class="text-muted" style="font-size: 0.7rem;">
+                                                        <a t-if="op.count_draft > 0" 
+                                                           type="object" name="open_picking_type_view"
+                                                           t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;draft&quot;}'"
+                                                           class="text-muted text-decoration-none me-1">
+                                                           Nháp:<t t-esc="op.count_draft"/>
+                                                        </a>
+                                                        
+                                                        <a type="object" name="open_picking_type_view"
+                                                           t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;done&quot;}'"
+                                                           class="text-success text-decoration-none">
+                                                           Xong
+                                                        </a>
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
                                     </tbody>
                                 </table>
+                                
+                                <div t-if="dashboard_data.length === 0" class="text-center text-muted fst-italic py-3">
+                                    Không có hoạt động
+                                </div>
                             </div>
                         </div>
                     </t>
