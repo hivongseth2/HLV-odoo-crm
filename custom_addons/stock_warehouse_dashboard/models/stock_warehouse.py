@@ -4,44 +4,82 @@ import json
 class StockWarehouse(models.Model):
     _inherit = 'stock.warehouse'
 
+    # 1. Fix lỗi picking_type_ids one2many
     picking_type_ids = fields.One2many(
         'stock.picking.type', 
         'warehouse_id', 
         string='Operation Types'
     )
 
+    # 2. Trường chứa JSON data cho Dashboard
     warehouse_dashboard_data = fields.Text(compute='_compute_warehouse_dashboard_data')
 
-    @api.depends('picking_type_ids', 'picking_type_ids.count_picking_ready', 'picking_type_ids.sequence')
+    @api.depends('picking_type_ids', 'picking_type_ids.count_picking_ready')
     def _compute_warehouse_dashboard_data(self):
         Picking = self.env['stock.picking']
+        SaleOrder = self.env['sale.order']
+        today = fields.Date.context_today(self)
+
         for warehouse in self:
-            data = []
+            # --- PHẦN 1: TÍNH TOÁN HOẠT ĐỘNG KHO ---
+            ops_data = []
             operations = warehouse.picking_type_ids.sorted(key=lambda r: r.sequence)
+            
             for op in operations:
-                # Đếm số lượng
+                # Đếm số lượng draft (Odoo không đếm sẵn)
                 count_draft = Picking.search_count([('picking_type_id', '=', op.id), ('state', '=', 'draft')])
-                # Nếu muốn đếm Done thì mở dòng dưới ra, nhưng cẩn thận nếu dữ liệu nhiều sẽ chậm
-                # count_done = Picking.search_count([('picking_type_id', '=', op.id), ('state', '=', 'done')])
                 
-                # Màu sắc nút chính
+                # Màu sắc nút
                 btn_color = 'btn-secondary'
                 if op.code == 'incoming': btn_color = 'btn-primary'
                 elif op.code == 'outgoing': btn_color = 'btn-success'
                 elif op.code == 'internal': btn_color = 'btn-warning'
 
-                data.append({
+                ops_data.append({
                     'id': op.id,
                     'name': op.name,
                     'code': op.code,
                     'count_ready': op.count_picking_ready,
-                    'count_waiting': op.count_picking_waiting,
                     'count_late': op.count_picking_late,
+                    'count_waiting': op.count_picking_waiting,
                     'count_draft': count_draft,
                     'btn_color': btn_color,
                 })
-            warehouse.warehouse_dashboard_data = json.dumps(data)
 
+            # --- PHẦN 2: TÍNH TOÁN ĐƠN HÀNG MISA ---
+            # Tìm đơn hàng thuộc kho này & ngày MISA là hôm nay & đã xác nhận
+            misa_domain = [
+                ('warehouse_id', '=', warehouse.id),
+                ('x_studio_misa_order_date', '=', today),
+                ('state', 'in', ['sale', 'done'])
+            ]
+            
+            # Lấy danh sách đơn
+            orders = SaleOrder.search(misa_domain)
+            total_orders = len(orders)
+            
+            # Phân loại theo trạng thái giao hàng (delivery_status)
+            full_orders = orders.filtered(lambda o: o.delivery_status == 'full')
+            partial_orders = orders.filtered(lambda o: o.delivery_status == 'partial')
+            
+            # Số đơn tồn (Chưa giao hoặc Giao chưa hết)
+            not_full_count = total_orders - len(full_orders)
+
+            misa_stats = {
+                'total': total_orders,
+                'full': len(full_orders),
+                'partial': len(partial_orders),
+                'not_full': not_full_count
+            }
+
+            # Đóng gói JSON
+            final_data = {
+                'operations': ops_data,
+                'misa': misa_stats
+            }
+            warehouse.warehouse_dashboard_data = json.dumps(final_data)
+
+    # --- HÀM 1: MỞ VIEW HOẠT ĐỘNG KHO ---
     def open_picking_type_view(self):
         self.ensure_one()
         p_type_id = self.env.context.get('picking_type_id')
@@ -68,10 +106,45 @@ class StockWarehouse(models.Model):
             
         return action
 
+    # --- HÀM 2: MỞ DANH SÁCH Picking Type CỦA KHO ---
     def open_warehouse_operations(self):
         self.ensure_one()
         action = self.env["ir.actions.actions"]._for_xml_id("stock.stock_picking_type_action")
-        # Lọc danh sách loại hoạt động THEO KHO hiện tại
         action['domain'] = [('warehouse_id', '=', self.id)]
         action['display_name'] = f"Hoạt động: {self.name}"
+        action['context'] = {'default_warehouse_id': self.id}
         return action
+
+    # --- HÀM 3: MỞ ĐƠN HÀNG MISA ---
+    def open_misa_sale_orders(self):
+        self.ensure_one()
+        today = fields.Date.context_today(self)
+        filter_type = self.env.context.get('misa_filter', 'all')
+        
+        domain = [
+            ('warehouse_id', '=', self.id),
+            ('x_studio_misa_order_date', '=', today),
+            ('state', 'in', ['sale', 'done'])
+        ]
+        
+        name = f"Đơn MISA {today}"
+
+        if filter_type == 'full':
+            domain.append(('delivery_status', '=', 'full'))
+            name += " (Đã xong)"
+        elif filter_type == 'partial':
+            domain.append(('delivery_status', '=', 'partial'))
+            name += " (1 Phần)"
+        elif filter_type == 'not_full':
+            # Khác full nghĩa là pending hoặc partial
+            domain.append(('delivery_status', '!=', 'full'))
+            name += " (Chưa xong)"
+            
+        return {
+            'name': name,
+            'type': 'ir.actions.act_window',
+            'res_model': 'sale.order',
+            'view_mode': 'list,form',
+            'domain': domain,
+            'context': {'create': False}
+        }
