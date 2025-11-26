@@ -58,15 +58,11 @@
                                         </a>
                                     </div>
 
-                                    <div class="col-4">
-                                        <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'not_full'}"
-                                           class="d-block text-decoration-none py-2 px-1 hover-zoom">
-                                            <div class="display-6 fw-bold text-danger mb-0" style="line-height: 1;">
-                                                <t t-esc="misa_data.not_full"/>
-                                            </div>
-                                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">Chưa giao</small>
-                                        </a>
-                                    </div>
+                                                                        <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">
+                                        <span style="display:block;">CHƯA XUẤT</span>
+                                        <span style="display:block;">(gồm cả đơn xuất 1 phần)</span>
+                                    </small>
+
                                 </div>
                             </div>
                             
