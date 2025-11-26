@@ -10,76 +10,77 @@
                 <field name="warehouse_dashboard_data"/>
                 <templates>
                     <t t-name="kanban-box">
-                        <div class="d-flex flex-column h-100">
+                        <div class="d-flex flex-column h-100 shadow-sm">
                             
-                            <div class="o_kanban_card_header p-2 bg-100 border-bottom">
+                            <div class="o_kanban_card_header p-3 bg-100 border-bottom">
                                 <a type="object" name="open_warehouse_operations" 
-                                   class="fw-bold text-uppercase text-dark text-decoration-none d-block w-100">
-                                    <h3 class="mb-0 fs-5"><field name="name"/></h3>
+                                   class="fw-bold text-uppercase text-dark text-decoration-none d-block">
+                                    <h4 class="mb-0 fs-6"><field name="name"/></h4>
                                 </a>
                             </div>
 
-                            <div class="p-2 flex-grow-1">
+                            <div class="p-0 flex-grow-1 bg-white">
                                 <t t-set="dashboard_data" t-value="JSON.parse(record.warehouse_dashboard_data.value || '[]')"/>
                                 
-                                <table class="table table-sm table-borderless mb-0">
-                                    <tbody>
-                                        <tr t-foreach="dashboard_data" t-as="op" class="border-bottom">
+                                <div class="list-group list-group-flush">
+                                    <t t-foreach="dashboard_data" t-as="op">
+                                        <div class="list-group-item p-3">
                                             
-                                            <td class="align-middle ps-0 py-2">
-                                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                                    <a type="object" name="open_picking_type_view" 
-                                                       t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;all&quot;}'"
-                                                       class="fw-bold text-dark text-decoration-none text-truncate" 
-                                                       style="max-width: 160px; font-size: 1rem;">
-                                                        <t t-esc="op.name"/>
-                                                    </a>
-                                                    
-                                                    <a t-if="op.count_ready > 0" 
-                                                       type="object" name="open_picking_type_view"
-                                                       t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;ready&quot;}'" 
-                                                       t-attf-class="btn btn-sm #{op.btn_color} text-white fw-bold rounded-pill px-3 shadow-sm">
-                                                        <t t-esc="op.count_ready"/>
-                                                    </a>
-                                                </div>
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <a type="object" name="open_picking_type_view" 
+                                                   t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;all&quot;}'"
+                                                   class="fw-bold text-dark text-decoration-none text-truncate me-2" 
+                                                   title="Xem tất cả"
+                                                   style="font-size: 1rem; max-width: 70%;">
+                                                    <t t-esc="op.name"/>
+                                                </a>
 
-                                                <div class="d-flex flex-wrap gap-1 mt-1">
-                                                    
-                                                    <a t-if="op.count_late > 0" 
-                                                       type="object" name="open_picking_type_view"
-                                                       t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;late&quot;}'"
-                                                       class="badge rounded-pill text-bg-danger text-decoration-none py-1 px-2 pointer"
-                                                       title="Đơn hàng trễ">
-                                                        <t t-esc="op.count_late"/> Trễ
-                                                    </a>
+                                                <a t-if="op.count_ready > 0" 
+                                                   type="object" name="open_picking_type_view"
+                                                   t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;ready&quot;}'" 
+                                                   t-attf-class="btn btn-sm #{op.btn_color} text-white fw-bold rounded-pill px-3 shadow-sm"
+                                                   style="min-width: 40px;">
+                                                    <t t-esc="op.count_ready"/>
+                                                </a>
+                                            </div>
 
-                                                    <a t-if="op.count_waiting > 0" 
-                                                       type="object" name="open_picking_type_view"
-                                                       t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;waiting&quot;}'"
-                                                       class="badge rounded-pill text-bg-warning text-decoration-none py-1 px-2 pointer"
-                                                       title="Đang chờ hàng">
-                                                        <t t-esc="op.count_waiting"/> Chờ
-                                                    </a>
+                                            <div class="d-flex flex-wrap align-items-center gap-2" style="font-size: 0.75rem;">
+                                                
+                                                <a t-if="op.count_late > 0" 
+                                                   type="object" name="open_picking_type_view"
+                                                   t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;late&quot;}'"
+                                                   class="badge bg-danger bg-opacity-10 text-danger border border-danger text-decoration-none py-1 px-2 rounded-2">
+                                                    <i class="fa fa-clock-o me-1"/>Trễ: <t t-esc="op.count_late"/>
+                                                </a>
 
-                                                    <a t-if="op.count_draft > 0" 
-                                                       type="object" name="open_picking_type_view"
-                                                       t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;draft&quot;}'"
-                                                       class="badge rounded-pill bg-200 text-dark text-decoration-none py-1 px-2 pointer border border-300">
-                                                        Nháp: <t t-esc="op.count_draft"/>
-                                                    </a>
+                                                <a t-if="op.count_waiting > 0" 
+                                                   type="object" name="open_picking_type_view"
+                                                   t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;waiting&quot;}'"
+                                                   class="badge bg-warning bg-opacity-10 text-warning-700 border border-warning text-decoration-none py-1 px-2 rounded-2">
+                                                    Chờ: <t t-esc="op.count_waiting"/>
+                                                </a>
 
-                                                    <a type="object" name="open_picking_type_view"
-                                                       t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;done&quot;}'"
-                                                       class="badge rounded-pill text-bg-success text-decoration-none py-1 px-2 pointer">
-                                                        Xong
-                                                    </a>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                                                <a t-if="op.count_draft > 0" 
+                                                   type="object" name="open_picking_type_view"
+                                                   t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;draft&quot;}'"
+                                                   class="text-muted text-decoration-none fw-bold bg-light border px-2 py-1 rounded-2">
+                                                    Nháp: <t t-esc="op.count_draft"/>
+                                                </a>
+
+                                                <a type="object" name="open_picking_type_view"
+                                                   t-att-context="'{&quot;picking_type_id&quot;: ' + op.id + ', &quot;view_type&quot;: &quot;done&quot;}'"
+                                                   class="text-success text-decoration-none opacity-75 hover-opacity-100 ms-auto"
+                                                   title="Xem lịch sử hoàn tất">
+                                                    <i class="fa fa-check-circle"/> Xong
+                                                </a>
+                                            </div>
+
+                                        </div>
+                                    </t>
+                                </div>
                                 
-                                <div t-if="dashboard_data.length === 0" class="text-center text-muted fst-italic py-3">
+                                <div t-if="dashboard_data.length === 0" class="text-center text-muted fst-italic py-4 bg-light">
+                                    <i class="fa fa-folder-open-o mb-2 fs-4 d-block"/>
                                     Không có hoạt động
                                 </div>
                             </div>
@@ -91,7 +92,7 @@
     </record>
 
     <record id="action_warehouse_dashboard" model="ir.actions.act_window">
-        <field name="name">Tổng quan Kho (Gộp)</field>
+        <field name="name">Tổng quan Kho</field>
         <field name="res_model">stock.warehouse</field>
         <field name="view_mode">kanban,form</field>
         <field name="view_id" ref="view_warehouse_dashboard_kanban"/>
