@@ -13,20 +13,18 @@ class StockWarehouse(models.Model):
         today = fields.Date.context_today(self)
 
         for warehouse in self:
-            # --- PHẦN MISA: QUAN TRỌNG NHẤT ---
-            # Tìm đơn hàng thuộc kho này & ngày MISA là hôm nay & đã xác nhận
             misa_domain = [
                 ('warehouse_id', '=', warehouse.id),
                 ('x_studio_misa_order_date', '=', today),
                 ('state', 'in', ['sale', 'done'])
             ]
-            
             orders = SaleOrder.search(misa_domain)
             total_orders = len(orders)
             
-            # Tính toán delivery_status
+            # Logic tính toán (giữ nguyên)
             full_orders = len(orders.filtered(lambda o: o.delivery_status == 'full'))
             partial_orders = len(orders.filtered(lambda o: o.delivery_status == 'partial'))
+            # not_full = Tổng - Full (tức là gồm cả Partial và Pending)
             not_full_count = total_orders - full_orders
 
             final_data = {
@@ -36,11 +34,9 @@ class StockWarehouse(models.Model):
                     'partial': partial_orders,
                     'not_full': not_full_count
                 }
-                # Không cần gửi ops_data nữa vì giao diện không dùng
             }
             warehouse.warehouse_dashboard_data = json.dumps(final_data)
 
-    # --- HÀM CLICK TÊN KHO -> MỞ HOẠT ĐỘNG ---
     def open_warehouse_operations(self):
         self.ensure_one()
         action = self.env["ir.actions.actions"]._for_xml_id("stock.stock_picking_type_action")
@@ -49,7 +45,6 @@ class StockWarehouse(models.Model):
         action['context'] = {'default_warehouse_id': self.id}
         return action
 
-    # --- HÀM CLICK SỐ LIỆU MISA -> MỞ ĐƠN HÀNG ---
     def open_misa_sale_orders(self):
         self.ensure_one()
         today = fields.Date.context_today(self)
@@ -71,7 +66,8 @@ class StockWarehouse(models.Model):
             name += " (1 Phần)"
         elif filter_type == 'not_full':
             domain.append(('delivery_status', '!=', 'full'))
-            name += " (Tồn kho)"
+            # SỬA TÊN CỬA SỔ Ở ĐÂY
+            name += " (Chưa giao / Chưa xong)"
             
         return {
             'name': name,
