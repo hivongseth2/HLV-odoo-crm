@@ -19,6 +19,8 @@ class SaleOrder(models.Model):
         store=True,
         help="Chỉ hiển thị các kho đã hoàn thành phiếu xuất"
     )
+    
+    effective_warehouse_names = fields.Char(related='warehouse_done_names', string="Kho cũ (Sắp xóa)")
 
     @api.depends('picking_ids', 'picking_ids.state', 'picking_ids.location_id', 'picking_ids.date_done')
     def _compute_warehouse_info(self):
