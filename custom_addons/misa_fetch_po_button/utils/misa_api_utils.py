@@ -380,6 +380,7 @@ class MisaApiUtils(models.AbstractModel):
         """
         Hàm này dùng để lấy ra mã nhân viên sale (OwnerIDText, chỉ lấy phần trong ngoặc),
         ngày đơn hàng (SaleOrderDate), thông tin giao hàng từ CustomField14,
+        tên người nhận hàng (ShippingContactIDText),
         và mã vận đơn (OtherSysOrderCode, DeliveryOrderNumber)
         - Gọi API: POST https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4
         - Payload: {"ID": "<sale_order_id>", "MISAEntityState": "2"}
@@ -393,11 +394,11 @@ class MisaApiUtils(models.AbstractModel):
             resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
             if resp.status_code != 200:
                 _logger.error("FormDataNew(SaleOrder) HTTP %s: %s", resp.status_code, resp.text[:300])
-                return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None}
+                return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None}
             data = resp.json() if resp.content else {}
         except Exception as ex:
             _logger.exception("Lỗi gọi FormDataNew SaleOrder (ID=%s): %s", sale_order_id, ex)
-            return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None}
+            return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None}
 
         # Lấy dữ liệu chi tiết đơn hàng từ response
         cd = (data or {}).get("Data", {}).get("CurrentData", {}) or {}
@@ -426,13 +427,17 @@ class MisaApiUtils(models.AbstractModel):
         other_sys_order_code = (cd.get("OtherSysOrderCode") or "").strip() or None
         delivery_order_number = (cd.get("DeliveryOrderNumber") or "").strip() or None
 
+        # Lấy tên người nhận hàng từ ShippingContactIDText
+        shipping_contact = (cd.get("ShippingContactIDText") or "").strip() or None
+
         # Trả về kết quả dạng dict
         return {
             "owner_code": owner_code,
             "sale_order_date": sale_date,
             "misa_delivery": misa_delivery,
             "other_sys_order_code": other_sys_order_code,
-            "delivery_order_number": delivery_order_number
+            "delivery_order_number": delivery_order_number,
+            "shipping_contact": shipping_contact
         }    
     
 
