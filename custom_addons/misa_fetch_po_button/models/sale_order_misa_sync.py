@@ -832,6 +832,7 @@ class SaleOrder(models.Model):
         delivery_no   = data.get("DeliveryOrderNumber") or order_no
         # delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
+        deadline_date_raw = data.get("DeadlineDate")
         shipping_addr = data.get("ShippingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
 
@@ -866,13 +867,18 @@ class SaleOrder(models.Model):
             'partner_shipping_id': shipping_id,
             'x_studio_zns': zns
         }
+        
+        from dateutil.parser import parse as dtparse
         if book_date:
-            from dateutil.parser import parse as dtparse
             try:
                 vals_create['date_order'] = dtparse(book_date).replace(tzinfo=None)
             except Exception:
                 pass
-
+        if deadline_date_raw:
+                    try:
+                        vals_create['commitment_date'] = dtparse(deadline_date_raw).replace(tzinfo=None)
+                    except Exception:
+                        pass
         # Sync x_studio_misa_saler_code and x_studio_misa_order_date
         if owner_date.get('owner_code'):
             vals_create['x_studio_misa_saler_code'] = owner_date['owner_code']

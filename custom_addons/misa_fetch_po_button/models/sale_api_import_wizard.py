@@ -908,6 +908,18 @@ class SaleApiImportWizard(models.TransientModel):
 
                 order_ref_base = order.get("SaleOrderNo")
                 order_date = parse(order.get("SaleOrderDate")).replace(tzinfo=None)
+                
+                deadline_date_raw = order.get("DeadlineDate")
+                commitment_date = False
+                if deadline_date_raw:
+                    try:
+                        # Parse và bỏ timezone để lưu vào Odoo (Odoo lưu UTC naive hoặc theo context server)
+                        commitment_date = parse(deadline_date_raw).replace(tzinfo=None)
+                    except Exception:
+                        commitment_date = False
+                        
+                        
+                        
                 if not order_ref_base or not customer_name:
                     _logger.warning("⛔ Thiếu mã đơn hoặc tên khách hàng trong đơn hàng: %s", order)
                     continue
@@ -1007,6 +1019,7 @@ class SaleApiImportWizard(models.TransientModel):
                         'partner_id': partner.id,
                         'date_order': order_date,
                         'amount_total': group_total,
+                        'commitment_date': commitment_date,
                         'partner_shipping_id': delivery_contact.id, 
                         'origin':origin,
                         'warehouse_id': warehouse.id,
@@ -1336,6 +1349,9 @@ class SaleApiImportWizard(models.TransientModel):
                                 upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
                             if owner_date.get('misa_delivery'):
                                 upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
+                                
+                            if commitment_date:
+                                upd['commitment_date'] = commitment_date
                             if upd:
                                 existing_order.write(upd)
                             _logger.info("🔁 SO đã tồn tại: %s, đã cập nhật thuế", order_ref)
@@ -1347,6 +1363,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'partner_id': partner.id,
                             'date_order': order_date,
                             'partner_shipping_id': delivery_contact.id,
+                            'commitment_date': commitment_date,
                             'amount_total': group_total,       # có thể để Odoo tự tính lại sau khi tạo line
                             'warehouse_id': warehouse.id,
                             'origin': origin,
