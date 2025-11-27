@@ -72,7 +72,6 @@
         </field>
     </record>
 
-
     <record id="action_warehouse_dashboard" model="ir.actions.act_window">
         <field name="name">Tổng quan Kho (Mới)</field>
         <field name="res_model">stock.warehouse</field>
@@ -85,5 +84,5 @@
               parent="stock.menu_stock_root"
               action="action_warehouse_dashboard"
               sequence="1"/>
-</odoo>
+
 </odoo>
