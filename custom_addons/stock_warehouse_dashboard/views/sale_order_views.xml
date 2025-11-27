@@ -3,11 +3,11 @@
     <record id="view_order_tree_inherit_print_count" model="ir.ui.view">
         <field name="name">sale.order.tree.inherit.print.count</field>
         <field name="model">sale.order</field>
-        <field name="inherit_id" ref="sale.view_order_tree"/>
+        <field name="inherit_id" ref="sale.view_quotation_tree"/>
         <field name="arch" type="xml">
-            <field name="state" position="before">
+            <xpath expr="//field[@name='state']" position="before">
                 <field name="picking_slip_print_count" optional="show" sum="Total"/>
-            </field>
+            </xpath>
         </field>
     </record>
 
