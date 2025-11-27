@@ -17,13 +17,13 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_internal_search"/>
         <field name="arch" type="xml">
-            <filter name="picking_type_id" position="before">
+            <xpath expr="//filter[@name='my_transfers']" position="before">
                 <filter string="Chưa in phiếu" name="filter_not_printed" domain="[('print_count', '=', 0)]"/>
                 <filter string="Đã in phiếu" name="filter_printed" domain="[('print_count', '>', 0)]"/>
                 <separator/>
                 <filter string="Ngày MISA hôm nay" name="filter_misa_today" domain="[('x_misa_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
                 <separator/>
-            </filter>
+            </xpath>
         </field>
     </record>
 
