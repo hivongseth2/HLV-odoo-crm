@@ -1382,9 +1382,15 @@ class SaleOrder(models.Model):
             vals_header_upd['x_studio_misa_saler_code'] = owner_date['owner_code']
         if owner_date.get('sale_order_date'):
             vals_header_upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
+        if owner_date.get('misa_delivery'):
+            vals_header_upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
+        if owner_date.get('httt'):
+            vals_header_upd['x_studio_httt'] = owner_date['httt']
+        if owner_date.get('htgh'):
+            vals_header_upd['x_studio_htgh'] = owner_date['htgh']
         if vals_header_upd:
             self.write(vals_header_upd)
-            _logger.info("✅ Đã cập nhật misa_saler_code/order_date cho SO %s", self.name)
+            _logger.info("✅ Đã cập nhật misa_saler_code/order_date/httt/htgh/misa_delivery cho SO %s", self.name)
 
         # --------- Bước 0a: ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA ---------
         _logger.info("🔄 Đồng bộ tên sản phẩm từ MISA cho SO %s...", self.name)
