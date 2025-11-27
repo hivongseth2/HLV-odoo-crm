@@ -1321,7 +1321,7 @@ class SaleOrder(models.Model):
 
     def _safe_unreserve_move(self, move):
         """Helper: Unreserve move một cách an toàn (reset qty_done, huỷ reserve)."""
-        try:
+        try: 
             if move.move_line_ids:
                 # reset mọi qty_done trên line (nếu có)
                 move.move_line_ids.filtered(lambda ml: getattr(ml, 'qty_done', 0)).write({'qty_done': 0})
