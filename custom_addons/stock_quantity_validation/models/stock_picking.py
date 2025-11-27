@@ -23,7 +23,7 @@ class StockPicking(models.Model):
         for move in self.move_ids_without_package:
             # Bỏ qua các move đã done hoặc đã cancel
             if move.state in ('done', 'cancel'):
-                continue
+                continue 
 
             # Lấy số lượng đã đặt (demand) và số lượng thực tế (done)
             qty_demand = float(move.product_uom_qty or 0.0)
