@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_picking_tree_inherit_print_misa" model="ir.ui.view">
+        <field name="name">stock.picking.tree.inherit.print.misa</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.vpicktree"/>
+        <field name="arch" type="xml">
+            <field name="origin" position="after">
+                <field name="x_misa_date" optional="show"/>
+                <field name="print_count" optional="show" sum="Total"/>
+            </field>
+        </field>
+    </record>
+
+    <record id="view_picking_internal_search_inherit_print" model="ir.ui.view">
+        <field name="name">stock.picking.search.inherit.print</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_internal_search"/>
+        <field name="arch" type="xml">
+            <filter name="picking_type_id" position="before">
+                <filter string="Chưa in phiếu" name="filter_not_printed" domain="[('print_count', '=', 0)]"/>
+                <filter string="Đã in phiếu" name="filter_printed" domain="[('print_count', '>', 0)]"/>
+                <separator/>
+                <filter string="Ngày MISA hôm nay" name="filter_misa_today" domain="[('x_misa_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                <separator/>
+            </filter>
+        </field>
+    </record>
+
+    <record id="action_print_batch_delivery_slip" model="ir.actions.server">
+        <field name="name">🖨️ In Phiếu Lấy Hàng (Có đếm)</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+            action = records.action_print_batch_delivery_slip()
+        </field>
+    </record>
+</odoo>
