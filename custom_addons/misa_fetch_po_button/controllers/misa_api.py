@@ -1,6 +1,6 @@
 # controllers/misa_api.py
 # -*- coding: utf-8 -*-
-import logging, json, re
+import logging, json,re
 from odoo import http
 from odoo.http import request
 
@@ -85,8 +85,8 @@ class MisaApiSaleOrder(http.Controller):
         except Exception as e:
             _logger.exception("MISA API /resync exception: %s", e)
             return {"ok": False, "error": "exception", "message": str(e)}
-        
-        
+
+
     @http.route('/api/misa/sale_order/resync_by_name', type='json', auth='none', methods=['POST'], csrf=False)
     def api_misa_sale_order_resync_by_name(self, **payload):
         # ---- parse body y như bạn đang làm ở trên ----

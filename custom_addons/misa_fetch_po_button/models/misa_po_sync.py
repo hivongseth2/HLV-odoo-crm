@@ -554,26 +554,7 @@ class MisaPOSync(models.TransientModel):
         receive_date_str = misa_po.get("receive_date") or misa_po.get("refdate")
         planned_naive_utc = _to_naive_utc(receive_date_str)
 
-        # Lấy thêm thông tin đối tác từ API
-        account_object_code = misa_po.get("account_object_code", "")
-        account_object_tax_code = misa_po.get("account_object_tax_code", "")
-        account_object_address = misa_po.get("account_object_address", "")
-
-        # Tạo/cập nhật partner với thông tin chi tiết từ MISA
         partner = odoo_utils._get_or_create_partner(supplier_name)
-        
-        # Cập nhật thông tin đối tác nếu có
-        partner_update_vals = {}
-        if account_object_code and not partner.ref:
-            partner_update_vals['ref'] = account_object_code
-        if account_object_tax_code and not partner.vat:
-            partner_update_vals['vat'] = account_object_tax_code
-        if account_object_address and not partner.street:
-            partner_update_vals['street'] = account_object_address
-        
-        if partner_update_vals:
-            partner.write(partner_update_vals)
-            _logger.info("✅ Cập nhật thông tin đối tác %s: %s", supplier_name, partner_update_vals)
 
         detail_payload = {
             "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
@@ -608,9 +589,19 @@ class MisaPOSync(models.TransientModel):
         if not lines:
             raise models.UserError(f"⚠️ Đơn {refno} không có chi tiết sản phẩm")
 
-        # ===== LOGIC MAPPING MỚI: PO luôn vào KBC/Tồn kho =====
-        # Purchase Order là nhập hàng từ nhà cung cấp → tất cả vào KBC
-        location_name = "KBC/Tồn kho"
+        stock_code = lines[0].get("stock_code", "").strip().replace(" ", "").upper()
+        
+        stock_mapping = {
+                "HCM": "TSN/Stock",
+                "BENCAM": "KBC/Tồn kho",
+                "HIENDUC": "KHD/Tồn kho",
+                "HCM_SHOWROOM": "TSNSR/Stock"
+            }
+
+        if stock_code not in stock_mapping:
+            raise models.UserError(f"📛 Kho {stock_code} không được hỗ trợ")
+
+        location_name = stock_mapping[stock_code]
         location = self.env['stock.location'].search([('complete_name', '=', location_name)], limit=1)
 
         if not location:
@@ -621,9 +612,7 @@ class MisaPOSync(models.TransientModel):
         ], limit=1)
 
         if not warehouse:
-            raise models.UserError(f"❌ Không tìm thấy warehouse cho {location_name}")
-        
-        _logger.info("✅ PO %s → Location '%s' (Warehouse: %s)", refno, location_name, warehouse.name)
+            raise models.UserError(f"❌ Không tìm thấy warehouse cho {stock_code}")
 
         picking_type = warehouse.in_type_id
 
@@ -651,7 +640,7 @@ class MisaPOSync(models.TransientModel):
                 'origin': memo,
                 'picking_type_id': picking_type.id,
                 'date_planned': planned_naive_utc or fields.Datetime.now(),
-                'partner_ref': account_object_code,
+                'partner_ref': refno,
             })
             
             po_rec = odoo_po
@@ -666,7 +655,7 @@ class MisaPOSync(models.TransientModel):
                 "picking_type_id": picking_type.id,
                 "name": refno,
                 "date_planned": planned_naive_utc or fields.Datetime.now(),
-                "partner_ref": account_object_code,
+                "partner_ref": refno,
             }
             po_rec = self.env["purchase.order"].create(po_vals)
             total_lines = len(lines)

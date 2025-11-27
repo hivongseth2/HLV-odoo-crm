@@ -396,11 +396,14 @@ class MisaApiUtils(models.AbstractModel):
             resp = requests.post(url, headers=sale_headers, json=payload, timeout=30)
             if resp.status_code != 200:
                 _logger.error("FormDataNew(SaleOrder) HTTP %s: %s", resp.status_code, resp.text[:300])
-                return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None, "httt": None, "htgh": None}
+
+                return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "shipping_contact": None, "httt": None, "htgh": None}
+                # return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None}
             data = resp.json() if resp.content else {}
         except Exception as ex:
             _logger.exception("Lỗi gọi FormDataNew SaleOrder (ID=%s): %s", sale_order_id, ex)
-            return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None, "httt": None, "htgh": None}
+            return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "shipping_contact": None, "httt": None, "htgh": None}
+            # return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None}
 
         # Lấy dữ liệu chi tiết đơn hàng từ response
         cd = (data or {}).get("Data", {}).get("CurrentData", {}) or {}
@@ -426,8 +429,8 @@ class MisaApiUtils(models.AbstractModel):
         misa_delivery = (cd.get("CustomField14") or "").strip() or None
 
         # Lấy mã vận đơn từ OtherSysOrderCode và DeliveryOrderNumber
-        other_sys_order_code = (cd.get("OtherSysOrderCode") or "").strip() or None
-        delivery_order_number = (cd.get("DeliveryOrderNumber") or "").strip() or None
+        # other_sys_order_code = (cd.get("OtherSysOrderCode") or "").strip() or None
+        # delivery_order_number = (cd.get("DeliveryOrderNumber") or "").strip() or None
 
         # Lấy tên người nhận hàng từ ShippingContactIDText
         shipping_contact = (cd.get("ShippingContactIDText") or "").strip() or None
@@ -441,12 +444,18 @@ class MisaApiUtils(models.AbstractModel):
             "owner_code": owner_code,
             "sale_order_date": sale_date,
             "misa_delivery": misa_delivery,
-            "other_sys_order_code": other_sys_order_code,
-            "delivery_order_number": delivery_order_number,
             "shipping_contact": shipping_contact,
             "httt": httt,
             "htgh": htgh
-        }    
+        }
+        # return {
+        #     "owner_code": owner_code,
+        #     "sale_order_date": sale_date,
+        #     "misa_delivery": misa_delivery,
+        #     "other_sys_order_code": other_sys_order_code,
+        #     "delivery_order_number": delivery_order_number,
+        #     "shipping_contact": shipping_contact
+        # }    
     
 
 
@@ -483,7 +492,7 @@ class MisaApiUtils(models.AbstractModel):
             return mapping.get(raw, raw)
 
         session = requests.Session()
-        api_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
+        api_url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
         api_headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}" if token else "",
