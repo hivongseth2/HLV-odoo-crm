@@ -9,82 +9,81 @@ class StockWarehouse(models.Model):
 
     @api.depends('picking_type_ids')
     def _compute_warehouse_dashboard_data(self):
-        Picking = self.env['stock.picking']
+        SaleOrder = self.env['sale.order']
         today = fields.Date.context_today(self)
 
         for warehouse in self:
-            # 1. Lọc các phiếu xuất kho (Outgoing) thuộc kho này & Ngày MISA hôm nay
-            domain = [
-                ('picking_type_id.warehouse_id', '=', warehouse.id),
-                ('picking_type_id.code', '=', 'outgoing'), # Chỉ lấy phiếu xuất
-                ('x_misa_date', '=', today),
-                ('state', 'not in', ['cancel', 'draft']) # Đã xác nhận trở lên
+            # 1. Tìm đơn hàng MISA hôm nay
+            misa_domain = [
+                ('warehouse_id', '=', warehouse.id),
+                ('x_studio_misa_order_date', '=', today),
+                ('state', 'in', ['sale', 'done'])
             ]
             
-            # 2. Lấy dữ liệu
-            pickings = Picking.search(domain)
-            total = len(pickings)
+            orders = SaleOrder.search(misa_domain)
+            total = len(orders)
             
-            # Phân loại theo trạng thái in ấn
-            not_printed = len(pickings.filtered(lambda p: p.print_count == 0))
-            printed = total - not_printed
+            # 2. Thống kê theo trạng thái giao hàng
+            full = len(orders.filtered(lambda o: o.delivery_status == 'full'))
+            partial = len(orders.filtered(lambda o: o.delivery_status == 'partial'))
+            not_full = total - full
 
-            # Phân loại theo trạng thái kho (Xong / Chưa xong)
-            done = len(pickings.filtered(lambda p: p.state == 'done'))
-            pending = total - done
+            # 3. Thống kê in ấn (Optional: để hiển thị con số chưa in lên dashboard nếu cần)
+            not_printed = len(orders.filtered(lambda o: o.picking_slip_print_count == 0))
 
             final_data = {
                 'misa': {
                     'total': total,
-                    'not_printed': not_printed, # Chưa in
-                    'printed': printed,         # Đã in
-                    'done': done,               # Đã xuất kho xong
-                    'pending': pending          # Đang chờ xuất
+                    'full': full,
+                    'partial': partial,
+                    'not_full': not_full,
+                    'not_printed': not_printed # Số lượng chưa in
                 }
             }
             warehouse.warehouse_dashboard_data = json.dumps(final_data)
 
-    # --- HÀM MỞ DANH SÁCH PHIẾU KHO ---
-    def open_misa_pickings(self):
+    # Hàm mở danh sách Đơn hàng (Sale Order)
+    def open_misa_sale_orders(self):
         self.ensure_one()
         today = fields.Date.context_today(self)
         filter_type = self.env.context.get('misa_filter', 'all')
         
-        # Domain cơ bản: Kho này + Xuất kho + Ngày MISA
+        # Domain cơ bản
         domain = [
-            ('picking_type_id.warehouse_id', '=', self.id),
-            ('picking_type_id.code', '=', 'outgoing'),
-            ('x_misa_date', '=', today),
-            ('state', 'not in', ['cancel', 'draft'])
+            ('warehouse_id', '=', self.id),
+            ('x_studio_misa_order_date', '=', today),
+            ('state', 'in', ['sale', 'done'])
         ]
         
-        name = f"Phiếu xuất {today}"
+        name = f"Đơn MISA {today}"
         ctx = {'create': False}
 
-        # Xử lý các bộ lọc khi bấm vào số liệu
-        if filter_type == 'not_printed':
-            domain.append(('print_count', '=', 0))
+        # Xử lý Filter
+        if filter_type == 'full':
+            domain.append(('delivery_status', '=', 'full'))
+            name += " (Đã xong)"
+        elif filter_type == 'partial':
+            domain.append(('delivery_status', '=', 'partial'))
+            name += " (1 Phần)"
+        elif filter_type == 'not_full':
+            domain.append(('delivery_status', '!=', 'full'))
+            name += " (Tồn/Chưa giao)"
+        elif filter_type == 'not_printed':
+            # Nếu bấm vào nút in -> Lọc ra đơn chưa in
+            # Cách dùng search_default trong context để kích hoạt bộ lọc XML
+            ctx['search_default_filter_not_printed'] = 1
             name += " (Chưa in)"
-        elif filter_type == 'printed':
-            domain.append(('print_count', '>', 0))
-            name += " (Đã in)"
-        elif filter_type == 'done':
-            domain.append(('state', '=', 'done'))
-            name += " (Đã xuất)"
-        elif filter_type == 'pending':
-            domain.append(('state', '!=', 'done'))
-            name += " (Chờ xuất)"
             
         return {
             'name': name,
             'type': 'ir.actions.act_window',
-            'res_model': 'stock.picking', # Mở model stock.picking thay vì sale.order
+            'res_model': 'sale.order',
             'view_mode': 'list,form',
             'domain': domain,
             'context': ctx
         }
-    
-    # Giữ lại hàm mở cấu hình hoạt động kho
+        
+    # Giữ hàm mở hoạt động kho
     def open_warehouse_operations(self):
         self.ensure_one()
         action = self.env["ir.actions.actions"]._for_xml_id("stock.stock_picking_type_action")

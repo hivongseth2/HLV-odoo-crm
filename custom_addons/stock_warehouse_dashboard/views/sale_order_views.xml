@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_order_tree_inherit_print_count" model="ir.ui.view">
+    <record id="view_quotation_tree_inherit_print_count" model="ir.ui.view">
         <field name="name">sale.order.tree.inherit.print.count</field>
         <field name="model">sale.order</field>
         <field name="inherit_id" ref="sale.view_quotation_tree"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='state']" position="before">
+            <field name="state" position="before">
                 <field name="picking_slip_print_count" optional="show" sum="Total"/>
-            </xpath>
+            </field>
         </field>
     </record>
 
@@ -25,8 +25,8 @@
         </field>
     </record>
 
-    <record id="action_print_batch_picking_slip" model="ir.actions.server">
-        <field name="name">In Phiếu Lấy Hàng (Có đếm)</field>
+    <record id="action_print_batch_sale_slip" model="ir.actions.server">
+        <field name="name">🖨️ In Phiếu (Có đếm)</field>
         <field name="model_id" ref="sale.model_sale_order"/>
         <field name="binding_model_id" ref="sale.model_sale_order"/>
         <field name="binding_view_types">list</field>
