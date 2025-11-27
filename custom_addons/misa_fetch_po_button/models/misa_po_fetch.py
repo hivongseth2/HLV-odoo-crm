@@ -322,10 +322,13 @@ class MisaPOFetch(models.TransientModel):
             "useSp": False,
             "view": 2
         }
-        
-        # ===== LOGIC MAPPING MỚI: PO luôn vào KBC/Tồn kho =====
-        # Purchase Order là nhập hàng từ nhà cung cấp → tất cả vào KBC
-        location_name = "KBC/Tồn kho"
+        stock_mapping = {
+                "HCM": "TSN/Stock",
+                "BENCAM": "KBC/Tồn kho",
+                "HIENDUC": "KHD/Tồn kho",
+                "HCM_SHOWROOM":"TSNSR/Stock"
+            }
+
 
         page_index = 1
         while True:
@@ -353,11 +356,6 @@ class MisaPOFetch(models.TransientModel):
                 refno = po.get("refno", "PO-MISA")
                 memo = po.get("journal_memo", "")
 
-                # Lấy thêm thông tin đối tác từ API
-                account_object_code = po.get("account_object_code", "")
-                account_object_tax_code = po.get("account_object_tax_code", "")
-                account_object_address = po.get("account_object_address", "")
-
                 # chỉ lấy đơn "chưa thực hiện" ---
                 def _as_bool(val):
                     if isinstance(val, bool):
@@ -376,21 +374,7 @@ class MisaPOFetch(models.TransientModel):
                 planned_naive_utc = _to_naive_utc(receive_date_str)
 
 
-                # Tạo/cập nhật partner với thông tin chi tiết từ MISA
                 partner = odoo_utils._get_or_create_partner(supplier_name)
-                
-                # Cập nhật thông tin đối tác nếu có
-                partner_update_vals = {}
-                if account_object_code and not partner.ref:
-                    partner_update_vals['ref'] = account_object_code
-                if account_object_tax_code and not partner.vat:
-                    partner_update_vals['vat'] = account_object_tax_code
-                if account_object_address and not partner.street:
-                    partner_update_vals['street'] = account_object_address
-                
-                if partner_update_vals:
-                    partner.write(partner_update_vals)
-                    _logger.info("✅ Cập nhật thông tin đối tác %s: %s", supplier_name, partner_update_vals)
 
                 detail_page_index = 1
                 all_detail_lines = []
@@ -434,15 +418,23 @@ class MisaPOFetch(models.TransientModel):
 
                 # Sau khi loop hết các trang thì gán lại cho lines để xử lý như cũ
                 lines = all_detail_lines
-                
-                # ===== XÁC ĐỊNH KHO: PO luôn vào KBC/Tồn kho =====
+                stock_code = (
+                    lines[0].get("stock_code", "").strip().replace(" ", "").upper()
+                    if lines else None
+)
+                if stock_code not in stock_mapping:
+                    _logger.warning("📛 Kho %s không nằm trong mapping, bỏ PO %s", stock_code, refno)
+                    continue
+
+                location_name = stock_mapping[stock_code]
                 location = self.env['stock.location'].search([
                     ('complete_name', '=', location_name)
                 ], limit=1)
 
                 if not location:
-                    _logger.warning("❌ Không tìm thấy stock.location '%s' cho PO %s", location_name, refno)
+                    _logger.warning("❌ Không tìm thấy stock.location cho kho %s (%s)", stock_code, location_name)
                     continue
+                
                 
                 existing_po = self.env["purchase.order"].search([("name", "=", refno)], limit=1)
                 if existing_po:
@@ -454,10 +446,8 @@ class MisaPOFetch(models.TransientModel):
                 ], limit=1)
 
                 if not warehouse:
-                    _logger.warning("❌ Không tìm thấy warehouse cho location '%s'", location_name)
+                    _logger.warning("❌ Không tìm thấy warehouse cho kho %s", stock_code)
                     continue
-                
-                _logger.info("✅ PO %s → Location '%s' (Warehouse: %s)", refno, location_name, warehouse.name)
                 picking_type = warehouse.in_type_id
                 
                 po_vals = {
@@ -511,7 +501,7 @@ class MisaPOFetch(models.TransientModel):
                     self.env["purchase.order.line"].create(pol_vals)
                     
                     
-                po_rec.write({'partner_ref': account_object_code})      # tham chiếu NCC, dễ tra cứu
+                po_rec.write({'partner_ref': refno})      # tham chiếu NCC, dễ tra cứu
                 po_rec.button_confirm()                   # xác nhận đơn mua
 
                 # Cập nhật ngày dự kiến + đảm bảo receipt đúng kho/location

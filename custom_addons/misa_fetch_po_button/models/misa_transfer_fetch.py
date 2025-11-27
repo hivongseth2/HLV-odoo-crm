@@ -59,12 +59,11 @@ class MisaTransferFetch(models.TransientModel):
         """Ví dụ: to_code = 'TSN' -> trả về record stock.warehouse của TSN"""
         # Tùy theo mapping của bạn, ở dưới mình map code MISA -> warehouse.code
         code_map = {
-            'HCM': 'KHSG',
+            'HCM': 'TSN',
             'BENCAM': 'KBC',
             'HIENDUC': 'KHD',
-            'TSN': 'TSN',
-            'HCM_SHOWROOM': 'TSNSR'
-            # "HCM":        "TSN",
+            'HCM_SHOWROOM': 'TSNSR',
+            "HANGMUON": "KMUON"
             # "HCM_SHOWROOM":"TSNSR",
             # "BENCAM":     "KBC",
             # "HIENDUC":    "KHD",
@@ -87,11 +86,12 @@ class MisaTransferFetch(models.TransientModel):
 
         # map mã MISA -> complete_name location NGUỒN (chỉ dùng cho from)
         source_location_map = {
-            "HCM":        "KHSG/Stock",
+            "HCM":         "TSN/Stock",
             "BENCAM":     "KBC/Tồn kho",
             "HIENDUC":    "KHD/Tồn kho",
-            "TSN":        "TSN/Stock",
             "HCM_SHOWROOM":"TSNSR/Stock",
+            "HANGMUON":"KMUON/Tồn kho",
+
         }
         default_location_path = "Partners/Vendors"
 
@@ -109,7 +109,12 @@ class MisaTransferFetch(models.TransientModel):
             "pageIndex": 1, "pageSize": 100, "useSp": False, "view": 62,
             "summaryColumns": [5042], "loadMode": 2,
         }
+        
+        _logger.info("🔁payloade='%s' ", payload)
+        _logger.info("header----='%s' ", headers)
 
+
+        
         page_index = 1
         while True:
             payload["pageIndex"] = page_index

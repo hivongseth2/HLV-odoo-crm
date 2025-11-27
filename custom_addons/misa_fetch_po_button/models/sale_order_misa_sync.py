@@ -169,23 +169,11 @@ class SaleOrder(models.Model):
         data = self._misa_fetch_order()
         # Một số key phổ biến cần dùng (tùy chỉnh theo thực tế):
         # OtherSysOrderCode, DeliveryOrderNumber, SaleOrderNo, ListOrderNumber, AccountIDText, BookDate, DeliveryDate, BillingAddress, v.v.
-
-        # Lấy misa_order_id để fetch thông tin chi tiết
-        misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
-
-        # Fetch OwnerIDText, SaleOrderDate, và ShippingContactIDText từ MISA
-        headers, _crm_token = self._misa_headers()
-        owner_date_early = {}
-        try:
-            owner_date_early = self.env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
-        except Exception as _e:
-            _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
-
-        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
-        partner_name = owner_date_early.get('shipping_contact') or data.get("AccountIDText") or data.get("BillingAccountIDText")
+        partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText")
         order_no     = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo")
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-        delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
+        delivery_no  = data.get("DeliveryOrderNumber") or order_no
+        # delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("BillingAddress")  # hoặc gọi API địa chỉ chi tiết của bạn
         revenue_status_id = data.get("RevenueStatusID")
@@ -263,11 +251,22 @@ class SaleOrder(models.Model):
             except Exception as e:
                 raise UserError(_("Không thể hủy phiếu khi đồng bộ: %s") % e)
 
-        # 2) Lấy lines từ DataSubPaging
-        lines = self._misa_fetch_lines(misa_order_id)
+        # 2) Lấy misa_order_id để fetch thông tin chi tiết
+        misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
 
-        # owner_date đã được fetch ở trên (owner_date_early), dùng lại
-        owner_date = owner_date_early
+        # Fetch OwnerIDText, SaleOrderDate, ShippingContactIDText, httt, htgh từ MISA
+        headers, _crm_token = self._misa_headers()
+        owner_date = {}
+        try:
+            owner_date = self.env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
+        except Exception as _e:
+            _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
+
+        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
+        partner_name = owner_date.get('shipping_contact') or partner_name
+
+        # Lấy lines từ DataSubPaging
+        lines = self._misa_fetch_lines(misa_order_id)
 
         # 3) Upsert header
         partner = odoo_utils._get_or_create_partner(partner_name or _("Khách hàng MISA"))
@@ -280,23 +279,15 @@ class SaleOrder(models.Model):
                 vals_upd['date_order'] = dtparse(book_date).replace(tzinfo=None)
             except Exception:
                 pass
-        # Sync x_studio_misa_saler_code and x_studio_misa_order_date
+        # Sync x_studio_misa_saler_code, x_studio_misa_order_date, httt, htgh
         if owner_date.get('owner_code'):
             vals_upd['x_studio_misa_saler_code'] = owner_date['owner_code']
         if owner_date.get('sale_order_date'):
             vals_upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
-        if owner_date.get('misa_delivery'):
-            vals_upd['x_studio_misa_delivery'] = owner_date['misa_delivery']
         if owner_date.get('httt'):
             vals_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_upd['x_studio_htgh'] = owner_date['htgh']
-        # >>> CẬP NHẬT MÃ VẬN ĐƠN NẾU CHƯA CÓ <<<
-        # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-        delivery_order_number = (data.get('OtherSysOrderCode') or data.get('DeliveryOrderNumber') or '').strip()
-        if delivery_order_number and not self.tracking_number:
-            vals_upd['tracking_number'] = delivery_order_number
-            _logger.info(f"📦 Updating tracking_number: {delivery_order_number} for order {self.name}")
         # Gán lại địa chỉ giao nếu bạn có helper build contact giao hàng
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
@@ -843,7 +834,7 @@ class SaleOrder(models.Model):
         self.sudo().unlink()
 
         # ===== 8) TẠO LẠI TỪ MISA =====
-        # Fetch OwnerIDText, SaleOrderDate, và ShippingContactIDText từ MISA
+        # Fetch OwnerIDText, SaleOrderDate, ShippingContactIDText, httt, htgh từ MISA
         owner_date = {}
         try:
             owner_date = env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
@@ -855,11 +846,13 @@ class SaleOrder(models.Model):
         partner       = odoo_utils._get_or_create_partner(partner_name)
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-        delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
+        delivery_no   = data.get("DeliveryOrderNumber") or order_no
+        # delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
+        deadline_date_raw = data.get("DeadlineDate")
         shipping_addr = data.get("ShippingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
-        deadline_date_raw = data.get("DeadlineDate") # <--- [NEW] Lấy DeadlineDate
+
         # địa chỉ giao hàng
         try:
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
@@ -884,21 +877,19 @@ class SaleOrder(models.Model):
             'partner_shipping_id': shipping_id,
             'x_studio_zns': zns
         }
+        
         from dateutil.parser import parse as dtparse
-
         if book_date:
             try:
                 vals_create['date_order'] = dtparse(book_date).replace(tzinfo=None)
             except Exception:
                 pass
-            
         if deadline_date_raw:
-            try:
-                vals_create['commitment_date'] = dtparse(deadline_date_raw).replace(tzinfo=None)
-            except Exception:
-                pass
-
-        # Sync x_studio_misa_saler_code and x_studio_misa_order_date
+                    try:
+                        vals_create['commitment_date'] = dtparse(deadline_date_raw).replace(tzinfo=None)
+                    except Exception:
+                        pass
+        # Sync x_studio_misa_saler_code, x_studio_misa_order_date, misa_delivery, httt, htgh
         if owner_date.get('owner_code'):
             vals_create['x_studio_misa_saler_code'] = owner_date['owner_code']
         if owner_date.get('sale_order_date'):
@@ -1394,49 +1385,6 @@ class SaleOrder(models.Model):
         if vals_header_upd:
             self.write(vals_header_upd)
             _logger.info("✅ Đã cập nhật misa_saler_code/order_date cho SO %s", self.name)
-
-        # --------- Cập nhật địa chỉ giao hàng từ MISA ---------
-        try:
-            partner = self.partner_id
-            shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress") or ''
-
-            # Nếu ShippingAddress là "0" hoặc rỗng, thử build từ components
-            if not shipping_addr or shipping_addr == "0":
-                s_addr = data.get("ShippingAddressID") or ""
-                s_ward = data.get("ShippingWardID") or ""
-                s_dist = data.get("ShippingDistrictID") or ""
-                s_prov = data.get("ShippingProvinceIDText") or ""
-
-                # Fallback sang billing nếu shipping rỗng
-                if not any([s_addr, s_ward, s_dist, s_prov]):
-                    s_addr = data.get("BillingAddressID") or ""
-                    s_ward = data.get("BillingWardID") or ""
-                    s_dist = data.get("BillingDistrictID") or ""
-                    s_prov = data.get("BillingProvinceIDText") or ""
-
-                parts = [x for x in [s_addr, s_ward, s_dist, s_prov] if x and x != "0"]
-                shipping_addr = ", ".join(parts) if parts else ""
-
-            # Chỉ cập nhật nếu có địa chỉ hợp lệ
-            if shipping_addr and shipping_addr != "0":
-                delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
-                    parent_partner=partner,
-                    addr_str=shipping_addr,
-                    phone=data.get("Phone"),
-                    province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
-                )
-
-                # Cập nhật partner_shipping_id nếu khác với hiện tại
-                if delivery_contact and delivery_contact.id != self.partner_shipping_id.id:
-                    self.write({'partner_shipping_id': delivery_contact.id})
-                    _logger.info("✅ Đã cập nhật địa chỉ giao hàng cho SO %s: %s", self.name, shipping_addr)
-                elif delivery_contact:
-                    _logger.info("ℹ️  Địa chỉ giao hàng SO %s đã đúng, không cần cập nhật", self.name)
-            else:
-                _logger.warning("⚠️  Không có địa chỉ giao hàng hợp lệ từ MISA cho SO %s", self.name)
-
-        except Exception as e:
-            _logger.warning("❌ Không thể cập nhật địa chỉ giao hàng trong partial resync cho SO %s: %s", self.name, e)
 
         # --------- Bước 0a: ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA ---------
         _logger.info("🔄 Đồng bộ tên sản phẩm từ MISA cho SO %s...", self.name)
