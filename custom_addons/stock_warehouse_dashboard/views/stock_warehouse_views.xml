@@ -24,61 +24,46 @@
 
                             <div class="flex-grow-1 d-flex flex-column justify-content-center p-3">
                                 <t t-set="raw_data" t-value="JSON.parse(record.warehouse_dashboard_data.value || '{}')"/>
-                                <t t-set="misa_data" t-value="raw_data.misa || {total: 0, full: 0, partial: 0, not_full: 0}"/>
+                                <t t-set="misa_data" t-value="raw_data.misa || {total: 0, not_printed: 0, printed: 0}"/>
 
                                 <div class="d-flex justify-content-center align-items-center mb-3">
                                     <span class="text-uppercase fs-6 text-muted fw-bold small">
-                                        Đơn hàng hôm nay
+                                        Phiếu xuất hôm nay
                                     </span>
-                                    <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'all'}"
-                                       class="badge bg-secondary ms-2 rounded-pill px-2 text-decoration-none" 
-                                       title="Tổng đơn phát sinh hôm nay">
+                                    <a type="object" name="open_misa_pickings" context="{'misa_filter': 'all'}"
+                                       class="badge bg-secondary ms-2 rounded-pill px-2 text-decoration-none">
                                         <t t-esc="misa_data.total"/>
                                     </a>
                                 </div>
-                                <a type="object" name="open_today_picking_slips" 
-                                       class="btn btn-sm btn-outline-primary border-0 fw-bold py-0"
-                                       title="Mở danh sách để in phiếu lấy hàng">
-                                        <i class="fa fa-print me-1"/>In phiếu
-                                    </a>
 
                                 <div class="row g-0 text-center">
-                                    <div class="col-4 border-end">
-                                        <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'full'}"
-                                           class="d-block text-decoration-none py-2 px-1 hover-zoom">
-                                            <div class="display-6 fw-bold text-success mb-0" style="line-height: 1;">
-                                                <t t-esc="misa_data.full"/>
-                                            </div>
-                                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">Đã Xong</small>
-                                        </a>
-                                    </div>
-
-                                    <div class="col-4 border-end">
-                                        <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'partial'}"
-                                           class="d-block text-decoration-none py-2 px-1 hover-zoom">
-                                            <div class="display-6 fw-bold text-warning mb-0" style="line-height: 1;">
-                                                <t t-esc="misa_data.partial"/>
-                                            </div>
-                                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">1 Phần</small>
-                                        </a>
-                                    </div>
-
-                                    <div class="col-4">
-                                        <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'not_full'}"
+                                    
+                                    <div class="col-6 border-end">
+                                        <a type="object" name="open_misa_pickings" context="{'misa_filter': 'not_printed'}"
                                            class="d-block text-decoration-none py-2 px-1 hover-zoom">
                                             <div class="display-6 fw-bold text-danger mb-0" style="line-height: 1;">
-                                                <t t-esc="misa_data.not_full"/>
+                                                <t t-esc="misa_data.not_printed"/>
                                             </div>
-                                            <small class="text-muted fw-bold " style="font-size: 0.7rem;">
-                                                    <span style="display:block; text-uppercase">CHƯA XUẤT</span>
-                                                    <span style="display:block;">(gồm cả đơn xuất 1 phần)</span>
+                                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">
+                                                <i class="fa fa-print me-1"/>Chưa in
                                             </small>
-
                                         </a>
                                     </div>
+
+                                    <div class="col-6">
+                                        <a type="object" name="open_misa_pickings" context="{'misa_filter': 'printed'}"
+                                           class="d-block text-decoration-none py-2 px-1 hover-zoom">
+                                            <div class="display-6 fw-bold text-success mb-0" style="line-height: 1;">
+                                                <t t-esc="misa_data.printed"/>
+                                            </div>
+                                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">
+                                                <i class="fa fa-check me-1"/>Đã in
+                                            </small>
+                                        </a>
+                                    </div>
+
                                 </div>
                             </div>
-                            
                             <div class="bg-light p-1 border-top"></div>
                         </div>
                     </t>
@@ -86,16 +71,4 @@
             </kanban>
         </field>
     </record>
-    <record id="action_warehouse_dashboard" model="ir.actions.act_window">
-        <field name="name">Tổng quan Kho (Mới)</field>
-        <field name="res_model">stock.warehouse</field>
-        <field name="view_mode">kanban,form</field>
-        <field name="view_id" ref="view_warehouse_dashboard_kanban"/>
-    </record>
-
-    <menuitem id="menu_warehouse_dashboard_combined"
-              name="Tổng quan (Mới)"
-              parent="stock.menu_stock_root"
-              action="action_warehouse_dashboard"
-              sequence="1"/>
 </odoo>
