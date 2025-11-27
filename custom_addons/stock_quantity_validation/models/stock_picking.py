@@ -109,3 +109,91 @@ class StockMove(models.Model):
                 )
 
         return res
+
+
+class StockMoveLine(models.Model):
+    _inherit = 'stock.move.line'
+
+    @api.constrains('qty_done')
+    def _check_qty_done_not_exceed_demand(self):
+        """
+        Chặn ngay khi tạo hoặc cập nhật stock.move.line nếu qty_done vượt quá
+        product_uom_qty của stock.move tương ứng.
+
+        Điều này ngăn chặn việc quét mã vạch dư hoặc nhập thủ công số lượng vượt mức.
+        """
+        EPS = 1e-6  # Epsilon để xử lý sai số floating point
+
+        for line in self:
+            # Bỏ qua nếu không có move liên kết hoặc move đã done/cancel
+            if not line.move_id or line.move_id.state in ('done', 'cancel'):
+                continue
+
+            # Bỏ qua nếu picking đã done (cho phép điều chỉnh sau khi hoàn thành)
+            if line.picking_id and line.picking_id.state == 'done':
+                continue
+
+            move = line.move_id
+
+            # Lấy tổng qty_done của TẤT CẢ move lines cùng move (bao gồm line hiện tại)
+            total_qty_done = sum(
+                float(ml.qty_done or 0.0)
+                for ml in move.move_line_ids
+                if ml.state not in ('done', 'cancel')
+            )
+
+            # Số lượng demand (đã đặt)
+            qty_demand = float(move.product_uom_qty or 0.0)
+
+            # Kiểm tra vi phạm
+            if total_qty_done > qty_demand + EPS:
+                product_name = move.product_id.display_name or move.product_id.name or _("Sản phẩm không xác định")
+                uom_name = move.product_uom.name if move.product_uom else ''
+                picking_name = line.picking_id.name if line.picking_id else _("N/A")
+
+                _logger.error(
+                    "🚫 CHẶN tạo/cập nhật move.line: Picking %s, Product %s, "
+                    "Total qty_done (%.2f) > demand (%.2f)",
+                    picking_name, product_name, total_qty_done, qty_demand
+                )
+
+                raise UserError(_(
+                    "Không thể nhập số lượng vượt quá demand!\n\n"
+                    "📦 Phiếu: %s\n"
+                    "🏷️ Sản phẩm: %s\n"
+                    "📊 Đã đặt (Demand): %.2f %s\n"
+                    "✏️ Đã nhập (Done): %.2f %s\n\n"
+                    "❌ Bạn đang cố nhập %.2f %s vượt quá số lượng cho phép.\n\n"
+                    "💡 Vui lòng kiểm tra lại số lượng hoặc liên hệ quản lý."
+                ) % (
+                    picking_name,
+                    product_name,
+                    qty_demand, uom_name,
+                    total_qty_done, uom_name,
+                    total_qty_done - qty_demand, uom_name
+                ))
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        """
+        Override create để validate ngay khi tạo move.line mới
+        (ví dụ: khi quét mã vạch)
+        """
+        lines = super(StockMoveLine, self).create(vals_list)
+
+        # Validate sau khi tạo
+        lines._check_qty_done_not_exceed_demand()
+
+        return lines
+
+    def write(self, vals):
+        """
+        Override write để validate khi cập nhật qty_done
+        """
+        res = super(StockMoveLine, self).write(vals)
+
+        # Chỉ validate nếu có thay đổi qty_done
+        if 'qty_done' in vals:
+            self._check_qty_done_not_exceed_demand()
+
+        return res
