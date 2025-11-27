@@ -27,7 +27,7 @@ class StockPicking(models.Model):
 
             # Lấy số lượng đã đặt (demand) và số lượng thực tế (done)
             qty_demand = float(move.product_uom_qty or 0.0)
-            qty_done = float(move.quantity_done or 0.0)
+            qty_done = float(move.quantity or 0.0)
 
             # Sử dụng epsilon để xử lý sai số floating point
             EPS = 1e-6
@@ -96,7 +96,7 @@ class StockMove(models.Model):
                 continue
 
             qty_demand = float(move.product_uom_qty or 0.0)
-            qty_done = float(move.quantity_done or 0.0)
+            qty_done = float(move.quantity or 0.0)
             EPS = 1e-6
 
             if qty_done > qty_demand + EPS:
