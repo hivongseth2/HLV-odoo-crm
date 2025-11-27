@@ -77,3 +77,25 @@ class StockWarehouse(models.Model):
             'domain': domain,
             'context': {'create': False}
         }
+        
+    def open_today_picking_slips(self):
+        self.ensure_one()
+        today = fields.Date.context_today(self)
+        
+        return {
+            'name': f"Phiếu lấy hàng {self.name} ({today})",
+            'type': 'ir.actions.act_window',
+            'res_model': 'sale.order',
+            'view_mode': 'list,form',
+            # Lọc: Đúng kho + Đúng ngày MISA + Đã xác nhận
+            'domain': [
+                ('warehouse_id', '=', self.id),
+                ('x_studio_misa_order_date', '=', today),
+                ('state', 'in', ['sale', 'done'])
+            ],
+            # Mặc định bật filter "Chưa in" lên cho tiện
+            'context': {
+                'create': False,
+                'search_default_filter_not_printed': 1 
+            }
+        }

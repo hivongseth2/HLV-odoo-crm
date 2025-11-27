@@ -36,6 +36,11 @@
                                         <t t-esc="misa_data.total"/>
                                     </a>
                                 </div>
+                                <a type="object" name="open_today_picking_slips" 
+                                       class="btn btn-sm btn-outline-primary border-0 fw-bold py-0"
+                                       title="Mở danh sách để in phiếu lấy hàng">
+                                        <i class="fa fa-print me-1"/>In phiếu
+                                    </a>
 
                                 <div class="row g-0 text-center">
                                     <div class="col-4 border-end">
