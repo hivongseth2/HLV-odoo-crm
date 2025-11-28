@@ -262,9 +262,9 @@ class SaleOrder(models.Model):
         except Exception as _e:
             _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
 
-        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
-        # partner_name = owner_date.get('shipping_contact') or partner_name
-        partner_name = partner_name
+        # Khách hàng (partner_id) LUÔN lấy từ AccountIDText
+        # Địa chỉ giao hàng/lập hóa đơn lấy từ ShippingContactIDText
+        shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
 
         # Lấy lines từ DataSubPaging
         lines = self._misa_fetch_lines(misa_order_id)
@@ -289,14 +289,14 @@ class SaleOrder(models.Model):
             vals_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_upd['x_studio_htgh'] = owner_date['htgh']
-        # Gán lại địa chỉ giao nếu bạn có helper build contact giao hàng
+        # Gán lại địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
                 addr_str=shipping_addr or '',
                 phone=data.get("Phone"),
                 province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
-                contact_name=(data.get("ShippingContactIDText") or "").strip() or None
+                contact_name=shipping_contact_name.strip() if shipping_contact_name else None
             )
             vals_upd['partner_shipping_id'] = delivery_contact.id
             vals_upd['partner_invoice_id'] = delivery_contact.id
@@ -844,9 +844,10 @@ class SaleOrder(models.Model):
         except Exception as _e:
             _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
 
-        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
-        # partner_name  = owner_date.get('shipping_contact') or data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        # Khách hàng (partner_id) LUÔN lấy từ AccountIDText
+        # Địa chỉ giao hàng/lập hóa đơn lấy từ ShippingContactIDText
         partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
         partner       = odoo_utils._get_or_create_partner(partner_name)
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
@@ -857,14 +858,14 @@ class SaleOrder(models.Model):
         shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
 
-        # địa chỉ giao hàng
+        # Địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
         try:
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
                 addr_str=shipping_addr,
                 phone=data.get("Phone"),
                 province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
-                contact_name=(data.get("ShippingContactIDText") or "").strip() or None
+                contact_name=shipping_contact_name.strip() if shipping_contact_name else None
             )
             shipping_id = delivery_contact.id
         except Exception as e:
