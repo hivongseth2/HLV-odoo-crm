@@ -175,7 +175,7 @@ class SaleOrder(models.Model):
         delivery_no  = data.get("DeliveryOrderNumber") or order_no
         # delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
-        shipping_addr = data.get("BillingAddress")  # hoặc gọi API địa chỉ chi tiết của bạn
+        shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress")  # Ưu tiên ShippingAddress
         revenue_status_id = data.get("RevenueStatusID")
         revenue_status_text = data.get("RevenueStatusIDText")
 
@@ -262,14 +262,48 @@ class SaleOrder(models.Model):
         except Exception as _e:
             _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
 
-        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
-        partner_name = owner_date.get('shipping_contact') or partner_name
+        # Khách hàng (partner_id) LUÔN lấy từ AccountIDText
+        # Địa chỉ giao hàng/lập hóa đơn lấy từ ShippingContactIDText
+        shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
 
         # Lấy lines từ DataSubPaging
         lines = self._misa_fetch_lines(misa_order_id)
 
         # 3) Upsert header
         partner = odoo_utils._get_or_create_partner(partner_name or _("Khách hàng MISA"))
+
+        # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
+        partner_vals = {}
+        billing_addr = data.get("BillingAddress")
+        partner_phone = data.get("Phone")
+        partner_province = data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText")
+
+        if billing_addr and partner.street != billing_addr:
+            partner_vals['street'] = billing_addr
+        if partner_phone and partner.phone != partner_phone:
+            partner_vals['phone'] = partner_phone
+        if partner_province and partner.city != partner_province:
+            partner_vals['city'] = partner_province
+            # Cập nhật state_id nếu cần
+            try:
+                state = self.env['sale.api.import.wizard']._vn_state_by_name(partner_province)
+                if state and partner.state_id != state:
+                    partner_vals['state_id'] = state.id
+            except Exception:
+                pass
+
+        # Đảm bảo country là Việt Nam
+        try:
+            vn_country = self.env['sale.api.import.wizard']._vn_country()
+            if vn_country and partner.country_id != vn_country:
+                partner_vals['country_id'] = vn_country.id
+        except Exception:
+            pass
+
+        if partner_vals:
+            partner.write(partner_vals)
+            _logger.info("Cập nhật thông tin partner %s: %s", partner.name, partner_vals.keys())
+
         vals_upd = {
             'partner_id': partner.id,
             'origin': order_no or (self.origin or self.name),
@@ -288,15 +322,17 @@ class SaleOrder(models.Model):
             vals_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_upd['x_studio_htgh'] = owner_date['htgh']
-        # Gán lại địa chỉ giao nếu bạn có helper build contact giao hàng
+        # Gán lại địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
         try:
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
                 addr_str=shipping_addr or '',
                 phone=data.get("Phone"),
-                province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText")
+                province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
+                contact_name=shipping_contact_name.strip() if shipping_contact_name else None
             )
             vals_upd['partner_shipping_id'] = delivery_contact.id
+            vals_upd['partner_invoice_id'] = delivery_contact.id
         except Exception as e:
             _logger.warning("Không set được delivery contact: %s", e)
 
@@ -841,25 +877,61 @@ class SaleOrder(models.Model):
         except Exception as _e:
             _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
 
-        # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
-        partner_name  = owner_date.get('shipping_contact') or data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        # Khách hàng (partner_id) LUÔN lấy từ AccountIDText
+        # Địa chỉ giao hàng/lập hóa đơn lấy từ ShippingContactIDText
+        partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
         partner       = odoo_utils._get_or_create_partner(partner_name)
+
+        # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
+        partner_vals = {}
+        billing_addr = data.get("BillingAddress")
+        partner_phone = data.get("Phone")
+        partner_province = data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText")
+
+        if billing_addr and partner.street != billing_addr:
+            partner_vals['street'] = billing_addr
+        if partner_phone and partner.phone != partner_phone:
+            partner_vals['phone'] = partner_phone
+        if partner_province and partner.city != partner_province:
+            partner_vals['city'] = partner_province
+            # Cập nhật state_id nếu cần
+            try:
+                state = env['sale.api.import.wizard']._vn_state_by_name(partner_province)
+                if state and partner.state_id != state:
+                    partner_vals['state_id'] = state.id
+            except Exception:
+                pass
+
+        # Đảm bảo country là Việt Nam
+        try:
+            vn_country = env['sale.api.import.wizard']._vn_country()
+            if vn_country and partner.country_id != vn_country:
+                partner_vals['country_id'] = vn_country.id
+        except Exception:
+            pass
+
+        if partner_vals:
+            partner.write(partner_vals)
+            _logger.info("Cập nhật thông tin partner %s: %s", partner.name, partner_vals.keys())
+
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
         delivery_no   = data.get("DeliveryOrderNumber") or order_no
         # delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         deadline_date_raw = data.get("DeadlineDate")
-        shipping_addr = data.get("ShippingAddress") or ''
+        shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
 
-        # địa chỉ giao hàng
+        # Địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
         try:
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
                 addr_str=shipping_addr,
                 phone=data.get("Phone"),
                 province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
+                contact_name=shipping_contact_name.strip() if shipping_contact_name else None
             )
             shipping_id = delivery_contact.id
         except Exception as e:
@@ -875,6 +947,7 @@ class SaleOrder(models.Model):
             'warehouse_id': old_wh.id or False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'partner_shipping_id': shipping_id,
+            'partner_invoice_id': shipping_id,
             'x_studio_zns': zns
         }
         

@@ -647,43 +647,72 @@ class SaleApiImportWizard(models.TransientModel):
         st = State.search([('name', 'ilike', name), ('country_id', '=', country.id)], limit=1)
         return st or False
 
-    def _get_or_create_delivery_contact(self, parent_partner, addr_str, phone=None, province_text=None):
+    def _get_or_create_delivery_contact(self, parent_partner, addr_str, phone=None, province_text=None, contact_name=None):
         """
-        Tạo/nhặt contact con kiểu 'delivery' dưới parent_partner.
-        Ưu tiên set:
-          - street = addr_str (full chuỗi)
-          - city = province_text nếu có
-          - state_id/country_id nếu map được
-        Tránh nhân bản: tìm theo (parent_id, type='delivery', street == addr_str) trước.
+        Tạo/nhặt contact con kiểu 'contact' dưới parent_partner.
+        Dùng type='contact' thay vì 'delivery' để hiển thị tên contact thay vì tên công ty cha.
+        Logic:
+          - Nếu có contact_name: Tìm theo (parent_id, name=contact_name) - tìm cả 'delivery' và 'contact'
+            -> Nếu thấy: UPDATE lại type='contact', name, street, phone, city... theo dữ liệu mới nhất.
+            -> Nếu không thấy: TẠO MỚI với name=contact_name, type='contact'
+          - Nếu không có contact_name: Tìm theo (parent_id, street=addr_str) - tìm cả 'delivery' và 'contact'
+            -> Nếu thấy: UPDATE type='contact' nếu cần, update các field thiếu.
+            -> Nếu không thấy: TẠO MỚI với name=parent_partner.name, type='contact'
+          - Auto-migrate: Tự động chuyển contact cũ từ type='delivery' sang 'contact' để fix hiển thị
         """
         Partner = self.env['res.partner']
         country = self._vn_country()
         state = self._vn_state_by_name(province_text) if province_text else False
 
-        # Tìm lại nếu có
-        existing = Partner.search([
-            ('parent_id', '=', parent_partner.id),
-            ('type', '=', 'delivery'),
-            ('street', '=', addr_str or ''),
-        ], limit=1)
+        existing = None
+        if contact_name:
+             # Ưu tiên tìm theo tên contact - tìm cả 'delivery' và 'contact' để migrate
+             existing = Partner.search([
+                ('parent_id', '=', parent_partner.id),
+                ('type', 'in', ['delivery', 'contact']),
+                ('name', '=', contact_name)
+             ], limit=1)
+        elif addr_str:
+             # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name - tìm cả 'delivery' và 'contact'
+             existing = Partner.search([
+                ('parent_id', '=', parent_partner.id),
+                ('type', 'in', ['delivery', 'contact']),
+                ('street', '=', addr_str),
+             ], limit=1)
+
         if existing:
-            # cập nhật nhẹ nếu thiếu
+            # Cập nhật thông tin (Force update để đảm bảo đồng bộ)
             vals_upd = {}
-            if country and not existing.country_id:
+
+            # MIGRATE: Nếu contact cũ có type='delivery', chuyển sang 'contact' để hiển thị đúng tên
+            if existing.type == 'delivery':
+                vals_upd['type'] = 'contact'
+
+            # Luôn cập nhật tên nếu có contact_name và khác tên hiện tại
+            if contact_name and existing.name != contact_name:
+                vals_upd['name'] = contact_name
+
+            # Luôn cập nhật địa chỉ nếu khác
+            if addr_str and existing.street != addr_str:
+                vals_upd['street'] = addr_str
+
+            if country and existing.country_id != country:
                 vals_upd['country_id'] = country.id
-            if state and not existing.state_id:
+            if state and existing.state_id != state:
                 vals_upd['state_id'] = state.id
-            if province_text and not existing.city:
+            if province_text and existing.city != province_text:
                 vals_upd['city'] = province_text
-            if phone and not existing.phone:
+            if phone and existing.phone != phone:
                 vals_upd['phone'] = phone
+
             if vals_upd:
                 existing.write(vals_upd)
             return existing
 
+        # Tạo mới contact với tên chính xác
         vals = {
-            'name': parent_partner.name,          # hoặc đặt nhãn riêng nếu bạn muốn
-            'type': 'delivery',
+            'name': contact_name or parent_partner.name,
+            'type': 'contact',
             'parent_id': parent_partner.id,
             'street': addr_str or '',
             'city': province_text or False,
@@ -925,7 +954,8 @@ class SaleApiImportWizard(models.TransientModel):
                     continue
 
                 # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
-                partner_name_for_so = owner_date.get('shipping_contact') or customer_name
+                # partner_name_for_so = owner_date.get('shipping_contact') or customer_name
+                partner_name_for_so = customer_name
                 partner = odoo_utils._get_or_create_partner(partner_name_for_so)
                 
                 try:
@@ -957,7 +987,8 @@ class SaleApiImportWizard(models.TransientModel):
                     parent_partner=partner,
                     addr_str=shipping_address_str or order.get("ShippingAddress") or order.get("BillingAddress") or order_ref_base,
                     phone=phone_text,
-                    province_text=province_text
+                    province_text=province_text,
+                    contact_name=owner_date.get('shipping_contact')
                 )
 
                 distinct_stocks = [s for s in lines_by_stock.keys() if s in stock_mapping]
@@ -1021,6 +1052,7 @@ class SaleApiImportWizard(models.TransientModel):
                         'amount_total': group_total,
                         'commitment_date': commitment_date,
                         'partner_shipping_id': delivery_contact.id, 
+                        'partner_invoice_id': delivery_contact.id, 
                         'origin':origin,
                         'warehouse_id': warehouse.id,
                         'misa_id': misa_id_str, 
@@ -1369,6 +1401,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'partner_id': partner.id,
                             'date_order': order_date,
                             'partner_shipping_id': delivery_contact.id,
+                            'partner_invoice_id': delivery_contact.id,
                             'commitment_date': commitment_date,
                             'amount_total': group_total,       # có thể để Odoo tự tính lại sau khi tạo line
                             'warehouse_id': warehouse.id,
