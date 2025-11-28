@@ -175,7 +175,7 @@ class SaleOrder(models.Model):
         delivery_no  = data.get("DeliveryOrderNumber") or order_no
         # delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
-        shipping_addr = data.get("BillingAddress")  # hoặc gọi API địa chỉ chi tiết của bạn
+        shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress")  # Ưu tiên ShippingAddress
         revenue_status_id = data.get("RevenueStatusID")
         revenue_status_text = data.get("RevenueStatusIDText")
 
@@ -296,7 +296,7 @@ class SaleOrder(models.Model):
                 addr_str=shipping_addr or '',
                 phone=data.get("Phone"),
                 province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
-                contact_name=owner_date.get('shipping_contact')
+                contact_name=(data.get("ShippingContactIDText") or "").strip() or None
             )
             vals_upd['partner_shipping_id'] = delivery_contact.id
             vals_upd['partner_invoice_id'] = delivery_contact.id
@@ -854,7 +854,7 @@ class SaleOrder(models.Model):
         # delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         deadline_date_raw = data.get("DeadlineDate")
-        shipping_addr = data.get("ShippingAddress") or ''
+        shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress") or ''
         origin        = data.get("SaleOrderName") or ''
 
         # địa chỉ giao hàng
@@ -864,7 +864,7 @@ class SaleOrder(models.Model):
                 addr_str=shipping_addr,
                 phone=data.get("Phone"),
                 province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
-                contact_name=owner_date.get('shipping_contact')
+                contact_name=(data.get("ShippingContactIDText") or "").strip() or None
             )
             shipping_id = delivery_contact.id
         except Exception as e:

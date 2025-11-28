@@ -650,38 +650,51 @@ class SaleApiImportWizard(models.TransientModel):
     def _get_or_create_delivery_contact(self, parent_partner, addr_str, phone=None, province_text=None, contact_name=None):
         """
         Tạo/nhặt contact con kiểu 'delivery' dưới parent_partner.
-        Ưu tiên set:
-          - street = addr_str (full chuỗi)
-          - city = province_text nếu có
-          - state_id/country_id nếu map được
-        Tránh nhân bản: tìm theo (parent_id, type='delivery', street == addr_str) trước.
+        Logic:
+          - Nếu có contact_name: Tìm theo (parent_id, type='delivery', name=contact_name).
+            -> Nếu thấy: UPDATE lại street, phone, city... theo dữ liệu mới nhất.
+          - Nếu không có contact_name: Tìm theo (parent_id, type='delivery', street=addr_str).
+            -> Nếu thấy: update nhẹ các field thiếu.
+          - Nếu không thấy: Tạo mới.
         """
         Partner = self.env['res.partner']
         country = self._vn_country()
         state = self._vn_state_by_name(province_text) if province_text else False
 
-        # Tìm lại nếu có
-        domain = [
-            ('parent_id', '=', parent_partner.id),
-            ('type', '=', 'delivery'),
-            ('street', '=', addr_str or ''),
-        ]
+        existing = None
         if contact_name:
-             domain.append(('name', '=', contact_name))
-             
-        existing = Partner.search(domain, limit=1)
+             # Ưu tiên tìm theo tên contact
+             existing = Partner.search([
+                ('parent_id', '=', parent_partner.id),
+                ('type', '=', 'delivery'),
+                ('name', '=', contact_name)
+             ], limit=1)
+        
+        if not existing and not contact_name:
+             # Fallback: tìm theo địa chỉ nếu không có tên
+             existing = Partner.search([
+                ('parent_id', '=', parent_partner.id),
+                ('type', '=', 'delivery'),
+                ('street', '=', addr_str or ''),
+             ], limit=1)
         
         if existing:
-            # cập nhật nhẹ nếu thiếu
+            # Cập nhật thông tin (Force update nếu tìm thấy theo tên để đảm bảo đồng bộ)
             vals_upd = {}
-            if country and not existing.country_id:
+            
+            # Luôn cập nhật địa chỉ nếu khác (đặc biệt quan trọng khi tìm theo tên)
+            if addr_str and existing.street != addr_str:
+                vals_upd['street'] = addr_str
+            
+            if country and existing.country_id != country:
                 vals_upd['country_id'] = country.id
-            if state and not existing.state_id:
+            if state and existing.state_id != state:
                 vals_upd['state_id'] = state.id
-            if province_text and not existing.city:
+            if province_text and existing.city != province_text:
                 vals_upd['city'] = province_text
-            if phone and not existing.phone:
+            if phone and existing.phone != phone:
                 vals_upd['phone'] = phone
+                
             if vals_upd:
                 existing.write(vals_upd)
             return existing
