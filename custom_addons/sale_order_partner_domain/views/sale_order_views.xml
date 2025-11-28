@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_order_form_partner_domain_inherit" model="ir.ui.view">
+        <field name="name">sale.order.form.partner.domain</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Override domain của partner_shipping_id -->
+            <xpath expr="//field[@name='partner_shipping_id']" position="attributes">
+                <attribute name="domain">[
+                    ('type', 'in', ['contact', 'delivery']),
+                    ('is_company', '=', False),
+                    '|',
+                    ('parent_id', '=', partner_id),
+                    ('id', '=', partner_id)
+                ]</attribute>
+            </xpath>
+
+            <!-- Override domain của partner_invoice_id -->
+            <xpath expr="//field[@name='partner_invoice_id']" position="attributes">
+                <attribute name="domain">[
+                    ('type', 'in', ['contact', 'delivery']),
+                    ('is_company', '=', False),
+                    '|',
+                    ('parent_id', '=', partner_id),
+                    ('id', '=', partner_id)
+                ]</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>
