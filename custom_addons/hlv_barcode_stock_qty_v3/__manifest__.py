@@ -1,6 +1,6 @@
 {
     'name': 'HLV Barcode Stock Quantity (inline)',
-    'version': '1.3.2',
+    'version': '1.3.1',
     'depends': ['stock', 'stock_barcode'],
     'data': [],
     'assets': {
