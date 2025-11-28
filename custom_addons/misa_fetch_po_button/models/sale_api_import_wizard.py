@@ -652,12 +652,13 @@ class SaleApiImportWizard(models.TransientModel):
         Tạo/nhặt contact con kiểu 'contact' dưới parent_partner.
         Dùng type='contact' thay vì 'delivery' để hiển thị tên contact thay vì tên công ty cha.
         Logic:
-          - Nếu có contact_name: Tìm theo (parent_id, type='contact', name=contact_name).
-            -> Nếu thấy: UPDATE lại street, phone, city... theo dữ liệu mới nhất.
-            -> Nếu không thấy: TẠO MỚI với name=contact_name
-          - Nếu không có contact_name: Tìm theo (parent_id, type='contact', street=addr_str).
-            -> Nếu thấy: update nhẹ các field thiếu.
-            -> Nếu không thấy: TẠO MỚI với name=parent_partner.name
+          - Nếu có contact_name: Tìm theo (parent_id, name=contact_name) - tìm cả 'delivery' và 'contact'
+            -> Nếu thấy: UPDATE lại type='contact', name, street, phone, city... theo dữ liệu mới nhất.
+            -> Nếu không thấy: TẠO MỚI với name=contact_name, type='contact'
+          - Nếu không có contact_name: Tìm theo (parent_id, street=addr_str) - tìm cả 'delivery' và 'contact'
+            -> Nếu thấy: UPDATE type='contact' nếu cần, update các field thiếu.
+            -> Nếu không thấy: TẠO MỚI với name=parent_partner.name, type='contact'
+          - Auto-migrate: Tự động chuyển contact cũ từ type='delivery' sang 'contact' để fix hiển thị
         """
         Partner = self.env['res.partner']
         country = self._vn_country()
@@ -665,23 +666,27 @@ class SaleApiImportWizard(models.TransientModel):
 
         existing = None
         if contact_name:
-             # Ưu tiên tìm theo tên contact - CHỈ tìm nếu có contact_name
+             # Ưu tiên tìm theo tên contact - tìm cả 'delivery' và 'contact' để migrate
              existing = Partner.search([
                 ('parent_id', '=', parent_partner.id),
-                ('type', '=', 'contact'),
+                ('type', 'in', ['delivery', 'contact']),
                 ('name', '=', contact_name)
              ], limit=1)
         elif addr_str:
-             # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name
+             # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name - tìm cả 'delivery' và 'contact'
              existing = Partner.search([
                 ('parent_id', '=', parent_partner.id),
-                ('type', '=', 'contact'),
+                ('type', 'in', ['delivery', 'contact']),
                 ('street', '=', addr_str),
              ], limit=1)
 
         if existing:
             # Cập nhật thông tin (Force update để đảm bảo đồng bộ)
             vals_upd = {}
+
+            # MIGRATE: Nếu contact cũ có type='delivery', chuyển sang 'contact' để hiển thị đúng tên
+            if existing.type == 'delivery':
+                vals_upd['type'] = 'contact'
 
             # Luôn cập nhật tên nếu có contact_name và khác tên hiện tại
             if contact_name and existing.name != contact_name:
