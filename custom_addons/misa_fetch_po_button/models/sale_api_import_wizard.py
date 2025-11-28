@@ -649,13 +649,15 @@ class SaleApiImportWizard(models.TransientModel):
 
     def _get_or_create_delivery_contact(self, parent_partner, addr_str, phone=None, province_text=None, contact_name=None):
         """
-        Tạo/nhặt contact con kiểu 'delivery' dưới parent_partner.
+        Tạo/nhặt contact con kiểu 'contact' dưới parent_partner.
+        Dùng type='contact' thay vì 'delivery' để hiển thị tên contact thay vì tên công ty cha.
         Logic:
-          - Nếu có contact_name: Tìm theo (parent_id, type='delivery', name=contact_name).
+          - Nếu có contact_name: Tìm theo (parent_id, type='contact', name=contact_name).
             -> Nếu thấy: UPDATE lại street, phone, city... theo dữ liệu mới nhất.
-          - Nếu không có contact_name: Tìm theo (parent_id, type='delivery', street=addr_str).
+            -> Nếu không thấy: TẠO MỚI với name=contact_name
+          - Nếu không có contact_name: Tìm theo (parent_id, type='contact', street=addr_str).
             -> Nếu thấy: update nhẹ các field thiếu.
-          - Nếu không thấy: Tạo mới.
+            -> Nếu không thấy: TẠO MỚI với name=parent_partner.name
         """
         Partner = self.env['res.partner']
         country = self._vn_country()
@@ -663,29 +665,32 @@ class SaleApiImportWizard(models.TransientModel):
 
         existing = None
         if contact_name:
-             # Ưu tiên tìm theo tên contact
+             # Ưu tiên tìm theo tên contact - CHỈ tìm nếu có contact_name
              existing = Partner.search([
                 ('parent_id', '=', parent_partner.id),
-                ('type', '=', 'delivery'),
+                ('type', '=', 'contact'),
                 ('name', '=', contact_name)
              ], limit=1)
-        
-        if not existing and not contact_name:
-             # Fallback: tìm theo địa chỉ nếu không có tên
+        elif addr_str:
+             # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name
              existing = Partner.search([
                 ('parent_id', '=', parent_partner.id),
-                ('type', '=', 'delivery'),
-                ('street', '=', addr_str or ''),
+                ('type', '=', 'contact'),
+                ('street', '=', addr_str),
              ], limit=1)
-        
+
         if existing:
-            # Cập nhật thông tin (Force update nếu tìm thấy theo tên để đảm bảo đồng bộ)
+            # Cập nhật thông tin (Force update để đảm bảo đồng bộ)
             vals_upd = {}
-            
-            # Luôn cập nhật địa chỉ nếu khác (đặc biệt quan trọng khi tìm theo tên)
+
+            # Luôn cập nhật tên nếu có contact_name và khác tên hiện tại
+            if contact_name and existing.name != contact_name:
+                vals_upd['name'] = contact_name
+
+            # Luôn cập nhật địa chỉ nếu khác
             if addr_str and existing.street != addr_str:
                 vals_upd['street'] = addr_str
-            
+
             if country and existing.country_id != country:
                 vals_upd['country_id'] = country.id
             if state and existing.state_id != state:
@@ -694,14 +699,15 @@ class SaleApiImportWizard(models.TransientModel):
                 vals_upd['city'] = province_text
             if phone and existing.phone != phone:
                 vals_upd['phone'] = phone
-                
+
             if vals_upd:
                 existing.write(vals_upd)
             return existing
 
+        # Tạo mới contact với tên chính xác
         vals = {
-            'name': contact_name or parent_partner.name,          # hoặc đặt nhãn riêng nếu bạn muốn
-            'type': 'delivery',
+            'name': contact_name or parent_partner.name,
+            'type': 'contact',
             'parent_id': parent_partner.id,
             'street': addr_str or '',
             'city': province_text or False,
