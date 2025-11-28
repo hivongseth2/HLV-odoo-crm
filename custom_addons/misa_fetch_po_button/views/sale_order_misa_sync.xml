@@ -13,6 +13,28 @@
                   help="Chỉ chạy khi không có phiếu giao done và không có hoá đơn posted."
                   invisible="misa_id == False"/>
         </xpath>
+
+        <!-- Sửa domain của partner_shipping_id để cho phép chọn contact -->
+        <xpath expr="//field[@name='partner_shipping_id']" position="attributes">
+          <attribute name="domain">[
+            ('type', 'in', ['contact', 'delivery']),
+            ('is_company', '=', False),
+            '|',
+            ('parent_id', '=', partner_id),
+            ('id', '=', partner_id)
+          ]</attribute>
+        </xpath>
+
+        <!-- Sửa domain của partner_invoice_id để cho phép chọn contact -->
+        <xpath expr="//field[@name='partner_invoice_id']" position="attributes">
+          <attribute name="domain">[
+            ('type', 'in', ['contact', 'delivery']),
+            ('is_company', '=', False),
+            '|',
+            ('parent_id', '=', partner_id),
+            ('id', '=', partner_id)
+          ]</attribute>
+        </xpath>
       </field>
     </record>
   </data>
