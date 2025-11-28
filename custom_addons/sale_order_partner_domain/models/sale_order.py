@@ -1,20 +1,28 @@
-# -*- coding: utf-8 -*-
-from odoo import models, fields, api
+# custom_sale_shipping/models/sale_order.py
+from odoo import api, fields, models
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
-
-    @api.depends('partner_id')
-    def _compute_partner_shipping_id(self):
-        for order in self:
-            order.partner_shipping_id = order.partner_shipping_id or order.partner_id.address_get(['delivery'])['delivery']
-
+    
     partner_shipping_id = fields.Many2one(
         'res.partner',
-        string='Delivery Address',
-        compute='_compute_partner_shipping_id',
-        store=True,
+        string='Địa chỉ giao hàng',
+        domain="[('type', 'in', ['contact', 'delivery']), '|', ('parent_id', '=', partner_id), ('id', '=', partner_id)]",
         readonly=False,
-        precompute=True,
+        store=True,
     )
-
+    
+    shipping_display_name = fields.Char(
+        string='Tên người nhận',
+        compute='_compute_shipping_display_name',
+        store=False
+    )
+    
+    @api.depends('partner_shipping_id')
+    def _compute_shipping_display_name(self):
+        for record in self:
+            if record.partner_shipping_id:
+                # Chỉ lấy tên contact, không lấy tên công ty cha
+                record.shipping_display_name = record.partner_shipping_id.name
+            else:
+                record.shipping_display_name = ''
