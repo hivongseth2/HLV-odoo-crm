@@ -647,7 +647,7 @@ class SaleApiImportWizard(models.TransientModel):
         st = State.search([('name', 'ilike', name), ('country_id', '=', country.id)], limit=1)
         return st or False
 
-    def _get_or_create_delivery_contact(self, parent_partner, addr_str, phone=None, province_text=None):
+    def _get_or_create_delivery_contact(self, parent_partner, addr_str, phone=None, province_text=None, contact_name=None):
         """
         Tạo/nhặt contact con kiểu 'delivery' dưới parent_partner.
         Ưu tiên set:
@@ -661,11 +661,16 @@ class SaleApiImportWizard(models.TransientModel):
         state = self._vn_state_by_name(province_text) if province_text else False
 
         # Tìm lại nếu có
-        existing = Partner.search([
+        domain = [
             ('parent_id', '=', parent_partner.id),
             ('type', '=', 'delivery'),
             ('street', '=', addr_str or ''),
-        ], limit=1)
+        ]
+        if contact_name:
+             domain.append(('name', '=', contact_name))
+             
+        existing = Partner.search(domain, limit=1)
+        
         if existing:
             # cập nhật nhẹ nếu thiếu
             vals_upd = {}
@@ -682,7 +687,7 @@ class SaleApiImportWizard(models.TransientModel):
             return existing
 
         vals = {
-            'name': parent_partner.name,          # hoặc đặt nhãn riêng nếu bạn muốn
+            'name': contact_name or parent_partner.name,          # hoặc đặt nhãn riêng nếu bạn muốn
             'type': 'delivery',
             'parent_id': parent_partner.id,
             'street': addr_str or '',
@@ -925,7 +930,8 @@ class SaleApiImportWizard(models.TransientModel):
                     continue
 
                 # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
-                partner_name_for_so = owner_date.get('shipping_contact') or customer_name
+                # partner_name_for_so = owner_date.get('shipping_contact') or customer_name
+                partner_name_for_so = customer_name
                 partner = odoo_utils._get_or_create_partner(partner_name_for_so)
                 
                 try:
@@ -957,7 +963,8 @@ class SaleApiImportWizard(models.TransientModel):
                     parent_partner=partner,
                     addr_str=shipping_address_str or order.get("ShippingAddress") or order.get("BillingAddress") or order_ref_base,
                     phone=phone_text,
-                    province_text=province_text
+                    province_text=province_text,
+                    contact_name=owner_date.get('shipping_contact')
                 )
 
                 distinct_stocks = [s for s in lines_by_stock.keys() if s in stock_mapping]
@@ -1021,6 +1028,7 @@ class SaleApiImportWizard(models.TransientModel):
                         'amount_total': group_total,
                         'commitment_date': commitment_date,
                         'partner_shipping_id': delivery_contact.id, 
+                        'partner_invoice_id': delivery_contact.id, 
                         'origin':origin,
                         'warehouse_id': warehouse.id,
                         'misa_id': misa_id_str, 
@@ -1369,6 +1377,7 @@ class SaleApiImportWizard(models.TransientModel):
                             'partner_id': partner.id,
                             'date_order': order_date,
                             'partner_shipping_id': delivery_contact.id,
+                            'partner_invoice_id': delivery_contact.id,
                             'commitment_date': commitment_date,
                             'amount_total': group_total,       # có thể để Odoo tự tính lại sau khi tạo line
                             'warehouse_id': warehouse.id,

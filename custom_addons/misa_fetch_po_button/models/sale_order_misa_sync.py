@@ -263,7 +263,8 @@ class SaleOrder(models.Model):
             _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
 
         # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
-        partner_name = owner_date.get('shipping_contact') or partner_name
+        # partner_name = owner_date.get('shipping_contact') or partner_name
+        partner_name = partner_name
 
         # Lấy lines từ DataSubPaging
         lines = self._misa_fetch_lines(misa_order_id)
@@ -294,9 +295,11 @@ class SaleOrder(models.Model):
                 parent_partner=partner,
                 addr_str=shipping_addr or '',
                 phone=data.get("Phone"),
-                province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText")
+                province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
+                contact_name=owner_date.get('shipping_contact')
             )
             vals_upd['partner_shipping_id'] = delivery_contact.id
+            vals_upd['partner_invoice_id'] = delivery_contact.id
         except Exception as e:
             _logger.warning("Không set được delivery contact: %s", e)
 
@@ -842,7 +845,8 @@ class SaleOrder(models.Model):
             _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
 
         # Ưu tiên lấy tên người nhận hàng từ ShippingContactIDText, nếu không có thì dùng AccountIDText
-        partner_name  = owner_date.get('shipping_contact') or data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        # partner_name  = owner_date.get('shipping_contact') or data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+        partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
         partner       = odoo_utils._get_or_create_partner(partner_name)
         order_no      = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo") or order_no_fallback
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
@@ -860,6 +864,7 @@ class SaleOrder(models.Model):
                 addr_str=shipping_addr,
                 phone=data.get("Phone"),
                 province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
+                contact_name=owner_date.get('shipping_contact')
             )
             shipping_id = delivery_contact.id
         except Exception as e:
@@ -875,6 +880,7 @@ class SaleOrder(models.Model):
             'warehouse_id': old_wh.id or False,
             'misa_id': str(misa_order_id) if misa_order_id else False,
             'partner_shipping_id': shipping_id,
+            'partner_invoice_id': shipping_id,
             'x_studio_zns': zns
         }
         
