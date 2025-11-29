@@ -214,34 +214,62 @@ class ProductionOperation(models.Model):
         else:  # disassembly
             moves_to_create = self._prepare_disassembly_moves(virtual_location)
         
+        # Validate stock availability before processing
+        if self.operation_type == 'disassembly':
+            # Check if there's enough stock at the exact source location (not child locations)
+            quant = self.env['stock.quant'].search([
+                ('product_id', '=', self.main_product_id.id),
+                ('location_id', '=', self.source_location_id.id),  # Exact location, not children
+                ('company_id', '=', self.company_id.id)
+            ])
+            available_qty = sum(quant.mapped('quantity'))
+            if available_qty < self.main_product_qty:
+                raise UserError(_(
+                    'Không đủ tồn kho tại vị trí "%s".\n'
+                    'Số lượng cần: %.2f\n'
+                    'Số lượng có sẵn tại vị trí này: %.2f\n\n'
+                    'Lưu ý: Hệ thống chỉ lấy hàng từ vị trí bạn chọn, không bao gồm các vị trí con.'
+                ) % (self.source_location_id.display_name, self.main_product_qty, available_qty))
+
+        elif self.operation_type == 'assembly':
+            # Check stock for each component at exact source location
+            for line in self.component_line_ids:
+                quant = self.env['stock.quant'].search([
+                    ('product_id', '=', line.product_id.id),
+                    ('location_id', '=', line.source_location_id.id),  # Exact location, not children
+                    ('company_id', '=', self.company_id.id)
+                ])
+                available_qty = sum(quant.mapped('quantity'))
+                if available_qty < line.qty:
+                    raise UserError(_(
+                        'Không đủ tồn kho cho thành phần "%s" tại vị trí "%s".\n'
+                        'Số lượng cần: %.2f\n'
+                        'Số lượng có sẵn tại vị trí này: %.2f\n\n'
+                        'Lưu ý: Hệ thống chỉ lấy hàng từ vị trí bạn chọn, không bao gồm các vị trí con.'
+                    ) % (line.product_id.name, line.source_location_id.display_name, line.qty, available_qty))
+
         # Create and process moves
         moves = self.env['stock.move'].create(moves_to_create)
         moves._action_confirm()
-        moves._action_assign()
-        
-        # Process moves directly without picking - simpler approach
+
+        # DO NOT use _action_assign() - it will automatically pick child locations
+        # Instead, create move_lines manually with exact location_id user selected
+
+        # Process moves directly without picking
         for move in moves:
-            # Ensure move is assigned
-            if move.state not in ('assigned', 'partially_available'):
-                move._action_assign()
-            
-            # Create move lines if they don't exist
-            if not move.move_line_ids:
-                move_line_vals = {
-                    'move_id': move.id,
-                    'product_id': move.product_id.id,
-                    'product_uom_id': move.product_uom.id,
-                    'location_id': move.location_id.id,
-                    'location_dest_id': move.location_dest_id.id,
-                    'company_id': move.company_id.id,
-                    'qty_done': move.product_uom_qty,
-                }
-                self.env['stock.move.line'].create(move_line_vals)
-            else:
-                # Set qty_done on existing move lines
-                for move_line in move.move_line_ids:
-                    move_line.qty_done = move.product_uom_qty
-            
+            # Create move lines manually with exact location specified
+            move_line_vals = {
+                'move_id': move.id,
+                'product_id': move.product_id.id,
+                'product_uom_id': move.product_uom.id,
+                'location_id': move.location_id.id,  # Use exact location from move
+                'location_dest_id': move.location_dest_id.id,
+                'company_id': move.company_id.id,
+                'quantity': move.product_uom_qty,
+                'qty_done': move.product_uom_qty,
+            }
+            self.env['stock.move.line'].create(move_line_vals)
+
             # Complete the move
             move._action_done()
         
