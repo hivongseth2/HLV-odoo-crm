@@ -87,6 +87,20 @@ class MisaApiPurchaseOrder(http.Controller):
 
         try:
             env_admin = request.env(user=admin_user)
+            
+            # check đơn 
+            existing_po = env_admin['purchase.order'].search([('name', '=', po_code)], limit=1)
+            
+            if existing_po:
+                _logger.info("MISA PO API: PO %s found (ID: %s). Skipping creation.", po_code, existing_po.id)
+                # Trả về kết quả ngay lập tức, không gọi hàm tạo mới bên dưới nữa
+                return {
+                    "ok": True,
+                    "res_id": existing_po.id,
+                    "name": existing_po.name,
+                    "action": "existed",  # Đánh dấu là đã tồn tại
+                    "detail": "Đơn hàng %s đã tồn tại trên hệ thống. Không tạo mới." % po_code
+                }
 
             result = env_admin["purchase.order"].api_sync_po_by_code(
                 po_code=po_code,
