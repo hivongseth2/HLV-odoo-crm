@@ -36,10 +36,9 @@
             max-width: 100%;
         }
         .search-chip span {
-            white-space: nowrap;
-            overflow: hidden;
+
             text-overflow: ellipsis;
-            max-width: 200px; /* Giới hạn chiều dài chip trên mobile */
+            max-width: 300px; /* Giới hạn chiều dài chip trên mobile */
         }
         .search-chip .btn-close-chip {
             margin-left: 6px;
