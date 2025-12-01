@@ -263,7 +263,7 @@
 
           <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
           
-          <script type="text/javascript"><![CDATA[
+       <script type="text/javascript"><![CDATA[
             (function () {
               var searchTimeout = null;
 
@@ -283,7 +283,7 @@
 
                   // Hàm vẽ lại toàn bộ chips
                   function renderChips() {
-                      $container.find('.search-chip').remove(); // Xóa chip cũ
+                      $container.find('.search-chip').remove();
                       currentChips.forEach(function(term, index) {
                           var $chip = $(
                               '<div class="search-chip">' +
@@ -303,16 +303,16 @@
 
                   // Thêm chip mới
                   window.addSearchChip = function(term) {
-                      term = term.trim().replace(/,/g, ''); // Loại bỏ dấu phẩy trong tên
+                      term = term.trim().replace(/,/g, ''); // Loại bỏ dấu phẩy
                       if(term && !currentChips.includes(term)) {
                           currentChips.push(term);
                           renderChips();
                       }
-                      $visualInput.val(''); // Xóa input sau khi chọn
+                      $visualInput.val('');
                       $visualInput.focus();
                   }
 
-                  // Xóa chip khi click dấu X
+                  // Xóa chip
                   $container.on('click', '.btn-close-chip', function() {
                       var idx = $(this).data('index');
                       currentChips.splice(idx, 1);
@@ -320,20 +320,20 @@
                       $visualInput.focus();
                   });
 
-                  // Xử lý phím Backspace và Enter/Comma trong input
+                  // Xử lý phím Backspace, Enter, Comma
                   $visualInput.on('keydown', function(e) {
                       var val = $(this).val();
                       if(e.key === 'Backspace' && val === '' && currentChips.length > 0) {
-                          // Xóa chip cuối cùng nếu đang ở input rỗng
                           currentChips.pop();
                           renderChips();
                       } else if (e.key === 'Enter') {
-                          // Ngăn submit form mặc định, thay vào đó tạo chip
                           e.preventDefault();
                           if (val.trim()) {
                               addSearchChip(val);
+                              // Nếu nhấn Enter khi đang gõ -> Thêm chip và tìm luôn
+                              $('#search-form').submit();
                           } else {
-                              // Nếu input rỗng mà enter -> Submit form tìm kiếm
+                              // Nếu input rỗng -> Tìm kiếm với các chip hiện tại
                               $('#search-form').submit();
                           }
                       } else if (e.key === ',') {
@@ -344,13 +344,13 @@
                       }
                   });
 
-                  // Click vào wrapper thì focus input
+                  // Focus input khi click wrapper
                   $container.on('click', function(e) {
                       if(e.target === this) $visualInput.focus();
                   });
               }
 
-              // --- LOGIC GỢI Ý (SUGGESTION) ---
+              // --- LOGIC GỢI Ý ---
               function debounce(func, wait) {
                 return function() {
                   var context = this, args = arguments;
@@ -362,12 +362,8 @@
               function searchProducts(term, callback) {
                 $.ajax({
                   url: "/search_stock/suggest",
-                  type: "POST",
-                  dataType: "json",
-                  contentType: "application/json; charset=utf-8",
-                  data: JSON.stringify({
-                    jsonrpc: "2.0", method: "call", params: { q: term }, id: new Date().getTime()
-                  }),
+                  type: "POST", dataType: "json", contentType: "application/json",
+                  data: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { q: term }, id: new Date().getTime() }),
                   success: function(resp) {
                     var result = (resp && resp.result) ? resp.result : {};
                     callback(result.products || []);
@@ -383,22 +379,26 @@
                 }
                 var html = '';
                 products.forEach(function(p) {
-                   // Dùng tên sản phẩm cho data-name để chọn
-                   var displayName = (p.name || '') + ' ' + (p.default_code || ''); 
-                   // Logic hiển thị item
-                   html += '<div class="suggestion-item border-bottom p-2" data-name="' + (p.name || '') + '" style="cursor:pointer;">';
+                   // Dùng TÊN để tìm kiếm
+                   var displayName = p.name || p.default_code || '';
+                   
+                   html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
                    html += '  <div class="d-flex align-items-center">';
                    // Ảnh
                    if (p.image_url) {
-                       html += '<img src="' + p.image_url + '" class="rounded border me-2" style="width:40px; height:40px; object-fit:cover;"/>';
+                       html += '<img src="' + p.image_url + '" class="rounded border me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
                    } else {
-                       html += '<div class="rounded border me-2 bg-light d-flex align-items-center justify-content-center" style="width:40px; height:40px;"><i class="fa fa-cube text-muted"></i></div>';
+                       html += '<div class="rounded border me-2 bg-light d-flex align-items-center justify-content-center flex-shrink-0" style="width:40px; height:40px;"><i class="fa fa-cube text-muted"></i></div>';
                    }
-                   // Text
+                   // Thông tin text
                    html += '    <div class="flex-grow-1 overflow-hidden">';
                    html += '      <div class="fw-bold text-dark text-truncate" style="font-size:0.9rem;">' + (p.default_code || '') + '</div>';
                    html += '      <div class="text-muted text-truncate small">' + (p.name || '') + '</div>';
                    html += '    </div>';
+                   
+                   // Icon mũi tên để gợi ý là "Chọn cái này"
+                   html += '    <div class="ms-2 text-primary"><i class="fa fa-angle-right"></i></div>';
+                   
                    html += '  </div>';
                    html += '</div>';
                 });
@@ -407,12 +407,12 @@
 
               // --- MAIN INIT ---
               $(document).ready(function() {
-                initChipInput(); // Khởi tạo chip input
+                initChipInput(); // Setup UI
 
                 var $visualInput = $('#visual-search-input');
                 var $dropdown = $('#search-suggestions');
 
-                // Gõ phím tìm gợi ý
+                // Input debounce
                 $visualInput.on('input', debounce(function() {
                   var term = $(this).val().trim();
                   if (term.length >= 2) {
@@ -422,23 +422,29 @@
                   }
                 }, 300));
 
-                // Click chọn gợi ý -> Tạo Chip bằng TÊN
+                // >>> CLICK GỢI Ý -> AUTO SUBMIT <<<
                 $(document).on('click', '.suggestion-item', function() {
                   var name = $(this).data('name');
                   if (name) {
-                    window.addSearchChip(name); // Thêm chip bằng tên
+                    // 1. Thêm chip vào ô tìm kiếm
+                    window.addSearchChip(name);
+                    
+                    // 2. Ẩn dropdown
                     $dropdown.hide();
+
+                    // 3. TỰ ĐỘNG SUBMIT FORM NGAY LẬP TỨC
+                    $('#search-form').submit();
                   }
                 });
 
-                // Click ngoài thì đóng dropdown
+                // Click ngoài -> đóng dropdown
                 $(document).on('click', function(e) {
                   if (!$(e.target).closest('#chip-container, #search-suggestions').length) {
                     $dropdown.hide();
                   }
                 });
                 
-                // --- Logic mở rộng chi tiết (Giữ nguyên logic cũ nhưng làm gọn) ---
+                // Logic mở rộng chi tiết (không đổi)
                 $(document).on('click', '.btn-expand', function () {
                    var $btn = $(this);
                    var pid = $btn.data('pid');
@@ -452,16 +458,14 @@
                      return;
                    }
                    
-                   // Tạo loading row
                    var colCount = $row.children('td').length;
-                   var $detail = $('<tr class="detail-row bg-white"><td colspan="' + colCount + '" class="p-3 shadow-inset">Trying to load...</td></tr>');
+                   var $detail = $('<tr class="detail-row bg-white"><td colspan="' + colCount + '" class="p-3 shadow-inset"><div class="d-flex align-items-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải dữ liệu...</div></td></tr>');
                    $row.after($detail);
                    $btn.html('<i class="fa fa-minus"></i>');
 
                    var currentWid = $('select[name="warehouse_id"]').val() || '';
                    var detailMode = isCombo ? 'per_warehouse' : null;
 
-                   // Gọi API (Tái sử dụng hàm loadBreakdown cũ hoặc viết gọn lại ở đây)
                    $.ajax({
                       url: "/search_stock/product_breakdown",
                       type: "POST", dataType: "json", contentType: "application/json",
@@ -471,26 +475,24 @@
                           if(res.ok) {
                              $detail.find('td').html(buildDetailTable(res));
                           } else {
-                             $detail.find('td').html('<div class="text-danger">Lỗi tải dữ liệu.</div>');
+                             $detail.find('td').html('<div class="text-danger small">Lỗi: ' + (res.error || 'Unknown') + '</div>');
                           }
                       }
                    });
                 });
               });
               
-              // Helper render bảng chi tiết (giữ logic cũ, chỉnh CSS đẹp hơn)
+              // Helper render bảng chi tiết
               function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US'); }
               function buildDetailTable(data) {
                   var html = '<div class="border rounded bg-light p-2"><table class="table table-sm table-borderless mb-0 small">';
                   var rows = data.rows || [];
                   if(data.mode === 'components_by_warehouse') {
-                      html += '<thead class="text-muted border-bottom"><tr><th colspan="2">Thành phần combo</th><th class="text-end">SL/Combo</th><th class="text-end">Tồn kho</th><th class="text-end">Khả dụng</th></tr></thead><tbody>';
+                      html += '<thead class="text-muted border-bottom"><tr><th colspan="2">Thành phần</th><th class="text-end">SL/Combo</th><th class="text-end">Tồn kho</th><th class="text-end">Khả dụng</th></tr></thead><tbody>';
                       rows.forEach(function(c){
-                          var t_avail = 0;
-                          (c.warehouses||[]).forEach(function(w){ t_avail += (w.qty_available||0); });
-                          html += '<tr><td colspan="5" class="fw-bold pt-2">' + c.name + ' <span class="text-muted fw-normal">(' + c.default_code + ')</span></td></tr>';
+                          html += '<tr><td colspan="5" class="fw-bold pt-2 text-primary">' + c.name + ' <span class="text-muted fw-normal ms-1">(' + c.default_code + ')</span></td></tr>';
                           (c.warehouses||[]).forEach(function(w){
-                              html += '<tr><td style="width:20px;"></td><td>↳ ' + w.warehouse_name + '</td><td class="text-end">' + fmt(c.component_qty_in_combo) + '</td><td class="text-end">' + fmt(w.qty_total) + '</td><td class="text-end fw-bold text-success">' + fmt(w.qty_available) + '</td></tr>';
+                              html += '<tr><td style="width:15px;"></td><td>↳ ' + w.warehouse_name + '</td><td class="text-end">' + fmt(c.component_qty_in_combo) + '</td><td class="text-end">' + fmt(w.qty_total) + '</td><td class="text-end fw-bold text-success">' + fmt(w.qty_available) + '</td></tr>';
                           });
                       });
                   } else {
