@@ -1,21 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
   <data>
-    <record id="paperformat_picking_label" model="report.paperformat">
-      <field name="name">Label 50x100mm</field>
-      <field name="default" eval="False"/>
-      <field name="format" eval="'custom'"/>
-      <field name="page_height">50</field>
-      <field name="page_width">100</field>
-      <field name="orientation">Portrait</field>
-      <field name="margin_top">0</field>
-      <field name="margin_bottom">0</field>
-      <field name="margin_left">0</field>
-      <field name="margin_right">0</field>
-      <field name="header_line" eval="False"/>
-      <field name="header_spacing">0</field>
-    </record>
-
     <record id="action_report_stock_picking_label" model="ir.actions.report">
       <field name="name">Nhãn đơn hàng 50 x 100</field>
       <field name="model">stock.picking</field>
@@ -23,7 +8,7 @@
       <field name="report_name">sale_order_label.report_stock_picking_label_document</field>
       <field name="binding_model_id" ref="stock.model_stock_picking"/>
       <field name="binding_type">report</field>
-      <field name="paperformat_id" ref="sale_order_label.paperformat_picking_label"/>
+      <field name="paperformat_id" ref="sale_order_label.paperformat_order_label"/>
     </record>
   </data>
 </odoo>
