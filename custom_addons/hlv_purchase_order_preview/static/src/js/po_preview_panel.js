@@ -619,10 +619,28 @@ patch(ListRenderer.prototype, {
                 // Extract supplier names from description
                 const supplierNames = item.description.substring(5).split(' hoặc ').map(s => s.trim());
 
-                // Extract IDs from domain
-                const domain = item.domain;
-                if (domain && domain.length > 0) {
-                    const idCondition = domain.find(d => Array.isArray(d) && d[0] === 'id' && d[1] === 'in');
+                // Extract IDs from domain (handle array-like objects recursively)
+                let domainArray = null;
+                if (item.domain) {
+                    if (Array.isArray(item.domain)) {
+                        domainArray = item.domain;
+                    } else if (typeof item.domain === 'object' && item.domain.length !== undefined) {
+                        domainArray = Array.from(item.domain);
+                        console.log('[HLV] Converted supplier domain to array, length:', domainArray.length);
+                    }
+                }
+
+                if (domainArray && domainArray.length > 0) {
+                    // Convert nested array-like objects
+                    for (let i = 0; i < domainArray.length; i++) {
+                        const d = domainArray[i];
+                        if (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d)) {
+                            domainArray[i] = Array.from(d);
+                            console.log('[HLV] Converted nested domain item:', domainArray[i]);
+                        }
+                    }
+
+                    const idCondition = domainArray.find(d => Array.isArray(d) && d[0] === 'id' && d[1] === 'in');
                     if (idCondition && idCondition[2]) {
                         const allIds = idCondition[2];
                         // If multiple suppliers, we need to re-fetch each supplier's IDs
@@ -862,10 +880,38 @@ patch(ListRenderer.prototype, {
 
             // Check if this is a receipt status filter by examining the domain
             let isReceiptFilter = false;
-            if (item.domain && Array.isArray(item.domain)) {
-                isReceiptFilter = item.domain.some(d =>
-                    Array.isArray(d) && d[0] === 'receipt_status'
-                );
+            let domainArray = null;
+
+            // Convert domain to array if it's array-like object
+            if (item.domain) {
+                if (Array.isArray(item.domain)) {
+                    domainArray = item.domain;
+                } else if (typeof item.domain === 'object' && item.domain.length !== undefined) {
+                    // Array-like object, convert to real array recursively
+                    domainArray = Array.from(item.domain);
+                    console.log('[HLV] Converted array-like domain to array, length:', domainArray.length);
+                }
+            }
+
+            if (domainArray && domainArray.length > 0) {
+                console.log('[HLV] Checking domain items...');
+                for (let i = 0; i < domainArray.length; i++) {
+                    const d = domainArray[i];
+                    console.log('[HLV] Domain item', i, ':', typeof d, d);
+
+                    // Convert nested array-like objects to real arrays
+                    if (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d)) {
+                        domainArray[i] = Array.from(d);
+                        console.log('[HLV] Converted nested array-like to array:', domainArray[i]);
+                    }
+
+                    const domainItem = Array.isArray(domainArray[i]) ? domainArray[i] : domainArray[i];
+                    if (Array.isArray(domainItem) && domainItem[0] === 'receipt_status') {
+                        isReceiptFilter = true;
+                        console.log('[HLV] Found receipt_status in domain');
+                        break;
+                    }
+                }
             }
 
             if (isReceiptFilter) {
@@ -873,9 +919,15 @@ patch(ListRenderer.prototype, {
                 console.log('[HLV] Found receipt filter to remove:', id, desc);
 
                 // Extract status values from domain
-                item.domain.forEach(d => {
-                    if (Array.isArray(d) && d[0] === 'receipt_status' && d[1] === '=' && d[2]) {
-                        selectedStatuses.add(d[2]);
+                domainArray.forEach(d => {
+                    // Convert if needed
+                    const domainItem = (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d))
+                        ? Array.from(d)
+                        : d;
+
+                    if (Array.isArray(domainItem) && domainItem[0] === 'receipt_status' && domainItem[1] === '=' && domainItem[2]) {
+                        selectedStatuses.add(domainItem[2]);
+                        console.log('[HLV] Extracted status:', domainItem[2]);
                     }
                 });
             }
