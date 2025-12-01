@@ -7,101 +7,6 @@ import { onMounted, onPatched } from "@odoo/owl";
 // Store reference to current controller for use in ListRenderer
 let _hlvCurrentController = null;
 
-// Filter state management with localStorage and URL persistence
-const HLV_FILTER_STATE = {
-    product: null,
-    supplier: null,
-    receipt: null,
-
-    // Save to localStorage and URL
-    save() {
-        const state = {
-            product: this.product,
-            supplier: this.supplier,
-            receipt: this.receipt
-        };
-        try {
-            localStorage.setItem('hlv_po_filters', JSON.stringify(state));
-            this._updateURL(state);
-        } catch (e) {
-            console.warn('[HLV] Failed to save filter state:', e);
-        }
-    },
-
-    // Load from localStorage or URL
-    load() {
-        // First try URL params
-        const urlState = this._loadFromURL();
-        if (urlState.hasFilters) {
-            this.product = urlState.product;
-            this.supplier = urlState.supplier;
-            this.receipt = urlState.receipt;
-            return;
-        }
-
-        // Fallback to localStorage
-        try {
-            const saved = localStorage.getItem('hlv_po_filters');
-            if (saved) {
-                const state = JSON.parse(saved);
-                this.product = state.product || null;
-                this.supplier = state.supplier || null;
-                this.receipt = state.receipt || null;
-            }
-        } catch (e) {
-            console.warn('[HLV] Failed to load filter state:', e);
-        }
-    },
-
-    // Update URL params
-    _updateURL(state) {
-        const url = new URL(window.location.href);
-
-        if (state.product) {
-            url.searchParams.set('hlv_product', state.product);
-        } else {
-            url.searchParams.delete('hlv_product');
-        }
-
-        if (state.supplier) {
-            url.searchParams.set('hlv_supplier', state.supplier);
-        } else {
-            url.searchParams.delete('hlv_supplier');
-        }
-
-        if (state.receipt) {
-            url.searchParams.set('hlv_receipt', state.receipt);
-        } else {
-            url.searchParams.delete('hlv_receipt');
-        }
-
-        window.history.replaceState({}, '', url.toString());
-    },
-
-    // Load from URL params
-    _loadFromURL() {
-        const url = new URL(window.location.href);
-        const product = url.searchParams.get('hlv_product');
-        const supplier = url.searchParams.get('hlv_supplier');
-        const receipt = url.searchParams.get('hlv_receipt');
-
-        return {
-            product: product || null,
-            supplier: supplier || null,
-            receipt: receipt || null,
-            hasFilters: !!(product || supplier || receipt)
-        };
-    },
-
-    // Clear all filters
-    clear() {
-        this.product = null;
-        this.supplier = null;
-        this.receipt = null;
-        this.save();
-    }
-};
-
 /**
  * Format number as currency (Vietnamese locale)
  */
@@ -318,6 +223,20 @@ function getResIdFromRow(listRenderer, row) {
 }
 
 /**
+ * Get current product filter value from searchModel
+ */
+function getProductFilterValue(searchModel) {
+    if (!searchModel) return null;
+    const items = searchModel.searchItems || {};
+    for (const item of Object.values(items)) {
+        if (item.description && item.description.startsWith('SP:')) {
+            return item.description.substring(4); // Remove 'SP: ' prefix
+        }
+    }
+    return null;
+}
+
+/**
  * Patch ListController to add custom search bar and store reference
  */
 patch(ListController.prototype, {
@@ -330,14 +249,11 @@ patch(ListController.prototype, {
 
             onMounted(() => {
                 this._hlvAddCustomSearchBar();
-                // Restore filters after mount
-                this._hlvRestoreFilters();
-                // Monitor filter changes
                 this._hlvMonitorFilterChanges();
             });
             onPatched(() => {
                 this._hlvAddCustomSearchBar();
-                this._hlvSyncInputsWithState();
+                this._hlvSyncProductInput();
                 this._hlvMonitorFilterChanges();
             });
         }
@@ -352,7 +268,7 @@ patch(ListController.prototype, {
 
         // Use MutationObserver to detect when facets are removed
         const observer = new MutationObserver(() => {
-            this._hlvCheckFilterSync();
+            this._hlvSyncProductInput();
         });
 
         observer.observe(searchPanel, {
@@ -361,130 +277,20 @@ patch(ListController.prototype, {
         });
     },
 
-    _hlvCheckFilterSync() {
-        const searchModel = this.env?.searchModel;
-        if (!searchModel) return;
-
-        const activeFilters = searchModel.searchItems || {};
-
-        // Check if product filter was removed
-        const hasProductFilter = Object.values(activeFilters).some(
-            item => item.description && item.description.startsWith('SP:')
-        );
-        if (!hasProductFilter && HLV_FILTER_STATE.product) {
-            console.log('[HLV] Product filter removed externally');
-            HLV_FILTER_STATE.product = null;
-            HLV_FILTER_STATE.save();
-            this._hlvSyncInputsWithState();
-        }
-
-        // Check if supplier filter was removed
-        const hasSupplierFilter = Object.values(activeFilters).some(
-            item => item.description && item.description.startsWith('NCC:')
-        );
-        if (!hasSupplierFilter && HLV_FILTER_STATE.supplier) {
-            console.log('[HLV] Supplier filter removed externally');
-            HLV_FILTER_STATE.supplier = null;
-            HLV_FILTER_STATE.save();
-        }
-
-        // Check if receipt filter was removed
-        const hasReceiptFilter = Object.values(activeFilters).some(
-            item => item.description && (
-                item.description === 'Chưa nhận' ||
-                item.description === 'Đã nhận một phần' ||
-                item.description === 'Đã nhận hết'
-            )
-        );
-        if (!hasReceiptFilter && HLV_FILTER_STATE.receipt) {
-            console.log('[HLV] Receipt filter removed externally');
-            HLV_FILTER_STATE.receipt = null;
-            HLV_FILTER_STATE.save();
-        }
-    },
-
-    async _hlvRestoreFilters() {
-        console.log('[HLV] Restoring filters from storage');
-        HLV_FILTER_STATE.load();
-
-        const searchModel = this.env?.searchModel;
-        if (!searchModel || !searchModel.createNewFilters) {
-            console.warn('[HLV] Cannot restore filters - searchModel not ready');
-            return;
-        }
-
-        // Restore product filter
-        if (HLV_FILTER_STATE.product) {
-            try {
-                const domain = [
-                    '|',
-                    ['order_line.product_id.name', 'ilike', `%${HLV_FILTER_STATE.product}%`],
-                    ['order_line.product_id.default_code', 'ilike', `%${HLV_FILTER_STATE.product}%`]
-                ];
-                searchModel.createNewFilters([{
-                    description: `SP: ${HLV_FILTER_STATE.product}`,
-                    domain: domain,
-                    type: 'filter',
-                }]);
-            } catch (e) {
-                console.error('[HLV] Failed to restore product filter:', e);
-            }
-        }
-
-        // Restore supplier filter with exact Vietnamese matching
-        if (HLV_FILTER_STATE.supplier) {
-            try {
-                const orm = this.env.services.orm;
-                const matchingIds = await orm.call(
-                    'purchase.order',
-                    'search_supplier_exact',
-                    [HLV_FILTER_STATE.supplier, null]
-                );
-
-                const domain = matchingIds.length > 0
-                    ? [['id', 'in', matchingIds]]
-                    : [['id', '=', -1]];
-
-                searchModel.createNewFilters([{
-                    description: `NCC: ${HLV_FILTER_STATE.supplier}`,
-                    domain: domain,
-                    type: 'filter',
-                }]);
-            } catch (e) {
-                console.error('[HLV] Failed to restore supplier filter:', e);
-            }
-        }
-
-        // Restore receipt filter
-        if (HLV_FILTER_STATE.receipt) {
-            try {
-                const domain = [['receipt_status', '=', HLV_FILTER_STATE.receipt]];
-                const label = getReceiptStatusLabel(HLV_FILTER_STATE.receipt);
-                searchModel.createNewFilters([{
-                    description: label,
-                    domain: domain,
-                    type: 'filter',
-                }]);
-            } catch (e) {
-                console.error('[HLV] Failed to restore receipt filter:', e);
-            }
-        }
-
-        // Sync input values
-        this._hlvSyncInputsWithState();
-    },
-
-    _hlvSyncInputsWithState() {
-        // Sync product input
+    _hlvSyncProductInput() {
+        // Sync product input with current searchModel state
         const productInput = document.querySelector('.hlv-product-search');
-        if (productInput && productInput.value !== (HLV_FILTER_STATE.product || '')) {
-            productInput.value = HLV_FILTER_STATE.product || '';
+        const clearBtn = document.querySelector('.hlv-clear-product');
+        if (!productInput) return;
+
+        const currentValue = getProductFilterValue(this.env?.searchModel);
+
+        if (productInput.value !== (currentValue || '')) {
+            productInput.value = currentValue || '';
         }
 
-        // Update clear button visibility
-        const clearBtn = document.querySelector('.hlv-clear-product');
         if (clearBtn) {
-            clearBtn.style.display = HLV_FILTER_STATE.product ? 'inline-block' : 'none';
+            clearBtn.style.display = currentValue ? 'inline-block' : 'none';
         }
     },
 
@@ -506,13 +312,17 @@ patch(ListController.prototype, {
         const searchBar = document.createElement('div');
         searchBar.className = 'hlv-custom-search-bar d-flex gap-2 align-items-center';
         searchBar.style.cssText = 'margin-left: auto; margin-right: 16px;';
+
+        // Get current filter value from searchModel
+        const currentValue = getProductFilterValue(this.env?.searchModel) || '';
+
         searchBar.innerHTML = `
             <div class="hlv-search-group d-flex align-items-center">
                 <label class="hlv-search-label me-2" style="font-weight: 500; color: #714B67; white-space: nowrap;">SP:</label>
                 <input type="text" class="form-control form-control-sm hlv-product-search"
                        placeholder="Tìm sản phẩm trong đơn..." style="width: 200px;"
-                       value="${HLV_FILTER_STATE.product || ''}">
-                <button class="btn btn-sm btn-link hlv-clear-product" style="display: ${HLV_FILTER_STATE.product ? 'inline-block' : 'none'}; padding: 0 8px; color: #dc3545;" title="Xóa">
+                       value="${currentValue}">
+                <button class="btn btn-sm btn-link hlv-clear-product" style="display: ${currentValue ? 'inline-block' : 'none'}; padding: 0 8px; color: #dc3545;" title="Xóa">
                     <i class="fa fa-times"></i>
                 </button>
             </div>
@@ -572,16 +382,12 @@ patch(ListController.prototype, {
             }
         }
 
-        // Update state
-        HLV_FILTER_STATE.product = value || null;
-        HLV_FILTER_STATE.save();
-
         if (!value) {
             console.log('[HLV] Cleared product search');
             return;
         }
 
-        // Create new filter with facet - using ilike for search
+        // Create new filter with facet
         const domain = [
             '|',
             ['order_line.product_id.name', 'ilike', `%${value}%`],
@@ -589,7 +395,7 @@ patch(ListController.prototype, {
         ];
 
         try {
-            await searchModel.createNewFilters([{
+            searchModel.createNewFilters([{
                 description: `SP: ${value}`,
                 domain: domain,
                 type: 'filter',
@@ -756,10 +562,6 @@ patch(ListRenderer.prototype, {
                 searchModel.deactivateGroup(id);
             }
         }
-
-        // Update state
-        HLV_FILTER_STATE.supplier = value || null;
-        HLV_FILTER_STATE.save();
 
         if (!value) {
             console.log('[HLV] Cleared supplier search');
@@ -934,10 +736,6 @@ patch(ListRenderer.prototype, {
                 searchModel.deactivateGroup(id);
             }
         }
-
-        // Update state
-        HLV_FILTER_STATE.receipt = value || null;
-        HLV_FILTER_STATE.save();
 
         if (!value) {
             console.log('[HLV] Cleared receipt filter');
