@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <data>
+    <record id="action_report_stock_picking_label" model="ir.actions.report">
+      <field name="name">Nhãn đơn hàng 50 x 100</field>
+      <field name="model">stock.picking</field>
+      <field name="report_type">qweb-pdf</field>
+      <field name="report_name">sale_order_label.report_stock_picking_label_document</field>
+      <field name="binding_model_id" ref="stock.model_stock_picking"/>
+      <field name="binding_type">report</field>
+      <field name="paperformat_id" ref="sale_order_label.paperformat_order_label"/>
+    </record>
+  </data>
+</odoo>
