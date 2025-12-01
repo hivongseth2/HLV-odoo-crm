@@ -169,3 +169,69 @@
     background-color: #714B67 !important;
     color: #fff !important;
 }
+
+/* Filter indicator tags */
+.hlv-filter-indicator {
+    flex-shrink: 0;
+}
+
+.hlv-filter-tag {
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+    background-color: #714B67 !important;
+    border: none;
+    animation: hlvTagFadeIn 0.2s ease-out;
+}
+
+.hlv-filter-tag .btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.8;
+    transition: opacity 0.15s;
+}
+
+.hlv-filter-tag .btn-close:hover {
+    opacity: 1;
+}
+
+@keyframes hlvTagFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Custom search bar styling */
+.hlv-custom-search-bar {
+    flex-shrink: 0;
+}
+
+.hlv-custom-search-bar .hlv-product-search {
+    border-color: #dee2e6;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.hlv-custom-search-bar .hlv-product-search:focus {
+    border-color: #714B67;
+    box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.25);
+}
+
+/* Header search button */
+.hlv-header-search-btn {
+    color: #6c757d;
+    font-size: 0.8rem;
+    transition: color 0.15s;
+}
+
+.hlv-header-search-btn:hover {
+    color: #714B67;
+}
+
+/* Search popup */
+.hlv-search-popup {
+    animation: hlvDropdownFadeIn 0.15s ease-out;
+}
