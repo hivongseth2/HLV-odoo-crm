@@ -400,15 +400,8 @@ patch(ListController.prototype, {
 
         // Force UI refresh
         if (filterIdsToRemove.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Force trigger search to refresh UI
-            try {
-                await searchModel.search();
-                console.log('[HLV] Triggered search refresh after deactivate product filters');
-            } catch (e) {
-                console.warn('[HLV] Failed to trigger search refresh', e);
-            }
+            await new Promise(resolve => setTimeout(resolve, 150));
+            console.log('[HLV] Waited for product filter removal to complete');
         }
 
         if (!value) {
@@ -421,19 +414,6 @@ patch(ListController.prototype, {
             selectedProducts.delete(value);
         } else {
             selectedProducts.add(value);
-        }
-
-        // Clean up any remaining product filters before creating new one
-        const currentFilters = searchModel.searchItems || {};
-        for (const [id, item] of Object.entries(currentFilters)) {
-            if (item.description && item.description.startsWith('SP:')) {
-                try {
-                    searchModel.deactivateGroup(id);
-                    console.log('[HLV] Cleaned up stale product filter:', id);
-                } catch (e) {
-                    // Ignore
-                }
-            }
         }
 
         if (selectedProducts.size === 0) {
@@ -702,15 +682,8 @@ patch(ListRenderer.prototype, {
 
         // Force UI refresh
         if (filterIdsToRemove.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Force trigger search to refresh UI
-            try {
-                await searchModel.search();
-                console.log('[HLV] Triggered search refresh after deactivate supplier filters');
-            } catch (e) {
-                console.warn('[HLV] Failed to trigger search refresh', e);
-            }
+            await new Promise(resolve => setTimeout(resolve, 150));
+            console.log('[HLV] Waited for supplier filter removal to complete');
         }
 
         if (!value) {
@@ -757,19 +730,6 @@ patch(ListRenderer.prototype, {
             } catch (e) {
                 console.error('[HLV] Failed to search supplier:', e);
                 return;
-            }
-        }
-
-        // Clean up any remaining supplier filters before creating new one
-        const currentFilters = searchModel.searchItems || {};
-        for (const [id, item] of Object.entries(currentFilters)) {
-            if (item.description && item.description.startsWith('NCC:')) {
-                try {
-                    searchModel.deactivateGroup(id);
-                    console.log('[HLV] Cleaned up stale supplier filter:', id);
-                } catch (e) {
-                    // Ignore
-                }
             }
         }
 
@@ -931,90 +891,51 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        // Get currently selected receipt statuses
+        // Get currently selected receipt statuses from existing TT: filters
         const existingFilters = searchModel.searchItems || {};
         const selectedStatuses = new Set();
-        const filterIdsToRemove = [];
+        const idsToRemove = [];
 
         console.log('[HLV] Checking existing filters for receipt status');
 
         for (const [id, item] of Object.entries(existingFilters)) {
             const desc = item.description;
-            console.log('[HLV] Filter:', id, desc, 'domain type:', typeof item.domain, item.domain);
 
-            // Check if this is a receipt status filter by examining the domain
-            let isReceiptFilter = false;
-            let domainArray = null;
-
-            // Convert domain to array if it's array-like object
-            if (item.domain) {
-                if (Array.isArray(item.domain)) {
-                    domainArray = item.domain;
-                } else if (typeof item.domain === 'object' && item.domain.length !== undefined) {
-                    // Array-like object, convert to real array recursively
-                    domainArray = Array.from(item.domain);
-                    console.log('[HLV] Converted array-like domain to array, length:', domainArray.length);
-                }
-            }
-
-            if (domainArray && domainArray.length > 0) {
-                console.log('[HLV] Checking domain items...');
-                for (let i = 0; i < domainArray.length; i++) {
-                    let d = domainArray[i];
-                    console.log('[HLV] Domain item', i, ':', typeof d, d);
-
-                    // Convert nested array-like objects to real arrays
-                    if (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d)) {
-                        d = Array.from(d);
-                        domainArray[i] = d;
-                        console.log('[HLV] Converted nested array-like to array:', d);
-                    }
-
-                    // Now check if this is a receipt_status condition
-                    if (Array.isArray(d) && d.length >= 1) {
-                        // Check first element
-                        let firstElem = d[0];
-
-                        // First element might also be array-like
-                        if (firstElem && typeof firstElem === 'object' && firstElem.length !== undefined && !Array.isArray(firstElem)) {
-                            firstElem = Array.from(firstElem);
-                            d[0] = firstElem;
-                            console.log('[HLV] Converted first element:', firstElem);
-                        }
-
-                        if (firstElem === 'receipt_status' || (Array.isArray(firstElem) && firstElem[0] === 'receipt_status')) {
-                            isReceiptFilter = true;
-                            console.log('[HLV] Found receipt_status in domain');
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if (isReceiptFilter) {
-                filterIdsToRemove.push(id);
-                console.log('[HLV] Found receipt filter to remove:', id, desc);
+            // Find filters by TT: prefix (simpler and more reliable)
+            if (desc && desc.startsWith('TT:')) {
+                idsToRemove.push(id);
+                console.log('[HLV] Found TT: filter to remove:', id, desc);
 
                 // Extract status values from domain
-                domainArray.forEach(d => {
-                    // Convert if needed
-                    const domainItem = (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d))
-                        ? Array.from(d)
-                        : d;
-
-                    if (Array.isArray(domainItem) && domainItem[0] === 'receipt_status' && domainItem[1] === '=' && domainItem[2]) {
-                        selectedStatuses.add(domainItem[2]);
-                        console.log('[HLV] Extracted status:', domainItem[2]);
+                let domainArray = null;
+                if (item.domain) {
+                    if (Array.isArray(item.domain)) {
+                        domainArray = item.domain;
+                    } else if (typeof item.domain === 'object' && item.domain.length !== undefined) {
+                        domainArray = Array.from(item.domain);
                     }
-                });
+                }
+
+                if (domainArray) {
+                    domainArray.forEach(d => {
+                        const domainItem = (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d))
+                            ? Array.from(d)
+                            : d;
+
+                        if (Array.isArray(domainItem) && domainItem[0] === 'receipt_status' && domainItem[1] === '=' && domainItem[2]) {
+                            selectedStatuses.add(domainItem[2]);
+                            console.log('[HLV] Extracted status:', domainItem[2]);
+                        }
+                    });
+                }
             }
         }
 
         console.log('[HLV] Selected statuses before toggle:', Array.from(selectedStatuses));
-        console.log('[HLV] Filters to remove:', filterIdsToRemove);
+        console.log('[HLV] Filters to remove:', idsToRemove);
 
-        // Remove all existing receipt filters
-        for (const id of filterIdsToRemove) {
+        // Remove ALL existing TT: filters
+        for (const id of idsToRemove) {
             console.log('[HLV] Attempting to deactivate filter:', id);
             try {
                 searchModel.deactivateGroup(id);
@@ -1025,16 +946,9 @@ patch(ListRenderer.prototype, {
         }
 
         // Force UI refresh after removing filters
-        if (filterIdsToRemove.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-            // Force trigger search to refresh UI
-            try {
-                await searchModel.search();
-                console.log('[HLV] Triggered search refresh after deactivate');
-            } catch (e) {
-                console.warn('[HLV] Failed to trigger search refresh', e);
-            }
+        if (idsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 150));
+            console.log('[HLV] Waited for filter removal to complete');
         }
 
         if (!value) {
@@ -1047,19 +961,6 @@ patch(ListRenderer.prototype, {
             selectedStatuses.delete(value);
         } else {
             selectedStatuses.add(value);
-        }
-
-        // Clean up any remaining receipt status filters before creating new one
-        const currentFilters = searchModel.searchItems || {};
-        for (const [id, item] of Object.entries(currentFilters)) {
-            if (item.description && item.description.startsWith('TT:')) {
-                try {
-                    searchModel.deactivateGroup(id);
-                    console.log('[HLV] Cleaned up stale filter:', id);
-                } catch (e) {
-                    // Ignore errors for already removed filters
-                }
-            }
         }
 
         if (selectedStatuses.size === 0) {
