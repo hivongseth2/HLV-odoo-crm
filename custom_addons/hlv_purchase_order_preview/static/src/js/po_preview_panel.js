@@ -403,7 +403,7 @@ patch(ListController.prototype, {
         }
     },
 
-    _hlvRestoreFilters() {
+    async _hlvRestoreFilters() {
         console.log('[HLV] Restoring filters from storage');
         HLV_FILTER_STATE.load();
 
@@ -418,8 +418,8 @@ patch(ListController.prototype, {
             try {
                 const domain = [
                     '|',
-                    ['order_line.product_id.name', '=ilike', `%${HLV_FILTER_STATE.product}%`],
-                    ['order_line.product_id.default_code', '=ilike', `%${HLV_FILTER_STATE.product}%`]
+                    ['order_line.product_id.name', 'ilike', `%${HLV_FILTER_STATE.product}%`],
+                    ['order_line.product_id.default_code', 'ilike', `%${HLV_FILTER_STATE.product}%`]
                 ];
                 searchModel.createNewFilters([{
                     description: `SP: ${HLV_FILTER_STATE.product}`,
@@ -431,10 +431,20 @@ patch(ListController.prototype, {
             }
         }
 
-        // Restore supplier filter
+        // Restore supplier filter with exact Vietnamese matching
         if (HLV_FILTER_STATE.supplier) {
             try {
-                const domain = [['partner_id.name', '=ilike', `%${HLV_FILTER_STATE.supplier}%`]];
+                const orm = this.env.services.orm;
+                const matchingIds = await orm.call(
+                    'purchase.order',
+                    'search_supplier_exact',
+                    [HLV_FILTER_STATE.supplier, null]
+                );
+
+                const domain = matchingIds.length > 0
+                    ? [['id', 'in', matchingIds]]
+                    : [['id', '=', -1]];
+
                 searchModel.createNewFilters([{
                     description: `NCC: ${HLV_FILTER_STATE.supplier}`,
                     domain: domain,
@@ -486,13 +496,16 @@ patch(ListController.prototype, {
 
         if (document.querySelector('.hlv-custom-search-bar')) return;
 
-        const searchArea = controlPanel.querySelector('.o_searchview') ||
-                          controlPanel.querySelector('.o_control_panel_main');
-        if (!searchArea) return;
+        // Find the buttons area (right side of control panel) to insert before it
+        const buttonsArea = controlPanel.querySelector('.o_control_panel_actions') ||
+                           controlPanel.querySelector('.o_cp_action_menus');
+
+        // Or find the breadcrumb area to insert after
+        const breadcrumbArea = controlPanel.querySelector('.o_control_panel_breadcrumbs');
 
         const searchBar = document.createElement('div');
         searchBar.className = 'hlv-custom-search-bar d-flex gap-2 align-items-center';
-        searchBar.style.cssText = 'margin-left: 24px;';
+        searchBar.style.cssText = 'margin-left: auto; margin-right: 16px;';
         searchBar.innerHTML = `
             <div class="hlv-search-group d-flex align-items-center">
                 <label class="hlv-search-label me-2" style="font-weight: 500; color: #714B67; white-space: nowrap;">SP:</label>
@@ -505,9 +518,18 @@ patch(ListController.prototype, {
             </div>
         `;
 
-        const parentEl = searchArea.parentElement;
-        if (parentEl) {
-            parentEl.insertBefore(searchBar, searchArea.nextSibling);
+        // Insert in the control panel navigation area, not inside searchview
+        if (buttonsArea && buttonsArea.parentElement) {
+            buttonsArea.parentElement.insertBefore(searchBar, buttonsArea);
+        } else if (breadcrumbArea && breadcrumbArea.parentElement) {
+            // Fallback: insert after breadcrumb
+            breadcrumbArea.parentElement.appendChild(searchBar);
+        } else {
+            // Last fallback: append to control panel main
+            const mainArea = controlPanel.querySelector('.o_control_panel_main');
+            if (mainArea) {
+                mainArea.appendChild(searchBar);
+            }
         }
 
         const productInput = searchBar.querySelector('.hlv-product-search');
@@ -559,11 +581,11 @@ patch(ListController.prototype, {
             return;
         }
 
-        // Create new filter with facet - using =ilike for accent-sensitive search
+        // Create new filter with facet - using ilike for search
         const domain = [
             '|',
-            ['order_line.product_id.name', '=ilike', `%${value}%`],
-            ['order_line.product_id.default_code', '=ilike', `%${value}%`]
+            ['order_line.product_id.name', 'ilike', `%${value}%`],
+            ['order_line.product_id.default_code', 'ilike', `%${value}%`]
         ];
 
         try {
@@ -712,7 +734,7 @@ patch(ListRenderer.prototype, {
         }, 10);
     },
 
-    _hlvApplySupplierSearch(value) {
+    async _hlvApplySupplierSearch(value) {
         console.log('[HLV] Supplier search:', value);
 
         const controller = _hlvCurrentController;
@@ -744,17 +766,40 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        // Create new filter with facet - using =ilike for accent-sensitive search
-        const domain = [['partner_id.name', '=ilike', `%${value}%`]];
-
+        // Use Python method to search with exact Vietnamese diacritic matching
         try {
+            const orm = controller.env.services.orm;
+            const matchingIds = await orm.call(
+                'purchase.order',
+                'search_supplier_exact',
+                [value, null]
+            );
+
+            console.log('[HLV] Supplier search found IDs:', matchingIds);
+
+            // Create filter with exact ID list
+            const domain = matchingIds.length > 0
+                ? [['id', 'in', matchingIds]]
+                : [['id', '=', -1]]; // No results
+
             searchModel.createNewFilters([{
                 description: `NCC: ${value}`,
                 domain: domain,
                 type: 'filter',
             }]);
         } catch (e) {
-            console.error('[HLV] Failed to create supplier filter:', e);
+            console.error('[HLV] Failed to search supplier:', e);
+            // Fallback to ilike search
+            const domain = [['partner_id.name', 'ilike', `%${value}%`]];
+            try {
+                searchModel.createNewFilters([{
+                    description: `NCC: ${value}`,
+                    domain: domain,
+                    type: 'filter',
+                }]);
+            } catch (e2) {
+                console.error('[HLV] Failed to create supplier filter:', e2);
+            }
         }
     },
 
