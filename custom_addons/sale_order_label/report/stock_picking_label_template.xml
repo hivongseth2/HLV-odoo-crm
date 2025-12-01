@@ -3,10 +3,10 @@
     <t t-call="web.basic_layout">
       <main>
         <t t-foreach="docs" t-as="o">
-          <div style="width: 100mm; height: 50mm; font-size: 9pt; page-break-after: always; padding: 1mm;">
-            <strong>Đơn hàng:</strong> <t t-esc="o.sale_id.name"/><br/>
+          <div style="width: 40mm; height: 30mm; font-size: 9pt; page-break-after: always; padding: 1mm;">
+            <strong>Đơn hàng:</strong> <t t-esc="o.name"/><br/>
             <div style="margin-top: 4mm;">
-              <img t-att-src="'/report/barcode/Code128/%s' % o.sale_id.name" style="width:100%; height:10mm;" />
+              <img t-att-src="'/report/barcode/Code128/%s' % o.name" style="width:100%; height:10mm;" />
             </div>
           </div>
         </t>
