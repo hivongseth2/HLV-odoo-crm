@@ -6,7 +6,7 @@
       
       <!-- Link to External CSS -->
       <xpath expr="//head" position="inside">
-        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/css/order_lookup.css"/>
+        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/src/css/order_lookup.css"/>
       </xpath>
       
       <div id="wrap" class="oe_structure">
@@ -363,7 +363,7 @@
       
       <!-- Link to External CSS -->
       <xpath expr="//head" position="inside">
-        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/css/order_lookup.css"/>
+        <link rel="stylesheet" type="text/css" href="/website_public_inventory_18/static/src/css/order_lookup.css"/>
       </xpath>
       
       <div id="wrap" class="oe_structure">
@@ -374,24 +374,20 @@
             <div class="container">
               <div class="row">
                 <div class="col-12">
-                  <div class="d-flex justify-content-between align-items-center flex-column flex-md-row mt-2">
-                  <div class="order-code d-flex flex-wrap align-items-center justify-content-center justify-content-md-start gap-2">
-                       <div class="d-flex text-center text-md-left align-items-center justify-content-center justify-content-md-start">
-                        <h2 class="fw-bold text-white" style="font-size: 1rem; letter-spacing: 1px;">
-                          <t t-esc="order.get('name', '')"/>
-                        </h2>
-                      </div>
-
-                        </div>
-
+                  <div class="d-flex justify-content-between align-items-center flex-column flex-md-row gap-3">
+                    <div class="text-center text-md-start flex-grow-1">
+                      <p class="lead text-white-50 mb-0">
+                        Mã đơn: <strong><t t-esc="order.get('name', '')"/></strong>
+                      </p>
+                    </div>
                     <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-md-end gap-2">
-                      <!-- Mobile: full-width, rõ nghĩa - COMMENTED OUT -->
-                      <!-- <a href="/saleorder-lookup"
+                      <!-- Mobile: full-width, rõ nghĩa -->
+                      <a href="/saleorder-lookup"
                         class="btn btn-light btn-sm d-md-none btn-back w-100" aria-label="Quay lại">
                         <i class="fa fa-arrow-left me-2"></i> Quay lại
-                      </a> -->
+                      </a>
 
-                      <!-- <a t-attf-href="/track/search?tracking_number={{order.get('name', '')}}"
+                      <a t-attf-href="/track/search?tracking_number={{order.get('name', '')}}"
                         class="btn btn-primary btn-sm d-md-none btn-track w-100"
                         aria-label="Theo dõi vận chuyển" title="Theo dõi vận chuyển">
                         <i class="fa fa-truck me-2"></i>
@@ -399,17 +395,17 @@
                           <span class="line-1">Theo dõi vận chuyển</span>
                           <span class="line-2">Xem tình trạng giao hàng</span>
                         </span>
-                      </a> -->
+                      </a>
 
-                      <!-- Desktop: inline, cùng hàng với nút Quay lại - COMMENTED OUT -->
-                      <!-- <a href="/saleorder-lookup" class="btn btn-light d-none d-md-inline-flex btn-back" aria-label="Quay lại">
+                      <!-- Desktop: inline, cùng hàng với nút Quay lại -->
+                      <a href="/saleorder-lookup" class="btn btn-light d-none d-md-inline-flex btn-back" aria-label="Quay lại">
                         <i class="fa fa-arrow-left me-2"></i> Quay lại
                       </a>
                       <a t-attf-href="/track/search?tracking_number={{order.get('name', '')}}"
                         class="btn btn-primary d-none d-md-inline-flex btn-track"
                         aria-label="Theo dõi vận chuyển" title="Theo dõi vận chuyển">
                         <i class="fa fa-truck me-2"></i> Theo dõi vận chuyển
-                      </a> -->
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -450,6 +446,17 @@
                                 <div class="combo-component">
                                   <t t-esc="line.get('product_name', 'N/A')"/>
                                 </div>
+                                <!-- Show delivered qty for component -->
+                                <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                                <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                                <t t-if="delivered > 0">
+                                  <small class="text-muted d-block" style="padding-left: 2.5rem;">
+                                    Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                    <t t-if="delivered >= total_qty">
+                                      <i class="fa fa-check-circle text-success ms-1"></i>
+                                    </t>
+                                  </small>
+                                </t>
                               </t>
                               
                               <!-- Combo parent or regular product -->
@@ -461,7 +468,17 @@
                                     <i class="fa fa-check-circle text-success ms-2" title="Đã giao đủ"></i>
                                   </t>
                                 </div>
-                                <!-- Đã giao: ĐÃ BỎ -->
+                                <!-- Show delivered qty as subtext for regular products only -->
+                                <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                                <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                                <t t-if="delivered > 0 and not line.get('is_combo')">
+                                  <small class="text-muted d-block mt-1">
+                                    Đã giao: <t t-esc="'{:.0f}'.format(delivered)"/>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                    <t t-if="delivered >= total_qty">
+                                      <i class="fa fa-check-circle text-success ms-1"></i>
+                                    </t>
+                                  </small>
+                                </t>
                               </t>
                             </td>
                             <td class="text-center">
@@ -472,16 +489,12 @@
                                 <strong><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></strong>
                               </t>
                             </td>
-                
-                                                      <!-- ĐƠN GIÁ (đã gồm VAT) -->
                             <td class="text-end">
-                              <t t-esc="'{:,.0f}'.format(line.get('unit_price_inc', 0))"/>
+                              <t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/>
                             </td>
                             <td class="text-end">
-                              <strong><t t-esc="'{:,.0f}'.format(line.get('price_total', 0))"/></strong>
+                              <strong><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></strong>
                             </td>
-
-
                           </tr>
                         </t>
                       </t>
@@ -520,29 +533,36 @@
                               </div>
                             </t>
                           </div>
-                          <!-- Delivery Info: ĐÃ BỎ -->
+                          
+                          <!-- Delivery Info -->
+                          <t t-set="delivered" t-value="line.get('qty_delivered', 0)"/>
+                          <t t-set="total_qty" t-value="line.get('qty', 0)"/>
+                          <t t-if="delivered > 0">
+                            <div class="delivery-info mt-1">
+                              <small class="text-muted">
+                                Đã giao: <strong><t t-esc="'{:.0f}'.format(delivered)"/></strong>/<t t-esc="'{:.0f}'.format(total_qty)"/>
+                                <t t-if="delivered >= total_qty">
+                                  <i class="fa fa-check-circle text-success ms-1"></i>
+                                </t>
+                              </small>
+                            </div>
+                          </t>
                         </div>
                         
                         <!-- Product Details Row -->
                         <div class="mobile-product-details">
-                          <!-- SL -->
-                            <div class="detail-item">
-                              <span class="detail-label">SL:</span>
-                              <span class="detail-value"><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></span>
-                            </div>
-
-                            <!-- ĐƠN GIÁ (đã gồm VAT) -->
+                          <div class="detail-item">
+                            <span class="detail-label">SL:</span>
+                            <span class="detail-value"><t t-esc="'{:.0f}'.format(line.get('qty', 0))"/></span>
+                          </div>
                           <div class="detail-item">
                             <span class="detail-label">Đơn Giá:</span>
-                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('unit_price_inc', 0))"/></span>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_unit', 0))"/></span>
                           </div>
-
-                            <!-- THÀNH TIỀN (đã gồm VAT) -->
                           <div class="detail-item total">
                             <span class="detail-label">Thành Tiền:</span>
-                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_total', 0))"/></span>
+                            <span class="detail-value"><t t-esc="'{:,.0f}'.format(line.get('price_subtotal', 0))"/></span>
                           </div>
-
                         </div>
                       </div>
                     </t>
@@ -558,32 +578,34 @@
                 <div class="row">
                   <div class="col-md-6 offset-md-6">
                     <!-- Total Summary -->
-              
                     <div class="total-summary">
+                      <div class="summary-row">
+                        <span>Tạm tính:</span>
+                        <span class="amount"><t t-esc="'{:,.0f}'.format(order.get('amount_untaxed', order['amount_total']))"/></span>
+                      </div>
+                      <div class="summary-row">
+                        <span>VAT:</span>
+                        <span class="amount"><t t-esc="'{:,.0f}'.format(order.get('amount_tax', 0))"/></span>
+                      </div>
                       <div class="summary-row total-row">
-                        <span>TỔNG TIỀN:</span>
+                        <span>Tổng cộng:</span>
                         <span class="amount-total">
                           <t t-esc="'{:,.0f}'.format(order['amount_total'])"/>
-                          <small class="currency">
-                          <!-- <t t-esc="order['currency']"/> -->
-                          VND
-                          </small>
+                          <small class="currency"><t t-esc="order['currency']"/></small>
                         </span>
                       </div>
-                      <small class="text-muted d-block mt-1">Giá đã bao gồm VAT</small>
                     </div>
-
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Back Button
+            <!-- Back Button -->
             <div class="text-center mt-4">
               <a href="/saleorder-lookup" class="btn btn-secondary btn-lg">
                 <i class="fa fa-arrow-left me-2"></i> Quay lại
               </a>
-            </div> -->
+            </div>
           </div>
         </div>
       </div>

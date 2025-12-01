@@ -1,665 +1,513 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- QWeb template độc lập, KHÔNG inherit -->
   <template id="inventory_page" name="Public Inventory Page">
     <t t-call="website.layout">
+      <style>
+        /* Container giả lập input */
+        .search-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 0.375rem;
+            background-color: #fff;
+            min-height: 45px; /* Tăng chiều cao cho mobile dễ bấm */
+            cursor: text;
+            transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+        }
+        .search-wrapper:focus-within {
+            border-color: #86b7fe;
+            outline: 0;
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+        
+        /* Style cho Chip */
+        .search-chip {
+            display: inline-flex;
+            align-items: center;
+            background-color: #e9ecef;
+            color: #495057;
+            font-size: 0.9rem;
+            padding: 4px 10px;
+            border-radius: 16px; /* Bo tròn kiểu chip */
+            user-select: none;
+            max-width: 100%;
+        }
+        .search-chip span {
+
+            text-overflow: ellipsis;
+            max-width: 300px; /* Giới hạn chiều dài chip trên mobile */
+        }
+        .search-chip .btn-close-chip {
+            margin-left: 6px;
+            cursor: pointer;
+            color: #adb5bd;
+            font-weight: bold;
+            line-height: 1;
+            font-size: 16px;
+        }
+        .search-chip .btn-close-chip:hover {
+            color: #dc3545;
+        }
+
+        /* Input thật (trong suốt) */
+        .search-input-field {
+            border: none;
+            outline: none;
+            flex-grow: 1;
+            min-width: 120px; /* Đủ rộng để gõ */
+            font-size: 16px; /* Font 16px để iOS không tự zoom */
+            padding: 0;
+            margin: 0;
+            background: transparent;
+            color: #212529;
+        }
+        
+        /* Dropdown gợi ý */
+        #search-suggestions {
+            border-radius: 0.5rem;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(0,0,0,.05);
+            max-height: 60vh; /* Tối đa 60% chiều cao màn hình */
+        }
+        .suggestion-item:active {
+            background-color: #e9ecef;
+        }
+        
+        /* Mobile fixes */
+        @media (max-width: 768px) {
+            .search-chip {
+                font-size: 0.85rem;
+                padding: 3px 8px;
+            }
+        }
+      </style>
+
       <main id="wrap" class="oe_structure">
-        <!-- ======= GATE: yêu cầu mật khẩu ======= -->
         <t t-if="not pw_ok">
           <section>
             <div class="container mt-5 mb-6" style="max-width:560px;">
-              <h1 class="mb-3">Tra cứu tồn kho</h1>
-
+              <h1 class="mb-3 text-center">Tra cứu tồn kho</h1>
               <t t-if="pw_err">
                 <div class="alert alert-danger">
-                  Mật khẩu không đúng. Vui lòng <strong>tải lại trang (F5)</strong> để nhập lại.
+                  Mật khẩu không đúng. Vui lòng <strong>tải lại trang (F5)</strong>.
                 </div>
               </t>
               <t t-else="">
-                <form method="post" t-att-action="request.httprequest.path" class="card p-3 shadow-sm">
+                <form method="post" t-att-action="request.httprequest.path" class="card p-4 shadow-sm border-0">
                   <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
-                  <label class="form-label">Nhập mật khẩu để truy cập</label>
-                  <input type="password" name="inv_password" class="form-control mb-3" autocomplete="off" required="required"/>
-                  <button type="submit" class="btn btn-primary w-100">Xác nhận</button>
+                  <label class="form-label fw-bold">Nhập mật khẩu truy cập</label>
+                  <input type="password" name="inv_password" class="form-control mb-3 form-control-lg" autocomplete="off" required="required"/>
+                  <button type="submit" class="btn btn-primary w-100 btn-lg">Xác nhận</button>
                 </form>
               </t>
             </div>
           </section>
         </t>
-        <!-- ======= END GATE ======= -->
 
-      <t t-if="pw_ok">
-        <section>
-          <div class="container mt-4 mb-6">
-            <h1>Tra cứu tồn kho</h1>
+        <t t-if="pw_ok">
+          <section>
+            <div class="container mt-3 mb-6">
+              <h2 class="mb-4 text-primary fw-bold">Tra cứu tồn kho</h2>
 
-            <!-- Form GET giữ nguyên tham số -->
-            <form t-att-action="request.httprequest.path" method="get" class="row g-2 my-3">
-              <div class="col-md-5 position-relative">
-                <input name="q" id="search-input" t-att-value="q" class="form-control" placeholder="Tìm theo tên, mã, barcode"/>
-                <div id="search-suggestions" class="position-absolute w-100 bg-white border rounded shadow-sm" style="display:none; z-index:1050; max-height:400px; overflow-y:auto; top:100%; left:0; margin-top:2px;">
-                  <!-- Các item gợi ý sẽ được thêm động bằng JS -->
+              <form t-att-action="request.httprequest.path" method="get" class="row g-2 mb-4" id="search-form">
+                
+                <div class="col-md-6 position-relative">
+                    <input type="hidden" name="q" id="real-search-q" t-att-value="q"/>
+                    
+                    <div class="search-wrapper" id="chip-container">
+                        <input type="text" id="visual-search-input" class="search-input-field" placeholder="Tìm tên, mã, barcode..." autocomplete="off"/>
+                    </div>
+
+                    <div id="search-suggestions" class="position-absolute w-100 bg-white overflow-auto" style="display:none; z-index:1050; top:100%; left:0; margin-top:4px;">
+                        </div>
                 </div>
-              </div>
-              <div class="col-md-4">
-                <select name="warehouse_id" class="form-select">
-                  <option t-att-selected="not warehouse_id" value="">Tất cả kho (được phép)</option>
-                  <t t-foreach="warehouses" t-as="w">
-                    <option t-att-value="w.id" t-att-selected="int(warehouse_id)==w.id if warehouse_id else False">
-                      <t t-esc="w.name"/>
-                    </option>
-                  </t>
-                </select>
-              </div>
 
-              <!-- NEW: Checkbox lọc tồn <= 5 -->
-              <div class="col-md-1 d-flex align-items-center">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" name="low_stock" value="1"
-                        t-att-checked="request.params.get('low_stock') in ('1','true','on')"/>
-                  <label class="form-check-label" for="">Tồn ≤ 5</label>
-                </div>
-              </div>
-
-              <!-- Nút tìm kiếm (giảm còn col-md-2) -->
-              <div class="col-md-2">
-                <button class="btn btn-primary w-100" type="submit">Tìm kiếm</button>
-              </div>
-            </form>
-
-            <t t-if="rows">
-              <div class="table-responsive">
-                <table class="table table-striped align-middle" id="inv-table">
-                  <thead>
-                    <tr>
-                      <th style="width:32px;"></th> <!-- Nút + -->
-                      <th style="width:80px;">Hình ảnh</th>
-                      <th>Mã</th>
-                      <th>Tên</th>
-                      <th>Barcode</th>
-                      <th>ĐVT</th>
-                      <th class="text-end">Được dự báo</th>
-                      <th class="text-end">Tồn thực tế</th>
-                      <th class="text-end">Giá bán</th>
-                      <th class="text-end">Giá bán thương mại</th>
-                      <th class="text-end">Giá gốc</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <t t-foreach="rows" t-as="r">
-                      <!-- Biến cục bộ: is_combo -->
-                      <t t-set="is_combo" t-value="r.get('is_combo', False)"/>
-
-                      <!-- Hàng chính -->
-                      <tr t-att-id="'row-'+str(r['id'])">
-                        <td>
-                          <button type="button"
-                                  class="btn btn-sm btn-outline-primary btn-expand"
-                                  t-att-data-pid="r['id']"
-                                  t-att-data-is-combo="str(bool(r.get('is_combo'))).lower()"
-                                  title="Xem chi tiết">+</button>
-                        </td>
-
-                        <!-- Ảnh -->
-                        <td>
-                          <t t-if="r.get('image_url')">
-                            <img t-att-src="r['image_url']"
-                                alt="Product Image"
-                                class="img-thumbnail"
-                                style="width: 60px; height: 60px; object-fit: cover;"/>
-                          </t>
-                          <t t-else="">
-                            <div class="bg-light d-flex align-items-center justify-content-center"
-                                style="width: 60px; height: 60px; border: 1px solid #dee2e6;">
-                              <small class="text-muted">N/A</small>
-                            </div>
-                          </t>
-                        </td>
-
-                        <!-- Mã -->
-                        <td><t t-esc="r['default_code']"/></td>
-
-                        <!-- Tên + badge COMBO -->
-                        <td>
-                          <t t-esc="r['name']"/>
-                          <t t-if="is_combo">
-                            <span class="badge bg-warning text-dark ms-2">COMBO</span>
-                          </t>
-                        </td>
-
-                        <!-- Barcode -->
-                        <td><t t-esc="r['barcode']"/></td>
-
-                        <!-- ĐVT -->
-                        <td><t t-esc="r['uom']"/></td>
-
-                        <!-- Được dự báo (combo: '-') -->
-                        <td class="text-end">
-                          <t t-if="is_combo">-</t>
-                          <t t-else=""><t t-esc="('%.2f' % r.get('qty_forecasted', 0.0))"/></t>
-                        </td>
-
-                        <!-- Tồn thực tế (combo: '-') -->
-                        <td class="text-end">
-                          <t t-if="is_combo">-</t>
-                          <t t-else=""><t t-esc="('%.2f' % r.get('qty_total', 0.0))"/></t>
-                        </td>
-
-                        <!-- Giá bán -->
-                        <td class="text-end">
-                          <t t-if="r.get('list_price')">
-                            <t t-esc="'{:,.0f}'.format(r['list_price'])"/>
-                          </t>
-                          <t t-else="">-</t>
-                        </td>
-
-                        <!-- Giá bán thương mại -->
-                        <td class="text-end">
-                          <t t-set="v" t-value="r.get('commercial_price', 0.0)"/>
-                          <t t-if="v">
-                            <t t-esc="'{:,.0f}'.format(v)"/>
-                          </t>
-                          <t t-else="">-</t>
-                        </td>
-
-                        <!-- Giá gốc -->
-                        <td class="text-end">
-                          <t t-set="v" t-value="r.get('standard_price', 0.0)"/>
-                          <t t-if="v">
-                            <t t-esc="'{:,.0f}'.format(v)"/>
-                          </t>
-                          <t t-else="">-</t>
-                        </td>
-
-                        <!-- Link website -->
-                        <td>
-                          <t t-if="r['website_url']">
-                            <a t-att-href="r['website_url']" class="btn btn-sm btn-outline-secondary">Xem</a>
-                          </t>
-                        </td>
-                      </tr>
-                      <!-- Hàng chi tiết: KHÔNG render cho combo (vì đã disable nút) -->
+                <div class="col-md-3">
+                  <select name="warehouse_id" class="form-select" style="height: 47px;"> <option t-att-selected="not warehouse_id" value="">Tất cả kho</option>
+                    <t t-foreach="warehouses" t-as="w">
+                      <option t-att-value="w.id" t-att-selected="int(warehouse_id)==w.id if warehouse_id else False">
+                        <t t-esc="w.name"/>
+                      </option>
                     </t>
-                  </tbody>
-                </table>
-              </div>
+                  </select>
+                </div>
 
-              <!-- Pagination -->
-              <nav t-if="pages &gt; 1" aria-label="Page navigation">
-                <!-- Hiển thị theo block 25 trang -->
-                <t t-set="BLOCK" t-value="25"/>
-                <t t-set="block_index" t-value="(page - 1) // BLOCK"/>
-                <t t-set="start_p" t-value="block_index * BLOCK + 1"/>
-                <t t-set="end_p"   t-value="min(pages, start_p + BLOCK - 1)"/>
-                <t t-set="LS" t-value="'1' if request.params.get('low_stock') else ''"/>
+                <div class="col-md-1 d-flex align-items-center">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="lowStockCheck" name="low_stock" value="1"
+                           t-att-checked="request.params.get('low_stock') in ('1','true','on')"/>
+                    <label class="form-check-label user-select-none" for="lowStockCheck">Tồn ≤ 5</label>
+                  </div>
+                </div>
 
-                <ul class="pagination">
-                  <!-- Trang trước -->
-                  <li t-attf-class="page-item #{'disabled' if not (page &gt; 1) else ''}">
-                    <a class="page-link"
-                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;low_stock=%s&amp;page=%d' % (q, warehouse_id or '', LS, page-1))">«</a>
-                  </li>
+                <div class="col-md-2">
+                  <button class="btn btn-primary w-100 fw-bold" style="height: 47px;" type="submit">
+                    <i class="fa fa-search me-1"></i> Tìm kiếm
+                  </button>
+                </div>
+              </form>
 
-                  <!-- Về block trước -->
-                  <li t-if="start_p &gt; 1" class="page-item">
-                    <a class="page-link"
-                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;low_stock=%s&amp;page=%d' % (q, warehouse_id or '', LS, start_p-1))">…</a>
-                  </li>
+              <t t-if="rows">
+                <div class="card shadow-sm border-0">
+                    <div class="table-responsive">
+                      <table class="table table-hover align-middle mb-0" id="inv-table">
+                        <thead class="bg-light">
+                          <tr>
+                            <th style="width:40px;"></th>
+                            <th style="width:70px;">Ảnh</th>
+                            <th>Mã</th>
+                            <th>Tên sản phẩm</th>
+                            <th>Barcode</th>
+                            <th>ĐVT</th>
+                            <th class="text-end">Dự báo</th>
+                            <th class="text-end fw-bold">Thực tế</th>
+                            <th class="text-end">Giá bán</th>
+                            <th style="width:50px;"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <t t-foreach="rows" t-as="r">
+                            <t t-set="is_combo" t-value="r.get('is_combo', False)"/>
+                            <tr t-att-id="'row-'+str(r['id'])">
+                              <td>
+                                <button type="button" class="btn btn-sm btn-light text-primary btn-expand rounded-circle"
+                                        t-att-data-pid="r['id']"
+                                        t-att-data-is-combo="str(bool(r.get('is_combo'))).lower()">
+                                  <i class="fa fa-plus"></i>
+                                </button>
+                              </td>
+                              <td>
+                                <div class="position-relative" style="width: 50px; height: 50px;">
+                                    <t t-if="r.get('image_url')">
+                                      <img t-att-src="r['image_url']" class="rounded border" style="width:100%; height:100%; object-fit:cover;"/>
+                                    </t>
+                                    <t t-else="">
+                                      <div class="bg-light rounded border d-flex align-items-center justify-content-center h-100 text-muted">
+                                        <i class="fa fa-camera"></i>
+                                      </div>
+                                    </t>
+                                </div>
+                              </td>
+                              <td class="fw-bold text-primary"><t t-esc="r['default_code']"/></td>
+                              <td>
+                                <div class="text-wrap" style="min-width: 200px;">
+                                    <t t-esc="r['name']"/>
+                                    <t t-if="is_combo">
+                                      <span class="badge bg-warning text-dark ms-1">COMBO</span>
+                                    </t>
+                                </div>
+                              </td>
+                              <td class="text-muted"><small><t t-esc="r['barcode']"/></small></td>
+                              <td><t t-esc="r['uom']"/></td>
+                              <td class="text-end text-muted">
+                                <t t-if="is_combo">-</t>
+                                <t t-else=""><t t-esc="'{:,.0f}'.format(r.get('qty_forecasted', 0))"/></t>
+                              </td>
+                              <td class="text-end fw-bold fs-6">
+                                <t t-if="is_combo">-</t>
+                                <t t-else="">
+                                    <span t-att-class="'text-danger' if r.get('qty_total', 0) &lt;= 5 else 'text-success'">
+                                        <t t-esc="'{:,.0f}'.format(r.get('qty_total', 0))"/>
+                                    </span>
+                                </t>
+                              </td>
+                              <td class="text-end">
+                                <t t-if="r.get('list_price')"><t t-esc="'{:,.0f}'.format(r['list_price'])"/></t>
+                              </td>
+                              <td>
+                                <t t-if="r['website_url']">
+                                  <a t-att-href="r['website_url']" target="_blank" class="text-decoration-none">
+                                    <i class="fa fa-external-link"></i>
+                                  </a>
+                                </t>
+                              </td>
+                            </tr>
+                          </t>
+                        </tbody>
+                      </table>
+                    </div>
+                </div>
 
-                  <!-- Các trang trong block hiện tại (tối đa 25) -->
-                  <t t-foreach="range(int(start_p), int(end_p) + 1)" t-as="p">
-                    <li t-attf-class="page-item #{'active' if p==page else ''}">
-                      <a class="page-link"
-                        t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;low_stock=%s&amp;page=%d' % (q, warehouse_id or '', LS, p))">
-                        <t t-esc="p"/>
-                      </a>
-                    </li>
-                  </t>
+                <div class="d-flex justify-content-center mt-4">
+                    <nav t-if="pages &gt; 1">
+                        <ul class="pagination pagination-lg">
+                            <li t-attf-class="page-item #{'disabled' if page &lt;= 1 else ''}">
+                                <a class="page-link" t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;low_stock=%s&amp;page=%d' % (q, warehouse_id or '', '1' if request.params.get('low_stock') else '', page-1))">
+                                    <i class="fa fa-chevron-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item active">
+                                <span class="page-link">Trang <t t-esc="page"/> / <t t-esc="pages"/></span>
+                            </li>
+                            <li t-attf-class="page-item #{'disabled' if page &gt;= pages else ''}">
+                                <a class="page-link" t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;low_stock=%s&amp;page=%d' % (q, warehouse_id or '', '1' if request.params.get('low_stock') else '', page+1))">
+                                    <i class="fa fa-chevron-right"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+              </t>
+              <t t-else="">
+                <div class="text-center py-5">
+                    <img src="/web/static/img/smiling_face.svg" style="width:64px; opacity:0.5;"/>
+                    <p class="mt-3 text-muted">Không tìm thấy sản phẩm nào phù hợp.</p>
+                </div>
+              </t>
+            </div>
+          </section>
 
-                  <!-- Sang block sau -->
-                  <li t-if="end_p &lt; pages" class="page-item">
-                    <a class="page-link"
-                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;low_stock=%s&amp;page=%d' % (q, warehouse_id or '', LS, end_p+1))">…</a>
-                  </li>
+          <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+          
+       <script type="text/javascript"><![CDATA[
+            (function () {
+              var searchTimeout = null;
 
-                  <!-- Trang sau -->
-                  <li t-attf-class="page-item #{'disabled' if (page + 1) &gt; pages else ''}">
-                    <a class="page-link"
-                      t-att-href="request.httprequest.path + ('?q=%s&amp;warehouse_id=%s&amp;low_stock=%s&amp;page=%d' % (q, warehouse_id or '', LS, page+1))">»</a>
-                  </li>
-                </ul>
-              </nav>
-            </t>
-            <t t-else="">
-              <div class="alert alert-info">Không có dữ liệu phù hợp.</div>
-            </t>
+              // --- LOGIC CHIP SEARCH ---
+              function initChipInput() {
+                  var $realInput = $('#real-search-q');
+                  var $container = $('#chip-container');
+                  var $visualInput = $('#visual-search-input');
+                  var currentChips = [];
 
-          </div>
-        </section>
-
-        <!-- Load jQuery if not already loaded -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-        
-        <!-- JS: xử lý mở rộng chi tiết từng kho -->
-        <script type="text/javascript"><![CDATA[
-          (function () {
-            var searchTimeout = null;
-            // ===== SEARCH SUGGESTIONS =====
-            function debounce(func, wait) {
-              return function() {
-                var context = this, args = arguments;
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(function() {
-                  func.apply(context, args);
-                }, wait);
-              };
-            }
-
-            function getCurrentSearchTerm($input) {
-              var fullText = $input.val() || '';
-              var cursorPos = $input[0].selectionStart || fullText.length;
-              var textBeforeCursor = fullText.substring(0, cursorPos);
-              var lastCommaIndex = textBeforeCursor.lastIndexOf(',');
-              var term = textBeforeCursor.substring(lastCommaIndex + 1).trim();
-              return {
-                term: term,
-                startPos: lastCommaIndex + 1,
-                fullText: fullText
-              };
-            }
-
-            function searchProducts(term, callback) {
-              if (!term || term.length < 2) {
-                callback([]);
-                return;
-              }
-
-              $.ajax({
-                url: "/search_stock/suggest",
-                type: "POST",
-                dataType: "json",
-                contentType: "application/json; charset=utf-8",
-                headers: {
-                  'X-CSRF-Token': $('input[name="csrf_token"]').val() || ''
-                },
-                data: JSON.stringify({
-                  jsonrpc: "2.0",
-                  method: "call",
-                  params: { q: term },
-                  id: new Date().getTime()
-                }),
-                success: function(resp) {
-                  var result = (resp && resp.result) ? resp.result : (resp || {});
-                  callback(result.products || []);
-                },
-                error: function() {
-                  callback([]);
-                }
-              });
-            }
-
-            function renderSuggestions(products) {
-              var $dropdown = $('#search-suggestions');
-              
-              if (!products || products.length === 0) {
-                $dropdown.hide().empty();
-                return;
-              }
-
-              var html = '';
-              products.forEach(function(p, index) {
-                var isLast = index === products.length - 1;
-                var borderClass = isLast ? '' : 'border-bottom';
-                
-                html += '<div class="suggestion-item ' + borderClass + '" data-code="' + (p.default_code || '') + '" style="cursor:pointer; padding:12px 16px; transition: all 0.15s ease;">';
-                html += '  <div class="d-flex align-items-center" style="gap:12px;">';
-                
-                // Hình ảnh với viền đẹp hơn
-                if (p.image_url) {
-                  html += '<img src="' + p.image_url + '" alt="" class="flex-shrink-0" style="width:50px; height:50px; object-fit:cover; border-radius:6px; border:1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.08);"/>';
-                } else {
-                  html += '<div class="flex-shrink-0 d-flex align-items-center justify-content-center" style="width:50px; height:50px; border-radius:6px; background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%); border:1px solid #dee2e6;">';
-                  html += '  <svg width="20" height="20" fill="#adb5bd" viewBox="0 0 16 16"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/></svg>';
-                  html += '</div>';
-                }
-                
-                // Thông tin sản phẩm với typography cải thiện
-                html += '    <div class="flex-grow-1 overflow-hidden">';
-                
-                // Mã sản phẩm TRƯỚC - siêu nổi bật
-                if (p.default_code) {
-                  html += '      <div class="mb-1">';
-                  html += '        <span class="badge" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-weight: 600; padding: 5px 12px; border-radius: 6px; font-size: 0.875rem; letter-spacing: 0.5px; box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);">';
-                  html += '          <svg width="13" height="13" fill="currentColor" viewBox="0 0 16 16" style="margin-right: 5px; vertical-align: text-bottom;"><path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3zm12 1a1 1 0 0 0-1 1v8a1 1 0 0 0 2 0V4a1 1 0 0 0-1-1z"/></svg>';
-                  html += '          ' + p.default_code;
-                  html += '        </span>';
-                  html += '      </div>';
-                }
-                
-                // Tên sản phẩm
-                html += '      <div class="fw-medium text-truncate mb-1" style="font-size: 0.9rem; color: #495057; line-height: 1.3;">' + (p.name || '') + '</div>';
-                
-                // Barcode - nhỏ hơn, ít nổi bật hơn
-                if (p.barcode) {
-                  html += '      <div style="font-size: 0.75rem; color: #868e96; display: flex; align-items: center; gap: 4px;">';
-                  html += '        <svg width="11" height="11" fill="currentColor" viewBox="0 0 16 16"><path d="M0 3h1v10H0V3zm2 0h1v10H2V3zm2 0h.5v10H4V3zm2 0h.5v10H6V3zm2 0h2v10H8V3zm3 0h.5v10H11V3zm2 0h2v10h-2V3z"/></svg>';
-                  html += '        ' + p.barcode;
-                  html += '      </div>';
-                }
-                
-                html += '    </div>';
-                
-                // Icon chọn
-                html += '    <div class="flex-shrink-0 select-icon" style="opacity:0; transition: opacity 0.15s ease;">';
-                html += '      <svg width="20" height="20" fill="#198754" viewBox="0 0 16 16"><path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425a.247.247 0 0 1 .02-.022Z"/></svg>';
-                html += '    </div>';
-                
-                html += '  </div>';
-                html += '</div>';
-              });
-
-              $dropdown.html(html).show();
-            }
-
-            function selectSuggestion($input, code) {
-              var fullText = $input.val() || '';
-              var cursorPos = $input[0].selectionStart || fullText.length;
-              
-              // Tìm vị trí bắt đầu của term hiện tại (sau dấu phẩy gần nhất trước cursor)
-              var textBeforeCursor = fullText.substring(0, cursorPos);
-              var lastCommaIndex = textBeforeCursor.lastIndexOf(',');
-              var startPos = lastCommaIndex >= 0 ? lastCommaIndex + 1 : 0;
-              
-              // Tìm vị trí kết thúc của term hiện tại (trước dấu phẩy tiếp theo sau cursor)
-              var textAfterCursor = fullText.substring(cursorPos);
-              var nextCommaIndex = textAfterCursor.indexOf(',');
-              var endPos = nextCommaIndex >= 0 ? cursorPos + nextCommaIndex : fullText.length;
-              
-              // Lấy phần trước và sau term hiện tại
-              var before = fullText.substring(0, startPos);
-              var after = fullText.substring(endPos);
-              
-              // Xây dựng giá trị mới
-              var newValue = before;
-              
-              // Nếu có text phía trước và không kết thúc bằng dấu phẩy, thêm dấu phẩy + space
-              if (before && !before.trim().endsWith(',')) {
-                // Xóa space thừa ở cuối before
-                newValue = before.trimEnd();
-                if (newValue) {
-                  newValue += ', ';
-                }
-              } else if (before && before.trim().endsWith(',')) {
-                // Nếu đã có dấu phẩy, chỉ cần trim và thêm 1 space
-                newValue = before.trimEnd() + ' ';
-              }
-              
-              // Thêm mã sản phẩm
-              newValue += code;
-              
-              // Thêm dấu phẩy và space để nhập tiếp
-              newValue += ', ';
-              
-              // Nếu có text phía sau
-              if (after) {
-                // Nếu after bắt đầu bằng dấu phẩy, bỏ qua (tránh trùng)
-                if (after.trimStart().startsWith(',')) {
-                  after = after.trimStart().substring(1).trimStart();
-                }
-                if (after) {
-                  newValue += after;
-                }
-              }
-              
-              // Set giá trị mới
-              $input.val(newValue);
-              
-              // Đặt cursor ngay sau dấu phẩy và space vừa thêm (sau mã sản phẩm)
-              var newCursorPos = (before.length > 0 ? before.trimEnd().length + 2 : 0) + code.length + 2;
-              
-              // Đảm bảo cursor không vượt quá độ dài text
-              newCursorPos = Math.min(newCursorPos, newValue.length);
-              
-              setTimeout(function() {
-                $input[0].setSelectionRange(newCursorPos, newCursorPos);
-                $input.focus();
-              }, 0);
-              
-              $('#search-suggestions').hide();
-            }
-
-            $(document).ready(function() {
-              var $searchInput = $('#search-input');
-              var $dropdown = $('#search-suggestions');
-
-              // Xử lý input với debounce
-              $searchInput.on('input', debounce(function() {
-                var searchInfo = getCurrentSearchTerm($searchInput);
-                var term = searchInfo.term;
-                
-                if (term && term.length >= 2) {
-                  searchProducts(term, renderSuggestions);
-                } else {
-                  $dropdown.hide();
-                }
-              }, 300));
-
-              // Xử lý click vào suggestion
-              $(document).on('click', '.suggestion-item', function() {
-                var code = $(this).data('code');
-                if (code) {
-                  selectSuggestion($searchInput, code);
-                }
-              });
-
-              // Hover effect
-              $(document).on('mouseenter', '.suggestion-item', function() {
-                $(this).css('background-color', '#f8f9fa');
-              }).on('mouseleave', '.suggestion-item', function() {
-                $(this).css('background-color', '');
-              });
-
-              // Ẩn dropdown khi click ra ngoài
-              $(document).on('click', function(e) {
-                if (!$(e.target).closest('#search-input, #search-suggestions').length) {
-                  $dropdown.hide();
-                }
-              });
-
-              // Xử lý phím ESC để đóng dropdown
-              $searchInput.on('keydown', function(e) {
-                if (e.key === 'Escape') {
-                  $dropdown.hide();
-                }
-              });
-            });
-            function fmt(n) {
-              try { return (parseFloat(n) || 0).toFixed(2); } catch(e) { return '0.00'; }
-            }
-
-            /**
-            * data = { ok: true, mode: "components_by_warehouse" | "warehouses", rows: [...] }
-            * - components_by_warehouse:
-            *    rows[i] = {
-            *      default_code, name, uom, component_qty_in_combo,
-            *      warehouses: [{ warehouse_name, qty_total, qty_reserved, qty_available }, ...]
-            *    }
-            *    => Hiển thị header mỗi sản phẩm con: Mã | Tên | ĐVT | Trong mỗi combo | Tồn thực tế | Đã giữ hàng | Tồn khả dụng
-            *       và bên dưới là các dòng chi tiết theo từng kho (Tồn thực tế | Đã giữ hàng | Tồn khả dụng).
-            * - warehouses (sản phẩm thường): bảng theo từng kho như cũ.
-            */
-            function buildDetailTable(data) {
-              var mode = (data && data.mode) || "warehouses";
-              var rows = (data && data.rows) || [];
-
-              var html = '<div class="p-2"><table class="table table-sm table-bordered mb-0"><thead><tr>';
-
-              if (mode === "components_by_warehouse") {
-                // Header 7 cột yêu cầu
-                html += '<th colspan="2">Thành phần</th>';
-                html += '<th>ĐVT</th>';
-                html += '<th class="text-end">Trong mỗi combo</th>';
-                html += '<th class="text-end">Tồn thực tế</th>';
-                html += '<th class="text-end">Đã giữ hàng</th>';
-                html += '<th class="text-end">Tồn khả dụng</th>';
-                html += '</tr></thead><tbody>';
-
-                if (!rows.length) {
-                  html += '<tr><td colspan="7"><em>Không có thành phần combo.</em></td></tr>';
-                } else {
-                  rows.forEach(function (c) {
-                    // Tính tổng theo tất cả kho cho sản phẩm con
-                    var t_total = 0, t_reserved = 0, t_available = 0;
-                    (c.warehouses || []).forEach(function (w) {
-                      t_total += parseFloat(w.qty_total || 0);
-                      t_reserved += parseFloat(w.qty_reserved || 0);
-                      t_available += parseFloat(w.qty_available || 0);
-                    });
-
-                    // Hàng header cho component (hiển thị cả tổng)
-                    html += '<tr class="table-active">'
-                      + '<td style="width:140px;"><strong>' + (c.default_code || '') + '</strong></td>'
-                      + '<td><strong>' + (c.name || '') + '</strong></td>'
-                      + '<td>' + (c.uom || '') + '</td>'
-                      + '<td class="text-end">' + fmt(c.component_qty_in_combo) + '</td>'
-                      + '<td class="text-end">' + fmt(t_total) + '</td>'
-                      + '<td class="text-end">' + fmt(t_reserved) + '</td>'
-                      + '<td class="text-end">' + fmt(t_available) + '</td>'
-                      + '</tr>';
-
-                    // Các kho của component
-                    (c.warehouses || []).forEach(function (w) {
-                      html += '<tr>'
-                        + '<td colspan="2" class="ps-4">↳ ' + (w.warehouse_name || '') + '</td>'
-                        + '<td></td>'
-                        + '<td></td>'
-                        + '<td class="text-end">' + fmt(w.qty_total) + '</td>'
-                        + '<td class="text-end">' + fmt(w.qty_reserved) + '</td>'
-                        + '<td class="text-end">' + fmt(w.qty_available) + '</td>'
-                        + '</tr>';
-                    });
-                  });
-                }
-
-                html += '</tbody></table></div>';
-                return html;
-              }
-
-              // ======= Mặc định: breakdown theo kho cho sản phẩm thường =======
-              html += '<th>Kho</th>';
-              html += '<th class="text-end">Tồn thực tế</th>';
-              html += '<th class="text-end">Đã giữ hàng</th>';
-              html += '<th class="text-end">Tồn khả dụng</th>';
-              html += '</tr></thead><tbody>';
-
-              if (rows.length) {
-                rows.forEach(function (r) {
-                  html += '<tr>'
-                    + '<td>' + (r.warehouse_name || '') + '</td>'
-                    + '<td class="text-end">' + fmt(r.qty_total) + '</td>'
-                    + '<td class="text-end">' + fmt(r.qty_reserved) + '</td>'
-                    + '<td class="text-end">' + fmt(r.qty_available) + '</td>'
-                    + '</tr>';
-                });
-              } else {
-                html += '<tr><td colspan="4"><em>Không có dữ liệu chi tiết.</em></td></tr>';
-              }
-
-              html += '</tbody></table></div>';
-              return html;
-            }
-
-            function ensureDetailRow($tr) {
-              var $next = $tr.next();
-              if ($next.length && $next.hasClass('detail-row')) {
-                return $next;
-              }
-              var colCount = $tr.children('td,th').length;
-              var $detail = $(
-                '<tr class="detail-row bg-light"><td colspan="' + colCount + '">'+
-                '<div class="d-flex align-items-center gap-2 p-2">'+
-                '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>'+
-                '<span>Đang tải chi tiết...</span>'+
-                '</div>'+
-                '</td></tr>'
-              );
-              $tr.after($detail);
-              return $detail;
-            }
-
-            function loadBreakdown(pid, warehouse_id, detail_mode, done) {
-              var payload = {
-                jsonrpc: "2.0",
-                method: "call",
-                params: {
-                  product_id: pid,
-                  warehouse_id: warehouse_id || null,
-                  detail_mode: detail_mode || null   // 'per_warehouse' cho combo
-                },
-                id: new Date().getTime()
-              };
-
-              $.ajax({
-                url: "/search_stock/product_breakdown",
-                type: "POST",
-                dataType: "json",
-                contentType: "application/json; charset=utf-8",
-                data: JSON.stringify(payload),
-                success: function (resp) {
-                  try {
-                    var result = (resp && resp.result) ? resp.result : resp;
-                    done(null, result);
-                  } catch (e) {
-                    done(e);
+                  // Load giá trị ban đầu từ URL
+                  var initialVal = $realInput.val();
+                  if(initialVal) {
+                      currentChips = initialVal.split(',').map(function(s){ return s.trim(); }).filter(function(s){ return s; });
+                      renderChips();
                   }
-                },
-                error: function (xhr) {
-                  done(xhr || true);
-                }
-              });
-            }
 
-            $(document).ready(function() {
-              $(document).on('click', '.btn-expand', function () {
-                var $btn = $(this);
-                var pid = $btn.data('pid');
-                // Yêu cầu có data-is-combo="true|false" ở nút
-                var isCombo = String($btn.data('is-combo')) === 'true';
+                  // Hàm vẽ lại toàn bộ chips
+                  function renderChips() {
+                      $container.find('.search-chip').remove();
+                      currentChips.forEach(function(term, index) {
+                          var $chip = $(
+                              '<div class="search-chip">' +
+                                  '<span>' + $('<div>').text(term).html() + '</span>' +
+                                  '<span class="btn-close-chip" data-index="' + index + '">&times;</span>' +
+                              '</div>'
+                          );
+                          $visualInput.before($chip);
+                      });
+                      updateRealInput();
+                  }
 
-                var $row = $btn.closest('tr');
-                var $next = $row.next();
+                  // Cập nhật input ẩn
+                  function updateRealInput() {
+                      $realInput.val(currentChips.join(', '));
+                  }
 
-                if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) {
-                  $next.remove();
-                  $btn.text('+');
+                  // Thêm chip mới
+                  window.addSearchChip = function(term) {
+                      term = term.trim().replace(/,/g, ''); // Loại bỏ dấu phẩy
+                      if(term && !currentChips.includes(term)) {
+                          currentChips.push(term);
+                          renderChips();
+                      }
+                      $visualInput.val('');
+                      $visualInput.focus();
+                  }
+
+                  // Xóa chip
+                  $container.on('click', '.btn-close-chip', function() {
+                      var idx = $(this).data('index');
+                      currentChips.splice(idx, 1);
+                      renderChips();
+                      $visualInput.focus();
+                  });
+
+                  // Xử lý phím Backspace, Enter, Comma
+                  $visualInput.on('keydown', function(e) {
+                      var val = $(this).val();
+                      if(e.key === 'Backspace' && val === '' && currentChips.length > 0) {
+                          currentChips.pop();
+                          renderChips();
+                      } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (val.trim()) {
+                              addSearchChip(val);
+                              // Nếu nhấn Enter khi đang gõ -> Thêm chip và tìm luôn
+                              $('#search-form').submit();
+                          } else {
+                              // Nếu input rỗng -> Tìm kiếm với các chip hiện tại
+                              $('#search-form').submit();
+                          }
+                      } else if (e.key === ',') {
+                          e.preventDefault();
+                          if (val.trim()) {
+                              addSearchChip(val);
+                          }
+                      }
+                  });
+
+                  // Focus input khi click wrapper
+                  $container.on('click', function(e) {
+                      if(e.target === this) $visualInput.focus();
+                  });
+              }
+
+              // --- LOGIC GỢI Ý ---
+              function debounce(func, wait) {
+                return function() {
+                  var context = this, args = arguments;
+                  clearTimeout(searchTimeout);
+                  searchTimeout = setTimeout(function() { func.apply(context, args); }, wait);
+                };
+              }
+
+              function searchProducts(term, callback) {
+                $.ajax({
+                  url: "/search_stock/suggest",
+                  type: "POST", dataType: "json", contentType: "application/json",
+                  data: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { q: term }, id: new Date().getTime() }),
+                  success: function(resp) {
+                    var result = (resp && resp.result) ? resp.result : {};
+                    callback(result.products || []);
+                  }
+                });
+              }
+
+              function renderSuggestions(products) {
+                var $dropdown = $('#search-suggestions');
+                if (!products || products.length === 0) {
+                  $dropdown.hide().empty();
                   return;
                 }
+                var html = '';
+                products.forEach(function(p) {
+                   // Dùng TÊN để tìm kiếm
+                   var displayName = p.name || p.default_code || '';
+                   
+                   html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
+                   html += '  <div class="d-flex align-items-center">';
+                   // Ảnh
+                   if (p.image_url) {
+                       html += '<img src="' + p.image_url + '" class="rounded border me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
+                   } else {
+                       html += '<div class="rounded border me-2 bg-light d-flex align-items-center justify-content-center flex-shrink-0" style="width:40px; height:40px;"><i class="fa fa-cube text-muted"></i></div>';
+                   }
+                   // Thông tin text
+                   html += '    <div class="flex-grow-1 overflow-hidden">';
+                   html += '      <div class="fw-bold text-dark text-truncate" style="font-size:0.9rem;">' + (p.default_code || '') + '</div>';
+                   html += '      <div class="text-muted text-truncate small">' + (p.name || '') + '</div>';
+                   html += '    </div>';
+                   
+                   // Icon mũi tên để gợi ý là "Chọn cái này"
+                   html += '    <div class="ms-2 text-primary"><i class="fa fa-angle-right"></i></div>';
+                   
+                   html += '  </div>';
+                   html += '</div>';
+                });
+                $dropdown.html(html).show();
+              }
 
-                var $detail = ensureDetailRow($row);
-                $btn.text('–');
+              // --- MAIN INIT ---
+              $(document).ready(function() {
+                initChipInput(); // Setup UI
 
-                var currentWid = $('select[name="warehouse_id"]').val() || '';
-                // Với combo: luôn yêu cầu chi tiết theo từng kho của từng sản phẩm con
-                var detailMode = isCombo ? 'per_warehouse' : null;
+                var $visualInput = $('#visual-search-input');
+                var $dropdown = $('#search-suggestions');
 
-                loadBreakdown(pid, currentWid, detailMode, function (err, data) {
-                  if (err || !data || data.ok === false) {
-                    var msg = (data && data.error) ? data.error : 'load_failed';
-                    $detail.find('td').html(
-                      '<div class="alert alert-danger mb-0">Không tải được chi tiết (' + msg + ').</div>'
-                    );
-                    return;
+                // Input debounce
+                $visualInput.on('input', debounce(function() {
+                  var term = $(this).val().trim();
+                  if (term.length >= 2) {
+                    searchProducts(term, renderSuggestions);
+                  } else {
+                    $dropdown.hide();
                   }
-                  var html = buildDetailTable(data || {});
-                  $detail.find('td').html(html);
+                }, 300));
+
+                // >>> CLICK GỢI Ý -> AUTO SUBMIT <<<
+                $(document).on('click', '.suggestion-item', function() {
+                  var name = $(this).data('name');
+                  if (name) {
+                    // 1. Thêm chip vào ô tìm kiếm
+                    window.addSearchChip(name);
+                    
+                    // 2. Ẩn dropdown
+                    $dropdown.hide();
+
+                    // 3. TỰ ĐỘNG SUBMIT FORM NGAY LẬP TỨC
+                    $('#search-form').submit();
+                  }
+                });
+
+                // Click ngoài -> đóng dropdown
+                $(document).on('click', function(e) {
+                  if (!$(e.target).closest('#chip-container, #search-suggestions').length) {
+                    $dropdown.hide();
+                  }
+                });
+                
+                // Logic mở rộng chi tiết (không đổi)
+                $(document).on('click', '.btn-expand', function () {
+                   var $btn = $(this);
+                   var pid = $btn.data('pid');
+                   var isCombo = String($btn.data('is-combo')) === 'true';
+                   var $row = $btn.closest('tr');
+                   var $next = $row.next();
+
+                   if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) {
+                     $next.remove();
+                     $btn.html('<i class="fa fa-plus"></i>');
+                     return;
+                   }
+                   
+                   var colCount = $row.children('td').length;
+                   var $detail = $('<tr class="detail-row bg-white"><td colspan="' + colCount + '" class="p-3 shadow-inset"><div class="d-flex align-items-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải dữ liệu...</div></td></tr>');
+                   $row.after($detail);
+                   $btn.html('<i class="fa fa-minus"></i>');
+
+                   var currentWid = $('select[name="warehouse_id"]').val() || '';
+                   var detailMode = isCombo ? 'per_warehouse' : null;
+
+                   $.ajax({
+                      url: "/search_stock/product_breakdown",
+                      type: "POST", dataType: "json", contentType: "application/json",
+                      data: JSON.stringify({jsonrpc: "2.0", method: "call", params: { product_id: pid, warehouse_id: currentWid, detail_mode: detailMode }, id: 1}),
+                      success: function(resp) {
+                          var res = (resp && resp.result) ? resp.result : {};
+                          if(res.ok) {
+                             $detail.find('td').html(buildDetailTable(res));
+                          } else {
+                             $detail.find('td').html('<div class="text-danger small">Lỗi: ' + (res.error || 'Unknown') + '</div>');
+                          }
+                      }
+                   });
                 });
               });
-            });
-          })();
-        ]]></script>
-      </t>
-    </main>
+              
+              // Helper render bảng chi tiết
+              function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US'); }
+              function buildDetailTable(data) {
+                  var html = '<div class="border rounded bg-light p-2"><table class="table table-sm table-borderless mb-0 small">';
+                  var rows = data.rows || [];
+                  if(data.mode === 'components_by_warehouse') {
+                      html += '<thead class="text-muted border-bottom"><tr><th colspan="2">Thành phần</th><th class="text-end">SL/Combo</th><th class="text-end">Tồn kho</th><th class="text-end">Khả dụng</th></tr></thead><tbody>';
+                      rows.forEach(function(c){
+                          html += '<tr><td colspan="5" class="fw-bold pt-2 text-primary">' + c.name + ' <span class="text-muted fw-normal ms-1">(' + c.default_code + ')</span></td></tr>';
+                          (c.warehouses||[]).forEach(function(w){
+                              html += '<tr><td style="width:15px;"></td><td>↳ ' + w.warehouse_name + '</td><td class="text-end">' + fmt(c.component_qty_in_combo) + '</td><td class="text-end">' + fmt(w.qty_total) + '</td><td class="text-end fw-bold text-success">' + fmt(w.qty_available) + '</td></tr>';
+                          });
+                      });
+                  } else {
+                      html += '<thead class="text-muted border-bottom"><tr><th>Kho hàng</th><th class="text-end">Tồn thực tế</th><th class="text-end">Đã giữ</th><th class="text-end">Khả dụng</th></tr></thead><tbody>';
+                      rows.forEach(function(r){
+                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end text-muted">' + fmt(r.qty_reserved) + '</td><td class="text-end fw-bold text-success">' + fmt(r.qty_available) + '</td></tr>';
+                      });
+                  }
+                  html += '</tbody></table></div>';
+                  return html;
+              }
+
+            })();
+          ]]></script>
+        </t>
+      </main>
     </t>
   </template>
 </odoo>
