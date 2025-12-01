@@ -1,14 +1,14 @@
 <odoo>
   <template id="report_stock_picking_label_document">
     <t t-call="web.basic_layout">
-      <main>
+      <main style="margin: 0; padding: 0;">
         <t t-foreach="docs" t-as="o">
-          <div style="width: 100mm; height: 50mm; font-size: 12pt; page-break-after: always; padding: 3mm; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
-            <div style="margin-bottom: 5mm;">
+          <div style="width: 100mm; height: 50mm; font-size: 12pt; page-break-after: always; margin: 0; padding: 0; display: flex; flex-direction: column; box-sizing: border-box;">
+            <div style="margin-bottom: 5mm; flex-shrink: 0;">
               <strong style="font-size: 14pt;">Đơn hàng:</strong> <span style="font-size: 14pt;"><t t-esc="o.name"/></span>
             </div>
-            <div style="width: 90mm;">
-              <img t-att-src="'/report/barcode/Code128/%s' % o.name" style="width:100%; height:18mm;" />
+            <div style="width: 95mm; flex-shrink: 0; display: flex; justify-content: center;">
+              <img t-att-src="'/report/barcode/Code128/%s' % o.name" style="width: 95mm; height: 18mm; object-fit: contain;" />
             </div>
           </div>
         </t>
