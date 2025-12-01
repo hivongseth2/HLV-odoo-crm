@@ -415,37 +415,49 @@ patch(ListController.prototype, {
 
         // Restore product filter
         if (HLV_FILTER_STATE.product) {
-            const domain = [
-                '|',
-                ['order_line.product_id.name', '=ilike', HLV_FILTER_STATE.product],
-                ['order_line.product_id.default_code', '=ilike', HLV_FILTER_STATE.product]
-            ];
-            searchModel.createNewFilters([{
-                description: `SP: ${HLV_FILTER_STATE.product}`,
-                domain: domain,
-                type: 'filter',
-            }]).catch(e => console.error('[HLV] Failed to restore product filter:', e));
+            try {
+                const domain = [
+                    '|',
+                    ['order_line.product_id.name', '=ilike', `%${HLV_FILTER_STATE.product}%`],
+                    ['order_line.product_id.default_code', '=ilike', `%${HLV_FILTER_STATE.product}%`]
+                ];
+                searchModel.createNewFilters([{
+                    description: `SP: ${HLV_FILTER_STATE.product}`,
+                    domain: domain,
+                    type: 'filter',
+                }]);
+            } catch (e) {
+                console.error('[HLV] Failed to restore product filter:', e);
+            }
         }
 
         // Restore supplier filter
         if (HLV_FILTER_STATE.supplier) {
-            const domain = [['partner_id.name', '=ilike', `%${HLV_FILTER_STATE.supplier}%`]];
-            searchModel.createNewFilters([{
-                description: `NCC: ${HLV_FILTER_STATE.supplier}`,
-                domain: domain,
-                type: 'filter',
-            }]).catch(e => console.error('[HLV] Failed to restore supplier filter:', e));
+            try {
+                const domain = [['partner_id.name', '=ilike', `%${HLV_FILTER_STATE.supplier}%`]];
+                searchModel.createNewFilters([{
+                    description: `NCC: ${HLV_FILTER_STATE.supplier}`,
+                    domain: domain,
+                    type: 'filter',
+                }]);
+            } catch (e) {
+                console.error('[HLV] Failed to restore supplier filter:', e);
+            }
         }
 
         // Restore receipt filter
         if (HLV_FILTER_STATE.receipt) {
-            const domain = [['receipt_status', '=', HLV_FILTER_STATE.receipt]];
-            const label = getReceiptStatusLabel(HLV_FILTER_STATE.receipt);
-            searchModel.createNewFilters([{
-                description: label,
-                domain: domain,
-                type: 'filter',
-            }]).catch(e => console.error('[HLV] Failed to restore receipt filter:', e));
+            try {
+                const domain = [['receipt_status', '=', HLV_FILTER_STATE.receipt]];
+                const label = getReceiptStatusLabel(HLV_FILTER_STATE.receipt);
+                searchModel.createNewFilters([{
+                    description: label,
+                    domain: domain,
+                    type: 'filter',
+                }]);
+            } catch (e) {
+                console.error('[HLV] Failed to restore receipt filter:', e);
+            }
         }
 
         // Sync input values
@@ -735,13 +747,15 @@ patch(ListRenderer.prototype, {
         // Create new filter with facet - using =ilike for accent-sensitive search
         const domain = [['partner_id.name', '=ilike', `%${value}%`]];
 
-        searchModel.createNewFilters([{
-            description: `NCC: ${value}`,
-            domain: domain,
-            type: 'filter',
-        }]).catch(e => {
+        try {
+            searchModel.createNewFilters([{
+                description: `NCC: ${value}`,
+                domain: domain,
+                type: 'filter',
+            }]);
+        } catch (e) {
             console.error('[HLV] Failed to create supplier filter:', e);
-        });
+        }
     },
 
     _hlvAddReceiptStatusFilter() {
@@ -889,12 +903,14 @@ patch(ListRenderer.prototype, {
         const domain = [['receipt_status', '=', value]];
         const label = getReceiptStatusLabel(value);
 
-        searchModel.createNewFilters([{
-            description: label,
-            domain: domain,
-            type: 'filter',
-        }]).catch(e => {
+        try {
+            searchModel.createNewFilters([{
+                description: label,
+                domain: domain,
+                type: 'filter',
+            }]);
+        } catch (e) {
             console.error('[HLV] Failed to create receipt filter:', e);
-        });
+        }
     }
 });
