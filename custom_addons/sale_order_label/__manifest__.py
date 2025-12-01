@@ -10,7 +10,6 @@
         "report/stock_picking_label_template.xml",
         "report/stock_picking_label_report.xml",
         "views/sale_order_view.xml",
-        "views/stock_picking_view.xml",
     ],
     "installable": True,
     "application": False,
