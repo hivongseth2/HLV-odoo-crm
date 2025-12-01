@@ -304,7 +304,7 @@ patch(ListController.prototype, {
 
         // Find the buttons area (right side of control panel) to insert before it
         const buttonsArea = controlPanel.querySelector('.o_control_panel_actions') ||
-                           controlPanel.querySelector('.o_cp_action_menus');
+            controlPanel.querySelector('.o_cp_action_menus');
 
         // Or find the breadcrumb area to insert after
         const breadcrumbArea = controlPanel.querySelector('.o_control_panel_breadcrumbs');
@@ -374,14 +374,18 @@ patch(ListController.prototype, {
             return;
         }
 
-        // Get currently selected products
-        const existingFilters = searchModel.searchItems || {};
+        // Get currently selected products from ACTIVE filters only
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
         const selectedProducts = new Set();
         const filterIdsToRemove = [];
 
-        for (const [id, item] of Object.entries(existingFilters)) {
-            if (item.description && item.description.startsWith('SP:')) {
-                filterIdsToRemove.push(id);
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('SP:')) {
+                filterIdsToRemove.push(itemId);
 
                 // Extract product names from description (handle " hoặc " for multiple products)
                 const productNames = item.description.substring(4).split(' hoặc ').map(s => s.trim());
@@ -400,7 +404,7 @@ patch(ListController.prototype, {
 
         // Force UI refresh
         if (filterIdsToRemove.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 250));
             console.log('[HLV] Waited for product filter removal to complete');
         }
 
@@ -616,17 +620,21 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        // Get currently selected suppliers
-        const existingFilters = searchModel.searchItems || {};
+        // Get currently selected suppliers from ACTIVE filters only
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
         const selectedSuppliers = new Map(); // Map<supplierName, matchingIds>
         const filterIdsToRemove = [];
 
-        console.log('[HLV] Existing filters:', existingFilters);
+        console.log('[HLV] Checking active filters for supplier');
 
-        for (const [id, item] of Object.entries(existingFilters)) {
-            if (item.description && item.description.startsWith('NCC:')) {
-                filterIdsToRemove.push(id);
-                console.log('[HLV] Found NCC filter to remove:', id, item.description);
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('NCC:')) {
+                filterIdsToRemove.push(itemId);
+                console.log('[HLV] Found NCC filter to remove:', itemId, item.description);
 
                 // Extract supplier names from description
                 const supplierNames = item.description.substring(5).split(' hoặc ').map(s => s.trim());
@@ -682,7 +690,7 @@ patch(ListRenderer.prototype, {
 
         // Force UI refresh
         if (filterIdsToRemove.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 250));
             console.log('[HLV] Waited for supplier filter removal to complete');
         }
 
@@ -891,20 +899,22 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        // Get currently selected receipt statuses from existing TT: filters
-        const existingFilters = searchModel.searchItems || {};
+        // Get currently selected receipt statuses from ACTIVE filters only
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
         const selectedStatuses = new Set();
         const idsToRemove = [];
 
-        console.log('[HLV] Checking existing filters for receipt status');
+        console.log('[HLV] Checking active filters for receipt status');
 
-        for (const [id, item] of Object.entries(existingFilters)) {
-            const desc = item.description;
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
 
-            // Find filters by TT: prefix (simpler and more reliable)
-            if (desc && desc.startsWith('TT:')) {
-                idsToRemove.push(id);
-                console.log('[HLV] Found TT: filter to remove:', id, desc);
+            if (item && item.description && item.description.startsWith('TT:')) {
+                const desc = item.description;
+                idsToRemove.push(itemId);
+                console.log('[HLV] Found TT: filter to remove:', itemId, desc);
 
                 // Extract status values from domain
                 let domainArray = null;
@@ -946,8 +956,9 @@ patch(ListRenderer.prototype, {
         }
 
         // Force UI refresh after removing filters
+        // Increased delay to 250ms to ensure UI has time to update and remove old chips
         if (idsToRemove.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise(resolve => setTimeout(resolve, 250));
             console.log('[HLV] Waited for filter removal to complete');
         }
 
