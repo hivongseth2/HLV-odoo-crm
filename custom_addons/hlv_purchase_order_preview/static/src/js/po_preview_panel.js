@@ -4,6 +4,9 @@ import { ListRenderer } from "@web/views/list/list_renderer";
 import { ListController } from "@web/views/list/list_controller";
 import { onMounted, onPatched } from "@odoo/owl";
 
+// Store reference to current controller's searchModel for use in ListRenderer
+let _hlvCurrentSearchModel = null;
+
 /**
  * Format number as currency (Vietnamese locale)
  */
@@ -234,6 +237,9 @@ patch(ListController.prototype, {
         super.setup(...arguments);
 
         if (this.props.resModel === 'purchase.order') {
+            // Store searchModel reference for ListRenderer to use
+            _hlvCurrentSearchModel = this.env.searchModel;
+
             onMounted(() => {
                 this._hlvAddCustomSearchBar();
             });
@@ -258,19 +264,14 @@ patch(ListController.prototype, {
                           controlPanel.querySelector('.o_control_panel_main');
         if (!searchArea) return;
 
-        // Create custom search bar
+        // Create custom search bar - only product search
         const searchBar = document.createElement('div');
         searchBar.className = 'hlv-custom-search-bar d-flex gap-2 align-items-center ms-3';
         searchBar.innerHTML = `
             <div class="hlv-search-group d-flex align-items-center">
-                <label class="hlv-search-label me-1">NCC:</label>
-                <input type="text" class="form-control form-control-sm hlv-supplier-search"
-                       placeholder="Tìm nhà cung cấp..." style="width: 150px;">
-            </div>
-            <div class="hlv-search-group d-flex align-items-center">
-                <label class="hlv-search-label me-1">SP:</label>
+                <label class="hlv-search-label me-1" style="font-weight: 500; color: #714B67;">SP:</label>
                 <input type="text" class="form-control form-control-sm hlv-product-search"
-                       placeholder="Tìm sản phẩm..." style="width: 150px;">
+                       placeholder="Tìm sản phẩm trong đơn..." style="width: 180px;">
             </div>
         `;
 
@@ -280,16 +281,8 @@ patch(ListController.prototype, {
             parentEl.insertBefore(searchBar, searchArea);
         }
 
-        // Add event listeners
-        const supplierInput = searchBar.querySelector('.hlv-supplier-search');
+        // Add event listener for product search
         const productInput = searchBar.querySelector('.hlv-product-search');
-
-        supplierInput?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                this._hlvSearchBySupplier(supplierInput.value.trim());
-            }
-        });
 
         productInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -299,32 +292,45 @@ patch(ListController.prototype, {
         });
     },
 
-    async _hlvSearchBySupplier(value) {
-        if (!value) {
-            // Clear filter - reload without domain
-            this._hlvReloadWithDomain([]);
-            return;
-        }
-
-        // Search with partner domain
-        const domain = [['partner_id', 'ilike', value]];
-        this._hlvReloadWithDomain(domain);
-    },
-
     async _hlvSearchByProduct(value) {
-        if (!value) {
-            // Clear filter
-            this._hlvReloadWithDomain([]);
+        const searchModel = this.env?.searchModel;
+
+        if (!searchModel) {
+            // Fallback to doAction
+            if (!value) {
+                this._hlvReloadWithDomain([]);
+                return;
+            }
+
+            const domain = [
+                '|',
+                ['order_line.product_id.name', 'ilike', value],
+                ['order_line.product_id.default_code', 'ilike', value]
+            ];
+            this._hlvReloadWithDomain(domain);
             return;
         }
 
-        // Search orders containing the product
-        const domain = [
-            '|',
-            ['order_line.product_id.name', 'ilike', value],
-            ['order_line.product_id.default_code', 'ilike', value]
-        ];
-        this._hlvReloadWithDomain(domain);
+        // Clear existing product search domain parts
+        if (searchModel.setDomainParts) {
+            searchModel.setDomainParts({
+                hlv_product_search: value ? {
+                    domain: [
+                        '|',
+                        ['order_line.product_id.name', 'ilike', value],
+                        ['order_line.product_id.default_code', 'ilike', value]
+                    ],
+                    facetLabel: `SP: ${value}`,
+                } : null
+            });
+        } else {
+            // Fallback for older API
+            this._hlvReloadWithDomain(value ? [
+                '|',
+                ['order_line.product_id.name', 'ilike', value],
+                ['order_line.product_id.default_code', 'ilike', value]
+            ] : []);
+        }
     },
 
     _hlvReloadWithDomain(domain) {
@@ -487,21 +493,34 @@ patch(ListRenderer.prototype, {
     },
 
     _hlvApplySupplierSearch(value) {
-        const actionService = this.env?.services?.action;
-        if (!actionService) return;
+        const searchModel = _hlvCurrentSearchModel || this.env?.searchModel;
 
-        let domain = [];
-        if (value) {
-            domain = [['partner_id', 'ilike', value]];
+        if (searchModel && searchModel.setDomainParts) {
+            // Use setDomainParts for consistent behavior with native Odoo filters
+            searchModel.setDomainParts({
+                hlv_supplier_search: value ? {
+                    domain: [['partner_id', 'ilike', value]],
+                    facetLabel: `NCC: ${value}`,
+                } : null
+            });
+            return;
         }
 
-        actionService.doAction({
-            type: 'ir.actions.act_window',
-            res_model: 'purchase.order',
-            views: [[false, 'list'], [false, 'form']],
-            domain: domain,
-            target: 'current',
-        });
+        // Fallback to doAction with clearBreadcrumbs
+        const actionService = this.env?.services?.action;
+        if (actionService) {
+            const domain = value ? [['partner_id', 'ilike', value]] : [];
+            actionService.doAction({
+                type: 'ir.actions.act_window',
+                res_model: 'purchase.order',
+                name: 'Đơn mua hàng',
+                views: [[false, 'list'], [false, 'form']],
+                domain: domain,
+                target: 'current',
+            }, {
+                clearBreadcrumbs: true,
+            });
+        }
     },
 
     _hlvAddReceiptStatusFilter() {
@@ -610,9 +629,6 @@ patch(ListRenderer.prototype, {
     },
 
     _hlvApplyReceiptFilter(value) {
-        const actionService = this.env?.services?.action;
-        if (!actionService) return;
-
         // Map value to filter name defined in purchase_order_views.xml
         const filterNameMap = {
             'pending': 'filter_receipt_pending',
@@ -620,19 +636,78 @@ patch(ListRenderer.prototype, {
             'full': 'filter_receipt_full'
         };
 
-        // Build context with search_default_<filter_name> = 1 to activate native Odoo filter
-        // This will show filter tag like Odoo default behavior
-        const context = {};
-        if (value && filterNameMap[value]) {
-            context[`search_default_${filterNameMap[value]}`] = 1;
+        const searchModel = _hlvCurrentSearchModel || this.env?.searchModel;
+
+        if (!searchModel) {
+            console.warn('[HLV] SearchModel not found, falling back to setDomainParts');
+            this._hlvApplyFilterViaDomain(value);
+            return;
         }
 
-        actionService.doAction({
-            type: 'ir.actions.act_window',
-            res_model: 'purchase.order',
-            views: [[false, 'list'], [false, 'form']],
-            target: 'current',
-            context: context,
-        });
+        console.log('[HLV] SearchModel:', searchModel);
+        console.log('[HLV] SearchModel methods:', Object.keys(searchModel));
+
+        // Use setDomainParts which is available in Odoo 18
+        if (searchModel.setDomainParts) {
+            // Clear existing receipt filter first
+            searchModel.setDomainParts({
+                hlv_receipt_filter: value ? {
+                    domain: [['receipt_status', '=', value]],
+                    facetLabel: getReceiptStatusLabel(value),
+                } : null
+            });
+            console.log('[HLV] Applied filter via setDomainParts:', value);
+            return;
+        }
+
+        // Fallback: Try toggleSearchItem if searchItems exists
+        const searchItems = searchModel.searchItems || {};
+        console.log('[HLV] SearchModel searchItems:', searchItems);
+
+        if (Object.keys(searchItems).length > 0) {
+            const filterName = filterNameMap[value];
+
+            // First, deactivate all receipt filters
+            for (const [id, item] of Object.entries(searchItems)) {
+                if (item.name && item.name.startsWith('filter_receipt_')) {
+                    const isActive = searchModel.isSearchItemActive?.(id) || item.isActive;
+                    if (isActive) {
+                        searchModel.toggleSearchItem(id);
+                    }
+                }
+            }
+
+            if (value && filterName) {
+                // Activate the target filter
+                for (const [id, item] of Object.entries(searchItems)) {
+                    if (item.name === filterName) {
+                        searchModel.toggleSearchItem(id);
+                        console.log('[HLV] Toggled filter:', filterName);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Last fallback
+        this._hlvApplyFilterViaDomain(value);
+    },
+
+    _hlvApplyFilterViaDomain(value) {
+        // Use direct domain via action service
+        const actionService = this.env?.services?.action;
+        if (actionService) {
+            const domain = value ? [['receipt_status', '=', value]] : [];
+            actionService.doAction({
+                type: 'ir.actions.act_window',
+                res_model: 'purchase.order',
+                name: 'Đơn mua hàng',
+                views: [[false, 'list'], [false, 'form']],
+                target: 'current',
+                domain: domain,
+            }, {
+                clearBreadcrumbs: true,
+            });
+        }
     }
 });
