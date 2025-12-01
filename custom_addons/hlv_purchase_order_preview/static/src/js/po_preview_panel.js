@@ -4,8 +4,8 @@ import { ListRenderer } from "@web/views/list/list_renderer";
 import { ListController } from "@web/views/list/list_controller";
 import { onMounted, onPatched } from "@odoo/owl";
 
-// Store reference to current controller's searchModel for use in ListRenderer
-let _hlvCurrentSearchModel = null;
+// Store reference to current controller for use in ListRenderer
+let _hlvCurrentController = null;
 
 /**
  * Format number as currency (Vietnamese locale)
@@ -206,13 +206,11 @@ async function showPOPreviewPanel(env, resId) {
 
 /**
  * Get record resId from row element in Odoo 18
- * In Odoo 18, row.dataset.id contains datapoint ID, not database ID
  */
 function getResIdFromRow(listRenderer, row) {
     const datapointId = row.dataset.id;
     if (!datapointId) return null;
 
-    // Try to find record from ListRenderer's records
     const records = listRenderer.props.list?.records || [];
     for (const record of records) {
         if (record.id === datapointId) {
@@ -220,7 +218,6 @@ function getResIdFromRow(listRenderer, row) {
         }
     }
 
-    // Fallback: try parsing as integer if it looks like a number
     const parsed = parseInt(datapointId);
     if (!isNaN(parsed) && parsed > 0) {
         return parsed;
@@ -230,15 +227,15 @@ function getResIdFromRow(listRenderer, row) {
 }
 
 /**
- * Patch ListController to add custom search bar for purchase.order
+ * Patch ListController to add custom search bar and store reference
  */
 patch(ListController.prototype, {
     setup() {
         super.setup(...arguments);
 
         if (this.props.resModel === 'purchase.order') {
-            // Store searchModel reference for ListRenderer to use
-            _hlvCurrentSearchModel = this.env.searchModel;
+            // Store controller reference for ListRenderer
+            _hlvCurrentController = this;
 
             onMounted(() => {
                 this._hlvAddCustomSearchBar();
@@ -252,19 +249,15 @@ patch(ListController.prototype, {
     _hlvAddCustomSearchBar() {
         if (this.props.resModel !== 'purchase.order') return;
 
-        // Find the control panel area
         const controlPanel = document.querySelector('.o_control_panel');
         if (!controlPanel) return;
 
-        // Check if already added
         if (document.querySelector('.hlv-custom-search-bar')) return;
 
-        // Find the breadcrumb/title area or search area
         const searchArea = controlPanel.querySelector('.o_searchview') ||
                           controlPanel.querySelector('.o_control_panel_main');
         if (!searchArea) return;
 
-        // Create custom search bar - only product search
         const searchBar = document.createElement('div');
         searchBar.className = 'hlv-custom-search-bar d-flex gap-2 align-items-center ms-3';
         searchBar.innerHTML = `
@@ -275,13 +268,11 @@ patch(ListController.prototype, {
             </div>
         `;
 
-        // Insert before search view or append to control panel
         const parentEl = searchArea.parentElement;
         if (parentEl) {
             parentEl.insertBefore(searchBar, searchArea);
         }
 
-        // Add event listener for product search
         const productInput = searchBar.querySelector('.hlv-product-search');
 
         productInput?.addEventListener('keydown', (e) => {
@@ -293,39 +284,71 @@ patch(ListController.prototype, {
     },
 
     async _hlvSearchByProduct(value) {
-        const searchModel = this.env?.searchModel;
+        console.log('[HLV] Product search:', value);
+        console.log('[HLV] Model props:', this.model);
+        console.log('[HLV] Env searchModel:', this.env.searchModel);
+        
+        const domain = value ? [
+            '|',
+            ['order_line.product_id.name', 'ilike', value],
+            ['order_line.product_id.default_code', 'ilike', value]
+        ] : [];
 
-        if (!searchModel) {
-            console.warn('[HLV] SearchModel not available');
-            return;
+        // Method 1: Try using model.load with domain
+        if (this.model && this.model.load) {
+            try {
+                await this.model.load({ domain });
+                console.log('[HLV] Applied via model.load');
+                return;
+            } catch (e) {
+                console.warn('[HLV] model.load failed:', e);
+            }
         }
 
-        // FIXED: Always use setDomainParts - no fallback to doAction
-        if (searchModel.setDomainParts) {
-            searchModel.setDomainParts({
-                hlv_product_search: value ? {
-                    domain: [
-                        '|',
-                        ['order_line.product_id.name', 'ilike', value],
-                        ['order_line.product_id.default_code', 'ilike', value]
-                    ],
-                    facetLabel: `SP: ${value}`,
-                } : null
-            });
-        } else {
-            console.error('[HLV] setDomainParts not available on searchModel');
+        // Method 2: Try using model's root domain
+        if (this.model && this.model.root) {
+            try {
+                this.model.root.domain = domain;
+                await this.model.root.load();
+                console.log('[HLV] Applied via model.root.domain');
+                return;
+            } catch (e) {
+                console.warn('[HLV] model.root.domain failed:', e);
+            }
         }
+
+        // Method 3: Try searchModel with different APIs
+        const searchModel = this.env.searchModel;
+        if (searchModel) {
+            console.log('[HLV] SearchModel methods:', Object.keys(searchModel));
+            
+            // Try query property
+            if (searchModel.query) {
+                console.log('[HLV] SearchModel.query:', searchModel.query);
+            }
+
+            // Try _fetchSearchReadData or similar
+            if (searchModel._notify) {
+                try {
+                    searchModel._notify();
+                    console.log('[HLV] Called searchModel._notify');
+                } catch (e) {
+                    console.warn('[HLV] _notify failed:', e);
+                }
+            }
+        }
+
+        console.error('[HLV] All methods failed, domain not applied');
     }
 });
 
 /**
- * Patch ListRenderer to add preview button and filter dropdown for purchase.order
+ * Patch ListRenderer to add preview button and filters
  */
 patch(ListRenderer.prototype, {
     setup() {
         super.setup(...arguments);
 
-        // Only apply to purchase.order model
         if (this.props.list?.resModel === 'purchase.order') {
             onMounted(() => {
                 this._hlvAddReceiptStatusFilter();
@@ -346,28 +369,22 @@ patch(ListRenderer.prototype, {
         const tableEl = this.tableRef?.el;
         if (!tableEl) return;
 
-        // Find all rows and add preview button
         const rows = tableEl.querySelectorAll('tbody tr.o_data_row');
         rows.forEach(row => {
-            // Skip if already processed
             if (row.dataset.hlvPreviewAdded) return;
             row.dataset.hlvPreviewAdded = 'true';
 
-            // Get record resId from the row using ListRenderer's records
             const resId = getResIdFromRow(this, row);
             if (!resId) {
                 console.warn('[HLV] Could not get resId for row:', row.dataset.id);
                 return;
             }
 
-            // Find the last td or create button in last column
             const lastTd = row.querySelector('td:last-child');
             if (!lastTd) return;
 
-            // Check if there's already our button
             if (lastTd.querySelector('.hlv-preview-btn')) return;
 
-            // Create preview button
             const btn = document.createElement('button');
             btn.className = 'btn btn-sm btn-outline-primary hlv-preview-btn ms-1';
             btn.innerHTML = '👁 Xem';
@@ -389,12 +406,10 @@ patch(ListRenderer.prototype, {
         const tableEl = this.tableRef?.el;
         if (!tableEl) return;
 
-        // Find partner_id column header
         const partnerHeader = tableEl.querySelector('th[data-name="partner_id"]');
         if (!partnerHeader || partnerHeader.dataset.hlvSearchAdded) return;
         partnerHeader.dataset.hlvSearchAdded = 'true';
 
-        // Create search button
         const searchBtn = document.createElement('button');
         searchBtn.className = 'btn btn-link p-0 hlv-header-search-btn ms-1';
         searchBtn.type = 'button';
@@ -411,7 +426,6 @@ patch(ListRenderer.prototype, {
     },
 
     _hlvShowSupplierSearchPopup(triggerBtn) {
-        // Remove any existing popups
         document.querySelectorAll('.hlv-search-popup').forEach(p => p.remove());
 
         const rect = triggerBtn.getBoundingClientRect();
@@ -451,7 +465,6 @@ patch(ListRenderer.prototype, {
             }
         });
 
-        // Close on click outside
         setTimeout(() => {
             document.addEventListener('click', function closePopup(e) {
                 if (!popup.contains(e.target) && e.target !== triggerBtn) {
@@ -463,23 +476,21 @@ patch(ListRenderer.prototype, {
     },
 
     _hlvApplySupplierSearch(value) {
-        const searchModel = _hlvCurrentSearchModel || this.env?.searchModel;
-
-        if (!searchModel) {
-            console.warn('[HLV] SearchModel not available');
+        console.log('[HLV] Supplier search:', value);
+        
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
             return;
         }
 
-        // FIXED: Only use setDomainParts - no doAction fallback
-        if (searchModel.setDomainParts) {
-            searchModel.setDomainParts({
-                hlv_supplier_search: value ? {
-                    domain: [['partner_id', 'ilike', value]],
-                    facetLabel: `NCC: ${value}`,
-                } : null
+        const domain = value ? [['partner_id', 'ilike', value]] : [];
+
+        // Try controller's model
+        if (controller.model && controller.model.load) {
+            controller.model.load({ domain }).catch(e => {
+                console.error('[HLV] Failed to apply supplier filter:', e);
             });
-        } else {
-            console.error('[HLV] setDomainParts not available on searchModel');
         }
     },
 
@@ -489,12 +500,10 @@ patch(ListRenderer.prototype, {
         const tableEl = this.tableRef?.el;
         if (!tableEl) return;
 
-        // Only add filter to receipt_status column (not invoice_status)
         const receiptHeader = tableEl.querySelector('th[data-name="receipt_status"]');
         if (!receiptHeader || receiptHeader.dataset.hlvFilterAdded) return;
         receiptHeader.dataset.hlvFilterAdded = 'true';
 
-        // Create filter button
         const filterBtn = document.createElement('button');
         filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
         filterBtn.type = 'button';
@@ -511,7 +520,6 @@ patch(ListRenderer.prototype, {
     },
 
     _hlvShowReceiptFilterDropdown(triggerBtn) {
-        // Remove any existing dropdown
         document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
 
         const rect = triggerBtn.getBoundingClientRect();
@@ -570,7 +578,6 @@ patch(ListRenderer.prototype, {
 
         document.body.appendChild(dropdown);
 
-        // Close handlers
         const closeHandler = (e) => {
             if (!dropdown.contains(e.target) && e.target !== triggerBtn) {
                 dropdown.remove();
@@ -589,24 +596,21 @@ patch(ListRenderer.prototype, {
     },
 
     _hlvApplyReceiptFilter(value) {
-        const searchModel = _hlvCurrentSearchModel || this.env?.searchModel;
+        console.log('[HLV] Receipt filter:', value);
 
-        if (!searchModel) {
-            console.warn('[HLV] SearchModel not available');
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
             return;
         }
 
-        // FIXED: Only use setDomainParts - no doAction fallback
-        if (searchModel.setDomainParts) {
-            searchModel.setDomainParts({
-                hlv_receipt_filter: value ? {
-                    domain: [['receipt_status', '=', value]],
-                    facetLabel: getReceiptStatusLabel(value),
-                } : null
+        const domain = value ? [['receipt_status', '=', value]] : [];
+
+        // Try controller's model
+        if (controller.model && controller.model.load) {
+            controller.model.load({ domain }).catch(e => {
+                console.error('[HLV] Failed to apply receipt filter:', e);
             });
-            console.log('[HLV] Applied filter via setDomainParts:', value);
-        } else {
-            console.error('[HLV] setDomainParts not available on searchModel');
         }
     }
 });
