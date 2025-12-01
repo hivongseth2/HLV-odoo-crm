@@ -374,37 +374,76 @@ patch(ListController.prototype, {
             return;
         }
 
-        if (!value) {
-            // Remove ALL product search filters when clearing
-            const existingFilters = searchModel.searchItems || {};
-            for (const [id, item] of Object.entries(existingFilters)) {
-                if (item.description && item.description.startsWith('SP:')) {
-                    searchModel.deactivateGroup(id);
-                }
+        // Get currently selected products
+        const existingFilters = searchModel.searchItems || {};
+        const selectedProducts = new Set();
+        const filterIdsToRemove = [];
+
+        for (const [id, item] of Object.entries(existingFilters)) {
+            if (item.description && item.description.startsWith('SP:')) {
+                filterIdsToRemove.push(id);
+                const productName = item.description.substring(4); // Remove 'SP: '
+                selectedProducts.add(productName);
             }
+        }
+
+        // Remove all existing product filters
+        filterIdsToRemove.forEach(id => searchModel.deactivateGroup(id));
+
+        if (!value) {
             console.log('[HLV] Cleared all product search filters');
             return;
         }
 
-        // Check if this exact product filter already exists
-        const existingFilters = searchModel.searchItems || {};
-        for (const item of Object.values(existingFilters)) {
-            if (item.description === `SP: ${value}`) {
-                console.log('[HLV] Product filter already exists, skipping');
-                return;
-            }
+        // Toggle the selected product
+        if (selectedProducts.has(value)) {
+            selectedProducts.delete(value);
+        } else {
+            selectedProducts.add(value);
         }
 
-        // Create new filter with facet (OR with other SP filters)
-        const domain = [
-            '|',
-            ['order_line.product_id.name', 'ilike', `%${value}%`],
-            ['order_line.product_id.default_code', 'ilike', `%${value}%`]
-        ];
+        if (selectedProducts.size === 0) {
+            console.log('[HLV] No product filters selected');
+            return;
+        }
+
+        // Build OR domain for multiple products
+        const productArray = Array.from(selectedProducts);
+        let domain;
+        let description;
+
+        if (productArray.length === 1) {
+            domain = [
+                '|',
+                ['order_line.product_id.name', 'ilike', `%${productArray[0]}%`],
+                ['order_line.product_id.default_code', 'ilike', `%${productArray[0]}%`]
+            ];
+            description = `SP: ${productArray[0]}`;
+        } else {
+            // Build OR domain for multiple products
+            // Structure: ['|', ['|', cond1, cond2], ['|', cond3, cond4]]
+            domain = [];
+
+            // Add OR operators
+            for (let i = 0; i < productArray.length - 1; i++) {
+                domain.push('|');
+            }
+
+            // Add conditions for each product (name OR code)
+            productArray.forEach(product => {
+                domain.push(
+                    '|',
+                    ['order_line.product_id.name', 'ilike', `%${product}%`],
+                    ['order_line.product_id.default_code', 'ilike', `%${product}%`]
+                );
+            });
+
+            description = `SP: ${productArray.join(' hoặc ')}`;
+        }
 
         try {
             searchModel.createNewFilters([{
-                description: `SP: ${value}`,
+                description: description,
                 domain: domain,
                 type: 'filter',
             }]);
@@ -563,63 +602,96 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        if (!value) {
-            // Remove ALL supplier search filters when clearing
-            const existingFilters = searchModel.searchItems || {};
-            for (const [id, item] of Object.entries(existingFilters)) {
-                if (item.description && item.description.startsWith('NCC:')) {
-                    searchModel.deactivateGroup(id);
+        // Get currently selected suppliers
+        const existingFilters = searchModel.searchItems || {};
+        const selectedSuppliers = new Map(); // Map<supplierName, matchingIds>
+        const filterIdsToRemove = [];
+
+        for (const [id, item] of Object.entries(existingFilters)) {
+            if (item.description && item.description.startsWith('NCC:')) {
+                filterIdsToRemove.push(id);
+                const supplierName = item.description.substring(5); // Remove 'NCC: '
+
+                // Extract IDs from domain
+                const domain = item.domain;
+                if (domain && domain.length > 0) {
+                    const idCondition = domain.find(d => Array.isArray(d) && d[0] === 'id' && d[1] === 'in');
+                    if (idCondition && idCondition[2]) {
+                        selectedSuppliers.set(supplierName, idCondition[2]);
+                    }
                 }
             }
+        }
+
+        // Remove all existing supplier filters
+        filterIdsToRemove.forEach(id => searchModel.deactivateGroup(id));
+
+        if (!value) {
             console.log('[HLV] Cleared all supplier search filters');
             return;
         }
 
-        // Check if this exact supplier filter already exists
-        const existingFilters = searchModel.searchItems || {};
-        for (const item of Object.values(existingFilters)) {
-            if (item.description === `NCC: ${value}`) {
-                console.log('[HLV] Supplier filter already exists, skipping');
+        // Toggle the selected supplier
+        if (selectedSuppliers.has(value)) {
+            selectedSuppliers.delete(value);
+        } else {
+            // Fetch IDs for the new supplier
+            try {
+                const orm = controller.env.services.orm;
+                const matchingIds = await orm.call(
+                    'purchase.order',
+                    'search_supplier_exact',
+                    [value, null]
+                );
+                console.log('[HLV] Supplier search found IDs:', matchingIds);
+
+                if (matchingIds.length > 0) {
+                    selectedSuppliers.set(value, matchingIds);
+                } else {
+                    console.warn('[HLV] No purchase orders found for supplier:', value);
+                    return;
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to search supplier:', e);
                 return;
             }
         }
 
-        // Use Python method to search with exact Vietnamese diacritic matching
+        if (selectedSuppliers.size === 0) {
+            console.log('[HLV] No supplier filters selected');
+            return;
+        }
+
+        // Build OR domain for multiple suppliers
+        const supplierArray = Array.from(selectedSuppliers.entries());
+        let domain;
+        let description;
+
+        if (supplierArray.length === 1) {
+            const [name, ids] = supplierArray[0];
+            domain = [['id', 'in', ids]];
+            description = `NCC: ${name}`;
+        } else {
+            // Merge all IDs and create single domain
+            const allIds = new Set();
+            supplierArray.forEach(([_, ids]) => {
+                ids.forEach(id => allIds.add(id));
+            });
+
+            domain = [['id', 'in', Array.from(allIds)]];
+            const names = supplierArray.map(([name, _]) => name).join(' hoặc ');
+            description = `NCC: ${names}`;
+        }
+
         try {
-            const orm = controller.env.services.orm;
-            const matchingIds = await orm.call(
-                'purchase.order',
-                'search_supplier_exact',
-                [value, null]
-            );
-
-            console.log('[HLV] Supplier search found IDs:', matchingIds);
-
-            // Create filter with exact ID list (OR with other NCC filters)
-            const domain = matchingIds.length > 0
-                ? [['id', 'in', matchingIds]]
-                : [['id', '=', -1]]; // No results
-
             searchModel.createNewFilters([{
-                description: `NCC: ${value}`,
+                description: description,
                 domain: domain,
                 type: 'filter',
             }]);
             console.log('[HLV] Applied supplier filter (OR logic)');
         } catch (e) {
-            console.error('[HLV] Failed to search supplier:', e);
-            // Fallback to ilike search
-            const domain = [['partner_id.name', 'ilike', `%${value}%`]];
-            try {
-                searchModel.createNewFilters([{
-                    description: `NCC: ${value}`,
-                    domain: domain,
-                    type: 'filter',
-                }]);
-                console.log('[HLV] Applied supplier filter (OR logic - fallback)');
-            } catch (e2) {
-                console.error('[HLV] Failed to create supplier filter:', e2);
-            }
+            console.error('[HLV] Failed to create supplier filter:', e);
         }
     },
 
@@ -743,43 +815,71 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        if (!value) {
-            // Remove ALL receipt status filters when clearing
-            const existingFilters = searchModel.searchItems || {};
-            for (const [id, item] of Object.entries(existingFilters)) {
-                if (item.description && (
-                    item.description === 'Chưa nhận' ||
-                    item.description === 'Đã nhận một phần' ||
-                    item.description === 'Đã nhận hết'
-                )) {
-                    searchModel.deactivateGroup(id);
-                }
+        // Get currently selected receipt statuses
+        const existingFilters = searchModel.searchItems || {};
+        const selectedStatuses = new Set();
+        const filterIdsToRemove = [];
+
+        for (const [id, item] of Object.entries(existingFilters)) {
+            if (item.description && item.description.startsWith('TT:')) {
+                filterIdsToRemove.push(id);
+                // Extract status from description "TT: Chưa nhận" -> "pending"
+                const statusLabel = item.description.substring(4);
+                if (statusLabel === 'Chưa nhận') selectedStatuses.add('pending');
+                else if (statusLabel === 'Đã nhận một phần') selectedStatuses.add('partial');
+                else if (statusLabel === 'Đã nhận hết') selectedStatuses.add('full');
             }
+        }
+
+        // Remove all existing receipt filters
+        filterIdsToRemove.forEach(id => searchModel.deactivateGroup(id));
+
+        if (!value) {
             console.log('[HLV] Cleared all receipt filters');
             return;
         }
 
-        const label = getReceiptStatusLabel(value);
-
-        // Check if this exact receipt status filter already exists
-        const existingFilters = searchModel.searchItems || {};
-        for (const item of Object.values(existingFilters)) {
-            if (item.description === label) {
-                console.log('[HLV] Receipt status filter already exists, skipping');
-                return;
-            }
+        // Toggle the selected status
+        if (selectedStatuses.has(value)) {
+            selectedStatuses.delete(value);
+        } else {
+            selectedStatuses.add(value);
         }
 
-        // Create new filter with facet (OR with other receipt status filters)
-        const domain = [['receipt_status', '=', value]];
+        if (selectedStatuses.size === 0) {
+            console.log('[HLV] No receipt filters selected');
+            return;
+        }
+
+        // Build OR domain for multiple statuses
+        const statusArray = Array.from(selectedStatuses);
+        let domain;
+        let description;
+
+        if (statusArray.length === 1) {
+            domain = [['receipt_status', '=', statusArray[0]]];
+            description = `TT: ${getReceiptStatusLabel(statusArray[0])}`;
+        } else {
+            // Build OR domain: ['|', ['status', '=', 'pending'], ['status', '=', 'partial']]
+            domain = [];
+            for (let i = 0; i < statusArray.length - 1; i++) {
+                domain.push('|');
+            }
+            statusArray.forEach(status => {
+                domain.push(['receipt_status', '=', status]);
+            });
+
+            const labels = statusArray.map(s => getReceiptStatusLabel(s)).join(' hoặc ');
+            description = `TT: ${labels}`;
+        }
 
         try {
             searchModel.createNewFilters([{
-                description: label,
+                description: description,
                 domain: domain,
                 type: 'filter',
             }]);
-            console.log('[HLV] Applied receipt status filter (OR logic)');
+            console.log('[HLV] Applied receipt status filter (OR logic):', statusArray);
         } catch (e) {
             console.error('[HLV] Failed to create receipt filter:', e);
         }
