@@ -7,6 +7,13 @@ import { onMounted, onPatched } from "@odoo/owl";
 // Store reference to current controller for use in ListRenderer
 let _hlvCurrentController = null;
 
+// Track active filters for visual indicator
+let _hlvActiveFilters = {
+    receipt: null,
+    supplier: null,
+    product: null
+};
+
 /**
  * Format number as currency (Vietnamese locale)
  */
@@ -41,6 +48,98 @@ function getReceiptStatusLabel(status) {
         'full': 'Đã nhận đủ'
     };
     return labels[status] || status || '';
+}
+
+/**
+ * Update the filter indicator bar to show active filters
+ */
+function updateFilterIndicator() {
+    // Remove existing indicator
+    document.querySelectorAll('.hlv-filter-indicator').forEach(el => el.remove());
+
+    const activeFilters = [];
+    if (_hlvActiveFilters.receipt) {
+        activeFilters.push({
+            type: 'receipt',
+            label: `Nhập kho: ${getReceiptStatusLabel(_hlvActiveFilters.receipt)}`
+        });
+    }
+    if (_hlvActiveFilters.supplier) {
+        activeFilters.push({
+            type: 'supplier',
+            label: `NCC: ${_hlvActiveFilters.supplier}`
+        });
+    }
+    if (_hlvActiveFilters.product) {
+        activeFilters.push({
+            type: 'product',
+            label: `SP: ${_hlvActiveFilters.product}`
+        });
+    }
+
+    if (activeFilters.length === 0) return;
+
+    // Find the search view to append indicator
+    const searchView = document.querySelector('.o_searchview');
+    if (!searchView) return;
+
+    const indicator = document.createElement('div');
+    indicator.className = 'hlv-filter-indicator d-flex align-items-center gap-2 ms-2';
+
+    activeFilters.forEach(filter => {
+        const tag = document.createElement('span');
+        tag.className = 'hlv-filter-tag badge bg-primary d-flex align-items-center gap-1';
+        tag.innerHTML = `
+            ${filter.label}
+            <button type="button" class="btn-close btn-close-white ms-1"
+                    style="font-size: 0.6rem; padding: 0.2em;"
+                    data-filter-type="${filter.type}"></button>
+        `;
+        tag.querySelector('.btn-close').addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            clearFilter(filter.type);
+        });
+        indicator.appendChild(tag);
+    });
+
+    searchView.parentElement?.insertBefore(indicator, searchView.nextSibling);
+}
+
+/**
+ * Clear a specific filter
+ */
+function clearFilter(type) {
+    const controller = _hlvCurrentController;
+    if (!controller) return;
+
+    _hlvActiveFilters[type] = null;
+
+    // Rebuild domain from remaining active filters
+    const domains = [];
+    if (_hlvActiveFilters.receipt) {
+        domains.push(['receipt_status', '=', _hlvActiveFilters.receipt]);
+    }
+    if (_hlvActiveFilters.supplier) {
+        domains.push(['partner_id.name', '=ilike', _hlvActiveFilters.supplier]);
+    }
+    if (_hlvActiveFilters.product) {
+        domains.push('|');
+        domains.push(['order_line.product_id.name', '=ilike', _hlvActiveFilters.product]);
+        domains.push(['order_line.product_id.default_code', '=ilike', _hlvActiveFilters.product]);
+    }
+
+    if (controller.model && controller.model.load) {
+        controller.model.load({ domain: domains }).then(() => {
+            updateFilterIndicator();
+        });
+    }
+
+    // Clear input if it's product filter
+    if (type === 'product') {
+        const productInput = document.querySelector('.hlv-product-search');
+        if (productInput) productInput.value = '';
+    }
 }
 
 /**
@@ -259,12 +358,13 @@ patch(ListController.prototype, {
         if (!searchArea) return;
 
         const searchBar = document.createElement('div');
-        searchBar.className = 'hlv-custom-search-bar d-flex gap-2 align-items-center ms-3';
+        searchBar.className = 'hlv-custom-search-bar d-flex gap-2 align-items-center';
+        searchBar.style.cssText = 'margin-right: 16px; padding-right: 16px; border-right: 1px solid #dee2e6;';
         searchBar.innerHTML = `
             <div class="hlv-search-group d-flex align-items-center">
-                <label class="hlv-search-label me-1" style="font-weight: 500; color: #714B67;">SP:</label>
+                <label class="hlv-search-label me-2" style="font-weight: 500; color: #714B67;">SP:</label>
                 <input type="text" class="form-control form-control-sm hlv-product-search"
-                       placeholder="Tìm sản phẩm trong đơn..." style="width: 180px;">
+                       placeholder="Tìm sản phẩm..." style="width: 160px;">
             </div>
         `;
 
@@ -285,60 +385,56 @@ patch(ListController.prototype, {
 
     async _hlvSearchByProduct(value) {
         console.log('[HLV] Product search:', value);
-        console.log('[HLV] Model props:', this.model);
-        console.log('[HLV] Env searchModel:', this.env.searchModel);
-        
+
+        // Update active filter tracking
+        _hlvActiveFilters.product = value || null;
+
+        // Use =ilike for accent-sensitive search in Vietnamese
         const domain = value ? [
             '|',
-            ['order_line.product_id.name', 'ilike', value],
-            ['order_line.product_id.default_code', 'ilike', value]
+            ['order_line.product_id.name', '=ilike', `%${value}%`],
+            ['order_line.product_id.default_code', '=ilike', `%${value}%`]
         ] : [];
 
-        // Method 1: Try using model.load with domain
+        // Build combined domain with other active filters
+        const combinedDomain = this._hlvBuildCombinedDomain(domain);
+
+        // Try using model.load with domain
         if (this.model && this.model.load) {
             try {
-                await this.model.load({ domain });
+                await this.model.load({ domain: combinedDomain });
                 console.log('[HLV] Applied via model.load');
+                updateFilterIndicator();
                 return;
             } catch (e) {
                 console.warn('[HLV] model.load failed:', e);
             }
         }
 
-        // Method 2: Try using model's root domain
-        if (this.model && this.model.root) {
-            try {
-                this.model.root.domain = domain;
-                await this.model.root.load();
-                console.log('[HLV] Applied via model.root.domain');
-                return;
-            } catch (e) {
-                console.warn('[HLV] model.root.domain failed:', e);
-            }
+        console.error('[HLV] Failed to apply product search');
+    },
+
+    _hlvBuildCombinedDomain(additionalDomain = []) {
+        const domains = [];
+
+        if (_hlvActiveFilters.receipt) {
+            domains.push(['receipt_status', '=', _hlvActiveFilters.receipt]);
+        }
+        if (_hlvActiveFilters.supplier) {
+            domains.push(['partner_id.name', '=ilike', `%${_hlvActiveFilters.supplier}%`]);
+        }
+        if (_hlvActiveFilters.product) {
+            domains.push('|');
+            domains.push(['order_line.product_id.name', '=ilike', `%${_hlvActiveFilters.product}%`]);
+            domains.push(['order_line.product_id.default_code', '=ilike', `%${_hlvActiveFilters.product}%`]);
         }
 
-        // Method 3: Try searchModel with different APIs
-        const searchModel = this.env.searchModel;
-        if (searchModel) {
-            console.log('[HLV] SearchModel methods:', Object.keys(searchModel));
-            
-            // Try query property
-            if (searchModel.query) {
-                console.log('[HLV] SearchModel.query:', searchModel.query);
-            }
-
-            // Try _fetchSearchReadData or similar
-            if (searchModel._notify) {
-                try {
-                    searchModel._notify();
-                    console.log('[HLV] Called searchModel._notify');
-                } catch (e) {
-                    console.warn('[HLV] _notify failed:', e);
-                }
-            }
+        // If additional domain provided and product not yet in filters, add it
+        if (additionalDomain.length > 0 && !_hlvActiveFilters.product) {
+            domains.push(...additionalDomain);
         }
 
-        console.error('[HLV] All methods failed, domain not applied');
+        return domains;
     }
 });
 
@@ -477,18 +573,36 @@ patch(ListRenderer.prototype, {
 
     _hlvApplySupplierSearch(value) {
         console.log('[HLV] Supplier search:', value);
-        
+
+        // Update active filter tracking
+        _hlvActiveFilters.supplier = value || null;
+
         const controller = _hlvCurrentController;
         if (!controller) {
             console.error('[HLV] Controller not available');
             return;
         }
 
-        const domain = value ? [['partner_id', 'ilike', value]] : [];
+        // Build combined domain with all active filters
+        const domains = [];
+        if (_hlvActiveFilters.receipt) {
+            domains.push(['receipt_status', '=', _hlvActiveFilters.receipt]);
+        }
+        if (_hlvActiveFilters.supplier) {
+            // Use =ilike for accent-sensitive search
+            domains.push(['partner_id.name', '=ilike', `%${_hlvActiveFilters.supplier}%`]);
+        }
+        if (_hlvActiveFilters.product) {
+            domains.push('|');
+            domains.push(['order_line.product_id.name', '=ilike', `%${_hlvActiveFilters.product}%`]);
+            domains.push(['order_line.product_id.default_code', '=ilike', `%${_hlvActiveFilters.product}%`]);
+        }
 
         // Try controller's model
         if (controller.model && controller.model.load) {
-            controller.model.load({ domain }).catch(e => {
+            controller.model.load({ domain: domains }).then(() => {
+                updateFilterIndicator();
+            }).catch(e => {
                 console.error('[HLV] Failed to apply supplier filter:', e);
             });
         }
@@ -598,17 +712,34 @@ patch(ListRenderer.prototype, {
     _hlvApplyReceiptFilter(value) {
         console.log('[HLV] Receipt filter:', value);
 
+        // Update active filter tracking
+        _hlvActiveFilters.receipt = value || null;
+
         const controller = _hlvCurrentController;
         if (!controller) {
             console.error('[HLV] Controller not available');
             return;
         }
 
-        const domain = value ? [['receipt_status', '=', value]] : [];
+        // Build combined domain with all active filters
+        const domains = [];
+        if (_hlvActiveFilters.receipt) {
+            domains.push(['receipt_status', '=', _hlvActiveFilters.receipt]);
+        }
+        if (_hlvActiveFilters.supplier) {
+            domains.push(['partner_id.name', '=ilike', `%${_hlvActiveFilters.supplier}%`]);
+        }
+        if (_hlvActiveFilters.product) {
+            domains.push('|');
+            domains.push(['order_line.product_id.name', '=ilike', `%${_hlvActiveFilters.product}%`]);
+            domains.push(['order_line.product_id.default_code', '=ilike', `%${_hlvActiveFilters.product}%`]);
+        }
 
         // Try controller's model
         if (controller.model && controller.model.load) {
-            controller.model.load({ domain }).catch(e => {
+            controller.model.load({ domain: domains }).then(() => {
+                updateFilterIndicator();
+            }).catch(e => {
                 console.error('[HLV] Failed to apply receipt filter:', e);
             });
         }
