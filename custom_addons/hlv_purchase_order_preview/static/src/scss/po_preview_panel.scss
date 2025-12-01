@@ -1,0 +1,171 @@
+/* HLV Purchase Order Preview Panel Styles */
+
+/* Bottom panel container */
+.hlv-po-preview-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 45%;
+    max-height: 60%;
+    min-height: 250px;
+    background: #fff;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    border-top: 2px solid #714B67;
+    box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.12);
+    animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Panel header */
+.hlv-po-preview-panel .hlv-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid #eee;
+    background: linear-gradient(135deg, #714B67 0%, #8a5d7e 100%);
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.hlv-po-preview-panel .hlv-title {
+    font-size: 1.1rem;
+}
+
+.hlv-po-preview-panel .hlv-title .text-muted {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.hlv-po-preview-panel .hlv-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    transition: all 0.2s;
+}
+
+.hlv-po-preview-panel .hlv-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Panel body */
+.hlv-po-preview-panel .hlv-panel-body {
+    overflow: auto;
+    padding: 16px;
+    flex: 1;
+    background: #fafafa;
+}
+
+/* Table styles */
+.hlv-po-preview-panel table {
+    font-size: 0.9rem;
+}
+
+.hlv-po-preview-panel table th {
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.hlv-po-preview-panel table td {
+    vertical-align: middle;
+}
+
+.hlv-po-preview-panel table tbody tr:hover {
+    background-color: #f0f4f8 !important;
+}
+
+/* Quick preview button in list */
+.hlv-po-quick-btn {
+    font-size: 1rem;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.hlv-po-quick-btn:hover {
+    opacity: 1;
+}
+
+/* Badge styles */
+.hlv-po-preview-panel .badge {
+    font-weight: 500;
+    padding: 0.4em 0.8em;
+}
+
+/* Summary row styles */
+.hlv-po-preview-panel .row > div {
+    padding: 8px 12px;
+    background: #fff;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .hlv-po-preview-panel {
+        height: 60%;
+        max-height: 70%;
+    }
+
+    .hlv-po-preview-panel .hlv-panel-body {
+        padding: 10px;
+    }
+
+    .hlv-po-preview-panel table {
+        font-size: 0.8rem;
+    }
+}
+
+/* Status filter dropdown in column headers */
+.hlv-status-filter-wrapper {
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.hlv-status-filter-wrapper .hlv-filter-btn {
+    color: #6c757d;
+    font-size: 0.85rem;
+    padding: 2px 4px;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.hlv-status-filter-wrapper .hlv-filter-btn:hover,
+.hlv-status-filter-wrapper .hlv-filter-btn:focus {
+    color: #714B67;
+}
+
+.hlv-status-filter-wrapper .dropdown-menu {
+    min-width: 160px;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid #e0e0e0;
+}
+
+.hlv-status-filter-wrapper .dropdown-item {
+    padding: 8px 16px;
+    transition: background-color 0.15s;
+}
+
+.hlv-status-filter-wrapper .dropdown-item:hover {
+    background-color: #f8f4f7;
+    color: #714B67;
+}
+
+.hlv-status-filter-wrapper .dropdown-item:active {
+    background-color: #714B67;
+    color: #fff;
+}
