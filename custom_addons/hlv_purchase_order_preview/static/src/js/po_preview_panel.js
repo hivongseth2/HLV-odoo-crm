@@ -390,7 +390,18 @@ patch(ListController.prototype, {
         }
 
         // Remove all existing product filters
-        filterIdsToRemove.forEach(id => searchModel.deactivateGroup(id));
+        for (const id of filterIdsToRemove) {
+            try {
+                searchModel.deactivateGroup(id);
+            } catch (e) {
+                console.error('[HLV] Failed to deactivate product filter:', id, e);
+            }
+        }
+
+        // Force UI refresh
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
         if (!value) {
             console.log('[HLV] Cleared all product search filters');
@@ -402,6 +413,19 @@ patch(ListController.prototype, {
             selectedProducts.delete(value);
         } else {
             selectedProducts.add(value);
+        }
+
+        // Clean up any remaining product filters before creating new one
+        const currentFilters = searchModel.searchItems || {};
+        for (const [id, item] of Object.entries(currentFilters)) {
+            if (item.description && item.description.startsWith('SP:')) {
+                try {
+                    searchModel.deactivateGroup(id);
+                    console.log('[HLV] Cleaned up stale product filter:', id);
+                } catch (e) {
+                    // Ignore
+                }
+            }
         }
 
         if (selectedProducts.size === 0) {
@@ -660,7 +684,18 @@ patch(ListRenderer.prototype, {
         }
 
         // Remove all existing supplier filters
-        filterIdsToRemove.forEach(id => searchModel.deactivateGroup(id));
+        for (const id of filterIdsToRemove) {
+            try {
+                searchModel.deactivateGroup(id);
+            } catch (e) {
+                console.error('[HLV] Failed to deactivate supplier filter:', id, e);
+            }
+        }
+
+        // Force UI refresh
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
         if (!value) {
             console.log('[HLV] Cleared all supplier search filters');
@@ -706,6 +741,19 @@ patch(ListRenderer.prototype, {
             } catch (e) {
                 console.error('[HLV] Failed to search supplier:', e);
                 return;
+            }
+        }
+
+        // Clean up any remaining supplier filters before creating new one
+        const currentFilters = searchModel.searchItems || {};
+        for (const [id, item] of Object.entries(currentFilters)) {
+            if (item.description && item.description.startsWith('NCC:')) {
+                try {
+                    searchModel.deactivateGroup(id);
+                    console.log('[HLV] Cleaned up stale supplier filter:', id);
+                } catch (e) {
+                    // Ignore
+                }
             }
         }
 
@@ -852,7 +900,7 @@ patch(ListRenderer.prototype, {
         document.addEventListener('scroll', scrollHandler, true);
     },
 
-    _hlvApplyReceiptFilter(value) {
+    async _hlvApplyReceiptFilter(value) {
         console.log('[HLV] Receipt filter:', value);
 
         const controller = _hlvCurrentController;
@@ -950,7 +998,7 @@ patch(ListRenderer.prototype, {
         console.log('[HLV] Filters to remove:', filterIdsToRemove);
 
         // Remove all existing receipt filters
-        filterIdsToRemove.forEach(id => {
+        for (const id of filterIdsToRemove) {
             console.log('[HLV] Attempting to deactivate filter:', id);
             try {
                 searchModel.deactivateGroup(id);
@@ -958,7 +1006,12 @@ patch(ListRenderer.prototype, {
             } catch (e) {
                 console.error('[HLV] Failed to deactivate:', id, e);
             }
-        });
+        }
+
+        // Force UI refresh after removing filters
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
         if (!value) {
             console.log('[HLV] Cleared all receipt filters');
@@ -970,6 +1023,19 @@ patch(ListRenderer.prototype, {
             selectedStatuses.delete(value);
         } else {
             selectedStatuses.add(value);
+        }
+
+        // Clean up any remaining receipt status filters before creating new one
+        const currentFilters = searchModel.searchItems || {};
+        for (const [id, item] of Object.entries(currentFilters)) {
+            if (item.description && item.description.startsWith('TT:')) {
+                try {
+                    searchModel.deactivateGroup(id);
+                    console.log('[HLV] Cleaned up stale filter:', id);
+                } catch (e) {
+                    // Ignore errors for already removed filters
+                }
+            }
         }
 
         if (selectedStatuses.size === 0) {
