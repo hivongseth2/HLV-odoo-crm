@@ -751,11 +751,8 @@ class MisaPOSync(models.TransientModel):
 
         misa_po = self._search_po_in_misa(po_code, headers)
         odoo_po = self.env["purchase.order"].search([
-            '|',
-            ('name', '=', po_code),
-            ('partner_ref', '=', po_code)
-        ], limit=1)
-
+                ('name', '=', po_code)
+            ], limit=1)
         # ===== CASE 1: Không có trong MISA =====
         if not misa_po:
             if odoo_po:
