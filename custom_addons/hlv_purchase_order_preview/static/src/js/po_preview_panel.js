@@ -896,20 +896,33 @@ patch(ListRenderer.prototype, {
             if (domainArray && domainArray.length > 0) {
                 console.log('[HLV] Checking domain items...');
                 for (let i = 0; i < domainArray.length; i++) {
-                    const d = domainArray[i];
+                    let d = domainArray[i];
                     console.log('[HLV] Domain item', i, ':', typeof d, d);
 
                     // Convert nested array-like objects to real arrays
                     if (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d)) {
-                        domainArray[i] = Array.from(d);
-                        console.log('[HLV] Converted nested array-like to array:', domainArray[i]);
+                        d = Array.from(d);
+                        domainArray[i] = d;
+                        console.log('[HLV] Converted nested array-like to array:', d);
                     }
 
-                    const domainItem = Array.isArray(domainArray[i]) ? domainArray[i] : domainArray[i];
-                    if (Array.isArray(domainItem) && domainItem[0] === 'receipt_status') {
-                        isReceiptFilter = true;
-                        console.log('[HLV] Found receipt_status in domain');
-                        break;
+                    // Now check if this is a receipt_status condition
+                    if (Array.isArray(d) && d.length >= 1) {
+                        // Check first element
+                        let firstElem = d[0];
+
+                        // First element might also be array-like
+                        if (firstElem && typeof firstElem === 'object' && firstElem.length !== undefined && !Array.isArray(firstElem)) {
+                            firstElem = Array.from(firstElem);
+                            d[0] = firstElem;
+                            console.log('[HLV] Converted first element:', firstElem);
+                        }
+
+                        if (firstElem === 'receipt_status' || (Array.isArray(firstElem) && firstElem[0] === 'receipt_status')) {
+                            isReceiptFilter = true;
+                            console.log('[HLV] Found receipt_status in domain');
+                            break;
+                        }
                     }
                 }
             }
@@ -934,9 +947,18 @@ patch(ListRenderer.prototype, {
         }
 
         console.log('[HLV] Selected statuses before toggle:', Array.from(selectedStatuses));
+        console.log('[HLV] Filters to remove:', filterIdsToRemove);
 
         // Remove all existing receipt filters
-        filterIdsToRemove.forEach(id => searchModel.deactivateGroup(id));
+        filterIdsToRemove.forEach(id => {
+            console.log('[HLV] Attempting to deactivate filter:', id);
+            try {
+                searchModel.deactivateGroup(id);
+                console.log('[HLV] Successfully deactivated:', id);
+            } catch (e) {
+                console.error('[HLV] Failed to deactivate:', id, e);
+            }
+        });
 
         if (!value) {
             console.log('[HLV] Cleared all receipt filters');
