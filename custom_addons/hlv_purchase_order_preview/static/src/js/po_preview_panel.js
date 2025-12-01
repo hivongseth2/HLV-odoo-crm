@@ -1,8 +1,11 @@
 /** @odoo-module **/
-import { registry } from "@web/core/registry";
 import { patch } from "@web/core/utils/patch";
 import { ListRenderer } from "@web/views/list/list_renderer";
+import { ListController } from "@web/views/list/list_controller";
 import { onMounted, onPatched } from "@odoo/owl";
+
+// Store reference to current controller for use in ListRenderer
+let _hlvCurrentController = null;
 
 /**
  * Format number as currency (Vietnamese locale)
@@ -203,13 +206,11 @@ async function showPOPreviewPanel(env, resId) {
 
 /**
  * Get record resId from row element in Odoo 18
- * In Odoo 18, row.dataset.id contains datapoint ID, not database ID
  */
 function getResIdFromRow(listRenderer, row) {
     const datapointId = row.dataset.id;
     if (!datapointId) return null;
 
-    // Try to find record from ListRenderer's records
     const records = listRenderer.props.list?.records || [];
     for (const record of records) {
         if (record.id === datapointId) {
@@ -217,7 +218,6 @@ function getResIdFromRow(listRenderer, row) {
         }
     }
 
-    // Fallback: try parsing as integer if it looks like a number
     const parsed = parseInt(datapointId);
     if (!isNaN(parsed) && parsed > 0) {
         return parsed;
@@ -227,20 +227,137 @@ function getResIdFromRow(listRenderer, row) {
 }
 
 /**
- * Patch ListRenderer to add preview button and filter dropdown for purchase.order
+ * Patch ListController to add custom search bar and store reference
+ */
+patch(ListController.prototype, {
+    setup() {
+        super.setup(...arguments);
+
+        if (this.props.resModel === 'purchase.order') {
+            // Store controller reference for ListRenderer
+            _hlvCurrentController = this;
+
+            onMounted(() => {
+                this._hlvAddCustomSearchBar();
+            });
+            onPatched(() => {
+                this._hlvAddCustomSearchBar();
+            });
+        }
+    },
+
+    _hlvAddCustomSearchBar() {
+        if (this.props.resModel !== 'purchase.order') return;
+
+        const controlPanel = document.querySelector('.o_control_panel');
+        if (!controlPanel) return;
+
+        if (document.querySelector('.hlv-custom-search-bar')) return;
+
+        const searchArea = controlPanel.querySelector('.o_searchview') ||
+                          controlPanel.querySelector('.o_control_panel_main');
+        if (!searchArea) return;
+
+        const searchBar = document.createElement('div');
+        searchBar.className = 'hlv-custom-search-bar d-flex gap-2 align-items-center ms-3';
+        searchBar.innerHTML = `
+            <div class="hlv-search-group d-flex align-items-center">
+                <label class="hlv-search-label me-1" style="font-weight: 500; color: #714B67;">SP:</label>
+                <input type="text" class="form-control form-control-sm hlv-product-search"
+                       placeholder="Tìm sản phẩm trong đơn..." style="width: 180px;">
+            </div>
+        `;
+
+        const parentEl = searchArea.parentElement;
+        if (parentEl) {
+            parentEl.insertBefore(searchBar, searchArea);
+        }
+
+        const productInput = searchBar.querySelector('.hlv-product-search');
+
+        productInput?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this._hlvSearchByProduct(productInput.value.trim());
+            }
+        });
+    },
+
+    async _hlvSearchByProduct(value) {
+        console.log('[HLV] Product search:', value);
+        console.log('[HLV] Model props:', this.model);
+        console.log('[HLV] Env searchModel:', this.env.searchModel);
+        
+        const domain = value ? [
+            '|',
+            ['order_line.product_id.name', 'ilike', value],
+            ['order_line.product_id.default_code', 'ilike', value]
+        ] : [];
+
+        // Method 1: Try using model.load with domain
+        if (this.model && this.model.load) {
+            try {
+                await this.model.load({ domain });
+                console.log('[HLV] Applied via model.load');
+                return;
+            } catch (e) {
+                console.warn('[HLV] model.load failed:', e);
+            }
+        }
+
+        // Method 2: Try using model's root domain
+        if (this.model && this.model.root) {
+            try {
+                this.model.root.domain = domain;
+                await this.model.root.load();
+                console.log('[HLV] Applied via model.root.domain');
+                return;
+            } catch (e) {
+                console.warn('[HLV] model.root.domain failed:', e);
+            }
+        }
+
+        // Method 3: Try searchModel with different APIs
+        const searchModel = this.env.searchModel;
+        if (searchModel) {
+            console.log('[HLV] SearchModel methods:', Object.keys(searchModel));
+            
+            // Try query property
+            if (searchModel.query) {
+                console.log('[HLV] SearchModel.query:', searchModel.query);
+            }
+
+            // Try _fetchSearchReadData or similar
+            if (searchModel._notify) {
+                try {
+                    searchModel._notify();
+                    console.log('[HLV] Called searchModel._notify');
+                } catch (e) {
+                    console.warn('[HLV] _notify failed:', e);
+                }
+            }
+        }
+
+        console.error('[HLV] All methods failed, domain not applied');
+    }
+});
+
+/**
+ * Patch ListRenderer to add preview button and filters
  */
 patch(ListRenderer.prototype, {
     setup() {
         super.setup(...arguments);
 
-        // Only apply to purchase.order model
         if (this.props.list?.resModel === 'purchase.order') {
             onMounted(() => {
-                this._hlvAddStatusFilters();
+                this._hlvAddReceiptStatusFilter();
+                this._hlvAddSupplierHeaderSearch();
                 this._hlvAddPreviewButtons();
             });
             onPatched(() => {
-                this._hlvAddStatusFilters();
+                this._hlvAddReceiptStatusFilter();
+                this._hlvAddSupplierHeaderSearch();
                 this._hlvAddPreviewButtons();
             });
         }
@@ -252,28 +369,22 @@ patch(ListRenderer.prototype, {
         const tableEl = this.tableRef?.el;
         if (!tableEl) return;
 
-        // Find all rows and add preview button
         const rows = tableEl.querySelectorAll('tbody tr.o_data_row');
         rows.forEach(row => {
-            // Skip if already processed
             if (row.dataset.hlvPreviewAdded) return;
             row.dataset.hlvPreviewAdded = 'true';
 
-            // Get record resId from the row using ListRenderer's records
             const resId = getResIdFromRow(this, row);
             if (!resId) {
                 console.warn('[HLV] Could not get resId for row:', row.dataset.id);
                 return;
             }
 
-            // Find the last td or create button in last column
             const lastTd = row.querySelector('td:last-child');
             if (!lastTd) return;
 
-            // Check if there's already our button
             if (lastTd.querySelector('.hlv-preview-btn')) return;
 
-            // Create preview button
             const btn = document.createElement('button');
             btn.className = 'btn btn-sm btn-outline-primary hlv-preview-btn ms-1';
             btn.innerHTML = '👁 Xem';
@@ -289,58 +400,137 @@ patch(ListRenderer.prototype, {
         });
     },
 
-    _hlvAddStatusFilters() {
+    _hlvAddSupplierHeaderSearch() {
         if (this.props.list?.resModel !== 'purchase.order') return;
 
         const tableEl = this.tableRef?.el;
         if (!tableEl) return;
 
-        // Find invoice_status and receipt_status column headers
-        const headers = tableEl.querySelectorAll('th[data-name="invoice_status"], th[data-name="receipt_status"]');
+        const partnerHeader = tableEl.querySelector('th[data-name="partner_id"]');
+        if (!partnerHeader || partnerHeader.dataset.hlvSearchAdded) return;
+        partnerHeader.dataset.hlvSearchAdded = 'true';
 
-        headers.forEach(th => {
-            // Skip if already processed
-            if (th.dataset.hlvFilterAdded) return;
-            th.dataset.hlvFilterAdded = 'true';
+        const searchBtn = document.createElement('button');
+        searchBtn.className = 'btn btn-link p-0 hlv-header-search-btn ms-1';
+        searchBtn.type = 'button';
+        searchBtn.title = 'Nhấn để tìm theo nhà cung cấp';
+        searchBtn.innerHTML = '<i class="fa fa-search"></i>';
 
-            const fieldName = th.dataset.name;
-            const isInvoiceStatus = fieldName === 'invoice_status';
-
-            // Create filter button (icon only)
-            const filterBtn = document.createElement('button');
-            filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
-            filterBtn.type = 'button';
-            filterBtn.title = 'Nhấn để lọc theo trạng thái';
-            filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
-
-            // Store reference for dropdown positioning
-            filterBtn.dataset.hlvField = fieldName;
-
-            filterBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this._hlvShowFilterDropdown(filterBtn, isInvoiceStatus);
-            });
-
-            th.appendChild(filterBtn);
+        searchBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._hlvShowSupplierSearchPopup(searchBtn);
         });
+
+        partnerHeader.appendChild(searchBtn);
     },
 
-    _hlvShowFilterDropdown(triggerBtn, isInvoiceStatus) {
-        // Remove any existing dropdown
-        document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
+    _hlvShowSupplierSearchPopup(triggerBtn) {
+        document.querySelectorAll('.hlv-search-popup').forEach(p => p.remove());
 
-        // Get button position
         const rect = triggerBtn.getBoundingClientRect();
 
-        // Create dropdown in body (portal pattern)
+        const popup = document.createElement('div');
+        popup.className = 'hlv-search-popup';
+        popup.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${rect.left - 100}px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            padding: 10px;
+        `;
+        popup.innerHTML = `
+            <input type="text" class="form-control form-control-sm hlv-popup-input"
+                   placeholder="Nhập tên nhà cung cấp..." autofocus style="width: 200px;">
+            <div class="mt-2 text-muted small">Nhấn Enter để tìm</div>
+        `;
+
+        document.body.appendChild(popup);
+
+        const input = popup.querySelector('.hlv-popup-input');
+        input.focus();
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const value = input.value.trim();
+                popup.remove();
+                this._hlvApplySupplierSearch(value);
+            } else if (e.key === 'Escape') {
+                popup.remove();
+            }
+        });
+
+        setTimeout(() => {
+            document.addEventListener('click', function closePopup(e) {
+                if (!popup.contains(e.target) && e.target !== triggerBtn) {
+                    popup.remove();
+                    document.removeEventListener('click', closePopup);
+                }
+            });
+        }, 10);
+    },
+
+    _hlvApplySupplierSearch(value) {
+        console.log('[HLV] Supplier search:', value);
+        
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
+            return;
+        }
+
+        const domain = value ? [['partner_id', 'ilike', value]] : [];
+
+        // Try controller's model
+        if (controller.model && controller.model.load) {
+            controller.model.load({ domain }).catch(e => {
+                console.error('[HLV] Failed to apply supplier filter:', e);
+            });
+        }
+    },
+
+    _hlvAddReceiptStatusFilter() {
+        if (this.props.list?.resModel !== 'purchase.order') return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        const receiptHeader = tableEl.querySelector('th[data-name="receipt_status"]');
+        if (!receiptHeader || receiptHeader.dataset.hlvFilterAdded) return;
+        receiptHeader.dataset.hlvFilterAdded = 'true';
+
+        const filterBtn = document.createElement('button');
+        filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
+        filterBtn.type = 'button';
+        filterBtn.title = 'Nhấn để lọc theo trạng thái';
+        filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
+
+        filterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._hlvShowReceiptFilterDropdown(filterBtn);
+        });
+
+        receiptHeader.appendChild(filterBtn);
+    },
+
+    _hlvShowReceiptFilterDropdown(triggerBtn) {
+        document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
+
+        const rect = triggerBtn.getBoundingClientRect();
+
         const dropdown = document.createElement('div');
         dropdown.className = 'hlv-filter-dropdown-portal';
         dropdown.style.cssText = `
             position: fixed;
             top: ${rect.bottom + 4}px;
-            left: ${rect.left}px;
-            min-width: 180px;
+            left: ${rect.left - 80}px;
+            min-width: 160px;
             background: #fff;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
@@ -349,14 +539,11 @@ patch(ListRenderer.prototype, {
             overflow: hidden;
         `;
 
-        const items = isInvoiceStatus ? [
-            { name: 'filter_invoice_no', label: 'Chưa lập hóa đơn' },
-            { name: 'filter_invoice_to_invoice', label: 'Cần lập hóa đơn' },
-            { name: 'filter_invoice_invoiced', label: 'Đã lập hóa đơn đầy đủ' }
-        ] : [
-            { name: 'filter_receipt_pending', label: 'Chờ nhận hàng' },
-            { name: 'filter_receipt_partial', label: 'Nhận một phần' },
-            { name: 'filter_receipt_full', label: 'Đã nhận đủ' }
+        const items = [
+            { value: 'pending', label: 'Chờ nhận hàng' },
+            { value: 'partial', label: 'Nhận một phần' },
+            { value: 'full', label: 'Đã nhận đủ' },
+            { value: '', label: '— Tất cả —' }
         ];
 
         items.forEach((item, idx) => {
@@ -367,7 +554,8 @@ patch(ListRenderer.prototype, {
                 padding: 10px 16px;
                 cursor: pointer;
                 font-size: 0.9rem;
-                color: #333;
+                color: ${item.value === '' ? '#714B67' : '#333'};
+                font-weight: ${item.value === '' ? '600' : '400'};
                 border-bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
                 transition: background-color 0.15s;
             `;
@@ -377,20 +565,19 @@ patch(ListRenderer.prototype, {
             });
             div.addEventListener('mouseleave', () => {
                 div.style.backgroundColor = '';
-                div.style.color = '#333';
+                div.style.color = item.value === '' ? '#714B67' : '#333';
             });
             div.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 dropdown.remove();
-                this._hlvApplyFilter(item.name);
+                this._hlvApplyReceiptFilter(item.value);
             });
             dropdown.appendChild(div);
         });
 
         document.body.appendChild(dropdown);
 
-        // Close on click outside
         const closeHandler = (e) => {
             if (!dropdown.contains(e.target) && e.target !== triggerBtn) {
                 dropdown.remove();
@@ -401,7 +588,6 @@ patch(ListRenderer.prototype, {
             document.addEventListener('click', closeHandler);
         }, 10);
 
-        // Close on scroll
         const scrollHandler = () => {
             dropdown.remove();
             document.removeEventListener('scroll', scrollHandler, true);
@@ -409,133 +595,22 @@ patch(ListRenderer.prototype, {
         document.addEventListener('scroll', scrollHandler, true);
     },
 
-    _hlvApplyFilter(filterName) {
-        console.log('[HLV] Applying filter:', filterName);
+    _hlvApplyReceiptFilter(value) {
+        console.log('[HLV] Receipt filter:', value);
 
-        // In Odoo 18, searchModel is typically accessed through the model's config
-        let searchModel = null;
-
-        // Method 1: Direct from env
-        if (this.env?.searchModel) {
-            searchModel = this.env.searchModel;
-        }
-
-        // Method 2: From model config (most common in Odoo 18)
-        if (!searchModel) {
-            const model = this.props?.list?.model;
-            if (model?.config?.searchModel) {
-                searchModel = model.config.searchModel;
-            } else if (model?.root?.config?.searchModel) {
-                searchModel = model.root.config.searchModel;
-            }
-        }
-
-        // Method 3: From controller props
-        if (!searchModel && this.props?.archInfo?.searchModel) {
-            searchModel = this.props.archInfo.searchModel;
-        }
-
-        if (searchModel) {
-            console.log('[HLV] SearchModel found');
-            try {
-                // In Odoo 18, use query method or direct filter toggle
-                const searchItems = searchModel.getSearchItems((item) => item.name === filterName);
-                console.log('[HLV] Found search items:', searchItems.length);
-                if (searchItems.length > 0) {
-                    searchModel.toggleSearchItem(searchItems[0].id);
-                    return;
-                }
-            } catch (e) {
-                console.error('[HLV] Error with searchModel:', e);
-            }
-        }
-
-        // Fallback: Click the filter in the search panel
-        console.log('[HLV] Trying to click filter in search panel');
-        this._hlvClickSearchFilter(filterName);
-    },
-
-    _hlvClickSearchFilter(filterName) {
-        // Try to find and click the filter in the control panel
-        // First, open the filter dropdown if needed
-        const filterMenu = document.querySelector('.o_filter_menu');
-        if (filterMenu) {
-            // Click to open menu
-            const filterButton = document.querySelector('.o_filter_menu .dropdown-toggle, button[data-hotkey="f"]');
-            if (filterButton && !filterMenu.classList.contains('show')) {
-                filterButton.click();
-            }
-
-            // Wait for menu to open, then find our filter
-            setTimeout(() => {
-                const filterItems = document.querySelectorAll('.o_filter_menu .o_menu_item, .o_dropdown_item');
-                for (const item of filterItems) {
-                    const itemName = item.dataset?.name || item.getAttribute('name');
-                    if (itemName === filterName) {
-                        item.click();
-                        return;
-                    }
-                }
-
-                // If not found by name, try by text content
-                const labels = {
-                    'filter_invoice_no': 'Chưa lập hóa đơn',
-                    'filter_invoice_to_invoice': 'Cần lập hóa đơn',
-                    'filter_invoice_invoiced': 'Đã lập hóa đơn đầy đủ',
-                    'filter_receipt_pending': 'Chờ nhận hàng',
-                    'filter_receipt_partial': 'Nhận một phần',
-                    'filter_receipt_full': 'Đã nhận đủ'
-                };
-                const targetLabel = labels[filterName];
-                if (targetLabel) {
-                    for (const item of filterItems) {
-                        if (item.textContent?.trim() === targetLabel) {
-                            item.click();
-                            return;
-                        }
-                    }
-                }
-
-                console.warn('[HLV] Filter item not found in menu');
-            }, 100);
-        } else {
-            // Alternative: use doAction with domain
-            this._hlvApplyFilterViaDomain(filterName);
-        }
-    },
-
-    _hlvApplyFilterViaDomain(filterName) {
-        // Map filter names to domain values
-        const filterDomains = {
-            'filter_invoice_no': { field: 'invoice_status', value: 'no' },
-            'filter_invoice_to_invoice': { field: 'invoice_status', value: 'to invoice' },
-            'filter_invoice_invoiced': { field: 'invoice_status', value: 'invoiced' },
-            'filter_receipt_pending': { field: 'receipt_status', value: 'pending' },
-            'filter_receipt_partial': { field: 'receipt_status', value: 'partial' },
-            'filter_receipt_full': { field: 'receipt_status', value: 'full' }
-        };
-
-        const filterInfo = filterDomains[filterName];
-        if (!filterInfo) {
-            console.warn('[HLV] Unknown filter:', filterName);
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
             return;
         }
 
-        // Use action service to reload with domain
-        const actionService = this.env?.services?.action;
-        if (actionService) {
-            const domain = [[filterInfo.field, '=', filterInfo.value]];
-            console.log('[HLV] Applying domain via action:', domain);
+        const domain = value ? [['receipt_status', '=', value]] : [];
 
-            actionService.doAction({
-                type: 'ir.actions.act_window',
-                res_model: 'purchase.order',
-                views: [[false, 'list'], [false, 'form']],
-                domain: domain,
-                target: 'current',
+        // Try controller's model
+        if (controller.model && controller.model.load) {
+            controller.model.load({ domain }).catch(e => {
+                console.error('[HLV] Failed to apply receipt filter:', e);
             });
-        } else {
-            console.warn('[HLV] Action service not found');
         }
     }
 });
