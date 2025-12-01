@@ -813,9 +813,7 @@ class MisaPOSync(models.TransientModel):
                 )
                 
                 after_po = odoo_po or self.env["purchase.order"].search([
-                    '|',
-                    ('name', '=', po_code),
-                    ('partner_ref', '=', po_code)
+                    ('name', '=', po_code)
                 ], limit=1)
                 
                 return {
@@ -823,8 +821,7 @@ class MisaPOSync(models.TransientModel):
                     'action': 'updated' if existed else 'created',
                     'res_id': after_po.id if after_po else None,
                     'name': after_po.name if after_po else po_code,
-                    'detail': f'Đã {"cập nhật" if existed else "tạo mới"} đơn {po_code} từ MISA'
-                }
+                    'detail': f'Đã {"cập nhật" if existed else "tạo mới"} đơn {po_code} từ MISA'}
             except Exception as e:
                 _logger.exception("❌ Lỗi upsert PO %s: %s", po_code, e)
                 return {
