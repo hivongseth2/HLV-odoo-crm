@@ -379,6 +379,9 @@ def _get_order_lines(order):
         is_component = False
         parent_combo_name = ""
         is_fully_delivered = False
+        
+        if product and product.detailed_type == 'product':
+            continue
 
         # component?
         if product and product.id in component_to_parent_map:
