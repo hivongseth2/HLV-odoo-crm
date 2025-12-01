@@ -208,7 +208,14 @@
                                 <t t-else=""><t t-esc="'{:,.0f}'.format(r.get('qty_forecasted', 0))"/></t>
                               </td>
                               <td class="text-end fw-bold fs-6">
-                                <t t-if="is_combo">-</t>
+                                <t t-if="is_combo">
+                                    <div class="d-flex flex-column align-items-end">
+                                        <span t-attf-class="badge #{'bg-success' if r.get('qty_total', 0) > 0 else 'bg-danger'}">
+                                            Ghép được: <t t-esc="'{:,.0f}'.format(r.get('qty_total', 0))"/>
+                                        </span>
+                                        <small class="text-muted" style="font-size: 0.7rem;">(Từ linh kiện)</small>
+                                    </div>
+                                </t>
                                 <t t-else="">
                                     <span t-att-class="'text-danger' if r.get('qty_total', 0) &lt;= 5 else 'text-success'">
                                         <t t-esc="'{:,.0f}'.format(r.get('qty_total', 0))"/>

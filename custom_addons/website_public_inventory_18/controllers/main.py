@@ -299,24 +299,104 @@ class PublicInventory(http.Controller):
                     continue
 
                 # Nếu là combo: giữ nguyên render như cũ (tồn '-')
-                if getattr(p.product_tmpl_id, "is_combo", False):
-                    rows.append({
-                        "id": pid,
-                        "name": p.name,
-                        "default_code": p.default_code or "",
-                        "barcode": p.barcode or "",
-                        "uom": p.uom_id.name,
-                        "qty_forecasted": 0.0,
-                        "qty_total": 0.0,
-                        "list_price": p.list_price,
-                        "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
-                        "standard_price": p.standard_price,
-                        "image_url": _get_product_image_url(p),
-                        "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
-                        "is_combo": True,
-                    })
-                    continue
+                is_combo = bool(getattr(p.product_tmpl_id, "is_combo", False))
+                
+                qty_total = 0.0
+                qty_forecasted = 0.0
 
+                # 2. Xử lý Logic tính tồn
+                if is_combo:
+                    # --- LOGIC TÍNH TỒN KHO COMBO (Dựa trên thành phần) ---
+                    # Tìm các dòng thành phần trong model 'combo.product'
+                    ComboLines = env['combo.product'].sudo().search([
+                        ('product_template_id', '=', p.product_tmpl_id.id)
+                    ])
+
+                    if not ComboLines:
+                        # Combo rỗng ruột -> Không có hàng
+                        qty_total = 0.0
+                        qty_forecasted = 0.0
+                    else:
+                        possible_sets = []
+                        
+                        for line in ComboLines:
+                            comp = line.product_id
+                            if not comp:
+                                continue
+
+                            # --- QUAN TRỌNG: Áp dụng context Kho ---
+                            # Nếu người dùng đang lọc 1 kho cụ thể (wid), ta phải tính tồn của linh kiện
+                            # CHỈ trong kho đó. Nếu không, Odoo sẽ lấy tồn toàn hệ thống.
+                            if wid:
+                                # with_context(warehouse=wid) giúp qty_available trả về đúng kho đó
+                                comp_ctx = comp.with_context(warehouse=wid, location=False)
+                            else:
+                                # Nếu xem tất cả, dùng context hiện tại (đã xử lý allowed_company_ids ở trên)
+                                comp_ctx = comp
+
+                            # Lấy số lượng thực tế (On Hand) của linh kiện
+                            # comp_ctx.qty_available: Tồn thực tế
+                            # comp_ctx.virtual_available: Tồn dự báo
+                            hand_qty = comp_ctx.qty_available
+                            
+                            # Số lượng cần cho 1 bộ combo
+                            needed_qty = line.product_quantity or 1.0
+
+                            # Tính số bộ tối đa linh kiện này đáp ứng được (phép chia lấy nguyên)
+                            if needed_qty > 0:
+                                # Ví dụ: Có 10 cái, cần 2 => Đáp ứng được 5 bộ
+                                sets = int(hand_qty // needed_qty)
+                                possible_sets.append(sets)
+                            else:
+                                # Nếu định mức là 0 hoặc âm (lỗi data), coi như vô tận
+                                possible_sets.append(999999)
+
+                        # Số bộ Combo bán được = Min của các linh kiện (nguyên tắc thắt cổ chai)
+                        # max(0, ...) để tránh trường hợp linh kiện bị âm kho dẫn đến kết quả âm
+                        if possible_sets:
+                            qty_total = max(0, min(possible_sets))
+                        else:
+                            qty_total = 0.0
+                        
+                        # Với combo, tạm thời gán dự báo = thực tế (hoặc bạn có thể tính riêng bằng virtual_available)
+                        qty_forecasted = qty_total
+
+                else:
+                    # --- LOGIC CŨ CHO SẢN PHẨM THƯỜNG ---
+                    # Lấy dữ liệu từ read_group đã query ở trên (biến g hoặc gmap)
+                    # Nếu dùng logic low_stock (đã query gmap)
+                    if 'gmap' in locals():
+                        g = gmap.get(pid) or {}
+                    else:
+                        # Nếu dùng logic phân trang thường (biến g lấy từ vòng lặp groups)
+                        # Cần sửa lại vòng lặp cha một chút để map đúng g, 
+                        # nhưng ở code cũ của bạn đoạn này nằm trong if low_stock hoặc else
+                        # Đơn giản nhất: query lại hoặc lấy từ context nếu biến g có sẵn
+                        # Giả sử biến 'g' đang giữ data group hiện tại:
+                        g = g if 'g' in locals() else {}
+
+                    qty_total = _rg_sum(g, "quantity")
+                    
+                    # Lấy dự báo (Forecasted)
+                    p_ctx = p.with_context(warehouse=wid) if wid else p
+                    qty_forecasted = p_ctx.virtual_available
+
+                # 3. Append vào danh sách hiển thị
+                rows.append({
+                    "id": pid,
+                    "name": p.name,
+                    "default_code": p.default_code or "",
+                    "barcode": p.barcode or "",
+                    "uom": p.uom_id.name,
+                    "qty_forecasted": qty_forecasted,
+                    "qty_total": qty_total, # Với Combo: đây là số bộ ghép được
+                    "list_price": p.list_price,
+                    "commercial_price": getattr(p.product_tmpl_id, "x_studio_gi_bn_thng_mi", 0.0) or 0.0,
+                    "standard_price": p.standard_price,
+                    "image_url": _get_product_image_url(p),
+                    "website_url": getattr(p.product_tmpl_id, "website_url", "") or "",
+                    "is_combo": is_combo,
+                })
                 qty_total = _rg_sum(g, "quantity")
                 res = _rg_sum(g, "reserved_quantity")
 
