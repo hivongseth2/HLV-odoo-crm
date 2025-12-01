@@ -380,8 +380,7 @@ def _get_order_lines(order):
         parent_combo_name = ""
         is_fully_delivered = False
         
-        if product and not product.active:
-            continue
+        
 
         # component?
         if product and product.id in component_to_parent_map:

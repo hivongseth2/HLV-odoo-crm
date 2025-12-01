@@ -148,6 +148,7 @@ class PublicInventory(http.Controller):
         domain = _domain_for_locations(wid)
         # Prefilter có tồn thực tế > 0 để tránh rỗng
         domain += [("quantity", ">", 0)]
+        domain += [("product_id.active", "=", True)]
 
         # Tìm theo từ khóa: hỗ trợ nhiều từ khóa, phân cách bởi dấu phẩy
         if q:
