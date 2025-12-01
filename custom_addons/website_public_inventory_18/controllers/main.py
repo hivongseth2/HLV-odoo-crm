@@ -501,38 +501,60 @@ class PublicInventory(http.Controller):
     
     @http.route(["/search_stock/suggest"], type="json", auth="public", methods=["POST"])
     def search_suggest(self, q=""):
-        """Gợi ý tìm kiếm sản phẩm (tối đa 10 kết quả)"""
-        if not _pw_allowed():
-            return {"ok": False, "error": "access_denied", "products": []}
-        
-        env = request.env
-        q = (q or "").strip()
-        
-        if not q or len(q) < 2:
-            return {"ok": True, "products": []}
-        
-        # Company context
-        company_ids = env.companies.ids
-        Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
-        
-        # Tìm kiếm theo tên, mã, hoặc barcode
-        domain = [
-            '|', '|',
-            ('name', 'ilike', q),
-            ('default_code', 'ilike', q),
-            ('barcode', 'ilike', q),
-        ]
-        
-        products = Product.search(domain, order='name')
-        
-        results = []
-        for p in products:
-            results.append({
-                "id": p.id,
-                "name": p.name,
-                "default_code": p.default_code or "",
-                "barcode": p.barcode or "",
-                "image_url": _get_product_image_url(p),
-            })
-        
-        return {"ok": True, "products": results}
+            """Gợi ý tìm kiếm sản phẩm (tối đa 10 kết quả) - Đã nâng cấp Search thông minh"""
+            if not _pw_allowed():
+                return {"ok": False, "error": "access_denied", "products": []}
+            
+            env = request.env
+            q = (q or "").strip()
+            
+            if not q or len(q) < 2:
+                return {"ok": True, "products": []}
+            
+            # Company context
+            company_ids = env.companies.ids
+            Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
+            
+            # --- LOGIC TÌM KIẾM THÔNG MINH (Smart Search) ---
+            
+            # 1. Luôn phải là sản phẩm đang hoạt động
+            base_domain = [('active', '=', True)]
+            
+            # 2. Tách từ khóa theo khoảng trắng (Ví dụ: "fpd3 máy" -> ["fpd3", "máy"])
+            tokens = q.split()
+            domains_per_token = []
+            
+            for token in tokens:
+                # Với mỗi từ, tìm trong Tên HOẶC Mã HOẶC Barcode
+                token_domain = [
+                    '|', '|',
+                    ('name', 'ilike', token),
+                    ('default_code', 'ilike', token),
+                    ('barcode', 'ilike', token),
+                ]
+                domains_per_token.append(token_domain)
+            
+            # 3. Gộp tất cả điều kiện lại
+            # logic: (Active) AND (Chứa 'fpd3') AND (Chứa 'máy')
+            if domains_per_token:
+                # Gộp các token bằng AND
+                search_domain = expression.AND(domains_per_token)
+                # Gộp với điều kiện active
+                final_domain = expression.AND([base_domain, search_domain])
+            else:
+                final_domain = base_domain
+
+            # Thực hiện tìm kiếm (Limit 10 để gợi ý nhanh)
+            products = Product.search(final_domain, limit=10, order='name')
+            
+            results = []
+            for p in products:
+                results.append({
+                    "id": p.id,
+                    "name": p.name,
+                    "default_code": p.default_code or "",
+                    "barcode": p.barcode or "",
+                    "image_url": _get_product_image_url(p),
+                })
+            
+            return {"ok": True, "products": results}
