@@ -858,12 +858,15 @@ patch(ListRenderer.prototype, {
 
         for (const [id, item] of Object.entries(existingFilters)) {
             const desc = item.description;
-            console.log('[HLV] Filter:', id, desc, item.domain);
+            console.log('[HLV] Filter:', id, desc, 'domain type:', typeof item.domain, item.domain);
 
             // Check if this is a receipt status filter by examining the domain
-            const isReceiptFilter = item.domain && item.domain.some(d =>
-                Array.isArray(d) && d[0] === 'receipt_status'
-            );
+            let isReceiptFilter = false;
+            if (item.domain && Array.isArray(item.domain)) {
+                isReceiptFilter = item.domain.some(d =>
+                    Array.isArray(d) && d[0] === 'receipt_status'
+                );
+            }
 
             if (isReceiptFilter) {
                 filterIdsToRemove.push(id);
