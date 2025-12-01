@@ -401,6 +401,14 @@ patch(ListController.prototype, {
         // Force UI refresh
         if (filterIdsToRemove.length > 0) {
             await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Force trigger search to refresh UI
+            try {
+                await searchModel.search();
+                console.log('[HLV] Triggered search refresh after deactivate product filters');
+            } catch (e) {
+                console.warn('[HLV] Failed to trigger search refresh', e);
+            }
         }
 
         if (!value) {
@@ -695,6 +703,14 @@ patch(ListRenderer.prototype, {
         // Force UI refresh
         if (filterIdsToRemove.length > 0) {
             await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Force trigger search to refresh UI
+            try {
+                await searchModel.search();
+                console.log('[HLV] Triggered search refresh after deactivate supplier filters');
+            } catch (e) {
+                console.warn('[HLV] Failed to trigger search refresh', e);
+            }
         }
 
         if (!value) {
@@ -1011,6 +1027,14 @@ patch(ListRenderer.prototype, {
         // Force UI refresh after removing filters
         if (filterIdsToRemove.length > 0) {
             await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Force trigger search to refresh UI
+            try {
+                await searchModel.search();
+                console.log('[HLV] Triggered search refresh after deactivate');
+            } catch (e) {
+                console.warn('[HLV] Failed to trigger search refresh', e);
+            }
         }
 
         if (!value) {
