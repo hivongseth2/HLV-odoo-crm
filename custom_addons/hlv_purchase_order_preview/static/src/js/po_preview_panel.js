@@ -296,22 +296,11 @@ patch(ListController.prototype, {
         const searchModel = this.env?.searchModel;
 
         if (!searchModel) {
-            // Fallback to doAction
-            if (!value) {
-                this._hlvReloadWithDomain([]);
-                return;
-            }
-
-            const domain = [
-                '|',
-                ['order_line.product_id.name', 'ilike', value],
-                ['order_line.product_id.default_code', 'ilike', value]
-            ];
-            this._hlvReloadWithDomain(domain);
+            console.warn('[HLV] SearchModel not available');
             return;
         }
 
-        // Clear existing product search domain parts
+        // FIXED: Always use setDomainParts - no fallback to doAction
         if (searchModel.setDomainParts) {
             searchModel.setDomainParts({
                 hlv_product_search: value ? {
@@ -324,26 +313,7 @@ patch(ListController.prototype, {
                 } : null
             });
         } else {
-            // Fallback for older API
-            this._hlvReloadWithDomain(value ? [
-                '|',
-                ['order_line.product_id.name', 'ilike', value],
-                ['order_line.product_id.default_code', 'ilike', value]
-            ] : []);
-        }
-    },
-
-    _hlvReloadWithDomain(domain) {
-        const actionService = this.env?.services?.action;
-        if (actionService) {
-            actionService.doAction({
-                type: 'ir.actions.act_window',
-                res_model: 'purchase.order',
-                views: [[false, 'list'], [false, 'form']],
-                domain: domain,
-                target: 'current',
-                context: this.props.context || {},
-            });
+            console.error('[HLV] setDomainParts not available on searchModel');
         }
     }
 });
@@ -495,31 +465,21 @@ patch(ListRenderer.prototype, {
     _hlvApplySupplierSearch(value) {
         const searchModel = _hlvCurrentSearchModel || this.env?.searchModel;
 
-        if (searchModel && searchModel.setDomainParts) {
-            // Use setDomainParts for consistent behavior with native Odoo filters
+        if (!searchModel) {
+            console.warn('[HLV] SearchModel not available');
+            return;
+        }
+
+        // FIXED: Only use setDomainParts - no doAction fallback
+        if (searchModel.setDomainParts) {
             searchModel.setDomainParts({
                 hlv_supplier_search: value ? {
                     domain: [['partner_id', 'ilike', value]],
                     facetLabel: `NCC: ${value}`,
                 } : null
             });
-            return;
-        }
-
-        // Fallback to doAction with clearBreadcrumbs
-        const actionService = this.env?.services?.action;
-        if (actionService) {
-            const domain = value ? [['partner_id', 'ilike', value]] : [];
-            actionService.doAction({
-                type: 'ir.actions.act_window',
-                res_model: 'purchase.order',
-                name: 'Đơn mua hàng',
-                views: [[false, 'list'], [false, 'form']],
-                domain: domain,
-                target: 'current',
-            }, {
-                clearBreadcrumbs: true,
-            });
+        } else {
+            console.error('[HLV] setDomainParts not available on searchModel');
         }
     },
 
@@ -629,27 +589,15 @@ patch(ListRenderer.prototype, {
     },
 
     _hlvApplyReceiptFilter(value) {
-        // Map value to filter name defined in purchase_order_views.xml
-        const filterNameMap = {
-            'pending': 'filter_receipt_pending',
-            'partial': 'filter_receipt_partial',
-            'full': 'filter_receipt_full'
-        };
-
         const searchModel = _hlvCurrentSearchModel || this.env?.searchModel;
 
         if (!searchModel) {
-            console.warn('[HLV] SearchModel not found, falling back to setDomainParts');
-            this._hlvApplyFilterViaDomain(value);
+            console.warn('[HLV] SearchModel not available');
             return;
         }
 
-        console.log('[HLV] SearchModel:', searchModel);
-        console.log('[HLV] SearchModel methods:', Object.keys(searchModel));
-
-        // Use setDomainParts which is available in Odoo 18
+        // FIXED: Only use setDomainParts - no doAction fallback
         if (searchModel.setDomainParts) {
-            // Clear existing receipt filter first
             searchModel.setDomainParts({
                 hlv_receipt_filter: value ? {
                     domain: [['receipt_status', '=', value]],
@@ -657,57 +605,8 @@ patch(ListRenderer.prototype, {
                 } : null
             });
             console.log('[HLV] Applied filter via setDomainParts:', value);
-            return;
-        }
-
-        // Fallback: Try toggleSearchItem if searchItems exists
-        const searchItems = searchModel.searchItems || {};
-        console.log('[HLV] SearchModel searchItems:', searchItems);
-
-        if (Object.keys(searchItems).length > 0) {
-            const filterName = filterNameMap[value];
-
-            // First, deactivate all receipt filters
-            for (const [id, item] of Object.entries(searchItems)) {
-                if (item.name && item.name.startsWith('filter_receipt_')) {
-                    const isActive = searchModel.isSearchItemActive?.(id) || item.isActive;
-                    if (isActive) {
-                        searchModel.toggleSearchItem(id);
-                    }
-                }
-            }
-
-            if (value && filterName) {
-                // Activate the target filter
-                for (const [id, item] of Object.entries(searchItems)) {
-                    if (item.name === filterName) {
-                        searchModel.toggleSearchItem(id);
-                        console.log('[HLV] Toggled filter:', filterName);
-                        return;
-                    }
-                }
-            }
-        }
-
-        // Last fallback
-        this._hlvApplyFilterViaDomain(value);
-    },
-
-    _hlvApplyFilterViaDomain(value) {
-        // Use direct domain via action service
-        const actionService = this.env?.services?.action;
-        if (actionService) {
-            const domain = value ? [['receipt_status', '=', value]] : [];
-            actionService.doAction({
-                type: 'ir.actions.act_window',
-                res_model: 'purchase.order',
-                name: 'Đơn mua hàng',
-                views: [[false, 'list'], [false, 'form']],
-                target: 'current',
-                domain: domain,
-            }, {
-                clearBreadcrumbs: true,
-            });
+        } else {
+            console.error('[HLV] setDomainParts not available on searchModel');
         }
     }
 });
