@@ -382,8 +382,10 @@ patch(ListController.prototype, {
         for (const [id, item] of Object.entries(existingFilters)) {
             if (item.description && item.description.startsWith('SP:')) {
                 filterIdsToRemove.push(id);
-                const productName = item.description.substring(4); // Remove 'SP: '
-                selectedProducts.add(productName);
+
+                // Extract product names from description (handle " hoặc " for multiple products)
+                const productNames = item.description.substring(4).split(' hoặc ').map(s => s.trim());
+                productNames.forEach(name => selectedProducts.add(name));
             }
         }
 
@@ -852,25 +854,31 @@ patch(ListRenderer.prototype, {
         const selectedStatuses = new Set();
         const filterIdsToRemove = [];
 
-        for (const [id, item] of Object.entries(existingFilters)) {
-            if (item.description && (
-                item.description.startsWith('TT:') ||
-                item.description === 'Chưa nhận' ||
-                item.description === 'Đã nhận một phần' ||
-                item.description === 'Đã nhận hết' ||
-                item.description.includes('Chưa nhận') ||
-                item.description.includes('Đã nhận một phần') ||
-                item.description.includes('Đã nhận hết')
-            )) {
-                filterIdsToRemove.push(id);
+        console.log('[HLV] Checking existing filters for receipt status');
 
-                // Extract status from description
-                const desc = item.description;
-                if (desc.includes('Chưa nhận')) selectedStatuses.add('pending');
-                if (desc.includes('Đã nhận một phần')) selectedStatuses.add('partial');
-                if (desc.includes('Đã nhận hết')) selectedStatuses.add('full');
+        for (const [id, item] of Object.entries(existingFilters)) {
+            const desc = item.description;
+            console.log('[HLV] Filter:', id, desc, item.domain);
+
+            // Check if this is a receipt status filter by examining the domain
+            const isReceiptFilter = item.domain && item.domain.some(d =>
+                Array.isArray(d) && d[0] === 'receipt_status'
+            );
+
+            if (isReceiptFilter) {
+                filterIdsToRemove.push(id);
+                console.log('[HLV] Found receipt filter to remove:', id, desc);
+
+                // Extract status values from domain
+                item.domain.forEach(d => {
+                    if (Array.isArray(d) && d[0] === 'receipt_status' && d[1] === '=' && d[2]) {
+                        selectedStatuses.add(d[2]);
+                    }
+                });
             }
         }
+
+        console.log('[HLV] Selected statuses before toggle:', Array.from(selectedStatuses));
 
         // Remove all existing receipt filters
         filterIdsToRemove.forEach(id => searchModel.deactivateGroup(id));
