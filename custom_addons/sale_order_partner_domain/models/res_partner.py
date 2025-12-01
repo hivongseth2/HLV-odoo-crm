@@ -4,17 +4,12 @@ from odoo import api, models
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
-    @api.model
-    def name_get(self):
-        result = []
-        for partner in self:
-            if self._context.get('show_shipping_name_only'):
-                if partner.type in ['contact', 'delivery'] and partner.parent_id:
-                    name = partner.name
-                else:
-                    name = partner.name
-            else:
-                name = partner.display_name
-
-            result.append((partner.id, name))
-        return result
+    @api.depends('name', 'parent_id.name', 'type', 'company_name')
+    @api.depends_context('show_shipping_name_only')
+    def _compute_display_name(self):
+        if self._context.get('show_shipping_name_only'):
+            for partner in self:
+                # Chỉ hiển thị tên người nhận, không kèm tên công ty cha
+                partner.display_name = partner.name or ''
+        else:
+            super()._compute_display_name()
