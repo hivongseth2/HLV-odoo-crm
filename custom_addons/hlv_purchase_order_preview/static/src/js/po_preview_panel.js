@@ -7,12 +7,12 @@ import { onMounted, onPatched } from "@odoo/owl";
 // Store reference to current controller for use in ListRenderer
 let _hlvCurrentController = null;
 
-// Filter state management
+// Filter state management with localStorage and URL persistence
 const HLV_FILTER_STATE = {
     product: null,
     supplier: null,
     receipt: null,
-    
+
     // Save to localStorage and URL
     save() {
         const state = {
@@ -27,7 +27,7 @@ const HLV_FILTER_STATE = {
             console.warn('[HLV] Failed to save filter state:', e);
         }
     },
-    
+
     // Load from localStorage or URL
     load() {
         // First try URL params
@@ -38,7 +38,7 @@ const HLV_FILTER_STATE = {
             this.receipt = urlState.receipt;
             return;
         }
-        
+
         // Fallback to localStorage
         try {
             const saved = localStorage.getItem('hlv_po_filters');
@@ -52,39 +52,39 @@ const HLV_FILTER_STATE = {
             console.warn('[HLV] Failed to load filter state:', e);
         }
     },
-    
+
     // Update URL params
     _updateURL(state) {
         const url = new URL(window.location.href);
-        
+
         if (state.product) {
             url.searchParams.set('hlv_product', state.product);
         } else {
             url.searchParams.delete('hlv_product');
         }
-        
+
         if (state.supplier) {
             url.searchParams.set('hlv_supplier', state.supplier);
         } else {
             url.searchParams.delete('hlv_supplier');
         }
-        
+
         if (state.receipt) {
             url.searchParams.set('hlv_receipt', state.receipt);
         } else {
             url.searchParams.delete('hlv_receipt');
         }
-        
+
         window.history.replaceState({}, '', url.toString());
     },
-    
+
     // Load from URL params
     _loadFromURL() {
         const url = new URL(window.location.href);
         const product = url.searchParams.get('hlv_product');
         const supplier = url.searchParams.get('hlv_supplier');
         const receipt = url.searchParams.get('hlv_receipt');
-        
+
         return {
             product: product || null,
             supplier: supplier || null,
@@ -92,7 +92,7 @@ const HLV_FILTER_STATE = {
             hasFilters: !!(product || supplier || receipt)
         };
     },
-    
+
     // Clear all filters
     clear() {
         this.product = null;
@@ -132,7 +132,7 @@ function getReceiptStatusLabel(status) {
 function getReceiptStatusBadgeClass(status) {
     const classes = {
         'pending': 'bg-warning text-dark',
-        'partial': 'bg-info text-dark', 
+        'partial': 'bg-info text-dark',
         'full': 'bg-success text-white'
     };
     return classes[status] || 'bg-secondary';
@@ -206,7 +206,7 @@ async function showPOPreviewPanel(env, resId) {
     try {
         log("RPC read(purchase.order) ->", resId);
 
-        // Fetch purchase order data - thêm date_planned
+        // Fetch purchase order data
         const [order] = await orm.read(
             "purchase.order",
             [resId],
@@ -232,7 +232,7 @@ async function showPOPreviewPanel(env, resId) {
 
         const body = target.querySelector(".hlv-panel-body");
 
-        // Build order summary - sử dụng date_planned thay vì date_order
+        // Build order summary
         const plannedDate = order?.date_planned ? new Date(order.date_planned).toLocaleDateString('vi-VN') : '';
         const receiptStatusLabel = getReceiptStatusLabel(order?.receipt_status);
         const receiptStatusBadge = getReceiptStatusBadgeClass(order?.receipt_status);
@@ -256,7 +256,7 @@ async function showPOPreviewPanel(env, resId) {
             <div class="row mb-3">
                 <div class="col-md-6">
                     <small class="text-muted">Ngày hàng về dự kiến:</small>
-                    <div class="fw-bold">${plannedDate}</div>
+                    <div class="fw-bold">${plannedDate || 'Chưa có'}</div>
                 </div>
                 <div class="col-md-6">
                     <small class="text-muted">Trạng thái nhập kho:</small>
@@ -347,14 +347,14 @@ patch(ListController.prototype, {
         // Watch for filter removals in the search panel
         const searchPanel = document.querySelector('.o_searchview');
         if (!searchPanel || searchPanel.dataset.hlvMonitored) return;
-        
+
         searchPanel.dataset.hlvMonitored = 'true';
-        
+
         // Use MutationObserver to detect when facets are removed
-        const observer = new MutationObserver((mutations) => {
+        const observer = new MutationObserver(() => {
             this._hlvCheckFilterSync();
         });
-        
+
         observer.observe(searchPanel, {
             childList: true,
             subtree: true
@@ -366,7 +366,7 @@ patch(ListController.prototype, {
         if (!searchModel) return;
 
         const activeFilters = searchModel.searchItems || {};
-        
+
         // Check if product filter was removed
         const hasProductFilter = Object.values(activeFilters).some(
             item => item.description && item.description.startsWith('SP:')
@@ -391,9 +391,9 @@ patch(ListController.prototype, {
         // Check if receipt filter was removed
         const hasReceiptFilter = Object.values(activeFilters).some(
             item => item.description && (
-                item.description === 'Chờ nhận hàng' ||
-                item.description === 'Nhận một phần' ||
-                item.description === 'Đã nhận đủ'
+                item.description === 'Chưa nhận' ||
+                item.description === 'Đã nhận một phần' ||
+                item.description === 'Đã nhận hết'
             )
         );
         if (!hasReceiptFilter && HLV_FILTER_STATE.receipt) {
@@ -406,7 +406,7 @@ patch(ListController.prototype, {
     _hlvRestoreFilters() {
         console.log('[HLV] Restoring filters from storage');
         HLV_FILTER_STATE.load();
-        
+
         const searchModel = this.env?.searchModel;
         if (!searchModel || !searchModel.createNewFilters) {
             console.warn('[HLV] Cannot restore filters - searchModel not ready');
@@ -429,7 +429,7 @@ patch(ListController.prototype, {
 
         // Restore supplier filter
         if (HLV_FILTER_STATE.supplier) {
-            const domain = [['partner_id', '=ilike', HLV_FILTER_STATE.supplier]];
+            const domain = [['partner_id.name', '=ilike', `%${HLV_FILTER_STATE.supplier}%`]];
             searchModel.createNewFilters([{
                 description: `NCC: ${HLV_FILTER_STATE.supplier}`,
                 domain: domain,
@@ -457,6 +457,12 @@ patch(ListController.prototype, {
         const productInput = document.querySelector('.hlv-product-search');
         if (productInput && productInput.value !== (HLV_FILTER_STATE.product || '')) {
             productInput.value = HLV_FILTER_STATE.product || '';
+        }
+
+        // Update clear button visibility
+        const clearBtn = document.querySelector('.hlv-clear-product');
+        if (clearBtn) {
+            clearBtn.style.display = HLV_FILTER_STATE.product ? 'inline-block' : 'none';
         }
     },
 
@@ -489,10 +495,11 @@ patch(ListController.prototype, {
 
         const parentEl = searchArea.parentElement;
         if (parentEl) {
-            parentEl.insertBefore(searchBar, searchArea);
+            parentEl.insertBefore(searchBar, searchArea.nextSibling);
         }
 
         const productInput = searchBar.querySelector('.hlv-product-search');
+        const clearBtn = searchBar.querySelector('.hlv-clear-product');
 
         productInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -500,13 +507,24 @@ patch(ListController.prototype, {
                 this._hlvSearchByProduct(productInput.value.trim());
             }
         });
+
+        productInput?.addEventListener('input', () => {
+            clearBtn.style.display = productInput.value ? 'inline-block' : 'none';
+        });
+
+        clearBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            productInput.value = '';
+            clearBtn.style.display = 'none';
+            this._hlvSearchByProduct('');
+        });
     },
 
     async _hlvSearchByProduct(value) {
         console.log('[HLV] Product search:', value);
-        
+
         const searchModel = this.env.searchModel;
-        
+
         if (!searchModel || !searchModel.createNewFilters) {
             console.error('[HLV] SearchModel or createNewFilters not available');
             return;
@@ -529,11 +547,11 @@ patch(ListController.prototype, {
             return;
         }
 
-        // Create new filter with facet
+        // Create new filter with facet - using =ilike for accent-sensitive search
         const domain = [
             '|',
-            ['order_line.product_id.name', '=ilike', value],
-            ['order_line.product_id.default_code', '=ilike', value]
+            ['order_line.product_id.name', '=ilike', `%${value}%`],
+            ['order_line.product_id.default_code', '=ilike', `%${value}%`]
         ];
 
         try {
@@ -684,7 +702,7 @@ patch(ListRenderer.prototype, {
 
     _hlvApplySupplierSearch(value) {
         console.log('[HLV] Supplier search:', value);
-        
+
         const controller = _hlvCurrentController;
         if (!controller) {
             console.error('[HLV] Controller not available');
@@ -714,8 +732,8 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        // Create new filter with facet
-        const domain = [['partner_id', '=ilike', value]];
+        // Create new filter with facet - using =ilike for accent-sensitive search
+        const domain = [['partner_id.name', '=ilike', `%${value}%`]];
 
         searchModel.createNewFilters([{
             description: `NCC: ${value}`,
@@ -772,19 +790,19 @@ patch(ListRenderer.prototype, {
         `;
 
         const items = [
-            { value: 'pending', label: 'Chờ nhận hàng', color: '#ffc107' },
-            { value: 'partial', label: 'Nhận một phần', color: '#17a2b8' },
-            { value: 'full', label: 'Đã nhận đủ', color: '#28a745' },
+            { value: 'pending', label: 'Chưa nhận', color: '#ffc107' },
+            { value: 'partial', label: 'Đã nhận một phần', color: '#17a2b8' },
+            { value: 'full', label: 'Đã nhận hết', color: '#28a745' },
             { value: '', label: '— Tất cả —', color: '#714B67' }
         ];
 
         items.forEach((item, idx) => {
             const div = document.createElement('div');
             div.className = 'hlv-filter-dropdown-item';
-            
+
             // Add color indicator dot
             const colorDot = item.color ? `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${item.color}; margin-right: 8px;"></span>` : '';
-            
+
             div.innerHTML = colorDot + item.label;
             div.style.cssText = `
                 padding: 10px 16px;
@@ -850,9 +868,9 @@ patch(ListRenderer.prototype, {
         const existingFilters = searchModel.searchItems || {};
         for (const [id, item] of Object.entries(existingFilters)) {
             if (item.description && (
-                item.description === 'Chờ nhận hàng' ||
-                item.description === 'Nhận một phần' ||
-                item.description === 'Đã nhận đủ'
+                item.description === 'Chưa nhận' ||
+                item.description === 'Đã nhận một phần' ||
+                item.description === 'Đã nhận hết'
             )) {
                 searchModel.deactivateGroup(id);
             }
