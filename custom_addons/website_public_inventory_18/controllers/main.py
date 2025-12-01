@@ -150,20 +150,34 @@ class PublicInventory(http.Controller):
         domain += [("quantity", ">", 0)]
         domain += [("product_id.active", "=", True)]
         # Tìm theo từ khóa: hỗ trợ nhiều từ khóa, phân cách bởi dấu phẩy
+        # Tìm theo từ khóa: hỗ trợ nhiều từ khóa, phân cách bởi dấu phẩy
         if q:
-            # tách theo dấu phẩy, loại rỗng, bỏ trùng
-            terms = list({t.strip() for t in q.split(",") if t.strip()})
-            search_dom = []
-            for t in terms:
-                # với mỗi term: OR 3 field
-                term_dom = [
-                    '|', '|',
-                    ('product_id.name', 'ilike', t),
-                    ('product_id.default_code', 'ilike', t),
-                    ('product_id.barcode', 'ilike', t),
-                ]
-                search_dom = term_dom if not search_dom else expression.OR([search_dom, term_dom])
-            domain += search_dom
+            # 1. Tách các nhóm tìm kiếm bằng dấu phẩy (Logic OR giữa các nhóm)
+            search_groups = list({t.strip() for t in q.split(",") if t.strip()})
+            final_search_dom = []
+
+            for group in search_groups:
+                # 2. Tách từng từ trong nhóm bằng dấu cách (Logic AND giữa các từ)
+                # Ví dụ: "fpd3 máy" -> ["fpd3", "máy"] -> Phải chứa cả 2 từ này
+                tokens = group.split()
+                group_domain = [] 
+                
+                for token in tokens:
+                    # Mỗi từ (token) có thể nằm ở Tên HOẶC Mã HOẶC Barcode
+                    token_dom = [
+                        '|', '|',
+                        ('product_id.name', 'ilike', token),
+                        ('product_id.default_code', 'ilike', token),
+                        ('product_id.barcode', 'ilike', token),
+                    ]
+                    # Cộng dồn vào group_domain (Mặc định Odoo nối list là AND)
+                    group_domain += token_dom
+                
+                # 3. Gộp các nhóm lớn bằng OR
+                if group_domain:
+                    final_search_dom = expression.OR([final_search_dom, group_domain])
+            
+            domain += final_search_dom
 
         # >>>>>>>>>>>>>  FIX MULTI-COMPANY CONTEXT  <<<<<<<<<<<<<<
         company_ids = _companies_for_context(wid)
