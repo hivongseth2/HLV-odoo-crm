@@ -8,6 +8,7 @@ class SaleOrder(models.Model):
         'res.partner',
         string='Địa chỉ giao hàng',
         domain="[('type', 'in', ['contact', 'delivery']), '|', ('parent_id', '=', partner_id), ('id', '=', partner_id)]",
+        context={'show_shipping_name_only': True},
         readonly=False,
         store=True,
     )
