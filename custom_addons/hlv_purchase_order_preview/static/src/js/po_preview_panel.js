@@ -7,12 +7,45 @@ import { onMounted, onPatched } from "@odoo/owl";
 // Store reference to current controller for use in ListRenderer
 let _hlvCurrentController = null;
 
+// Storage key for filter persistence
+const HLV_FILTER_STORAGE_KEY = 'hlv_po_filters';
+
 // Track active filters for visual indicator
 let _hlvActiveFilters = {
     receipt: null,
     supplier: null,
     product: null
 };
+
+/**
+ * Save filters to sessionStorage
+ */
+function saveFiltersToStorage() {
+    try {
+        sessionStorage.setItem(HLV_FILTER_STORAGE_KEY, JSON.stringify(_hlvActiveFilters));
+    } catch (e) {
+        console.warn('[HLV] Failed to save filters to storage:', e);
+    }
+}
+
+/**
+ * Load filters from sessionStorage
+ */
+function loadFiltersFromStorage() {
+    try {
+        const stored = sessionStorage.getItem(HLV_FILTER_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            _hlvActiveFilters.receipt = parsed.receipt || null;
+            _hlvActiveFilters.supplier = parsed.supplier || null;
+            _hlvActiveFilters.product = parsed.product || null;
+            return true;
+        }
+    } catch (e) {
+        console.warn('[HLV] Failed to load filters from storage:', e);
+    }
+    return false;
+}
 
 /**
  * Format number as currency (Vietnamese locale)
@@ -31,9 +64,9 @@ function fmtCurrency(env, value) {
  */
 function getReceiptStatusLabel(status) {
     const labels = {
-        'pending': 'Chờ nhận hàng',
-        'partial': 'Nhận một phần',
-        'full': 'Đã nhận đủ'
+        'pending': 'Chưa nhận',
+        'partial': 'Đã nhận một phần',
+        'full': 'Đã nhận hết'
     };
     return labels[status] || status || '';
 }
@@ -70,6 +103,9 @@ function applyFilters() {
         console.error('[HLV] Controller not available');
         return Promise.resolve();
     }
+
+    // Save filters to storage for persistence
+    saveFiltersToStorage();
 
     const domain = buildCombinedDomain();
     console.log('[HLV] Applying combined domain:', domain);
@@ -152,6 +188,8 @@ function clearFilter(type) {
         if (productInput) productInput.value = '';
     }
 
+    // Save to storage and apply
+    saveFiltersToStorage();
     applyFilters();
 }
 
@@ -356,10 +394,36 @@ patch(ListController.prototype, {
 
             onMounted(() => {
                 this._hlvAddCustomSearchBar();
+                this._hlvRestoreFilters();
             });
             onPatched(() => {
                 this._hlvAddCustomSearchBar();
             });
+        }
+    },
+
+    /**
+     * Restore filters from sessionStorage after page reload
+     */
+    _hlvRestoreFilters() {
+        if (loadFiltersFromStorage()) {
+            const hasFilters = _hlvActiveFilters.receipt || _hlvActiveFilters.supplier || _hlvActiveFilters.product;
+            if (hasFilters) {
+                console.log('[HLV] Restoring filters from storage:', _hlvActiveFilters);
+
+                // Update product input if exists
+                if (_hlvActiveFilters.product) {
+                    const productInput = document.querySelector('.hlv-product-search');
+                    if (productInput) {
+                        productInput.value = _hlvActiveFilters.product;
+                    }
+                }
+
+                // Apply filters with a small delay to ensure model is ready
+                setTimeout(() => {
+                    applyFilters();
+                }, 100);
+            }
         }
     },
 
