@@ -607,17 +607,33 @@ patch(ListRenderer.prototype, {
         const selectedSuppliers = new Map(); // Map<supplierName, matchingIds>
         const filterIdsToRemove = [];
 
+        console.log('[HLV] Existing filters:', existingFilters);
+
         for (const [id, item] of Object.entries(existingFilters)) {
             if (item.description && item.description.startsWith('NCC:')) {
                 filterIdsToRemove.push(id);
-                const supplierName = item.description.substring(5); // Remove 'NCC: '
+                console.log('[HLV] Found NCC filter to remove:', id, item.description);
+
+                // Extract supplier names from description
+                const supplierNames = item.description.substring(5).split(' hoặc ').map(s => s.trim());
 
                 // Extract IDs from domain
                 const domain = item.domain;
                 if (domain && domain.length > 0) {
                     const idCondition = domain.find(d => Array.isArray(d) && d[0] === 'id' && d[1] === 'in');
                     if (idCondition && idCondition[2]) {
-                        selectedSuppliers.set(supplierName, idCondition[2]);
+                        const allIds = idCondition[2];
+                        // If multiple suppliers, we need to re-fetch each supplier's IDs
+                        // For now, just store the combined IDs under the full description
+                        if (supplierNames.length === 1) {
+                            selectedSuppliers.set(supplierNames[0], allIds);
+                        } else {
+                            // Multiple suppliers - need to store them separately
+                            // But we don't have individual IDs, so we'll fetch them again
+                            supplierNames.forEach(name => {
+                                selectedSuppliers.set(name, []); // Mark for re-fetch
+                            });
+                        }
                     }
                 }
             }
@@ -631,13 +647,29 @@ patch(ListRenderer.prototype, {
             return;
         }
 
+        // Re-fetch IDs for suppliers that need it (marked with empty array)
+        const orm = controller.env.services.orm;
+        for (const [name, ids] of selectedSuppliers.entries()) {
+            if (ids.length === 0) {
+                try {
+                    const matchingIds = await orm.call(
+                        'purchase.order',
+                        'search_supplier_exact',
+                        [name, null]
+                    );
+                    selectedSuppliers.set(name, matchingIds);
+                } catch (e) {
+                    console.error('[HLV] Failed to re-fetch supplier IDs:', e);
+                }
+            }
+        }
+
         // Toggle the selected supplier
         if (selectedSuppliers.has(value)) {
             selectedSuppliers.delete(value);
         } else {
             // Fetch IDs for the new supplier
             try {
-                const orm = controller.env.services.orm;
                 const matchingIds = await orm.call(
                     'purchase.order',
                     'search_supplier_exact',
@@ -821,13 +853,22 @@ patch(ListRenderer.prototype, {
         const filterIdsToRemove = [];
 
         for (const [id, item] of Object.entries(existingFilters)) {
-            if (item.description && item.description.startsWith('TT:')) {
+            if (item.description && (
+                item.description.startsWith('TT:') ||
+                item.description === 'Chưa nhận' ||
+                item.description === 'Đã nhận một phần' ||
+                item.description === 'Đã nhận hết' ||
+                item.description.includes('Chưa nhận') ||
+                item.description.includes('Đã nhận một phần') ||
+                item.description.includes('Đã nhận hết')
+            )) {
                 filterIdsToRemove.push(id);
-                // Extract status from description "TT: Chưa nhận" -> "pending"
-                const statusLabel = item.description.substring(4);
-                if (statusLabel === 'Chưa nhận') selectedStatuses.add('pending');
-                else if (statusLabel === 'Đã nhận một phần') selectedStatuses.add('partial');
-                else if (statusLabel === 'Đã nhận hết') selectedStatuses.add('full');
+
+                // Extract status from description
+                const desc = item.description;
+                if (desc.includes('Chưa nhận')) selectedStatuses.add('pending');
+                if (desc.includes('Đã nhận một phần')) selectedStatuses.add('partial');
+                if (desc.includes('Đã nhận hết')) selectedStatuses.add('full');
             }
         }
 
