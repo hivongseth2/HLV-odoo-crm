@@ -7,13 +7,6 @@ import { onMounted, onPatched } from "@odoo/owl";
 // Store reference to current controller for use in ListRenderer
 let _hlvCurrentController = null;
 
-// Định nghĩa ID nhóm cố định để gom nhóm OR
-const HLV_GROUPS = {
-    SUPPLIER: 1001, // Arbitrary unique ID number for supplier group
-    STATUS: 1002,   // For receipt status group
-    PRODUCT: 1003   // For product group
-};
-
 /**
  * Format number as currency (Vietnamese locale)
  */
@@ -311,7 +304,7 @@ patch(ListController.prototype, {
 
         // Find the buttons area (right side of control panel) to insert before it
         const buttonsArea = controlPanel.querySelector('.o_control_panel_actions') ||
-            controlPanel.querySelector('.o_cp_action_menus');
+                           controlPanel.querySelector('.o_cp_action_menus');
 
         // Or find the breadcrumb area to insert after
         const breadcrumbArea = controlPanel.querySelector('.o_control_panel_breadcrumbs');
@@ -381,20 +374,28 @@ patch(ListController.prototype, {
             return;
         }
 
-        // Remove existing product search filter (thay thế logic cho sản phẩm - thường chỉ tìm 1 mã)
-        const existingFilters = searchModel.searchItems || {};
-        for (const [id, item] of Object.entries(existingFilters)) {
-            if (item.description && item.description.startsWith('SP:')) {
-                searchModel.deactivateGroup(id);
-            }
-        }
-
         if (!value) {
-            console.log('[HLV] Cleared product search');
+            // Remove ALL product search filters when clearing
+            const existingFilters = searchModel.searchItems || {};
+            for (const [id, item] of Object.entries(existingFilters)) {
+                if (item.description && item.description.startsWith('SP:')) {
+                    searchModel.deactivateGroup(id);
+                }
+            }
+            console.log('[HLV] Cleared all product search filters');
             return;
         }
 
-        // Create new filter with facet
+        // Check if this exact product filter already exists
+        const existingFilters = searchModel.searchItems || {};
+        for (const item of Object.values(existingFilters)) {
+            if (item.description === `SP: ${value}`) {
+                console.log('[HLV] Product filter already exists, skipping');
+                return;
+            }
+        }
+
+        // Create new filter with facet (OR with other SP filters)
         const domain = [
             '|',
             ['order_line.product_id.name', 'ilike', `%${value}%`],
@@ -406,9 +407,8 @@ patch(ListController.prototype, {
                 description: `SP: ${value}`,
                 domain: domain,
                 type: 'filter',
-                groupId: HLV_GROUPS.PRODUCT, // Gán group riêng để AND với NCC và Status
             }]);
-            console.log('[HLV] Applied product search with facet');
+            console.log('[HLV] Applied product search with facet (OR logic)');
         } catch (e) {
             console.error('[HLV] Failed to create filter:', e);
         }
@@ -564,50 +564,62 @@ patch(ListRenderer.prototype, {
         }
 
         if (!value) {
-            console.log('[HLV] Cleared supplier search');
+            // Remove ALL supplier search filters when clearing
+            const existingFilters = searchModel.searchItems || {};
+            for (const [id, item] of Object.entries(existingFilters)) {
+                if (item.description && item.description.startsWith('NCC:')) {
+                    searchModel.deactivateGroup(id);
+                }
+            }
+            console.log('[HLV] Cleared all supplier search filters');
             return;
         }
 
-        // LOGIC MỚI: Không xóa các filter NCC cũ nữa để cho phép chọn nhiều (OR)
-        // Các filter cùng groupId sẽ tự động OR với nhau
+        // Check if this exact supplier filter already exists
+        const existingFilters = searchModel.searchItems || {};
+        for (const item of Object.values(existingFilters)) {
+            if (item.description === `NCC: ${value}`) {
+                console.log('[HLV] Supplier filter already exists, skipping');
+                return;
+            }
+        }
 
-        // Tìm kiếm ID nhà cung cấp
-        let domain;
-        let label = `NCC: ${value}`;
-
+        // Use Python method to search with exact Vietnamese diacritic matching
         try {
             const orm = controller.env.services.orm;
-            // Tìm theo tên chính xác hoặc gần đúng
             const matchingIds = await orm.call(
                 'purchase.order',
                 'search_supplier_exact',
                 [value, null]
-            ).catch(() => []); // Fallback nếu lỗi RPC
+            );
 
-            if (matchingIds && matchingIds.length > 0) {
-                // Nếu tìm thấy ID chính xác
-                domain = [['id', 'in', matchingIds]];
-                console.log('[HLV] Supplier search found IDs:', matchingIds);
-            } else {
-                // Fallback tìm theo tên (ilike)
-                domain = [['partner_id.name', 'ilike', `%${value}%`]];
-            }
-        } catch (e) {
-            console.error('[HLV] Failed to search supplier:', e);
-            domain = [['partner_id.name', 'ilike', `%${value}%`]];
-        }
+            console.log('[HLV] Supplier search found IDs:', matchingIds);
 
-        try {
-            // QUAN TRỌNG: Thêm groupId để gom nhóm OR
+            // Create filter with exact ID list (OR with other NCC filters)
+            const domain = matchingIds.length > 0
+                ? [['id', 'in', matchingIds]]
+                : [['id', '=', -1]]; // No results
+
             searchModel.createNewFilters([{
-                description: label,
+                description: `NCC: ${value}`,
                 domain: domain,
                 type: 'filter',
-                groupId: HLV_GROUPS.SUPPLIER, // Các filter cùng ID này sẽ OR với nhau
             }]);
-            console.log('[HLV] Applied supplier search with OR group');
+            console.log('[HLV] Applied supplier filter (OR logic)');
         } catch (e) {
-            console.error('[HLV] Failed to create supplier filter:', e);
+            console.error('[HLV] Failed to search supplier:', e);
+            // Fallback to ilike search
+            const domain = [['partner_id.name', 'ilike', `%${value}%`]];
+            try {
+                searchModel.createNewFilters([{
+                    description: `NCC: ${value}`,
+                    domain: domain,
+                    type: 'filter',
+                }]);
+                console.log('[HLV] Applied supplier filter (OR logic - fallback)');
+            } catch (e2) {
+                console.error('[HLV] Failed to create supplier filter:', e2);
+            }
         }
     },
 
@@ -647,7 +659,7 @@ patch(ListRenderer.prototype, {
             position: fixed;
             top: ${rect.bottom + 4}px;
             left: ${rect.left - 80}px;
-            min-width: 180px;
+            min-width: 160px;
             background: #fff;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
@@ -660,73 +672,42 @@ patch(ListRenderer.prototype, {
             { value: 'pending', label: 'Chưa nhận', color: '#ffc107' },
             { value: 'partial', label: 'Đã nhận một phần', color: '#17a2b8' },
             { value: 'full', label: 'Đã nhận hết', color: '#28a745' },
+            { value: '', label: '— Tất cả —', color: '#714B67' }
         ];
 
-        // Lấy danh sách các filter đang active trong searchModel để đánh dấu
-        const searchModel = _hlvCurrentController?.env?.searchModel;
-        const activeFilters = [];
-        if (searchModel) {
-            // Duyệt qua searchItems để xem cái nào đang bật
-            for (const item of Object.values(searchModel.searchItems || {})) {
-                // Kiểm tra nếu item thuộc group Status
-                if (item.groupId === HLV_GROUPS.STATUS) {
-                    // Trích xuất value từ domain hoặc description
-                    // Cách đơn giản nhất: check description
-                    items.forEach(i => {
-                        if (item.description === i.label) activeFilters.push(i.value);
-                    });
-                }
-            }
-        }
-
         items.forEach((item, idx) => {
-            const isActive = activeFilters.includes(item.value);
             const div = document.createElement('div');
+            div.className = 'hlv-filter-dropdown-item';
 
-            // UI: Thêm dấu check nếu đang active
-            const checkIcon = isActive ? '<i class="fa fa-check text-primary me-2"></i>' : '<span style="display:inline-block; width:18px; margin-right:0.5rem"></span>';
-            const colorDot = `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${item.color}; margin-right: 8px;"></span>`;
+            // Add color indicator dot
+            const colorDot = item.color ? `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${item.color}; margin-right: 8px;"></span>` : '';
 
-            div.innerHTML = `${checkIcon}${colorDot}${item.label}`;
-
+            div.innerHTML = colorDot + item.label;
             div.style.cssText = `
                 padding: 10px 16px;
                 cursor: pointer;
                 font-size: 0.9rem;
-                color: #333;
+                color: ${item.value === '' ? '#714B67' : '#333'};
+                font-weight: ${item.value === '' ? '600' : '400'};
                 border-bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
+                transition: background-color 0.15s;
                 display: flex;
                 align-items: center;
-                background-color: ${isActive ? '#f0f8ff' : 'transparent'};
             `;
-
-            div.addEventListener('mouseenter', () => { if(!isActive) div.style.backgroundColor = '#f8f4f7'; });
-            div.addEventListener('mouseleave', () => { if(!isActive) div.style.backgroundColor = isActive ? '#f0f8ff' : ''; });
-
+            div.addEventListener('mouseenter', () => {
+                div.style.backgroundColor = '#f8f4f7';
+            });
+            div.addEventListener('mouseleave', () => {
+                div.style.backgroundColor = '';
+            });
             div.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                // Không đóng dropdown ngay để cho phép chọn nhiều
-                // Hoặc đóng để apply. Ở đây ta đóng để trải nghiệm gọn gàng.
                 dropdown.remove();
                 this._hlvApplyReceiptFilter(item.value);
             });
             dropdown.appendChild(div);
         });
-
-        // Nút xóa tất cả filter trạng thái
-        if (activeFilters.length > 0) {
-            const clearDiv = document.createElement('div');
-            clearDiv.innerHTML = '<i class="fa fa-trash me-2"></i> Bỏ lọc trạng thái';
-            clearDiv.style.cssText = 'padding: 10px 16px; cursor: pointer; font-size: 0.9rem; color: #dc3545; border-top: 1px solid #e0e0e0; font-weight: 500;';
-            clearDiv.addEventListener('mouseenter', () => clearDiv.style.backgroundColor = '#fff5f5');
-            clearDiv.addEventListener('mouseleave', () => clearDiv.style.backgroundColor = '');
-            clearDiv.addEventListener('click', () => {
-                dropdown.remove();
-                this._hlvApplyReceiptFilter(null); // Null nghĩa là xóa hết
-            });
-            dropdown.appendChild(clearDiv);
-        }
 
         document.body.appendChild(dropdown);
 
@@ -748,7 +729,7 @@ patch(ListRenderer.prototype, {
     },
 
     _hlvApplyReceiptFilter(value) {
-        console.log('[HLV] Receipt filter toggle:', value);
+        console.log('[HLV] Receipt filter:', value);
 
         const controller = _hlvCurrentController;
         if (!controller) {
@@ -762,11 +743,15 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        // Trường hợp xóa hết (khi bấm nút "Bỏ lọc" hoặc truyền null)
-        if (value === null) {
-            const items = searchModel.searchItems || {};
-            for (const [id, item] of Object.entries(items)) {
-                if (item.groupId === HLV_GROUPS.STATUS) {
+        if (!value) {
+            // Remove ALL receipt status filters when clearing
+            const existingFilters = searchModel.searchItems || {};
+            for (const [id, item] of Object.entries(existingFilters)) {
+                if (item.description && (
+                    item.description === 'Chưa nhận' ||
+                    item.description === 'Đã nhận một phần' ||
+                    item.description === 'Đã nhận hết'
+                )) {
                     searchModel.deactivateGroup(id);
                 }
             }
@@ -776,38 +761,27 @@ patch(ListRenderer.prototype, {
 
         const label = getReceiptStatusLabel(value);
 
-        // 1. Kiểm tra xem filter này đã tồn tại chưa (để Toggle OFF)
-        let foundId = null;
-        const items = searchModel.searchItems || {};
-        for (const [id, item] of Object.entries(items)) {
-            // Check trùng group và trùng mô tả (hoặc domain)
-            if (item.groupId === HLV_GROUPS.STATUS && item.description === label) {
-                foundId = id;
-                break;
+        // Check if this exact receipt status filter already exists
+        const existingFilters = searchModel.searchItems || {};
+        for (const item of Object.values(existingFilters)) {
+            if (item.description === label) {
+                console.log('[HLV] Receipt status filter already exists, skipping');
+                return;
             }
         }
 
-        if (foundId) {
-            // Nếu đã có -> Tắt nó đi (Toggle Off)
-            console.log('[HLV] Deactivating existing filter:', foundId);
-            searchModel.deactivateGroup(foundId);
-        } else {
-            // Nếu chưa có -> Thêm mới vào Group (Toggle On / OR logic)
-            console.log('[HLV] Adding new filter to group');
-            const domain = [['receipt_status', '=', value]];
+        // Create new filter with facet (OR with other receipt status filters)
+        const domain = [['receipt_status', '=', value]];
 
-            try {
-                // QUAN TRỌNG: Dùng groupId cố định
-                searchModel.createNewFilters([{
-                    description: label,
-                    domain: domain,
-                    type: 'filter',
-                    groupId: HLV_GROUPS.STATUS, // Các status sẽ OR với nhau
-                }]);
-                console.log('[HLV] Applied receipt filter with OR group');
-            } catch (e) {
-                console.error('[HLV] Failed to create receipt filter:', e);
-            }
+        try {
+            searchModel.createNewFilters([{
+                description: label,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Applied receipt status filter (OR logic)');
+        } catch (e) {
+            console.error('[HLV] Failed to create receipt filter:', e);
         }
     }
 });
