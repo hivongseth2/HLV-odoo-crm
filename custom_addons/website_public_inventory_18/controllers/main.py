@@ -151,34 +151,49 @@ class PublicInventory(http.Controller):
         domain += [("product_id.active", "=", True)]
         # Tìm theo từ khóa: hỗ trợ nhiều từ khóa, phân cách bởi dấu phẩy
         # Tìm theo từ khóa: hỗ trợ nhiều từ khóa, phân cách bởi dấu phẩy
+        # Tìm theo từ khóa: hỗ trợ tìm kiếm thông minh
         if q:
-            # 1. Tách các nhóm tìm kiếm bằng dấu phẩy (Logic OR giữa các nhóm)
-            search_groups = list({t.strip() for t in q.split(",") if t.strip()})
-            final_search_dom = []
+            # Bước 1: Tách các cụm từ theo dấu phẩy (nếu người dùng muốn tìm nhiều món cùng lúc)
+            # Ví dụ: "fpd3 máy, bosch" -> ["fpd3 máy", "bosch"]
+            search_groups = [t.strip() for t in q.split(",") if t.strip()]
+            
+            # Danh sách các domain con cho từng nhóm
+            domains_per_group = []
 
             for group in search_groups:
-                # 2. Tách từng từ trong nhóm bằng dấu cách (Logic AND giữa các từ)
-                # Ví dụ: "fpd3 máy" -> ["fpd3", "máy"] -> Phải chứa cả 2 từ này
+                # Bước 2: Tách từng từ trong cụm từ bằng khoảng trắng
+                # Ví dụ: "fpd3 máy" -> ["fpd3", "máy"]
                 tokens = group.split()
-                group_domain = [] 
+                
+                # Danh sách domain cho từng từ (token)
+                domains_per_token = []
                 
                 for token in tokens:
-                    # Mỗi từ (token) có thể nằm ở Tên HOẶC Mã HOẶC Barcode
-                    token_dom = [
+                    # Với mỗi từ, tìm trong Tên HOẶC Mã HOẶC Barcode
+                    token_domain = [
                         '|', '|',
                         ('product_id.name', 'ilike', token),
                         ('product_id.default_code', 'ilike', token),
                         ('product_id.barcode', 'ilike', token),
                     ]
-                    # Cộng dồn vào group_domain (Mặc định Odoo nối list là AND)
-                    group_domain += token_dom
+                    domains_per_token.append(token_domain)
                 
-                # 3. Gộp các nhóm lớn bằng OR
-                if group_domain:
-                    final_search_dom = expression.OR([final_search_dom, group_domain])
+                # Bước 3: Gộp các từ lại bằng AND (Phải chứa TẤT CẢ các từ trong nhóm)
+                # Dùng expression.AND để Odoo tự xử lý cú pháp Polish Notation
+                if domains_per_token:
+                    group_combined_domain = expression.AND(domains_per_token)
+                    domains_per_group.append(group_combined_domain)
             
-            domain += final_search_dom
-
+            # Bước 4: Gộp các nhóm lại bằng OR (Tìm nhóm 1 HOẶC nhóm 2)
+            if domains_per_group:
+                final_search_dom = expression.OR(domains_per_group)
+                
+                # Thêm domain tìm kiếm vào domain chính bằng AND
+                # Lưu ý: expression.AND nhận vào 1 list các domain list
+                domain = expression.AND([domain, final_search_dom])
+                
+                # Debug log để xem domain sinh ra là gì (kiểm tra trong log server)
+                _logger.info("SEARCH SMART DOMAIN: %s", domain)
         # >>>>>>>>>>>>>  FIX MULTI-COMPANY CONTEXT  <<<<<<<<<<<<<<
         company_ids = _companies_for_context(wid)
         if not company_ids:
