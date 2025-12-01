@@ -410,19 +410,132 @@ patch(ListRenderer.prototype, {
     },
 
     _hlvApplyFilter(filterName) {
-        // Get the search model from the controller
-        const searchModel = this.env?.searchModel;
+        console.log('[HLV] Applying filter:', filterName);
+
+        // In Odoo 18, searchModel is typically accessed through the model's config
+        let searchModel = null;
+
+        // Method 1: Direct from env
+        if (this.env?.searchModel) {
+            searchModel = this.env.searchModel;
+        }
+
+        // Method 2: From model config (most common in Odoo 18)
         if (!searchModel) {
-            console.warn('[HLV] SearchModel not found');
+            const model = this.props?.list?.model;
+            if (model?.config?.searchModel) {
+                searchModel = model.config.searchModel;
+            } else if (model?.root?.config?.searchModel) {
+                searchModel = model.root.config.searchModel;
+            }
+        }
+
+        // Method 3: From controller props
+        if (!searchModel && this.props?.archInfo?.searchModel) {
+            searchModel = this.props.archInfo.searchModel;
+        }
+
+        if (searchModel) {
+            console.log('[HLV] SearchModel found');
+            try {
+                // In Odoo 18, use query method or direct filter toggle
+                const searchItems = searchModel.getSearchItems((item) => item.name === filterName);
+                console.log('[HLV] Found search items:', searchItems.length);
+                if (searchItems.length > 0) {
+                    searchModel.toggleSearchItem(searchItems[0].id);
+                    return;
+                }
+            } catch (e) {
+                console.error('[HLV] Error with searchModel:', e);
+            }
+        }
+
+        // Fallback: Click the filter in the search panel
+        console.log('[HLV] Trying to click filter in search panel');
+        this._hlvClickSearchFilter(filterName);
+    },
+
+    _hlvClickSearchFilter(filterName) {
+        // Try to find and click the filter in the control panel
+        // First, open the filter dropdown if needed
+        const filterMenu = document.querySelector('.o_filter_menu');
+        if (filterMenu) {
+            // Click to open menu
+            const filterButton = document.querySelector('.o_filter_menu .dropdown-toggle, button[data-hotkey="f"]');
+            if (filterButton && !filterMenu.classList.contains('show')) {
+                filterButton.click();
+            }
+
+            // Wait for menu to open, then find our filter
+            setTimeout(() => {
+                const filterItems = document.querySelectorAll('.o_filter_menu .o_menu_item, .o_dropdown_item');
+                for (const item of filterItems) {
+                    const itemName = item.dataset?.name || item.getAttribute('name');
+                    if (itemName === filterName) {
+                        item.click();
+                        return;
+                    }
+                }
+
+                // If not found by name, try by text content
+                const labels = {
+                    'filter_invoice_no': 'Chưa lập hóa đơn',
+                    'filter_invoice_to_invoice': 'Cần lập hóa đơn',
+                    'filter_invoice_invoiced': 'Đã lập hóa đơn đầy đủ',
+                    'filter_receipt_pending': 'Chờ nhận hàng',
+                    'filter_receipt_partial': 'Nhận một phần',
+                    'filter_receipt_full': 'Đã nhận đủ'
+                };
+                const targetLabel = labels[filterName];
+                if (targetLabel) {
+                    for (const item of filterItems) {
+                        if (item.textContent?.trim() === targetLabel) {
+                            item.click();
+                            return;
+                        }
+                    }
+                }
+
+                console.warn('[HLV] Filter item not found in menu');
+            }, 100);
+        } else {
+            // Alternative: use doAction with domain
+            this._hlvApplyFilterViaDomain(filterName);
+        }
+    },
+
+    _hlvApplyFilterViaDomain(filterName) {
+        // Map filter names to domain values
+        const filterDomains = {
+            'filter_invoice_no': { field: 'invoice_status', value: 'no' },
+            'filter_invoice_to_invoice': { field: 'invoice_status', value: 'to invoice' },
+            'filter_invoice_invoiced': { field: 'invoice_status', value: 'invoiced' },
+            'filter_receipt_pending': { field: 'receipt_status', value: 'pending' },
+            'filter_receipt_partial': { field: 'receipt_status', value: 'partial' },
+            'filter_receipt_full': { field: 'receipt_status', value: 'full' }
+        };
+
+        const filterInfo = filterDomains[filterName];
+        if (!filterInfo) {
+            console.warn('[HLV] Unknown filter:', filterName);
             return;
         }
 
-        // Find the filter by name and toggle it
-        const searchItems = searchModel.getSearchItems((item) => item.name === filterName);
-        if (searchItems.length > 0) {
-            searchModel.toggleSearchItem(searchItems[0].id);
+        // Use action service to reload with domain
+        const actionService = this.env?.services?.action;
+        if (actionService) {
+            const domain = [[filterInfo.field, '=', filterInfo.value]];
+            console.log('[HLV] Applying domain via action:', domain);
+
+            actionService.doAction({
+                type: 'ir.actions.act_window',
+                res_model: 'purchase.order',
+                views: [[false, 'list'], [false, 'form']],
+                domain: domain,
+                target: 'current',
+            });
         } else {
-            console.warn('[HLV] Filter not found:', filterName);
+            console.warn('[HLV] Action service not found');
         }
     }
 });
