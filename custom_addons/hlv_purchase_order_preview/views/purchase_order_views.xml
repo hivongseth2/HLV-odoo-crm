@@ -1,33 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Client action for quick preview panel -->
-    <record id="action_hlv_po_preview_panel" model="ir.actions.client">
-        <field name="name">Xem nhanh đơn mua</field>
-        <field name="tag">hlv_po_preview_panel</field>
-        <field name="target">current</field>
-    </record>
-
-    <!-- Inherit purchase order tree view to add preview button -->
-    <record id="hlv_purchase_order_tree_preview" model="ir.ui.view">
-        <field name="name">purchase.order.tree.hlv.preview</field>
-        <field name="model">purchase.order</field>
-        <field name="inherit_id" ref="purchase.purchase_order_kpis_tree"/>
-        <field name="priority" eval="99"/>
-        <field name="arch" type="xml">
-            <!-- Add preview button at the end -->
-            <xpath expr="//list" position="inside">
-                <button
-                    type="action"
-                    string="👁 Xem"
-                    title="Xem sơ lược sản phẩm"
-                    class="btn btn-sm btn-outline-primary hlv-po-quick-btn"
-                    name="%(action_hlv_po_preview_panel)d"
-                    context="{'active_id': id}"
-                />
-            </xpath>
-        </field>
-    </record>
-
     <!-- Inherit search view to add product search and status filters -->
     <record id="hlv_purchase_order_search_product" model="ir.ui.view">
         <field name="name">purchase.order.search.hlv.product</field>
@@ -44,7 +16,6 @@
             <!-- Add separator and invoice status filters group -->
             <xpath expr="//separator[1]" position="before">
                 <separator/>
-                <filter string="Trạng thái thanh toán" name="filter_invoice_header" invisible="1"/>
                 <filter string="Chưa lập hóa đơn" name="filter_invoice_no"
                         domain="[('invoice_status', '=', 'no')]"/>
                 <filter string="Cần lập hóa đơn" name="filter_invoice_to_invoice"
@@ -52,7 +23,6 @@
                 <filter string="Đã lập hóa đơn đầy đủ" name="filter_invoice_invoiced"
                         domain="[('invoice_status', '=', 'invoiced')]"/>
                 <separator/>
-                <filter string="Trạng thái nhập kho" name="filter_receipt_header" invisible="1"/>
                 <filter string="Chờ nhận hàng" name="filter_receipt_pending"
                         domain="[('receipt_status', '=', 'pending')]"/>
                 <filter string="Nhận một phần" name="filter_receipt_partial"

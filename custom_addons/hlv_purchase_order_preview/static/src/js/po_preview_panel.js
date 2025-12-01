@@ -2,7 +2,7 @@
 import { registry } from "@web/core/registry";
 import { patch } from "@web/core/utils/patch";
 import { ListRenderer } from "@web/views/list/list_renderer";
-import { onMounted, onPatched, useEffect } from "@odoo/owl";
+import { onMounted, onPatched } from "@odoo/owl";
 
 /**
  * Format number as currency (Vietnamese locale)
@@ -41,32 +41,21 @@ function getReceiptStatusLabel(status) {
 }
 
 /**
- * Register the purchase order preview panel action
+ * Show preview panel for a purchase order
  */
-registry.category("actions").add("hlv_po_preview_panel", async (env, action) => {
-    const t0 = performance.now();
+async function showPOPreviewPanel(env, resId) {
     const log = (...args) => console.log("[HLV][PO Preview]", ...args);
     const warn = (...args) => console.warn("[HLV][PO Preview]", ...args);
     const err = (...args) => console.error("[HLV][PO Preview]", ...args);
 
-    log("start", { action });
-
-    const orm = env.services.orm;
-    const notify = env.services.notification;
-
-    // Get resource ID from context
-    const ctx = action?.context || {};
-    const resId =
-        action?.params?.res_id ??
-        ctx.active_id ??
-        (Array.isArray(ctx.active_ids) && ctx.active_ids.length ? ctx.active_ids[0] : undefined);
-
-    log("ctx", ctx, "resId", resId);
+    log("showPOPreviewPanel called with resId:", resId);
 
     if (!resId) {
-        notify.add("Không xác định được đơn mua hàng để xem nhanh.", { type: "warning" });
-        return { destroy() { } };
+        env.services.notification.add("Không xác định được đơn mua hàng để xem nhanh.", { type: "warning" });
+        return;
     }
+
+    const orm = env.services.orm;
 
     // Remove any existing panels
     try {
@@ -94,7 +83,10 @@ registry.category("actions").add("hlv_po_preview_panel", async (env, action) => 
     document.body.appendChild(target);
 
     const destroy = () => {
-        try { target.remove(); } catch { }
+        try {
+            target.remove();
+            document.removeEventListener('keydown', handleEscape);
+        } catch { }
     };
     target.querySelector(".hlv-close")?.addEventListener("click", destroy);
 
@@ -102,13 +94,18 @@ registry.category("actions").add("hlv_po_preview_panel", async (env, action) => 
     const handleEscape = (e) => {
         if (e.key === 'Escape') {
             destroy();
-            document.removeEventListener('keydown', handleEscape);
         }
     };
     document.addEventListener('keydown', handleEscape);
 
+    // Click outside to close
+    target.addEventListener('click', (e) => {
+        if (e.target === target) {
+            destroy();
+        }
+    });
+
     try {
-        const t1 = performance.now();
         log("RPC read(purchase.order) ->", resId);
 
         // Fetch purchase order data
@@ -117,9 +114,8 @@ registry.category("actions").add("hlv_po_preview_panel", async (env, action) => 
             [resId],
             ["name", "partner_id", "state", "amount_total", "invoice_status", "receipt_status", "date_order"]
         );
-        log("read OK", { ms: Math.round(performance.now() - t1), order });
+        log("read OK", order);
 
-        const t2 = performance.now();
         log("RPC search_read(purchase.order.line)");
 
         // Fetch order lines
@@ -128,7 +124,7 @@ registry.category("actions").add("hlv_po_preview_panel", async (env, action) => 
             [["order_id", "=", resId]],
             ["product_id", "name", "product_qty", "qty_received", "price_unit", "price_subtotal", "product_uom"]
         );
-        log("searchRead OK", { ms: Math.round(performance.now() - t2), count: lines?.length });
+        log("searchRead OK", { count: lines?.length });
 
         // Render header
         target.querySelector(".hlv-title").innerHTML = `
@@ -196,25 +192,17 @@ registry.category("actions").add("hlv_po_preview_panel", async (env, action) => 
             </div>
         `;
 
-        log("rendered", { totalMs: Math.round(performance.now() - t0) });
-
-        // Close action properly
-        await env.services.action.doAction({ type: "ir.actions.act_window_close" });
-        return { destroy };
+        log("rendered successfully");
 
     } catch (e) {
         err("exception", e);
-        notify.add("Không thể tải dữ liệu đơn mua hàng.", { type: "danger" });
+        env.services.notification.add("Không thể tải dữ liệu đơn mua hàng.", { type: "danger" });
         try { target?.remove(); } catch { }
-
-        await env.services.action.doAction({ type: "ir.actions.act_window_close" });
-        return { destroy };
     }
-});
-
+}
 
 /**
- * Patch ListRenderer to add filter dropdown on status columns for purchase.order
+ * Patch ListRenderer to add preview button and filter dropdown for purchase.order
  */
 patch(ListRenderer.prototype, {
     setup() {
@@ -222,9 +210,55 @@ patch(ListRenderer.prototype, {
 
         // Only apply to purchase.order model
         if (this.props.list?.resModel === 'purchase.order') {
-            onMounted(() => this._hlvAddStatusFilters());
-            onPatched(() => this._hlvAddStatusFilters());
+            onMounted(() => {
+                this._hlvAddStatusFilters();
+                this._hlvAddPreviewButtons();
+            });
+            onPatched(() => {
+                this._hlvAddStatusFilters();
+                this._hlvAddPreviewButtons();
+            });
         }
+    },
+
+    _hlvAddPreviewButtons() {
+        if (this.props.list?.resModel !== 'purchase.order') return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        // Find all rows and add preview button
+        const rows = tableEl.querySelectorAll('tbody tr.o_data_row');
+        rows.forEach(row => {
+            // Skip if already processed
+            if (row.dataset.hlvPreviewAdded) return;
+            row.dataset.hlvPreviewAdded = 'true';
+
+            // Get record id from the row
+            const recordId = row.dataset.id;
+            if (!recordId) return;
+
+            // Find the last td or create button in last column
+            const lastTd = row.querySelector('td:last-child');
+            if (!lastTd) return;
+
+            // Check if there's already our button
+            if (lastTd.querySelector('.hlv-preview-btn')) return;
+
+            // Create preview button
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-sm btn-outline-primary hlv-preview-btn ms-1';
+            btn.innerHTML = '👁 Xem';
+            btn.title = 'Xem sơ lược sản phẩm';
+            btn.type = 'button';
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showPOPreviewPanel(this.env, parseInt(recordId));
+            });
+
+            lastTd.appendChild(btn);
+        });
     },
 
     _hlvAddStatusFilters() {
@@ -248,34 +282,56 @@ patch(ListRenderer.prototype, {
             const wrapper = document.createElement('div');
             wrapper.className = 'hlv-status-filter-wrapper dropdown d-inline-block';
             wrapper.innerHTML = `
-                <button class="btn btn-link p-0 dropdown-toggle hlv-filter-btn"
+                <button class="btn btn-link p-0 hlv-filter-btn"
                         type="button"
-                        data-bs-toggle="dropdown"
-                        aria-expanded="false"
                         title="Nhấn để lọc theo trạng thái">
                     <i class="fa fa-filter"></i>
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                    <li><a class="dropdown-item" href="#" data-filter-name="${isInvoiceStatus ? 'filter_invoice_no' : 'filter_receipt_pending'}">
+                <div class="hlv-filter-dropdown">
+                    <div class="hlv-filter-item" data-filter-name="${isInvoiceStatus ? 'filter_invoice_no' : 'filter_receipt_pending'}">
                         ${isInvoiceStatus ? 'Chưa lập hóa đơn' : 'Chờ nhận hàng'}
-                    </a></li>
-                    <li><a class="dropdown-item" href="#" data-filter-name="${isInvoiceStatus ? 'filter_invoice_to_invoice' : 'filter_receipt_partial'}">
+                    </div>
+                    <div class="hlv-filter-item" data-filter-name="${isInvoiceStatus ? 'filter_invoice_to_invoice' : 'filter_receipt_partial'}">
                         ${isInvoiceStatus ? 'Cần lập hóa đơn' : 'Nhận một phần'}
-                    </a></li>
-                    <li><a class="dropdown-item" href="#" data-filter-name="${isInvoiceStatus ? 'filter_invoice_invoiced' : 'filter_receipt_full'}">
+                    </div>
+                    <div class="hlv-filter-item" data-filter-name="${isInvoiceStatus ? 'filter_invoice_invoiced' : 'filter_receipt_full'}">
                         ${isInvoiceStatus ? 'Đã lập hóa đơn' : 'Đã nhận đủ'}
-                    </a></li>
-                </ul>
+                    </div>
+                </div>
             `;
 
+            // Toggle dropdown on button click
+            const filterBtn = wrapper.querySelector('.hlv-filter-btn');
+            const dropdown = wrapper.querySelector('.hlv-filter-dropdown');
+
+            filterBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Close other dropdowns
+                document.querySelectorAll('.hlv-filter-dropdown.show').forEach(d => {
+                    if (d !== dropdown) d.classList.remove('show');
+                });
+
+                dropdown.classList.toggle('show');
+            });
+
             // Add click handler for filter items
-            wrapper.querySelectorAll('.dropdown-item').forEach(item => {
+            wrapper.querySelectorAll('.hlv-filter-item').forEach(item => {
                 item.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     const filterName = item.dataset.filterName;
+                    dropdown.classList.remove('show');
                     this._hlvApplyFilter(filterName);
                 });
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!wrapper.contains(e.target)) {
+                    dropdown.classList.remove('show');
+                }
             });
 
             // Append to header cell

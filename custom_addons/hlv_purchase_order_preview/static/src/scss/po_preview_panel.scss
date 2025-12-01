@@ -88,14 +88,16 @@
 }
 
 /* Quick preview button in list */
-.hlv-po-quick-btn {
-    font-size: 1rem;
-    opacity: 0.6;
-    transition: opacity 0.2s;
+.hlv-preview-btn {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    white-space: nowrap;
 }
 
-.hlv-po-quick-btn:hover {
-    opacity: 1;
+.hlv-preview-btn:hover {
+    background-color: #714B67 !important;
+    border-color: #714B67 !important;
+    color: #fff !important;
 }
 
 /* Badge styles */
@@ -133,14 +135,19 @@
 .hlv-status-filter-wrapper {
     margin-left: 6px;
     vertical-align: middle;
+    position: relative;
+    display: inline-block;
 }
 
 .hlv-status-filter-wrapper .hlv-filter-btn {
     color: #6c757d;
     font-size: 0.85rem;
-    padding: 2px 4px;
+    padding: 2px 6px;
     text-decoration: none;
     transition: color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
 }
 
 .hlv-status-filter-wrapper .hlv-filter-btn:hover,
@@ -148,24 +155,45 @@
     color: #714B67;
 }
 
-.hlv-status-filter-wrapper .dropdown-menu {
-    min-width: 160px;
-    font-size: 0.9rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+/* Custom dropdown menu */
+.hlv-filter-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    min-width: 180px;
+    background: #fff;
     border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    margin-top: 4px;
+    overflow: hidden;
 }
 
-.hlv-status-filter-wrapper .dropdown-item {
-    padding: 8px 16px;
+.hlv-filter-dropdown.show {
+    display: block;
+}
+
+.hlv-filter-item {
+    padding: 10px 16px;
+    cursor: pointer;
     transition: background-color 0.15s;
+    font-size: 0.9rem;
+    color: #333;
+    border-bottom: 1px solid #f0f0f0;
 }
 
-.hlv-status-filter-wrapper .dropdown-item:hover {
+.hlv-filter-item:last-child {
+    border-bottom: none;
+}
+
+.hlv-filter-item:hover {
     background-color: #f8f4f7;
     color: #714B67;
 }
 
-.hlv-status-filter-wrapper .dropdown-item:active {
+.hlv-filter-item:active {
     background-color: #714B67;
     color: #fff;
 }
