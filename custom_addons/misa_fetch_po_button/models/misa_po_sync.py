@@ -551,8 +551,18 @@ class MisaPOSync(models.TransientModel):
         supplier_name = misa_po.get("account_object_name")
         refno = misa_po.get("refno", "PO-MISA")
         memo = misa_po.get("journal_memo", "")
-        receive_date_str = misa_po.get("receive_date") or misa_po.get("refdate")
+        refdate_str = misa_po.get("refdate")  # ngày chứng từ
+        custom_field2 = misa_po.get("custom_field2", "")  # điều khoản giao hàng
+        receive_date_str = misa_po.get("receive_date") or refdate_str
         planned_naive_utc = _to_naive_utc(receive_date_str)
+
+        # Chuyển refdate sang date (chỉ lấy ngày)
+        misa_date = False
+        if refdate_str:
+            try:
+                misa_date = datetime.fromisoformat(refdate_str.replace('Z', '+00:00')).date()
+            except Exception:
+                misa_date = False
 
         partner = odoo_utils._get_or_create_partner(supplier_name)
 
@@ -641,6 +651,8 @@ class MisaPOSync(models.TransientModel):
                 'picking_type_id': picking_type.id,
                 'date_planned': planned_naive_utc or fields.Datetime.now(),
                 'partner_ref': refno,
+                'x_studio_misa_date': misa_date,
+                'x_studio_delivery_term': custom_field2 or False,
             })
             
             po_rec = odoo_po
@@ -656,6 +668,8 @@ class MisaPOSync(models.TransientModel):
                 "name": refno,
                 "date_planned": planned_naive_utc or fields.Datetime.now(),
                 "partner_ref": refno,
+                "x_studio_misa_date": misa_date,
+                "x_studio_delivery_term": custom_field2 or False,
             }
             po_rec = self.env["purchase.order"].create(po_vals)
             total_lines = len(lines)
