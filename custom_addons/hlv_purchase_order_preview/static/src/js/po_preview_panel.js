@@ -223,20 +223,6 @@ function getResIdFromRow(listRenderer, row) {
 }
 
 /**
- * Get current product filter value from searchModel
- */
-function getProductFilterValue(searchModel) {
-    if (!searchModel) return null;
-    const items = searchModel.searchItems || {};
-    for (const item of Object.values(items)) {
-        if (item.description && item.description.startsWith('SP:')) {
-            return item.description.substring(4); // Remove 'SP: ' prefix
-        }
-    }
-    return null;
-}
-
-/**
  * Patch ListController to add custom search bar and store reference
  */
 patch(ListController.prototype, {
@@ -278,20 +264,8 @@ patch(ListController.prototype, {
     },
 
     _hlvSyncProductInput() {
-        // Sync product input with current searchModel state
-        const productInput = document.querySelector('.hlv-product-search');
-        const clearBtn = document.querySelector('.hlv-clear-product');
-        if (!productInput) return;
-
-        const currentValue = getProductFilterValue(this.env?.searchModel);
-
-        if (productInput.value !== (currentValue || '')) {
-            productInput.value = currentValue || '';
-        }
-
-        if (clearBtn) {
-            clearBtn.style.display = currentValue ? 'inline-block' : 'none';
-        }
+        // Không cần sync vì input luôn trống sau mỗi lần tìm kiếm
+        // Facet được quản lý bởi Odoo searchbar
     },
 
     _hlvAddCustomSearchBar() {
@@ -313,18 +287,11 @@ patch(ListController.prototype, {
         searchBar.className = 'hlv-custom-search-bar d-flex gap-2 align-items-center';
         searchBar.style.cssText = 'margin-left: auto; margin-right: 16px;';
 
-        // Get current filter value from searchModel
-        const currentValue = getProductFilterValue(this.env?.searchModel) || '';
-
         searchBar.innerHTML = `
             <div class="hlv-search-group d-flex align-items-center">
                 <label class="hlv-search-label me-2" style="font-weight: 500; color: #714B67; white-space: nowrap;">SP:</label>
                 <input type="text" class="form-control form-control-sm hlv-product-search"
-                       placeholder="Tìm sản phẩm trong đơn..." style="width: 200px;"
-                       value="${currentValue}">
-                <button class="btn btn-sm btn-link hlv-clear-product" style="display: ${currentValue ? 'inline-block' : 'none'}; padding: 0 8px; color: #dc3545;" title="Xóa">
-                    <i class="fa fa-times"></i>
-                </button>
+                       placeholder="Tìm sản phẩm trong đơn..." style="width: 200px;">
             </div>
         `;
 
@@ -343,24 +310,17 @@ patch(ListController.prototype, {
         }
 
         const productInput = searchBar.querySelector('.hlv-product-search');
-        const clearBtn = searchBar.querySelector('.hlv-clear-product');
 
         productInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                this._hlvSearchByProduct(productInput.value.trim());
+                const value = productInput.value.trim();
+                if (value) {
+                    this._hlvSearchByProduct(value);
+                    // Xóa nội dung input sau khi tìm kiếm để người dùng có thể tìm sản phẩm khác
+                    productInput.value = '';
+                }
             }
-        });
-
-        productInput?.addEventListener('input', () => {
-            clearBtn.style.display = productInput.value ? 'inline-block' : 'none';
-        });
-
-        clearBtn?.addEventListener('click', (e) => {
-            e.preventDefault();
-            productInput.value = '';
-            clearBtn.style.display = 'none';
-            this._hlvSearchByProduct('');
         });
     },
 
