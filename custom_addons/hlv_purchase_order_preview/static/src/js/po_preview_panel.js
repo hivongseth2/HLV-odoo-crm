@@ -446,11 +446,17 @@ patch(ListRenderer.prototype, {
             onMounted(() => {
                 this._hlvAddReceiptStatusFilter();
                 this._hlvAddSupplierHeaderSearch();
+                this._hlvAddDateApproveFilter();
+                this._hlvAddMisaDateFilter();
+                this._hlvAddWarehouseFilter();
                 this._hlvAddPreviewButtons();
             });
             onPatched(() => {
                 this._hlvAddReceiptStatusFilter();
                 this._hlvAddSupplierHeaderSearch();
+                this._hlvAddDateApproveFilter();
+                this._hlvAddMisaDateFilter();
+                this._hlvAddWarehouseFilter();
                 this._hlvAddPreviewButtons();
             });
         }
@@ -971,6 +977,567 @@ patch(ListRenderer.prototype, {
             console.log('[HLV] Created new receipt filter');
         } catch (e) {
             console.error('[HLV] Failed to create receipt filter:', e);
+        }
+    },
+
+    // ========== DATE APPROVE FILTER ==========
+    _hlvAddDateApproveFilter() {
+        if (this.props.list?.resModel !== 'purchase.order') return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        const dateApproveHeader = tableEl.querySelector('th[data-name="date_approve"]');
+        if (!dateApproveHeader || dateApproveHeader.dataset.hlvFilterAdded) return;
+        dateApproveHeader.dataset.hlvFilterAdded = 'true';
+
+        const filterBtn = document.createElement('button');
+        filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
+        filterBtn.type = 'button';
+        filterBtn.title = 'Nhấn để lọc theo ngày xác nhận';
+        filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
+
+        filterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._hlvShowDateApproveFilterDropdown(filterBtn);
+        });
+
+        dateApproveHeader.appendChild(filterBtn);
+    },
+
+    _hlvShowDateApproveFilterDropdown(triggerBtn) {
+        document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
+
+        const rect = triggerBtn.getBoundingClientRect();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'hlv-filter-dropdown-portal';
+        dropdown.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${rect.left - 100}px;
+            min-width: 200px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            padding: 12px;
+        `;
+
+        dropdown.innerHTML = `
+            <div style="margin-bottom: 8px; font-weight: 500; color: #714B67;">Ngày xác nhận</div>
+            <input type="date" class="form-control form-control-sm hlv-date-input" style="margin-bottom: 8px;">
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-primary hlv-date-apply" style="flex: 1;">Áp dụng</button>
+                <button class="btn btn-sm btn-secondary hlv-date-clear" style="flex: 1;">Xóa</button>
+            </div>
+        `;
+
+        document.body.appendChild(dropdown);
+
+        const input = dropdown.querySelector('.hlv-date-input');
+        const applyBtn = dropdown.querySelector('.hlv-date-apply');
+        const clearBtn = dropdown.querySelector('.hlv-date-clear');
+
+        applyBtn.addEventListener('click', () => {
+            const dateValue = input.value;
+            if (dateValue) {
+                dropdown.remove();
+                this._hlvApplyDateApproveFilter(dateValue);
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            dropdown.remove();
+            this._hlvApplyDateApproveFilter('');
+        });
+
+        const closeHandler = (e) => {
+            if (!dropdown.contains(e.target) && e.target !== triggerBtn) {
+                dropdown.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeHandler);
+        }, 10);
+
+        const scrollHandler = () => {
+            dropdown.remove();
+            document.removeEventListener('scroll', scrollHandler, true);
+        };
+        document.addEventListener('scroll', scrollHandler, true);
+    },
+
+    async _hlvApplyDateApproveFilter(value) {
+        console.log('[HLV] Date approve filter:', value);
+
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
+            return;
+        }
+
+        const searchModel = controller.env.searchModel;
+        if (!searchModel || !searchModel.createNewFilters) {
+            console.error('[HLV] SearchModel or createNewFilters not available');
+            return;
+        }
+
+        // Remove existing date_approve filters
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const filterIdsToRemove = [];
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('Ngày XN:')) {
+                filterIdsToRemove.push(itemId);
+            }
+        }
+
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to remove date approve filter:', id, e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (!value) {
+            console.log('[HLV] Cleared date approve filter');
+            return;
+        }
+
+        // Apply new filter
+        const domain = [['date_approve', '>=', `${value} 00:00:00`], ['date_approve', '<=', `${value} 23:59:59`]];
+        const description = `Ngày XN: ${new Date(value).toLocaleDateString('vi-VN')}`;
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Applied date approve filter');
+        } catch (e) {
+            console.error('[HLV] Failed to create date approve filter:', e);
+        }
+    },
+
+    // ========== MISA DATE FILTER ==========
+    _hlvAddMisaDateFilter() {
+        if (this.props.list?.resModel !== 'purchase.order') return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        const misaDateHeader = tableEl.querySelector('th[data-name="x_studio_misa_date"]');
+        if (!misaDateHeader || misaDateHeader.dataset.hlvFilterAdded) return;
+        misaDateHeader.dataset.hlvFilterAdded = 'true';
+
+        const filterBtn = document.createElement('button');
+        filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
+        filterBtn.type = 'button';
+        filterBtn.title = 'Nhấn để lọc theo ngày đơn hàng MISA';
+        filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
+
+        filterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._hlvShowMisaDateFilterDropdown(filterBtn);
+        });
+
+        misaDateHeader.appendChild(filterBtn);
+    },
+
+    _hlvShowMisaDateFilterDropdown(triggerBtn) {
+        document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
+
+        const rect = triggerBtn.getBoundingClientRect();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'hlv-filter-dropdown-portal';
+        dropdown.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${rect.left - 100}px;
+            min-width: 200px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            padding: 12px;
+        `;
+
+        dropdown.innerHTML = `
+            <div style="margin-bottom: 8px; font-weight: 500; color: #714B67;">Ngày đơn hàng MISA</div>
+            <input type="date" class="form-control form-control-sm hlv-date-input" style="margin-bottom: 8px;">
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-primary hlv-date-apply" style="flex: 1;">Áp dụng</button>
+                <button class="btn btn-sm btn-secondary hlv-date-clear" style="flex: 1;">Xóa</button>
+            </div>
+        `;
+
+        document.body.appendChild(dropdown);
+
+        const input = dropdown.querySelector('.hlv-date-input');
+        const applyBtn = dropdown.querySelector('.hlv-date-apply');
+        const clearBtn = dropdown.querySelector('.hlv-date-clear');
+
+        applyBtn.addEventListener('click', () => {
+            const dateValue = input.value;
+            if (dateValue) {
+                dropdown.remove();
+                this._hlvApplyMisaDateFilter(dateValue);
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            dropdown.remove();
+            this._hlvApplyMisaDateFilter('');
+        });
+
+        const closeHandler = (e) => {
+            if (!dropdown.contains(e.target) && e.target !== triggerBtn) {
+                dropdown.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeHandler);
+        }, 10);
+
+        const scrollHandler = () => {
+            dropdown.remove();
+            document.removeEventListener('scroll', scrollHandler, true);
+        };
+        document.addEventListener('scroll', scrollHandler, true);
+    },
+
+    async _hlvApplyMisaDateFilter(value) {
+        console.log('[HLV] MISA date filter:', value);
+
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
+            return;
+        }
+
+        const searchModel = controller.env.searchModel;
+        if (!searchModel || !searchModel.createNewFilters) {
+            console.error('[HLV] SearchModel or createNewFilters not available');
+            return;
+        }
+
+        // Remove existing x_studio_misa_date filters
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const filterIdsToRemove = [];
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('Ngày MISA:')) {
+                filterIdsToRemove.push(itemId);
+            }
+        }
+
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to remove MISA date filter:', id, e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (!value) {
+            console.log('[HLV] Cleared MISA date filter');
+            return;
+        }
+
+        // Apply new filter
+        const domain = [['x_studio_misa_date', '>=', `${value} 00:00:00`], ['x_studio_misa_date', '<=', `${value} 23:59:59`]];
+        const description = `Ngày MISA: ${new Date(value).toLocaleDateString('vi-VN')}`;
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Applied MISA date filter');
+        } catch (e) {
+            console.error('[HLV] Failed to create MISA date filter:', e);
+        }
+    },
+
+    // ========== WAREHOUSE FILTER ==========
+    _hlvAddWarehouseFilter() {
+        if (this.props.list?.resModel !== 'purchase.order') return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        const warehouseHeader = tableEl.querySelector('th[data-name="x_studio_kho_nhn"]');
+        if (!warehouseHeader || warehouseHeader.dataset.hlvFilterAdded) return;
+        warehouseHeader.dataset.hlvFilterAdded = 'true';
+
+        const filterBtn = document.createElement('button');
+        filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
+        filterBtn.type = 'button';
+        filterBtn.title = 'Nhấn để lọc theo kho nhận';
+        filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
+
+        filterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._hlvShowWarehouseFilterDropdown(filterBtn);
+        });
+
+        warehouseHeader.appendChild(filterBtn);
+    },
+
+    async _hlvShowWarehouseFilterDropdown(triggerBtn) {
+        document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
+
+        const rect = triggerBtn.getBoundingClientRect();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'hlv-filter-dropdown-portal';
+        dropdown.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${rect.left - 80}px;
+            min-width: 180px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            overflow: hidden;
+        `;
+
+        // Fetch warehouses
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
+            return;
+        }
+
+        const orm = controller.env.services.orm;
+        let warehouses = [];
+
+        try {
+            warehouses = await orm.searchRead(
+                'stock.warehouse',
+                [],
+                ['id', 'name'],
+                { order: 'name' }
+            );
+        } catch (e) {
+            console.error('[HLV] Failed to fetch warehouses:', e);
+        }
+
+        const items = [
+            ...warehouses.map(wh => ({ value: wh.id, label: wh.name })),
+            { value: '', label: '— Tất cả —' }
+        ];
+
+        items.forEach((item, idx) => {
+            const div = document.createElement('div');
+            div.className = 'hlv-filter-dropdown-item';
+            div.innerHTML = item.label;
+            div.style.cssText = `
+                padding: 10px 16px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                color: ${item.value === '' ? '#714B67' : '#333'};
+                font-weight: ${item.value === '' ? '600' : '400'};
+                border-bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
+                transition: background-color 0.15s;
+            `;
+            div.addEventListener('mouseenter', () => {
+                div.style.backgroundColor = '#f8f4f7';
+            });
+            div.addEventListener('mouseleave', () => {
+                div.style.backgroundColor = '';
+            });
+            div.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropdown.remove();
+                this._hlvApplyWarehouseFilter(item.value, item.label);
+            });
+            dropdown.appendChild(div);
+        });
+
+        document.body.appendChild(dropdown);
+
+        const closeHandler = (e) => {
+            if (!dropdown.contains(e.target) && e.target !== triggerBtn) {
+                dropdown.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeHandler);
+        }, 10);
+
+        const scrollHandler = () => {
+            dropdown.remove();
+            document.removeEventListener('scroll', scrollHandler, true);
+        };
+        document.addEventListener('scroll', scrollHandler, true);
+    },
+
+    async _hlvApplyWarehouseFilter(value, label) {
+        console.log('[HLV] Warehouse filter:', value, label);
+
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
+            return;
+        }
+
+        const searchModel = controller.env.searchModel;
+        if (!searchModel || !searchModel.createNewFilters) {
+            console.error('[HLV] SearchModel or createNewFilters not available');
+            return;
+        }
+
+        // Get currently selected warehouses from ACTIVE filters only
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const selectedWarehouses = new Map(); // Map<warehouseName, id>
+        const filterIdsToRemove = [];
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('Kho:')) {
+                filterIdsToRemove.push(itemId);
+
+                // Extract warehouse info from description
+                const warehouseNames = item.description.substring(5).split(' hoặc ').map(s => s.trim());
+
+                // Extract IDs from domain
+                let domainArray = null;
+                if (item.domain) {
+                    if (Array.isArray(item.domain)) {
+                        domainArray = item.domain;
+                    } else if (typeof item.domain === 'object' && item.domain.length !== undefined) {
+                        domainArray = Array.from(item.domain);
+                    }
+                }
+
+                if (domainArray) {
+                    domainArray.forEach(d => {
+                        const domainItem = (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d))
+                            ? Array.from(d)
+                            : d;
+
+                        if (Array.isArray(domainItem) && domainItem[0] === 'x_studio_kho_nhn' && domainItem[1] === '=' && domainItem[2]) {
+                            // Store with a placeholder name (we'll match by ID later)
+                            const whId = domainItem[2];
+                            if (warehouseNames.length === 1) {
+                                selectedWarehouses.set(warehouseNames[0], whId);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        // Remove all existing warehouse filters
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to remove warehouse filter:', id, e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (!value) {
+            console.log('[HLV] Cleared all warehouse filters');
+            return;
+        }
+
+        // Toggle the selected warehouse
+        if (selectedWarehouses.has(label)) {
+            selectedWarehouses.delete(label);
+        } else {
+            selectedWarehouses.set(label, value);
+        }
+
+        if (selectedWarehouses.size === 0) {
+            console.log('[HLV] No warehouse filters selected');
+            return;
+        }
+
+        // Build OR domain for multiple warehouses
+        const warehouseArray = Array.from(selectedWarehouses.entries());
+        let domain;
+        let description;
+
+        if (warehouseArray.length === 1) {
+            const [name, id] = warehouseArray[0];
+            domain = [['x_studio_kho_nhn', '=', id]];
+            description = `Kho: ${name}`;
+        } else {
+            // Build OR domain
+            domain = [];
+            for (let i = 0; i < warehouseArray.length - 1; i++) {
+                domain.push('|');
+            }
+            warehouseArray.forEach(([_, id]) => {
+                domain.push(['x_studio_kho_nhn', '=', id]);
+            });
+
+            const names = warehouseArray.map(([name, _]) => name).join(' hoặc ');
+            description = `Kho: ${names}`;
+        }
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Created new warehouse filter');
+        } catch (e) {
+            console.error('[HLV] Failed to create warehouse filter:', e);
         }
     }
 });
