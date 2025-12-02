@@ -1017,7 +1017,7 @@ patch(ListRenderer.prototype, {
             position: fixed;
             top: ${rect.bottom + 4}px;
             left: ${rect.left - 100}px;
-            min-width: 200px;
+            min-width: 240px;
             background: #fff;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
@@ -1028,7 +1028,14 @@ patch(ListRenderer.prototype, {
 
         dropdown.innerHTML = `
             <div style="margin-bottom: 8px; font-weight: 500; color: #714B67;">Ngày xác nhận</div>
-            <input type="date" class="form-control form-control-sm hlv-date-input" style="margin-bottom: 8px;">
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Từ ngày:</label>
+                <input type="date" class="form-control form-control-sm hlv-date-from" style="margin-bottom: 8px;">
+            </div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Đến ngày:</label>
+                <input type="date" class="form-control form-control-sm hlv-date-to" style="margin-bottom: 8px;">
+            </div>
             <div style="display: flex; gap: 8px;">
                 <button class="btn btn-sm btn-primary hlv-date-apply" style="flex: 1;">Áp dụng</button>
                 <button class="btn btn-sm btn-secondary hlv-date-clear" style="flex: 1;">Xóa</button>
@@ -1037,21 +1044,23 @@ patch(ListRenderer.prototype, {
 
         document.body.appendChild(dropdown);
 
-        const input = dropdown.querySelector('.hlv-date-input');
+        const inputFrom = dropdown.querySelector('.hlv-date-from');
+        const inputTo = dropdown.querySelector('.hlv-date-to');
         const applyBtn = dropdown.querySelector('.hlv-date-apply');
         const clearBtn = dropdown.querySelector('.hlv-date-clear');
 
         applyBtn.addEventListener('click', () => {
-            const dateValue = input.value;
-            if (dateValue) {
+            const fromValue = inputFrom.value;
+            const toValue = inputTo.value;
+            if (fromValue || toValue) {
                 dropdown.remove();
-                this._hlvApplyDateApproveFilter(dateValue);
+                this._hlvApplyDateApproveFilter(fromValue, toValue);
             }
         });
 
         clearBtn.addEventListener('click', () => {
             dropdown.remove();
-            this._hlvApplyDateApproveFilter('');
+            this._hlvApplyDateApproveFilter('', '');
         });
 
         const closeHandler = (e) => {
@@ -1071,8 +1080,8 @@ patch(ListRenderer.prototype, {
         document.addEventListener('scroll', scrollHandler, true);
     },
 
-    async _hlvApplyDateApproveFilter(value) {
-        console.log('[HLV] Date approve filter:', value);
+    async _hlvApplyDateApproveFilter(fromValue, toValue) {
+        console.log('[HLV] Date approve filter:', fromValue, toValue);
 
         const controller = _hlvCurrentController;
         if (!controller) {
@@ -1116,14 +1125,28 @@ patch(ListRenderer.prototype, {
             await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        if (!value) {
+        if (!fromValue && !toValue) {
             console.log('[HLV] Cleared date approve filter');
             return;
         }
 
-        // Apply new filter
-        const domain = [['date_approve', '>=', `${value} 00:00:00`], ['date_approve', '<=', `${value} 23:59:59`]];
-        const description = `Ngày XN: ${new Date(value).toLocaleDateString('vi-VN')}`;
+        // Build domain based on date range
+        let domain = [];
+        let description = 'Ngày XN: ';
+
+        if (fromValue && toValue) {
+            // Both dates provided - range filter
+            domain = [['date_approve', '>=', fromValue], ['date_approve', '<=', toValue]];
+            description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+        } else if (fromValue) {
+            // Only from date - filter >= from
+            domain = [['date_approve', '>=', fromValue]];
+            description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')}`;
+        } else if (toValue) {
+            // Only to date - filter <= to
+            domain = [['date_approve', '<=', toValue]];
+            description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+        }
 
         try {
             searchModel.createNewFilters([{
@@ -1174,7 +1197,7 @@ patch(ListRenderer.prototype, {
             position: fixed;
             top: ${rect.bottom + 4}px;
             left: ${rect.left - 100}px;
-            min-width: 200px;
+            min-width: 240px;
             background: #fff;
             border: 1px solid #e0e0e0;
             border-radius: 6px;
@@ -1185,7 +1208,14 @@ patch(ListRenderer.prototype, {
 
         dropdown.innerHTML = `
             <div style="margin-bottom: 8px; font-weight: 500; color: #714B67;">Ngày đơn hàng MISA</div>
-            <input type="date" class="form-control form-control-sm hlv-date-input" style="margin-bottom: 8px;">
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Từ ngày:</label>
+                <input type="date" class="form-control form-control-sm hlv-date-from" style="margin-bottom: 8px;">
+            </div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Đến ngày:</label>
+                <input type="date" class="form-control form-control-sm hlv-date-to" style="margin-bottom: 8px;">
+            </div>
             <div style="display: flex; gap: 8px;">
                 <button class="btn btn-sm btn-primary hlv-date-apply" style="flex: 1;">Áp dụng</button>
                 <button class="btn btn-sm btn-secondary hlv-date-clear" style="flex: 1;">Xóa</button>
@@ -1194,21 +1224,23 @@ patch(ListRenderer.prototype, {
 
         document.body.appendChild(dropdown);
 
-        const input = dropdown.querySelector('.hlv-date-input');
+        const inputFrom = dropdown.querySelector('.hlv-date-from');
+        const inputTo = dropdown.querySelector('.hlv-date-to');
         const applyBtn = dropdown.querySelector('.hlv-date-apply');
         const clearBtn = dropdown.querySelector('.hlv-date-clear');
 
         applyBtn.addEventListener('click', () => {
-            const dateValue = input.value;
-            if (dateValue) {
+            const fromValue = inputFrom.value;
+            const toValue = inputTo.value;
+            if (fromValue || toValue) {
                 dropdown.remove();
-                this._hlvApplyMisaDateFilter(dateValue);
+                this._hlvApplyMisaDateFilter(fromValue, toValue);
             }
         });
 
         clearBtn.addEventListener('click', () => {
             dropdown.remove();
-            this._hlvApplyMisaDateFilter('');
+            this._hlvApplyMisaDateFilter('', '');
         });
 
         const closeHandler = (e) => {
@@ -1228,8 +1260,8 @@ patch(ListRenderer.prototype, {
         document.addEventListener('scroll', scrollHandler, true);
     },
 
-    async _hlvApplyMisaDateFilter(value) {
-        console.log('[HLV] MISA date filter:', value);
+    async _hlvApplyMisaDateFilter(fromValue, toValue) {
+        console.log('[HLV] MISA date filter:', fromValue, toValue);
 
         const controller = _hlvCurrentController;
         if (!controller) {
@@ -1273,14 +1305,28 @@ patch(ListRenderer.prototype, {
             await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        if (!value) {
+        if (!fromValue && !toValue) {
             console.log('[HLV] Cleared MISA date filter');
             return;
         }
 
-        // Apply new filter
-        const domain = [['x_studio_misa_date', '>=', `${value} 00:00:00`], ['x_studio_misa_date', '<=', `${value} 23:59:59`]];
-        const description = `Ngày MISA: ${new Date(value).toLocaleDateString('vi-VN')}`;
+        // Build domain based on date range
+        let domain = [];
+        let description = 'Ngày MISA: ';
+
+        if (fromValue && toValue) {
+            // Both dates provided - range filter
+            domain = [['x_studio_misa_date', '>=', fromValue], ['x_studio_misa_date', '<=', toValue]];
+            description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+        } else if (fromValue) {
+            // Only from date - filter >= from
+            domain = [['x_studio_misa_date', '>=', fromValue]];
+            description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')}`;
+        } else if (toValue) {
+            // Only to date - filter <= to
+            domain = [['x_studio_misa_date', '<=', toValue]];
+            description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+        }
 
         try {
             searchModel.createNewFilters([{
@@ -1340,10 +1386,15 @@ patch(ListRenderer.prototype, {
             overflow: hidden;
         `;
 
+        // Show loading
+        dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #666;">Đang tải...</div>';
+        document.body.appendChild(dropdown);
+
         // Fetch warehouses
         const controller = _hlvCurrentController;
         if (!controller) {
             console.error('[HLV] Controller not available');
+            dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #d9534f;">Lỗi tải dữ liệu</div>';
             return;
         }
 
@@ -1351,20 +1402,37 @@ patch(ListRenderer.prototype, {
         let warehouses = [];
 
         try {
+            // Fetch picking types (operation types) for incoming shipments
+            // These correspond to the warehouse destinations
             warehouses = await orm.searchRead(
-                'stock.warehouse',
-                [],
-                ['id', 'name'],
+                'stock.picking.type',
+                [['code', '=', 'incoming']],
+                ['id', 'name', 'warehouse_id'],
                 { order: 'name' }
             );
+            console.log('[HLV] Fetched picking types:', warehouses);
         } catch (e) {
-            console.error('[HLV] Failed to fetch warehouses:', e);
+            console.error('[HLV] Failed to fetch picking types:', e);
+            dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #d9534f;">Lỗi tải dữ liệu</div>';
+            return;
         }
 
+        // Clear loading
+        dropdown.innerHTML = '';
+
+        // Build items list - use warehouse name for display
         const items = [
-            ...warehouses.map(wh => ({ value: wh.id, label: wh.name })),
+            ...warehouses.map(pt => ({
+                value: pt.id,
+                label: pt.warehouse_id ? pt.warehouse_id[1] : pt.name
+            })),
             { value: '', label: '— Tất cả —' }
         ];
+
+        if (items.length === 1) {
+            dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #666;">Không có dữ liệu</div>';
+            return;
+        }
 
         items.forEach((item, idx) => {
             const div = document.createElement('div');
@@ -1393,8 +1461,6 @@ patch(ListRenderer.prototype, {
             });
             dropdown.appendChild(div);
         });
-
-        document.body.appendChild(dropdown);
 
         const closeHandler = (e) => {
             if (!dropdown.contains(e.target) && e.target !== triggerBtn) {
@@ -1460,7 +1526,11 @@ patch(ListRenderer.prototype, {
                             ? Array.from(d)
                             : d;
 
-                        if (Array.isArray(domainItem) && domainItem[0] === 'x_studio_kho_nhn' && domainItem[1] === '=' && domainItem[2]) {
+                        if (Array.isArray(domainItem) &&
+                            (domainItem[0] === 'x_studio_kho_nhn' ||
+                             domainItem[0] === 'picking_type_id.warehouse_id' ||
+                             domainItem[0] === 'picking_type_id') &&
+                            domainItem[1] === '=' && domainItem[2]) {
                             // Store with a placeholder name (we'll match by ID later)
                             const whId = domainItem[2];
                             if (warehouseNames.length === 1) {
@@ -1513,7 +1583,8 @@ patch(ListRenderer.prototype, {
 
         if (warehouseArray.length === 1) {
             const [name, id] = warehouseArray[0];
-            domain = [['x_studio_kho_nhn', '=', id]];
+            // Use picking_type_id to filter - this is the operation type that determines warehouse
+            domain = [['picking_type_id', '=', id]];
             description = `Kho: ${name}`;
         } else {
             // Build OR domain
@@ -1522,7 +1593,8 @@ patch(ListRenderer.prototype, {
                 domain.push('|');
             }
             warehouseArray.forEach(([_, id]) => {
-                domain.push(['x_studio_kho_nhn', '=', id]);
+                // Use picking_type_id to filter - this is the operation type that determines warehouse
+                domain.push(['picking_type_id', '=', id]);
             });
 
             const names = warehouseArray.map(([name, _]) => name).join(' hoặc ');
