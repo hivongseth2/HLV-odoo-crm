@@ -393,13 +393,22 @@ patch(ListController.prototype, {
             }
         }
 
-        // Remove all existing product filters
+        // Remove all existing product filters using toggleSearchItem
         for (const id of filterIdsToRemove) {
             try {
-                searchModel.deactivateGroup(id);
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
             } catch (e) {
                 console.error('[HLV] Failed to deactivate product filter:', id, e);
             }
+        }
+
+        // Wait for removal to propagate
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         if (!value) {
@@ -671,13 +680,22 @@ patch(ListRenderer.prototype, {
             }
         }
 
-        // Remove all existing supplier filters
+        // Remove all existing supplier filters using toggleSearchItem
         for (const id of filterIdsToRemove) {
             try {
-                searchModel.deactivateGroup(id);
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
             } catch (e) {
                 console.error('[HLV] Failed to deactivate supplier filter:', id, e);
             }
+        }
+
+        // Wait for removal to propagate
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         if (!value) {
@@ -925,11 +943,22 @@ patch(ListRenderer.prototype, {
             }
         }
 
-        // Remove all existing receipt filters
+        // Remove all existing receipt filters using toggleSearchItem
         for (const id of filterIdsToRemove) {
             try {
-                searchModel.deactivateGroup(id);
-            } catch (e) { }
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to remove filter:', id, e);
+            }
+        }
+
+        // Wait for removal to propagate
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         console.log('[HLV] Selected statuses before toggle:', Array.from(selectedStatuses));
