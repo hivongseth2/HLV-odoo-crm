@@ -44,6 +44,15 @@ function getReceiptStatusBadgeClass(status) {
 }
 
 /**
+ * Convert local date string (YYYY-MM-DD) and time string (HH:mm:ss) to UTC datetime string
+ */
+function toUTCDateTime(dateStr, timeStr) {
+    if (!dateStr) return null;
+    const localDate = new Date(`${dateStr}T${timeStr}`);
+    return localDate.toISOString().replace('T', ' ').split('.')[0];
+}
+
+/**
  * Show preview panel for a purchase order
  */
 async function showPOPreviewPanel(env, resId) {
@@ -1137,19 +1146,24 @@ patch(ListRenderer.prototype, {
 
         if (fromValue && toValue) {
             // Both dates provided - range filter
-            // Use 00:00:00 for start and 23:59:59 for end to cover full day in local timezone
+            // Convert local start/end of day to UTC
+            const utcStart = toUTCDateTime(fromValue, '00:00:00');
+            const utcEnd = toUTCDateTime(toValue, '23:59:59');
+
             domain = [
-                ['date_approve', '>=', `${fromValue} 00:00:00`],
-                ['date_approve', '<=', `${toValue} 23:59:59`]
+                ['date_approve', '>=', utcStart],
+                ['date_approve', '<=', utcEnd]
             ];
             description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')}`;
         } else if (fromValue) {
-            // Only from date - filter >= from 00:00:00
-            domain = [['date_approve', '>=', `${fromValue} 00:00:00`]];
+            // Only from date - filter >= from 00:00:00 local
+            const utcStart = toUTCDateTime(fromValue, '00:00:00');
+            domain = [['date_approve', '>=', utcStart]];
             description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')}`;
         } else if (toValue) {
-            // Only to date - filter <= to 23:59:59
-            domain = [['date_approve', '<=', `${toValue} 23:59:59`]];
+            // Only to date - filter <= to 23:59:59 local
+            const utcEnd = toUTCDateTime(toValue, '23:59:59');
+            domain = [['date_approve', '<=', utcEnd]];
             description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')}`;
         }
 
@@ -1322,19 +1336,24 @@ patch(ListRenderer.prototype, {
 
         if (fromValue && toValue) {
             // Both dates provided - range filter
-            // Use 00:00:00 for start and 23:59:59 for end to cover full day in local timezone
+            // Convert local start/end of day to UTC
+            const utcStart = toUTCDateTime(fromValue, '00:00:00');
+            const utcEnd = toUTCDateTime(toValue, '23:59:59');
+
             domain = [
-                ['x_studio_misa_date', '>=', `${fromValue} 00:00:00`],
-                ['x_studio_misa_date', '<=', `${toValue} 23:59:59`]
+                ['x_studio_misa_date', '>=', utcStart],
+                ['x_studio_misa_date', '<=', utcEnd]
             ];
             description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')}`;
         } else if (fromValue) {
-            // Only from date - filter >= from 00:00:00
-            domain = [['x_studio_misa_date', '>=', `${fromValue} 00:00:00`]];
+            // Only from date - filter >= from 00:00:00 local
+            const utcStart = toUTCDateTime(fromValue, '00:00:00');
+            domain = [['x_studio_misa_date', '>=', utcStart]];
             description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')}`;
         } else if (toValue) {
-            // Only to date - filter <= to 23:59:59
-            domain = [['x_studio_misa_date', '<=', `${toValue} 23:59:59`]];
+            // Only to date - filter <= to 23:59:59 local
+            const utcEnd = toUTCDateTime(toValue, '23:59:59');
+            domain = [['x_studio_misa_date', '<=', utcEnd]];
             description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')}`;
         }
 
@@ -1538,8 +1557,8 @@ patch(ListRenderer.prototype, {
 
                         if (Array.isArray(domainItem) &&
                             (domainItem[0] === 'x_studio_kho_nhn' ||
-                             domainItem[0] === 'picking_type_id.warehouse_id' ||
-                             domainItem[0] === 'picking_type_id') &&
+                                domainItem[0] === 'picking_type_id.warehouse_id' ||
+                                domainItem[0] === 'picking_type_id') &&
                             domainItem[1] === '=' && domainItem[2]) {
                             // Store with a placeholder name (we'll match by ID later)
                             const whId = domainItem[2];
