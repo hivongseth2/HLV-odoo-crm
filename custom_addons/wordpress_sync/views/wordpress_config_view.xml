@@ -5,42 +5,43 @@
         <field name="name">wordpress.config.form</field>
         <field name="model">wordpress.config</field>
         <field name="arch" type="xml">
-            <form string="WordPress Configuration">
+            <form string="Cấu hình WordPress">
                 <sheet>
                     <div class="oe_button_box" name="button_box">
                         <button name="test_connection" type="object" class="oe_stat_button" icon="fa-globe">
                             <div class="o_field_widget o_stat_info">
-                                <span class="o_stat_text">Test Connection</span>
+                                <span class="o_stat_text">Test kết nối</span>
                             </div>
                         </button>
                     </div>
 
+                    <widget name="web_ribbon" title="Tắt" bg_color="text-bg-danger" invisible="active"/>
+
                     <div class="oe_title">
                         <h1>
-                            <field name="name" class="oe_inline" />
+                            <field name="name" class="oe_inline" placeholder="VD: Store chính"/>
                         </h1>
                     </div>
 
                     <group>
-                        <group string="Store Information">
-                            <field name="wc_domain" placeholder="https://hoanglongvu.com" />
-                            <field name="active" />
+                        <group string="Thông tin Store">
+                            <field name="wc_domain" placeholder="https://hoanglongvu.com"/>
+                            <field name="active"/>
                         </group>
                         <group string="API Credentials">
-                            <field name="wc_key" password="True" />
-                            <field name="wc_secret" password="True" />
+                            <field name="wc_key" password="True"/>
+                            <field name="wc_secret" password="True"/>
                         </group>
                     </group>
 
-                    <group string="Cache & Settings">
+                    <group string="Cài đặt nâng cao">
                         <group>
-                            <field name="cache_purge_url" placeholder="/wp-json/litespeed/v1/purge?type=product&sku=" />
-                            <field name="sync_log_days" />
+                            <field name="cache_purge_url" placeholder="/wp-json/litespeed/v1/purge?type=product&amp;sku="/>
+                            <field name="sync_log_days"/>
                         </group>
-                    </group>
-
-                    <group string="Last Sync">
-                        <field name="last_sync_date" readonly="True" />
+                        <group>
+                            <field name="last_sync_date" readonly="True"/>
+                        </group>
                     </group>
                 </sheet>
             </form>
@@ -52,34 +53,41 @@
         <field name="name">wordpress.config.tree</field>
         <field name="model">wordpress.config</field>
         <field name="arch" type="xml">
-            <tree string="WordPress Configurations">
-                <field name="name" />
-                <field name="wc_domain" />
-                <field name="active" />
-                <field name="last_sync_date" />
+            <tree string="Cấu hình WordPress">
+                <field name="name"/>
+                <field name="wc_domain"/>
+                <field name="active"/>
+                <field name="last_sync_date"/>
             </tree>
         </field>
     </record>
 
     <!-- Action to open WordPress Config -->
     <record id="action_wordpress_config" model="ir.actions.act_window">
-        <field name="name">WordPress Configuration</field>
+        <field name="name">Cấu hình WordPress</field>
         <field name="res_model">wordpress.config</field>
         <field name="view_mode">tree,form</field>
-        <field name="help">Configure WordPress WooCommerce API credentials for price synchronization</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Tạo cấu hình WordPress đầu tiên
+            </p>
+            <p>
+                Nhập thông tin WooCommerce API để đồng bộ giá sản phẩm.
+            </p>
+        </field>
     </record>
 
-    <!-- Menu item -->
+    <!-- Menu items -->
     <menuitem
         id="menu_wordpress_sync"
         name="WordPress Sync"
         parent="website.menu_website_configuration"
-        sequence="99" />
+        sequence="99"/>
 
     <menuitem
         id="menu_wordpress_config"
-        name="WordPress Configuration"
+        name="Cấu hình"
         parent="menu_wordpress_sync"
         action="action_wordpress_config"
-        sequence="10" />
+        sequence="10"/>
 </odoo>

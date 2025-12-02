@@ -5,20 +5,23 @@
         <field name="name">wordpress.price.sync.form</field>
         <field name="model">wordpress.price.sync</field>
         <field name="arch" type="xml">
-            <form string="Sync Prices to WordPress">
+            <form string="Đồng bộ giá lên WordPress">
                 <group>
-                    <group string="Configuration">
-                        <field name="wordpress_config_id" required="True" />
+                    <group string="Cấu hình">
+                        <field name="wordpress_config_id" required="True" options="{'no_create': True}"/>
                     </group>
-                    <group string="Sync Mode">
-                        <field name="sync_mode" required="True" />
-                        <field name="product_id" attrs="{'invisible': [('sync_mode', '!=', 'single')], 'required': [('sync_mode', '=', 'single')]}" />
+                    <group string="Chế độ đồng bộ">
+                        <field name="sync_mode" required="True" widget="radio"/>
+                        <field name="product_id"
+                               invisible="sync_mode != 'single'"
+                               required="sync_mode == 'single'"
+                               options="{'no_create': True}"/>
                     </group>
                 </group>
 
                 <footer>
-                    <button name="action_sync" string="🔄 Sync Now" type="object" class="btn-primary" />
-                    <button string="Cancel" special="cancel" class="btn-secondary" />
+                    <button name="action_sync" string="Đồng bộ ngay" type="object" class="btn-primary"/>
+                    <button string="Hủy" special="cancel" class="btn-secondary"/>
                 </footer>
             </form>
         </field>
@@ -26,7 +29,7 @@
 
     <!-- Action to open Price Sync Wizard -->
     <record id="action_wordpress_price_sync" model="ir.actions.act_window">
-        <field name="name">Sync Prices to WordPress</field>
+        <field name="name">Đồng bộ giá lên WordPress</field>
         <field name="res_model">wordpress.price.sync</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
@@ -35,8 +38,8 @@
     <!-- Menu item for wizard -->
     <menuitem
         id="menu_wordpress_price_sync"
-        name="Sync Prices to WordPress"
+        name="Đồng bộ giá"
         parent="menu_wordpress_sync"
         action="action_wordpress_price_sync"
-        sequence="20" />
+        sequence="20"/>
 </odoo>

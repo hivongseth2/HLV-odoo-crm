@@ -1,122 +1,121 @@
-from odoo import models, fields
+# -*- coding: utf-8 -*-
+from odoo import models, fields, api
+from datetime import timedelta
 import logging
 
 _logger = logging.getLogger(__name__)
 
 
 class ProductSyncLog(models.Model):
+    """
+    Log lịch sử đồng bộ giá lên WordPress
+    """
     _name = 'product.sync.log'
     _description = 'Product Price Sync Log'
     _order = 'sync_date desc'
 
+    # ===========================================
+    # FIELDS
+    # ===========================================
     product_id = fields.Many2one(
         'product.template',
-        string='Product',
+        string='Sản phẩm',
         ondelete='cascade',
-        required=True
+        required=True,
+        index=True
     )
 
     sku = fields.Char(
         string='SKU',
-        help='Product SKU used for matching with WordPress'
+        index=True
     )
 
-    sync_type = fields.Selection(
-        [
-            ('manual', 'Manual'),
-            ('auto', 'Automatic (on product edit)'),
-            ('test', 'Test Sync')
-        ],
-        string='Sync Type',
-        default='auto'
-    )
+    sync_type = fields.Selection([
+        ('auto', 'Tự động'),
+        ('manual', 'Thủ công'),
+    ], string='Loại sync', default='auto')
 
-    status = fields.Selection(
-        [
-            ('success', 'Success ✅'),
-            ('failed', 'Failed ❌'),
-            ('skipped', 'Skipped ⏭️'),
-            ('partial', 'Partial ⚠️')
-        ],
-        string='Status',
-        required=True
-    )
+    status = fields.Selection([
+        ('success', 'Thành công'),
+        ('failed', 'Thất bại'),
+        ('skipped', 'Bỏ qua'),
+    ], string='Trạng thái', required=True, index=True)
 
-    message = fields.Text(
-        string='Message',
-        help='Details about sync result'
-    )
+    message = fields.Text(string='Chi tiết')
 
-    wc_product_id = fields.Char(
-        string='WC Product ID',
-        help='WooCommerce Product ID (for single product or parent)'
-    )
-
-    wc_variation_id = fields.Char(
-        string='WC Variation ID',
-        help='WooCommerce Variation ID (if applicable)'
-    )
+    wc_product_id = fields.Char(string='WC Product ID')
 
     sync_date = fields.Datetime(
-        string='Sync Date',
-        default=lambda self: fields.Datetime.now(),
+        string='Thời gian',
+        default=fields.Datetime.now,
+        readonly=True,
+        index=True
+    )
+
+    # Price fields
+    old_regular_price = fields.Float(string='Giá cũ (Regular)')
+    new_regular_price = fields.Float(string='Giá mới (Regular)')
+    old_sale_price = fields.Float(string='Giá cũ (Sale)')
+    new_sale_price = fields.Float(string='Giá mới (Sale)')
+
+    # User tracking
+    user_id = fields.Many2one(
+        'res.users',
+        string='Người thực hiện',
+        default=lambda self: self.env.user,
         readonly=True
     )
 
-    # Price information
-    old_regular_price = fields.Float(
-        string='Old Regular Price',
-        help='Previous regular price'
-    )
+    # ===========================================
+    # METHODS
+    # ===========================================
+    @api.model
+    def create_log(self, product, status, message, sync_type='auto', **kwargs):
+        """
+        Helper method để tạo log
 
-    new_regular_price = fields.Float(
-        string='New Regular Price',
-        help='New regular price synced to WordPress'
-    )
+        Args:
+            product: product.template record
+            status: 'success', 'failed', 'skipped'
+            message: Log message
+            sync_type: 'auto' hoặc 'manual'
+            **kwargs: Các field khác (sku, wc_product_id, prices...)
 
-    old_sale_price = fields.Float(
-        string='Old Sale Price',
-        help='Previous sale price'
-    )
+        Returns:
+            product.sync.log record
+        """
+        vals = {
+            'product_id': product.id,
+            'status': status,
+            'message': message,
+            'sync_type': sync_type,
+            'sku': kwargs.get('sku', product.default_code or ''),
+            'wc_product_id': kwargs.get('wc_product_id', ''),
+            'old_regular_price': kwargs.get('old_regular_price', 0),
+            'new_regular_price': kwargs.get('new_regular_price', 0),
+            'old_sale_price': kwargs.get('old_sale_price', 0),
+            'new_sale_price': kwargs.get('new_sale_price', 0),
+        }
+        return self.create(vals)
 
-    new_sale_price = fields.Float(
-        string='New Sale Price',
-        help='New sale price synced to WordPress'
-    )
+    @api.model
+    def cleanup_old_logs(self, days=None):
+        """
+        Xóa các log cũ hơn số ngày quy định
 
-    # Changed by information
-    changed_by_id = fields.Many2one(
-        'res.users',
-        string='Changed By',
-        readonly=True,
-        default=lambda self: self.env.user
-    )
+        Args:
+            days: Số ngày giữ log. Nếu None, lấy từ config.
+        """
+        if days is None:
+            config = self.env['wordpress.config'].search([('active', '=', True)], limit=1)
+            days = config.sync_log_days if config else 30
 
-    changed_by_name = fields.Char(
-        string='Changed By Name',
-        compute='_compute_changed_by_name',
-        store=True
-    )
+        cutoff = fields.Datetime.now() - timedelta(days=days)
+        old_logs = self.search([('sync_date', '<', cutoff)])
+        count = len(old_logs)
 
-    @staticmethod
-    def _compute_changed_by_name():
-        for record in self:
-            record.changed_by_name = record.changed_by_id.name if record.changed_by_id else 'System'
-
-    def _clean_old_logs(self):
-        """Clean up old sync logs based on config retention days"""
-        try:
-            from datetime import timedelta
-            config = self.env['wordpress.config'].search([], limit=1)
-            if not config:
-                return
-
-            days_to_keep = config.sync_log_days or 30
-            cutoff_date = fields.Datetime.now() - timedelta(days=days_to_keep)
-
-            old_logs = self.search([('sync_date', '<', cutoff_date)])
+        if count > 0:
             old_logs.unlink()
+            _logger.info(f"Cleaned up {count} old sync logs (older than {days} days)")
 
-            _logger.info(f"🧹 Cleaned up {len(old_logs)} old sync logs (older than {days_to_keep} days)")
-        except Exception as e:
-            _logger.warning(f"⚠️ Error cleaning old logs: {str(e)}")
+        return count
