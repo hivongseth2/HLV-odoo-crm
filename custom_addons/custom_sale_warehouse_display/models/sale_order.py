@@ -18,6 +18,19 @@ class SaleOrder(models.Model):
         store=True
     )
 
+    # 3. Trường alias để tương thích ngược với view cũ (nếu có cache)
+    warehouse_plan_names = fields.Char(
+        string="Kho dự kiến (alias)",
+        compute='_compute_warehouse_plan_alias',
+        store=False
+    )
+
+    @api.depends('effective_warehouse_names')
+    def _compute_warehouse_plan_alias(self):
+        """Alias field để tương thích ngược"""
+        for order in self:
+            order.warehouse_plan_names = order.effective_warehouse_names
+
     @api.depends('picking_ids', 'picking_ids.state', 'picking_ids.location_id', 'picking_ids.date_done')
     def _compute_warehouse_info(self):
         for order in self:
