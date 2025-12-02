@@ -378,14 +378,19 @@ patch(ListController.prototype, {
         const query = searchModel.query || [];
         const searchItems = searchModel.searchItems || {};
         const selectedProducts = new Set();
-        const filterIdsToRemove = [];
+        let activeFilterId = null;
+        const otherFilterIds = [];
 
         for (const queryItem of query) {
             const itemId = queryItem.searchItemId;
             const item = searchItems[itemId];
 
             if (item && item.description && item.description.startsWith('SP:')) {
-                filterIdsToRemove.push(itemId);
+                if (!activeFilterId) {
+                    activeFilterId = itemId;
+                } else {
+                    otherFilterIds.push(itemId);
+                }
 
                 // Extract product names from description (handle " hoặc " for multiple products)
                 const productNames = item.description.substring(4).split(' hoặc ').map(s => s.trim());
@@ -394,7 +399,7 @@ patch(ListController.prototype, {
         }
 
         // Remove all existing product filters
-        for (const id of filterIdsToRemove) {
+        for (const id of otherFilterIds) {
             try {
                 searchModel.deactivateGroup(id);
             } catch (e) {
@@ -402,13 +407,10 @@ patch(ListController.prototype, {
             }
         }
 
-        // Force UI refresh
-        if (filterIdsToRemove.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 250));
-            console.log('[HLV] Waited for product filter removal to complete');
-        }
-
         if (!value) {
+            if (activeFilterId) {
+                searchModel.deactivateGroup(activeFilterId);
+            }
             console.log('[HLV] Cleared all product search filters');
             return;
         }
@@ -421,6 +423,9 @@ patch(ListController.prototype, {
         }
 
         if (selectedProducts.size === 0) {
+            if (activeFilterId) {
+                searchModel.deactivateGroup(activeFilterId);
+            }
             console.log('[HLV] No product filters selected');
             return;
         }
@@ -459,15 +464,31 @@ patch(ListController.prototype, {
             description = `SP: ${productArray.join(' hoặc ')}`;
         }
 
-        try {
-            searchModel.createNewFilters([{
-                description: description,
-                domain: domain,
-                type: 'filter',
-            }]);
-            console.log('[HLV] Applied product search with facet (OR logic)');
-        } catch (e) {
-            console.error('[HLV] Failed to create filter:', e);
+        if (activeFilterId) {
+            // Modify in-place
+            if (searchItems[activeFilterId]) {
+                searchItems[activeFilterId].domain = domain;
+                searchItems[activeFilterId].description = description;
+            }
+            try {
+                searchModel.deactivateGroup(activeFilterId);
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(activeFilterId);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to modify product filter:', e);
+            }
+        } else {
+            try {
+                searchModel.createNewFilters([{
+                    description: description,
+                    domain: domain,
+                    type: 'filter',
+                }]);
+                console.log('[HLV] Applied product search with facet (OR logic)');
+            } catch (e) {
+                console.error('[HLV] Failed to create filter:', e);
+            }
         }
     }
 });
@@ -624,7 +645,8 @@ patch(ListRenderer.prototype, {
         const query = searchModel.query || [];
         const searchItems = searchModel.searchItems || {};
         const selectedSuppliers = new Map(); // Map<supplierName, matchingIds>
-        const filterIdsToRemove = [];
+        let activeFilterId = null;
+        const otherFilterIds = [];
 
         console.log('[HLV] Checking active filters for supplier');
 
@@ -633,8 +655,12 @@ patch(ListRenderer.prototype, {
             const item = searchItems[itemId];
 
             if (item && item.description && item.description.startsWith('NCC:')) {
-                filterIdsToRemove.push(itemId);
-                console.log('[HLV] Found NCC filter to remove:', itemId, item.description);
+                if (!activeFilterId) {
+                    activeFilterId = itemId;
+                    console.log('[HLV] Found active NCC filter to reuse:', itemId, item.description);
+                } else {
+                    otherFilterIds.push(itemId);
+                }
 
                 // Extract supplier names from description
                 const supplierNames = item.description.substring(5).split(' hoặc ').map(s => s.trim());
@@ -646,7 +672,6 @@ patch(ListRenderer.prototype, {
                         domainArray = item.domain;
                     } else if (typeof item.domain === 'object' && item.domain.length !== undefined) {
                         domainArray = Array.from(item.domain);
-                        console.log('[HLV] Converted supplier domain to array, length:', domainArray.length);
                     }
                 }
 
@@ -656,7 +681,6 @@ patch(ListRenderer.prototype, {
                         const d = domainArray[i];
                         if (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d)) {
                             domainArray[i] = Array.from(d);
-                            console.log('[HLV] Converted nested domain item:', domainArray[i]);
                         }
                     }
 
@@ -679,8 +703,8 @@ patch(ListRenderer.prototype, {
             }
         }
 
-        // Remove all existing supplier filters
-        for (const id of filterIdsToRemove) {
+        // Cleanup duplicate filters
+        for (const id of otherFilterIds) {
             try {
                 searchModel.deactivateGroup(id);
             } catch (e) {
@@ -688,13 +712,10 @@ patch(ListRenderer.prototype, {
             }
         }
 
-        // Force UI refresh
-        if (filterIdsToRemove.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 250));
-            console.log('[HLV] Waited for supplier filter removal to complete');
-        }
-
         if (!value) {
+            if (activeFilterId) {
+                searchModel.deactivateGroup(activeFilterId);
+            }
             console.log('[HLV] Cleared all supplier search filters');
             return;
         }
@@ -742,6 +763,9 @@ patch(ListRenderer.prototype, {
         }
 
         if (selectedSuppliers.size === 0) {
+            if (activeFilterId) {
+                searchModel.deactivateGroup(activeFilterId);
+            }
             console.log('[HLV] No supplier filters selected');
             return;
         }
@@ -767,15 +791,35 @@ patch(ListRenderer.prototype, {
             description = `NCC: ${names}`;
         }
 
-        try {
-            searchModel.createNewFilters([{
-                description: description,
-                domain: domain,
-                type: 'filter',
-            }]);
-            console.log('[HLV] Applied supplier filter (OR logic)');
-        } catch (e) {
-            console.error('[HLV] Failed to create supplier filter:', e);
+        if (activeFilterId) {
+            // Modify in-place
+            console.log('[HLV] Modifying existing filter:', activeFilterId);
+            if (searchItems[activeFilterId]) {
+                searchItems[activeFilterId].domain = domain;
+                searchItems[activeFilterId].description = description;
+            }
+
+            try {
+                // Deactivate and Reactivate to refresh
+                searchModel.deactivateGroup(activeFilterId);
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(activeFilterId);
+                }
+                console.log('[HLV] Modified and refreshed filter:', activeFilterId);
+            } catch (e) {
+                console.error('[HLV] Failed to modify filter:', e);
+            }
+        } else {
+            try {
+                searchModel.createNewFilters([{
+                    description: description,
+                    domain: domain,
+                    type: 'filter',
+                }]);
+                console.log('[HLV] Applied supplier filter (OR logic)');
+            } catch (e) {
+                console.error('[HLV] Failed to create supplier filter:', e);
+            }
         }
     },
 
@@ -903,7 +947,8 @@ patch(ListRenderer.prototype, {
         const query = searchModel.query || [];
         const searchItems = searchModel.searchItems || {};
         const selectedStatuses = new Set();
-        const idsToRemove = [];
+        let activeFilterId = null;
+        const otherFilterIds = [];
 
         console.log('[HLV] Checking active filters for receipt status');
 
@@ -912,9 +957,12 @@ patch(ListRenderer.prototype, {
             const item = searchItems[itemId];
 
             if (item && item.description && item.description.startsWith('TT:')) {
-                const desc = item.description;
-                idsToRemove.push(itemId);
-                console.log('[HLV] Found TT: filter to remove:', itemId, desc);
+                if (!activeFilterId) {
+                    activeFilterId = itemId;
+                    console.log('[HLV] Found active TT: filter to reuse:', itemId, item.description);
+                } else {
+                    otherFilterIds.push(itemId);
+                }
 
                 // Extract status values from domain
                 let domainArray = null;
@@ -934,35 +982,25 @@ patch(ListRenderer.prototype, {
 
                         if (Array.isArray(domainItem) && domainItem[0] === 'receipt_status' && domainItem[1] === '=' && domainItem[2]) {
                             selectedStatuses.add(domainItem[2]);
-                            console.log('[HLV] Extracted status:', domainItem[2]);
                         }
                     });
                 }
             }
         }
 
-        console.log('[HLV] Selected statuses before toggle:', Array.from(selectedStatuses));
-        console.log('[HLV] Filters to remove:', idsToRemove);
-
-        // Remove ALL existing TT: filters
-        for (const id of idsToRemove) {
-            console.log('[HLV] Attempting to deactivate filter:', id);
+        // Cleanup duplicate filters if any
+        for (const id of otherFilterIds) {
             try {
                 searchModel.deactivateGroup(id);
-                console.log('[HLV] Successfully deactivated:', id);
-            } catch (e) {
-                console.error('[HLV] Failed to deactivate:', id, e);
-            }
+            } catch (e) { }
         }
 
-        // Force UI refresh after removing filters
-        // Increased delay to 250ms to ensure UI has time to update and remove old chips
-        if (idsToRemove.length > 0) {
-            await new Promise(resolve => setTimeout(resolve, 250));
-            console.log('[HLV] Waited for filter removal to complete');
-        }
+        console.log('[HLV] Selected statuses before toggle:', Array.from(selectedStatuses));
 
         if (!value) {
+            if (activeFilterId) {
+                searchModel.deactivateGroup(activeFilterId);
+            }
             console.log('[HLV] Cleared all receipt filters');
             return;
         }
@@ -975,6 +1013,9 @@ patch(ListRenderer.prototype, {
         }
 
         if (selectedStatuses.size === 0) {
+            if (activeFilterId) {
+                searchModel.deactivateGroup(activeFilterId);
+            }
             console.log('[HLV] No receipt filters selected');
             return;
         }
@@ -1001,15 +1042,35 @@ patch(ListRenderer.prototype, {
             description = `TT: ${labels}`;
         }
 
-        try {
-            searchModel.createNewFilters([{
-                description: description,
-                domain: domain,
-                type: 'filter',
-            }]);
-            console.log('[HLV] Applied receipt status filter (OR logic):', statusArray);
-        } catch (e) {
-            console.error('[HLV] Failed to create receipt filter:', e);
+        if (activeFilterId) {
+            // Modify in-place
+            console.log('[HLV] Modifying existing filter:', activeFilterId);
+            if (searchItems[activeFilterId]) {
+                searchItems[activeFilterId].domain = domain;
+                searchItems[activeFilterId].description = description;
+            }
+
+            try {
+                // Deactivate and Reactivate to refresh
+                searchModel.deactivateGroup(activeFilterId);
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(activeFilterId);
+                }
+                console.log('[HLV] Modified and refreshed filter:', activeFilterId);
+            } catch (e) {
+                console.error('[HLV] Failed to modify filter:', e);
+            }
+        } else {
+            try {
+                searchModel.createNewFilters([{
+                    description: description,
+                    domain: domain,
+                    type: 'filter',
+                }]);
+                console.log('[HLV] Created new receipt filter');
+            } catch (e) {
+                console.error('[HLV] Failed to create receipt filter:', e);
+            }
         }
     }
 });
