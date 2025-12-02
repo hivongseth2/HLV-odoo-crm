@@ -552,7 +552,7 @@ class MisaPOSync(models.TransientModel):
         refno = misa_po.get("refno", "PO-MISA")
         memo = misa_po.get("journal_memo", "")
         refdate_str = misa_po.get("refdate")  # ngày chứng từ
-        custom_field3 = misa_po.get("custom_field3", "")  # điều khoản giao hàng
+        custom_field2 = misa_po.get("custom_field2", "")  # điều khoản giao hàng
         receive_date_str = misa_po.get("receive_date") or refdate_str
         planned_naive_utc = _to_naive_utc(receive_date_str)
 
@@ -652,7 +652,7 @@ class MisaPOSync(models.TransientModel):
                 'date_planned': planned_naive_utc or fields.Datetime.now(),
                 'partner_ref': refno,
                 'x_studio_misa_date': misa_date,
-                'x_studio_delivery_term': custom_field3 or False,
+                'x_studio_delivery_term': custom_field2 or False,
             })
             
             po_rec = odoo_po
@@ -669,7 +669,7 @@ class MisaPOSync(models.TransientModel):
                 "date_planned": planned_naive_utc or fields.Datetime.now(),
                 "partner_ref": refno,
                 "x_studio_misa_date": misa_date,
-                "x_studio_delivery_term": custom_field3 or False,
+                "x_studio_delivery_term": custom_field2 or False,
             }
             po_rec = self.env["purchase.order"].create(po_vals)
             total_lines = len(lines)
