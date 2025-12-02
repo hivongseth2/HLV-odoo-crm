@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- WordPress Configuration Form View -->
+    <record id="view_wordpress_config_form" model="ir.ui.view">
+        <field name="name">wordpress.config.form</field>
+        <field name="model">wordpress.config</field>
+        <field name="arch" type="xml">
+            <form string="WordPress Configuration">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="test_connection" type="object" class="oe_stat_button" icon="fa-globe">
+                            <div class="o_field_widget o_stat_info">
+                                <span class="o_stat_text">Test Connection</span>
+                            </div>
+                        </button>
+                    </div>
+
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" class="oe_inline" />
+                        </h1>
+                    </div>
+
+                    <group>
+                        <group string="Store Information">
+                            <field name="wc_domain" placeholder="https://hoanglongvu.com" />
+                            <field name="active" />
+                        </group>
+                        <group string="API Credentials">
+                            <field name="wc_key" password="True" />
+                            <field name="wc_secret" password="True" />
+                        </group>
+                    </group>
+
+                    <group string="Cache & Settings">
+                        <group>
+                            <field name="cache_purge_url" placeholder="/wp-json/litespeed/v1/purge?type=product&sku=" />
+                            <field name="sync_log_days" />
+                        </group>
+                    </group>
+
+                    <group string="Last Sync">
+                        <field name="last_sync_date" readonly="True" />
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- WordPress Configuration Tree View -->
+    <record id="view_wordpress_config_tree" model="ir.ui.view">
+        <field name="name">wordpress.config.tree</field>
+        <field name="model">wordpress.config</field>
+        <field name="arch" type="xml">
+            <tree string="WordPress Configurations">
+                <field name="name" />
+                <field name="wc_domain" />
+                <field name="active" />
+                <field name="last_sync_date" />
+            </tree>
+        </field>
+    </record>
+
+    <!-- Action to open WordPress Config -->
+    <record id="action_wordpress_config" model="ir.actions.act_window">
+        <field name="name">WordPress Configuration</field>
+        <field name="res_model">wordpress.config</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help">Configure WordPress WooCommerce API credentials for price synchronization</field>
+    </record>
+
+    <!-- Menu item -->
+    <menuitem
+        id="menu_wordpress_sync"
+        name="WordPress Sync"
+        parent="website.menu_website_configuration"
+        sequence="99" />
+
+    <menuitem
+        id="menu_wordpress_config"
+        name="WordPress Configuration"
+        parent="menu_wordpress_sync"
+        action="action_wordpress_config"
+        sequence="10" />
+</odoo>

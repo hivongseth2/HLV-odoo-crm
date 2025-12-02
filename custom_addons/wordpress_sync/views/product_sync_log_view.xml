@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Product Sync Log Tree View -->
+    <record id="view_product_sync_log_tree" model="ir.ui.view">
+        <field name="name">product.sync.log.tree</field>
+        <field name="model">product.sync.log</field>
+        <field name="arch" type="xml">
+            <tree string="Sync History" decoration-success="status=='success'" decoration-danger="status=='failed'" decoration-warning="status=='skipped'">
+                <field name="sync_date" />
+                <field name="product_id" />
+                <field name="sku" />
+                <field name="sync_type" />
+                <field name="status" />
+                <field name="new_regular_price" />
+                <field name="new_sale_price" />
+                <field name="changed_by_id" />
+            </tree>
+        </field>
+    </record>
+
+    <!-- Product Sync Log Form View -->
+    <record id="view_product_sync_log_form" model="ir.ui.view">
+        <field name="name">product.sync.log.form</field>
+        <field name="model">product.sync.log</field>
+        <field name="arch" type="xml">
+            <form string="Sync Log Details" readonly="True">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="product_id" class="oe_inline" />
+                            <field name="status" class="oe_inline" widget="badge" />
+                        </h1>
+                    </div>
+
+                    <group>
+                        <group string="Basic Information">
+                            <field name="sku" />
+                            <field name="sync_date" />
+                            <field name="sync_type" />
+                        </group>
+                        <group string="WordPress Information">
+                            <field name="wc_product_id" />
+                            <field name="wc_variation_id" />
+                        </group>
+                    </group>
+
+                    <group string="Price Information">
+                        <group>
+                            <label for="old_regular_price">Regular Price Change</label>
+                            <div>
+                                <field name="old_regular_price" class="oe_inline" /> → <field name="new_regular_price" class="oe_inline" />
+                            </div>
+                            <label for="old_sale_price">Sale Price Change</label>
+                            <div>
+                                <field name="old_sale_price" class="oe_inline" /> → <field name="new_sale_price" class="oe_inline" />
+                            </div>
+                        </group>
+                    </group>
+
+                    <group string="Changed By">
+                        <field name="changed_by_id" />
+                    </group>
+
+                    <group string="Message">
+                        <field name="message" nolabel="1" />
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to view Sync Logs -->
+    <record id="action_product_sync_log" model="ir.actions.act_window">
+        <field name="name">Price Sync History</field>
+        <field name="res_model">product.sync.log</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_recent': 1}</field>
+    </record>
+
+    <!-- Menu item -->
+    <menuitem
+        id="menu_product_sync_log"
+        name="Price Sync History"
+        parent="menu_wordpress_sync"
+        action="action_product_sync_log"
+        sequence="30" />
+</odoo>
