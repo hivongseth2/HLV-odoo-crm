@@ -1131,20 +1131,25 @@ patch(ListRenderer.prototype, {
         }
 
         // Build domain based on date range
+        // Add time to ensure proper timezone handling: 00:00:00 local time
         let domain = [];
         let description = 'Ngày XN: ';
 
         if (fromValue && toValue) {
             // Both dates provided - range filter
-            domain = [['date_approve', '>=', fromValue], ['date_approve', '<=', toValue]];
+            // Use 00:00:00 for start and 23:59:59 for end to cover full day in local timezone
+            domain = [
+                ['date_approve', '>=', `${fromValue} 00:00:00`],
+                ['date_approve', '<=', `${toValue} 23:59:59`]
+            ];
             description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')}`;
         } else if (fromValue) {
-            // Only from date - filter >= from
-            domain = [['date_approve', '>=', fromValue]];
+            // Only from date - filter >= from 00:00:00
+            domain = [['date_approve', '>=', `${fromValue} 00:00:00`]];
             description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')}`;
         } else if (toValue) {
-            // Only to date - filter <= to
-            domain = [['date_approve', '<=', toValue]];
+            // Only to date - filter <= to 23:59:59
+            domain = [['date_approve', '<=', `${toValue} 23:59:59`]];
             description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')}`;
         }
 
@@ -1311,20 +1316,25 @@ patch(ListRenderer.prototype, {
         }
 
         // Build domain based on date range
+        // Add time to ensure proper timezone handling: 00:00:00 local time
         let domain = [];
         let description = 'Ngày MISA: ';
 
         if (fromValue && toValue) {
             // Both dates provided - range filter
-            domain = [['x_studio_misa_date', '>=', fromValue], ['x_studio_misa_date', '<=', toValue]];
+            // Use 00:00:00 for start and 23:59:59 for end to cover full day in local timezone
+            domain = [
+                ['x_studio_misa_date', '>=', `${fromValue} 00:00:00`],
+                ['x_studio_misa_date', '<=', `${toValue} 23:59:59`]
+            ];
             description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')}`;
         } else if (fromValue) {
-            // Only from date - filter >= from
-            domain = [['x_studio_misa_date', '>=', fromValue]];
+            // Only from date - filter >= from 00:00:00
+            domain = [['x_studio_misa_date', '>=', `${fromValue} 00:00:00`]];
             description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')}`;
         } else if (toValue) {
-            // Only to date - filter <= to
-            domain = [['x_studio_misa_date', '<=', toValue]];
+            // Only to date - filter <= to 23:59:59
+            domain = [['x_studio_misa_date', '<=', `${toValue} 23:59:59`]];
             description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')}`;
         }
 
