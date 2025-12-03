@@ -11,7 +11,8 @@
         "views/zalo_stock_notification_views.xml",
         "data/cron_refresh_shared_token.xml",
         "data/cron_refresh_token.xml",
-        "data/cron_refresh_stock_notification_token.xml"
+        "data/cron_refresh_stock_notification_token.xml",
+        "data/cron_interaction_reminder.xml"
     ],
     "installable": True,
     "application": False,

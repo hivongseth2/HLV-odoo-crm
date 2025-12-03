@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Cron job gửi tin nhắn nhắc nhở tương tác Zalo OA
+
+            === MỤC ĐÍCH ===
+            Theo chính sách của Zalo, nếu người dùng không tương tác với OA
+            trong 7 ngày liên tục, hệ thống sẽ tạm ngừng gửi tin nhắn.
+
+            Cron job này sẽ:
+            - Chạy mỗi ngày (kiểm tra điều kiện gửi)
+            - Tìm các config có bật enable_interaction_reminder
+            - Kiểm tra xem đã đến thời gian gửi chưa (dựa trên reminder_interval_days)
+            - Gửi tin nhắn nhắc nhở tới tất cả kế toán đã cấu hình
+
+            === CẤU HÌNH ===
+            - Mặc định: chạy mỗi ngày lúc 9:00 sáng
+            - Khoảng cách gửi: được cấu hình trong từng config (mặc định 5 ngày)
+            - Nội dung tin nhắn: được cấu hình trong từng config
+
+            === LƯU Ý ===
+            - Cron job chỉ kiểm tra và gửi nếu đủ điều kiện
+            - Nếu chưa tới thời gian gửi, sẽ bỏ qua
+            - Mỗi config có thể có khoảng cách gửi khác nhau
+        -->
+        <record id="ir_cron_zalo_interaction_reminder" model="ir.cron">
+            <field name="name">Zalo - Gửi tin nhắn nhắc nhở tương tác</field>
+            <field name="model_id" ref="model_hlv_zalo_stock_notification"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_send_interaction_reminder()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+            <field name="doall" eval="False"/>
+        </record>
+    </data>
+</odoo>

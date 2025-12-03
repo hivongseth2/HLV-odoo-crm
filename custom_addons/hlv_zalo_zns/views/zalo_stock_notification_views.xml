@@ -27,6 +27,11 @@
                         type="object"
                         class="btn-secondary"
                         invisible="use_shared_token or not active or not (refresh_token != False)" />
+                    <button name="action_send_reminder_now"
+                        string="📢 Gửi Nhắc Nhở Ngay"
+                        type="object"
+                        class="btn-warning"
+                        invisible="not active or not enable_interaction_reminder" />
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -116,6 +121,28 @@
                     <group string="📥 Cấu Hình Phiếu NHẬP KHO">
                         <field name="incoming_recipient_user_id"
                             placeholder="Zalo User ID kế toán xử lý TẤT CẢ phiếu nhập kho" />
+                    </group>
+
+                    <!-- NEW: Cấu hình gửi tin nhắn nhắc nhở tương tác -->
+                    <group string="🔔 Cấu Hình Nhắc Nhở Tương Tác">
+                        <div class="alert alert-warning" role="alert" style="margin-bottom: 15px;">
+                            <p style="margin: 5px 0;">
+                                <b>⚠️ Lưu ý:</b> Theo chính sách của Zalo, nếu người dùng không tương tác với OA trong 7 ngày liên tục,
+                                hệ thống sẽ tạm ngừng gửi tin nhắn tới người đó.
+                            </p>
+                            <p style="margin: 5px 0;">
+                                Bật tính năng này để tự động gửi tin nhắn nhắc nhở kế toán tương tác với OA định kỳ.
+                            </p>
+                        </div>
+                        <group>
+                            <field name="enable_interaction_reminder" />
+                            <field name="reminder_interval_days" invisible="not enable_interaction_reminder" />
+                            <field name="last_reminder_sent" invisible="not enable_interaction_reminder" />
+                        </group>
+                        <group invisible="not enable_interaction_reminder">
+                            <field name="reminder_message_template" widget="text"
+                                placeholder="Nội dung tin nhắn nhắc nhở. Có thể sử dụng biến {date} để hiển thị ngày gửi." />
+                        </group>
                     </group>
 
                     <!-- COMMENT: Warehouse mapping - tạm thời không sử dụng -->
