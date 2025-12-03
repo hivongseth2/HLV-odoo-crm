@@ -1,132 +1,167 @@
-# WordPress Price Sync Configuration Guide
+# Hướng Dẫn Cấu Hình WordPress Price Sync
 
 ## Tổng Quan
-Module `wordpress_sync` cho phép đồng bộ giá sản phẩm từ Odoo lên WordPress tự động hoặc thủ công.
 
-## Cách Cấu Hình
+Module `wordpress_sync` đồng bộ giá sản phẩm từ Odoo lên WordPress/WooCommerce.
 
-### 1. Lưu Credentials vào System Parameters
+**Lưu ý quan trọng:**
+- Module này **CHỈ** đồng bộ **giá** từ Odoo lên WordPress
+- **KHÔNG** đồng bộ ngược từ WordPress về Odoo
+- **KHÔNG** đồng bộ sản phẩm mới, chỉ cập nhật giá sản phẩm đã có
 
-Để lưu WordPress API credentials an toàn, module sử dụng **System Parameters** của Odoo.
+---
 
-#### Cách 1: Qua UI (Dễ nhất)
+## Bước 1: Lấy WooCommerce API Keys
 
-1. Vào **Website > WordPress Sync > WordPress Configuration**
-2. Click **Create** để tạo config mới
-3. Nhập:
-   - **Config Name**: Tên của cấu hình (vd: "Main Store", "Test Store")
-   - **WordPress Domain**: Domain WordPress (vd: `https://hoanglongvu.com` - **KHÔNG** có dấu `/` ở cuối)
-   - **Consumer Key**: API Consumer Key từ WordPress
-   - **Consumer Secret**: API Consumer Secret từ WordPress
-   - **Cache Purge URL** (optional): Endpoint để xóa cache LiteSpeed
-   - **Keep Sync Logs (Days)**: Số ngày lưu log (mặc định 30 ngày)
+Trên WordPress Admin:
+
+1. Vào **WooCommerce > Settings > Advanced > REST API**
+2. Click **Add key**
+3. Điền thông tin:
+   - **Description**: `Odoo Price Sync`
+   - **User**: Chọn admin user
+   - **Permissions**: **Read/Write**
+4. Click **Generate API key**
+5. **Copy ngay** Consumer Key và Consumer Secret (chỉ hiện 1 lần)
+
+---
+
+## Bước 2: Tạo Cấu Hình WordPress trong Odoo
+
+1. Vào **Inventory > Configuration > WordPress Sync > Cấu hình WooCommerce**
+2. Click **Create**
+3. Điền thông tin:
+
+| Field | Giá trị | Ví dụ |
+|-------|---------|-------|
+| Tên cấu hình | Tên để nhận biết | `Store chính` |
+| WordPress Domain | URL WordPress (KHÔNG có `/` cuối) | `https://hoanglongvu.com` |
+| Consumer Key | Key từ WooCommerce | `ck_xxxxx` |
+| Consumer Secret | Secret từ WooCommerce | `cs_xxxxx` |
+| Cache Purge URL | (Tùy chọn) LiteSpeed cache | `/wp-json/litespeed/v1/purge?type=product&sku=` |
+| Giữ log (ngày) | Số ngày lưu log | `30` |
 
 4. Click **Save**
-5. Click **Test Connection** để kiểm tra kết nối
+5. Click **Test kết nối** để kiểm tra
 
-#### Cách 2: Qua System Parameters (Nâng cao)
+**Kết quả mong đợi:** Thông báo "Kết nối thành công"
 
-Nếu muốn lưu credentials thủ công:
+---
 
-1. Vào **Settings > Technical > System Parameters**
-2. Tạo 2 parameters:
-   - **Key**: `wordpress_sync.Main_Store.wc_key`
-     **Value**: Consumer Key từ WordPress
+## Bước 3: Bật Đồng Bộ Tự Động
 
-   - **Key**: `wordpress_sync.Main_Store.wc_secret`
-     **Value**: Consumer Secret từ WordPress
-
-   (Thay `Main_Store` bằng tên config của bạn)
-
-3. Sau đó vào **WordPress Configuration** và chỉ cần nhập:
-   - Config Name: `Main_Store`
-   - WordPress Domain: `https://hoanglongvu.com`
-   - Các field khác
+1. Vào **Settings > Inventory**
+2. Trong phần **Products**, tìm **Đồng bộ giá WordPress**
+3. Tick checkbox để bật
+4. Chọn cấu hình WordPress vừa tạo
+5. Click **Save**
 
 ---
 
 ## Cách Hoạt Động
 
-### Auto-Sync (Tự động)
-Khi bạn chỉnh sửa giá sản phẩm trong Odoo:
-1. Nhập giá vào field `x_studio_ga_web` (regular price) hoặc `x_studio_gi_bn_thng_mi` (sale price)
-2. Click **Save**
-3. Hệ thống tự động:
-   - Tìm sản phẩm trên WordPress qua SKU
-   - Cập nhật giá trên WordPress
-   - Tạo note bên trong sản phẩm với chi tiết thay đổi
-   - Log vào **Price Sync History**
-   - Xóa cache WordPress (nếu có)
+### Đồng Bộ Tự Động
 
-### Manual Sync (Thủ công)
-1. Vào sản phẩm, click nút **🔄 Sync to WordPress**
-2. Chọn:
-   - **Single Product**: Đồng bộ sản phẩm hiện tại
-   - **All Products**: Đồng bộ tất cả sản phẩm có SKU
-3. Click **Sync Now**
+**Điều kiện:** Checkbox "Đồng bộ giá WordPress" đã bật
+
+| Hành động | Kết quả |
+|-----------|---------|
+| Tick checkbox | Chỉ bật chế độ theo dõi, **KHÔNG** sync giá hiện tại |
+| Sửa giá sản phẩm | Tự động sync sản phẩm đó lên WordPress |
+| Sửa sản phẩm không có SKU | Bỏ qua, không sync |
+
+**Field giá được theo dõi:**
+- `x_studio_ga_web` → Regular Price trên WordPress
+- `x_studio_gi_bn_thng_mi` → Sale Price trên WordPress
+
+### Đồng Bộ Thủ Công
+
+**Hoạt động bất kể checkbox bật hay tắt**
+
+1. Vào form sản phẩm
+2. Click nút **Đồng bộ giá WordPress** (trong button box)
+3. Chọn chế độ:
+   - **Một sản phẩm**: Sync sản phẩm hiện tại
+   - **Tất cả sản phẩm**: Sync tất cả sản phẩm có SKU
+4. Chọn cấu hình WordPress
+5. Click **Đồng bộ**
 
 ---
 
-## Trường Giá
+## Logic Xử Lý Giá
 
-| Trường | Mô Tả | Dùng Cho |
-|--------|-------|---------|
-| `x_studio_ga_web` | Giá bán lẻ | Regular Price (WordPress) |
-| `x_studio_gi_bn_thng_mi` | Giá thương mại | Sale Price (WordPress) |
-
-**Logic Sale Price:**
-- Nếu `x_studio_gi_bn_thng_mi` > 0 và < `x_studio_ga_web` → Set sale price trên WordPress
-- Nếu không → Xóa sale price trên WordPress
+| Điều kiện | Kết quả trên WordPress |
+|-----------|------------------------|
+| `x_studio_ga_web` > 0 | Set Regular Price |
+| `x_studio_gi_bn_thng_mi` > 0 VÀ < `x_studio_ga_web` | Set Sale Price |
+| `x_studio_gi_bn_thng_mi` = 0 hoặc >= `x_studio_ga_web` | Xóa Sale Price |
+| Sản phẩm không có SKU | Bỏ qua |
+| SKU không tồn tại trên WordPress | Báo lỗi "Product not found" |
 
 ---
 
 ## Xem Lịch Sử Đồng Bộ
 
-1. Vào **Website > WordPress Sync > Price Sync History**
-2. Xem tất cả các lần sync:
-   - **Status**: success ✅, failed ❌, skipped ⏭️
-   - **Message**: Chi tiết lỗi hoặc kết quả
-   - **Changed by**: Người thực hiện
-   - **Sync Date**: Thời gian
+1. Vào **Inventory > Configuration > WordPress Sync > Lịch sử đồng bộ**
+2. Xem các lần sync với trạng thái:
+   - **success** (xanh): Thành công
+   - **failed** (đỏ): Thất bại
+   - **skipped** (vàng): Bỏ qua
+
+3. Click vào record để xem chi tiết:
+   - Giá cũ → Giá mới
+   - Message lỗi (nếu có)
+   - Người thực hiện
 
 ---
 
-## Kiểm Tra Bên Trong Sản Phẩm
+## Internal Note Trên Sản Phẩm
 
-Mỗi khi sync thành công, bên trong product sẽ có note:
+Mỗi lần sync thành công, sản phẩm sẽ có note trong chatter:
+
 ```
-🔄 WordPress Sync:
+WordPress Sync:
 Regular Price: 100,000
 Sale Price: 80,000
-Synced by: [Username]
-Date: 02/12/2025 14:30:00
+Synced by: Admin
+Date: 03/12/2025 10:30:00
 ```
 
 ---
 
 ## Lỗi Thường Gặp
 
-| Lỗi | Nguyên Nhân | Giải Pháp |
-|-----|------------|----------|
-| "Credentials Missing" | Credentials chưa được lưu | Vào Config, nhập Consumer Key/Secret, Save |
-| "Product not found" | SKU không tồn tại trên WordPress | Check SKU trên WordPress có giống không |
-| "HTTP 401" | Consumer Key/Secret sai | Kiểm tra lại credentials |
-| "Invalid regular price" | Giá regular <= 0 | Nhập giá regular > 0 |
+| Lỗi | Nguyên nhân | Giải pháp |
+|-----|-------------|-----------|
+| "Thiếu Credentials" | Chưa nhập Consumer Key/Secret | Vào cấu hình, nhập key/secret, Save |
+| "Kết nối thất bại HTTP 401" | Key/Secret sai | Tạo lại API key trên WooCommerce |
+| "Product not found on WooCommerce" | SKU không tồn tại trên WordPress | Kiểm tra SKU trên WordPress |
+| "Invalid regular price" | Giá `x_studio_ga_web` <= 0 | Nhập giá > 0 |
+| "Timeout" | Server WordPress chậm | Thử lại sau |
 
 ---
 
 ## Bảo Mật
 
-- **Credentials được lưu trong System Parameters** của Odoo, không lưu trong database của module
-- Trường `wc_key` và `wc_secret` hiển thị dạng **password** (ẩn ký tự)
-- Chỉ user có quyền truy cập System Parameters mới có thể xem/chỉnh sửa credentials
+- Consumer Key/Secret được lưu trong **System Parameters** (không lưu trực tiếp trong model)
+- Hiển thị dạng password (ẩn ký tự) trên UI
+- Chỉ user có quyền Admin mới truy cập được cấu hình
+
+---
+
+## Lưu Ý Quan Trọng
+
+1. **Sản phẩm phải có SKU** (`default_code` trong Odoo) để sync được
+2. **SKU phải trùng khớp** giữa Odoo và WordPress
+3. **Không sync hàng loạt khi tick checkbox** - chỉ sync khi có thay đổi giá
+4. **Test trước khi dùng production** - test với 1 sản phẩm trước
 
 ---
 
 ## Hỗ Trợ
 
-Nếu gặp lỗi, kiểm tra:
-1. **Logs**: Vào Settings > Technical > Logs
-2. **Sync History**: Xem chi tiết thất bại
-3. **Product Notes**: Xem bên trong sản phẩm
-4. **System Parameters**: Kiểm tra credentials có đúng không
+Nếu gặp lỗi:
+1. Kiểm tra **Lịch sử đồng bộ** để xem message lỗi chi tiết
+2. Kiểm tra **Chatter sản phẩm** để xem note sync
+3. Dùng **Test kết nối** để verify API hoạt động
+4. Kiểm tra Odoo server log nếu cần debug sâu hơn

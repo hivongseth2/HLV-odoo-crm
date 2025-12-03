@@ -13,12 +13,12 @@ class StockPicking(models.Model):
         """
         Override button_validate để kiểm tra quantity không được vượt quá product_uom_qty
         trên tất cả các stock.move trước khi xác nhận picking.
-        Chỉ áp dụng cho phiếu OUT (outgoing).
+        Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
         """
         self.ensure_one()
 
-        # Chỉ kiểm tra cho phiếu OUT (outgoing)
-        if self.picking_type_id.code != 'outgoing':
+        # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên)
+        if self.name and 'INT' in self.name:
             return super(StockPicking, self).button_validate()
 
         # Danh sách các move vi phạm (qty_done > product_uom_qty)
@@ -134,7 +134,7 @@ class StockMoveLine(models.Model):
         product_uom_qty của stock.move tương ứng.
 
         Điều này ngăn chặn việc quét mã vạch dư hoặc nhập thủ công số lượng vượt mức.
-        Chỉ áp dụng cho phiếu OUT (outgoing).
+        Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
         """
         EPS = 1e-6  # Epsilon để xử lý sai số floating point
 
@@ -147,8 +147,8 @@ class StockMoveLine(models.Model):
             if line.picking_id and line.picking_id.state == 'done':
                 continue
 
-            # Chỉ kiểm tra cho phiếu OUT (outgoing)
-            if not line.picking_id or line.picking_id.picking_type_id.code != 'outgoing':
+            # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên)
+            if not line.picking_id or (line.picking_id.name and 'INT' in line.picking_id.name):
                 continue
 
             move = line.move_id
