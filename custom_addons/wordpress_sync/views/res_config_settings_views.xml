@@ -5,33 +5,26 @@
         <field name="model">res.config.settings</field>
         <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
         <field name="arch" type="xml">
-            <!-- Add WordPress Sync settings to Inventory Settings -->
-            <xpath expr="//app[@name='stock']" position="inside">
-                <block title="Đồng bộ WordPress" id="wordpress_sync_settings">
-                    <setting id="wordpress_auto_sync_setting"
-                             string="Tự động đồng bộ giá lên WordPress"
-                             help="Khi giá sản phẩm thay đổi trong Odoo, tự động cập nhật lên WordPress">
-                        <field name="wordpress_auto_sync_enabled"/>
-                        <div class="content-group" invisible="not wordpress_auto_sync_enabled">
-                            <div class="row mt16">
-                                <label for="wordpress_config_id" class="col-3 o_light_label"/>
-                                <field name="wordpress_config_id"
-                                       options="{'no_create': True}"
-                                       placeholder="Chọn cấu hình WordPress"/>
-                            </div>
-                            <div class="content-group mt8">
-                                <small class="text-muted">
-                                    Theo dõi thay đổi trên: x_studio_ga_web (Regular Price), x_studio_gi_bn_thng_mi (Sale Price)
-                                </small>
-                            </div>
-                            <div class="mt8">
-                                <a type="action" name="%(wordpress_sync.action_wordpress_config)d" class="btn-link">
-                                    Quản lý cấu hình WordPress
-                                </a>
-                            </div>
+            <!-- Add WordPress Sync settings inside Products block -->
+            <xpath expr="//block[@name='product_setting_container']" position="inside">
+                <setting id="wordpress_auto_sync_setting"
+                         string="Đồng bộ giá WordPress"
+                         help="Tự động đồng bộ giá lên WordPress/WooCommerce khi giá sản phẩm thay đổi">
+                    <field name="wordpress_auto_sync_enabled"/>
+                    <div class="content-group" invisible="not wordpress_auto_sync_enabled">
+                        <div class="row mt16">
+                            <label for="wordpress_config_id" class="col-3 o_light_label"/>
+                            <field name="wordpress_config_id"
+                                   options="{'no_create': True}"
+                                   placeholder="Chọn cấu hình WordPress"/>
                         </div>
-                    </setting>
-                </block>
+                        <div class="mt8">
+                            <a type="action" name="%(wordpress_sync.action_wordpress_config)d" class="btn-link">
+                                Quản lý cấu hình WordPress →
+                            </a>
+                        </div>
+                    </div>
+                </setting>
             </xpath>
         </field>
     </record>
