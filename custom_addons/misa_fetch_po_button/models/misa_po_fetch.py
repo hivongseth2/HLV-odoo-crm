@@ -355,6 +355,8 @@ class MisaPOFetch(models.TransientModel):
                 supplier_name = po.get("account_object_name")
                 refno = po.get("refno", "PO-MISA")
                 memo = po.get("journal_memo", "")
+                refdate_str = po.get("refdate")  # ngày chứng từ
+                custom_field2 = po.get("custom_field2", "")  # điều khoản giao hàng
 
                 # chỉ lấy đơn "chưa thực hiện" ---
                 def _as_bool(val):
@@ -450,13 +452,23 @@ class MisaPOFetch(models.TransientModel):
                     continue
                 picking_type = warehouse.in_type_id
                 
+                # Chuyển refdate sang date (chỉ lấy ngày)
+                misa_date = False
+                if refdate_str:
+                    try:
+                        misa_date = datetime.fromisoformat(refdate_str.replace('Z', '+00:00')).date()
+                    except Exception:
+                        misa_date = False
+
                 po_vals = {
                     "partner_id": partner.id,
                     "origin": memo,
                     "picking_type_id": picking_type.id,
                     "name": refno,
+                    "x_studio_misa_date": misa_date,
+                    "x_studio_delivery_term": custom_field2 or False,
                 }
-                
+
                 if planned_naive_utc:
                     po_vals["date_planned"] = planned_naive_utc 
 

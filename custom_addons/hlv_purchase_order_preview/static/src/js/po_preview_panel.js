@@ -7,13 +7,6 @@ import { onMounted, onPatched } from "@odoo/owl";
 // Store reference to current controller for use in ListRenderer
 let _hlvCurrentController = null;
 
-// Track active filters for visual indicator
-let _hlvActiveFilters = {
-    receipt: null,
-    supplier: null,
-    product: null
-};
-
 /**
  * Format number as currency (Vietnamese locale)
  */
@@ -27,119 +20,36 @@ function fmtCurrency(env, value) {
 }
 
 /**
- * Get invoice status label in Vietnamese
- */
-function getInvoiceStatusLabel(status) {
-    const labels = {
-        'no': 'Chưa lập hóa đơn',
-        'to invoice': 'Cần lập hóa đơn',
-        'invoiced': 'Đã lập hóa đơn'
-    };
-    return labels[status] || status || '';
-}
-
-/**
  * Get receipt status label in Vietnamese
  */
 function getReceiptStatusLabel(status) {
     const labels = {
-        'pending': 'Chờ nhận hàng',
-        'partial': 'Nhận một phần',
-        'full': 'Đã nhận đủ'
+        'pending': 'Chưa nhận',
+        'partial': 'Đã nhận một phần',
+        'full': 'Đã nhận hết'
     };
     return labels[status] || status || '';
 }
 
 /**
- * Update the filter indicator bar to show active filters
+ * Get receipt status badge color
  */
-function updateFilterIndicator() {
-    // Remove existing indicator
-    document.querySelectorAll('.hlv-filter-indicator').forEach(el => el.remove());
-
-    const activeFilters = [];
-    if (_hlvActiveFilters.receipt) {
-        activeFilters.push({
-            type: 'receipt',
-            label: `Nhập kho: ${getReceiptStatusLabel(_hlvActiveFilters.receipt)}`
-        });
-    }
-    if (_hlvActiveFilters.supplier) {
-        activeFilters.push({
-            type: 'supplier',
-            label: `NCC: ${_hlvActiveFilters.supplier}`
-        });
-    }
-    if (_hlvActiveFilters.product) {
-        activeFilters.push({
-            type: 'product',
-            label: `SP: ${_hlvActiveFilters.product}`
-        });
-    }
-
-    if (activeFilters.length === 0) return;
-
-    // Find the search view to append indicator
-    const searchView = document.querySelector('.o_searchview');
-    if (!searchView) return;
-
-    const indicator = document.createElement('div');
-    indicator.className = 'hlv-filter-indicator d-flex align-items-center gap-2 ms-2';
-
-    activeFilters.forEach(filter => {
-        const tag = document.createElement('span');
-        tag.className = 'hlv-filter-tag badge bg-primary d-flex align-items-center gap-1';
-        tag.innerHTML = `
-            ${filter.label}
-            <button type="button" class="btn-close btn-close-white ms-1"
-                    style="font-size: 0.6rem; padding: 0.2em;"
-                    data-filter-type="${filter.type}"></button>
-        `;
-        tag.querySelector('.btn-close').addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            clearFilter(filter.type);
-        });
-        indicator.appendChild(tag);
-    });
-
-    searchView.parentElement?.insertBefore(indicator, searchView.nextSibling);
+function getReceiptStatusBadgeClass(status) {
+    const classes = {
+        'pending': 'bg-warning text-dark',
+        'partial': 'bg-info text-dark',
+        'full': 'bg-success text-white'
+    };
+    return classes[status] || 'bg-secondary';
 }
 
 /**
- * Clear a specific filter
+ * Convert local date string (YYYY-MM-DD) and time string (HH:mm:ss) to UTC datetime string
  */
-function clearFilter(type) {
-    const controller = _hlvCurrentController;
-    if (!controller) return;
-
-    _hlvActiveFilters[type] = null;
-
-    // Rebuild domain from remaining active filters
-    const domains = [];
-    if (_hlvActiveFilters.receipt) {
-        domains.push(['receipt_status', '=', _hlvActiveFilters.receipt]);
-    }
-    if (_hlvActiveFilters.supplier) {
-        domains.push(['partner_id.name', '=ilike', _hlvActiveFilters.supplier]);
-    }
-    if (_hlvActiveFilters.product) {
-        domains.push('|');
-        domains.push(['order_line.product_id.name', '=ilike', _hlvActiveFilters.product]);
-        domains.push(['order_line.product_id.default_code', '=ilike', _hlvActiveFilters.product]);
-    }
-
-    if (controller.model && controller.model.load) {
-        controller.model.load({ domain: domains }).then(() => {
-            updateFilterIndicator();
-        });
-    }
-
-    // Clear input if it's product filter
-    if (type === 'product') {
-        const productInput = document.querySelector('.hlv-product-search');
-        if (productInput) productInput.value = '';
-    }
+function toUTCDateTime(dateStr, timeStr) {
+    if (!dateStr) return null;
+    const localDate = new Date(`${dateStr}T${timeStr}`);
+    return localDate.toISOString().replace('T', ' ').split('.')[0];
 }
 
 /**
@@ -214,7 +124,7 @@ async function showPOPreviewPanel(env, resId) {
         const [order] = await orm.read(
             "purchase.order",
             [resId],
-            ["name", "partner_id", "state", "amount_total", "invoice_status", "receipt_status", "date_order"]
+            ["name", "partner_id", "state", "amount_total", "receipt_status", "date_planned"]
         );
         log("read OK", order);
 
@@ -237,9 +147,9 @@ async function showPOPreviewPanel(env, resId) {
         const body = target.querySelector(".hlv-panel-body");
 
         // Build order summary
-        const orderDate = order?.date_order ? new Date(order.date_order).toLocaleDateString('vi-VN') : '';
-        const invoiceStatusLabel = getInvoiceStatusLabel(order?.invoice_status);
+        const plannedDate = order?.date_planned ? new Date(order.date_planned).toLocaleDateString('vi-VN') : '';
         const receiptStatusLabel = getReceiptStatusLabel(order?.receipt_status);
+        const receiptStatusBadge = getReceiptStatusBadgeClass(order?.receipt_status);
 
         // Build product rows
         const rows = (lines || [])
@@ -258,17 +168,13 @@ async function showPOPreviewPanel(env, resId) {
 
         body.innerHTML = `
             <div class="row mb-3">
-                <div class="col-md-4">
-                    <small class="text-muted">Ngày đặt hàng:</small>
-                    <div>${orderDate}</div>
+                <div class="col-md-6">
+                    <small class="text-muted">Ngày hàng về dự kiến:</small>
+                    <div class="fw-bold">${plannedDate || 'Chưa có'}</div>
                 </div>
-                <div class="col-md-4">
-                    <small class="text-muted">Trạng thái thanh toán:</small>
-                    <div><span class="badge bg-info">${invoiceStatusLabel}</span></div>
-                </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <small class="text-muted">Trạng thái nhập kho:</small>
-                    <div><span class="badge bg-primary">${receiptStatusLabel}</span></div>
+                    <div><span class="badge ${receiptStatusBadge}">${receiptStatusLabel}</span></div>
                 </div>
             </div>
             <div class="table-responsive">
@@ -338,11 +244,37 @@ patch(ListController.prototype, {
 
             onMounted(() => {
                 this._hlvAddCustomSearchBar();
+                this._hlvMonitorFilterChanges();
             });
             onPatched(() => {
                 this._hlvAddCustomSearchBar();
+                this._hlvSyncProductInput();
+                this._hlvMonitorFilterChanges();
             });
         }
+    },
+
+    _hlvMonitorFilterChanges() {
+        // Watch for filter removals in the search panel
+        const searchPanel = document.querySelector('.o_searchview');
+        if (!searchPanel || searchPanel.dataset.hlvMonitored) return;
+
+        searchPanel.dataset.hlvMonitored = 'true';
+
+        // Use MutationObserver to detect when facets are removed
+        const observer = new MutationObserver(() => {
+            this._hlvSyncProductInput();
+        });
+
+        observer.observe(searchPanel, {
+            childList: true,
+            subtree: true
+        });
+    },
+
+    _hlvSyncProductInput() {
+        // Không cần sync vì input luôn trống sau mỗi lần tìm kiếm
+        // Facet được quản lý bởi Odoo searchbar
     },
 
     _hlvAddCustomSearchBar() {
@@ -353,24 +285,37 @@ patch(ListController.prototype, {
 
         if (document.querySelector('.hlv-custom-search-bar')) return;
 
-        const searchArea = controlPanel.querySelector('.o_searchview') ||
-                          controlPanel.querySelector('.o_control_panel_main');
-        if (!searchArea) return;
+        // Find the buttons area (right side of control panel) to insert before it
+        const buttonsArea = controlPanel.querySelector('.o_control_panel_actions') ||
+            controlPanel.querySelector('.o_cp_action_menus');
+
+        // Or find the breadcrumb area to insert after
+        const breadcrumbArea = controlPanel.querySelector('.o_control_panel_breadcrumbs');
 
         const searchBar = document.createElement('div');
         searchBar.className = 'hlv-custom-search-bar d-flex gap-2 align-items-center';
-        searchBar.style.cssText = 'margin-right: 16px; padding-right: 16px; border-right: 1px solid #dee2e6;';
+        searchBar.style.cssText = 'margin-left: auto; margin-right: 16px;';
+
         searchBar.innerHTML = `
             <div class="hlv-search-group d-flex align-items-center">
-                <label class="hlv-search-label me-2" style="font-weight: 500; color: #714B67;">SP:</label>
+                <label class="hlv-search-label me-2" style="font-weight: 500; color: #714B67; white-space: nowrap;">SP:</label>
                 <input type="text" class="form-control form-control-sm hlv-product-search"
-                       placeholder="Tìm sản phẩm..." style="width: 160px;">
+                       placeholder="Tìm sản phẩm trong đơn..." style="width: 200px;">
             </div>
         `;
 
-        const parentEl = searchArea.parentElement;
-        if (parentEl) {
-            parentEl.insertBefore(searchBar, searchArea);
+        // Insert in the control panel navigation area, not inside searchview
+        if (buttonsArea && buttonsArea.parentElement) {
+            buttonsArea.parentElement.insertBefore(searchBar, buttonsArea);
+        } else if (breadcrumbArea && breadcrumbArea.parentElement) {
+            // Fallback: insert after breadcrumb
+            breadcrumbArea.parentElement.appendChild(searchBar);
+        } else {
+            // Last fallback: append to control panel main
+            const mainArea = controlPanel.querySelector('.o_control_panel_main');
+            if (mainArea) {
+                mainArea.appendChild(searchBar);
+            }
         }
 
         const productInput = searchBar.querySelector('.hlv-product-search');
@@ -378,7 +323,12 @@ patch(ListController.prototype, {
         productInput?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                this._hlvSearchByProduct(productInput.value.trim());
+                const value = productInput.value.trim();
+                if (value) {
+                    this._hlvSearchByProduct(value);
+                    // Xóa nội dung input sau khi tìm kiếm để người dùng có thể tìm sản phẩm khác
+                    productInput.value = '';
+                }
             }
         });
     },
@@ -386,55 +336,111 @@ patch(ListController.prototype, {
     async _hlvSearchByProduct(value) {
         console.log('[HLV] Product search:', value);
 
-        // Update active filter tracking
-        _hlvActiveFilters.product = value || null;
+        const searchModel = this.env.searchModel;
 
-        // Use =ilike for accent-sensitive search in Vietnamese
-        const domain = value ? [
-            '|',
-            ['order_line.product_id.name', '=ilike', `%${value}%`],
-            ['order_line.product_id.default_code', '=ilike', `%${value}%`]
-        ] : [];
+        if (!searchModel || !searchModel.createNewFilters) {
+            console.error('[HLV] SearchModel or createNewFilters not available');
+            return;
+        }
 
-        // Build combined domain with other active filters
-        const combinedDomain = this._hlvBuildCombinedDomain(domain);
+        // Get currently selected products from ACTIVE filters only
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const selectedProducts = new Set();
+        const filterIdsToRemove = [];
 
-        // Try using model.load with domain
-        if (this.model && this.model.load) {
-            try {
-                await this.model.load({ domain: combinedDomain });
-                console.log('[HLV] Applied via model.load');
-                updateFilterIndicator();
-                return;
-            } catch (e) {
-                console.warn('[HLV] model.load failed:', e);
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('SP:')) {
+                filterIdsToRemove.push(itemId);
+
+                // Extract product names from description (handle " hoặc " for multiple products)
+                const productNames = item.description.substring(4).split(' hoặc ').map(s => s.trim());
+                productNames.forEach(name => selectedProducts.add(name));
             }
         }
 
-        console.error('[HLV] Failed to apply product search');
-    },
-
-    _hlvBuildCombinedDomain(additionalDomain = []) {
-        const domains = [];
-
-        if (_hlvActiveFilters.receipt) {
-            domains.push(['receipt_status', '=', _hlvActiveFilters.receipt]);
-        }
-        if (_hlvActiveFilters.supplier) {
-            domains.push(['partner_id.name', '=ilike', `%${_hlvActiveFilters.supplier}%`]);
-        }
-        if (_hlvActiveFilters.product) {
-            domains.push('|');
-            domains.push(['order_line.product_id.name', '=ilike', `%${_hlvActiveFilters.product}%`]);
-            domains.push(['order_line.product_id.default_code', '=ilike', `%${_hlvActiveFilters.product}%`]);
+        // Remove all existing product filters using toggleSearchItem
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to deactivate product filter:', id, e);
+            }
         }
 
-        // If additional domain provided and product not yet in filters, add it
-        if (additionalDomain.length > 0 && !_hlvActiveFilters.product) {
-            domains.push(...additionalDomain);
+        // Wait for removal to propagate
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
 
-        return domains;
+        if (!value) {
+            console.log('[HLV] Cleared all product search filters');
+            return;
+        }
+
+        // Toggle the selected product
+        if (selectedProducts.has(value)) {
+            selectedProducts.delete(value);
+        } else {
+            selectedProducts.add(value);
+        }
+
+        if (selectedProducts.size === 0) {
+            console.log('[HLV] No product filters selected');
+            return;
+        }
+
+        // Build OR domain for multiple products
+        const productArray = Array.from(selectedProducts);
+        let domain;
+        let description;
+
+        if (productArray.length === 1) {
+            domain = [
+                '|',
+                ['order_line.product_id.name', 'ilike', `%${productArray[0]}%`],
+                ['order_line.product_id.default_code', 'ilike', `%${productArray[0]}%`]
+            ];
+            description = `SP: ${productArray[0]}`;
+        } else {
+            // Build OR domain for multiple products
+            // Structure: ['|', ['|', cond1, cond2], ['|', cond3, cond4]]
+            domain = [];
+
+            // Add OR operators
+            for (let i = 0; i < productArray.length - 1; i++) {
+                domain.push('|');
+            }
+
+            // Add conditions for each product (name OR code)
+            productArray.forEach(product => {
+                domain.push(
+                    '|',
+                    ['order_line.product_id.name', 'ilike', `%${product}%`],
+                    ['order_line.product_id.default_code', 'ilike', `%${product}%`]
+                );
+            });
+
+            description = `SP: ${productArray.join(' hoặc ')}`;
+        }
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Applied product search with facet (OR logic)');
+        } catch (e) {
+            console.error('[HLV] Failed to create filter:', e);
+        }
     }
 });
 
@@ -449,11 +455,17 @@ patch(ListRenderer.prototype, {
             onMounted(() => {
                 this._hlvAddReceiptStatusFilter();
                 this._hlvAddSupplierHeaderSearch();
+                this._hlvAddDateApproveFilter();
+                this._hlvAddMisaDateFilter();
+                this._hlvAddWarehouseFilter();
                 this._hlvAddPreviewButtons();
             });
             onPatched(() => {
                 this._hlvAddReceiptStatusFilter();
                 this._hlvAddSupplierHeaderSearch();
+                this._hlvAddDateApproveFilter();
+                this._hlvAddMisaDateFilter();
+                this._hlvAddWarehouseFilter();
                 this._hlvAddPreviewButtons();
             });
         }
@@ -571,11 +583,8 @@ patch(ListRenderer.prototype, {
         }, 10);
     },
 
-    _hlvApplySupplierSearch(value) {
+    async _hlvApplySupplierSearch(value) {
         console.log('[HLV] Supplier search:', value);
-
-        // Update active filter tracking
-        _hlvActiveFilters.supplier = value || null;
 
         const controller = _hlvCurrentController;
         if (!controller) {
@@ -583,28 +592,169 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        // Build combined domain with all active filters
-        const domains = [];
-        if (_hlvActiveFilters.receipt) {
-            domains.push(['receipt_status', '=', _hlvActiveFilters.receipt]);
-        }
-        if (_hlvActiveFilters.supplier) {
-            // Use =ilike for accent-sensitive search
-            domains.push(['partner_id.name', '=ilike', `%${_hlvActiveFilters.supplier}%`]);
-        }
-        if (_hlvActiveFilters.product) {
-            domains.push('|');
-            domains.push(['order_line.product_id.name', '=ilike', `%${_hlvActiveFilters.product}%`]);
-            domains.push(['order_line.product_id.default_code', '=ilike', `%${_hlvActiveFilters.product}%`]);
+        const searchModel = controller.env.searchModel;
+        if (!searchModel || !searchModel.createNewFilters) {
+            console.error('[HLV] SearchModel or createNewFilters not available');
+            return;
         }
 
-        // Try controller's model
-        if (controller.model && controller.model.load) {
-            controller.model.load({ domain: domains }).then(() => {
-                updateFilterIndicator();
-            }).catch(e => {
-                console.error('[HLV] Failed to apply supplier filter:', e);
+        // Get currently selected suppliers from ACTIVE filters only
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const selectedSuppliers = new Map(); // Map<supplierName, matchingIds>
+        const filterIdsToRemove = [];
+
+        console.log('[HLV] Checking active filters for supplier');
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('NCC:')) {
+                filterIdsToRemove.push(itemId);
+                console.log('[HLV] Found active NCC filter to remove:', itemId, item.description);
+
+                // Extract supplier names from description
+                const supplierNames = item.description.substring(5).split(' hoặc ').map(s => s.trim());
+
+                // Extract IDs from domain (handle array-like objects recursively)
+                let domainArray = null;
+                if (item.domain) {
+                    if (Array.isArray(item.domain)) {
+                        domainArray = item.domain;
+                    } else if (typeof item.domain === 'object' && item.domain.length !== undefined) {
+                        domainArray = Array.from(item.domain);
+                    }
+                }
+
+                if (domainArray && domainArray.length > 0) {
+                    // Convert nested array-like objects
+                    for (let i = 0; i < domainArray.length; i++) {
+                        const d = domainArray[i];
+                        if (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d)) {
+                            domainArray[i] = Array.from(d);
+                        }
+                    }
+
+                    const idCondition = domainArray.find(d => Array.isArray(d) && d[0] === 'id' && d[1] === 'in');
+                    if (idCondition && idCondition[2]) {
+                        const allIds = idCondition[2];
+                        // If multiple suppliers, we need to re-fetch each supplier's IDs
+                        // For now, just store the combined IDs under the full description
+                        if (supplierNames.length === 1) {
+                            selectedSuppliers.set(supplierNames[0], allIds);
+                        } else {
+                            // Multiple suppliers - need to store them separately
+                            // But we don't have individual IDs, so we'll fetch them again
+                            supplierNames.forEach(name => {
+                                selectedSuppliers.set(name, []); // Mark for re-fetch
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove all existing supplier filters using toggleSearchItem
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to deactivate supplier filter:', id, e);
+            }
+        }
+
+        // Wait for removal to propagate
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (!value) {
+            console.log('[HLV] Cleared all supplier search filters');
+            return;
+        }
+
+        // Re-fetch IDs for suppliers that need it (marked with empty array)
+        const orm = controller.env.services.orm;
+        for (const [name, ids] of selectedSuppliers.entries()) {
+            if (ids.length === 0) {
+                try {
+                    const matchingIds = await orm.call(
+                        'purchase.order',
+                        'search_supplier_exact',
+                        [name, null]
+                    );
+                    selectedSuppliers.set(name, matchingIds);
+                } catch (e) {
+                    console.error('[HLV] Failed to re-fetch supplier IDs:', e);
+                }
+            }
+        }
+
+        // Toggle the selected supplier
+        if (selectedSuppliers.has(value)) {
+            selectedSuppliers.delete(value);
+        } else {
+            // Fetch IDs for the new supplier
+            try {
+                const matchingIds = await orm.call(
+                    'purchase.order',
+                    'search_supplier_exact',
+                    [value, null]
+                );
+                console.log('[HLV] Supplier search found IDs:', matchingIds);
+
+                if (matchingIds.length > 0) {
+                    selectedSuppliers.set(value, matchingIds);
+                } else {
+                    console.warn('[HLV] No purchase orders found for supplier:', value);
+                    return;
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to search supplier:', e);
+                return;
+            }
+        }
+
+        if (selectedSuppliers.size === 0) {
+            console.log('[HLV] No supplier filters selected');
+            return;
+        }
+
+        // Build OR domain for multiple suppliers
+        const supplierArray = Array.from(selectedSuppliers.entries());
+        let domain;
+        let description;
+
+        if (supplierArray.length === 1) {
+            const [name, ids] = supplierArray[0];
+            domain = [['id', 'in', ids]];
+            description = `NCC: ${name}`;
+        } else {
+            // Merge all IDs and create single domain
+            const allIds = new Set();
+            supplierArray.forEach(([_, ids]) => {
+                ids.forEach(id => allIds.add(id));
             });
+
+            domain = [['id', 'in', Array.from(allIds)]];
+            const names = supplierArray.map(([name, _]) => name).join(' hoặc ');
+            description = `NCC: ${names}`;
+        }
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Applied supplier filter (OR logic)');
+        } catch (e) {
+            console.error('[HLV] Failed to create supplier filter:', e);
         }
     },
 
@@ -654,16 +804,20 @@ patch(ListRenderer.prototype, {
         `;
 
         const items = [
-            { value: 'pending', label: 'Chờ nhận hàng' },
-            { value: 'partial', label: 'Nhận một phần' },
-            { value: 'full', label: 'Đã nhận đủ' },
-            { value: '', label: '— Tất cả —' }
+            { value: 'pending', label: 'Chưa nhận', color: '#ffc107' },
+            { value: 'partial', label: 'Đã nhận một phần', color: '#17a2b8' },
+            { value: 'full', label: 'Đã nhận hết', color: '#28a745' },
+            { value: '', label: '— Tất cả —', color: '#714B67' }
         ];
 
         items.forEach((item, idx) => {
             const div = document.createElement('div');
             div.className = 'hlv-filter-dropdown-item';
-            div.textContent = item.label;
+
+            // Add color indicator dot
+            const colorDot = item.color ? `<span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${item.color}; margin-right: 8px;"></span>` : '';
+
+            div.innerHTML = colorDot + item.label;
             div.style.cssText = `
                 padding: 10px 16px;
                 cursor: pointer;
@@ -672,14 +826,14 @@ patch(ListRenderer.prototype, {
                 font-weight: ${item.value === '' ? '600' : '400'};
                 border-bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
                 transition: background-color 0.15s;
+                display: flex;
+                align-items: center;
             `;
             div.addEventListener('mouseenter', () => {
                 div.style.backgroundColor = '#f8f4f7';
-                div.style.color = '#714B67';
             });
             div.addEventListener('mouseleave', () => {
                 div.style.backgroundColor = '';
-                div.style.color = item.value === '' ? '#714B67' : '#333';
             });
             div.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -709,11 +863,8 @@ patch(ListRenderer.prototype, {
         document.addEventListener('scroll', scrollHandler, true);
     },
 
-    _hlvApplyReceiptFilter(value) {
+    async _hlvApplyReceiptFilter(value) {
         console.log('[HLV] Receipt filter:', value);
-
-        // Update active filter tracking
-        _hlvActiveFilters.receipt = value || null;
 
         const controller = _hlvCurrentController;
         if (!controller) {
@@ -721,27 +872,773 @@ patch(ListRenderer.prototype, {
             return;
         }
 
-        // Build combined domain with all active filters
-        const domains = [];
-        if (_hlvActiveFilters.receipt) {
-            domains.push(['receipt_status', '=', _hlvActiveFilters.receipt]);
-        }
-        if (_hlvActiveFilters.supplier) {
-            domains.push(['partner_id.name', '=ilike', `%${_hlvActiveFilters.supplier}%`]);
-        }
-        if (_hlvActiveFilters.product) {
-            domains.push('|');
-            domains.push(['order_line.product_id.name', '=ilike', `%${_hlvActiveFilters.product}%`]);
-            domains.push(['order_line.product_id.default_code', '=ilike', `%${_hlvActiveFilters.product}%`]);
+        const searchModel = controller.env.searchModel;
+        if (!searchModel || !searchModel.createNewFilters) {
+            console.error('[HLV] SearchModel or createNewFilters not available');
+            return;
         }
 
-        // Try controller's model
-        if (controller.model && controller.model.load) {
-            controller.model.load({ domain: domains }).then(() => {
-                updateFilterIndicator();
-            }).catch(e => {
-                console.error('[HLV] Failed to apply receipt filter:', e);
+        // Get currently selected receipt statuses from ACTIVE filters only
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const selectedStatuses = new Set();
+        const filterIdsToRemove = [];
+
+        console.log('[HLV] Checking active filters for receipt status');
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('TT:')) {
+                filterIdsToRemove.push(itemId);
+                console.log('[HLV] Found active TT: filter to remove:', itemId, item.description);
+
+                // Extract status values from domain
+                let domainArray = null;
+                if (item.domain) {
+                    if (Array.isArray(item.domain)) {
+                        domainArray = item.domain;
+                    } else if (typeof item.domain === 'object' && item.domain.length !== undefined) {
+                        domainArray = Array.from(item.domain);
+                    }
+                }
+
+                if (domainArray) {
+                    domainArray.forEach(d => {
+                        const domainItem = (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d))
+                            ? Array.from(d)
+                            : d;
+
+                        if (Array.isArray(domainItem) && domainItem[0] === 'receipt_status' && domainItem[1] === '=' && domainItem[2]) {
+                            selectedStatuses.add(domainItem[2]);
+                        }
+                    });
+                }
+            }
+        }
+
+        // Remove all existing receipt filters using toggleSearchItem
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to remove filter:', id, e);
+            }
+        }
+
+        // Wait for removal to propagate
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        console.log('[HLV] Selected statuses before toggle:', Array.from(selectedStatuses));
+
+        if (!value) {
+            console.log('[HLV] Cleared all receipt filters');
+            return;
+        }
+
+        // Toggle the selected status
+        if (selectedStatuses.has(value)) {
+            selectedStatuses.delete(value);
+        } else {
+            selectedStatuses.add(value);
+        }
+
+        if (selectedStatuses.size === 0) {
+            console.log('[HLV] No receipt filters selected');
+            return;
+        }
+
+        // Build OR domain for multiple statuses
+        const statusArray = Array.from(selectedStatuses);
+        let domain;
+        let description;
+
+        if (statusArray.length === 1) {
+            domain = [['receipt_status', '=', statusArray[0]]];
+            description = `TT: ${getReceiptStatusLabel(statusArray[0])}`;
+        } else {
+            // Build OR domain: ['|', ['status', '=', 'pending'], ['status', '=', 'partial']]
+            domain = [];
+            for (let i = 0; i < statusArray.length - 1; i++) {
+                domain.push('|');
+            }
+            statusArray.forEach(status => {
+                domain.push(['receipt_status', '=', status]);
             });
+
+            const labels = statusArray.map(s => getReceiptStatusLabel(s)).join(' hoặc ');
+            description = `TT: ${labels}`;
+        }
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Created new receipt filter');
+        } catch (e) {
+            console.error('[HLV] Failed to create receipt filter:', e);
+        }
+    },
+
+    // ========== DATE APPROVE FILTER ==========
+    _hlvAddDateApproveFilter() {
+        if (this.props.list?.resModel !== 'purchase.order') return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        const dateApproveHeader = tableEl.querySelector('th[data-name="date_approve"]');
+        if (!dateApproveHeader || dateApproveHeader.dataset.hlvFilterAdded) return;
+        dateApproveHeader.dataset.hlvFilterAdded = 'true';
+
+        const filterBtn = document.createElement('button');
+        filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
+        filterBtn.type = 'button';
+        filterBtn.title = 'Nhấn để lọc theo ngày xác nhận';
+        filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
+
+        filterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._hlvShowDateApproveFilterDropdown(filterBtn);
+        });
+
+        dateApproveHeader.appendChild(filterBtn);
+    },
+
+    _hlvShowDateApproveFilterDropdown(triggerBtn) {
+        document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
+
+        const rect = triggerBtn.getBoundingClientRect();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'hlv-filter-dropdown-portal';
+        dropdown.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${rect.left - 100}px;
+            min-width: 240px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            padding: 12px;
+        `;
+
+        dropdown.innerHTML = `
+            <div style="margin-bottom: 8px; font-weight: 500; color: #714B67;">Ngày xác nhận</div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Từ ngày:</label>
+                <input type="date" class="form-control form-control-sm hlv-date-from" style="margin-bottom: 8px;">
+            </div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Đến ngày:</label>
+                <input type="date" class="form-control form-control-sm hlv-date-to" style="margin-bottom: 8px;">
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-primary hlv-date-apply" style="flex: 1;">Áp dụng</button>
+                <button class="btn btn-sm btn-secondary hlv-date-clear" style="flex: 1;">Xóa</button>
+            </div>
+        `;
+
+        document.body.appendChild(dropdown);
+
+        const inputFrom = dropdown.querySelector('.hlv-date-from');
+        const inputTo = dropdown.querySelector('.hlv-date-to');
+        const applyBtn = dropdown.querySelector('.hlv-date-apply');
+        const clearBtn = dropdown.querySelector('.hlv-date-clear');
+
+        applyBtn.addEventListener('click', () => {
+            const fromValue = inputFrom.value;
+            const toValue = inputTo.value;
+            if (fromValue || toValue) {
+                dropdown.remove();
+                this._hlvApplyDateApproveFilter(fromValue, toValue);
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            dropdown.remove();
+            this._hlvApplyDateApproveFilter('', '');
+        });
+
+        const closeHandler = (e) => {
+            if (!dropdown.contains(e.target) && e.target !== triggerBtn) {
+                dropdown.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeHandler);
+        }, 10);
+
+        const scrollHandler = () => {
+            dropdown.remove();
+            document.removeEventListener('scroll', scrollHandler, true);
+        };
+        document.addEventListener('scroll', scrollHandler, true);
+    },
+
+    async _hlvApplyDateApproveFilter(fromValue, toValue) {
+        console.log('[HLV] Date approve filter:', fromValue, toValue);
+
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
+            return;
+        }
+
+        const searchModel = controller.env.searchModel;
+        if (!searchModel || !searchModel.createNewFilters) {
+            console.error('[HLV] SearchModel or createNewFilters not available');
+            return;
+        }
+
+        // Remove existing date_approve filters
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const filterIdsToRemove = [];
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('Ngày XN:')) {
+                filterIdsToRemove.push(itemId);
+            }
+        }
+
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to remove date approve filter:', id, e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (!fromValue && !toValue) {
+            console.log('[HLV] Cleared date approve filter');
+            return;
+        }
+
+        // Build domain based on date range
+        // Add time to ensure proper timezone handling: 00:00:00 local time
+        let domain = [];
+        let description = 'Ngày XN: ';
+
+        if (fromValue && toValue) {
+            // Both dates provided - range filter
+            // Convert local start/end of day to UTC
+            const utcStart = toUTCDateTime(fromValue, '00:00:00');
+            const utcEnd = toUTCDateTime(toValue, '23:59:59');
+
+            domain = [
+                ['date_approve', '>=', utcStart],
+                ['date_approve', '<=', utcEnd]
+            ];
+            description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+        } else if (fromValue) {
+            // Only from date - filter >= from 00:00:00 local
+            const utcStart = toUTCDateTime(fromValue, '00:00:00');
+            domain = [['date_approve', '>=', utcStart]];
+            description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')}`;
+        } else if (toValue) {
+            // Only to date - filter <= to 23:59:59 local
+            const utcEnd = toUTCDateTime(toValue, '23:59:59');
+            domain = [['date_approve', '<=', utcEnd]];
+            description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+        }
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Applied date approve filter');
+        } catch (e) {
+            console.error('[HLV] Failed to create date approve filter:', e);
+        }
+    },
+
+    // ========== MISA DATE FILTER ==========
+    _hlvAddMisaDateFilter() {
+        if (this.props.list?.resModel !== 'purchase.order') return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        const misaDateHeader = tableEl.querySelector('th[data-name="x_studio_misa_date"]');
+        if (!misaDateHeader || misaDateHeader.dataset.hlvFilterAdded) return;
+        misaDateHeader.dataset.hlvFilterAdded = 'true';
+
+        const filterBtn = document.createElement('button');
+        filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
+        filterBtn.type = 'button';
+        filterBtn.title = 'Nhấn để lọc theo ngày đơn hàng MISA';
+        filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
+
+        filterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._hlvShowMisaDateFilterDropdown(filterBtn);
+        });
+
+        misaDateHeader.appendChild(filterBtn);
+    },
+
+    _hlvShowMisaDateFilterDropdown(triggerBtn) {
+        document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
+
+        const rect = triggerBtn.getBoundingClientRect();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'hlv-filter-dropdown-portal';
+        dropdown.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${rect.left - 100}px;
+            min-width: 240px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            padding: 12px;
+        `;
+
+        dropdown.innerHTML = `
+            <div style="margin-bottom: 8px; font-weight: 500; color: #714B67;">Ngày đơn hàng MISA</div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Từ ngày:</label>
+                <input type="date" class="form-control form-control-sm hlv-date-from" style="margin-bottom: 8px;">
+            </div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Đến ngày:</label>
+                <input type="date" class="form-control form-control-sm hlv-date-to" style="margin-bottom: 8px;">
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-primary hlv-date-apply" style="flex: 1;">Áp dụng</button>
+                <button class="btn btn-sm btn-secondary hlv-date-clear" style="flex: 1;">Xóa</button>
+            </div>
+        `;
+
+        document.body.appendChild(dropdown);
+
+        const inputFrom = dropdown.querySelector('.hlv-date-from');
+        const inputTo = dropdown.querySelector('.hlv-date-to');
+        const applyBtn = dropdown.querySelector('.hlv-date-apply');
+        const clearBtn = dropdown.querySelector('.hlv-date-clear');
+
+        applyBtn.addEventListener('click', () => {
+            const fromValue = inputFrom.value;
+            const toValue = inputTo.value;
+            if (fromValue || toValue) {
+                dropdown.remove();
+                this._hlvApplyMisaDateFilter(fromValue, toValue);
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            dropdown.remove();
+            this._hlvApplyMisaDateFilter('', '');
+        });
+
+        const closeHandler = (e) => {
+            if (!dropdown.contains(e.target) && e.target !== triggerBtn) {
+                dropdown.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeHandler);
+        }, 10);
+
+        const scrollHandler = () => {
+            dropdown.remove();
+            document.removeEventListener('scroll', scrollHandler, true);
+        };
+        document.addEventListener('scroll', scrollHandler, true);
+    },
+
+    async _hlvApplyMisaDateFilter(fromValue, toValue) {
+        console.log('[HLV] MISA date filter:', fromValue, toValue);
+
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
+            return;
+        }
+
+        const searchModel = controller.env.searchModel;
+        if (!searchModel || !searchModel.createNewFilters) {
+            console.error('[HLV] SearchModel or createNewFilters not available');
+            return;
+        }
+
+        // Remove existing x_studio_misa_date filters
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const filterIdsToRemove = [];
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('Ngày MISA:')) {
+                filterIdsToRemove.push(itemId);
+            }
+        }
+
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to remove MISA date filter:', id, e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (!fromValue && !toValue) {
+            console.log('[HLV] Cleared MISA date filter');
+            return;
+        }
+
+        // Build domain based on date range
+        // Add time to ensure proper timezone handling: 00:00:00 local time
+        let domain = [];
+        let description = 'Ngày MISA: ';
+
+        if (fromValue && toValue) {
+            // Both dates provided - range filter
+            // Convert local start/end of day to UTC
+            const utcStart = toUTCDateTime(fromValue, '00:00:00');
+            const utcEnd = toUTCDateTime(toValue, '23:59:59');
+
+            domain = [
+                ['x_studio_misa_date', '>=', utcStart],
+                ['x_studio_misa_date', '<=', utcEnd]
+            ];
+            description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+        } else if (fromValue) {
+            // Only from date - filter >= from 00:00:00 local
+            const utcStart = toUTCDateTime(fromValue, '00:00:00');
+            domain = [['x_studio_misa_date', '>=', utcStart]];
+            description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')}`;
+        } else if (toValue) {
+            // Only to date - filter <= to 23:59:59 local
+            const utcEnd = toUTCDateTime(toValue, '23:59:59');
+            domain = [['x_studio_misa_date', '<=', utcEnd]];
+            description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+        }
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Applied MISA date filter');
+        } catch (e) {
+            console.error('[HLV] Failed to create MISA date filter:', e);
+        }
+    },
+
+    // ========== WAREHOUSE FILTER ==========
+    _hlvAddWarehouseFilter() {
+        if (this.props.list?.resModel !== 'purchase.order') return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        const warehouseHeader = tableEl.querySelector('th[data-name="x_studio_kho_nhn"]');
+        if (!warehouseHeader || warehouseHeader.dataset.hlvFilterAdded) return;
+        warehouseHeader.dataset.hlvFilterAdded = 'true';
+
+        const filterBtn = document.createElement('button');
+        filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
+        filterBtn.type = 'button';
+        filterBtn.title = 'Nhấn để lọc theo kho nhận';
+        filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
+
+        filterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._hlvShowWarehouseFilterDropdown(filterBtn);
+        });
+
+        warehouseHeader.appendChild(filterBtn);
+    },
+
+    async _hlvShowWarehouseFilterDropdown(triggerBtn) {
+        document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
+
+        const rect = triggerBtn.getBoundingClientRect();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'hlv-filter-dropdown-portal';
+        dropdown.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${rect.left - 80}px;
+            min-width: 180px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            overflow: hidden;
+        `;
+
+        // Show loading
+        dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #666;">Đang tải...</div>';
+        document.body.appendChild(dropdown);
+
+        // Fetch warehouses
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
+            dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #d9534f;">Lỗi tải dữ liệu</div>';
+            return;
+        }
+
+        const orm = controller.env.services.orm;
+        let warehouses = [];
+
+        try {
+            // Fetch picking types (operation types) for incoming shipments
+            // These correspond to the warehouse destinations
+            warehouses = await orm.searchRead(
+                'stock.picking.type',
+                [['code', '=', 'incoming']],
+                ['id', 'name', 'warehouse_id'],
+                { order: 'name' }
+            );
+            console.log('[HLV] Fetched picking types:', warehouses);
+        } catch (e) {
+            console.error('[HLV] Failed to fetch picking types:', e);
+            dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #d9534f;">Lỗi tải dữ liệu</div>';
+            return;
+        }
+
+        // Clear loading
+        dropdown.innerHTML = '';
+
+        // Build items list - use warehouse name for display
+        const items = [
+            ...warehouses.map(pt => ({
+                value: pt.id,
+                label: pt.warehouse_id ? pt.warehouse_id[1] : pt.name
+            })),
+            { value: '', label: '— Tất cả —' }
+        ];
+
+        if (items.length === 1) {
+            dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #666;">Không có dữ liệu</div>';
+            return;
+        }
+
+        items.forEach((item, idx) => {
+            const div = document.createElement('div');
+            div.className = 'hlv-filter-dropdown-item';
+            div.innerHTML = item.label;
+            div.style.cssText = `
+                padding: 10px 16px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                color: ${item.value === '' ? '#714B67' : '#333'};
+                font-weight: ${item.value === '' ? '600' : '400'};
+                border-bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
+                transition: background-color 0.15s;
+            `;
+            div.addEventListener('mouseenter', () => {
+                div.style.backgroundColor = '#f8f4f7';
+            });
+            div.addEventListener('mouseleave', () => {
+                div.style.backgroundColor = '';
+            });
+            div.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropdown.remove();
+                this._hlvApplyWarehouseFilter(item.value, item.label);
+            });
+            dropdown.appendChild(div);
+        });
+
+        const closeHandler = (e) => {
+            if (!dropdown.contains(e.target) && e.target !== triggerBtn) {
+                dropdown.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => {
+            document.addEventListener('click', closeHandler);
+        }, 10);
+
+        const scrollHandler = () => {
+            dropdown.remove();
+            document.removeEventListener('scroll', scrollHandler, true);
+        };
+        document.addEventListener('scroll', scrollHandler, true);
+    },
+
+    async _hlvApplyWarehouseFilter(value, label) {
+        console.log('[HLV] Warehouse filter:', value, label);
+
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            console.error('[HLV] Controller not available');
+            return;
+        }
+
+        const searchModel = controller.env.searchModel;
+        if (!searchModel || !searchModel.createNewFilters) {
+            console.error('[HLV] SearchModel or createNewFilters not available');
+            return;
+        }
+
+        // Get currently selected warehouses from ACTIVE filters only
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const selectedWarehouses = new Map(); // Map<warehouseName, id>
+        const filterIdsToRemove = [];
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith('Kho:')) {
+                filterIdsToRemove.push(itemId);
+
+                // Extract warehouse info from description
+                const warehouseNames = item.description.substring(5).split(' hoặc ').map(s => s.trim());
+
+                // Extract IDs from domain
+                let domainArray = null;
+                if (item.domain) {
+                    if (Array.isArray(item.domain)) {
+                        domainArray = item.domain;
+                    } else if (typeof item.domain === 'object' && item.domain.length !== undefined) {
+                        domainArray = Array.from(item.domain);
+                    }
+                }
+
+                if (domainArray) {
+                    domainArray.forEach(d => {
+                        const domainItem = (d && typeof d === 'object' && d.length !== undefined && !Array.isArray(d))
+                            ? Array.from(d)
+                            : d;
+
+                        if (Array.isArray(domainItem) &&
+                            (domainItem[0] === 'x_studio_kho_nhn' ||
+                                domainItem[0] === 'picking_type_id.warehouse_id' ||
+                                domainItem[0] === 'picking_type_id') &&
+                            domainItem[1] === '=' && domainItem[2]) {
+                            // Store with a placeholder name (we'll match by ID later)
+                            const whId = domainItem[2];
+                            if (warehouseNames.length === 1) {
+                                selectedWarehouses.set(warehouseNames[0], whId);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        // Remove all existing warehouse filters
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to remove warehouse filter:', id, e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (!value) {
+            console.log('[HLV] Cleared all warehouse filters');
+            return;
+        }
+
+        // Toggle the selected warehouse
+        if (selectedWarehouses.has(label)) {
+            selectedWarehouses.delete(label);
+        } else {
+            selectedWarehouses.set(label, value);
+        }
+
+        if (selectedWarehouses.size === 0) {
+            console.log('[HLV] No warehouse filters selected');
+            return;
+        }
+
+        // Build OR domain for multiple warehouses
+        const warehouseArray = Array.from(selectedWarehouses.entries());
+        let domain;
+        let description;
+
+        if (warehouseArray.length === 1) {
+            const [name, id] = warehouseArray[0];
+            // Use picking_type_id to filter - this is the operation type that determines warehouse
+            domain = [['picking_type_id', '=', id]];
+            description = `Kho: ${name}`;
+        } else {
+            // Build OR domain
+            domain = [];
+            for (let i = 0; i < warehouseArray.length - 1; i++) {
+                domain.push('|');
+            }
+            warehouseArray.forEach(([_, id]) => {
+                // Use picking_type_id to filter - this is the operation type that determines warehouse
+                domain.push(['picking_type_id', '=', id]);
+            });
+
+            const names = warehouseArray.map(([name, _]) => name).join(' hoặc ');
+            description = `Kho: ${names}`;
+        }
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Created new warehouse filter');
+        } catch (e) {
+            console.error('[HLV] Failed to create warehouse filter:', e);
         }
     }
 });

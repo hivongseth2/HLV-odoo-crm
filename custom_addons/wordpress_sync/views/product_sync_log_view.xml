@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Product Sync Log List View -->
+    <record id="view_product_sync_log_tree" model="ir.ui.view">
+        <field name="name">product.sync.log.list</field>
+        <field name="model">product.sync.log</field>
+        <field name="arch" type="xml">
+            <list string="Lịch sử đồng bộ" decoration-success="status=='success'" decoration-danger="status=='failed'" decoration-warning="status=='skipped'">
+                <field name="sync_date" string="Thời gian"/>
+                <field name="product_id" string="Sản phẩm"/>
+                <field name="sku"/>
+                <field name="sync_type" string="Loại"/>
+                <field name="status" string="Trạng thái"/>
+                <field name="new_regular_price" string="Giá Regular"/>
+                <field name="new_sale_price" string="Giá Sale"/>
+                <field name="user_id" string="Người thực hiện"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Product Sync Log Form View -->
+    <record id="view_product_sync_log_form" model="ir.ui.view">
+        <field name="name">product.sync.log.form</field>
+        <field name="model">product.sync.log</field>
+        <field name="arch" type="xml">
+            <form string="Chi tiết Log" readonly="True">
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="product_id" class="oe_inline"/>
+                            <field name="status" class="oe_inline" widget="badge"/>
+                        </h1>
+                    </div>
+
+                    <group>
+                        <group string="Thông tin cơ bản">
+                            <field name="sku"/>
+                            <field name="sync_date" string="Thời gian"/>
+                            <field name="sync_type" string="Loại sync"/>
+                            <field name="user_id" string="Người thực hiện"/>
+                        </group>
+                        <group string="WordPress">
+                            <field name="wc_product_id" string="WC Product ID"/>
+                        </group>
+                    </group>
+
+                    <group string="Thông tin giá">
+                        <group>
+                            <label for="old_regular_price" string="Thay đổi giá Regular"/>
+                            <div>
+                                <field name="old_regular_price" class="oe_inline"/> → <field name="new_regular_price" class="oe_inline"/>
+                            </div>
+                            <label for="old_sale_price" string="Thay đổi giá Sale"/>
+                            <div>
+                                <field name="old_sale_price" class="oe_inline"/> → <field name="new_sale_price" class="oe_inline"/>
+                            </div>
+                        </group>
+                    </group>
+
+                    <group string="Chi tiết">
+                        <field name="message" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_product_sync_log_search" model="ir.ui.view">
+        <field name="name">product.sync.log.search</field>
+        <field name="model">product.sync.log</field>
+        <field name="arch" type="xml">
+            <search string="Tìm kiếm Log">
+                <field name="product_id"/>
+                <field name="sku"/>
+                <filter name="success" string="Thành công" domain="[('status','=','success')]"/>
+                <filter name="failed" string="Thất bại" domain="[('status','=','failed')]"/>
+                <separator/>
+                <filter name="auto" string="Tự động" domain="[('sync_type','=','auto')]"/>
+                <filter name="manual" string="Thủ công" domain="[('sync_type','=','manual')]"/>
+                <separator/>
+                <filter name="today" string="Hôm nay" domain="[('sync_date','>=', (context_today()).strftime('%Y-%m-%d'))]"/>
+                <filter name="week" string="Tuần này" domain="[('sync_date','>=', (context_today() - datetime.timedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                <group expand="0" string="Nhóm theo">
+                    <filter name="group_product" string="Sản phẩm" context="{'group_by':'product_id'}"/>
+                    <filter name="group_status" string="Trạng thái" context="{'group_by':'status'}"/>
+                    <filter name="group_date" string="Ngày" context="{'group_by':'sync_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action to view Sync Logs -->
+    <record id="action_product_sync_log" model="ir.actions.act_window">
+        <field name="name">Lịch sử đồng bộ giá</field>
+        <field name="res_model">product.sync.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_today': 1}</field>
+    </record>
+
+    <!-- Menu item -->
+    <menuitem
+        id="menu_product_sync_log"
+        name="Lịch sử đồng bộ"
+        parent="menu_wordpress_sync"
+        action="action_product_sync_log"
+        sequence="30"/>
+</odoo>
