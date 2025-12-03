@@ -10,9 +10,9 @@
         - Cài đặt trong Inventory Settings
     ''',
     'author': 'HLV',
-    'category': 'Website',
+    'category': 'Inventory',
     'license': 'LGPL-3',
-    'depends': ['base', 'product', 'stock', 'website', 'mail'],
+    'depends': ['base', 'product', 'stock', 'mail'],
     'data': [
         'security/ir.model.access.csv',
         'views/wordpress_config_view.xml',

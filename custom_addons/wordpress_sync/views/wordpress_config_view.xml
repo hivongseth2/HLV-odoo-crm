@@ -77,16 +77,16 @@
         </field>
     </record>
 
-    <!-- Menu items -->
+    <!-- Menu items - under Inventory/Configuration -->
     <menuitem
         id="menu_wordpress_sync"
         name="WordPress Sync"
-        parent="website.menu_website_configuration"
+        parent="stock.menu_stock_config_settings"
         sequence="99"/>
 
     <menuitem
         id="menu_wordpress_config"
-        name="Cấu hình"
+        name="Cấu hình WooCommerce"
         parent="menu_wordpress_sync"
         action="action_wordpress_config"
         sequence="10"/>
