@@ -54,25 +54,63 @@ class ProductImportWizard(models.TransientModel):
         return None
 
     def _read_excel(self, file_content, dtype=None):
-        """Đọc file Excel, tự động xác định engine dựa trên đuôi file."""
-        # Xác định suffix và engine từ filename
-        suffix = '.xlsx'
-        engine = None
-        if self.filename:
-            if self.filename.lower().endswith('.xls'):
-                suffix = '.xls'
-                engine = 'xlrd'
-            elif self.filename.lower().endswith('.xlsx'):
-                suffix = '.xlsx'
-                engine = 'openpyxl'
+        """
+        Đọc file Excel, tự động xác định engine.
+        Hỗ trợ cả file HTML giả dạng .xls (như MISA xuất ra).
+        """
+        import os
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(base64.b64decode(file_content))
-            tmp.seek(0)
-            if engine:
-                return pd.read_excel(tmp.name, dtype=dtype, engine=engine)
-            else:
-                return pd.read_excel(tmp.name, dtype=dtype)
+        file_data = base64.b64decode(file_content)
+
+        # Kiểm tra xem file có phải HTML không (MISA thường xuất HTML với đuôi .xls)
+        file_start = file_data[:50].lower()
+        is_html = b'<html' in file_start or b'<!doctype' in file_start or b'<ht' in file_start[:10]
+
+        if is_html:
+            # File là HTML, dùng pd.read_html
+            _logger.info("Phát hiện file HTML giả dạng Excel, đọc bằng read_html")
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.html', mode='wb') as tmp:
+                tmp.write(file_data)
+                tmp_path = tmp.name
+
+            try:
+                # read_html trả về list các DataFrame (mỗi table 1 df)
+                dfs = pd.read_html(tmp_path, encoding='utf-8')
+                if dfs:
+                    df = dfs[0]  # Lấy bảng đầu tiên
+                    # Ép kiểu cho các cột nếu có
+                    if dtype:
+                        for col, col_type in dtype.items():
+                            if col in df.columns:
+                                df[col] = df[col].astype(str)
+                    return df
+                else:
+                    raise ValueError("Không tìm thấy bảng dữ liệu trong file HTML")
+            finally:
+                os.unlink(tmp_path)
+        else:
+            # File Excel thật
+            suffix = '.xlsx'
+            engine = None
+            if self.filename:
+                if self.filename.lower().endswith('.xls'):
+                    suffix = '.xls'
+                    engine = 'xlrd'
+                elif self.filename.lower().endswith('.xlsx'):
+                    suffix = '.xlsx'
+                    engine = 'openpyxl'
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, mode='wb') as tmp:
+                tmp.write(file_data)
+                tmp_path = tmp.name
+
+            try:
+                if engine:
+                    return pd.read_excel(tmp_path, dtype=dtype, engine=engine)
+                else:
+                    return pd.read_excel(tmp_path, dtype=dtype)
+            finally:
+                os.unlink(tmp_path)
 
     # -------- Main Action --------
     def action_import(self):
