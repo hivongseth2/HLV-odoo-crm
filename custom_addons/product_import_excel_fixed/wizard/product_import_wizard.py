@@ -44,6 +44,70 @@ class ProductImportWizard(models.TransientModel):
         except Exception:
             return default
 
+    def _get_or_create_uom(self, name):
+        """Tìm hoặc tạo mới đơn vị tính (UoM) dựa trên tên."""
+        if not name:
+            name = 'Cái'
+        name = name.strip().title()
+        UoM = self.env['uom.uom'].sudo()
+        UoMCat = self.env['uom.category'].sudo()
+
+        uom = UoM.search([('name', '=', name)], limit=1)
+        if uom:
+            return uom
+
+        cat = UoMCat.search([('name', 'ilike', 'Unit')], limit=1)
+        if not cat:
+            cat = UoMCat.create({'name': 'Unit'})
+
+        ref_uom = UoM.search([
+            ('category_id', '=', cat.id),
+            ('uom_type', '=', 'reference')
+        ], limit=1)
+
+        uom_type = 'reference' if not ref_uom else 'smaller'
+
+        return UoM.create({
+            'name': name,
+            'category_id': cat.id,
+            'uom_type': uom_type,
+            'factor_inv': 1.0,
+            'rounding': 1.0,
+        })
+
+    def _get_or_create_product(self, code, name, unit_name=None):
+        """
+        Tìm hoặc tạo mới sản phẩm dựa trên mã.
+        Nếu tìm thấy → trả về product.product
+        Nếu không → tạo mới với thông tin cơ bản từ Excel
+        """
+        code = code.strip()
+        name = name.strip() if name else code
+
+        ProductProduct = self.env['product.product'].sudo()
+        ProductTemplate = self.env['product.template'].sudo()
+
+        product = ProductProduct.search([('default_code', '=', code)], limit=1)
+
+        if product:
+            _logger.info("🔁 Sản phẩm %s đã tồn tại", code)
+            return product, False  # False = không tạo mới
+
+        # Tạo mới nếu chưa có
+        uom = self._get_or_create_uom(unit_name or 'Cái')
+        tmpl = ProductTemplate.create({
+            'name': name,
+            'default_code': code,
+            'type': 'consu',
+            'uom_id': uom.id,
+            'uom_po_id': uom.id,
+            'purchase_ok': True,
+            'sale_ok': True,
+            'is_storable': True,
+        })
+        _logger.info("🆕 Tạo sản phẩm mới: [%s] %s với UOM: %s", code, name, uom.name)
+        return tmpl.product_variant_id, True  # True = đã tạo mới
+
     def _get_excel_engine(self, filename):
         """Xác định engine dựa trên đuôi file."""
         if filename:
@@ -199,7 +263,7 @@ class ProductImportWizard(models.TransientModel):
         Logic:
         - Nếu combo chưa tồn tại (theo Mã Combo): tạo mới với is_combo=True
         - Nếu combo đã tồn tại: bỏ qua
-        - Child products phải tồn tại trong hệ thống
+        - Child products: tự động tạo nếu không tồn tại trong hệ thống
         """
         df = self._read_excel(self.file, dtype={
             'Mã Combo': str,
@@ -217,14 +281,13 @@ class ProductImportWizard(models.TransientModel):
             df['Tên Combo'] = df['Tên Combo'].fillna(method='ffill')
 
         ProductTemplate = self.env['product.template'].sudo()
-        ProductProduct = self.env['product.product'].sudo()
         ComboProduct = self.env['combo.product'].sudo()
 
         # Thống kê
         combo_created = 0
         combo_skipped = 0
         child_added = 0
-        child_not_found = []
+        child_created = 0  # Số child products được tạo mới
         errors = []
 
         # Nhóm dữ liệu theo Mã Combo
@@ -234,6 +297,7 @@ class ProductImportWizard(models.TransientModel):
             combo_name = self._clean_string(row.get('Tên Combo'))
             child_code = self._clean_string(row.get('Mã Hàng Con'))
             child_name = self._clean_string(row.get('Tên Hàng Con'))
+            child_uom = self._clean_string(row.get('ĐVT'))
             qty = self._safe_float(row.get('Số Lượng'), default=1.0)
 
             # Bỏ qua dòng không có mã combo hoặc mã hàng con
@@ -249,6 +313,7 @@ class ProductImportWizard(models.TransientModel):
             combo_groups[combo_code]['children'].append({
                 'code': child_code,
                 'name': child_name,
+                'uom': child_uom,
                 'qty': qty,
             })
 
@@ -267,26 +332,29 @@ class ProductImportWizard(models.TransientModel):
                 _logger.info("⏭️ Combo đã tồn tại, bỏ qua: [%s] %s", combo_code, combo_name)
                 continue
 
-            # Kiểm tra tất cả child products có tồn tại không
+            # Lấy hoặc tạo child products
             valid_children = []
             for child in children:
-                child_product = ProductProduct.search([
-                    ('default_code', '=', child['code'])
-                ], limit=1)
+                # Sử dụng _get_or_create_product để tự động tạo nếu không có
+                child_product, is_new = self._get_or_create_product(
+                    code=child['code'],
+                    name=child['name'],
+                    unit_name=child['uom']
+                )
 
-                if not child_product:
-                    child_not_found.append(f"{child['code']} ({child['name']})")
-                    _logger.warning("⚠️ Không tìm thấy child product: [%s] %s",
-                                    child['code'], child['name'])
-                else:
-                    # Kiểm tra child không phải là combo
-                    if child_product.is_combo:
-                        _logger.warning("⚠️ Child product [%s] là combo, bỏ qua", child['code'])
-                        continue
-                    valid_children.append({
-                        'product': child_product,
-                        'qty': child['qty'],
-                    })
+                if is_new:
+                    child_created += 1
+                    _logger.info("🆕 Tạo child product mới: [%s] %s", child['code'], child['name'])
+
+                # Kiểm tra child không phải là combo
+                if child_product.is_combo:
+                    _logger.warning("⚠️ Child product [%s] là combo, bỏ qua", child['code'])
+                    continue
+
+                valid_children.append({
+                    'product': child_product,
+                    'qty': child['qty'],
+                })
 
             if not valid_children:
                 errors.append(f"Combo [{combo_code}]: Không có child product hợp lệ")
@@ -337,16 +405,9 @@ class ProductImportWizard(models.TransientModel):
             "Hoàn tất import Combo Products.",
             f"- Combo tạo mới: {combo_created}",
             f"- Combo bỏ qua (đã tồn tại): {combo_skipped}",
-            f"- Child products đã thêm: {child_added}",
+            f"- Child products đã thêm vào combo: {child_added}",
+            f"- Child products tạo mới: {child_created}",
         ]
-
-        if child_not_found:
-            unique_not_found = list(set(child_not_found))[:10]
-            msg_lines.append(f"- Child không tìm thấy: {len(set(child_not_found))}")
-            for item in unique_not_found:
-                msg_lines.append(f"  • {item}")
-            if len(set(child_not_found)) > 10:
-                msg_lines.append(f"  ... và {len(set(child_not_found)) - 10} items khác")
 
         if errors:
             msg_lines.append(f"- Lỗi: {len(errors)}")

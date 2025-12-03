@@ -38,7 +38,7 @@
             <ul>
               <li>Chỉ tạo combo mới nếu chưa tồn tại (theo Mã Combo)</li>
               <li>Combo đã tồn tại sẽ được bỏ qua</li>
-              <li>Child products phải tồn tại trong hệ thống</li>
+              <li><strong>Child products không tồn tại sẽ được TỰ ĐỘNG TẠO MỚI</strong></li>
               <li>Hỗ trợ merged cells cho cột Mã Combo và Tên Combo</li>
             </ul>
           </div>
