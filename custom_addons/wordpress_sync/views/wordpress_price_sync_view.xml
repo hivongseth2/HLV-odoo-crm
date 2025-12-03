@@ -7,7 +7,9 @@
         <field name="arch" type="xml">
             <form string="Đồng bộ giá lên WordPress">
                 <group>
-                    <group string="Cấu hình">
+                    <!-- Ẩn field cấu hình nếu chỉ có 1 config -->
+                    <field name="has_multiple_configs" invisible="1"/>
+                    <group string="Cấu hình" invisible="not has_multiple_configs">
                         <field name="wordpress_config_id" required="True" options="{'no_create': True}"/>
                     </group>
                     <group string="Chế độ đồng bộ">

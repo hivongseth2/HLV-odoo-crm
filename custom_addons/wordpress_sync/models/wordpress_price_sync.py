@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+from odoo import models, fields, api
 from odoo.exceptions import UserError
 from .wordpress_api import PriceSyncService
 import logging
@@ -31,8 +31,41 @@ class WordPressPriceSyncWizard(models.TransientModel):
         'wordpress.config',
         string='Cấu hình WordPress',
         required=True,
-        domain=[('active', '=', True)]
+        domain=[('active', '=', True)],
+        default=lambda self: self._default_wordpress_config()
     )
+
+    # Computed field để kiểm tra có nhiều config không
+    has_multiple_configs = fields.Boolean(
+        compute='_compute_has_multiple_configs'
+    )
+
+    # ===========================================
+    # DEFAULT / COMPUTE METHODS
+    # ===========================================
+    @api.model
+    def _default_wordpress_config(self):
+        """Lấy config mặc định từ Settings hoặc config active đầu tiên"""
+        ICP = self.env['ir.config_parameter'].sudo()
+        config_id = ICP.get_param('wordpress_sync.default_config_id', False)
+
+        if config_id:
+            try:
+                config = self.env['wordpress.config'].browse(int(config_id))
+                if config.exists() and config.active:
+                    return config
+            except (ValueError, TypeError):
+                pass
+
+        # Fallback: lấy config active đầu tiên
+        return self.env['wordpress.config'].search([('active', '=', True)], limit=1)
+
+    @api.depends('wordpress_config_id')
+    def _compute_has_multiple_configs(self):
+        """Kiểm tra có nhiều hơn 1 config active không"""
+        config_count = self.env['wordpress.config'].search_count([('active', '=', True)])
+        for record in self:
+            record.has_multiple_configs = config_count > 1
 
     # ===========================================
     # ACTIONS
