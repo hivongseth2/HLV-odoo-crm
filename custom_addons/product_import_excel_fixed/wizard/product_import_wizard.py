@@ -1,339 +1,3 @@
-﻿# # -*- coding: utf-8 -*-
-# from odoo import models, fields, api
-# import base64
-# import tempfile
-# import pandas as pd
-# import math
-# import logging
-
-# _logger = logging.getLogger(__name__)
-
-
-# class ProductOrigin(models.Model):
-#     _name = "product.origin"
-#     _description = "Nguồn gốc sản phẩm"
-#     name = fields.Char(required=True)
-
-
-# class ProductGroup(models.Model):
-#     _name = "product.group"
-#     _description = "Nhóm VTHH"
-#     name = fields.Char(required=True)
-
-
-# class ProductProperty(models.Model):
-#     _name = "product.property"
-#     _description = "Tính chất sản phẩm"
-#     name = fields.Char(required=True)
-
-
-# class ProductTemplate(models.Model):
-#     _inherit = "product.template"
-
-#     x_origin = fields.Many2one("product.origin", string="Nguồn gốc")
-#     x_group = fields.Many2one("product.group", string="Nhóm VTHH")
-#     x_property = fields.Many2one("product.property", string="Tính chất")
-
-#     _sql_constraints = [
-#         ('default_code_unique', 'unique(default_code)', 'ID EXTERNAL (Mã) phải là duy nhất!'),
-#         ('barcode_unique', 'unique(barcode)', 'Mã vạch phải là duy nhất!'),
-#     ]
-
-
-# class ProductImportWizard(models.TransientModel):
-#     _name = "product.import.wizard"
-#     _description = "Wizard to import product from Excel"
-
-#     file = fields.Binary(string="Excel File", required=True)
-#     filename = fields.Char(string="File Name")
-
-#         # ===================== Helpers cho 3 loại giá =====================
-#     def _first_non_empty(self, row, candidates, default=None):
-#         """Trả về giá trị đầu tiên khác rỗng theo danh sách tên cột."""
-#         for name in candidates:
-#             if name in row:
-#                 val = row.get(name)
-#                 # dùng _clean_string để đồng nhất
-#                 s = self._clean_string(val)
-#                 if s != '':
-#                     return val
-#         return default
-
-#     def _extract_prices(self, row):
-#         """
-#         Đọc 3 loại giá từ các cột:
-#         - Chi phí            -> standard_price
-#         - Giá bán           -> list_price
-#         - Giá thương mại    -> x_studio_gi_bn_thng_mi
-
-#         Fallback về tên cột cũ nếu có (để không phá dữ liệu cũ):
-#         - 'Đơn giá mua gần nhất' cho chi phí
-#         - 'Đơn giá bán 1' cho giá bán
-#         """
-#         # Chi phí
-#         cost_raw = self._first_non_empty(
-#             row,
-#             ['Chi phí', 'Đơn giá mua gần nhất'],
-#             default=0.0
-#         )
-#         # Giá bán
-#         price_raw = self._first_non_empty(
-#             row,
-#             ['Giá bán', 'Đơn giá bán 1'],
-#             default=0.0
-#         )
-#         # Giá thương mại
-#         trade_raw = self._first_non_empty(
-#             row,
-#             ['Giá thương mại'],
-#             default=0.0
-#         )
-
-#         return {
-#             'standard_price': self._safe_float(cost_raw),
-#             'list_price': self._safe_float(price_raw),
-#             'x_studio_gi_bn_thng_mi': self._safe_float(trade_raw),
-#         }
-
-
-#     # ===================== Helpers: UoM =====================
-#     def _get_unit_category(self):
-#         """Tìm category 'Unit' (tiếng Anh mặc định). Nếu tên đã dịch, vẫn ưu tiên chuỗi chứa 'Unit'."""
-#         Cat = self.env['uom.category'].sudo()
-#         cat = Cat.search([('name', 'ilike', 'Unit')], limit=1)
-#         if cat:
-#             return cat
-#         # Fallback: tìm category có UoM 'Cái' để suy ra
-#         Uom = self.env['uom.uom'].sudo()
-#         cai_uom = Uom.search([('name', 'ilike', 'cái')], limit=1)
-#         return cai_uom.category_id if cai_uom else Cat.search([], limit=1)  # last resort
-
-#     def _find_uom_in_unit_category(self, dvt_text):
-#         """
-#         Tìm UoM theo tên (case-insensitive) trong category 'Unit'.
-#         Không thấy thì fallback 'Cái' (trong Unit). Cuối cùng: reference UoM của Unit.
-#         """
-#         Uom = self.env['uom.uom'].sudo()
-#         unit_cat = self._get_unit_category()
-#         if not unit_cat:
-#             _logger.warning("⚠ Không tìm thấy uom.category 'Unit', dùng bất kỳ UoM sẵn có.")
-#             # Dù sao cũng thử 'Cái' chung
-#             any_uom = Uom.search([('name', 'ilike', 'cái')], limit=1)
-#             return any_uom or Uom.search([], limit=1)
-
-#         # Chuẩn hóa chuỗi tìm
-#         name = self._clean_string(dvt_text).strip()
-#         if name:
-#             # Tìm EXACT (không phân biệt hoa thường) trong Unit
-#             # '=ilike' là so sánh bằng không phân biệt hoa thường (nếu version hỗ trợ),
-#             # nếu không, dùng ilike và lọc tên đúng.
-#             uoms = Uom.search([('category_id', '=', unit_cat.id), ('name', 'ilike', name)], limit=10)
-#             exact = next((u for u in uoms if (u.name or '').strip().lower() == name.lower()), False)
-#             if exact:
-#                 return exact
-
-#         # Fallback: 'Cái' trong Unit
-#         cai = Uom.search([('category_id', '=', unit_cat.id), ('name', 'ilike', 'cái')], limit=1)
-#         if cai:
-#             return cai
-
-#         # Fallback cuối: reference UoM trong Unit (chuẩn hệ số)
-#         ref = Uom.search([('category_id', '=', unit_cat.id), ('uom_type', '=', 'reference')], limit=1)
-#         if ref:
-#             return ref
-
-#         # Bất đắc dĩ: bất kỳ UoM trong Unit
-#         any_unit = Uom.search([('category_id', '=', unit_cat.id)], limit=1)
-#         if any_unit:
-#             return any_unit
-
-#         # Cực chẳng đã: UoM bất kỳ
-#         return Uom.search([], limit=1)
-
-#     # ===================== Import =====================
-#     def action_import(self):
-#         if not self.file:
-#             return
-
-#         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-#             tmp.write(base64.b64decode(self.file))
-#             tmp.seek(0)
-#             df = pd.read_excel(
-#                 tmp.name,
-#                 dtype={
-#                     'Mã vạch': str,
-#                     'ID EXTERNAL': str,
-#                     'Mã': str,
-#                     'DVT': str,  # <-- thêm đọc cột DVT
-#                 }
-#             )
-
-#         Product = self.env["product.template"].sudo()
-
-#         for _, row in df.iterrows():
-#             name = self._clean_string(row.get('Tên'))
-#             if not name:
-#                 continue
-
-#             default_code = self._clean_string(row.get('ID EXTERNAL')) or self._clean_string(row.get('Mã'))
-#             barcode = self._clean_string(row.get('Mã vạch'))
-#             x_origin_name = self._clean_string(row.get('Nguồn gốc'))
-#             x_group_name = self._clean_string(row.get('Nhóm VTHH'))
-#             x_property_name = self._clean_string(row.get('Tính chất'))
-#             vat = row.get('Thuế suất GTGT', 0)
-#             cost_price = row.get('Đơn giá mua gần nhất', 0.0)
-#             price1 = row.get('Đơn giá bán 1', 0.0)
-#             vat_float = self._safe_float(vat)
-
-#             # ===== Helpers lấy 3 loại giá từ Excel =====
-#             price_dict = self._extract_prices(row)
-#             cost_price = price_dict['standard_price']
-#             price1 = price_dict['list_price']
-#             trade_price = price_dict['x_studio_gi_bn_thng_mi']
-
-#             # ===== UOM từ cột DVT =====
-#             dvt_text = row.get('DVT')
-#             uom = self._find_uom_in_unit_category(dvt_text)  # đảm bảo thuộc Unit; fallback 'Cái'
-#             if not uom:
-#                 _logger.warning("⚠ Không xác định được UoM; bỏ qua gán UoM cho dòng: %s", name)
-
-#             # --- build values ---
-#             values = {
-#                 "name": name,
-#                 "type": "consu",          # bạn giữ nguyên theo nhu cầu
-#                 "tracking": "none",
-#                 "standard_price": self._safe_float(cost_price),
-#                 "list_price": self._safe_float(price1),
-#                 "taxes_id": [(6, 0, self._get_tax_ids(vat_float))],
-#                 "is_storable": True,
-#             }
-#             values["x_studio_gi_bn_thng_mi"] = self._safe_float(trade_price)
-#             if uom:
-#                 # set cả uom_id & uom_po_id
-#                 values["uom_id"] = uom.id
-#                 values["uom_po_id"] = uom.id
-
-#             if default_code:
-#                 values["default_code"] = default_code
-#             if barcode:
-#                 values["barcode"] = barcode
-#             if x_origin_name:
-#                 values["x_origin"] = self._get_or_create_m2o("product.origin", x_origin_name)
-#             if x_group_name:
-#                 values["x_group"] = self._get_or_create_m2o("product.group", x_group_name)
-#             if x_property_name:
-#                 values["x_property"] = self._get_or_create_m2o("product.property", x_property_name)
-
-#             # --- TÌM SẢN PHẨM TỒN TẠI ---
-#             product = False
-#             if default_code:
-#                 product = Product.search([('default_code', '=', default_code)], limit=1)
-#             if not product and barcode:
-#                 product = Product.search([('barcode', '=', barcode)], limit=1)
-
-#             # --- XỬ LÝ TẠO/UPDATE ---
-#             if not product:
-#                 if barcode:
-#                     dup = Product.search([('barcode', '=', barcode)], limit=1)
-#                     if dup:
-#                         _logger.warning("⚠ Bỏ qua tạo mới vì barcode %s đã tồn tại ở sản phẩm %s", barcode, dup.display_name)
-#                         values.pop('barcode', None)
-#                 try:
-#                     Product.create(values)
-#                 except Exception as e:
-#                     _logger.exception("❌ Lỗi tạo sản phẩm (default_code=%s, barcode=%s): %s", default_code, barcode, e)
-#                 continue
-
-#             # Đã có product: build write_vals incremental
-#             write_vals = {}
-
-#             if barcode and barcode != (product.barcode or ''):
-#                 conflict = Product.search([('id', '!=', product.id), ('barcode', '=', barcode)], limit=1)
-#                 if conflict:
-#                     _logger.warning("⚠ Không thể cập nhật barcode %s cho %s vì đã thuộc %s",
-#                                     barcode, product.display_name, conflict.display_name)
-#                 else:
-#                     write_vals['barcode'] = barcode
-
-#             if name and name != product.name:
-#                 write_vals['name'] = name
-
-#             if default_code and default_code != (product.default_code or ''):
-#                 dc_conflict = Product.search([('id', '!=', product.id), ('default_code', '=', default_code)], limit=1)
-#                 if dc_conflict:
-#                     _logger.warning("⚠ ID EXTERNAL %s đã thuộc %s, bỏ qua update default_code cho %s",
-#                                     default_code, dc_conflict.display_name, product.display_name)
-#                 else:
-#                     write_vals['default_code'] = default_code
-
-#             if 'standard_price' in values:
-#                 write_vals['standard_price'] = values['standard_price']
-#             if 'list_price' in values:
-#                 write_vals['list_price'] = values['list_price']
-#             if 'x_studio_gi_bn_thng_mi' in values:
-#                 write_vals['x_studio_gi_bn_thng_mi'] = values['x_studio_gi_bn_thng_mi']
-#             if values.get('taxes_id'):
-#                 write_vals['taxes_id'] = values['taxes_id']
-
-#             if values.get('x_origin'):
-#                 write_vals['x_origin'] = values['x_origin']
-#             if values.get('x_group'):
-#                 write_vals['x_group'] = values['x_group']
-#             if values.get('x_property'):
-#                 write_vals['x_property'] = values['x_property']
-
-#             # Cập nhật UoM nếu xác định được và khác hiện tại
-#             if uom and (product.uom_id.id != uom.id or product.uom_po_id.id != uom.id):
-#                 write_vals['uom_id'] = uom.id
-#                 write_vals['uom_po_id'] = uom.id
-
-#             if write_vals:
-#                 try:
-#                     product.write(write_vals)
-#                 except Exception as e:
-#                     _logger.exception("❌ Lỗi cập nhật sản phẩm %s: %s", product.display_name, e)
-
-#     # ===== Helpers khác =====
-#     def _get_tax_ids(self, vat_float):
-#         if not isinstance(vat_float, (int, float)) or math.isnan(vat_float):
-#             return []
-#         tax = self.env['account.tax'].search([
-#             ('amount', '=', vat_float),
-#             ('type_tax_use', '=', 'sale')
-#         ], limit=1)
-#         return [tax.id] if tax else []
-
-#     def _safe_float(self, value):
-#         try:
-#             f = float(value)
-#             return 0.0 if math.isnan(f) else f
-#         except Exception:
-#             return 0.0
-
-#     def _clean_string(self, val):
-#         if val is None:
-#             return ''
-#         try:
-#             if pd.isna(val):
-#                 return ''
-#         except Exception:
-#             pass
-#         if isinstance(val, (int, float)):
-#             if float(val).is_integer():
-#                 return str(int(val)).strip()
-#             else:
-#                 return str(val).strip()
-#         s = str(val).strip()
-#         return '' if s.lower() == 'nan' else s
-
-#     def _get_or_create_m2o(self, model, name):
-#         record = self.env[model].sudo().search([('name', '=', name)], limit=1)
-#         if not record:
-#             record = self.env[model].sudo().create({'name': name})
-#         return record.id
-
-
-
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 import base64
@@ -350,9 +14,14 @@ class ProductImportWizard(models.TransientModel):
 
     file = fields.Binary(string="Excel File", required=True)
     filename = fields.Char(string="File Name")
+    import_type = fields.Selection([
+        ('product_name', 'Cập nhật tên sản phẩm'),
+        ('combo', 'Import Combo Products'),
+    ], string="Loại Import", default='product_name', required=True)
 
     # -------- Helpers --------
     def _clean_string(self, val):
+        """Chuẩn hóa giá trị thành string, xử lý NaN, None, số."""
         if val is None:
             return ''
         try:
@@ -361,21 +30,36 @@ class ProductImportWizard(models.TransientModel):
         except Exception:
             pass
         if isinstance(val, (int, float)):
-            # Tránh hiển thị .0 nếu là số nguyên
             return str(int(val)) if float(val).is_integer() else str(val).strip()
         s = str(val).strip()
         return '' if s.lower() == 'nan' else s
 
-    # -------- Main --------
+    def _safe_float(self, value, default=1.0):
+        """Chuyển đổi sang float an toàn."""
+        try:
+            f = float(value)
+            if pd.isna(f):
+                return default
+            return f if f > 0 else default
+        except Exception:
+            return default
+
+    # -------- Main Action --------
     def action_import(self):
         if not self.file:
             return
 
-        # Đọc Excel
+        if self.import_type == 'product_name':
+            return self._import_product_name()
+        elif self.import_type == 'combo':
+            return self._import_combo()
+
+    # -------- Import Product Name (logic cũ) --------
+    def _import_product_name(self):
+        """Import cập nhật tên sản phẩm theo Mã."""
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
             tmp.write(base64.b64decode(self.file))
             tmp.seek(0)
-            # Chỉ cần 2 cột 'Mã' và 'Tên'; ép kiểu 'Mã' là str để không mất số 0 đầu
             df = pd.read_excel(tmp.name, dtype={'Mã': str, 'Tên': str})
 
         Product = self.env['product.template'].sudo()
@@ -403,7 +87,6 @@ class ProductImportWizard(models.TransientModel):
                 _logger.info("⏭️ Bỏ qua: không tìm thấy sản phẩm có default_code='%s'", code)
                 continue
 
-            # Chỉ cập nhật khi khác tên hiện tại
             if (prod.name or '').strip() != new_name.strip():
                 try:
                     prod.write({'name': new_name})
@@ -424,10 +107,204 @@ class ProductImportWizard(models.TransientModel):
         )
         _logger.info(msg)
 
-        # Hiển thị thông báo nhẹ cho người dùng (tùy phiên bản Odoo, có thể dùng notify_info)
-        try:
-            self.env.user.notify_info(message=msg)
-        except Exception:
-            pass
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Import Sản phẩm',
+                'message': msg,
+                'type': 'success',
+                'sticky': True,
+            }
+        }
 
-        return {'type': 'ir.actions.act_window_close'}
+    # -------- Import Combo Products --------
+    def _import_combo(self):
+        """
+        Import combo products từ file Excel.
+
+        Cấu trúc Excel (có merged cells):
+        - Cột B (Mã Combo): default_code của combo - CÓ THỂ MERGED nhiều dòng
+        - Cột C (Tên Combo): Tên combo - CÓ THỂ MERGED nhiều dòng
+        - Cột D (Mã Hàng Con): default_code của child product
+        - Cột E (Tên Hàng Con): Tên child product
+        - Cột F (ĐVT): Đơn vị tính
+        - Cột G (Số Lượng): Số lượng child trong combo
+
+        Logic:
+        - Nếu combo chưa tồn tại (theo Mã Combo): tạo mới với is_combo=True
+        - Nếu combo đã tồn tại: bỏ qua
+        - Child products phải tồn tại trong hệ thống
+        """
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+            tmp.write(base64.b64decode(self.file))
+            tmp.seek(0)
+            # Đọc Excel, ép kiểu str cho các cột mã
+            df = pd.read_excel(
+                tmp.name,
+                dtype={
+                    'Mã Combo': str,
+                    'Tên Combo': str,
+                    'Mã Hàng Con': str,
+                    'Tên Hàng Con': str,
+                    'ĐVT': str,
+                }
+            )
+
+        # Xử lý merged cells: fill forward các giá trị NaN từ ô merged
+        # Khi pandas đọc merged cells, chỉ ô đầu tiên có giá trị, còn lại là NaN
+        if 'Mã Combo' in df.columns:
+            df['Mã Combo'] = df['Mã Combo'].fillna(method='ffill')
+        if 'Tên Combo' in df.columns:
+            df['Tên Combo'] = df['Tên Combo'].fillna(method='ffill')
+
+        ProductTemplate = self.env['product.template'].sudo()
+        ProductProduct = self.env['product.product'].sudo()
+        ComboProduct = self.env['combo.product'].sudo()
+
+        # Thống kê
+        combo_created = 0
+        combo_skipped = 0
+        child_added = 0
+        child_not_found = []
+        errors = []
+
+        # Nhóm dữ liệu theo Mã Combo
+        combo_groups = {}
+        for _, row in df.iterrows():
+            combo_code = self._clean_string(row.get('Mã Combo'))
+            combo_name = self._clean_string(row.get('Tên Combo'))
+            child_code = self._clean_string(row.get('Mã Hàng Con'))
+            child_name = self._clean_string(row.get('Tên Hàng Con'))
+            qty = self._safe_float(row.get('Số Lượng'), default=1.0)
+
+            # Bỏ qua dòng không có mã combo hoặc mã hàng con
+            if not combo_code or not child_code:
+                continue
+
+            if combo_code not in combo_groups:
+                combo_groups[combo_code] = {
+                    'name': combo_name,
+                    'children': []
+                }
+
+            combo_groups[combo_code]['children'].append({
+                'code': child_code,
+                'name': child_name,
+                'qty': qty,
+            })
+
+        # Xử lý từng combo
+        for combo_code, combo_data in combo_groups.items():
+            combo_name = combo_data['name']
+            children = combo_data['children']
+
+            # Kiểm tra combo đã tồn tại chưa
+            existing_combo = ProductTemplate.search([
+                ('default_code', '=', combo_code)
+            ], limit=1)
+
+            if existing_combo:
+                combo_skipped += 1
+                _logger.info("⏭️ Combo đã tồn tại, bỏ qua: [%s] %s", combo_code, combo_name)
+                continue
+
+            # Kiểm tra tất cả child products có tồn tại không
+            valid_children = []
+            for child in children:
+                child_product = ProductProduct.search([
+                    ('default_code', '=', child['code'])
+                ], limit=1)
+
+                if not child_product:
+                    child_not_found.append(f"{child['code']} ({child['name']})")
+                    _logger.warning("⚠️ Không tìm thấy child product: [%s] %s",
+                                    child['code'], child['name'])
+                else:
+                    # Kiểm tra child không phải là combo
+                    if child_product.is_combo:
+                        _logger.warning("⚠️ Child product [%s] là combo, bỏ qua", child['code'])
+                        continue
+                    valid_children.append({
+                        'product': child_product,
+                        'qty': child['qty'],
+                    })
+
+            if not valid_children:
+                errors.append(f"Combo [{combo_code}]: Không có child product hợp lệ")
+                _logger.error("❌ Combo [%s] không có child product hợp lệ", combo_code)
+                continue
+
+            # Tạo combo product mới
+            try:
+                # Lấy UoM mặc định (Cái)
+                default_uom = self.env['uom.uom'].sudo().search([
+                    ('name', 'ilike', 'Cái')
+                ], limit=1)
+                if not default_uom:
+                    default_uom = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+
+                combo_vals = {
+                    'name': combo_name or combo_code,
+                    'default_code': combo_code,
+                    'is_combo': True,
+                    'type': 'service',
+                }
+                if default_uom:
+                    combo_vals['uom_id'] = default_uom.id
+                    combo_vals['uom_po_id'] = default_uom.id
+
+                new_combo = ProductTemplate.create(combo_vals)
+                combo_created += 1
+                _logger.info("✅ Tạo combo mới: [%s] %s", combo_code, combo_name)
+
+                # Tạo combo lines (children)
+                for child_data in valid_children:
+                    ComboProduct.create({
+                        'product_template_id': new_combo.id,
+                        'product_id': child_data['product'].id,
+                        'product_quantity': child_data['qty'],
+                        'name': child_data['product'].name,
+                    })
+                    child_added += 1
+                    _logger.info("   ➕ Thêm child: [%s] x %s",
+                                 child_data['product'].default_code, child_data['qty'])
+
+            except Exception as e:
+                errors.append(f"Combo [{combo_code}]: {str(e)}")
+                _logger.exception("❌ Lỗi tạo combo [%s]: %s", combo_code, e)
+
+        # Tạo thông báo kết quả
+        msg_lines = [
+            "Hoàn tất import Combo Products.",
+            f"- Combo tạo mới: {combo_created}",
+            f"- Combo bỏ qua (đã tồn tại): {combo_skipped}",
+            f"- Child products đã thêm: {child_added}",
+        ]
+
+        if child_not_found:
+            unique_not_found = list(set(child_not_found))[:10]
+            msg_lines.append(f"- Child không tìm thấy: {len(set(child_not_found))}")
+            for item in unique_not_found:
+                msg_lines.append(f"  • {item}")
+            if len(set(child_not_found)) > 10:
+                msg_lines.append(f"  ... và {len(set(child_not_found)) - 10} items khác")
+
+        if errors:
+            msg_lines.append(f"- Lỗi: {len(errors)}")
+            for err in errors[:5]:
+                msg_lines.append(f"  • {err}")
+
+        msg = "\n".join(msg_lines)
+        _logger.info(msg)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Import Combo Products',
+                'message': msg,
+                'type': 'success' if not errors else 'warning',
+                'sticky': True,
+            }
+        }
