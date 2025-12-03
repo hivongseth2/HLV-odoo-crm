@@ -13,43 +13,17 @@ class ResConfigSettings(models.TransientModel):
     # ===========================================
     wordpress_auto_sync_enabled = fields.Boolean(
         string='Bật đồng bộ giá tự động',
-        help='Tự động đồng bộ giá lên WordPress khi giá thay đổi trong Odoo'
+        help='Tự động đồng bộ giá lên WordPress khi giá thay đổi trong Odoo',
+        config_parameter='wordpress_sync.auto_sync_enabled'
     )
 
     wordpress_config_id = fields.Many2one(
         'wordpress.config',
         string='Cấu hình WordPress',
         domain=[('active', '=', True)],
-        help='Chọn cấu hình WordPress để đồng bộ'
+        help='Chọn cấu hình WordPress để đồng bộ',
+        config_parameter='wordpress_sync.default_config_id'
     )
-
-    # ===========================================
-    # GET / SET VALUES
-    # ===========================================
-    @api.model
-    def get_values(self):
-        res = super().get_values()
-        ICP = self.env['ir.config_parameter'].sudo()
-
-        # Auto sync enabled
-        auto_sync = ICP.get_param('wordpress_sync.auto_sync_enabled', 'False')
-        res['wordpress_auto_sync_enabled'] = auto_sync in ('1', 'true', 'True', True)
-
-        # Default config
-        config_id = ICP.get_param('wordpress_sync.default_config_id', '0')
-        res['wordpress_config_id'] = int(config_id) if config_id else 0
-
-        return res
-
-    def set_values(self):
-        super().set_values()
-        ICP = self.env['ir.config_parameter'].sudo()
-
-        ICP.set_param('wordpress_sync.auto_sync_enabled', self.wordpress_auto_sync_enabled)
-        ICP.set_param(
-            'wordpress_sync.default_config_id',
-            self.wordpress_config_id.id if self.wordpress_config_id else 0
-        )
 
     # ===========================================
     # HELPER METHODS
@@ -75,12 +49,15 @@ class ResConfigSettings(models.TransientModel):
             wordpress.config record hoặc False
         """
         ICP = self.env['ir.config_parameter'].sudo()
-        config_id = int(ICP.get_param('wordpress_sync.default_config_id', '0') or 0)
+        config_id = ICP.get_param('wordpress_sync.default_config_id', False)
 
         if config_id:
-            config = self.env['wordpress.config'].browse(config_id)
-            if config.exists() and config.active:
-                return config
+            try:
+                config = self.env['wordpress.config'].browse(int(config_id))
+                if config.exists() and config.active:
+                    return config
+            except (ValueError, TypeError):
+                pass
 
         # Fallback: lấy config active đầu tiên
         return self.env['wordpress.config'].search([('active', '=', True)], limit=1)
