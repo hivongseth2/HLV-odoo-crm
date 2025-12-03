@@ -217,7 +217,42 @@ class ZaloStockNotificationConfig(models.Model):
         help='Zalo User ID của kế toán xử lý TẤT CẢ đơn nhập kho. '
              'Tất cả phiếu nhập kho sẽ gửi thông báo tới user_id này'
     )
-    
+
+    # ===== Cấu hình gửi tin nhắn nhắc nhở tương tác =====
+    enable_interaction_reminder = fields.Boolean(
+        'Bật nhắc nhở tương tác',
+        default=False,
+        help='Bật tính năng gửi tin nhắn nhắc nhở người dùng tương tác với OA '
+             'để tránh bị ngừng nhận tin nhắn (do Zalo yêu cầu tương tác trong 7 ngày)'
+    )
+
+    reminder_interval_days = fields.Integer(
+        'Khoảng cách gửi (ngày)',
+        default=5,
+        help='Số ngày giữa mỗi lần gửi tin nhắn nhắc nhở. '
+             'Khuyến nghị: 5 ngày (để đảm bảo trước thời hạn 7 ngày của Zalo)'
+    )
+
+    reminder_message_template = fields.Text(
+        'Nội dung tin nhắn nhắc nhở',
+        default='''🔔 NHẮC NHỞ TƯƠNG TÁC ZALO OA
+
+Xin chào! Đây là tin nhắn tự động từ hệ thống HLV.
+
+Để tiếp tục nhận thông báo về đơn hàng qua Zalo, vui lòng phản hồi tin nhắn này (có thể gõ bất kỳ nội dung nào, ví dụ: "OK", "Đã nhận"...).
+
+⚠️ Lưu ý: Theo chính sách của Zalo, nếu bạn không tương tác trong 7 ngày, hệ thống sẽ tạm ngừng gửi tin nhắn.
+
+Cảm ơn bạn!''',
+        help='Nội dung tin nhắn nhắc nhở. Có thể sử dụng biến: {date} - ngày gửi'
+    )
+
+    last_reminder_sent = fields.Datetime(
+        'Lần gửi nhắc nhở cuối',
+        readonly=True,
+        help='Thời điểm gửi tin nhắn nhắc nhở cuối cùng'
+    )
+
     active = fields.Boolean('Active', default=True)
 
     @api.model
@@ -919,3 +954,201 @@ class ZaloStockNotificationConfig(models.Model):
             }
         except Exception as e:
             raise UserError(_("Lỗi khi refresh token: %s") % str(e))
+
+    # ===================== Interaction Reminder Methods =====================
+
+    def _get_all_reminder_recipients(self):
+        """
+        Lấy tất cả các Zalo User IDs cần gửi tin nhắn nhắc nhở.
+        Bao gồm: online_recipient_user_id, offline_recipient_user_id, incoming_recipient_user_id
+
+        :return: Set of unique user IDs
+        """
+        self.ensure_one()
+        recipients = set()
+
+        if self.online_recipient_user_id:
+            recipients.add(self.online_recipient_user_id.strip())
+
+        if self.offline_recipient_user_id:
+            recipients.add(self.offline_recipient_user_id.strip())
+
+        if self.incoming_recipient_user_id:
+            recipients.add(self.incoming_recipient_user_id.strip())
+
+        # Thêm recipients từ saler_mapping_text nếu có
+        saler_mapping = self._parse_saler_mapping_text()
+        for user_ids in saler_mapping.values():
+            for uid in user_ids:
+                if uid:
+                    recipients.add(uid.strip())
+
+        return recipients
+
+    def _should_send_reminder(self):
+        """
+        Kiểm tra có cần gửi tin nhắn nhắc nhở không.
+
+        Điều kiện gửi:
+        - enable_interaction_reminder = True
+        - active = True
+        - Chưa gửi lần nào (last_reminder_sent = False) HOẶC
+          đã quá reminder_interval_days ngày kể từ lần gửi cuối
+
+        :return: True nếu cần gửi, False nếu không
+        """
+        self.ensure_one()
+
+        if not self.enable_interaction_reminder:
+            _logger.debug("Config %s: Interaction reminder is disabled", self.id)
+            return False
+
+        if not self.active:
+            _logger.debug("Config %s: Config is inactive", self.id)
+            return False
+
+        if not self.last_reminder_sent:
+            _logger.info("Config %s: First time sending reminder (last_reminder_sent is empty)", self.id)
+            return True
+
+        # Tính số ngày kể từ lần gửi cuối
+        days_since_last = (fields.Datetime.now() - self.last_reminder_sent).days
+
+        if days_since_last >= self.reminder_interval_days:
+            _logger.info(
+                "Config %s: %d days since last reminder, interval is %d days - should send",
+                self.id, days_since_last, self.reminder_interval_days
+            )
+            return True
+        else:
+            _logger.debug(
+                "Config %s: %d days since last reminder, interval is %d days - not yet",
+                self.id, days_since_last, self.reminder_interval_days
+            )
+            return False
+
+    def send_interaction_reminder(self):
+        """
+        Gửi tin nhắn nhắc nhở tương tác tới tất cả recipients.
+
+        :return: Dict với kết quả {success_count, total_count, errors}
+        """
+        self.ensure_one()
+
+        recipients = self._get_all_reminder_recipients()
+
+        if not recipients:
+            _logger.warning("Config %s: No recipients configured for reminder", self.id)
+            return {'success_count': 0, 'total_count': 0, 'errors': ['No recipients configured']}
+
+        # Format message với biến {date}
+        now = fields.Datetime.now()
+        date_str = now.strftime('%d/%m/%Y %H:%M')
+        message_text = (self.reminder_message_template or '').format(date=date_str)
+
+        success_count = 0
+        errors = []
+
+        for user_id in recipients:
+            try:
+                result = self.send_notification_message(user_id, message_text)
+                if result.get('error') == 0:
+                    success_count += 1
+                    _logger.info("Config %s: Reminder sent to %s", self.id, user_id)
+                else:
+                    error_msg = result.get('message', 'Unknown error')
+                    errors.append(f"User {user_id}: {error_msg}")
+                    _logger.warning("Config %s: Failed to send reminder to %s: %s",
+                                   self.id, user_id, error_msg)
+            except Exception as e:
+                errors.append(f"User {user_id}: {str(e)}")
+                _logger.exception("Config %s: Error sending reminder to %s: %s",
+                                 self.id, user_id, e)
+
+        # Cập nhật last_reminder_sent
+        self.write({'last_reminder_sent': now})
+
+        _logger.info(
+            "Config %s: Reminder completed - %d/%d sent successfully",
+            self.id, success_count, len(recipients)
+        )
+
+        return {
+            'success_count': success_count,
+            'total_count': len(recipients),
+            'errors': errors
+        }
+
+    @api.model
+    def cron_send_interaction_reminder(self):
+        """
+        Cron job để gửi tin nhắn nhắc nhở tương tác.
+
+        Được gọi bởi scheduled action (ir.cron).
+        Chỉ gửi nếu _should_send_reminder() trả về True.
+        """
+        _logger.info("Starting cron_send_interaction_reminder...")
+
+        configs = self.search([
+            ('active', '=', True),
+            ('enable_interaction_reminder', '=', True)
+        ])
+
+        if not configs:
+            _logger.info("No active configs with reminder enabled")
+            return
+
+        for config in configs:
+            try:
+                if config._should_send_reminder():
+                    _logger.info("Config %s: Sending interaction reminder...", config.id)
+                    result = config.send_interaction_reminder()
+                    _logger.info(
+                        "Config %s: Reminder result - %d/%d sent, errors: %s",
+                        config.id,
+                        result['success_count'],
+                        result['total_count'],
+                        result['errors'] if result['errors'] else 'None'
+                    )
+                else:
+                    _logger.debug("Config %s: Not time to send reminder yet", config.id)
+            except Exception as e:
+                _logger.exception("Config %s: Error in cron_send_interaction_reminder: %s",
+                                 config.id, e)
+
+        _logger.info("Finished cron_send_interaction_reminder")
+
+    def action_send_reminder_now(self):
+        """
+        Action button để gửi tin nhắn nhắc nhở ngay lập tức (bỏ qua interval check).
+        """
+        self.ensure_one()
+
+        if not self.enable_interaction_reminder:
+            raise UserError(_("Chưa bật tính năng nhắc nhở tương tác!"))
+
+        recipients = self._get_all_reminder_recipients()
+        if not recipients:
+            raise UserError(_("Chưa cấu hình User ID kế toán nào để nhận thông báo!"))
+
+        result = self.send_interaction_reminder()
+
+        message = _('Đã gửi %d/%d tin nhắn nhắc nhở') % (
+            result['success_count'], result['total_count']
+        )
+
+        if result['errors']:
+            message += _('\n\nLỗi:\n') + '\n'.join(result['errors'][:5])
+            if len(result['errors']) > 5:
+                message += _('\n... và %d lỗi khác') % (len(result['errors']) - 5)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Gửi tin nhắn nhắc nhở'),
+                'message': message,
+                'type': 'success' if result['success_count'] > 0 else 'warning',
+                'sticky': True,
+            }
+        }

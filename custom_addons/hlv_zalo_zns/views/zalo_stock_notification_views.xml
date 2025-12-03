@@ -27,6 +27,11 @@
                         type="object"
                         class="btn-secondary"
                         invisible="use_shared_token or not active or not (refresh_token != False)" />
+                    <button name="action_send_reminder_now"
+                        string="Gửi Nhắc Nhở Ngay"
+                        type="object"
+                        class="btn-warning"
+                        invisible="not enable_interaction_reminder" />
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -116,6 +121,36 @@
                     <group string="📥 Cấu Hình Phiếu NHẬP KHO">
                         <field name="incoming_recipient_user_id"
                             placeholder="Zalo User ID kế toán xử lý TẤT CẢ phiếu nhập kho" />
+                    </group>
+
+                    <!-- NEW: Cấu hình nhắc nhở tương tác định kỳ -->
+                    <group string="🔔 Cấu Hình Nhắc Nhở Tương Tác (Tránh bị ngừng nhận tin)">
+                        <group>
+                            <field name="enable_interaction_reminder" />
+                            <field name="reminder_interval_days"
+                                invisible="not enable_interaction_reminder" />
+                            <field name="last_reminder_sent"
+                                invisible="not enable_interaction_reminder" />
+                        </group>
+                        <group invisible="not enable_interaction_reminder">
+                            <div class="alert alert-warning" role="alert">
+                                <p style="margin: 5px 0;">
+                                    <b>⚠️ Lưu ý về chính sách Zalo:</b>
+                                </p>
+                                <p style="margin: 5px 0;">
+                                    Zalo yêu cầu người dùng phải tương tác với OA trong vòng 7 ngày.
+                                    Nếu không tương tác, hệ thống sẽ tạm ngừng gửi tin nhắn.
+                                </p>
+                                <p style="margin: 5px 0;">
+                                    Tính năng này sẽ tự động gửi tin nhắn nhắc nhở để kế toán phản hồi,
+                                    đảm bảo luôn nhận được thông báo đơn hàng.
+                                </p>
+                            </div>
+                        </group>
+                        <field name="reminder_message_template"
+                            widget="text"
+                            invisible="not enable_interaction_reminder"
+                            placeholder="Nội dung tin nhắn nhắc nhở..." />
                     </group>
 
                                         <!-- NEW: Mapping MISA saler_code -> Zalo OA User ID -->
