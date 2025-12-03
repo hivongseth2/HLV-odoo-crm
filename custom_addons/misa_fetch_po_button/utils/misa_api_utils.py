@@ -783,3 +783,110 @@ class MisaApiUtils(models.AbstractModel):
 
 
 
+
+# create product
+    def create_product_in_misa(self, product):
+        """
+        Tạo sản phẩm từ Odoo sang MISA CRM.
+        :param product: record product.template hoặc product.product
+        """
+        # 1. Lấy Token & Config
+        misa_config = self.env['misa.config']
+        
+        # Hàm _fetch_login_crm_token đã có sẵn trong class này
+        token = self._fetch_login_crm_token()
+        if not token:
+            raise Exception("Không lấy được Access Token MISA CRM")
+
+        # 2. Chuẩn bị Header
+        headers = misa_config.get_crm_header(token)
+        # Bổ sung header bắt buộc cho API tạo sản phẩm
+        headers.update({
+            "LayoutCode": "product",
+            "X-Misa-Language": "vi-VN"
+        })
+
+        # 3. Mapping dữ liệu từ Odoo -> MISA
+        # Lưu ý: Các ID như ProductCategoryID, UnitID... nếu không khớp ID bên MISA 
+        # thì MISA thường ưu tiên lấy theo Text hoặc tạo mới tùy cấu hình.
+        # Để an toàn, chúng ta gửi Text là chủ yếu.
+        
+        code = product.default_code or ""
+        if not code:
+            raise Exception("Sản phẩm Odoo chưa có Mã (Internal Reference)")
+
+        uom_name = product.uom_id.name if product.uom_id else "Cái"
+        
+        # Payload chuẩn theo mẫu fetch bạn cung cấp
+        payload = {
+            "ProductCode": code,
+            "ProductName": product.name,
+            
+            # Đơn giá bán
+            "UnitPrice": product.list_price or 0,
+            "UnitPriceFixed": product.list_price or 0,
+            
+            # Đơn vị tính
+            "UsageUnitIDText": uom_name,
+            "UsageUnitID": None, # Để null để MISA tự map theo tên hoặc tạo mới
+            
+            # Loại hàng: 1-Hàng hóa, 2-Dịch vụ. Odoo: consu/product -> 1, service -> 2
+            "ProductPropertiesID": 2 if product.type == 'service' else 1,
+            "ProductPropertiesIDText": "Dịch vụ" if product.type == 'service' else "Hàng hóa",
+            
+            # Nhóm vật tư hàng hóa (Default)
+            "ProductCategoryIDText": str(product.categ_id.name) if product.categ_id else "Hàng hóa",
+            
+            # Thuế (Giả lập mặc định 8% hoặc 10% tùy setup, ở đây demo lấy text từ thuế đầu tiên)
+            "TaxIDText": product.taxes_id[0].description if product.taxes_id else "",
+            
+            # Các trường mặc định bắt buộc khác
+            "MISAEntityState": 1,   # 1 = Thêm mới, 2 = Sửa
+            "Active": True,
+            "Inactive": False,
+            "IsFollowSerialNumber": False,
+            "IsPublic": False,
+            "FormLayoutID": 45,     # Layout chuẩn của MISA
+            
+            # Cấu trúc bảng phụ (để rỗng nếu không dùng)
+            "Fields": [],
+            "FieldsCustom": [],
+            "CustomTables": [],
+            "DataCustom": {
+                 "Avatar": ""
+            }
+        }
+
+        # 4. Gọi API
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
+        
+        _logger.info(f"🚀 Đang gửi sản phẩm sang MISA: {code} - {product.name}")
+        
+        try:
+            # Dùng session để giữ kết nối tốt hơn
+            session = requests.Session()
+            response = session.post(url, headers=headers, json=payload, timeout=30)
+            
+            _logger.info(f"MISA Response Status: {response.status_code}")
+            _logger.info(f"MISA Response Body: {response.text}")
+
+            if response.status_code != 200:
+                raise Exception(f"Lỗi HTTP {response.status_code}: {response.text}")
+
+            res_json = response.json()
+            
+            # Kiểm tra Success từ body
+            if not res_json.get("Success"):
+                # Check lỗi cụ thể
+                user_msg = res_json.get("UserMessage") or res_json.get("Message") or "Lỗi không xác định từ MISA"
+                raise Exception(f"MISA từ chối: {user_msg}")
+
+            data = res_json.get("Data", {})
+            misa_id = data.get("ProductID") or data.get("ID")
+            
+            _logger.info(f"✅ Tạo thành công! MISA ID: {misa_id}")
+            return misa_id
+
+        except Exception as e:
+            _logger.error(f"❌ Lỗi khi tạo sản phẩm MISA: {e}")
+            raise e
