@@ -11,14 +11,14 @@ class StockPicking(models.Model):
 
     def button_validate(self):
         """
-        Override button_validate để kiểm tra qty_done không được vượt quá product_uom_qty
+        Override button_validate để kiểm tra quantity không được vượt quá product_uom_qty
         trên tất cả các stock.move trước khi xác nhận picking.
-        Chỉ áp dụng cho phiếu IN (incoming) và OUT (outgoing), không áp dụng cho internal (PICK, PACK).
+        Chỉ áp dụng cho phiếu OUT (outgoing).
         """
         self.ensure_one()
 
-        # Chỉ kiểm tra cho phiếu IN và OUT, bỏ qua internal (PICK, PACK)
-        if self.picking_type_id.code not in ('incoming', 'outgoing'):
+        # Chỉ kiểm tra cho phiếu OUT (outgoing)
+        if self.picking_type_id.code != 'outgoing':
             return super(StockPicking, self).button_validate()
 
         # Danh sách các move vi phạm (qty_done > product_uom_qty)
@@ -119,14 +119,22 @@ class StockMove(models.Model):
 class StockMoveLine(models.Model):
     _inherit = 'stock.move.line'
 
-    @api.constrains('qty_done')
+    def _get_qty_done_value(self):
+        """
+        Lấy giá trị qty_done, tương thích cả Odoo 16 (qty_done) và Odoo 17+ (quantity)
+        """
+        if hasattr(self, 'qty_done'):
+            return float(self.qty_done or 0.0)
+        return float(self.quantity or 0.0)
+
+    @api.constrains('qty_done', 'quantity')
     def _check_qty_done_not_exceed_demand(self):
         """
-        Chặn ngay khi tạo hoặc cập nhật stock.move.line nếu qty_done vượt quá
+        Chặn ngay khi tạo hoặc cập nhật stock.move.line nếu quantity vượt quá
         product_uom_qty của stock.move tương ứng.
 
         Điều này ngăn chặn việc quét mã vạch dư hoặc nhập thủ công số lượng vượt mức.
-        Chỉ áp dụng cho phiếu IN (incoming) và OUT (outgoing), không áp dụng cho internal (PICK, PACK).
+        Chỉ áp dụng cho phiếu OUT (outgoing).
         """
         EPS = 1e-6  # Epsilon để xử lý sai số floating point
 
@@ -139,15 +147,15 @@ class StockMoveLine(models.Model):
             if line.picking_id and line.picking_id.state == 'done':
                 continue
 
-            # Chỉ kiểm tra cho phiếu IN và OUT, bỏ qua internal (PICK, PACK)
-            if line.picking_id and line.picking_id.picking_type_id.code not in ('incoming', 'outgoing'):
+            # Chỉ kiểm tra cho phiếu OUT (outgoing)
+            if not line.picking_id or line.picking_id.picking_type_id.code != 'outgoing':
                 continue
 
             move = line.move_id
 
             # Lấy tổng qty_done của TẤT CẢ move lines cùng move (bao gồm line hiện tại)
             total_qty_done = sum(
-                float(ml.qty_done or 0.0)
+                ml._get_qty_done_value()
                 for ml in move.move_line_ids
                 if ml.state not in ('done', 'cancel')
             )
@@ -198,12 +206,12 @@ class StockMoveLine(models.Model):
 
     def write(self, vals):
         """
-        Override write để validate khi cập nhật qty_done
+        Override write để validate khi cập nhật qty_done hoặc quantity
         """
         res = super(StockMoveLine, self).write(vals)
 
-        # Chỉ validate nếu có thay đổi qty_done
-        if 'qty_done' in vals:
+        # Chỉ validate nếu có thay đổi qty_done hoặc quantity
+        if 'qty_done' in vals or 'quantity' in vals:
             self._check_qty_done_not_exceed_demand()
 
         return res
