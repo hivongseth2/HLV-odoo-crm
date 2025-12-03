@@ -44,6 +44,36 @@ class ProductImportWizard(models.TransientModel):
         except Exception:
             return default
 
+    def _get_excel_engine(self, filename):
+        """Xác định engine dựa trên đuôi file."""
+        if filename:
+            if filename.lower().endswith('.xls'):
+                return 'xlrd'
+            elif filename.lower().endswith('.xlsx'):
+                return 'openpyxl'
+        return None
+
+    def _read_excel(self, file_content, dtype=None):
+        """Đọc file Excel, tự động xác định engine dựa trên đuôi file."""
+        # Xác định suffix và engine từ filename
+        suffix = '.xlsx'
+        engine = None
+        if self.filename:
+            if self.filename.lower().endswith('.xls'):
+                suffix = '.xls'
+                engine = 'xlrd'
+            elif self.filename.lower().endswith('.xlsx'):
+                suffix = '.xlsx'
+                engine = 'openpyxl'
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(base64.b64decode(file_content))
+            tmp.seek(0)
+            if engine:
+                return pd.read_excel(tmp.name, dtype=dtype, engine=engine)
+            else:
+                return pd.read_excel(tmp.name, dtype=dtype)
+
     # -------- Main Action --------
     def action_import(self):
         if not self.file:
@@ -57,10 +87,7 @@ class ProductImportWizard(models.TransientModel):
     # -------- Import Product Name (logic cũ) --------
     def _import_product_name(self):
         """Import cập nhật tên sản phẩm theo Mã."""
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-            tmp.write(base64.b64decode(self.file))
-            tmp.seek(0)
-            df = pd.read_excel(tmp.name, dtype={'Mã': str, 'Tên': str})
+        df = self._read_excel(self.file, dtype={'Mã': str, 'Tên': str})
 
         Product = self.env['product.template'].sudo()
 
@@ -136,20 +163,13 @@ class ProductImportWizard(models.TransientModel):
         - Nếu combo đã tồn tại: bỏ qua
         - Child products phải tồn tại trong hệ thống
         """
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-            tmp.write(base64.b64decode(self.file))
-            tmp.seek(0)
-            # Đọc Excel, ép kiểu str cho các cột mã
-            df = pd.read_excel(
-                tmp.name,
-                dtype={
-                    'Mã Combo': str,
-                    'Tên Combo': str,
-                    'Mã Hàng Con': str,
-                    'Tên Hàng Con': str,
-                    'ĐVT': str,
-                }
-            )
+        df = self._read_excel(self.file, dtype={
+            'Mã Combo': str,
+            'Tên Combo': str,
+            'Mã Hàng Con': str,
+            'Tên Hàng Con': str,
+            'ĐVT': str,
+        })
 
         # Xử lý merged cells: fill forward các giá trị NaN từ ô merged
         # Khi pandas đọc merged cells, chỉ ô đầu tiên có giá trị, còn lại là NaN
