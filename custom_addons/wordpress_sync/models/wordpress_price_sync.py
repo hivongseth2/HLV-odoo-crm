@@ -98,6 +98,9 @@ class WordPressPriceSyncWizard(models.TransientModel):
         # Log kết quả
         self._create_log(self.product_id, result, 'manual')
 
+        # Tạo internal note trên product
+        self._post_sync_note(self.product_id, result)
+
         # Hiển thị notification
         if result['success']:
             return self._notify('Thành công', f"{self.product_id.name}: {result['message']}", 'success')
@@ -127,11 +130,13 @@ class WordPressPriceSyncWizard(models.TransientModel):
             if result['success']:
                 success += 1
                 self._create_log(product, result, 'manual')
+                self._post_sync_note(product, result)
             elif 'không hợp lệ' in result['message'].lower() or 'không có sku' in result['message'].lower():
                 skipped += 1
             else:
                 failed += 1
                 self._create_log(product, result, 'manual')
+                self._post_sync_note(product, result)
 
         # Update last sync date
         self.wordpress_config_id.last_sync_date = fields.Datetime.now()
@@ -170,3 +175,34 @@ class WordPressPriceSyncWizard(models.TransientModel):
                 'sticky': False,
             }
         }
+
+    def _post_sync_note(self, product, result):
+        """Tạo internal note trên product sau khi sync"""
+        from datetime import datetime
+        sync_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+        if result['success']:
+            regular_price = result.get('regular_price', 0)
+            sale_price = result.get('sale_price', 0)
+
+            body = f'''<p><strong style="color: green;">✓ WordPress Sync thành công</strong><br/>
+Regular Price: {regular_price:,.0f} đ<br/>
+Sale Price: {sale_price:,.0f if sale_price > 0 else "Không có"} đ<br/>
+Người thực hiện: {self.env.user.name}<br/>
+Thời gian: {sync_time}
+</p>'''
+        else:
+            error_message = result.get('message', 'Lỗi không xác định')
+
+            body = f'''<p><strong style="color: red;">✗ WordPress Sync thất bại</strong><br/>
+<strong>Chi tiết lỗi:</strong> {error_message}<br/>
+SKU: {product.default_code or "Không có"}<br/>
+Người thực hiện: {self.env.user.name}<br/>
+Thời gian: {sync_time}
+</p>'''
+
+        product.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note'
+        )
