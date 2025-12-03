@@ -144,10 +144,11 @@ class ProductTemplate(models.Model):
         if success:
             regular_price = result.get('regular_price', 0)
             sale_price = result.get('sale_price', 0)
+            sale_price_str = f"{sale_price:,.0f} đ" if sale_price > 0 else "Không có"
 
             body = f'''<p><strong style="color: green;">✓ WordPress Sync thành công</strong><br/>
 Regular Price: {regular_price:,.0f} đ<br/>
-Sale Price: {sale_price:,.0f if sale_price > 0 else "Không có"} đ<br/>
+Sale Price: {sale_price_str}<br/>
 Người thực hiện: {self.env.user.name}<br/>
 Thời gian: {sync_time}
 </p>'''
