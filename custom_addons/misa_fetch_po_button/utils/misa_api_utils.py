@@ -883,3 +883,28 @@ class MisaApiUtils(models.AbstractModel):
         except Exception as e:
             _logger.error(f"❌ Lỗi tạo sản phẩm: {e}")
             raise e
+        
+        
+    def find_product_id_by_code(self, product_code, headers):
+        """
+        Hàm phụ trợ: Tìm ID sản phẩm theo mã (Dùng khi tạo xong mà không nhận được ID)
+        """
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+        payload = {
+            "Page": 1,
+            "PageSize": 1,
+            "Columns": "ProductID,ProductCode",
+            "Filters": [{
+                "FieldName": "ProductCode",
+                "Operator": 1, # Bằng (=)
+                "Value": product_code
+            }]
+        }
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=10)
+            data = res.json()
+            if data.get("Success") and data.get("Data"):
+                return data["Data"][0].get("ProductID")
+        except Exception as e:
+            _logger.error(f"Lỗi tìm kiếm fallback: {e}")
+        return None
