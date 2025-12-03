@@ -90,6 +90,9 @@ class PickingExportWizard(models.TransientModel):
         return [
             {'key': 'hinh_thuc_ban_hang', 'name': 'Hình thức bán hàng', 'width': 25},
             {'key': 'phuong_thuc_thanh_toan', 'name': 'Phương thức thanh toán', 'width': 25},
+            {'key': 'hinh_thuc_giao_hang', 'name': 'Hình thức giao hàng', 'width': 25},
+            {'key': 'hinh_thuc_thanh_toan_so', 'name': 'Hình thức thanh toán (SO)', 'width': 25},
+            {'key': 'ben_tra_phi_van_chuyen', 'name': 'Bên trả phí vận chuyển', 'width': 25},
             {'key': 'kiem_phieu_xuat_kho', 'name': 'Kiêm phiếu xuất kho', 'width': 20},
             {'key': 'lap_kem_hoa_don', 'name': 'Lập kèm hóa đơn', 'width': 18},
             {'key': 'da_lap_hoa_don', 'name': 'Đã lập hóa đơn', 'width': 18},
@@ -361,6 +364,10 @@ class PickingExportWizard(models.TransientModel):
             # Hardcoded fields
             'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
             'phuong_thuc_thanh_toan': 'Chưa thu tiền',
+            # 3 cột mới từ sale.order (đặt ngay sau phương thức thanh toán)
+            'hinh_thuc_giao_hang': getattr(so, 'x_studio_htgh', '') if so else '',
+            'hinh_thuc_thanh_toan_so': getattr(so, 'x_studio_httt', '') if so else '',
+            'ben_tra_phi_van_chuyen': getattr(so, 'x_studio_misa_delivery', '') if so else '',
             'kiem_phieu_xuat_kho': 'Có',
             'lap_kem_hoa_don': 'Có',
             'da_lap_hoa_don': 'Đã lập',
