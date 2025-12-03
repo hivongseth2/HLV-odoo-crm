@@ -9,7 +9,7 @@ class StockMoveLine(models.Model):
     def _check_barcode_qty_limit(self, new_qty_done, product_id, move_id=None, exclude_line_id=None):
         """
         Kiểm tra xem tổng qty_done có vượt quá demand không
-        
+
         :param new_qty_done: Số lượng mới sẽ được thêm vào
         :param product_id: ID sản phẩm
         :param move_id: ID của move (để lấy demand)
@@ -18,14 +18,14 @@ class StockMoveLine(models.Model):
         """
         if not move_id:
             return False
-            
+
         move = self.env['stock.move'].browse(move_id)
         demand = move.product_uom_qty
-        
-        # Chỉ check với outgoing transfer
-        if move.picking_id.picking_type_code != 'outgoing':
+
+        # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0
+        if move.picking_id and move.picking_id.name and 'INT' in move.picking_id.name:
             return False
-            
+
         if demand <= 0:
             return False
         
