@@ -146,23 +146,23 @@ class ProductTemplate(models.Model):
             sale_price = result.get('sale_price', 0)
             sale_price_str = f"{sale_price:,.0f} đ" if sale_price > 0 else "Không có"
 
-            body = f"""<p>
-<b>✓ WordPress Sync thành công</b><br/>
-Regular Price: {regular_price:,.0f} đ<br/>
-Sale Price: {sale_price_str}<br/>
-Người thực hiện: {self.env.user.name}<br/>
-Thời gian: {sync_time}
-</p>"""
+            body = (
+                f"✓ WordPress Sync thành công\n"
+                f"Regular Price: {regular_price:,.0f} đ\n"
+                f"Sale Price: {sale_price_str}\n"
+                f"Người thực hiện: {self.env.user.name}\n"
+                f"Thời gian: {sync_time}"
+            )
         else:
             error_message = result.get('message', 'Lỗi không xác định')
 
-            body = f"""<p>
-<b>✗ WordPress Sync thất bại</b><br/>
-Chi tiết lỗi: {error_message}<br/>
-SKU: {product.default_code or "Không có"}<br/>
-Người thực hiện: {self.env.user.name}<br/>
-Thời gian: {sync_time}
-</p>"""
+            body = (
+                f"✗ WordPress Sync thất bại\n"
+                f"Chi tiết lỗi: {error_message}\n"
+                f"SKU: {product.default_code or 'Không có'}\n"
+                f"Người thực hiện: {self.env.user.name}\n"
+                f"Thời gian: {sync_time}"
+            )
 
         product.message_post(
             body=body,
