@@ -145,7 +145,42 @@ class ZaloStockNotificationConfig(models.Model):
         help='Zalo User ID của kế toán xử lý TẤT CẢ đơn nhập kho. '
              'Tất cả phiếu nhập kho sẽ gửi thông báo tới user_id này'
     )
-    
+
+    # ===== Cấu hình gửi tin nhắn nhắc nhở tương tác =====
+    enable_interaction_reminder = fields.Boolean(
+        'Bật nhắc nhở tương tác',
+        default=False,
+        help='Bật tính năng gửi tin nhắn nhắc nhở người dùng tương tác với OA '
+             'để tránh bị ngừng nhận tin nhắn (do Zalo yêu cầu tương tác trong 7 ngày)'
+    )
+
+    reminder_interval_days = fields.Integer(
+        'Khoảng cách gửi (ngày)',
+        default=5,
+        help='Số ngày giữa mỗi lần gửi tin nhắn nhắc nhở. '
+             'Khuyến nghị: 5 ngày (để đảm bảo trước thời hạn 7 ngày của Zalo)'
+    )
+
+    reminder_message_template = fields.Text(
+        'Nội dung tin nhắn nhắc nhở',
+        default='''🔔 NHẮC NHỞ TƯƠNG TÁC ZALO OA
+
+Xin chào! Đây là tin nhắn tự động từ hệ thống HLV.
+
+Để tiếp tục nhận thông báo về đơn hàng qua Zalo, vui lòng phản hồi tin nhắn này (có thể gõ bất kỳ nội dung nào, ví dụ: "OK", "Đã nhận"...).
+
+⚠️ Lưu ý: Theo chính sách của Zalo, nếu bạn không tương tác trong 7 ngày, hệ thống sẽ tạm ngừng gửi tin nhắn.
+
+Cảm ơn bạn!''',
+        help='Nội dung tin nhắn nhắc nhở. Có thể sử dụng biến: {date} - ngày gửi'
+    )
+
+    last_reminder_sent = fields.Datetime(
+        'Lần gửi nhắc nhở cuối',
+        readonly=True,
+        help='Thời điểm gửi tin nhắn nhắc nhở cuối cùng'
+    )
+
     active = fields.Boolean('Active', default=True)
 
     @api.model
@@ -847,3 +882,237 @@ class ZaloStockNotificationConfig(models.Model):
             }
         except Exception as e:
             raise UserError(_("Lỗi khi refresh token: %s") % str(e))
+
+    # ===== PHƯƠNG THỨC GỬI TIN NHẮN NHẮC NHỞ TƯƠNG TÁC =====
+
+    def _get_all_reminder_recipients(self):
+        """
+        Lấy tất cả user_id cần gửi tin nhắn nhắc nhở tương tác
+
+        Bao gồm:
+        - User ID Kế Toán Online
+        - User ID Kế Toán Offline
+        - User ID Kế Toán Nhập Kho
+
+        :return: List of unique user IDs (strings)
+        """
+        self.ensure_one()
+        recipients = set()
+
+        if self.online_recipient_user_id:
+            recipients.add(self.online_recipient_user_id.strip())
+
+        if self.offline_recipient_user_id:
+            recipients.add(self.offline_recipient_user_id.strip())
+
+        if self.incoming_recipient_user_id:
+            recipients.add(self.incoming_recipient_user_id.strip())
+
+        # Lọc bỏ các giá trị rỗng
+        return [r for r in recipients if r]
+
+    def _should_send_reminder(self):
+        """
+        Kiểm tra có nên gửi tin nhắn nhắc nhở hay không
+
+        Điều kiện:
+        - enable_interaction_reminder = True
+        - Chưa gửi lần nào HOẶC đã quá khoảng thời gian reminder_interval_days
+
+        :return: Boolean
+        """
+        self.ensure_one()
+
+        if not self.enable_interaction_reminder:
+            return False
+
+        if not self.last_reminder_sent:
+            return True
+
+        # Tính thời gian từ lần gửi cuối
+        now = fields.Datetime.now()
+        days_since_last = (now - self.last_reminder_sent).days
+
+        return days_since_last >= self.reminder_interval_days
+
+    def send_interaction_reminder(self):
+        """
+        Gửi tin nhắn nhắc nhở tương tác tới tất cả kế toán đã cấu hình
+
+        Được gọi bởi cron job hoặc thủ công
+
+        :return: Dict với thông tin kết quả gửi
+        """
+        self.ensure_one()
+
+        if not self.active:
+            _logger.info("Zalo Stock Notification config %s is inactive, skipping reminder", self.name)
+            return {'sent': 0, 'failed': 0, 'skipped': True, 'reason': 'Config inactive'}
+
+        if not self._should_send_reminder():
+            _logger.info(
+                "Zalo Stock Notification config %s: reminder not due yet (last sent: %s, interval: %s days)",
+                self.name, self.last_reminder_sent, self.reminder_interval_days
+            )
+            return {'sent': 0, 'failed': 0, 'skipped': True, 'reason': 'Not due yet'}
+
+        recipients = self._get_all_reminder_recipients()
+
+        if not recipients:
+            _logger.warning("Zalo Stock Notification config %s: no recipients configured for reminder", self.name)
+            return {'sent': 0, 'failed': 0, 'skipped': True, 'reason': 'No recipients'}
+
+        # Chuẩn bị nội dung tin nhắn
+        message_template = self.reminder_message_template or '''🔔 NHẮC NHỞ TƯƠNG TÁC ZALO OA
+
+Vui lòng phản hồi tin nhắn này để tiếp tục nhận thông báo.'''
+
+        # Thay thế biến {date} nếu có
+        now = fields.Datetime.now()
+        date_str = now.strftime('%d/%m/%Y %H:%M')
+        message = message_template.replace('{date}', date_str)
+
+        # Gửi tin nhắn tới từng recipient
+        sent_count = 0
+        failed_count = 0
+        failed_recipients = []
+
+        _logger.info(
+            "Zalo Stock Notification config %s: sending interaction reminder to %s recipients",
+            self.name, len(recipients)
+        )
+
+        for user_id in recipients:
+            try:
+                result = self.send_notification_message(user_id, message)
+
+                if result.get('error') == 0:
+                    sent_count += 1
+                    _logger.info("Interaction reminder sent successfully to %s", user_id)
+                else:
+                    failed_count += 1
+                    failed_recipients.append({
+                        'user_id': user_id,
+                        'error': result.get('error'),
+                        'message': result.get('message', 'Unknown error')
+                    })
+                    _logger.warning(
+                        "Failed to send interaction reminder to %s: error=%s, message=%s",
+                        user_id, result.get('error'), result.get('message')
+                    )
+            except Exception as e:
+                failed_count += 1
+                failed_recipients.append({
+                    'user_id': user_id,
+                    'error': 'exception',
+                    'message': str(e)
+                })
+                _logger.exception("Exception sending interaction reminder to %s: %s", user_id, e)
+
+        # Cập nhật thời gian gửi cuối
+        if sent_count > 0:
+            self.write({'last_reminder_sent': fields.Datetime.now()})
+            _logger.info(
+                "Zalo Stock Notification config %s: reminder completed - sent=%s, failed=%s",
+                self.name, sent_count, failed_count
+            )
+
+        return {
+            'sent': sent_count,
+            'failed': failed_count,
+            'skipped': False,
+            'failed_recipients': failed_recipients
+        }
+
+    @api.model
+    def cron_send_interaction_reminder(self):
+        """
+        Cron job method để gửi tin nhắn nhắc nhở tương tác
+
+        Được gọi bởi ir.cron theo lịch định kỳ (mặc định: mỗi ngày)
+        Logic:
+        - Tìm tất cả config active có enable_interaction_reminder = True
+        - Kiểm tra từng config xem đã tới thời gian gửi chưa
+        - Gửi tin nhắn nhắc nhở nếu đủ điều kiện
+        """
+        _logger.info("Cron: Starting interaction reminder job")
+
+        configs = self.search([
+            ('active', '=', True),
+            ('enable_interaction_reminder', '=', True)
+        ])
+
+        if not configs:
+            _logger.info("Cron: No active configs with reminder enabled")
+            return
+
+        total_sent = 0
+        total_failed = 0
+
+        for config in configs:
+            try:
+                result = config.send_interaction_reminder()
+                total_sent += result.get('sent', 0)
+                total_failed += result.get('failed', 0)
+            except Exception as e:
+                _logger.exception(
+                    "Cron: Error sending reminder for config %s: %s",
+                    config.name, e
+                )
+
+        _logger.info(
+            "Cron: Interaction reminder job completed - total_sent=%s, total_failed=%s",
+            total_sent, total_failed
+        )
+
+    def action_send_reminder_now(self):
+        """
+        Action button để gửi tin nhắn nhắc nhở ngay lập tức (bỏ qua kiểm tra thời gian)
+        """
+        self.ensure_one()
+
+        if not self.active:
+            raise UserError(_("Config đang inactive. Vui lòng bật Active trước."))
+
+        recipients = self._get_all_reminder_recipients()
+
+        if not recipients:
+            raise UserError(_("Chưa cấu hình User ID kế toán (online/offline/nhập kho)."))
+
+        # Chuẩn bị nội dung tin nhắn
+        message_template = self.reminder_message_template or '''🔔 NHẮC NHỞ TƯƠNG TÁC ZALO OA
+
+Vui lòng phản hồi tin nhắn này để tiếp tục nhận thông báo.'''
+
+        now = fields.Datetime.now()
+        date_str = now.strftime('%d/%m/%Y %H:%M')
+        message = message_template.replace('{date}', date_str)
+
+        # Gửi tin nhắn
+        sent_count = 0
+        failed_count = 0
+
+        for user_id in recipients:
+            try:
+                result = self.send_notification_message(user_id, message)
+                if result.get('error') == 0:
+                    sent_count += 1
+                else:
+                    failed_count += 1
+            except Exception:
+                failed_count += 1
+
+        # Cập nhật thời gian gửi cuối
+        if sent_count > 0:
+            self.write({'last_reminder_sent': fields.Datetime.now()})
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Gửi tin nhắn nhắc nhở'),
+                'message': _('Đã gửi thành công %s/%s tin nhắn tới kế toán') % (sent_count, sent_count + failed_count),
+                'type': 'success' if sent_count > 0 else 'warning',
+                'sticky': False,
+            }
+        }
