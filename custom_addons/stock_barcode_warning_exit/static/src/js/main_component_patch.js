@@ -32,7 +32,7 @@ if (MainComponent) {
 
                 this.env.services.dialog.add(ConfirmationDialog, {
                     title: _t("Cảnh báo thoát"),
-                    body: _t("Phiếu đang giữ hàng (Reserved). Nếu thoát ngay, hàng sẽ bị treo.\n\nBạn có chắc chắn muốn thoát?"),
+                    body: _t("Phiếu đang giữ hàng (Reserved). Nếu thoát ngay, hàng sẽ bị treo.Nếu hủy phiên vui lòng hủy phiếu trong menu bên phải \n\nBạn có chắc chắn muốn thoát?"),
                     confirmLabel: _t("Vẫn thoát"),
                     cancelLabel: _t("Ở lại"),
                     confirm: () => {
