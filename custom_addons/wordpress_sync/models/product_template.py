@@ -115,19 +115,50 @@ class ProductTemplate(models.Model):
                 else:
                     _logger.warning(f"Auto-sync failed: {product.name} - {result['message']}")
 
+                    # Tạo internal note về lỗi
+                    self._post_sync_note(product, result, success=False)
+
+                    # Tạo log thất bại
+                    self.env['product.sync.log'].create_log(
+                        product=product,
+                        status='failed',
+                        message=result['message'],
+                        sync_type='auto',
+                        sku=result.get('sku', product.default_code or ''),
+                        wc_product_id=result.get('wc_product_id', ''),
+                        new_regular_price=result.get('regular_price', 0),
+                        new_sale_price=result.get('sale_price', 0)
+                    )
+
             except Exception as e:
                 _logger.exception(f"Auto-sync error for {product.name}: {e}")
 
-    def _post_sync_note(self, product, result):
-        """Tạo internal note trên product sau khi sync thành công"""
-        regular_price = result.get('regular_price', 0)
-        sale_price = result.get('sale_price', 0)
+                # Tạo note cho exception
+                error_result = {'message': str(e)}
+                self._post_sync_note(product, error_result, success=False)
 
-        body = f'''<p><strong>WordPress Sync:</strong><br/>
-Regular Price: {regular_price:,.0f}<br/>
-Sale Price: {sale_price:,.0f if sale_price > 0 else "None"}<br/>
-Synced by: {self.env.user.name}<br/>
-Date: {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}
+    def _post_sync_note(self, product, result, success=True):
+        """Tạo internal note trên product sau khi sync"""
+        sync_time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+
+        if success:
+            regular_price = result.get('regular_price', 0)
+            sale_price = result.get('sale_price', 0)
+
+            body = f'''<p><strong style="color: green;">✓ WordPress Sync thành công</strong><br/>
+Regular Price: {regular_price:,.0f} đ<br/>
+Sale Price: {sale_price:,.0f if sale_price > 0 else "Không có"} đ<br/>
+Người thực hiện: {self.env.user.name}<br/>
+Thời gian: {sync_time}
+</p>'''
+        else:
+            error_message = result.get('message', 'Lỗi không xác định')
+
+            body = f'''<p><strong style="color: red;">✗ WordPress Sync thất bại</strong><br/>
+<strong>Chi tiết lỗi:</strong> {error_message}<br/>
+SKU: {product.default_code or "Không có"}<br/>
+Người thực hiện: {self.env.user.name}<br/>
+Thời gian: {sync_time}
 </p>'''
 
         product.message_post(
