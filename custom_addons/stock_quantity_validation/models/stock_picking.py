@@ -11,75 +11,77 @@ class StockPicking(models.Model):
 
     def button_validate(self):
         """
-        Override button_validate để kiểm tra qty_done không được vượt quá product_uom_qty
+        Override button_validate để kiểm tra quantity không được vượt quá product_uom_qty
         trên tất cả các stock.move trước khi xác nhận picking.
-        Hỗ trợ xử lý cả single record và multiple records.
+        Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
         """
-        # Xử lý từng picking một
-        for picking in self:
-            # Danh sách các move vi phạm (qty_done > product_uom_qty)
-            violations = []
+        self.ensure_one()
 
-            # Kiểm tra từng move trong picking
-            for move in picking.move_ids_without_package:
-                # Bỏ qua các move đã done hoặc đã cancel
-                if move.state in ('done', 'cancel'):
-                    continue
+        # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên)
+        if self.name and 'INT' in self.name:
+            return super(StockPicking, self).button_validate()
 
-                # Lấy số lượng đã đặt (demand) và số lượng thực tế (done)
-                qty_demand = float(move.product_uom_qty or 0.0)
-                qty_done = float(move.quantity or 0.0)
+        # Danh sách các move vi phạm (qty_done > product_uom_qty)
+        violations = []
 
-                # Sử dụng epsilon để xử lý sai số floating point
-                EPS = 1e-6
+        # Kiểm tra từng move trong picking
+        for move in self.move_ids_without_package:
+            # Bỏ qua các move đã done hoặc đã cancel
+            if move.state in ('done', 'cancel'):
+                continue 
 
-                # Nếu qty_done vượt quá qty_demand
-                if qty_done > qty_demand + EPS:
-                    product_name = move.product_id.display_name or move.product_id.name or _("Sản phẩm không xác định")
-                    uom_name = move.product_uom.name if move.product_uom else ''
+            # Lấy số lượng đã đặt (demand) và số lượng thực tế (done)
+            qty_demand = float(move.product_uom_qty or 0.0)
+            qty_done = float(move.quantity or 0.0)
 
-                    violations.append({
-                        'product': product_name,
-                        'demand': qty_demand,
-                        'done': qty_done,
-                        'uom': uom_name,
-                        'move_id': move.id,
-                    })
+            # Sử dụng epsilon để xử lý sai số floating point
+            EPS = 1e-6
 
-                    _logger.warning(
-                        "⚠️ Picking %s: Move %s (%s) có qty_done (%.2f) > product_uom_qty (%.2f)",
-                        picking.name, move.id, product_name, qty_done, qty_demand
+            # Nếu qty_done vượt quá qty_demand
+            if qty_done > qty_demand + EPS:
+                product_name = move.product_id.display_name or move.product_id.name or _("Sản phẩm không xác định")
+                uom_name = move.product_uom.name if move.product_uom else ''
+
+                violations.append({
+                    'product': product_name,
+                    'demand': qty_demand,
+                    'done': qty_done,
+                    'uom': uom_name,
+                    'move_id': move.id,
+                })
+
+                _logger.warning(
+                    "⚠️ Picking %s: Move %s (%s) có qty_done (%.2f) > product_uom_qty (%.2f)",
+                    self.name, move.id, product_name, qty_done, qty_demand
+                )
+
+        # Nếu có vi phạm, chặn xác nhận và hiển thị thông báo lỗi
+        if violations:
+            error_lines = []
+            for v in violations:
+                error_lines.append(
+                    _("• %s: Đã làm %.2f %s (vượt quá %.2f %s đã đặt)") % (
+                        v['product'],
+                        v['done'],
+                        v['uom'],
+                        v['demand'],
+                        v['uom']
                     )
+                )
 
-            # Nếu có vi phạm, chặn xác nhận và hiển thị thông báo lỗi
-            if violations:
-                error_lines = []
-                for v in violations:
-                    error_lines.append(
-                        _("• %s: Đã làm %.2f %s (vượt quá %.2f %s đã đặt)") % (
-                            v['product'],
-                            v['done'],
-                            v['uom'],
-                            v['demand'],
-                            v['uom']
-                        )
-                    )
+            error_message = _(
+                "Không thể xác nhận phiếu %s!\n\n"
+                "Số lượng thực tế (Done) không được vượt quá số lượng đã đặt (Demand):\n\n"
+                "%s\n\n"
+                "Vui lòng điều chỉnh số lượng trước khi xác nhận."
+            ) % (self.name, "\n".join(error_lines))
 
-                error_message = _(
-                    "Không thể xác nhận phiếu %s!\n\n"
-                    "Số lượng thực tế (Done) không được vượt quá số lượng đã đặt (Demand):\n\n"
-                    "%s\n\n"
-                    "Vui lòng điều chỉnh số lượng trước khi xác nhận."
-                ) % (picking.name, "\n".join(error_lines))
+            _logger.error("🚫 CHẶN XÁC NHẬN picking %s do vi phạm qty_done > product_uom_qty", self.name)
 
-                _logger.error("🚫 CHẶN XÁC NHẬN picking %s do vi phạm qty_done > product_uom_qty", picking.name)
+            raise UserError(error_message)
 
-                raise UserError(error_message)
-
-            # Nếu không có vi phạm, ghi log
-            _logger.info("✅ Picking %s: Tất cả qty_done đều hợp lệ, tiếp tục xác nhận", picking.name)
-
-        # Gọi super() cho tất cả records (Odoo sẽ tự xử lý từng record)
+        # Nếu không có vi phạm, tiếp tục xác nhận bình thường
+        _logger.info("✅ Picking %s: Tất cả qty_done đều hợp lệ, tiếp tục xác nhận", self.name)
         return super(StockPicking, self).button_validate()
 
 
@@ -117,13 +119,22 @@ class StockMove(models.Model):
 class StockMoveLine(models.Model):
     _inherit = 'stock.move.line'
 
-    @api.constrains('qty_done')
+    def _get_qty_done_value(self):
+        """
+        Lấy giá trị qty_done, tương thích cả Odoo 16 (qty_done) và Odoo 17+ (quantity)
+        """
+        if hasattr(self, 'qty_done'):
+            return float(self.qty_done or 0.0)
+        return float(self.quantity or 0.0)
+
+    @api.constrains('qty_done', 'quantity')
     def _check_qty_done_not_exceed_demand(self):
         """
-        Chặn ngay khi tạo hoặc cập nhật stock.move.line nếu qty_done vượt quá
+        Chặn ngay khi tạo hoặc cập nhật stock.move.line nếu quantity vượt quá
         product_uom_qty của stock.move tương ứng.
 
         Điều này ngăn chặn việc quét mã vạch dư hoặc nhập thủ công số lượng vượt mức.
+        Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
         """
         EPS = 1e-6  # Epsilon để xử lý sai số floating point
 
@@ -136,11 +147,15 @@ class StockMoveLine(models.Model):
             if line.picking_id and line.picking_id.state == 'done':
                 continue
 
+            # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên)
+            if not line.picking_id or (line.picking_id.name and 'INT' in line.picking_id.name):
+                continue
+
             move = line.move_id
 
             # Lấy tổng qty_done của TẤT CẢ move lines cùng move (bao gồm line hiện tại)
             total_qty_done = sum(
-                float(ml.qty_done or 0.0)
+                ml._get_qty_done_value()
                 for ml in move.move_line_ids
                 if ml.state not in ('done', 'cancel')
             )
@@ -191,12 +206,12 @@ class StockMoveLine(models.Model):
 
     def write(self, vals):
         """
-        Override write để validate khi cập nhật qty_done
+        Override write để validate khi cập nhật qty_done hoặc quantity
         """
         res = super(StockMoveLine, self).write(vals)
 
-        # Chỉ validate nếu có thay đổi qty_done
-        if 'qty_done' in vals:
+        # Chỉ validate nếu có thay đổi qty_done hoặc quantity
+        if 'qty_done' in vals or 'quantity' in vals:
             self._check_qty_done_not_exceed_demand()
 
         return res
