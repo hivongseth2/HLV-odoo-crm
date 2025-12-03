@@ -785,169 +785,120 @@ class MisaApiUtils(models.AbstractModel):
 
 
 # create product
+    # ---------------------------------------------------------
+    # 1. HÀM TẠO SẢN PHẨM (Đã cập nhật logic tìm nhóm hàng)
+    # ---------------------------------------------------------
     def create_product_in_misa(self, product):
-        """
-        Tạo sản phẩm sang MISA với Payload chuẩn 100% theo mẫu fetch user cung cấp.
-        """
         misa_config = self.env['misa.config']
-        
-        # 1. Lấy Token
         token = self._fetch_login_crm_token()
         if not token:
             raise Exception("Không lấy được Access Token MISA CRM")
 
-        # 2. Header (Thêm LayoutCode product)
         headers = misa_config.get_crm_header(token)
-        headers.update({
-            "LayoutCode": "product",
-            "X-Misa-Language": "vi-VN"
-        })
+        headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
-        # 3. Chuẩn bị dữ liệu từ Odoo
         code = (product.default_code or "").strip()
         if not code:
             raise Exception("Sản phẩm Odoo chưa có Mã (Internal Reference)")
         
         name = product.name or code
         uom_name = product.uom_id.name if product.uom_id else "Cái"
-        category_name = product.categ_id.name if product.categ_id else "Hàng hóa"
         
+        # --- XỬ LÝ NHÓM HÀNG HÓA ---
+        odoo_cat_name = product.categ_id.name if product.categ_id else "Hàng hóa"
+        
+        # Bước 1: Tìm ID theo tên nhóm Odoo
+        cat_id = self.get_misa_product_category_id(headers, odoo_cat_name)
+        cat_name_final = odoo_cat_name
+
+        # Bước 2: Nếu không thấy, tìm nhóm mặc định "Hàng hóa"
+        if not cat_id:
+            _logger.warning(f"⚠️ Không tìm thấy nhóm '{odoo_cat_name}'. Đang tìm nhóm 'Hàng hóa'...")
+            cat_id = self.get_misa_product_category_id(headers, "Hàng hóa")
+            cat_name_final = "Hàng hóa"
+        
+        # Bước 3: Nếu vẫn không thấy, Fallback cứng về ID 23 (ID 'Hàng hóa' từ log của bạn)
+        if not cat_id:
+            _logger.warning("⚠️ Không lấy được ID nhóm hàng từ API. Sử dụng ID mặc định 23 (Hàng hóa).")
+            cat_id = 23 
+            cat_name_final = "Hàng hóa"
+
+        # --- CHUẨN BỊ GIÁ ---
         price = float(product.list_price or 0)
         cost = float(product.standard_price or 0)
 
-        # 4. Xây dựng Payload GIỐNG HỆT mẫu fetch
-        # Lưu ý: Các ID như ProductCategoryID để None để MISA tự map theo Text
+        # --- PAYLOAD ---
         payload = {
-            "Fields": [],
-            "FieldsCustom": [],
+            "Fields": [], "FieldsCustom": [],
             "DataCustom": {
-                "CustomField13": "1",           # Giữ nguyên: Thương mại
-                "CustomField13Text": "Thương mại",
-                "CustomField14": None,
-                "CustomField15": code,          # Map mã sản phẩm vào đây theo mẫu
-                "CustomField16": 0,
-                "Avatar": ""
+                "CustomField13": "1", "CustomField13Text": "Thương mại",
+                "CustomField14": None, "CustomField15": code, "CustomField16": 0, "Avatar": ""
             },
             "ProductCode": code,
-            "ProductCategoryID": None,          # Để None để tự map theo Text
-            "ProductCategoryIDText": category_name,
+            
+            # ĐIỀN ID VÀ TÊN NHÓM HÀNG ĐÃ TÌM ĐƯỢC
+            "ProductCategoryID": cat_id,
+            "ProductCategoryIDText": cat_name_final,
             
             "ProductPropertiesID": "2" if product.type == 'service' else "1",
             "ProductPropertiesIDText": "Dịch vụ" if product.type == 'service' else "Hàng hóa",
-            
-            "UsageUnitID": "4" if uom_name == "Cái" else None, # Giữ logic mẫu
+            "UsageUnitID": "4" if uom_name == "Cái" else None, 
             "UsageUnitIDText": uom_name,
-            
-            "Source": None,
-            "DefaultStockID": None,
-            "DefaultStockIDText": "",
-            "ProductName": name,
-            "SaleDescription": None,
-            "IsFollowSerialNumber": False,
-            "BrandID": None,
-            "BrandIDText": "",
-            "Description": None,
-            
-            "UnitPrice": price,
-            "UnitPrice2": 0,
-            "PurchasedPrice": cost,
-            
-            "TaxID": "5",               # Mặc định theo mẫu (8%)
-            "TaxIDText": "8%",
-            
-            "UnitCost": 0,
-            "UnitPrice1": 0,
-            "UnitPriceFixed": price,    # Map giá vào đây
-            
-            "PriceAfterTax": False,
-            "IsUseTax": False,
-            "WarrantyPeriodTypeID": 2,
-            "WarrantyPeriodTypeIDText": "Tháng",
-            "WarrantyPeriodText": "0 Tháng",
-            "WarrantyPeriod": 0,
-            "WarrantyDescription": None,
-            "IsPublic": False,
-            "Inactive": False,
-            "FormLayoutID": 45,
-            "FormLayoutIDText": "Mẫu tiêu chuẩn",
-            "MappingDatas": [],
-            "MISAEntityState": 1,
-            "ModifiedDate": None,
-            "FormModeState": 1,
-            "IsGetFieldFormLayout": True,
-            "ClientExecutedTime": 74561, # Giữ nguyên số giả lập
+            "Source": None, "DefaultStockID": None, "DefaultStockIDText": "",
+            "ProductName": name, "SaleDescription": None,
+            "IsFollowSerialNumber": False, "BrandID": None, "BrandIDText": "", "Description": None,
+            "UnitPrice": price, "UnitPrice2": 0, "PurchasedPrice": cost,
+            "TaxID": "5", "TaxIDText": "8%",
+            "UnitCost": 0, "UnitPrice1": 0, "UnitPriceFixed": price,
+            "PriceAfterTax": False, "IsUseTax": False,
+            "WarrantyPeriodTypeID": 2, "WarrantyPeriodTypeIDText": "Tháng",
+            "WarrantyPeriodText": "0 Tháng", "WarrantyPeriod": 0, "WarrantyDescription": None,
+            "IsPublic": False, "Inactive": False,
+            "FormLayoutID": 45, "FormLayoutIDText": "Mẫu tiêu chuẩn",
+            "MappingDatas": [], "MISAEntityState": 1, "ModifiedDate": None,
+            "FormModeState": 1, "IsGetFieldFormLayout": True, "ClientExecutedTime": 74561,
             "IsSetProduct": "\u0000",
-            
-            # Giữ nguyên cấu trúc CustomTables (Mã quy cách & Đơn vị chuyển đổi)
             "CustomTables": [
                 {
-                    "DataFields": [],
-                    "Summary": {},
-                    "Data": [],
-                    "OldData": [],
-                    "SummaryFields": [],
-                    "GroupBoxText": "Thông tin đơn vị chuyển đổi",
-                    "IsRequired": False,
-                    "ParentIDKey": "ProductID",
-                    "TableName": "product_conversion_unit",
-                    "IsProductChange": False
+                    "DataFields": [], "Summary": {}, "Data": [], "OldData": [], "SummaryFields": [],
+                    "GroupBoxText": "Thông tin đơn vị chuyển đổi", "IsRequired": False,
+                    "ParentIDKey": "ProductID", "TableName": "product_conversion_unit", "IsProductChange": False
                 },
                 {
-                    "DataFields": [],
-                    "Summary": {},
-                    "Data": [
-                        # Tạo sẵn 5 dòng rỗng cho product_detail_serial_type như mẫu
-                        self._get_empty_serial_row(1),
-                        self._get_empty_serial_row(2),
-                        self._get_empty_serial_row(3),
-                        self._get_empty_serial_row(4),
-                        self._get_empty_serial_row(5)
-                    ],
-                    "OldData": [
-                        self._get_empty_serial_row(1),
-                        self._get_empty_serial_row(2),
-                        self._get_empty_serial_row(3),
-                        self._get_empty_serial_row(4),
-                        self._get_empty_serial_row(5)
-                    ],
-                    "SummaryFields": [],
-                    "GroupBoxText": "Thông tin mã quy cách",
-                    "IsRequired": False,
-                    "ParentIDKey": "ProductID",
-                    "TableName": "product_detail_serial_type",
-                    "IsProductChange": True
+                    "DataFields": [], "Summary": {},
+                    "Data": [self._get_empty_serial_row(i) for i in range(1, 6)],
+                    "OldData": [self._get_empty_serial_row(i) for i in range(1, 6)],
+                    "SummaryFields": [], "GroupBoxText": "Thông tin mã quy cách", "IsRequired": False,
+                    "ParentIDKey": "ProductID", "TableName": "product_detail_serial_type", "IsProductChange": True
                 }
             ],
-            "IsProductChange": False,
-            "IsMultiCurrency": False
+            "IsProductChange": False, "IsMultiCurrency": False
         }
 
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
-        _logger.info(f"🚀 [CREATE] Payload (Format Chuẩn): {code}")
+        _logger.info(f"🚀 [CREATE] Payload (CatID={cat_id}): {code}")
         
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=30)
             res_json = response.json()
-            
             _logger.info(f"MISA Response: {res_json}")
 
             if not res_json.get("Success"):
+                val_info = res_json.get("ValidateInfo", [])
+                if val_info:
+                    err_msg = ", ".join([v.get("ErrorMessage", "") for v in val_info])
+                    raise Exception(f"MISA Validate Error: {err_msg}")
                 msg = res_json.get("UserMessage") or res_json.get("Message")
                 raise Exception(f"MISA Refused: {msg}")
 
-            # Xử lý ID trả về (Int, String, Dict)
             data = res_json.get("Data")
             misa_id = None
-
-            if isinstance(data, int):
-                misa_id = str(data)
-            elif isinstance(data, str) and data:
-                misa_id = data
-            elif isinstance(data, dict):
-                misa_id = data.get("ProductID") or data.get("ID")
+            if isinstance(data, int): misa_id = str(data)
+            elif isinstance(data, str) and data: misa_id = data
+            elif isinstance(data, dict): misa_id = data.get("ProductID") or data.get("ID")
 
             if not misa_id:
-                _logger.warning("⚠️ Success=True nhưng không có ID. Gọi Fallback tìm theo mã...")
+                _logger.warning("⚠️ Gọi Fallback tìm theo mã...")
                 misa_id = self.find_product_id_by_code(code, headers)
 
             if not misa_id:
@@ -960,34 +911,63 @@ class MisaApiUtils(models.AbstractModel):
             _logger.error(f"❌ Lỗi tạo sản phẩm: {e}")
             raise e
 
+    # ---------------------------------------------------------
+    # 2. HÀM TÌM NHÓM HÀNG HÓA (Dùng API /grid bạn cung cấp)
+    # ---------------------------------------------------------
+    def get_misa_product_category_id(self, headers, name):
+        """
+        Lấy ID nhóm hàng bằng cách load danh sách và so sánh tên.
+        URL: /grid
+        """
+        url = "https://amisapp.misa.vn/crm/g2/api/business/ProductCategory/grid"
+        
+        # Payload y hệt mẫu bạn gửi, tăng pageSize để tìm được nhiều hơn
+        payload = {
+            "Filters": [],
+            "Formula": "",
+            "page": 1,
+            "pageSize": 200, # Tăng lên 200 để quét được nhiều nhóm
+            "Start": 0,
+            "DefaultTotal": True,
+            "layoutCode": "ProductCategory",
+            "IsUsedELTS": True,
+            "CustomPagingData": None,
+            "IsCheckInactive": True,
+            "IsMappingData": False,
+            "MappingValueObject": {},
+            "IsGetAllWhenEmptyCustomColumn": False,
+            "Columns": "SUQsT3duZXJJRCxQcm9kdWN0Q2F0ZWdvcnlOYW1l" # ID,OwnerID,ProductCategoryName
+        }
+        
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=10)
+            data = res.json()
+            
+            if data.get("Success") and data.get("Data"):
+                # Duyệt qua danh sách để tìm tên khớp
+                search_name = name.strip().lower()
+                for item in data["Data"]:
+                    cat_name = (item.get("ProductCategoryName") or "").strip().lower()
+                    if cat_name == search_name:
+                        return item.get("ID")
+                        
+        except Exception as e:
+            _logger.warning(f"Lỗi API Grid ProductCategory: {e}")
+            
+        return None
+
     def _get_empty_serial_row(self, sort_order):
-        """Helper trả về dòng rỗng cho bảng quy cách"""
         return {
-            "SortOrder": sort_order,
-            "TableName": "product_detail_serial_type",
-            "DisplayName": None,
-            "IsAllowDupplicate": None,
-            "ID": None,
-            "MISAEntityState": 1,
-            "AsyncID": "",
-            "OwnerID": "",
-            "PromotionMasterRowID": "",
-            "PromotionRowID": "",
-            "ProductSetID": "",
-            "ProductSetMasterID": "",
-            "ProductInSetMasterID": "",
-            "IsSetProduct": "",
-            "IsChildProduct": "",
-            "ProductIDInSet": "",
-            "ExcludeCurrentRecord": "",
-            "ExchangeID": 0,
-            "IsExchangeProduct": None,
-            "ExchangePoint": 0,
-            "TotalAmountBasedUPriceAndDATax": False,
-            "AmountBasedOnPriceAfterTax": False
+            "SortOrder": sort_order, "TableName": "product_detail_serial_type",
+            "DisplayName": None, "IsAllowDupplicate": None, "ID": None,
+            "MISAEntityState": 1, "AsyncID": "", "OwnerID": "", "PromotionMasterRowID": "",
+            "PromotionRowID": "", "ProductSetID": "", "ProductSetMasterID": "",
+            "ProductInSetMasterID": "", "IsSetProduct": "", "IsChildProduct": "",
+            "ProductIDInSet": "", "ExcludeCurrentRecord": "", "ExchangeID": 0,
+            "IsExchangeProduct": None, "ExchangePoint": 0,
+            "TotalAmountBasedUPriceAndDATax": False, "AmountBasedOnPriceAfterTax": False
         }
 
-    # Giữ nguyên hàm find_product_id_by_code ở câu trả lời trước
     def find_product_id_by_code(self, product_code, headers):
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
         payload = {
