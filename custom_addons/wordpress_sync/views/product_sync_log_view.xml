@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Product Sync Log Tree View -->
+    <!-- Product Sync Log List View -->
     <record id="view_product_sync_log_tree" model="ir.ui.view">
-        <field name="name">product.sync.log.tree</field>
+        <field name="name">product.sync.log.list</field>
         <field name="model">product.sync.log</field>
         <field name="arch" type="xml">
-            <tree string="Lịch sử đồng bộ" decoration-success="status=='success'" decoration-danger="status=='failed'" decoration-warning="status=='skipped'">
+            <list string="Lịch sử đồng bộ" decoration-success="status=='success'" decoration-danger="status=='failed'" decoration-warning="status=='skipped'">
                 <field name="sync_date" string="Thời gian"/>
                 <field name="product_id" string="Sản phẩm"/>
                 <field name="sku"/>
@@ -14,7 +14,7 @@
                 <field name="new_regular_price" string="Giá Regular"/>
                 <field name="new_sale_price" string="Giá Sale"/>
                 <field name="user_id" string="Người thực hiện"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -94,7 +94,7 @@
     <record id="action_product_sync_log" model="ir.actions.act_window">
         <field name="name">Lịch sử đồng bộ giá</field>
         <field name="res_model">product.sync.log</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="context">{'search_default_today': 1}</field>
     </record>
 
