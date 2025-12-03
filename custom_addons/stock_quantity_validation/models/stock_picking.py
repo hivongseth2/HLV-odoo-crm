@@ -9,17 +9,16 @@ _logger = logging.getLogger(__name__)
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
-    def button_validate(self):
+    def _check_qty_validation_before_validate(self):
         """
-        Override button_validate để kiểm tra quantity không được vượt quá product_uom_qty
-        trên tất cả các stock.move trước khi xác nhận picking.
+        Kiểm tra quantity không được vượt quá product_uom_qty trên picking.
         Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
         """
         self.ensure_one()
 
         # Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên)
         if self.name and 'INT' in self.name:
-            return super(StockPicking, self).button_validate()
+            return
 
         # Danh sách các move vi phạm (qty_done > product_uom_qty)
         violations = []
@@ -28,7 +27,7 @@ class StockPicking(models.Model):
         for move in self.move_ids_without_package:
             # Bỏ qua các move đã done hoặc đã cancel
             if move.state in ('done', 'cancel'):
-                continue 
+                continue
 
             # Lấy số lượng đã đặt (demand) và số lượng thực tế (done)
             qty_demand = float(move.product_uom_qty or 0.0)
@@ -80,8 +79,19 @@ class StockPicking(models.Model):
 
             raise UserError(error_message)
 
+        _logger.info("✅ Picking %s: Tất cả qty_done đều hợp lệ", self.name)
+
+    def button_validate(self):
+        """
+        Override button_validate để kiểm tra quantity không được vượt quá product_uom_qty
+        trên tất cả các stock.move trước khi xác nhận picking.
+        Hỗ trợ xác nhận nhiều picking cùng lúc.
+        """
+        # Kiểm tra từng picking trước khi validate
+        for picking in self:
+            picking._check_qty_validation_before_validate()
+
         # Nếu không có vi phạm, tiếp tục xác nhận bình thường
-        _logger.info("✅ Picking %s: Tất cả qty_done đều hợp lệ, tiếp tục xác nhận", self.name)
         return super(StockPicking, self).button_validate()
 
 
