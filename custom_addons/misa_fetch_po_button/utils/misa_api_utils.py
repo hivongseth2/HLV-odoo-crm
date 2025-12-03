@@ -787,61 +787,143 @@ class MisaApiUtils(models.AbstractModel):
 # create product
     def create_product_in_misa(self, product):
         """
-        Tạo sản phẩm từ Odoo sang MISA CRM (Fix lỗi parse ID dạng Int).
+        Tạo sản phẩm sang MISA với Payload chuẩn 100% theo mẫu fetch user cung cấp.
         """
         misa_config = self.env['misa.config']
+        
+        # 1. Lấy Token
         token = self._fetch_login_crm_token()
         if not token:
             raise Exception("Không lấy được Access Token MISA CRM")
 
+        # 2. Header (Thêm LayoutCode product)
         headers = misa_config.get_crm_header(token)
         headers.update({
             "LayoutCode": "product",
             "X-Misa-Language": "vi-VN"
         })
 
+        # 3. Chuẩn bị dữ liệu từ Odoo
         code = (product.default_code or "").strip()
         if not code:
             raise Exception("Sản phẩm Odoo chưa có Mã (Internal Reference)")
-
-        uom_name = product.uom_id.name if product.uom_id else "Cái"
         
-        # Payload chuẩn theo log bạn gửi
+        name = product.name or code
+        uom_name = product.uom_id.name if product.uom_id else "Cái"
+        category_name = product.categ_id.name if product.categ_id else "Hàng hóa"
+        
+        price = float(product.list_price or 0)
+        cost = float(product.standard_price or 0)
+
+        # 4. Xây dựng Payload GIỐNG HỆT mẫu fetch
+        # Lưu ý: Các ID như ProductCategoryID để None để MISA tự map theo Text
         payload = {
-            "ProductCode": code,
-            "ProductName": product.name,
-            "ProductCategoryIDText": str(product.categ_id.name) if product.categ_id else "Hàng hóa",
-            "UsageUnitIDText": uom_name,
-            "ProductPropertiesID": 2 if product.type == 'service' else 1,
-            "ProductPropertiesIDText": "Dịch vụ" if product.type == 'service' else "Hàng hóa",
-            "UnitPrice": float(product.list_price or 0),
-            "UnitPriceFixed": float(product.list_price or 0),
-            "PurchasedPrice": float(product.standard_price or 0),
-            "MISAEntityState": 1,
-            "Active": True,
-            "Inactive": False,
-            "IsPublic": False,
-            "IsFollowSerialNumber": False,
-            "FormLayoutID": 45,
-            # Các trường rỗng để giống log
             "Fields": [],
             "FieldsCustom": [],
-            "MappingDatas": [],
-            "CustomTables": [],
             "DataCustom": {
-                "Avatar": "",
-                "CustomField13": None,
+                "CustomField13": "1",           # Giữ nguyên: Thương mại
+                "CustomField13Text": "Thương mại",
                 "CustomField14": None,
-                "CustomField15": None
-            }
+                "CustomField15": code,          # Map mã sản phẩm vào đây theo mẫu
+                "CustomField16": 0,
+                "Avatar": ""
+            },
+            "ProductCode": code,
+            "ProductCategoryID": None,          # Để None để tự map theo Text
+            "ProductCategoryIDText": category_name,
+            
+            "ProductPropertiesID": "2" if product.type == 'service' else "1",
+            "ProductPropertiesIDText": "Dịch vụ" if product.type == 'service' else "Hàng hóa",
+            
+            "UsageUnitID": "4" if uom_name == "Cái" else None, # Giữ logic mẫu
+            "UsageUnitIDText": uom_name,
+            
+            "Source": None,
+            "DefaultStockID": None,
+            "DefaultStockIDText": "",
+            "ProductName": name,
+            "SaleDescription": None,
+            "IsFollowSerialNumber": False,
+            "BrandID": None,
+            "BrandIDText": "",
+            "Description": None,
+            
+            "UnitPrice": price,
+            "UnitPrice2": 0,
+            "PurchasedPrice": cost,
+            
+            "TaxID": "5",               # Mặc định theo mẫu (8%)
+            "TaxIDText": "8%",
+            
+            "UnitCost": 0,
+            "UnitPrice1": 0,
+            "UnitPriceFixed": price,    # Map giá vào đây
+            
+            "PriceAfterTax": False,
+            "IsUseTax": False,
+            "WarrantyPeriodTypeID": 2,
+            "WarrantyPeriodTypeIDText": "Tháng",
+            "WarrantyPeriodText": "0 Tháng",
+            "WarrantyPeriod": 0,
+            "WarrantyDescription": None,
+            "IsPublic": False,
+            "Inactive": False,
+            "FormLayoutID": 45,
+            "FormLayoutIDText": "Mẫu tiêu chuẩn",
+            "MappingDatas": [],
+            "MISAEntityState": 1,
+            "ModifiedDate": None,
+            "FormModeState": 1,
+            "IsGetFieldFormLayout": True,
+            "ClientExecutedTime": 74561, # Giữ nguyên số giả lập
+            "IsSetProduct": "\u0000",
+            
+            # Giữ nguyên cấu trúc CustomTables (Mã quy cách & Đơn vị chuyển đổi)
+            "CustomTables": [
+                {
+                    "DataFields": [],
+                    "Summary": {},
+                    "Data": [],
+                    "OldData": [],
+                    "SummaryFields": [],
+                    "GroupBoxText": "Thông tin đơn vị chuyển đổi",
+                    "IsRequired": False,
+                    "ParentIDKey": "ProductID",
+                    "TableName": "product_conversion_unit",
+                    "IsProductChange": False
+                },
+                {
+                    "DataFields": [],
+                    "Summary": {},
+                    "Data": [
+                        # Tạo sẵn 5 dòng rỗng cho product_detail_serial_type như mẫu
+                        self._get_empty_serial_row(1),
+                        self._get_empty_serial_row(2),
+                        self._get_empty_serial_row(3),
+                        self._get_empty_serial_row(4),
+                        self._get_empty_serial_row(5)
+                    ],
+                    "OldData": [
+                        self._get_empty_serial_row(1),
+                        self._get_empty_serial_row(2),
+                        self._get_empty_serial_row(3),
+                        self._get_empty_serial_row(4),
+                        self._get_empty_serial_row(5)
+                    ],
+                    "SummaryFields": [],
+                    "GroupBoxText": "Thông tin mã quy cách",
+                    "IsRequired": False,
+                    "ParentIDKey": "ProductID",
+                    "TableName": "product_detail_serial_type",
+                    "IsProductChange": True
+                }
+            ],
+            "IsProductChange": False,
+            "IsMultiCurrency": False
         }
 
-        if product.taxes_id:
-            payload["TaxIDText"] = product.taxes_id[0].description or "8%" # Demo 8%
-
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
-        
-        _logger.info(f"🚀 [CREATE] Đang gửi sản phẩm: {code}")
+        _logger.info(f"🚀 [CREATE] Payload (Format Chuẩn): {code}")
         
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -853,29 +935,23 @@ class MisaApiUtils(models.AbstractModel):
                 msg = res_json.get("UserMessage") or res_json.get("Message")
                 raise Exception(f"MISA Refused: {msg}")
 
-            # === PHẦN SỬA ĐỔI QUAN TRỌNG NHẤT ===
+            # Xử lý ID trả về (Int, String, Dict)
             data = res_json.get("Data")
             misa_id = None
 
-            # Trường hợp 1: Data là số nguyên (như log của bạn: 69346)
             if isinstance(data, int):
                 misa_id = str(data)
-            
-            # Trường hợp 2: Data là chuỗi (GUID hoặc số dạng chuỗi)
             elif isinstance(data, str) and data:
                 misa_id = data
-            
-            # Trường hợp 3: Data là Object (Dictionary)
             elif isinstance(data, dict):
-                misa_id = data.get("ProductID") or data.get("ID") or data.get("CustomID")
+                misa_id = data.get("ProductID") or data.get("ID")
 
-            # Fallback nếu vẫn không lấy được ID
             if not misa_id:
-                _logger.warning(f"⚠️ Không parse được ID từ response. Data={data}. Đang tìm lại theo mã...")
+                _logger.warning("⚠️ Success=True nhưng không có ID. Gọi Fallback tìm theo mã...")
                 misa_id = self.find_product_id_by_code(code, headers)
 
             if not misa_id:
-                raise Exception("Tạo thành công nhưng không lấy được ID.")
+                raise Exception("Tạo thành công nhưng KHÔNG TÌM THẤY ID.")
             
             _logger.info(f"✅ Hoàn tất! MISA ID: {misa_id}")
             return misa_id
@@ -883,28 +959,47 @@ class MisaApiUtils(models.AbstractModel):
         except Exception as e:
             _logger.error(f"❌ Lỗi tạo sản phẩm: {e}")
             raise e
-        
-        
+
+    def _get_empty_serial_row(self, sort_order):
+        """Helper trả về dòng rỗng cho bảng quy cách"""
+        return {
+            "SortOrder": sort_order,
+            "TableName": "product_detail_serial_type",
+            "DisplayName": None,
+            "IsAllowDupplicate": None,
+            "ID": None,
+            "MISAEntityState": 1,
+            "AsyncID": "",
+            "OwnerID": "",
+            "PromotionMasterRowID": "",
+            "PromotionRowID": "",
+            "ProductSetID": "",
+            "ProductSetMasterID": "",
+            "ProductInSetMasterID": "",
+            "IsSetProduct": "",
+            "IsChildProduct": "",
+            "ProductIDInSet": "",
+            "ExcludeCurrentRecord": "",
+            "ExchangeID": 0,
+            "IsExchangeProduct": None,
+            "ExchangePoint": 0,
+            "TotalAmountBasedUPriceAndDATax": False,
+            "AmountBasedOnPriceAfterTax": False
+        }
+
+    # Giữ nguyên hàm find_product_id_by_code ở câu trả lời trước
     def find_product_id_by_code(self, product_code, headers):
-        """
-        Hàm phụ trợ: Tìm ID sản phẩm theo mã (Dùng khi tạo xong mà không nhận được ID)
-        """
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
         payload = {
-            "Page": 1,
-            "PageSize": 1,
-            "Columns": "ProductID,ProductCode",
-            "Filters": [{
-                "FieldName": "ProductCode",
-                "Operator": 1, # Bằng (=)
-                "Value": product_code
-            }]
+            "Page": 1, "PageSize": 1, "Columns": "ProductID,ProductCode",
+            "Filters": [{"FieldName": "ProductCode", "Operator": 1, "OperandType": 0, "Value": product_code}],
+            "Sorts": [{"SortBy": "ModifiedDate", "SortDirection": 1}]
         }
         try:
             res = requests.post(url, headers=headers, json=payload, timeout=10)
             data = res.json()
             if data.get("Success") and data.get("Data"):
-                return data["Data"][0].get("ProductID")
-        except Exception as e:
-            _logger.error(f"Lỗi tìm kiếm fallback: {e}")
+                 return str(data["Data"][0].get("ProductID"))
+        except Exception:
+            return None
         return None
