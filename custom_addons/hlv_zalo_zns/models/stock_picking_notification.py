@@ -222,7 +222,7 @@ class StockPicking(models.Model):
                 qty = qty_done
                 uom = move.product_uom.name if move.product_uom else ''
                 message += f"  • {product_name}\n"
-                message += f"    SL: {qty:.0f} {uom}\n"
+                message += f"    SL: {qty:g} {uom}\n"
                 _logger.debug(
                     "Picking %s product: %s, qty_done=%s, uom=%s",
                     self.name, product_name, qty_done, uom
