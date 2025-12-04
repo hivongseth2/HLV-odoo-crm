@@ -6,6 +6,18 @@ from odoo.http import request, Response
 
 _logger = logging.getLogger(__name__)
 
+def _vn_msisdn(phone_raw: str) -> str:
+    """Chuẩn hoá số VN về +84, giữ nguyên quốc tế khác."""
+    if not phone_raw:
+        return ""
+    p = phone_raw.replace(" ", "").replace("-", "")
+    if p.startswith("+84"):
+        return p
+    if p.startswith("84") and len(p) >= 10:
+        return "+" + p
+    if p.startswith("0") and len(p) >= 10:
+        return "+84" + p[1:]
+    return p
 
 class WordPressOrderWebhook(http.Controller):
     """
@@ -55,6 +67,9 @@ class WordPressOrderWebhook(http.Controller):
     - Nên thêm API key hoặc secret token để xác thực
     - Hoặc giới hạn IP được phép gọi
     """
+    
+    
+    
     
     @http.route('/hlv_zalo/wordpress/order/notify', type='http', auth='public', methods=['POST'], csrf=False, cors='*')
     def wordpress_order_notify(self, **kwargs):
@@ -117,19 +132,136 @@ class WordPressOrderWebhook(http.Controller):
                     status=400
                 )
             
-            # Lấy access token từ Shared Token Manager
-            token_manager = request.env['hlv.zalo.shared.token'].sudo()
-            access_token = token_manager._get_shared_token()
+            # # Lấy access token từ Shared Token Manager
+            # token_manager = request.env['hlv.zalo.shared.token'].sudo()
+            # access_token = token_manager._get_shared_token()
+            # Thay khúc này trong wordpress_order_notify
+
+            # # Lấy access token từ Shared Token Manager
+            # token_manager = request.env['hlv.zalo.shared.token'].sudo()
+            # access_token = token_manager._get_shared_token()
             
-            if not access_token:
-                _logger.error("WordPress webhook - No active Zalo token found (order_id: %s)", 
-                            data.get('order_id', 'N/A'))
-                return Response(
-                    json.dumps({'success': False, 'error': 'No active Zalo token found. Please configure Zalo Shared Token Manager in Odoo.'}),
-                    content_type='application/json',
-                    status=500
+            # gửi tin cho khách hàng
+            order_status = str(data.get('order_status', '')).lower()
+            if order_status != 'cancelled':
+                
+                            # ===== GỬI ZNS XÁC NHẬN ĐƠN HÀNG CHO KHÁCH HÀNG =====
+                customer_phone = (data.get('customer_phone') or '').strip()
+                if customer_phone:
+                    # Chuẩn hoá số điện thoại
+                    msisdn = _vn_msisdn(customer_phone)
+
+                    if msisdn:
+                        # Lấy config ZNS (bộ cấu hình hlv.zalo.zns)
+                        zns_config = request.env['hlv.zalo.zns'].sudo().search([], limit=1)
+                        if not zns_config:
+                            _logger.warning(
+                                "WordPress webhook - No ZNS config found, skip sending ZNS to customer (order_id: %s)",
+                                data.get('order_id', 'N/A'),
+                            )
+                        else:
+                            # Chọn template cho WordPress: ưu tiên wp_template_id, fallback template_id
+                            zns_template_id = zns_config.wp_template_id or zns_config.template_id
+                            if not zns_template_id:
+                                _logger.warning(
+                                    "WordPress webhook - ZNS config missing template_id/wp_template_id, skip ZNS to customer (order_id: %s)",
+                                    data.get('order_id', 'N/A'),
+                                )
+                            else:
+                                # Build template_data cho ZNS (tuỳ template của bạn mà map field)
+                                import re
+                                total_raw = (data.get('total') or '').strip()
+                                # Lấy số từ chuỗi "500,000₫" -> 500000
+                                digits = re.sub(r'\D', '', total_raw)
+                                price_value = int(digits) if digits else 0
+
+                                from odoo.fields import Date
+                                today_str = Date.context_today(request.env.user).strftime("%d/%m/%Y")
+
+                                zns_params = {
+                                    "name": data.get('customer_name', ''),
+                                    "order_code": data.get('order_id', ''),
+                                    "price": price_value,
+                                    "date": today_str,
+                                    "status": "Đặt hàng thành công", 
+                                    "phone_number": customer_phone,
+                                    "address": data.get('customer_address', '') or '',
+                                }
+
+                                try:
+                                    resp_zns = zns_config.send_zns(
+                                        msisdn,
+                                        zns_params,
+                                        template_id_override=zns_template_id,
+                                    )
+                                    _logger.info(
+                                        "WordPress webhook - Sent ZNS to customer %s (order_id: %s), resp=%s",
+                                        msisdn,
+                                        data.get('order_id', 'N/A'),
+                                        resp_zns,
+                                    )
+                                except Exception as e:
+                                    _logger.exception(
+                                        "WordPress webhook - Failed to send ZNS to customer %s (order_id: %s): %s",
+                                        msisdn,
+                                        data.get('order_id', 'N/A'),
+                                        e,
+                                    )
+                    else:
+                        _logger.warning(
+                            "WordPress webhook - Cannot normalize customer_phone '%s' (order_id: %s)",
+                            customer_phone,
+                            data.get('order_id', 'N/A'),
+                        )
+                else:
+                    _logger.info(
+                        "WordPress webhook - No customer_phone provided, skip ZNS to customer (order_id: %s)",
+                        data.get('order_id', 'N/A'),
+                    )
+
+
+            # Lấy config qua request.env (KHÔNG dùng self.env trong controller)
+            config = request.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
+
+            if not config:
+                _logger.error(
+                    "WordPress webhook - No active Zalo Stock Notification config found (order_id: %s)",
+                    data.get('order_id', 'N/A')
                 )
-            
+                return Response(
+                    json.dumps({'success': False, 'error': 'No active Zalo config found'}),
+                    content_type='application/json',
+                    status=500,
+                )
+
+            try:
+                access_token = config.get_valid_access_token()
+            except Exception as e:
+                _logger.exception(
+                    "WordPress webhook - Error getting access token (order_id: %s): %s",
+                    data.get('order_id', 'N/A'),
+                    e,
+                )
+                return Response(
+                    json.dumps({'success': False, 'error': 'Error getting Zalo access token'}),
+                    content_type='application/json',
+                    status=500,
+                )
+
+            if not access_token:
+                _logger.error(
+                    "WordPress webhook - No valid Zalo access_token (order_id: %s)",
+                    data.get('order_id', 'N/A')
+                )
+                return Response(
+                    json.dumps({
+                        'success': False,
+                        'error': 'No active Zalo token found. Please configure Zalo Stock Notification in Odoo.',
+                    }),
+                    content_type='application/json',
+                    status=500,
+                )
+
             # Lấy danh sách recipients (từ request hoặc từ config mặc định)
             recipient_user_ids = data.get('recipient_user_ids', [])
             
@@ -203,36 +335,57 @@ class WordPressOrderWebhook(http.Controller):
     def _build_order_message(self, data):
         """
         Tạo nội dung tin nhắn từ dữ liệu đơn hàng
-        
+            
         :param data: Dict chứa thông tin đơn hàng
         :return: String message
         """
-        message = "Đơn hàng mới (hoanglongvu.com)\n"
+
+        # Lấy trạng thái & lý do hủy (nếu có)
+        status = (data.get('order_status') or '').strip().lower()
+        cancel_reason = (data.get('cancel_reason') or '').strip()
+
+        # Header theo trạng thái đơn
+        if status == 'cancelled':
+            # === ĐƠN HỦY ===
+            message = "🆘🆘🆘 HỦY ĐƠN HÀNG WEB\n"
+            if cancel_reason:
+                message += f"🔥LÝ DO: {cancel_reason}\n\n"
+            else:
+                message += "🔥LÝ DO: (không có ghi chú)\n\n"
+        else:
+            # === ĐƠN BÌNH THƯỜNG (MỚI / ĐANG XỬ LÝ / HOÀN THÀNH) ===
+            message = "🌐 THÔNG BÁO CÓ ĐƠN HÀNG WEB\n \n"
+
+        # 👤 Khách hàng
         message += f"👤 Khách hàng: {data.get('customer_name', 'Không rõ')}\n"
-        
-        # Danh sách sản phẩm
+
+        # 📦 Sản phẩm
         products = data.get('products', [])
         if products:
             message += "📦 Sản phẩm:\n"
             for product in products:
                 name = product.get('name', 'Unknown')
                 quantity = product.get('quantity', 0)
-                message += f"• {name}    SL: {quantity}\n"
-        
-        # Thông tin khác
-        if data.get('customer_address'):
-            message += f"🏠 Địa chỉ: {data['customer_address']}\n"
-        
-        if data.get('customer_phone'):
-            message += f"📞 SĐT: {data['customer_phone']}\n"
-        
-        if data.get('customer_email'):
-            message += f"📧 Email: {data['customer_email']}\n"
-        
+                message += f"  • {name}    SL: {quantity}\n"
+
+        # # 🏠 Địa chỉ
+        # if data.get('customer_address'):
+        #     message += f"🏠 Địa chỉ: {data['customer_address']}\n"
+
+        # # 📞 SĐT
+        # if data.get('customer_phone'):
+        #     message += f"📞 SĐT: {data['customer_phone']}\n"
+
+        # # 📧 Email
+        # if data.get('customer_email'):
+        #     message += f"📧 Email: {data['customer_email']}\n"
+
+        # 💰 Tổng
         if data.get('total'):
-            message += f"💰 Tổng: {data['total']}"
-        
+            message += f"- Tổng: {data['total']}"
+
         return message
+
     
     def _send_zalo_message(self, access_token, user_id, message_text):
         """

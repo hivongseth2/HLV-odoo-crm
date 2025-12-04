@@ -28,10 +28,10 @@
                         class="btn-secondary"
                         invisible="use_shared_token or not active or not (refresh_token != False)" />
                     <button name="action_send_reminder_now"
-                        string="📢 Gửi Nhắc Nhở Ngay"
+                        string="Gửi Nhắc Nhở Ngay"
                         type="object"
                         class="btn-warning"
-                        invisible="not active or not enable_interaction_reminder" />
+                        invisible="not enable_interaction_reminder" />
                 </header>
                 <sheet>
                     <div class="oe_button_box" name="button_box">
@@ -123,27 +123,51 @@
                             placeholder="Zalo User ID kế toán xử lý TẤT CẢ phiếu nhập kho" />
                     </group>
 
-                    <!-- NEW: Cấu hình gửi tin nhắn nhắc nhở tương tác -->
-                    <group string="🔔 Cấu Hình Nhắc Nhở Tương Tác">
-                        <div class="alert alert-warning" role="alert" style="margin-bottom: 15px;">
-                            <p style="margin: 5px 0;">
-                                <b>⚠️ Lưu ý:</b> Theo chính sách của Zalo, nếu người dùng không tương tác với OA trong 7 ngày liên tục,
-                                hệ thống sẽ tạm ngừng gửi tin nhắn tới người đó.
-                            </p>
-                            <p style="margin: 5px 0;">
-                                Bật tính năng này để tự động gửi tin nhắn nhắc nhở kế toán tương tác với OA định kỳ.
-                            </p>
-                        </div>
+                    <!-- NEW: Cấu hình nhắc nhở tương tác định kỳ -->
+                    <group string="🔔 Cấu Hình Nhắc Nhở Tương Tác (Tránh bị ngừng nhận tin)">
                         <group>
                             <field name="enable_interaction_reminder" />
-                            <field name="reminder_interval_days" invisible="not enable_interaction_reminder" />
-                            <field name="last_reminder_sent" invisible="not enable_interaction_reminder" />
+                            <field name="reminder_interval_days"
+                                invisible="not enable_interaction_reminder" />
+                            <field name="last_reminder_sent"
+                                invisible="not enable_interaction_reminder" />
                         </group>
                         <group invisible="not enable_interaction_reminder">
-                            <field name="reminder_message_template" widget="text"
-                                placeholder="Nội dung tin nhắn nhắc nhở. Có thể sử dụng biến {date} để hiển thị ngày gửi." />
+                            <div class="alert alert-warning" role="alert">
+                                <p style="margin: 5px 0;">
+                                    <b>⚠️ Lưu ý về chính sách Zalo:</b>
+                                </p>
+                                <p style="margin: 5px 0;">
+                                    Zalo yêu cầu người dùng phải tương tác với OA trong vòng 7 ngày.
+                                    Nếu không tương tác, hệ thống sẽ tạm ngừng gửi tin nhắn.
+                                </p>
+                                <p style="margin: 5px 0;">
+                                    Tính năng này sẽ tự động gửi tin nhắn nhắc nhở để kế toán phản hồi,
+                                    đảm bảo luôn nhận được thông báo đơn hàng.
+                                </p>
+                            </div>
                         </group>
+                        <field name="reminder_message_template"
+                            widget="text"
+                            invisible="not enable_interaction_reminder"
+                            placeholder="Nội dung tin nhắn nhắc nhở..." />
                     </group>
+
+                                        <!-- NEW: Mapping MISA saler_code -> Zalo OA User ID -->
+                    <group string="📤 Thông báo trực tiếp cho Nhân Viên Sale (phiếu XUẤT)">
+                        <field name="saler_mapping_text" widget="text"
+                               placeholder="Ví dụ:&#10;DUONGTHIHA:4954993286556475779&#10;NGUYENVANA:1111111111111111111,2222222222222222222" />
+                        <div class="alert alert-info" role="alert" style="margin-top: 8px;">
+                            <p style="margin: 0;">
+                                Mỗi dòng 1 cấu hình: <code>MISA_SALER_CODE:ID1,ID2,...</code><br/>
+                                Ví dụ: <code>DUONGTHIHA:4954993286556475779,</code><br/>
+                                Khi phiếu XUẤT kho thuộc nhân viên đó (theo
+                                <code>Sale Order.x_studio_misa_saler_code</code>) hệ thống sẽ
+                                gửi thêm thông báo tới các Zalo User ID ở đây.
+                            </p>
+                        </div>
+                    </group>
+
 
                     <!-- COMMENT: Warehouse mapping - tạm thời không sử dụng -->
                     <!-- <group string="Cấu Hình Người Nhận Thông Báo Theo Kho">
@@ -243,27 +267,11 @@
         </field>
     </record>
 
-    <!-- Search view cho Zalo Stock Notification Config -->
-    <record id="view_zalo_stock_notification_search" model="ir.ui.view">
-        <field name="name">hlv.zalo.stock.notification.search</field>
-        <field name="model">hlv.zalo.stock.notification</field>
-        <field name="arch" type="xml">
-            <search string="Zalo Stock Notification">
-                <field name="name" string="Tên" />
-                <filter string="Active" name="active" domain="[('active', '=', True)]"/>
-                <filter string="Inactive" name="inactive" domain="[('active', '=', False)]"/>
-                <filter string="All" name="all" domain="[]"/>
-            </search>
-        </field>
-    </record>
-
     <!-- Action cho Zalo Stock Notification Config -->
     <record id="action_zalo_stock_notification" model="ir.actions.act_window">
         <field name="name">Zalo Stock Notification</field>
         <field name="res_model">hlv.zalo.stock.notification</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[]</field>
-        <field name="context">{'search_default_active': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Tạo cấu hình Zalo Stock Notification

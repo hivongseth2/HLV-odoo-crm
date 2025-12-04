@@ -29,8 +29,14 @@ class ZaloZNSConfig(models.Model):
     refresh_token = fields.Text('Refresh Token', readonly=True, help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
     token_expires_at = fields.Datetime('Token Expires At', readonly=True, help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
     template_id = fields.Char('ZNS Template ID', help='Approved ZNS template ID')
-
+    wp_template_id = fields.Char(
+            'ZNS Template ID cho đơn WordPress',
+            help='Template ZNS dùng để xác nhận đơn hàng từ WordPress (khác với template giao hàng nếu cần)'
+        )
     authorize_url = fields.Char('Authorize URL', compute='_compute_authorize_url', readonly=True)
+
+
+
 
     # -------------------- OAuth permission URL --------------------
     @api.depends('app_id', 'callback_url')
@@ -45,6 +51,7 @@ class ZaloZNSConfig(models.Model):
                 )
             else:
                 rec.authorize_url = False
+                
 
     def action_open_oauth(self):
         self.ensure_one()
@@ -148,7 +155,7 @@ class ZaloZNSConfig(models.Model):
         return self.access_token
 
     # -------------------- Send ZNS --------------------
-    def send_zns(self, msisdn, params):
+    def send_zns(self, msisdn, params,template_id_override=None):
         """
         Gửi ZNS theo template:
         - Header dùng 'access_token'
@@ -181,8 +188,14 @@ class ZaloZNSConfig(models.Model):
         if not access_token:
             raise UserError(_("No valid access token. Please configure Shared Token Manager or own token."))
 
+
+        template_id = template_id_override or self.template_id
+        if not template_id:
+            raise UserError(_("Missing ZNS template ID"))
         body = {
-            "template_id": self.template_id,
+            # "template_id": self.template_id,
+            "template_id":template_id ,
+
             "phone": msisdn,
             "template_data": params,
             # "oa_id": self.oa_id,  # mở nếu cần

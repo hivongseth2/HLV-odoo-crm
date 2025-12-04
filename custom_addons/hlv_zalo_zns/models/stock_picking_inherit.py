@@ -101,15 +101,15 @@ class StockPicking(models.Model):
         id_encoded = quote(str(so.id), safe="")  # encode UTF-8 theo yêu cầu Zalo
 
         params = {
-            "name": ship_partner.name or "",
+            "name": ship_partner.name or "Không có thông tin",
             "order_code": order_code,
             "phone_number": msisdn.replace("+84", "0") if msisdn.startswith("+84") else msisdn,
             "price": price_value,
             "status": "Đang giao hàng",
             "date": date_str,
             "id": id_encoded,
-            "address":ship_partner.street or "",
-            "shipping_fee":shipping_fee
+            "address":ship_partner.street or "Không có thông tin",
+            "shipping_fee":shipping_fee or "Không có thông tin"
         }
 
         _logger.info("ZNS send try (OUT): %s to=%s params=%s", picking.name, msisdn, params)
