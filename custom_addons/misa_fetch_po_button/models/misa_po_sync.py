@@ -655,6 +655,9 @@ class MisaPOSync(models.TransientModel):
                 'x_studio_delivery_term': custom_field2 or False,
             })
             
+            # ===
+            
+            
             po_rec = odoo_po
             total_lines = len(lines)
             message = f'🔄 Đã đồng bộ: {refno} ({total_lines} dòng)'
