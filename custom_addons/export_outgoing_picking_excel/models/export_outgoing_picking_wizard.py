@@ -365,9 +365,9 @@ class PickingExportWizard(models.TransientModel):
             'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
             'phuong_thuc_thanh_toan': 'Chưa thu tiền',
             # 3 cột mới từ sale.order (đặt ngay sau phương thức thanh toán)
-            'hinh_thuc_giao_hang': getattr(so, 'x_studio_htgh', '') if so else '',
-            'hinh_thuc_thanh_toan_so': getattr(so, 'x_studio_httt', '') if so else '',
-            'ben_tra_phi_van_chuyen': getattr(so, 'x_studio_misa_delivery', '') if so else '',
+            'hinh_thuc_giao_hang': getattr(so, 'x_studio_htgh', '') or '' if so else '',
+            'hinh_thuc_thanh_toan_so': getattr(so, 'x_studio_httt', '') or '' if so else '',
+            'ben_tra_phi_van_chuyen': getattr(so, 'x_studio_misa_delivery', '') or '' if so else '',
             'kiem_phieu_xuat_kho': 'Có',
             'lap_kem_hoa_don': 'Có',
             'da_lap_hoa_don': 'Đã lập',
