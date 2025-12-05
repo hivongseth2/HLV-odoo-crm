@@ -5,6 +5,8 @@ import re
 from dateutil import parser as dtparser
 from requests.utils import dict_from_cookiejar
 from http.cookiejar import Cookie
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 _logger = logging.getLogger(__name__)
 
 class MisaApiUtils(models.AbstractModel):
@@ -960,24 +962,33 @@ class MisaApiUtils(models.AbstractModel):
     def get_misa_dictionary_item(self, headers, field_name, search_text):
         """
         Gọi API Dictionary Details để tìm ID dựa trên Text.
-        URL: Dictionary/Details/Product/{field_name}/...
-        
-        Trả về: (id, text) hoặc (None, None)
+        Có cơ chế Retry và Timeout cao hơn.
         """
-        # URL chuẩn bạn cung cấp, thay thế field_name
         url = f"https://amisapp.misa.vn/crm/g2/api/business/Dictionary/Details/Product/{field_name}/false/45/null/null"
         
         params = {
             "page": "null",
-            "searchText": "", # Lấy tất cả để tự filter chính xác hơn
+            "searchText": "", 
             "isLocationConcat": "false",
             "isContainFormLayoutName": "true",
             "isProductCustomField": "false",
             "isView": "true"
         }
 
+        # Cấu hình Retry: Thử lại 3 lần nếu gặp lỗi kết nối hoặc 500/502/503/504
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1, # Chờ 1s, 2s, 4s giữa các lần thử
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session = requests.Session()
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+
         try:
-            res = requests.get(url, headers=headers, params=params, timeout=10)
+            # Tăng timeout lên 30 giây (trước là 10 giây)
+            res = session.get(url, headers=headers, params=params, timeout=30)
             data = res.json()
             
             if data.get("Success") and data.get("Data"):
@@ -991,15 +1002,16 @@ class MisaApiUtils(models.AbstractModel):
                     if item_text == search_norm:
                         return item.get("id"), item.get("text")
                         
-                # Nếu không khớp chính xác, thử khớp tương đối (cho trường hợp Unit: 'Units' -> 'Cái' thì khó, nhưng 'kg' -> 'Kg' thì ok)
-                # Fallback đặc biệt cho Unit Odoo 'Unit' -> MISA 'Cái'
+                # Fallback đặc biệt cho Unit: Odoo 'Unit' -> MISA 'Cái'
                 if field_name == "UsageUnitID" and search_norm in ['unit', 'units', 'đơn vị']:
                     for item in data["Data"]:
                         if item.get("text") == "Cái":
                             return item.get("id"), "Cái"
 
+        except requests.exceptions.Timeout:
+            _logger.warning(f"⏳ API {field_name} bị Timeout sau 30s. Mạng MISA đang chậm.")
         except Exception as e:
-            _logger.warning(f"Lỗi Dictionary {field_name}: {e}")
+            _logger.warning(f"❌ Lỗi Dictionary {field_name}: {e}")
             
         return None, None
 
