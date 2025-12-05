@@ -841,34 +841,41 @@ class MisaApiUtils(models.AbstractModel):
         # MISA format: "0%", "5%", "8%", "10%", "KCT", "KKKNT"
         # Odoo format: "VAT VN 5%", amount = 5.0
         
-        tax_search_text = "10%" # Mặc định nếu Odoo không set thuế
+        tax_search_text = "8%" 
         
         if product.taxes_id:
-            tax_rec = product.taxes_id[0] # Lấy thuế đầu tiên
-            amount = tax_rec.amount       # Lấy số % (vd: 5.0, 8.0)
-            name_upper = (tax_rec.name or "").strip().upper()
+            # Lấy thuế đầu tiên trong danh sách thuế bán ra
+            tax_record = product.taxes_id[0]
+            
+            # Lấy giá trị amount (Ví dụ: 5.0, 8.0, 10.0, 0.0)
+            amount_val = tax_record.amount
+            
+            # Lấy tên để check trường hợp KCT (Không chịu thuế)
+            tax_name_upper = (tax_record.name or "").strip().upper()
 
-            if amount > 0:
-                # Nếu > 0: Bỏ số thập phân, thêm % (Vd: 5.0 -> "5%")
-                # Đây là bước quan trọng để khớp "VAT VN 5%" thành "5%"
-                tax_search_text = f"{int(amount)}%"
+            if amount_val > 0:
+                # Nếu amount > 0 (VD: 5.0 -> 5 -> "5%")
+                # int() sẽ cắt số 0 thừa phía sau (5.0000 -> 5)
+                tax_search_text = f"{int(amount_val)}%"
             else:
-                # Nếu = 0: Cần phân biệt 0%, KCT (Không chịu thuế), KKKNT
-                if "KCT" in name_upper or "KHÔNG CHỊU" in name_upper or "NO VAT" in name_upper:
+                # Nếu amount = 0, có 3 trường hợp: 0%, KCT, KKKNT
+                # Cần dựa vào tên để phân biệt vì amount đều là 0
+                if any(k in tax_name_upper for k in ["KCT", "KHÔNG CHỊU", "NO VAT"]):
                     tax_search_text = "KCT"
-                elif "KKKNT" in name_upper:
+                elif "KKKNT" in tax_name_upper:
                     tax_search_text = "KKKNT"
                 else:
                     tax_search_text = "0%"
 
-        # Gọi Dictionary để lấy ID chính xác từ MISA
-        # Lúc này tax_search_text đã là "5%", "8%"... chuẩn MISA
+        # Gọi API Dictionary tìm ID dựa trên text vừa tạo (VD: "5%")
         tax_id, tax_text = self.get_misa_dictionary_item(headers, "TaxID", tax_search_text)
         
         if not tax_id:
-            _logger.warning(f"⚠️ Không tìm thấy thuế '{tax_search_text}'. Dùng mặc định 10%.")
-            tax_id = 3   # ID của 10% (thường là 3)
-            tax_text = "10%"
+            _logger.warning(f"⚠️ Không tìm thấy mức thuế '{tax_search_text}' bên MISA. Dùng mặc định 10%.")
+            # Fallback về 10% (ID thường là 3, nhưng tốt nhất gọi dictionary tìm 10%)
+            fallback_id, fallback_text = self.get_misa_dictionary_item(headers, "TaxID", "8%")
+            tax_id = fallback_id or "3"
+            tax_text = fallback_text or "8%"
 
         # ... (Phần dưới giữ nguyên) ...
 
