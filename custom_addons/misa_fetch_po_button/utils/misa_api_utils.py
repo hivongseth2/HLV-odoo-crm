@@ -1007,3 +1007,90 @@ class MisaApiUtils(models.AbstractModel):
                 return str(d["Data"][0].get("ProductID"))
         except: pass
         return None
+    
+    
+    
+    # -------------------------------------------------------------------------
+    # API XỬ LÝ DỮ LIỆU THÔ (RAW DATA) - Dùng cho Controller gọi vào
+    # -------------------------------------------------------------------------
+    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods"):
+        """
+        Hàm nhận dữ liệu thô và đẩy sang MISA.
+        - code: Mã sản phẩm (Bắt buộc)
+        - name: Tên sản phẩm
+        - price: Giá bán
+        - tax_percent: Số % thuế (VD: 8, 10, 0)
+        - unit_name: Tên ĐVT (VD: Cái, Hộp, kg)
+        - category_name: Tên nhóm (VD: Hàng hóa, Dịch vụ)
+        - product_type: 'service' (Dịch vụ) hoặc 'goods' (Hàng hóa)
+        """
+        misa_config = self.env['misa.config']
+        token = self._fetch_login_crm_token()
+        if not token:
+            raise Exception("Lỗi Token MISA")
+
+        headers = misa_config.get_crm_header(token)
+        headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+
+        # 1. Xử lý ID Nhóm hàng
+        cat_id = self._get_category_id_by_name(headers, category_name)
+        if not cat_id:
+             cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
+
+        # 2. Xử lý ID Đơn vị tính
+        unit_id, unit_text = self._find_dictionary_item(headers, "UsageUnitID", unit_name)
+        if not unit_id:
+            unit_id, unit_text = 4, "Cái"
+
+        # 3. Xử lý ID Thuế (Dùng hàm Smart Regex đã viết)
+        # tax_percent đầu vào là số (vd: 8 hoặc 10)
+        tax_id, tax_text = self._find_tax_id_smart(headers, float(tax_percent), "")
+
+        # 4. Xử lý Tính chất (Hàng hóa/Dịch vụ)
+        is_service = (product_type == 'service' or product_type == 'dịch vụ')
+        prop_id = 2 if is_service else 1
+        prop_text = "Dịch vụ" if is_service else "Hàng hóa"
+
+        # 5. Payload
+        payload = {
+            "ProductCode": code,
+            "ProductName": name,
+            "ProductCategoryID": cat_id,
+            "ProductCategoryIDText": category_name if cat_id != 23 else "Hàng hóa",
+            "UsageUnitID": unit_id, 
+            "UsageUnitIDText": unit_text,
+            "ProductPropertiesID": prop_id,
+            "ProductPropertiesIDText": prop_text,
+            "TaxID": str(tax_id),
+            "TaxIDText": tax_text,
+            "UnitPrice": float(price),
+            "UnitPriceFixed": float(price),
+            "PurchasedPrice": 0,
+            "MISAEntityState": 1,
+            "Active": True, "Inactive": False, "IsPublic": False, "FormLayoutID": 45,
+            "Fields": [], "FieldsCustom": [], 
+            "DataCustom": {
+                "Avatar": "", 
+                "CustomField13": None, 
+                "CustomField15": code 
+            },
+            "CustomTables": [], 
+        }
+
+        # 6. Gửi Request
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
+        _logger.info(f"🚀 API RAW CREATE: {code} | Price: {price} | Tax: {tax_text}")
+
+        session = self._get_retry_session()
+        res = session.post(url, headers=headers, json=payload, timeout=30)
+        res_json = res.json()
+
+        if not res_json.get("Success"):
+            err_msg = res_json.get("UserMessage")
+            val_info = res_json.get("ValidateInfo", [])
+            if val_info:
+                err_msg = ", ".join([v.get("ErrorMessage", "") for v in val_info])
+            raise Exception(f"MISA Refused: {err_msg}")
+
+        misa_id = self._parse_misa_id(res_json, code, headers)
+        return misa_id
