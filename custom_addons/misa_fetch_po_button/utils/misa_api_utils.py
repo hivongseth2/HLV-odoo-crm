@@ -962,10 +962,25 @@ class MisaApiUtils(models.AbstractModel):
     def get_misa_dictionary_item(self, headers, field_name, search_text):
         """
         Gọi API Dictionary Details để tìm ID dựa trên Text.
-        Có cơ chế Retry và Timeout cao hơn.
+        FIX LỖI TIMEOUT: Xóa Content-Length khỏi header vì đây là GET request.
         """
         url = f"https://amisapp.misa.vn/crm/g2/api/business/Dictionary/Details/Product/{field_name}/false/45/null/null"
         
+        # --- QUAN TRỌNG: COPY VÀ LÀM SẠCH HEADER ---
+        # Phải copy ra biến mới để không ảnh hưởng đến header gốc dùng cho hàm tạo
+        get_headers = headers.copy()
+        
+        # Xóa Content-Length và Content-Type vì GET request không có body
+        # Nếu để Content-Length, server MISA sẽ treo để chờ body -> Timeout
+        get_headers.pop('content-length', None)
+        get_headers.pop('Content-Length', None)
+        get_headers.pop('content-type', None)
+        get_headers.pop('Content-Type', None)
+        
+        # Giả lập User-Agent giống trình duyệt để tránh bị chặn
+        get_headers['User-Agent'] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        get_headers['Referer'] = "https://amisapp.misa.vn/crm/product/add"
+
         params = {
             "page": "null",
             "searchText": "", 
@@ -975,41 +990,39 @@ class MisaApiUtils(models.AbstractModel):
             "isView": "true"
         }
 
-        # Cấu hình Retry: Thử lại 3 lần nếu gặp lỗi kết nối hoặc 500/502/503/504
-        retry_strategy = Retry(
-            total=3,
-            backoff_factor=1, # Chờ 1s, 2s, 4s giữa các lần thử
-            status_forcelist=[429, 500, 502, 503, 504],
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        session = requests.Session()
-        session.mount("https://", adapter)
-        session.mount("http://", adapter)
-
         try:
-            # Tăng timeout lên 30 giây (trước là 10 giây)
-            res = session.get(url, headers=headers, params=params, timeout=30)
+            _logger.info(f"🔎 Đang tìm '{search_text}' trong {field_name}...")
+            
+            # Timeout 10s là quá đủ cho API này nếu Header đúng
+            res = requests.get(url, headers=get_headers, params=params, timeout=10)
+            
+            if res.status_code != 200:
+                _logger.warning(f"⚠️ API Dictionary lỗi {res.status_code}: {res.text}")
+                return None, None
+                
             data = res.json()
             
             if data.get("Success") and data.get("Data"):
                 search_norm = str(search_text).strip().lower()
                 
-                # Duyệt qua danh sách để tìm text khớp
+                # 1. Tìm chính xác
                 for item in data["Data"]:
                     item_text = (item.get("text") or "").strip().lower()
-                    
-                    # So sánh chính xác (case-insensitive)
                     if item_text == search_norm:
                         return item.get("id"), item.get("text")
-                        
-                # Fallback đặc biệt cho Unit: Odoo 'Unit' -> MISA 'Cái'
-                if field_name == "UsageUnitID" and search_norm in ['unit', 'units', 'đơn vị']:
+                
+                # 2. Tìm tương đối cho đơn vị tính (Unit, kg, kgs...)
+                if field_name == "UsageUnitID":
+                    # MISA trả về 'kg' (thường là id 38) hoặc 'Kg' (id 14)
+                    # Odoo có thể là 'kg', 'kgs', 'kilogram'
                     for item in data["Data"]:
-                        if item.get("text") == "Cái":
-                            return item.get("id"), "Cái"
-
-        except requests.exceptions.Timeout:
-            _logger.warning(f"⏳ API {field_name} bị Timeout sau 30s. Mạng MISA đang chậm.")
+                        txt = (item.get("text") or "").strip().lower()
+                        if txt == search_norm: 
+                            return item.get("id"), item.get("text")
+                        # Fix cứng cho trường hợp kg
+                        if search_norm in ['kg', 'kgs', 'kilogram'] and txt in ['kg', 'kilogam']:
+                             return item.get("id"), item.get("text")
+                             
         except Exception as e:
             _logger.warning(f"❌ Lỗi Dictionary {field_name}: {e}")
             
