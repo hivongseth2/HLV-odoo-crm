@@ -787,325 +787,218 @@ class MisaApiUtils(models.AbstractModel):
 
 
 # create product
-    def create_product_in_misa(self, product):
+    def create_product_misa_api(self, product_id):
+        """
+        Hàm main để tạo sản phẩm.
+        Input: ID của sản phẩm trong Odoo (product.template hoặc product.product)
+        Output: MISA ID
+        """
+        product = self.env['product.template'].browse(product_id)
+        if not product.exists():
+            raise Exception(f"Không tìm thấy sản phẩm ID {product_id}")
+
+        # Gọi hàm xử lý nội bộ
+        return self._process_create_product_misa(product)
+
+    # -------------------------------------------------------------------------
+    # 2. LOGIC XỬ LÝ CHÍNH
+    # -------------------------------------------------------------------------
+    def _process_create_product_misa(self, product):
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
-            raise Exception("Không lấy được Access Token MISA CRM")
+            raise Exception("Lỗi Token MISA")
 
         headers = misa_config.get_crm_header(token)
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
         code = (product.default_code or "").strip()
         if not code:
-            raise Exception("Sản phẩm Odoo chưa có Mã (Internal Reference)")
+            raise Exception("Thiếu Mã sản phẩm (Internal Reference)")
         
-        name = product.name or code
-        
-        # --- A. XỬ LÝ NHÓM HÀNG (ProductCategory) ---
-        odoo_cat_name = product.categ_id.name if product.categ_id else "Hàng hóa"
-        cat_id = self.get_misa_product_category_id(headers, odoo_cat_name)
-        cat_name_final = odoo_cat_name
-        
-        if not cat_id:
-            # Fallback 1: Hàng hóa
-            cat_id = self.get_misa_product_category_id(headers, "Hàng hóa")
-            cat_name_final = "Hàng hóa"
-        if not cat_id:
-            # Fallback 2: Cứng (ID 23 - Hàng hóa)
-            cat_id = 23
-            cat_name_final = "Hàng hóa"
+        # --- A. TÌM ID NHÓM HÀNG ---
+        odoo_cat_name = product.categ_id.name or "Hàng hóa"
+        cat_id = self._get_category_id_by_name(headers, odoo_cat_name) or 23 # 23 là ID Hàng hóa
 
-        # --- B. XỬ LÝ ĐƠN VỊ TÍNH (UsageUnitID) ---
-        odoo_uom_name = product.uom_id.name if product.uom_id else "Cái"
-        # Gọi API Dictionary lấy ID
-        unit_id, unit_text = self.get_misa_dictionary_item(headers, "UsageUnitID", odoo_uom_name)
-        
+        # --- B. TÌM ID ĐƠN VỊ TÍNH (Robust) ---
+        odoo_uom = product.uom_id.name or "Cái"
+        unit_id, unit_text = self._find_dictionary_item(headers, "UsageUnitID", odoo_uom)
         if not unit_id:
-            _logger.warning(f"⚠️ Không tìm thấy ĐVT '{odoo_uom_name}'. Dùng mặc định 'Cái'.")
-            unit_id = 4 # ID của Cái
-            unit_text = "Cái"
+            # Fallback cứng nếu không tìm thấy
+            unit_id, unit_text = 4, "Cái"
 
-        # --- C. XỬ LÝ TÍNH CHẤT (ProductPropertiesID) ---
-        # Odoo Service -> Dịch vụ (2), Consu/Product -> Hàng hóa (1)
-        prop_search = "Dịch vụ" if product.type == 'service' else "Hàng hóa"
-        prop_id, prop_text = self.get_misa_dictionary_item(headers, "ProductPropertiesID", prop_search)
+        # --- C. TÌM ID THUẾ (FIX LỖI DEFAULT) ---
+        # Logic: Lấy toàn bộ thuế MISA về -> So sánh số học với Odoo Amount
+        odoo_tax_amount = product.taxes_id[0].amount if product.taxes_id else 10.0 # Mặc định 10 nếu Odoo ko có
+        odoo_tax_name = product.taxes_id[0].name if product.taxes_id else ""
         
-        if not prop_id:
-            prop_id = 2 if product.type == 'service' else 1
-            prop_text = prop_search
+        tax_id, tax_text = self._find_tax_id_smart(headers, odoo_tax_amount, odoo_tax_name)
 
-        # ... (Phần trên giữ nguyên) ...
-
-        # --- D. XỬ LÝ THUẾ (TaxID) ---
-        # MISA format: "0%", "5%", "8%", "10%", "KCT", "KKKNT"
-        # Odoo format: "VAT VN 5%", amount = 5.0
-        
-        tax_search_text = "8%" 
-        
-        if product.taxes_id:
-            # Lấy thuế đầu tiên trong danh sách thuế bán ra
-            tax_record = product.taxes_id[0]
-            
-            # Lấy giá trị amount (Ví dụ: 5.0, 8.0, 10.0, 0.0)
-            amount_val = tax_record.amount
-            
-            # Lấy tên để check trường hợp KCT (Không chịu thuế)
-            tax_name_upper = (tax_record.name or "").strip().upper()
-
-            if amount_val > 0:
-                # Nếu amount > 0 (VD: 5.0 -> 5 -> "5%")
-                # int() sẽ cắt số 0 thừa phía sau (5.0000 -> 5)
-                tax_search_text = f"{int(amount_val)}%"
-            else:
-                # Nếu amount = 0, có 3 trường hợp: 0%, KCT, KKKNT
-                # Cần dựa vào tên để phân biệt vì amount đều là 0
-                if any(k in tax_name_upper for k in ["KCT", "KHÔNG CHỊU", "NO VAT"]):
-                    tax_search_text = "KCT"
-                elif "KKKNT" in tax_name_upper:
-                    tax_search_text = "KKKNT"
-                else:
-                    tax_search_text = "0%"
-
-        # Gọi API Dictionary tìm ID dựa trên text vừa tạo (VD: "5%")
-        tax_id, tax_text = self.get_misa_dictionary_item(headers, "TaxID", tax_search_text)
-        
-        if not tax_id:
-            _logger.warning(f"⚠️ Không tìm thấy mức thuế '{tax_search_text}' bên MISA. Dùng mặc định 10%.")
-            # Fallback về 10% (ID thường là 3, nhưng tốt nhất gọi dictionary tìm 10%)
-            fallback_id, fallback_text = self.get_misa_dictionary_item(headers, "TaxID", "8%")
-            tax_id = fallback_id or "3"
-            tax_text = fallback_text or "8%"
-
-        # ... (Phần dưới giữ nguyên) ...
-
-        # --- CHUẨN BỊ GIÁ ---
-        price = float(product.list_price or 0)
-        cost = float(product.standard_price or 0)
+        # --- D. TÍNH CHẤT ---
+        prop_id = 2 if product.type == 'service' else 1
+        prop_text = "Dịch vụ" if product.type == 'service' else "Hàng hóa"
 
         # --- PAYLOAD ---
         payload = {
-            "Fields": [], "FieldsCustom": [],
-            "DataCustom": {
-                "CustomField13": "1", "CustomField13Text": "Thương mại",
-                "CustomField14": None, "CustomField15": code, "CustomField16": 0, "Avatar": ""
-            },
             "ProductCode": code,
-            
-            # Category
+            "ProductName": product.name,
             "ProductCategoryID": cat_id,
-            "ProductCategoryIDText": cat_name_final,
-            
-            # Properties
-            "ProductPropertiesID": str(prop_id),
-            "ProductPropertiesIDText": prop_text,
-            
-            # Unit
+            "ProductCategoryIDText": odoo_cat_name if cat_id != 23 else "Hàng hóa",
             "UsageUnitID": unit_id, 
             "UsageUnitIDText": unit_text,
-            
-            # Info
-            "Source": None, "DefaultStockID": None, "DefaultStockIDText": "",
-            "ProductName": name, "SaleDescription": None,
-            "IsFollowSerialNumber": False, "BrandID": None, "BrandIDText": "", "Description": None,
-            
-            # Price
-            "UnitPrice": price, "UnitPrice2": 0, "PurchasedPrice": cost,
-            
-            # Tax
-            "TaxID": str(tax_id), 
+            "ProductPropertiesID": prop_id,
+            "ProductPropertiesIDText": prop_text,
+            "TaxID": str(tax_id),
             "TaxIDText": tax_text,
-            
-            "UnitCost": 0, "UnitPrice1": 0, "UnitPriceFixed": price,
-            "PriceAfterTax": False, "IsUseTax": False,
-            
-            # Default MISA Params
-            "WarrantyPeriodTypeID": 2, "WarrantyPeriodTypeIDText": "Tháng",
-            "WarrantyPeriodText": "0 Tháng", "WarrantyPeriod": 0, "WarrantyDescription": None,
-            "IsPublic": False, "Inactive": False,
-            "FormLayoutID": 45, "FormLayoutIDText": "Mẫu tiêu chuẩn",
-            "MappingDatas": [], "MISAEntityState": 1, "ModifiedDate": None,
-            "FormModeState": 1, "IsGetFieldFormLayout": True, "ClientExecutedTime": 74561,
-            "IsSetProduct": "\u0000",
-            
-            # Tables
-            "CustomTables": [
-                {
-                    "DataFields": [], "Summary": {}, "Data": [], "OldData": [], "SummaryFields": [],
-                    "GroupBoxText": "Thông tin đơn vị chuyển đổi", "IsRequired": False,
-                    "ParentIDKey": "ProductID", "TableName": "product_conversion_unit", "IsProductChange": False
-                },
-                {
-                    "DataFields": [], "Summary": {},
-                    "Data": [self._get_empty_serial_row(i) for i in range(1, 6)],
-                    "OldData": [self._get_empty_serial_row(i) for i in range(1, 6)],
-                    "SummaryFields": [], "GroupBoxText": "Thông tin mã quy cách", "IsRequired": False,
-                    "ParentIDKey": "ProductID", "TableName": "product_detail_serial_type", "IsProductChange": True
-                }
-            ],
-            "IsProductChange": False, "IsMultiCurrency": False
+            "UnitPrice": float(product.list_price or 0),
+            "UnitPriceFixed": float(product.list_price or 0),
+            "PurchasedPrice": float(product.standard_price or 0),
+            "MISAEntityState": 1,
+            "Active": True, "Inactive": False, "IsPublic": False, "FormLayoutID": 45,
+            "Fields": [], "FieldsCustom": [], "DataCustom": {"Avatar": "", "CustomField13": None, "CustomField15": code},
+            "CustomTables": [], # Rút gọn cho ngắn, bạn dùng code custom table cũ nhé
         }
 
+        # Gửi Request
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
-        _logger.info(f"🚀 [CREATE] Payload (Unit={unit_text}, Tax={tax_text}): {code}")
+        _logger.info(f"🚀 MISA CREATE: {code} | Tax: {tax_text} (ID: {tax_id})")
+
+        res = requests.post(url, headers=headers, json=payload, timeout=30)
+        res_json = res.json()
         
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            res_json = response.json()
-            _logger.info(f"MISA Response: {res_json}")
+        if not res_json.get("Success"):
+             raise Exception(f"MISA Refused: {res_json.get('UserMessage')}")
 
-            if not res_json.get("Success"):
-                val_info = res_json.get("ValidateInfo", [])
-                if val_info:
-                    err_msg = ", ".join([v.get("ErrorMessage", "") for v in val_info])
-                    raise Exception(f"MISA Validate Error: {err_msg}")
-                msg = res_json.get("UserMessage") or res_json.get("Message")
-                raise Exception(f"MISA Refused: {msg}")
+        misa_id = self._parse_misa_id(res_json, code, headers)
+        _logger.info(f"✅ Created ID: {misa_id}")
+        return misa_id
 
-            data = res_json.get("Data")
-            misa_id = None
-            if isinstance(data, int): misa_id = str(data)
-            elif isinstance(data, str) and data: misa_id = data
-            elif isinstance(data, dict): misa_id = data.get("ProductID") or data.get("ID")
+    # -------------------------------------------------------------------------
+    # 3. HÀM TÌM THUẾ THÔNG MINH (THE FIX)
+    # -------------------------------------------------------------------------
+    def _find_tax_id_smart(self, headers, odoo_amount, odoo_name):
+        """
+        Lấy toàn bộ danh sách thuế MISA, sau đó dùng Regex để so sánh số.
+        Giải quyết triệt để vấn đề tìm kiếm text không khớp.
+        """
+        # 1. Lấy toàn bộ danh sách thuế (searchText rỗng)
+        all_taxes = self._get_all_dictionary_items(headers, "TaxID")
+        
+        if not all_taxes:
+            _logger.warning("⚠️ Không lấy được danh sách thuế MISA. Dùng mặc định 10%.")
+            return "3", "10%"
 
-            if not misa_id:
-                _logger.warning("⚠️ Gọi Fallback tìm theo mã...")
-                misa_id = self.find_product_id_by_code(code, headers)
-
-            if not misa_id:
-                raise Exception("Tạo thành công nhưng KHÔNG TÌM THẤY ID.")
+        # 2. Xử lý trường hợp đặc biệt: Không chịu thuế (Amount = 0)
+        if odoo_amount == 0:
+            odoo_name_upper = (odoo_name or "").upper()
+            is_kct = any(x in odoo_name_upper for x in ["KCT", "KHÔNG CHỊU", "NO VAT"])
             
-            _logger.info(f"✅ Hoàn tất! MISA ID: {misa_id}")
-            return misa_id
+            for item in all_taxes:
+                text = item.get("text", "").upper()
+                # Ưu tiên khớp KCT
+                if is_kct and ("KCT" in text or "KHÔNG CHỊU" in text):
+                    return str(item["id"]), item["text"]
+                # Khớp 0%
+                if not is_kct and "0%" in text:
+                    return str(item["id"]), item["text"]
+        
+        # 3. So sánh số học (cho 5%, 8%, 10%...)
+        # Dùng sai số nhỏ (epsilon) để so sánh float
+        epsilon = 0.001 
+        
+        for item in all_taxes:
+            text = item.get("text", "") # Ví dụ: "VAT 5%", "5%", "8% (+-2)"
+            
+            # Dùng Regex lấy tất cả các số trong chuỗi text của MISA
+            # Ví dụ: "8%" -> tìm thấy [8]
+            found_numbers = re.findall(r"[-+]?\d*\.\d+|\d+", text)
+            
+            if found_numbers:
+                # Lấy số đầu tiên tìm thấy
+                try:
+                    misa_val = float(found_numbers[0])
+                    # So sánh: |5.0 - 5.0| < 0.001 -> Khớp!
+                    if abs(misa_val - odoo_amount) < epsilon:
+                        _logger.info(f"🎯 Matched Tax: Odoo({odoo_amount}) == MISA({text})")
+                        return str(item["id"]), item["text"]
+                except ValueError:
+                    continue
 
-        except Exception as e:
-            _logger.error(f"❌ Lỗi tạo sản phẩm: {e}")
-            raise e
+        _logger.warning(f"⚠️ Không tìm thấy thuế {odoo_amount}%. Fallback 10%.")
+        return "3", "10%" # ID 3 thường là 10%
 
-    # ---------------------------------------------------------
-    # 2. HÀM TRA CỨU DICTIONARY (Dùng chung cho Unit, Tax, Property)
-    # ---------------------------------------------------------
-    def get_misa_dictionary_item(self, headers, field_name, search_text):
-        """
-        Gọi API Dictionary Details để tìm ID dựa trên Text.
-        FIX LỖI TIMEOUT: Xóa Content-Length khỏi header vì đây là GET request.
-        """
+    # -------------------------------------------------------------------------
+    # 4. CÁC HÀM HỖ TRỢ (PRIVATE)
+    # -------------------------------------------------------------------------
+    def _get_all_dictionary_items(self, headers, field_name):
+        """Lấy trọn bộ dictionary, có Retry"""
         url = f"https://amisapp.misa.vn/crm/g2/api/business/Dictionary/Details/Product/{field_name}/false/45/null/null"
         
-        # --- QUAN TRỌNG: COPY VÀ LÀM SẠCH HEADER ---
-        # Phải copy ra biến mới để không ảnh hưởng đến header gốc dùng cho hàm tạo
+        # Clean headers for GET
         get_headers = headers.copy()
+        for k in ['content-length', 'Content-Length', 'content-type', 'Content-Type']:
+            get_headers.pop(k, None)
+            
+        params = {"page": "null", "searchText": "", "isView": "true"} # Lấy ALL
         
-        # Xóa Content-Length và Content-Type vì GET request không có body
-        # Nếu để Content-Length, server MISA sẽ treo để chờ body -> Timeout
-        get_headers.pop('content-length', None)
-        get_headers.pop('Content-Length', None)
-        get_headers.pop('content-type', None)
-        get_headers.pop('Content-Type', None)
+        # Retry logic
+        adapter = HTTPAdapter(max_retries=Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504]))
+        session = requests.Session()
+        session.mount("https://", adapter)
         
-        # Giả lập User-Agent giống trình duyệt để tránh bị chặn
-        get_headers['User-Agent'] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        get_headers['Referer'] = "https://amisapp.misa.vn/crm/product/add"
-
-        params = {
-            "page": "null",
-            "searchText": "", 
-            "isLocationConcat": "false",
-            "isContainFormLayoutName": "true",
-            "isProductCustomField": "false",
-            "isView": "true"
-        }
-
         try:
-            _logger.info(f"🔎 Đang tìm '{search_text}' trong {field_name}...")
-            
-            # Timeout 10s là quá đủ cho API này nếu Header đúng
-            res = requests.get(url, headers=get_headers, params=params, timeout=10)
-            
-            if res.status_code != 200:
-                _logger.warning(f"⚠️ API Dictionary lỗi {res.status_code}: {res.text}")
-                return None, None
-                
-            data = res.json()
-            
-            if data.get("Success") and data.get("Data"):
-                search_norm = str(search_text).strip().lower()
-                
-                # 1. Tìm chính xác
-                for item in data["Data"]:
-                    item_text = (item.get("text") or "").strip().lower()
-                    if item_text == search_norm:
-                        return item.get("id"), item.get("text")
-                
-                # 2. Tìm tương đối cho đơn vị tính (Unit, kg, kgs...)
-                if field_name == "UsageUnitID":
-                    # MISA trả về 'kg' (thường là id 38) hoặc 'Kg' (id 14)
-                    # Odoo có thể là 'kg', 'kgs', 'kilogram'
-                    for item in data["Data"]:
-                        txt = (item.get("text") or "").strip().lower()
-                        if txt == search_norm: 
-                            return item.get("id"), item.get("text")
-                        # Fix cứng cho trường hợp kg
-                        if search_norm in ['kg', 'kgs', 'kilogram'] and txt in ['kg', 'kilogam']:
-                             return item.get("id"), item.get("text")
-                             
+            res = session.get(url, headers=get_headers, params=params, timeout=30)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("Success"):
+                    return data.get("Data", [])
         except Exception as e:
-            _logger.warning(f"❌ Lỗi Dictionary {field_name}: {e}")
-            
+            _logger.error(f"Lỗi fetch dictionary {field_name}: {e}")
+        return []
+
+    def _find_dictionary_item(self, headers, field_name, search_text):
+        """Tìm trong dictionary bằng text exact match"""
+        items = self._get_all_dictionary_items(headers, field_name)
+        search_norm = str(search_text).strip().lower()
+        
+        for item in items:
+            if str(item.get("text")).strip().lower() == search_norm:
+                return item["id"], item["text"]
         return None, None
 
-    # ---------------------------------------------------------
-    # 3. HÀM TÌM NHÓM HÀNG HÓA (Grid)
-    # ---------------------------------------------------------
-    def get_misa_product_category_id(self, headers, name):
+    def _get_category_id_by_name(self, headers, name):
         url = "https://amisapp.misa.vn/crm/g2/api/business/ProductCategory/grid"
         payload = {
-            "Filters": [], "Formula": "", "page": 1, "pageSize": 200, "Start": 0,
-            "DefaultTotal": True, "layoutCode": "ProductCategory", "IsUsedELTS": True,
-            "CustomPagingData": None, "IsCheckInactive": True, "IsMappingData": False,
-            "MappingValueObject": {}, "IsGetAllWhenEmptyCustomColumn": False,
-            "Columns": "SUQsT3duZXJJRCxQcm9kdWN0Q2F0ZWdvcnlOYW1l"
+            "Filters": [], "page": 1, "pageSize": 500, "Columns": "ProductCategoryID,ProductCategoryName",
+            "layoutCode": "ProductCategory"
         }
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=10)
-            data = res.json()
-            if data.get("Success") and data.get("Data"):
-                search_name = name.strip().lower()
-                for item in data["Data"]:
-                    cat_name = (item.get("ProductCategoryName") or "").strip().lower()
-                    if cat_name == search_name:
+            res = requests.post(url, headers=headers, json=payload, timeout=20)
+            if res.ok and res.json().get("Success"):
+                for item in res.json().get("Data", []):
+                    if item.get("ProductCategoryName", "").lower() == name.lower():
                         return item.get("ID")
-        except Exception as e:
-            _logger.warning(f"Lỗi Grid Category: {e}")
+        except Exception:
+            pass
         return None
 
-    # ---------------------------------------------------------
-    # 4. CÁC HÀM HELPER KHÁC
-    # ---------------------------------------------------------
-    def _get_empty_serial_row(self, sort_order):
-        return {
-            "SortOrder": sort_order, "TableName": "product_detail_serial_type",
-            "DisplayName": None, "IsAllowDupplicate": None, "ID": None,
-            "MISAEntityState": 1, "AsyncID": "", "OwnerID": "", "PromotionMasterRowID": "",
-            "PromotionRowID": "", "ProductSetID": "", "ProductSetMasterID": "",
-            "ProductInSetMasterID": "", "IsSetProduct": "", "IsChildProduct": "",
-            "ProductIDInSet": "", "ExcludeCurrentRecord": "", "ExchangeID": 0,
-            "IsExchangeProduct": None, "ExchangePoint": 0,
-            "TotalAmountBasedUPriceAndDATax": False, "AmountBasedOnPriceAfterTax": False
-        }
+    def _parse_misa_id(self, res_json, code, headers):
+        data = res_json.get("Data")
+        if isinstance(data, int): return str(data)
+        if isinstance(data, str) and data: return data
+        if isinstance(data, dict): return data.get("ProductID") or data.get("ID")
+        
+        # Fallback search
+        return self._fallback_search_product_id(code, headers)
 
-    def find_product_id_by_code(self, product_code, headers):
+    def _fallback_search_product_id(self, code, headers):
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
-        payload = {
-            "Page": 1, "PageSize": 1, "Columns": "ProductID,ProductCode",
-            "Filters": [{"FieldName": "ProductCode", "Operator": 1, "OperandType": 0, "Value": product_code}],
-            "Sorts": [{"SortBy": "ModifiedDate", "SortDirection": 1}]
-        }
+        payload = {"Page": 1, "PageSize": 1, "Filters": [{"FieldName": "ProductCode", "Operator": 1, "OperandType": 0, "Value": code}]}
         try:
-            res = requests.post(url, headers=headers, json=payload, timeout=10)
-            data = res.json()
-            if data.get("Success") and data.get("Data"):
-                 return str(data["Data"][0].get("ProductID"))
-        except Exception:
+            r = requests.post(url, headers=headers, json=payload, timeout=10)
+            d = r.json()
+            if d.get("Success") and d.get("Data"):
+                return str(d["Data"][0].get("ProductID"))
+        except:
             return None
         return None
