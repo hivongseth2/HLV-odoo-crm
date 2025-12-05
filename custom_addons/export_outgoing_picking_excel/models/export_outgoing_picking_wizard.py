@@ -3,6 +3,7 @@ from odoo import api, fields, models, _
 from odoo.exceptions import UserError
 import base64
 import datetime
+import json
 from io import BytesIO
 
 try:
@@ -89,6 +90,9 @@ class PickingExportWizard(models.TransientModel):
         return [
             {'key': 'hinh_thuc_ban_hang', 'name': 'Hình thức bán hàng', 'width': 25},
             {'key': 'phuong_thuc_thanh_toan', 'name': 'Phương thức thanh toán', 'width': 25},
+            {'key': 'hinh_thuc_giao_hang', 'name': 'Hình thức giao hàng', 'width': 25},
+            {'key': 'hinh_thuc_thanh_toan_so', 'name': 'Hình thức thanh toán (SO)', 'width': 25},
+            {'key': 'ben_tra_phi_van_chuyen', 'name': 'Bên trả phí vận chuyển', 'width': 25},
             {'key': 'kiem_phieu_xuat_kho', 'name': 'Kiêm phiếu xuất kho', 'width': 20},
             {'key': 'lap_kem_hoa_don', 'name': 'Lập kèm hóa đơn', 'width': 18},
             {'key': 'da_lap_hoa_don', 'name': 'Đã lập hóa đơn', 'width': 18},
@@ -250,20 +254,12 @@ class PickingExportWizard(models.TransientModel):
         sale_name = so.name if so else (picking.origin or "")
         # Lấy mã nhân viên sale từ trường x_studio_misa_saler_code của sale.order, nếu không có thì lấy từ user Odoo
         sale_user_code = ''
-        httt = ''  # Hình thức thanh toán
         if so:
             misa_code = getattr(so, 'x_studio_misa_saler_code', None)
             if misa_code:
                 sale_user_code = misa_code
             elif so.user_id:
                 sale_user_code = so.user_id.login or so.user_id.name or ''
-
-            # Lấy hình thức thanh toán từ sale order
-            httt = getattr(so, 'x_studio_httt', '')
-
-        # Nếu không có từ SO, thử lấy từ picking
-        if not httt:
-            httt = getattr(picking, 'x_studio_httt', '')
         
         # Diễn giải
         dien_giai = ""
@@ -290,7 +286,7 @@ class PickingExportWizard(models.TransientModel):
                     picking, so, prod, ml, move,
                     scheduled_date_str, picking_name, partner_code, partner_name,
                     partner_address, partner_vat, sale_name, sale_user_code,
-                    dien_giai, ly_do_xuat, warehouse_code, httt
+                    dien_giai, ly_do_xuat, warehouse_code
                 )
                 rows.append(row)
         else:
@@ -303,7 +299,7 @@ class PickingExportWizard(models.TransientModel):
                     picking, so, prod, None, mv,
                     scheduled_date_str, picking_name, partner_code, partner_name,
                     partner_address, partner_vat, sale_name, sale_user_code,
-                    dien_giai, ly_do_xuat, warehouse_code, httt
+                    dien_giai, ly_do_xuat, warehouse_code
                 )
                 rows.append(row)
 
@@ -312,7 +308,7 @@ class PickingExportWizard(models.TransientModel):
     def _build_row_data(self, picking, so, prod, ml, move,
                         scheduled_date_str, picking_name, partner_code, partner_name,
                         partner_address, partner_vat, sale_name, sale_user_code,
-                        dien_giai, ly_do_xuat, warehouse_code, httt):
+                        dien_giai, ly_do_xuat, warehouse_code):
         """Xây dựng dữ liệu cho 1 dòng"""
         
         product_code = prod.default_code or (prod.barcode if hasattr(prod, 'barcode') else "") or ""
@@ -367,7 +363,11 @@ class PickingExportWizard(models.TransientModel):
         return {
             # Hardcoded fields
             'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
-            'phuong_thuc_thanh_toan': httt or '',
+            'phuong_thuc_thanh_toan': 'Chưa thu tiền',
+            # 3 cột mới từ sale.order (đặt ngay sau phương thức thanh toán)
+            'hinh_thuc_giao_hang': getattr(so, 'x_studio_htgh', '') if so else '',
+            'hinh_thuc_thanh_toan_so': getattr(so, 'x_studio_httt', '') if so else '',
+            'ben_tra_phi_van_chuyen': getattr(so, 'x_studio_misa_delivery', '') if so else '',
             'kiem_phieu_xuat_kho': 'Có',
             'lap_kem_hoa_don': 'Có',
             'da_lap_hoa_don': 'Đã lập',
