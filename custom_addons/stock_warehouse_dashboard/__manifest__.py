@@ -13,7 +13,6 @@
     'version': '18.0.1.0.0',
     'depends': ['base', 'stock', 'sale', 'sale_stock'], # Cần sale_stock để có delivery_status
     'data': [
-        'security/ir.model.access.csv',
         'security/security.xml',
         'views/res_users_views.xml',
         'views/stock_warehouse_views.xml',

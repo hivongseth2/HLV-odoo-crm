@@ -1,21 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_misa_date_wizard_form" model="ir.ui.view">
-        <field name="name">misa.date.wizard.form</field>
-        <field name="model">misa.date.wizard</field>
-        <field name="arch" type="xml">
-            <form>
-                <group>
-                    <field name="date"/>
-                </group>
-                <footer>
-                    <button string="Xem dữ liệu" name="action_apply" type="object" class="btn-primary"/>
-                    <button string="Hủy" special="cancel" class="btn-secondary"/>
-                </footer>
-            </form>
-        </field>
-    </record>
-
     <record id="view_warehouse_dashboard_kanban" model="ir.ui.view">
         <field name="name">stock.warehouse.dashboard.kanban</field>
         <field name="model">stock.warehouse</field>
@@ -31,37 +15,24 @@
                     <t t-name="kanban-box">
                         <div class="d-flex flex-column h-100 shadow-sm border rounded overflow-hidden bg-white hover-shadow transition-base">
                             
-                            <div class="p-3 bg-light border-bottom text-center position-relative">
+                            <div class="p-3 bg-light border-bottom text-center">
                                 <h4 class="mb-0 fw-bold text-dark text-uppercase" style="letter-spacing: 0.5px;">
                                     <i class="fa fa-building-o me-2 text-muted"/>
                                     <field name="name"/>
                                 </h4>
-                                
-                                <div class="position-absolute top-0 end-0 p-2">
-                                    <a type="object" name="action_open_date_picker" 
-                                       class="btn btn-sm text-muted" 
-                                       title="Chọn ngày">
-                                        <i class="fa fa-calendar"/>
-                                    </a>
-                                </div>
                             </div>
 
                             <div class="flex-grow-1 d-flex flex-column justify-content-center p-3">
                                 <t t-set="raw_data" t-value="JSON.parse(record.warehouse_dashboard_data.value || '{}')"/>
-                                <t t-set="misa_data" t-value="raw_data.misa || {total: 0, full: 0, partial: 0, not_full: 0, is_today: true, date_display: ''}"/>
+                                <t t-set="misa_data" t-value="raw_data.misa || {total: 0, full: 0, partial: 0, not_full: 0}"/>
 
                                 <div class="d-flex justify-content-center align-items-center mb-3">
                                     <span class="text-uppercase fs-6 text-muted fw-bold small">
-                                        <t t-if="misa_data.is_today">
-                                            Đơn hàng hôm nay
-                                        </t>
-                                        <t t-else="">
-                                            Đơn hàng ngày <t t-esc="misa_data.date_display"/>
-                                        </t>
+                                        Đơn hàng hôm nay
                                     </span>
                                     <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'all'}"
                                        class="badge bg-secondary ms-2 rounded-pill px-2 text-decoration-none" 
-                                       title="Tổng đơn phát sinh">
+                                       title="Tổng đơn phát sinh hôm nay">
                                         <t t-esc="misa_data.total"/>
                                     </a>
                                 </div>
@@ -110,30 +81,11 @@
             </kanban>
         </field>
     </record>
-    <record id="view_warehouse_dashboard_search" model="ir.ui.view">
-            <field name="name">stock.warehouse.dashboard.search</field>
-            <field name="model">stock.warehouse</field>
-            <field name="arch" type="xml">
-                <search string="Tìm kiếm kho">
-                    <field name="name"/>
-                    <field name="code"/>
-                    <separator/>
-                    </search>
-            </field>
-        </record>
-  <record id="action_warehouse_dashboard" model="ir.actions.act_window">
+    <record id="action_warehouse_dashboard" model="ir.actions.act_window">
         <field name="name">Tổng quan Kho (Mới)</field>
         <field name="res_model">stock.warehouse</field>
         <field name="view_mode">kanban,form</field>
         <field name="view_id" ref="view_warehouse_dashboard_kanban"/>
-        
-        <field name="search_view_id" ref="view_warehouse_dashboard_search"/>
-        
-        <field name="help" type="html">
-          <p class="o_view_nocontent_smiling_face">
-            Không tìm thấy kho nào.
-          </p>
-        </field>
     </record>
 
     <menuitem id="menu_warehouse_dashboard_combined"
