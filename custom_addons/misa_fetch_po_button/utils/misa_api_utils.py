@@ -1111,3 +1111,18 @@ class MisaApiUtils(models.AbstractModel):
              raise Exception("MISA báo thành công nhưng không tạo được dữ liệu (Ghost Record). Kiểm tra log Odoo.")
 
         return misa_id
+    
+    def _get_empty_serial_row(self, sort_order):
+        """
+        Hàm tạo dòng rỗng cho bảng quy cách (Fix lỗi AttributeError)
+        """
+        return {
+            "SortOrder": sort_order, "TableName": "product_detail_serial_type",
+            "DisplayName": None, "IsAllowDupplicate": None, "ID": None,
+            "MISAEntityState": 1, "AsyncID": "", "OwnerID": "", "PromotionMasterRowID": "",
+            "PromotionRowID": "", "ProductSetID": "", "ProductSetMasterID": "",
+            "ProductInSetMasterID": "", "IsSetProduct": "", "IsChildProduct": "",
+            "ProductIDInSet": "", "ExcludeCurrentRecord": "", "ExchangeID": 0,
+            "IsExchangeProduct": None, "ExchangePoint": 0,
+            "TotalAmountBasedUPriceAndDATax": False, "AmountBasedOnPriceAfterTax": False
+        }
