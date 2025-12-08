@@ -85,23 +85,6 @@ export class StockDashboardField extends Component {
             name += " (Chưa giao / Chưa xong)";
         }
 
-        this.action.doAction({
-            name: name,
-            type: 'ir.actions.act_window',
-            res_model: 'sale.order',
-            view_mode: 'list,form',
-            domain: domain,
-            context: { create: false },
-        });
-    }
-
-    get displayDate() {
-        const today = new Date();
-        const dateStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, '0') + "-" + String(today.getDate()).padStart(2, '0');
-        if (this.state.date === dateStr) {
-            return "Hôm nay";
-        }
-
         try {
             const parts = this.state.date.split('-');
             return `${parts[2]}/${parts[1]}/${parts[0]}`;
