@@ -14,7 +14,7 @@
                     <field name="list_price" string="Giá bán lẻ" optional="show" widget="monetary"/>
                     <field name="x_studio_ga_web" string="Giá Web" optional="show" widget="monetary"/>
                     <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết" optional="show" widget="monetary"/>
-                    <field name="x_studio_ga_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary"/>
+                    <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary"/>
                     <field name="uom_id" optional="hide" string="Đơn vị tính"/>
                     <field name="active" invisible="1"/>
                     <field name="currency_id" invisible="1"/>
