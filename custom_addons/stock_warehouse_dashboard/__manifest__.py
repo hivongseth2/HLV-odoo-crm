@@ -17,6 +17,12 @@
         'views/res_users_views.xml',
         'views/stock_warehouse_views.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'stock_warehouse_dashboard/static/src/xml/stock_dashboard_field.xml',
+            'stock_warehouse_dashboard/static/src/js/stock_dashboard_field.js',
+        ],
+    },
     'installable': True,
     'application': False,
     'license': 'LGPL-3',
