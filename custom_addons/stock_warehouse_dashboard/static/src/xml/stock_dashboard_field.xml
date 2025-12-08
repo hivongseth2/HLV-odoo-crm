@@ -13,20 +13,33 @@
                 </h4>
                 
                 <!-- Date Picker Wrapper - Click Stop Propagation -->
-                <div class="position-relative d-flex align-items-center justify-content-center" 
-                     style="width: 30px; height: 30px; cursor: pointer;"
-                     t-on-click.stop="ignoreClick">
+                <div class="d-flex align-items-center">
                     
-                    <!-- Visible Icon -->
-                    <i class="fa fa-calendar text-primary fs-5"/>
-                    
-                    <!-- Invisible Input covering the icon -->
-                    <input type="date" 
-                           class="position-absolute w-100 h-100 top-0 start-0" 
-                           style="opacity: 0; cursor: pointer;"
-                           t-att-value="state.date" 
-                           t-on-change="onDateChanged"
-                           t-on-click.stop="ignoreClick"/>
+                    <!-- View All Button -->
+                    <div class="d-flex align-items-center justify-content-center me-2"
+                         style="width: 30px; height: 30px; cursor: pointer;"
+                         t-on-click.stop="onViewAllClick"
+                         title="Xem tất cả đơn">
+                        <i class="fa fa-list text-muted hover-primary transition-base fs-5"/>
+                    </div>
+
+                    <!-- Date Filter -->
+                    <div class="position-relative d-flex align-items-center justify-content-center" 
+                         style="width: 30px; height: 30px; cursor: pointer;"
+                         t-on-click.stop="ignoreClick"
+                         title="Lọc theo ngày">
+                        
+                        <!-- Visible Icon -->
+                        <i class="fa fa-calendar text-primary fs-5"/>
+                        
+                        <!-- Invisible Input covering the icon -->
+                        <input type="date" 
+                               class="position-absolute w-100 h-100 top-0 start-0" 
+                               style="opacity: 0; cursor: pointer;"
+                               t-att-value="state.date" 
+                               t-on-change="onDateChanged"
+                               t-on-click.stop="ignoreClick"/>
+                    </div>
                 </div>
             </div>
 
