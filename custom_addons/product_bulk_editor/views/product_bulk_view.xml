@@ -27,7 +27,7 @@
             <field name="name">Sửa nhanh sản phẩm</field>
             <field name="type">ir.actions.act_window</field>
             <field name="res_model">product.template</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
             <field name="view_id" ref="view_product_template_bulk_tree"/>
             <field name="domain">['|', ('active', '=', True), ('active', '=', False)]</field> <!-- Show archived too if needed, or default -->
             <field name="context">{'search_default_filter_to_sell': 1}</field>
@@ -38,17 +38,12 @@
             </field>
         </record>
 
-        <!-- MENU -->
-        <menuitem id="menu_product_bulk_editor_root"
-                  name="Sửa Nhanh (Bulk)"
-                  web_icon="product_bulk_editor,static/description/icon.png"
-                  sequence="5"/>
-
+        <!-- MENU (Moved to Sales > Products) -->
         <menuitem id="menu_product_bulk_editor_action"
-                  name="Bảng giá sản phẩm"
-                  parent="menu_product_bulk_editor_root"
+                  name="Sửa giá nhanh"
+                  parent="sale.product_menu_catalog"
                   action="action_product_bulk_editor"
-                  sequence="10"/>
+                  sequence="20"/>
 
     </data>
 </odoo>
