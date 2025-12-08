@@ -67,9 +67,9 @@
         <!-- MENU (Moved to Inventory > Products) -->
         <menuitem id="menu_product_bulk_editor_action"
                   name="Sửa giá nhanh"
-                  parent="stock.menu_stock_products"
+                  parent="stock.menu_stock_root"
                   action="action_product_bulk_editor"
-                  sequence="20"/>
+                  sequence="5"/>
 
     </data>
 </odoo>

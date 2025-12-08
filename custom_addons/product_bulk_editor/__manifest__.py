@@ -13,7 +13,7 @@
     'website': "http://www.yourcompany.com",
     'category': 'Sales',
     'version': '0.1',
-    'depends': ['product', 'sale'],
+    'depends': ['product', 'sale', 'stock'],
     'data': [
         'views/product_bulk_view.xml',
     ],
