@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- SEARCH VIEW -->
+        <record id="view_product_template_bulk_search" model="ir.ui.view">
+            <field name="name">product.template.bulk.search</field>
+            <field name="model">product.template</field>
+            <field name="arch" type="xml">
+                <search string="Tìm kiếm sản phẩm">
+                    <field name="name" string="Tên sản phẩm" filter_domain="['|', '|', ('default_code', 'ilike', self), ('name', 'ilike', self), ('barcode', 'ilike', self)]"/>
+                    <field name="default_code"/>
+                    <field name="barcode"/>
+                    
+                    <separator/>
+                    <filter string="Đã có Mã vạch" name="has_barcode" domain="['&amp;', ('barcode', '!=', False), ('barcode', '!=', '')]"/>
+                    <filter string="Chưa có Mã vạch" name="no_barcode" domain="['|', ('barcode', '=', False), ('barcode', '=', '')]"/>
+                    
+                    <separator/>
+                    <filter string="Đã có Mã nội bộ" name="has_default_code" domain="['&amp;', ('default_code', '!=', False), ('default_code', '!=', '')]"/>
+                    <filter string="Chưa có Mã nội bộ" name="no_default_code" domain="['|', ('default_code', '=', False), ('default_code', '=', '')]"/>
+                    
+                    <separator/>
+                    <filter string="Đang bán" name="filter_to_sell" domain="[('sale_ok', '=', True)]"/>
+                    <filter string="Lưu trữ" name="inactive" domain="[('active', '=', False)]"/>
+                </search>
+            </field>
+        </record>
+
+        <!-- TREE VIEW (Bulk Editor) -->
+        <record id="view_product_template_bulk_tree" model="ir.ui.view">
+            <field name="name">product.template.bulk.tree</field>
+            <field name="model">product.template</field>
+            <field name="arch" type="xml">
+                <list string="Sửa nhanh sản phẩm" editable="bottom" multi_edit="1" sample="1">
+                    <field name="default_code" optional="show" width="100px" string="Mã nội bộ"/>
+                    <field name="name" optional="show" string="Tên sản phẩm"/>
+                    <field name="barcode" optional="show" string="Mã vạch"/>
+                    <field name="list_price" string="Giá bán lẻ" optional="show" widget="monetary"/>
+                    <field name="x_studio_ga_web" string="Giá Web" optional="show" widget="monetary"/>
+                    <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết" optional="show" widget="monetary"/>
+                    <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary"/>
+                    <field name="uom_id" optional="hide" string="Đơn vị tính"/>
+                    <field name="active" column_invisible="True"/>
+                    <field name="currency_id" column_invisible="True"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- ACTION -->
+        <record id="action_product_bulk_editor" model="ir.actions.act_window">
+            <field name="name">Sửa nhanh sản phẩm</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">product.template</field>
+            <field name="view_mode">list,form</field>
+            <field name="view_id" ref="view_product_template_bulk_tree"/>
+            <field name="search_view_id" ref="view_product_template_bulk_search"/>
+            <field name="domain">['|', ('active', '=', True), ('active', '=', False)]</field>
+            <field name="context">{'search_default_filter_to_sell': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Tạo sản phẩm mới
+                </p>
+            </field>
+        </record>
+
+        <!-- MENU (Moved to Inventory > Products) -->
+        <menuitem id="menu_product_bulk_editor_action"
+                  name="Sửa giá nhanh"
+                  parent="stock.menu_stock_root"
+                  action="action_product_bulk_editor"
+                  sequence="5"/>
+
+    </data>
+</odoo>
