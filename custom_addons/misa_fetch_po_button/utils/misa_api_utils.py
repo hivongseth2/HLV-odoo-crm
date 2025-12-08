@@ -1026,7 +1026,7 @@ class MisaApiUtils(models.AbstractModel):
         headers = misa_config.get_crm_header(token)
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
-        # 1. Tìm ID tham chiếu
+        # --- 1. XỬ LÝ ID (Giữ nguyên logic tìm kiếm vì nó đã hoạt động tốt) ---
         cat_id = self._get_category_id_by_name(headers, category_name)
         if not cat_id:
              cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
@@ -1041,7 +1041,9 @@ class MisaApiUtils(models.AbstractModel):
         prop_id = 2 if is_service else 1
         prop_text = "Dịch vụ" if is_service else "Hàng hóa"
 
-        # 2. Payload ĐẦY ĐỦ (Quan trọng: CustomTables phải đúng mẫu)
+        # --- 2. PAYLOAD (ĐIỀU CHỈNH THEO MẪU FETCH THÀNH CÔNG) ---
+        price_val = float(price)
+        
         payload = {
             "ProductCode": code,
             "ProductName": name,
@@ -1053,18 +1055,29 @@ class MisaApiUtils(models.AbstractModel):
             "ProductPropertiesIDText": prop_text,
             "TaxID": str(tax_id),
             "TaxIDText": tax_text,
-            "UnitPrice": float(price),
-            "UnitPriceFixed": float(price),
+            "UnitPrice": price_val,
+            "UnitPriceFixed": price_val,
             "PurchasedPrice": 0,
+            
+            # Các trường mặc định theo mẫu
             "MISAEntityState": 1,
-            "Active": True, "Inactive": False, "IsPublic": False, "FormLayoutID": 45,
+            "Active": True, "Inactive": False, "IsPublic": False, 
+            "FormLayoutID": 45, "FormLayoutIDText": "Mẫu tiêu chuẩn",
+            "IsFollowSerialNumber": False,
+            "IsUseTax": False, "PriceAfterTax": False,
             "Fields": [], "FieldsCustom": [], 
+            
+            # --- KHU VỰC QUAN TRỌNG: DATACUSTOM ---
             "DataCustom": {
-                "Avatar": "", 
-                "CustomField13": None, 
-                "CustomField15": code 
+                "CustomField13": None,       # Theo mẫu: null
+                "CustomField13Text": "",     # Theo mẫu: rỗng
+                "CustomField14": None,
+                "CustomField15": None,       # Theo mẫu: null
+                "CustomField16": int(price_val), # Theo mẫu: 33333 -> Map giá vào đây
+                "Avatar": ""
             },
-            # --- QUAN TRỌNG: Phải có cấu trúc bảng này MISA mới chịu lưu ---
+            
+            # --- CẤU TRÚC BẢNG (Giữ nguyên vì đã chuẩn) ---
             "CustomTables": [
                 {
                     "DataFields": [], "Summary": {}, "Data": [], "OldData": [], "SummaryFields": [],
@@ -1073,29 +1086,30 @@ class MisaApiUtils(models.AbstractModel):
                 },
                 {
                     "DataFields": [], "Summary": {},
-                    # Tạo 5 dòng rỗng cho bảng quy cách (giống mẫu chuẩn)
                     "Data": [self._get_empty_serial_row(i) for i in range(1, 6)],
                     "OldData": [self._get_empty_serial_row(i) for i in range(1, 6)],
                     "SummaryFields": [], "GroupBoxText": "Thông tin mã quy cách", "IsRequired": False,
                     "ParentIDKey": "ProductID", "TableName": "product_detail_serial_type", "IsProductChange": True
                 }
             ],
+            # Các cờ bổ sung từ mẫu thành công
+            "IsProductChange": False,
+            "IsMultiCurrency": False,
+            "FormModeState": 1,
+            "IsGetFieldFormLayout": True,
+            "IsSetProduct": "\u0000"
         }
 
-        # 3. Gửi Request & LOG KẾT QUẢ
+        # 3. Gửi Request & LOG
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
-        
-        # In payload ra log để kiểm tra
-        _logger.info(f"📤 [MISA REQUEST] Code: {code} | Body: {json.dumps(payload, ensure_ascii=False)}")
+        _logger.info(f"📤 [MISA RAW REQUEST] Code: {code}")
 
         session = self._get_retry_session()
         res = session.post(url, headers=headers, json=payload, timeout=30)
         
-        # In response ra log (Dù thành công hay thất bại)
         _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code} | Body: {res.text}")
 
         res_json = res.json()
-
         if not res_json.get("Success"):
             err_msg = res_json.get("UserMessage")
             val_info = res_json.get("ValidateInfo", [])
@@ -1103,20 +1117,15 @@ class MisaApiUtils(models.AbstractModel):
                 err_msg = ", ".join([v.get("ErrorMessage", "") for v in val_info])
             raise Exception(f"MISA Refused: {err_msg}")
 
-        # 4. Parse ID
         misa_id = self._parse_misa_id(res_json, code, headers)
         
         if not misa_id:
-             # Nếu Success=True mà vẫn không có ID -> Log cảnh báo mạnh
-             _logger.error(f"⛔ MISA báo thành công nhưng không trả ID và không tìm thấy '{code}'.")
-             raise Exception("MISA báo thành công nhưng không tạo được dữ liệu (Ghost Record). Kiểm tra log Odoo.")
+             raise Exception("MISA báo thành công nhưng không trả ID.")
 
         return misa_id
     
     def _get_empty_serial_row(self, sort_order):
-        """
-        Hàm tạo dòng rỗng cho bảng quy cách (Fix lỗi AttributeError)
-        """
+        """Hàm tạo dòng rỗng cho bảng quy cách"""
         return {
             "SortOrder": sort_order, "TableName": "product_detail_serial_type",
             "DisplayName": None, "IsAllowDupplicate": None, "ID": None,
