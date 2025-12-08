@@ -1013,17 +1013,10 @@ class MisaApiUtils(models.AbstractModel):
     # -------------------------------------------------------------------------
     # API XỬ LÝ DỮ LIỆU THÔ (RAW DATA) - Dùng cho Controller gọi vào
     # -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
+    # -------------------------------------------------------------------------
     def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods"):
-        """
-        Hàm nhận dữ liệu thô và đẩy sang MISA.
-        - code: Mã sản phẩm (Bắt buộc)
-        - name: Tên sản phẩm
-        - price: Giá bán
-        - tax_percent: Số % thuế (VD: 8, 10, 0)
-        - unit_name: Tên ĐVT (VD: Cái, Hộp, kg)
-        - category_name: Tên nhóm (VD: Hàng hóa, Dịch vụ)
-        - product_type: 'service' (Dịch vụ) hoặc 'goods' (Hàng hóa)
-        """
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
@@ -1032,26 +1025,22 @@ class MisaApiUtils(models.AbstractModel):
         headers = misa_config.get_crm_header(token)
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
-        # 1. Xử lý ID Nhóm hàng
+        # 1. Tìm ID tham chiếu
         cat_id = self._get_category_id_by_name(headers, category_name)
         if not cat_id:
              cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
 
-        # 2. Xử lý ID Đơn vị tính
         unit_id, unit_text = self._find_dictionary_item(headers, "UsageUnitID", unit_name)
         if not unit_id:
             unit_id, unit_text = 4, "Cái"
 
-        # 3. Xử lý ID Thuế (Dùng hàm Smart Regex đã viết)
-        # tax_percent đầu vào là số (vd: 8 hoặc 10)
         tax_id, tax_text = self._find_tax_id_smart(headers, float(tax_percent), "")
 
-        # 4. Xử lý Tính chất (Hàng hóa/Dịch vụ)
         is_service = (product_type == 'service' or product_type == 'dịch vụ')
         prop_id = 2 if is_service else 1
         prop_text = "Dịch vụ" if is_service else "Hàng hóa"
 
-        # 5. Payload
+        # 2. Payload ĐẦY ĐỦ (Quan trọng: CustomTables phải đúng mẫu)
         payload = {
             "ProductCode": code,
             "ProductName": name,
@@ -1074,15 +1063,36 @@ class MisaApiUtils(models.AbstractModel):
                 "CustomField13": None, 
                 "CustomField15": code 
             },
-            "CustomTables": [], 
+            # --- QUAN TRỌNG: Phải có cấu trúc bảng này MISA mới chịu lưu ---
+            "CustomTables": [
+                {
+                    "DataFields": [], "Summary": {}, "Data": [], "OldData": [], "SummaryFields": [],
+                    "GroupBoxText": "Thông tin đơn vị chuyển đổi", "IsRequired": False,
+                    "ParentIDKey": "ProductID", "TableName": "product_conversion_unit", "IsProductChange": False
+                },
+                {
+                    "DataFields": [], "Summary": {},
+                    # Tạo 5 dòng rỗng cho bảng quy cách (giống mẫu chuẩn)
+                    "Data": [self._get_empty_serial_row(i) for i in range(1, 6)],
+                    "OldData": [self._get_empty_serial_row(i) for i in range(1, 6)],
+                    "SummaryFields": [], "GroupBoxText": "Thông tin mã quy cách", "IsRequired": False,
+                    "ParentIDKey": "ProductID", "TableName": "product_detail_serial_type", "IsProductChange": True
+                }
+            ],
         }
 
-        # 6. Gửi Request
+        # 3. Gửi Request & LOG KẾT QUẢ
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product"
-        _logger.info(f"🚀 API RAW CREATE: {code} | Price: {price} | Tax: {tax_text}")
+        
+        # In payload ra log để kiểm tra
+        _logger.info(f"📤 [MISA REQUEST] Code: {code} | Body: {json.dumps(payload, ensure_ascii=False)}")
 
         session = self._get_retry_session()
         res = session.post(url, headers=headers, json=payload, timeout=30)
+        
+        # In response ra log (Dù thành công hay thất bại)
+        _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code} | Body: {res.text}")
+
         res_json = res.json()
 
         if not res_json.get("Success"):
@@ -1092,5 +1102,12 @@ class MisaApiUtils(models.AbstractModel):
                 err_msg = ", ".join([v.get("ErrorMessage", "") for v in val_info])
             raise Exception(f"MISA Refused: {err_msg}")
 
+        # 4. Parse ID
         misa_id = self._parse_misa_id(res_json, code, headers)
+        
+        if not misa_id:
+             # Nếu Success=True mà vẫn không có ID -> Log cảnh báo mạnh
+             _logger.error(f"⛔ MISA báo thành công nhưng không trả ID và không tìm thấy '{code}'.")
+             raise Exception("MISA báo thành công nhưng không tạo được dữ liệu (Ghost Record). Kiểm tra log Odoo.")
+
         return misa_id
