@@ -2,6 +2,31 @@
 <odoo>
     <data>
 
+        <!-- SEARCH VIEW -->
+        <record id="view_product_template_bulk_search" model="ir.ui.view">
+            <field name="name">product.template.bulk.search</field>
+            <field name="model">product.template</field>
+            <field name="arch" type="xml">
+                <search string="Tìm kiếm sản phẩm">
+                    <field name="name" string="Tên sản phẩm" filter_domain="['|', '|', ('default_code', 'ilike', self), ('name', 'ilike', self), ('barcode', 'ilike', self)]"/>
+                    <field name="default_code"/>
+                    <field name="barcode"/>
+                    
+                    <separator/>
+                    <filter string="Đã có Mã nội bộ" name="has_default_code" domain="[('default_code', '!=', False)]"/>
+                    <filter string="Chưa có Mã nội bộ" name="no_default_code" domain="[('default_code', '=', False)]"/>
+                    
+                    <separator/>
+                    <filter string="Đã có Mã vạch" name="has_barcode" domain="[('barcode', '!=', False)]"/>
+                    <filter string="Chưa có Mã vạch" name="no_barcode" domain="[('barcode', '=', False)]"/>
+                    
+                    <separator/>
+                    <filter string="Đang bán" name="filter_to_sell" domain="[('sale_ok', '=', True)]"/>
+                    <filter string="Lưu trữ" name="inactive" domain="[('active', '=', False)]"/>
+                </search>
+            </field>
+        </record>
+
         <!-- TREE VIEW (Bulk Editor) -->
         <record id="view_product_template_bulk_tree" model="ir.ui.view">
             <field name="name">product.template.bulk.tree</field>
@@ -16,8 +41,8 @@
                     <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết" optional="show" widget="monetary"/>
                     <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary"/>
                     <field name="uom_id" optional="hide" string="Đơn vị tính"/>
-                    <field name="active" invisible="1"/>
-                    <field name="currency_id" invisible="1"/>
+                    <field name="active" column_invisible="True"/>
+                    <field name="currency_id" column_invisible="True"/>
                 </list>
             </field>
         </record>
@@ -29,7 +54,8 @@
             <field name="res_model">product.template</field>
             <field name="view_mode">list,form</field>
             <field name="view_id" ref="view_product_template_bulk_tree"/>
-            <field name="domain">['|', ('active', '=', True), ('active', '=', False)]</field> <!-- Show archived too if needed, or default -->
+            <field name="search_view_id" ref="view_product_template_bulk_search"/>
+            <field name="domain">['|', ('active', '=', True), ('active', '=', False)]</field>
             <field name="context">{'search_default_filter_to_sell': 1}</field>
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">
@@ -38,10 +64,10 @@
             </field>
         </record>
 
-        <!-- MENU (Moved to Sales > Products) -->
+        <!-- MENU (Moved to Inventory > Products) -->
         <menuitem id="menu_product_bulk_editor_action"
                   name="Sửa giá nhanh"
-                  parent="sale.product_menu_catalog"
+                  parent="stock.menu_stock_products"
                   action="action_product_bulk_editor"
                   sequence="20"/>
 
