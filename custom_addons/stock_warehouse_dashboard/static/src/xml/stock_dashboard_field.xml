@@ -9,13 +9,22 @@
                     <i class="fa fa-building-o me-2 text-muted"/>
                     <span class="text-truncate" style="max-width: 180px;" t-esc="props.record.data.name"/>
                 </h4>
-                <div class="d-flex align-items-center bg-white border rounded px-2 py-1">
-                    <i class="fa fa-calendar me-2 text-primary"/>
+                
+                <!-- Date Picker Wrapper - Click Stop Propagation -->
+                <div class="position-relative d-flex align-items-center justify-content-center" 
+                     style="width: 30px; height: 30px; cursor: pointer;"
+                     t-on-click.stop="ignoreClick">
+                    
+                    <!-- Visible Icon -->
+                    <i class="fa fa-calendar text-primary fs-5"/>
+                    
+                    <!-- Invisible Input covering the icon -->
                     <input type="date" 
-                           class="border-0 bg-transparent text-dark fw-bold" 
-                           style="outline: none; font-size: 0.9rem;"
+                           class="position-absolute w-100 h-100 top-0 start-0" 
+                           style="opacity: 0; cursor: pointer;"
                            t-att-value="state.date" 
-                           t-on-change="onDateChanged"/>
+                           t-on-change="onDateChanged"
+                           t-on-click.stop="ignoreClick"/>
                 </div>
             </div>
 
@@ -25,7 +34,7 @@
                 <!-- Total / Today Header -->
                 <div class="d-flex justify-content-center align-items-center mb-3">
                     <span class="text-uppercase fs-6 text-muted fw-bold small">
-                        Đơn hàng <t t-esc="state.date"/>
+                        Đơn hàng <t t-esc="displayDate"/>
                     </span>
                     <a href="#" t-on-click.prevent="() => this.onOrderClick('all')"
                        class="badge bg-secondary ms-2 rounded-pill px-2 text-decoration-none" 

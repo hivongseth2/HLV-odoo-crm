@@ -16,11 +16,10 @@ export class StockDashboardField extends Component {
         this.state = useState({
             date: dateStr, // Default today YYYY-MM-DD Local
             data: { total: 0, full: 0, partial: 0, not_full: 0 },
-            warehouse_name: this.props.record.data.name || "Unknown", // Assuming name is available in view
+            warehouse_name: this.props.record.data.name || "Unknown",
         });
 
         onWillStart(async () => {
-            // Try to use initial value if available
             try {
                 if (this.props.record.data[this.props.name]) {
                     const rawData = JSON.parse(this.props.record.data[this.props.name]);
@@ -34,15 +33,23 @@ export class StockDashboardField extends Component {
         });
 
         onWillUpdateProps((nextProps) => {
-            // If the record updates (e.g. name change), update local state if needed
-            // But we mainly care about our internal date state
+            // Handle updates if needed
         });
     }
 
     async onDateChanged(ev) {
+        if (ev && ev.stopPropagation) {
+            ev.stopPropagation();
+        }
         const newDate = ev.target.value;
         this.state.date = newDate;
         await this.fetchData(newDate);
+    }
+
+    ignoreClick(ev) {
+        if (ev) {
+            ev.stopPropagation();
+        }
     }
 
     async fetchData(date) {
@@ -58,7 +65,6 @@ export class StockDashboardField extends Component {
     onOrderClick(filterType) {
         const warehouseId = this.props.record.resId;
         const date = this.state.date;
-        const warehouseName = this.props.record.data.name;
 
         let domain = [
             ['warehouse_id', '=', warehouseId],
@@ -66,7 +72,7 @@ export class StockDashboardField extends Component {
             ['state', 'in', ['sale', 'done']]
         ];
 
-        let name = `Đơn MISA ${date}`;
+        let name = `Đơn MISA ${this.displayDate}`;
 
         if (filterType === 'full') {
             domain.push(['delivery_status', '=', 'full']);
@@ -89,9 +95,19 @@ export class StockDashboardField extends Component {
         });
     }
 
-    get formattedDate() {
-        // Optional: Format date for display if needed, but input type="date" handles it
-        return this.state.date;
+    get displayDate() {
+        const today = new Date();
+        const dateStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, '0') + "-" + String(today.getDate()).padStart(2, '0');
+        if (this.state.date === dateStr) {
+            return "Hôm nay";
+        }
+
+        try {
+            const parts = this.state.date.split('-');
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        } catch (e) {
+            return this.state.date;
+        }
     }
 }
 
