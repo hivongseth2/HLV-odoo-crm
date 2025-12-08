@@ -262,7 +262,7 @@
 
           <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
           
-       <script type="text/javascript"><![CDATA[
+          <script type="text/javascript"><![CDATA[
             (function () {
               var searchTimeout = null;
 
@@ -544,3 +544,8 @@
 
             })();
           ]]></script>
+        </t>
+      </main>
+    </t>
+  </template>
+</odoo>
