@@ -8,6 +8,7 @@ from http.cookiejar import Cookie
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 _logger = logging.getLogger(__name__)
+import json
 
 class MisaApiUtils(models.AbstractModel):
     _name = 'misa.api.utils'
