@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_misa_date_wizard_form" model="ir.ui.view">
+        <field name="name">misa.date.wizard.form</field>
+        <field name="model">misa.date.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <group>
+                    <field name="date"/>
+                </group>
+                <footer>
+                    <button string="Xem dữ liệu" name="action_apply" type="object" class="btn-primary"/>
+                    <button string="Hủy" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
     <record id="view_warehouse_dashboard_kanban" model="ir.ui.view">
         <field name="name">stock.warehouse.dashboard.kanban</field>
         <field name="model">stock.warehouse</field>
@@ -15,35 +31,38 @@
                     <t t-name="kanban-box">
                         <div class="d-flex flex-column h-100 shadow-sm border rounded overflow-hidden bg-white hover-shadow transition-base">
                             
-                            <div class="p-3 bg-light border-bottom text-center">
+                            <div class="p-3 bg-light border-bottom text-center position-relative">
                                 <h4 class="mb-0 fw-bold text-dark text-uppercase" style="letter-spacing: 0.5px;">
                                     <i class="fa fa-building-o me-2 text-muted"/>
                                     <field name="name"/>
                                 </h4>
+                                
+                                <div class="position-absolute top-0 end-0 p-2">
+                                    <a type="object" name="action_open_date_picker" 
+                                       class="btn btn-sm text-muted" 
+                                       title="Chọn ngày">
+                                        <i class="fa fa-calendar"/>
+                                    </a>
+                                </div>
                             </div>
 
                             <div class="flex-grow-1 d-flex flex-column justify-content-center p-3">
                                 <t t-set="raw_data" t-value="JSON.parse(record.warehouse_dashboard_data.value || '{}')"/>
-                                <t t-set="misa_data" t-value="raw_data.misa || {total: 0, full: 0, partial: 0, not_full: 0, not_printed: 0}"/>
+                                <t t-set="misa_data" t-value="raw_data.misa || {total: 0, full: 0, partial: 0, not_full: 0, is_today: true, date_display: ''}"/>
 
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <div class="d-flex align-items-center">
-                                        <span class="text-uppercase fs-6 text-muted fw-bold small">
+                                <div class="d-flex justify-content-center align-items-center mb-3">
+                                    <span class="text-uppercase fs-6 text-muted fw-bold small">
+                                        <t t-if="misa_data.is_today">
                                             Đơn hàng hôm nay
-                                        </span>
-                                        <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'all'}"
-                                           class="badge bg-secondary ms-2 rounded-pill px-2 text-decoration-none">
-                                            <t t-esc="misa_data.total"/>
-                                        </a>
-                                    </div>
-                                    
-                                    <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'not_printed'}"
-                                       class="btn btn-sm btn-outline-primary border-0 fw-bold py-0"
-                                       title="Mở danh sách đơn chưa in để in hàng loạt">
-                                        <i class="fa fa-print me-1"/>In phiếu
-                                        <span t-if="misa_data.not_printed > 0" class="badge bg-danger rounded-pill ms-1">
-                                            <t t-esc="misa_data.not_printed"/>
-                                        </span>
+                                        </t>
+                                        <t t-else="">
+                                            Đơn hàng ngày <t t-esc="misa_data.date_display"/>
+                                        </t>
+                                    </span>
+                                    <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'all'}"
+                                       class="badge bg-secondary ms-2 rounded-pill px-2 text-decoration-none" 
+                                       title="Tổng đơn phát sinh">
+                                        <t t-esc="misa_data.total"/>
                                     </a>
                                 </div>
 
@@ -74,11 +93,16 @@
                                             <div class="display-6 fw-bold text-danger mb-0" style="line-height: 1;">
                                                 <t t-esc="misa_data.not_full"/>
                                             </div>
-                                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">Chưa giao</small>
+                                            <small class="text-muted fw-bold " style="font-size: 0.7rem;">
+                                                    <span style="display:block; text-uppercase">CHƯA XUẤT</span>
+                                                    <span style="display:block;">(gồm cả đơn xuất 1 phần)</span>
+                                            </small>
+
                                         </a>
                                     </div>
                                 </div>
                             </div>
+                            
                             <div class="bg-light p-1 border-top"></div>
                         </div>
                     </t>
@@ -86,7 +110,7 @@
             </kanban>
         </field>
     </record>
-    
+
     <record id="action_warehouse_dashboard" model="ir.actions.act_window">
         <field name="name">Tổng quan Kho (Mới)</field>
         <field name="res_model">stock.warehouse</field>
