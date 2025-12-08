@@ -52,6 +52,14 @@ export class StockDashboardField extends Component {
         }
     }
 
+    onWarehouseClick(ev) {
+        if (ev) {
+            ev.stopPropagation();
+            ev.preventDefault();
+        }
+        this.onOrderClick('all');
+    }
+
     async fetchData(date) {
         try {
             const warehouseId = this.props.record.resId;
@@ -83,6 +91,24 @@ export class StockDashboardField extends Component {
         } else if (filterType === 'not_full') {
             domain.push(['delivery_status', '!=', 'full']);
             name += " (Chưa giao / Chưa xong)";
+        }
+
+        this.action.doAction({
+            name: name,
+            type: 'ir.actions.act_window',
+            res_model: 'sale.order',
+            view_mode: 'list,form',
+            views: [[false, 'list'], [false, 'form']],
+            domain: domain,
+            context: { create: false },
+        });
+    }
+
+    get displayDate() {
+        const today = new Date();
+        const dateStr = today.getFullYear() + "-" + String(today.getMonth() + 1).padStart(2, '0') + "-" + String(today.getDate()).padStart(2, '0');
+        if (this.state.date === dateStr) {
+            return "Hôm nay";
         }
 
         try {
