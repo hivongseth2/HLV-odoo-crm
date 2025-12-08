@@ -1,4 +1,4 @@
-
+<?xml version="1.0" encoding="utf-8"?>
 <odoo>
   <record id="view_product_import_wizard" model="ir.ui.view">
     <field name="name">product.import.wizard.form</field>
@@ -6,8 +6,38 @@
     <field name="arch" type="xml">
       <form string="Import Products from Excel">
         <group>
+          <field name="import_type" widget="radio"/>
           <field name="file" filename="filename"/>
+          <field name="filename" invisible="1"/>
+          <field name="update_existing" invisible="import_type != 'combo'"/>
         </group>
+
+        <!-- Hướng dẫn cho Import Tên Sản phẩm -->
+        <group string="Hướng dẫn" invisible="import_type != 'product_name'">
+          <div>
+            <p><strong>File Excel cần có các cột:</strong></p>
+            <ul>
+              <li><strong>Mã</strong>: Mã sản phẩm (default_code)</li>
+              <li><strong>Tên</strong>: Tên mới của sản phẩm</li>
+            </ul>
+          </div>
+        </group>
+
+        <!-- Hướng dẫn cho Import Combo -->
+        <group string="Hướng dẫn" invisible="import_type != 'combo'">
+          <div>
+            <p><strong>File Excel cần có các cột:</strong></p>
+            <ul>
+              <li><strong>Mã Combo</strong>: Mã của combo product (bắt buộc)</li>
+              <li><strong>Tên Combo</strong>: Tên combo product</li>
+              <li><strong>Mã Hàng Con</strong>: Mã của child product (bắt buộc)</li>
+              <li><strong>Tên Hàng Con</strong>: Tên child product</li>
+              <li><strong>ĐVT</strong>: Đơn vị tính</li>
+              <li><strong>Số Lượng</strong>: Số lượng child trong combo</li>
+            </ul>
+          </div>
+        </group>
+
         <footer>
           <button name="action_import" string="Import" type="object" class="btn-primary"/>
           <button string="Cancel" class="btn-secondary" special="cancel"/>
