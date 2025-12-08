@@ -77,25 +77,6 @@ export class StockDashboardField extends Component {
         this.onOrderClick('all');
     }
 
-    onViewAllClick(ev) {
-        if (ev) {
-            ev.stopPropagation();
-        }
-        const warehouseId = this.props.record.resId;
-        this.action.doAction({
-            name: `Đơn MISA (Tất cả)`,
-            type: 'ir.actions.act_window',
-            res_model: 'sale.order',
-            view_mode: 'list,form',
-            views: [[false, 'list'], [false, 'form']],
-            domain: [
-                ['warehouse_id', '=', warehouseId],
-                ['state', 'in', ['sale', 'done']]
-            ],
-            context: { create: false },
-        });
-    }
-
     async fetchData(date) {
         try {
             const warehouseId = this.props.record.resId;

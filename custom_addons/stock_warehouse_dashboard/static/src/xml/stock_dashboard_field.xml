@@ -18,14 +18,6 @@
                 <!-- Date Picker Wrapper - Click Stop Propagation -->
                 <div class="d-flex align-items-center">
                     
-                    <!-- View All Button -->
-                    <div class="d-flex align-items-center justify-content-center me-2"
-                         style="width: 30px; height: 30px; cursor: pointer;"
-                         t-on-click.stop="onViewAllClick"
-                         title="Xem tất cả đơn">
-                        <i class="fa fa-list text-muted hover-primary transition-base fs-5"/>
-                    </div>
-
                     <!-- Date Filter -->
                     <div class="position-relative d-flex align-items-center justify-content-center" 
                          style="width: 30px; height: 30px; cursor: pointer;"
