@@ -9,6 +9,7 @@
           <field name="import_type" widget="radio"/>
           <field name="file" filename="filename"/>
           <field name="filename" invisible="1"/>
+          <field name="update_existing" invisible="import_type != 'combo'"/>
         </group>
 
         <!-- Hướng dẫn cho Import Tên Sản phẩm -->
@@ -37,7 +38,7 @@
             <p><strong>Lưu ý:</strong></p>
             <ul>
               <li>Chỉ tạo combo mới nếu chưa tồn tại (theo Mã Combo)</li>
-              <li>Combo đã tồn tại sẽ được bỏ qua</li>
+              <li>Nếu chọn <strong>"Cập nhật nếu đã tồn tại"</strong>, hệ thống sẽ XÓA các child cũ và tạo lại theo Excel.</li>
               <li><strong>Child products không tồn tại sẽ được TỰ ĐỘNG TẠO MỚI</strong></li>
               <li>Hỗ trợ merged cells cho cột Mã Combo và Tên Combo</li>
             </ul>

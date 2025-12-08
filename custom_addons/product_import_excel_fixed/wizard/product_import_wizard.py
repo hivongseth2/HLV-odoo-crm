@@ -19,6 +19,9 @@ class ProductImportWizard(models.TransientModel):
         ('combo', 'Import Combo Products'),
     ], string="Loại Import", default='product_name', required=True)
 
+    update_existing = fields.Boolean(string="Cập nhật nếu đã tồn tại", default=False,
+        help="Nếu được chọn, các combo đã tồn tại sẽ được cập nhật tên và danh sách hàng con (xoá cũ thêm mới).")
+
     # -------- Helpers --------
     def _clean_string(self, val):
         """Chuẩn hóa giá trị thành string, xử lý NaN, None, số."""
@@ -90,7 +93,7 @@ class ProductImportWizard(models.TransientModel):
         product = ProductProduct.search([('default_code', '=', code)], limit=1)
 
         if product:
-            _logger.info("🔁 Sản phẩm %s đã tồn tại", code)
+            # _logger.info("🔁 Sản phẩm %s đã tồn tại", code)
             return product, False  # False = không tạo mới
 
         # Tạo mới nếu chưa có
@@ -262,7 +265,9 @@ class ProductImportWizard(models.TransientModel):
 
         Logic:
         - Nếu combo chưa tồn tại (theo Mã Combo): tạo mới với is_combo=True
-        - Nếu combo đã tồn tại: bỏ qua
+        - Nếu combo đã tồn tại:
+            - Nếu update_existing=True: Cập nhật tên, Xoá hết child cũ, Tạo child mới.
+            - Nếu update_existing=False: Bỏ qua.
         - Child products: tự động tạo nếu không tồn tại trong hệ thống
         """
         df = self._read_excel(self.file, dtype={
@@ -285,6 +290,7 @@ class ProductImportWizard(models.TransientModel):
 
         # Thống kê
         combo_created = 0
+        combo_updated = 0
         combo_skipped = 0
         child_added = 0
         child_created = 0  # Số child products được tạo mới
@@ -327,10 +333,15 @@ class ProductImportWizard(models.TransientModel):
                 ('default_code', '=', combo_code)
             ], limit=1)
 
+            is_update = False
             if existing_combo:
-                combo_skipped += 1
-                _logger.info("⏭️ Combo đã tồn tại, bỏ qua: [%s] %s", combo_code, combo_name)
-                continue
+                if not self.update_existing:
+                    combo_skipped += 1
+                    _logger.info("⏭️ Combo đã tồn tại, bỏ qua: [%s] %s", combo_code, combo_name)
+                    continue
+                else:
+                    is_update = True
+                    _logger.info("♻️ Combo đã tồn tại, tiến hành cập nhật: [%s]", combo_code)
 
             # Lấy hoặc tạo child products
             valid_children = []
@@ -344,7 +355,7 @@ class ProductImportWizard(models.TransientModel):
 
                 if is_new:
                     child_created += 1
-                    _logger.info("🆕 Tạo child product mới: [%s] %s", child['code'], child['name'])
+                    # _logger.info("🆕 Tạo child product mới: [%s] %s", child['code'], child['name'])
 
                 # Kiểm tra child không phải là combo
                 if child_product.is_combo:
@@ -361,52 +372,70 @@ class ProductImportWizard(models.TransientModel):
                 _logger.error("❌ Combo [%s] không có child product hợp lệ", combo_code)
                 continue
 
-            # Tạo combo product mới
+            # Tạo combo product mới hoặc Cập nhật
             try:
-                # Lấy UoM mặc định (Cái)
-                default_uom = self.env['uom.uom'].sudo().search([
-                    ('name', 'ilike', 'Cái')
-                ], limit=1)
-                if not default_uom:
-                    default_uom = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+                if is_update:
+                    # Cập nhật tên nếu có thay đổi (và khác rỗng)
+                    if combo_name and existing_combo.name != combo_name:
+                        existing_combo.name = combo_name
+                    
+                    # Đảm bảo là combo
+                    if not existing_combo.is_combo:
+                        existing_combo.is_combo = True
+                        existing_combo.type = 'service'
 
-                combo_vals = {
-                    'name': combo_name or combo_code,
-                    'default_code': combo_code,
-                    'is_combo': True,
-                    'type': 'service',
-                }
-                if default_uom:
-                    combo_vals['uom_id'] = default_uom.id
-                    combo_vals['uom_po_id'] = default_uom.id
+                    # Xoá toàn bộ child cũ
+                    existing_combo.combo_product_ids.unlink()
+                    _logger.info("   🗑️ Đã xoá các thành phần cũ của combo [%s]", combo_code)
 
-                new_combo = ProductTemplate.create(combo_vals)
-                combo_created += 1
-                _logger.info("✅ Tạo combo mới: [%s] %s", combo_code, combo_name)
+                    target_combo = existing_combo
+                    combo_updated += 1
+                else:
+                    # Tạo mới hoàn toàn
+                    # Lấy UoM mặc định (Cái)
+                    default_uom = self.env['uom.uom'].sudo().search([
+                        ('name', 'ilike', 'Cái')
+                    ], limit=1)
+                    if not default_uom:
+                        default_uom = self.env.ref('uom.product_uom_unit', raise_if_not_found=False)
+
+                    combo_vals = {
+                        'name': combo_name or combo_code,
+                        'default_code': combo_code,
+                        'is_combo': True,
+                        'type': 'service',
+                    }
+                    if default_uom:
+                        combo_vals['uom_id'] = default_uom.id
+                        combo_vals['uom_po_id'] = default_uom.id
+
+                    target_combo = ProductTemplate.create(combo_vals)
+                    combo_created += 1
+                    _logger.info("✅ Tạo combo mới: [%s] %s", combo_code, combo_name)
 
                 # Tạo combo lines (children)
                 for child_data in valid_children:
                     ComboProduct.create({
-                        'product_template_id': new_combo.id,
+                        'product_template_id': target_combo.id,
                         'product_id': child_data['product'].id,
                         'product_quantity': child_data['qty'],
                         'name': child_data['product'].name,
                     })
                     child_added += 1
-                    _logger.info("   ➕ Thêm child: [%s] x %s",
-                                 child_data['product'].default_code, child_data['qty'])
+                    # _logger.info("   ➕ Thêm child: [%s] x %s", child_data['product'].default_code, child_data['qty'])
 
             except Exception as e:
                 errors.append(f"Combo [{combo_code}]: {str(e)}")
-                _logger.exception("❌ Lỗi tạo combo [%s]: %s", combo_code, e)
+                _logger.exception("❌ Lỗi xử lý combo [%s]: %s", combo_code, e)
 
         # Tạo thông báo kết quả
         msg_lines = [
-            "Hoàn tất import Combo Products.",
+            "Hoàn tất xử lý Combo Products.",
             f"- Combo tạo mới: {combo_created}",
-            f"- Combo bỏ qua (đã tồn tại): {combo_skipped}",
+            f"- Combo cập nhật: {combo_updated}",
+            f"- Combo bỏ qua: {combo_skipped}",
             f"- Child products đã thêm vào combo: {child_added}",
-            f"- Child products tạo mới: {child_created}",
+            f"- Child products tạo mới (hệ thống): {child_created}",
         ]
 
         if errors:
@@ -421,7 +450,7 @@ class ProductImportWizard(models.TransientModel):
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Import Combo Products',
+                'title': 'Kết quả Import Combo',
                 'message': msg,
                 'type': 'success' if not errors else 'warning',
                 'sticky': True,
