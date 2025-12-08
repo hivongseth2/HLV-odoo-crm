@@ -110,12 +110,30 @@
             </kanban>
         </field>
     </record>
-
-    <record id="action_warehouse_dashboard" model="ir.actions.act_window">
+    <record id="view_warehouse_dashboard_search" model="ir.ui.view">
+            <field name="name">stock.warehouse.dashboard.search</field>
+            <field name="model">stock.warehouse</field>
+            <field name="arch" type="xml">
+                <search string="Tìm kiếm kho">
+                    <field name="name"/>
+                    <field name="code"/>
+                    <separator/>
+                    </search>
+            </field>
+        </record>
+  <record id="action_warehouse_dashboard" model="ir.actions.act_window">
         <field name="name">Tổng quan Kho (Mới)</field>
         <field name="res_model">stock.warehouse</field>
         <field name="view_mode">kanban,form</field>
         <field name="view_id" ref="view_warehouse_dashboard_kanban"/>
+        
+        <field name="search_view_id" ref="view_warehouse_dashboard_search"/>
+        
+        <field name="help" type="html">
+          <p class="o_view_nocontent_smiling_face">
+            Không tìm thấy kho nào.
+          </p>
+        </field>
     </record>
 
     <menuitem id="menu_warehouse_dashboard_combined"
