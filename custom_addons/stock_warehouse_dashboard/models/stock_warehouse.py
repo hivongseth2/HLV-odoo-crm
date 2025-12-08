@@ -1,64 +1,105 @@
 from odoo import models, fields, api
 import json
 
+# 1. Wizard chọn ngày (Popup)
+class MisaDateWizard(models.TransientModel):
+    _name = 'misa.date.wizard'
+    _description = 'Chọn ngày xem Dashboard'
+
+    date = fields.Date(string='Chọn ngày', required=True, default=fields.Date.context_today)
+
+    def action_apply(self):
+        # Reload lại trang và gắn ngày vào bộ nhớ tạm (Context)
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.warehouse',
+            'view_mode': 'kanban,form',
+            'target': 'current', 
+            'context': {'misa_selected_date': self.date} 
+        }
+
+# 2. Logic chính
 class StockWarehouse(models.Model):
     _inherit = 'stock.warehouse'
 
     picking_type_ids = fields.One2many('stock.picking.type', 'warehouse_id', string='Operation Types')
-    warehouse_dashboard_data = fields.Text(compute='_compute_warehouse_dashboard_data')
+    
+    # store=False để luôn tính toán lại khi context thay đổi
+    warehouse_dashboard_data = fields.Text(compute='_compute_warehouse_dashboard_data', store=False)
 
-    @api.depends('picking_type_ids')
     def _compute_warehouse_dashboard_data(self):
         SaleOrder = self.env['sale.order']
-        today = fields.Date.context_today(self)
+        
+        # Kiểm tra xem có ngày trong context không
+        ctx_date = self.env.context.get('misa_selected_date')
+        if ctx_date:
+            target_date = fields.Date.to_date(ctx_date)
+            is_today_flag = False
+        else:
+            target_date = fields.Date.context_today(self)
+            is_today_flag = True
 
         for warehouse in self:
-            # 1. Tìm đơn hàng MISA hôm nay
             misa_domain = [
                 ('warehouse_id', '=', warehouse.id),
-                ('x_studio_misa_order_date', '=', today),
+                ('x_studio_misa_order_date', '=', target_date),
                 ('state', 'in', ['sale', 'done'])
             ]
-            
             orders = SaleOrder.search(misa_domain)
-            total = len(orders)
             
-            # 2. Thống kê theo trạng thái giao hàng
-            full = len(orders.filtered(lambda o: o.delivery_status == 'full'))
-            partial = len(orders.filtered(lambda o: o.delivery_status == 'partial'))
-            not_full = total - full
-
-            # 3. Thống kê in ấn (Optional: để hiển thị con số chưa in lên dashboard nếu cần)
-            not_printed = len(orders.filtered(lambda o: o.picking_slip_print_count == 0))
+            total_orders = len(orders)
+            full_orders = len(orders.filtered(lambda o: o.delivery_status == 'full'))
+            partial_orders = len(orders.filtered(lambda o: o.delivery_status == 'partial'))
+            not_full_count = total_orders - full_orders
 
             final_data = {
                 'misa': {
-                    'total': total,
-                    'full': full,
-                    'partial': partial,
-                    'not_full': not_full,
-                    'not_printed': not_printed # Số lượng chưa in
+                    'total': total_orders,
+                    'full': full_orders,
+                    'partial': partial_orders,
+                    'not_full': not_full_count,
+                    # Truyền thêm dữ liệu để hiển thị giao diện
+                    'is_today': is_today_flag,
+                    'date_display': target_date.strftime('%d/%m/%Y')
                 }
             }
             warehouse.warehouse_dashboard_data = json.dumps(final_data)
 
-    # Hàm mở danh sách Đơn hàng (Sale Order)
+    # Hàm mở popup chọn ngày
+    def action_open_date_picker(self):
+        ctx_date = self.env.context.get('misa_selected_date')
+        return {
+            'name': 'Chọn ngày xem báo cáo',
+            'type': 'ir.actions.act_window',
+            'res_model': 'misa.date.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_date': ctx_date or fields.Date.context_today(self)}
+        }
+
+    # Các hàm mở list view giữ nguyên logic cũ, chỉ thêm lấy ngày từ context
+    def open_warehouse_operations(self):
+        self.ensure_one()
+        action = self.env["ir.actions.actions"]._for_xml_id("stock.stock_picking_type_action")
+        action['domain'] = [('warehouse_id', '=', self.id)]
+        action['display_name'] = f"Hoạt động: {self.name}"
+        action['context'] = {'default_warehouse_id': self.id}
+        return action
+
     def open_misa_sale_orders(self):
         self.ensure_one()
-        today = fields.Date.context_today(self)
+        ctx_date = self.env.context.get('misa_selected_date')
+        target_date = fields.Date.to_date(ctx_date) if ctx_date else fields.Date.context_today(self)
         filter_type = self.env.context.get('misa_filter', 'all')
         
-        # Domain cơ bản
         domain = [
             ('warehouse_id', '=', self.id),
-            ('x_studio_misa_order_date', '=', today),
+            ('x_studio_misa_order_date', '=', target_date),
             ('state', 'in', ['sale', 'done'])
         ]
         
-        name = f"Đơn MISA {today}"
-        ctx = {'create': False}
+        name = f"Đơn MISA {target_date.strftime('%d/%m')}"
 
-        # Xử lý Filter
         if filter_type == 'full':
             domain.append(('delivery_status', '=', 'full'))
             name += " (Đã xong)"
@@ -67,12 +108,7 @@ class StockWarehouse(models.Model):
             name += " (1 Phần)"
         elif filter_type == 'not_full':
             domain.append(('delivery_status', '!=', 'full'))
-            name += " (Tồn/Chưa giao)"
-        elif filter_type == 'not_printed':
-            # Nếu bấm vào nút in -> Lọc ra đơn chưa in
-            # Cách dùng search_default trong context để kích hoạt bộ lọc XML
-            ctx['search_default_filter_not_printed'] = 1
-            name += " (Chưa in)"
+            name += " (Chưa giao / Chưa xong)"
             
         return {
             'name': name,
@@ -80,14 +116,6 @@ class StockWarehouse(models.Model):
             'res_model': 'sale.order',
             'view_mode': 'list,form',
             'domain': domain,
-            'context': ctx
+            # Truyền tiếp context để giữ ngày khi quay lại
+            'context': {'create': False, 'misa_selected_date': target_date}
         }
-        
-    # Giữ hàm mở hoạt động kho
-    def open_warehouse_operations(self):
-        self.ensure_one()
-        action = self.env["ir.actions.actions"]._for_xml_id("stock.stock_picking_type_action")
-        action['domain'] = [('warehouse_id', '=', self.id)]
-        action['display_name'] = f"Hoạt động: {self.name}"
-        action['context'] = {'default_warehouse_id': self.id}
-        return action

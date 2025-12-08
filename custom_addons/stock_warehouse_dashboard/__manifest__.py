@@ -16,7 +16,6 @@
         'security/security.xml',
         'views/res_users_views.xml',
         'views/stock_warehouse_views.xml',
-        'views/stock_picking_views.xml'
     ],
     'installable': True,
     'application': False,
