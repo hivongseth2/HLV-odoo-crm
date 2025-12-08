@@ -52,7 +52,24 @@ export class StockDashboardField extends Component {
         }
     }
 
-    onWarehouseClick(ev) {
+    // SWAPPED: Warehouse Click opens Old Dashboard (Operations)
+    async onWarehouseClick(ev) {
+        if (ev) {
+            ev.stopPropagation();
+            ev.preventDefault();
+        }
+        try {
+            const warehouseId = this.props.record.resId;
+            // Trigger the server-side action method
+            const action = await this.orm.call("stock.warehouse", "open_warehouse_operations", [warehouseId]);
+            this.action.doAction(action);
+        } catch (e) {
+            console.error("Error opening warehouse operations", e);
+        }
+    }
+
+    // NEW: Header Click opens Filtered Orders
+    onOrderHeaderClick(ev) {
         if (ev) {
             ev.stopPropagation();
             ev.preventDefault();
