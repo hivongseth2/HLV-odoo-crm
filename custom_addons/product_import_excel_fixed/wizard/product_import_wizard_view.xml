@@ -35,13 +35,6 @@
               <li><strong>ĐVT</strong>: Đơn vị tính</li>
               <li><strong>Số Lượng</strong>: Số lượng child trong combo</li>
             </ul>
-            <p><strong>Lưu ý:</strong></p>
-            <ul>
-              <li>Chỉ tạo combo mới nếu chưa tồn tại (theo Mã Combo)</li>
-              <li>Nếu chọn <strong>"Cập nhật nếu đã tồn tại"</strong>, hệ thống sẽ XÓA các child cũ và tạo lại theo Excel.</li>
-              <li><strong>Child products không tồn tại sẽ được TỰ ĐỘNG TẠO MỚI</strong></li>
-              <li>Hỗ trợ merged cells cho cột Mã Combo và Tên Combo</li>
-            </ul>
           </div>
         </group>
 

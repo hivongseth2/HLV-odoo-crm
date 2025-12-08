@@ -385,7 +385,7 @@ class ProductImportWizard(models.TransientModel):
                         existing_combo.type = 'service'
 
                     # Xoá toàn bộ child cũ
-                    existing_combo.combo_product_ids.unlink()
+                    existing_combo.combo_product_id.unlink()
                     _logger.info("   🗑️ Đã xoá các thành phần cũ của combo [%s]", combo_code)
 
                     target_combo = existing_combo
