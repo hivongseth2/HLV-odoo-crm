@@ -13,12 +13,12 @@
                     <field name="barcode"/>
                     
                     <separator/>
-                    <filter string="Đã có Mã nội bộ" name="has_default_code" domain="[('default_code', '!=', False)]"/>
-                    <filter string="Chưa có Mã nội bộ" name="no_default_code" domain="[('default_code', '=', False)]"/>
+                    <filter string="Đã có Mã vạch" name="has_barcode" domain="['&amp;', ('barcode', '!=', False), ('barcode', '!=', '')]"/>
+                    <filter string="Chưa có Mã vạch" name="no_barcode" domain="['|', ('barcode', '=', False), ('barcode', '=', '')]"/>
                     
                     <separator/>
-                    <filter string="Đã có Mã vạch" name="has_barcode" domain="[('barcode', '!=', False)]"/>
-                    <filter string="Chưa có Mã vạch" name="no_barcode" domain="[('barcode', '=', False)]"/>
+                    <filter string="Đã có Mã nội bộ" name="has_default_code" domain="['&amp;', ('default_code', '!=', False), ('default_code', '!=', '')]"/>
+                    <filter string="Chưa có Mã nội bộ" name="no_default_code" domain="['|', ('default_code', '=', False), ('default_code', '=', '')]"/>
                     
                     <separator/>
                     <filter string="Đang bán" name="filter_to_sell" domain="[('sale_ok', '=', True)]"/>
