@@ -2,9 +2,12 @@
 import hmac
 import logging
 import math
+import base64
+import io
 from odoo import http
 from odoo.http import request
 from odoo.osv import expression
+from odoo.tools.mimetypes import guess_mimetype
 
 PAGE_SIZE = 25
 _logger = logging.getLogger(__name__)
@@ -55,23 +58,38 @@ def _rg_sum(row, base):
     except Exception:
         return 0.0
 
+# --- CẬP NHẬT: Link ảnh trỏ về Route tùy chỉnh để bypass quyền ---
 def _get_product_image_url(product):
     if not product:
         return ""
-    if product.image_1920:
-        return f"/web/image/product.product/{product.id}/image_1920"
-    elif product.image_128:
-        return f"/web/image/product.product/{product.id}/image_128"
-    
-    tmpl = product.product_tmpl_id
-    if tmpl.image_1920:
-        return f"/web/image/product.template/{tmpl.id}/image_1920"
-    elif tmpl.image_128:
-        return f"/web/image/product.template/{tmpl.id}/image_128"
-    return ""
+    # Sử dụng route riêng để đảm bảo Public user xem được ảnh kể cả khi chưa Publish
+    return f"/search_stock/image/{product.id}"
 
 class PublicInventory(http.Controller):
     
+    # --- CẬP NHẬT: Route phục vụ ảnh riêng ---
+    @http.route(["/search_stock/image/<int:product_id>"], type="http", auth="public")
+    def stock_image(self, product_id):
+        """Serve ảnh sản phẩm với quyền sudo nếu session hợp lệ"""
+        if not _pw_allowed():
+            return request.not_found()
+        
+        # Lấy ảnh field image_128 cho nhẹ
+        record = request.env['product.product'].sudo().browse(product_id).exists()
+        if not record or not record.image_128:
+            # Trả về ảnh placeholder trong suốt hoặc lỗi nhẹ
+            return request.not_found()
+
+        image_base64 = record.image_128
+        image_data = base64.b64decode(image_base64)
+        mimetype = guess_mimetype(image_data)
+        
+        headers = [
+            ('Content-Type', mimetype),
+            ('Cache-Control', 'public, max-age=604800'), # Cache 1 tuần
+        ]
+        return request.make_response(image_data, headers)
+
     @http.route(["/search_stock"], type="http", auth="public", website=True, sitemap=True)
     def inventory_page(self, q="", warehouse_id=None, page=1, **kw):
         # 1. AUTH & SESSION CHECK
@@ -99,8 +117,6 @@ class PublicInventory(http.Controller):
             page = 1
         
         wid = _as_int_or_none(warehouse_id)
-        
-        # Context Company
         company_ids = _companies_for_context(wid)
         if not company_ids:
             company_ids = env.companies.ids
@@ -111,7 +127,6 @@ class PublicInventory(http.Controller):
         low_stock_mode = request.params.get('low_stock') in ('1', 'true', 'on')
 
         # 3. BUILD SEARCH DOMAIN (ON PRODUCT)
-        # Thay đổi quan trọng: Tìm trên Product để lấy cả hàng không tồn
         domain = [("active", "=", True)]
         
         if q:
@@ -136,32 +151,20 @@ class PublicInventory(http.Controller):
                 domain = expression.AND([domain, final_search_dom])
 
         # 4. FETCH & EXPAND PRODUCTS (COMBO LOGIC)
-        # Tìm sản phẩm khớp từ khóa
-        found_products = Product.search(domain, order="name asc") # Tìm hết (chấp nhận performance nếu DB không quá lớn)
-
+        found_products = Product.search(domain, order="name asc") 
         final_product_ids = set()
         
-        # Logic: Duyệt sản phẩm tìm thấy -> Nếu là Combo -> Lấy thêm con
         for p in found_products:
             final_product_ids.add(p.id)
-            
-            # Kiểm tra xem có phải là Combo không (dựa trên field ở Model bạn cung cấp)
             is_combo = getattr(p.product_tmpl_id, "is_combo", False)
             if is_combo:
-                # Lấy danh sách con từ relation combo_product_id (One2many)
                 combo_items = p.product_tmpl_id.combo_product_id
                 child_ids = combo_items.mapped('product_id').ids
-                # Thêm con vào danh sách hiển thị
                 final_product_ids.update(child_ids)
 
-        # Chuyển về list và sắp xếp để phân trang ổn định
-        # (Lưu ý: Nếu không search gì 'q=""', có thể số lượng rất lớn, cần cân nhắc limit nếu DB to)
         sorted_pids = sorted(list(final_product_ids))
         
-        # 5. FETCH QUANTITY FOR DISPLAY
-        # Sau khi có danh sách ID (bao gồm cả hàng tồn = 0), giờ mới đi lấy tồn kho
-        
-        # Tính toán phân trang Python
+        # 5. PAGINATION & QUANT FETCH
         total = len(sorted_pids)
         pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 1
         if page > pages: page = pages
@@ -171,27 +174,22 @@ class PublicInventory(http.Controller):
         page_pids = sorted_pids[start:end]
         products_to_display = Product.browse(page_pids)
 
-        # Lấy dữ liệu tồn kho (chỉ cho trang hiện tại để tối ưu)
-        # Domain lấy tồn kho
         quant_domain = [
             ("product_id", "in", page_pids),
-            ("location_id.usage", "=", "internal") # Chỉ lấy kho nội bộ
+            ("location_id.usage", "=", "internal")
         ]
         
-        # Xử lý lọc theo Warehouse cụ thể
         if wid:
             wh = env['stock.warehouse'].sudo().browse(wid)
             if wh:
                 quant_domain.append(("location_id", "child_of", wh.view_location_id.id))
             else:
-                 quant_domain.append(("id", "=", -1)) # Kho không tồn tại
+                 quant_domain.append(("id", "=", -1))
         else:
-             # Nếu không chọn kho, giới hạn theo allowed warehouses
              allowed_whs = _get_allowed_warehouses()
              if allowed_whs:
                  quant_domain.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
 
-        # Read group để lấy tổng tồn
         quant_groups = Quant.read_group(
             quant_domain,
             ["product_id", "quantity:sum"],
@@ -199,7 +197,6 @@ class PublicInventory(http.Controller):
             lazy=False
         )
         
-        # Map: Product ID -> Quantity
         qty_map = {g["product_id"][0]: _rg_sum(g, "quantity") for g in quant_groups if g.get("product_id")}
 
         # 6. BUILD ROWS
@@ -211,28 +208,19 @@ class PublicInventory(http.Controller):
             qty_total = 0.0
             
             if is_combo:
-                # Tính tồn Combo (Logic cũ của bạn)
                 qty_total = self._compute_combo_qty(env, p, wid)
             else:
-                # Sản phẩm thường: Lấy từ map (nếu không có trong map nghĩa là tồn = 0)
                 qty_total = qty_map.get(pid, 0.0)
-            
-            # Lọc Low Stock (Tồn <= 5)
-            # Lưu ý: Do logic search thay đổi (tìm all -> lọc), nên việc lọc low_stock ở đây chỉ là ẩn dòng
-            # Nếu muốn pagination chuẩn khi filter low_stock, cần dời logic này lên trước bước phân trang.
-            # Ở code này tôi giữ logic hiển thị, nhưng đánh dấu đỏ nếu thấp.
-            # Nếu User tick "Low Stock", ta chỉ append nếu qty <= 5
             
             if low_stock_mode and qty_total > 5.0:
                 continue
 
-            # Dự báo (Virtual Available)
             qty_forecasted = 0.0
             if not is_combo:
                 p_ctx = p.with_context(warehouse=wid) if wid else p
                 qty_forecasted = p_ctx.virtual_available
             else:
-                qty_forecasted = qty_total # Combo tạm lấy bằng thực tế
+                qty_forecasted = qty_total
 
             rows.append({
                 "id": pid,
@@ -250,9 +238,6 @@ class PublicInventory(http.Controller):
                 "is_combo": is_combo,
             })
 
-        # Nếu lọc low_stock sau khi phân trang, số lượng rows có thể ít hơn PAGE_SIZE. 
-        # Để chính xác tuyệt đối cần tính toán lại bước 4, nhưng để đơn giản ta chấp nhận filter hiển thị.
-
         Warehouses = _get_allowed_warehouses()
 
         return request.render(
@@ -264,13 +249,12 @@ class PublicInventory(http.Controller):
                 "rows": rows,
                 "page": page,
                 "pages": pages,
-                "total": total, # Total này là tổng tìm thấy (chưa filter low stock)
+                "total": total,
                 "pw_ok": True,
             },
         )
 
     def _compute_combo_qty(self, env, product, warehouse_id):
-        """Hàm phụ trợ tính tồn kho Combo"""
         ComboLines = env['combo.product'].sudo().search([
             ('product_template_id', '=', product.product_tmpl_id.id)
         ])
@@ -283,7 +267,6 @@ class PublicInventory(http.Controller):
             comp = line.product_id
             if not comp: continue
             
-            # Context kho
             if warehouse_id:
                 comp_ctx = comp.with_context(warehouse=warehouse_id, location=False)
             else:
@@ -309,7 +292,7 @@ class PublicInventory(http.Controller):
         resp = self.inventory_page(q=q, warehouse_id=warehouse_id, page=page)
         return resp.qcontext.get("rows", [])
     
-    # ... (Giữ nguyên các hàm product_breakdown và search_suggest của bạn ở dưới) ...
+    # --- CẬP NHẬT: Breakdown trả về thêm Image URL ---
     @http.route(["/search_stock/product_breakdown"], type="json", auth="public", methods=["POST"])
     def product_breakdown(self, product_id=None, warehouse_id=None, detail_mode=None):
         if not _pw_allowed():
@@ -349,13 +332,12 @@ class PublicInventory(http.Controller):
         Warehouse = env["stock.warehouse"].sudo().with_context(allowed_company_ids=company_ids)
 
         product = Product.browse(pid).exists()
-        if not product: # Bỏ check active để show breakdown của sp cũ nếu cần
+        if not product:
             return {"ok": False, "error": "product_not_found", "rows": []}
 
         tmpl = product.product_tmpl_id
         is_combo = bool(getattr(tmpl, "is_combo", False))
 
-        # 1. COMBO DETAIL
         if is_combo:
             if wid:
                 wh = Warehouse.browse(wid).exists()
@@ -381,17 +363,18 @@ class PublicInventory(http.Controller):
                         "qty_reserved": qr,
                         "qty_available": qt - qr,
                     })
+                # Trả về cả URL ảnh cho child
                 rows.append({
                     "child_product_id": child.id,
                     "default_code": child.default_code or "",
                     "name": child.name or "",
                     "uom": child.uom_id.name or "",
+                    "image_url": _get_product_image_url(child), # Lấy ảnh
                     "component_qty_in_combo": float(line.product_quantity or 1.0),
                     "warehouses": wh_rows,
                 })
             return {"ok": True, "mode": "components_by_warehouse", "rows": rows}
 
-        # 2. STANDARD PRODUCT DETAIL
         if wid:
             wh = Warehouse.browse(wid).exists()
             warehouses = wh if wh else Warehouse.browse([])
@@ -424,11 +407,9 @@ class PublicInventory(http.Controller):
         company_ids = env.companies.ids
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
         
-        # Tìm trên Product (Active = True)
         base_domain = [('active', '=', True)]
         tokens = q.split()
         domains_per_token = []
-        
         for token in tokens:
             token_domain = [
                 '|', '|',

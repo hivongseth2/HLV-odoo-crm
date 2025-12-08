@@ -266,21 +266,19 @@
             (function () {
               var searchTimeout = null;
 
-              // --- LOGIC CHIP SEARCH ---
+              // --- LOGIC CHIP SEARCH (GIỮ NGUYÊN) ---
               function initChipInput() {
                   var $realInput = $('#real-search-q');
                   var $container = $('#chip-container');
                   var $visualInput = $('#visual-search-input');
                   var currentChips = [];
 
-                  // Load giá trị ban đầu từ URL
                   var initialVal = $realInput.val();
                   if(initialVal) {
                       currentChips = initialVal.split(',').map(function(s){ return s.trim(); }).filter(function(s){ return s; });
                       renderChips();
                   }
 
-                  // Hàm vẽ lại toàn bộ chips
                   function renderChips() {
                       $container.find('.search-chip').remove();
                       currentChips.forEach(function(term, index) {
@@ -295,14 +293,12 @@
                       updateRealInput();
                   }
 
-                  // Cập nhật input ẩn
                   function updateRealInput() {
                       $realInput.val(currentChips.join(', '));
                   }
 
-                  // Thêm chip mới
                   window.addSearchChip = function(term) {
-                      term = term.trim().replace(/,/g, ''); // Loại bỏ dấu phẩy
+                      term = term.trim().replace(/,/g, '');
                       if(term && !currentChips.includes(term)) {
                           currentChips.push(term);
                           renderChips();
@@ -311,7 +307,6 @@
                       $visualInput.focus();
                   }
 
-                  // Xóa chip
                   $container.on('click', '.btn-close-chip', function() {
                       var idx = $(this).data('index');
                       currentChips.splice(idx, 1);
@@ -319,7 +314,6 @@
                       $visualInput.focus();
                   });
 
-                  // Xử lý phím Backspace, Enter, Comma
                   $visualInput.on('keydown', function(e) {
                       var val = $(this).val();
                       if(e.key === 'Backspace' && val === '' && currentChips.length > 0) {
@@ -329,10 +323,8 @@
                           e.preventDefault();
                           if (val.trim()) {
                               addSearchChip(val);
-                              // Nếu nhấn Enter khi đang gõ -> Thêm chip và tìm luôn
                               $('#search-form').submit();
                           } else {
-                              // Nếu input rỗng -> Tìm kiếm với các chip hiện tại
                               $('#search-form').submit();
                           }
                       } else if (e.key === ',') {
@@ -343,13 +335,12 @@
                       }
                   });
 
-                  // Focus input khi click wrapper
                   $container.on('click', function(e) {
                       if(e.target === this) $visualInput.focus();
                   });
               }
 
-              // --- LOGIC GỢI Ý ---
+              // --- LOGIC GỢI Ý (GIỮ NGUYÊN) ---
               function debounce(func, wait) {
                 return function() {
                   var context = this, args = arguments;
@@ -378,40 +369,31 @@
                 }
                 var html = '';
                 products.forEach(function(p) {
-                   // Dùng TÊN để tìm kiếm
                    var displayName = p.name || p.default_code || '';
-                   
                    html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
                    html += '  <div class="d-flex align-items-center">';
-                   // Ảnh
                    if (p.image_url) {
                        html += '<img src="' + p.image_url + '" class="rounded border me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
                    } else {
                        html += '<div class="rounded border me-2 bg-light d-flex align-items-center justify-content-center flex-shrink-0" style="width:40px; height:40px;"><i class="fa fa-cube text-muted"></i></div>';
                    }
-                   // Thông tin text
                    html += '    <div class="flex-grow-1 overflow-hidden">';
                    html += '      <div class="fw-bold text-dark text-truncate" style="font-size:0.9rem;">' + (p.default_code || '') + '</div>';
                    html += '      <div class="text-muted text-truncate small">' + (p.name || '') + '</div>';
                    html += '    </div>';
-                   
-                   // Icon mũi tên để gợi ý là "Chọn cái này"
                    html += '    <div class="ms-2 text-primary"><i class="fa fa-angle-right"></i></div>';
-                   
                    html += '  </div>';
                    html += '</div>';
                 });
                 $dropdown.html(html).show();
               }
 
-              // --- MAIN INIT ---
               $(document).ready(function() {
-                initChipInput(); // Setup UI
+                initChipInput(); 
 
                 var $visualInput = $('#visual-search-input');
                 var $dropdown = $('#search-suggestions');
 
-                // Input debounce
                 $visualInput.on('input', debounce(function() {
                   var term = $(this).val().trim();
                   if (term.length >= 2) {
@@ -421,29 +403,22 @@
                   }
                 }, 300));
 
-                // >>> CLICK GỢI Ý -> AUTO SUBMIT <<<
                 $(document).on('click', '.suggestion-item', function() {
                   var name = $(this).data('name');
                   if (name) {
-                    // 1. Thêm chip vào ô tìm kiếm
                     window.addSearchChip(name);
-                    
-                    // 2. Ẩn dropdown
                     $dropdown.hide();
-
-                    // 3. TỰ ĐỘNG SUBMIT FORM NGAY LẬP TỨC
                     $('#search-form').submit();
                   }
                 });
 
-                // Click ngoài -> đóng dropdown
                 $(document).on('click', function(e) {
                   if (!$(e.target).closest('#chip-container, #search-suggestions').length) {
                     $dropdown.hide();
                   }
                 });
                 
-                // Logic mở rộng chi tiết (không đổi)
+                // --- LOGIC EXPAND ---
                 $(document).on('click', '.btn-expand', function () {
                    var $btn = $(this);
                    var pid = $btn.data('pid');
@@ -458,7 +433,7 @@
                    }
                    
                    var colCount = $row.children('td').length;
-                   var $detail = $('<tr class="detail-row bg-white"><td colspan="' + colCount + '" class="p-3 shadow-inset"><div class="d-flex align-items-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải dữ liệu...</div></td></tr>');
+                   var $detail = $('<tr class="detail-row bg-white"><td colspan="' + colCount + '" class="p-3 shadow-inset" style="background-color:#f8f9fa;"><div class="d-flex align-items-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải dữ liệu...</div></td></tr>');
                    $row.after($detail);
                    $btn.html('<i class="fa fa-minus"></i>');
 
@@ -481,33 +456,91 @@
                 });
               });
               
-              // Helper render bảng chi tiết
+              // --- HELPER RENDER BẢNG CHI TIẾT ĐẸP HƠN ---
               function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US'); }
+              
               function buildDetailTable(data) {
-                  var html = '<div class="border rounded bg-light p-2"><table class="table table-sm table-borderless mb-0 small">';
+                  var html = '';
                   var rows = data.rows || [];
+
+                  // TRƯỜNG HỢP 1: COMBO PRODUCT (Hiển thị dạng Card từng item con)
                   if(data.mode === 'components_by_warehouse') {
-                      html += '<thead class="text-muted border-bottom"><tr><th colspan="2">Thành phần</th><th class="text-end">SL/Combo</th><th class="text-end">Tồn kho</th><th class="text-end">Khả dụng</th></tr></thead><tbody>';
+                      html += '<div class="row g-3">'; // Sử dụng grid row của bootstrap
                       rows.forEach(function(c){
-                          html += '<tr><td colspan="5" class="fw-bold pt-2 text-primary">' + c.name + ' <span class="text-muted fw-normal ms-1">(' + c.default_code + ')</span></td></tr>';
+                          html += '<div class="col-12 col-md-12">'; // Mỗi sản phẩm con là 1 block
+                          html += '  <div class="card h-100 border shadow-sm">';
+                          
+                          // Header: Ảnh + Tên + SL cần
+                          html += '    <div class="card-header bg-white d-flex align-items-center py-2">';
+                          if(c.image_url) {
+                              html += '      <img src="' + c.image_url + '" class="rounded border me-3" style="width:48px; height:48px; object-fit:contain;">';
+                          } else {
+                              html += '      <div class="rounded border me-3 d-flex align-items-center justify-content-center bg-light text-muted" style="width:48px; height:48px;"><i class="fa fa-cube"></i></div>';
+                          }
+                          html += '      <div class="flex-grow-1">';
+                          html += '        <div class="fw-bold text-primary">' + c.name + '</div>';
+                          html += '        <div class="small text-muted">Mã: ' + c.default_code + ' | ĐVT: ' + c.uom + '</div>';
+                          html += '      </div>';
+                          html += '      <div class="text-end border-start ps-3">';
+                          html += '        <div class="small text-muted">Cần cho 1 Combo</div>';
+                          html += '        <div class="fw-bold fs-5 text-dark">' + fmt(c.component_qty_in_combo) + '</div>';
+                          html += '      </div>';
+                          html += '    </div>'; // End Header
+                          
+                          // Body: Table Tồn kho
+                          html += '    <div class="card-body p-0">';
+                          html += '      <table class="table table-sm table-striped mb-0">';
+                          html += '        <thead class="bg-light text-muted small">';
+                          html += '          <tr>';
+                          html += '            <th class="ps-3 border-0">Kho hàng</th>';
+                          html += '            <th class="text-end border-0">Tồn thực tế</th>';
+                          html += '            <th class="text-end border-0">Đã giữ</th>';
+                          html += '            <th class="text-end border-0 pe-3">Khả dụng</th>';
+                          html += '          </tr>';
+                          html += '        </thead>';
+                          html += '        <tbody>';
+                          
                           (c.warehouses||[]).forEach(function(w){
-                              html += '<tr><td style="width:15px;"></td><td>↳ ' + w.warehouse_name + '</td><td class="text-end">' + fmt(c.component_qty_in_combo) + '</td><td class="text-end">' + fmt(w.qty_total) + '</td><td class="text-end fw-bold text-success">' + fmt(w.qty_available) + '</td></tr>';
+                              // Highlight nếu có hàng khả dụng
+                              var availClass = (w.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
+                              
+                              html += '          <tr>';
+                              html += '            <td class="ps-3">' + w.warehouse_name + '</td>';
+                              html += '            <td class="text-end">' + fmt(w.qty_total) + '</td>';
+                              html += '            <td class="text-end text-muted">' + fmt(w.qty_reserved) + '</td>';
+                              html += '            <td class="text-end pe-3 ' + availClass + '">' + fmt(w.qty_available) + '</td>';
+                              html += '          </tr>';
                           });
+                          
+                          html += '        </tbody>';
+                          html += '      </table>';
+                          html += '    </div>'; // End Body
+                          html += '  </div>'; // End Card
+                          html += '</div>'; // End Col
                       });
-                  } else {
-                      html += '<thead class="text-muted border-bottom"><tr><th>Kho hàng</th><th class="text-end">Tồn thực tế</th><th class="text-end">Đã giữ</th><th class="text-end">Khả dụng</th></tr></thead><tbody>';
+                      html += '</div>'; // End Row
+                  } 
+                  
+                  // TRƯỜNG HỢP 2: SẢN PHẨM THƯỜNG (Table đơn giản)
+                  else {
+                      html += '<div class="card border shadow-sm" style="max-width: 800px;">';
+                      html += '  <table class="table table-hover mb-0">';
+                      html += '    <thead class="bg-light text-muted"><tr><th class="ps-3">Kho hàng</th><th class="text-end">Tồn thực tế</th><th class="text-end">Đã giữ</th><th class="text-end pe-3">Khả dụng</th></tr></thead>';
+                      html += '    <tbody>';
                       rows.forEach(function(r){
-                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end text-muted">' + fmt(r.qty_reserved) + '</td><td class="text-end fw-bold text-success">' + fmt(r.qty_available) + '</td></tr>';
+                          var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
+                          html += '      <tr>';
+                          html += '        <td class="ps-3">' + r.warehouse_name + '</td>';
+                          html += '        <td class="text-end">' + fmt(r.qty_total) + '</td>';
+                          html += '        <td class="text-end text-muted">' + fmt(r.qty_reserved) + '</td>';
+                          html += '        <td class="text-end pe-3 ' + availClass + '">' + fmt(r.qty_available) + '</td>';
+                          html += '      </tr>';
                       });
+                      html += '    </tbody></table></div>';
                   }
-                  html += '</tbody></table></div>';
+                  
                   return html;
               }
 
             })();
           ]]></script>
-        </t>
-      </main>
-    </t>
-  </template>
-</odoo>
