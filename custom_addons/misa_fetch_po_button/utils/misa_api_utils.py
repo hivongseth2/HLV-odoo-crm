@@ -1225,6 +1225,8 @@ class MisaApiUtils(models.AbstractModel):
                 - TaxIDText: Thuế
                 - Active: Trạng thái hoạt động
         """
+        import uuid
+        
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
@@ -1233,33 +1235,47 @@ class MisaApiUtils(models.AbstractModel):
         headers = misa_config.get_crm_header(token)
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
-        # API endpoint cho tìm kiếm sản phẩm
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/grid"
+        # API endpoint cho tìm kiếm sản phẩm (chữ hoa Grid)
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/Grid"
         
-        # Payload tìm kiếm theo tên (LIKE search)
-        # Operator = 8 là "Contains" (chứa) trong MISA
+        # Payload tìm kiếm theo tên - format giống _misa_get_product_id_by_code
+        # Operator = 7 là "Contains" (chứa) trong MISA
+        # Operator = 1 là "Equals" (bằng)
         payload = {
-            "Columns": "ProductID,ProductCode,ProductName,UnitPrice,UsageUnitIDText,ProductCategoryIDText,TaxIDText,Active,Inactive,PurchasedPrice,ProductPropertiesIDText",
+            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",
+            "Sorts": [],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": limit,
             "Filters": [
                 {
-                    "FieldName": "ProductName",
-                    "Operator": 8,  # Contains (chứa)
-                    "OperandType": 0,
+                    "Group": None,
+                    "Addition": 1,
+                    "InputType": 1,
+                    "IsFromFormula": True,
+                    "Operator": 7,  # 7 = Contains (chứa)
+                    "Property": "ProductName",
+                    "Text": name.strip(),
                     "Value": name.strip()
                 }
             ],
-            "Sorts": [],
-            "Page": 1,
-            "PageSize": limit,
-            "Start": 0,
+            "Formula": "( 1 )",
+            "LayoutCode": "Product",
             "DefaultTotal": False,
             "IsMappingData": False,
+            "MappingValueObject": {},
             "IsApproved": False,
+            "CustomPagingData": {},
             "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
             "IsListPaging": True,
             "IsGetCache": True,
             "IsCheckInactive": False,
-            "layoutCode": "product"
+            "IsConverted": False,
+            "SessionID": str(uuid.uuid4()),
+            "LayoutCodeCheckPermission": "Product",
+            "AISearchKeyword": ""
         }
 
         _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm với tên: '{name}'")
@@ -1268,11 +1284,12 @@ class MisaApiUtils(models.AbstractModel):
         try:
             res = session.post(url, headers=headers, json=payload, timeout=30)
             _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code}")
+            _logger.info(f"📥 [MISA RESPONSE] Body: {res.text[:500]}")  # Log 500 ký tự đầu
             
             res_json = res.json()
             
             if not res_json.get("Success"):
-                err_msg = res_json.get("UserMessage") or res_json.get("Message") or "Unknown error"
+                err_msg = res_json.get("UserMessage") or res_json.get("Message") or res_json.get("ErrorMessage") or f"Response: {res.text[:200]}"
                 _logger.error(f"❌ MISA Search Failed: {err_msg}")
                 raise Exception(f"MISA Search Failed: {err_msg}")
             
@@ -1285,7 +1302,7 @@ class MisaApiUtils(models.AbstractModel):
             result = []
             for p in products:
                 result.append({
-                    "misa_id": p.get("ProductID"),
+                    "misa_id": p.get("ID") or p.get("ProductID"),
                     "code": p.get("ProductCode"),
                     "name": p.get("ProductName"),
                     "price": p.get("UnitPrice") or 0,
