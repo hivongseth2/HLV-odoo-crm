@@ -1238,21 +1238,28 @@ class MisaApiUtils(models.AbstractModel):
         prod_id = None
         
         # ---------------------------------------------------------
-        # 1. Tìm theo PRODUCT CODE (Ưu tiên 1 - Grid API)
+        # 1. Tìm theo PRODUCT CODE (Ưu tiên 1 - Grid API g2)
         # ---------------------------------------------------------
-        # Use user provided URL: .../g1/api/business/Product/Grid
-        url_search = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
+        # Note: Dùng g2 ổn định hơn g1 cho filter params
+        url_search = "https://amisapp.misa.vn/crm/g2/api/business/Product/grid"
         
-        # Filter Code (Contains) to be safe
+        # Payload chuẩn cho Grid Search
         payload_code = {
-            "Page": 1, "PageSize": 10,
+            "Page": 1, 
+            "PageSize": 10,
             "Filters": [{"FieldName": "ProductCode", "Operator": 1, "Value": clean_name}], # 1: Contains
             "LayoutCode": "Product",
             "Columns": "ProductID,ProductCode,ProductName"
         }
         try:
-            _logger.info(f"   → Trying Code Search (Grid): {clean_name}")
-            res = session.post(url_search, headers=headers, json=payload_code, timeout=10)
+            _logger.info(f"   → Trying Code Search (g2 Grid): {clean_name}")
+            # _logger.info(f"     Payload: {payload_code}")
+            
+            res = session.post(url_search, headers=headers, json=payload_code, timeout=15)
+            
+            if not res.ok:
+                _logger.warning(f"     ⚠️ API Code Search Failed: {res.status_code} - {res.text}")
+            
             data = res.json().get("Data", [])
             _logger.info(f"   → Code Search Result: {len(data)} items")
             
@@ -1260,13 +1267,13 @@ class MisaApiUtils(models.AbstractModel):
                 # Ưu tiên chính xác 100%
                 if str(item.get("ProductCode")).strip().lower() == clean_name.lower():
                     prod_id = item.get("ProductID") or item.get("ID")
-                    _logger.info(f"   ✅ Exact Code Match: {prod_id}")
+                    _logger.info(f"   ✅ Exact Code Match (g2): {prod_id}")
                     break
             
             # Nếu không có match chính xác, lấy cái đầu tiên tìm thấy
             if not prod_id and data:
                  prod_id = data[0].get("ProductID") or data[0].get("ID")
-                 _logger.info(f"   ✅ Approximate Code Match: {prod_id}")
+                 _logger.info(f"   ✅ Approximate Code Match (g2): {prod_id}")
 
         except Exception as e:
              _logger.warning(f"⚠️ Code Search Error: {e}")
@@ -1276,19 +1283,20 @@ class MisaApiUtils(models.AbstractModel):
         # ---------------------------------------------------------
         if not prod_id:
             payload_name = {
-                "Page": 1, "PageSize": 5,
+                "Page": 1, 
+                "PageSize": 5,
                 "Filters": [{"FieldName": "ProductName", "Operator": 1, "Value": clean_name}],
                 "LayoutCode": "Product",
                 "Columns": "ProductID,ProductCode,ProductName"
             }
             try:
-                _logger.info(f"   → Trying Name Search (Grid): {clean_name}")
-                res = session.post(url_search, headers=headers, json=payload_name, timeout=10)
+                _logger.info(f"   → Trying Name Search (g2 Grid): {clean_name}")
+                res = session.post(url_search, headers=headers, json=payload_name, timeout=15)
                 data = res.json().get("Data", [])
                 
                 if data:
                     prod_id = data[0].get("ProductID") or data[0].get("ID")
-                    _logger.info(f"   ✅ Name Match: {prod_id}")
+                    _logger.info(f"   ✅ Name Match (g2): {prod_id}")
             except Exception as e:
                 _logger.warning(f"⚠️ Name Search Error: {e}")
 
@@ -1296,7 +1304,8 @@ class MisaApiUtils(models.AbstractModel):
              _logger.warning(f"⚠️ [API Search] Not found: {clean_name}")
              return None
 
-        # 3. Lấy Full Detail
+        # 3. Lấy Full Detail (Dùng ID từ bước trên)
+        # URL format: .../FormDataNew/Product/{ID}/45
         url_detail = f"https://amisapp.misa.vn/crm/g2/api/business/Product/FormDataNew/Product/{prod_id}/45"
             
         # Clean header for GET
