@@ -72,41 +72,76 @@ class MisaController(http.Controller):
                 "message": str(e)
             }
 
-    @http.route('/api/misa/product/search', type='http', auth='public', methods=['POST'], csrf=False)
+    @http.route('/api/misa/product/search', type='json', auth='public', methods=['POST'], csrf=False)
     def api_search_product_misa(self, **kwargs):
         """
-        API tìm kiếm sản phẩm MISA (HTTP Type -> Support raw JSON).
-        Body: {"name": "..."}
+        API tìm kiếm sản phẩm MISA theo tên.
+        
+        Body mẫu (JSON):
+        {
+            "jsonrpc": "2.0",
+            "params": {
+                "name": "Tên sản phẩm cần tìm",
+                "limit": 20
+            }
+        }
+        
+        Response:
+        {
+            "status": "success",
+            "message": "Tìm thấy N sản phẩm",
+            "data": {
+                "total": N,
+                "products": [
+                    {
+                        "misa_id": "...",
+                        "code": "SP001",
+                        "name": "Tên sản phẩm",
+                        "price": 100000,
+                        "unit": "Cái",
+                        "category": "Hàng hóa",
+                        "tax": "10%",
+                        "type": "Hàng hóa",
+                        "active": true
+                    },
+                    ...
+                ]
+            }
+        }
         """
         try:
-            # Parse Header & Body
-            import json
-            data = request.get_json_data()
-            name = data.get('name')
-            
+            # 1. Lấy tham số
+            name = kwargs.get('name')
+            limit = kwargs.get('limit', 20)
+
+            # Validate cơ bản
             if not name:
-                return request.make_response(
-                    json.dumps({"status": "error", "message": "Thiếu tham số 'name'"}),
-                    headers=[('Content-Type', 'application/json')]
-                )
+                return {
+                    "status": "error", 
+                    "message": "Thiếu thông tin bắt buộc: name"
+                }
 
+            # 2. Gọi logic xử lý (Dùng sudo để bypass quyền)
             misa_utils = request.env['misa.api.utils'].sudo()
-            result_data = misa_utils.search_product_misa_raw(name)
             
-            if not result_data:
-                return request.make_response(
-                    json.dumps({"status": "error", "message": "Không tìm thấy sản phẩm"}),
-                    headers=[('Content-Type', 'application/json')]
-                )
-
-            return request.make_response(
-                json.dumps({"status": "success", "data": result_data}),
-                headers=[('Content-Type', 'application/json')]
+            products = misa_utils.search_product_by_name(
+                name=name, 
+                limit=int(limit)
             )
+
+            # 3. Trả về kết quả
+            return {
+                "status": "success",
+                "message": f"Tìm thấy {len(products)} sản phẩm",
+                "data": {
+                    "total": len(products),
+                    "products": products
+                }
+            }
 
         except Exception as e:
-            _logger.exception("API Search MISA Error")
-            return request.make_response(
-                json.dumps({"status": "error", "message": str(e)}),
-                headers=[('Content-Type', 'application/json')]
-            )
+            _logger.exception("API MISA Search Error")
+            return {
+                "status": "error",
+                "message": str(e)
+            }

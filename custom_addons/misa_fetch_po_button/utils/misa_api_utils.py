@@ -1203,6 +1203,110 @@ class MisaApiUtils(models.AbstractModel):
 
         return misa_id
     
+    # =========================================================================
+    # API SEARCH PRODUCT BY NAME
+    # =========================================================================
+    def search_product_by_name(self, name, limit=20):
+        """
+        Tìm kiếm sản phẩm trong MISA CRM theo tên.
+        
+        Args:
+            name (str): Tên sản phẩm cần tìm (tìm kiếm gần đúng)
+            limit (int): Số lượng kết quả tối đa (mặc định 20)
+            
+        Returns:
+            list: Danh sách sản phẩm tìm thấy, mỗi item chứa các trường:
+                - ProductID: ID của sản phẩm trong MISA
+                - ProductCode: Mã sản phẩm
+                - ProductName: Tên sản phẩm
+                - UnitPrice: Giá bán
+                - UsageUnitIDText: Đơn vị tính
+                - ProductCategoryIDText: Nhóm hàng
+                - TaxIDText: Thuế
+                - Active: Trạng thái hoạt động
+        """
+        misa_config = self.env['misa.config']
+        token = self._fetch_login_crm_token()
+        if not token:
+            raise Exception("Lỗi Token MISA")
+
+        headers = misa_config.get_crm_header(token)
+        headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+
+        # API endpoint cho tìm kiếm sản phẩm
+        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/grid"
+        
+        # Payload tìm kiếm theo tên (LIKE search)
+        # Operator = 8 là "Contains" (chứa) trong MISA
+        payload = {
+            "Columns": "ProductID,ProductCode,ProductName,UnitPrice,UsageUnitIDText,ProductCategoryIDText,TaxIDText,Active,Inactive,PurchasedPrice,ProductPropertiesIDText",
+            "Filters": [
+                {
+                    "FieldName": "ProductName",
+                    "Operator": 8,  # Contains (chứa)
+                    "OperandType": 0,
+                    "Value": name.strip()
+                }
+            ],
+            "Sorts": [],
+            "Page": 1,
+            "PageSize": limit,
+            "Start": 0,
+            "DefaultTotal": False,
+            "IsMappingData": False,
+            "IsApproved": False,
+            "IsUsedELTS": True,
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "layoutCode": "product"
+        }
+
+        _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm với tên: '{name}'")
+
+        session = self._get_retry_session()
+        try:
+            res = session.post(url, headers=headers, json=payload, timeout=30)
+            _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code}")
+            
+            res_json = res.json()
+            
+            if not res_json.get("Success"):
+                err_msg = res_json.get("UserMessage") or res_json.get("Message") or "Unknown error"
+                _logger.error(f"❌ MISA Search Failed: {err_msg}")
+                raise Exception(f"MISA Search Failed: {err_msg}")
+            
+            products = res_json.get("Data", []) or []
+            total = res_json.get("Total", 0)
+            
+            _logger.info(f"✅ [MISA SEARCH] Tìm thấy {len(products)}/{total} sản phẩm")
+            
+            # Format lại kết quả để dễ sử dụng
+            result = []
+            for p in products:
+                result.append({
+                    "misa_id": p.get("ProductID"),
+                    "code": p.get("ProductCode"),
+                    "name": p.get("ProductName"),
+                    "price": p.get("UnitPrice") or 0,
+                    "cost": p.get("PurchasedPrice") or 0,
+                    "unit": p.get("UsageUnitIDText"),
+                    "category": p.get("ProductCategoryIDText"),
+                    "tax": p.get("TaxIDText"),
+                    "type": p.get("ProductPropertiesIDText"),
+                    "active": p.get("Active", True),
+                    "raw_data": p  # Giữ lại data gốc nếu cần
+                })
+            
+            return result
+
+        except requests.exceptions.RequestException as e:
+            _logger.exception(f"❌ Request error: {e}")
+            raise Exception(f"Lỗi kết nối MISA: {e}")
+        except Exception as e:
+            _logger.exception(f"❌ Search error: {e}")
+            raise e
+
     def _get_empty_serial_row(self, sort_order):
         """Hàm tạo dòng rỗng cho bảng quy cách"""
         return {
@@ -1215,124 +1319,3 @@ class MisaApiUtils(models.AbstractModel):
             "IsExchangeProduct": None, "ExchangePoint": 0,
             "TotalAmountBasedUPriceAndDATax": False, "AmountBasedOnPriceAfterTax": False
         }
-
-    # -------------------------------------------------------------------------
-    # API RAW: SEARCH PRODUCT (NEW)
-    # -------------------------------------------------------------------------
-    def search_product_misa_raw(self, name):
-        """
-        Tìm sản phẩm theo tên và trả về full detail.
-        """
-        misa_config = self.env['misa.config']
-        token = self._fetch_login_crm_token()
-        if not token:
-            raise Exception("Lỗi Token MISA")
-
-        headers = misa_config.get_crm_header(token)
-        headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
-        
-        # -------------------------------------------------------------
-        # 🔥 FIX HEADER: Remove hardcoded content-length from config
-        # -------------------------------------------------------------
-        if "content-length" in headers: del headers["content-length"]
-        if "Content-Length" in headers: del headers["Content-Length"]
-        
-        # Add Browser Headers (Important for g2)
-        headers.update({
-             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-             "Origin": "https://amisapp.misa.vn",
-             "Referer": "https://amisapp.misa.vn/",
-             "companycode": headers.get("companycode", "3R2PY2F4") # Ensure companycode
-        })
-
-        clean_name = str(name).strip()
-        _logger.info(f"🔎 [API Search] Searching for: '{clean_name}'")
-        # _logger.info(f"    Headers: {headers}") # Debug if needed
-
-        session = self._get_retry_session()
-        prod_id = None
-        
-        # ---------------------------------------------------------
-        # 1. Tìm theo PRODUCT CODE (Ưu tiên 1 - Grid API g2)
-        # ---------------------------------------------------------
-        # Note: Dùng g2 ổn định hơn g1 cho filter params
-        url_search = "https://amisapp.misa.vn/crm/g2/api/business/Product/grid"
-        
-        # Payload chuẩn cho Grid Search
-        payload_code = {
-            "Page": 1, 
-            "PageSize": 10,
-            "Filters": [{"FieldName": "ProductCode", "Operator": 1, "Value": clean_name}], # 1: Contains
-            "LayoutCode": "Product",
-            "Columns": "ProductID,ProductCode,ProductName"
-        }
-        try:
-            _logger.info(f"   → Trying Code Search (g2 Grid): {clean_name}")
-            # _logger.info(f"     Payload: {payload_code}")
-            
-            res = session.post(url_search, headers=headers, json=payload_code, timeout=15)
-            
-            if not res.ok:
-                _logger.warning(f"     ⚠️ API Code Search Failed: {res.status_code} - {res.text}")
-            
-            data = res.json().get("Data", [])
-            _logger.info(f"   → Code Search Result: {len(data)} items")
-            
-            for item in data:
-                # Ưu tiên chính xác 100%
-                if str(item.get("ProductCode")).strip().lower() == clean_name.lower():
-                    prod_id = item.get("ProductID") or item.get("ID")
-                    _logger.info(f"   ✅ Exact Code Match (g2): {prod_id}")
-                    break
-            
-            # Nếu không có match chính xác, lấy cái đầu tiên tìm thấy
-            if not prod_id and data:
-                 prod_id = data[0].get("ProductID") or data[0].get("ID")
-                 _logger.info(f"   ✅ Approximate Code Match (g2): {prod_id}")
-
-        except Exception as e:
-             _logger.warning(f"⚠️ Code Search Error: {e}")
-
-        # ---------------------------------------------------------
-        # 2. Tìm theo PRODUCT NAME (Ưu tiên 2 - Fallback)
-        # ---------------------------------------------------------
-        if not prod_id:
-            payload_name = {
-                "Page": 1, 
-                "PageSize": 5,
-                "Filters": [{"FieldName": "ProductName", "Operator": 1, "Value": clean_name}],
-                "LayoutCode": "Product",
-                "Columns": "ProductID,ProductCode,ProductName"
-            }
-            try:
-                _logger.info(f"   → Trying Name Search (g2 Grid): {clean_name}")
-                res = session.post(url_search, headers=headers, json=payload_name, timeout=15)
-                data = res.json().get("Data", [])
-                
-                if data:
-                    prod_id = data[0].get("ProductID") or data[0].get("ID")
-                    _logger.info(f"   ✅ Name Match (g2): {prod_id}")
-            except Exception as e:
-                _logger.warning(f"⚠️ Name Search Error: {e}")
-
-        if not prod_id:
-             _logger.warning(f"⚠️ [API Search] Not found: {clean_name}")
-             return None
-
-        # 3. Lấy Full Detail (Dùng ID từ bước trên)
-        # URL format: .../FormDataNew/Product/{ID}/45
-        url_detail = f"https://amisapp.misa.vn/crm/g2/api/business/Product/FormDataNew/Product/{prod_id}/45"
-            
-        # Clean header for GET
-        get_headers = headers.copy()
-        for k in ['content-length', 'Content-Length', 'content-type', 'Content-Type']:
-            get_headers.pop(k, None)
-
-        res_detail = session.get(url_detail, headers=get_headers, timeout=20)
-        if res_detail.ok and res_detail.json().get("Success"):
-            full_data = res_detail.json().get("Data")
-            return full_data
-        else:
-            _logger.warning(f"⚠️ Detail Fetch Failed: {res_detail.text}")
-            return None
-
