@@ -1238,40 +1238,59 @@ class MisaApiUtils(models.AbstractModel):
         prod_id = None
         
         # ---------------------------------------------------------
-        # 1. Tìm theo PRODUCT CODE (Ưu tiên 1 - Chính xác)
+        # 1. Tìm theo PRODUCT CODE (Ưu tiên 1 - Grid API)
         # ---------------------------------------------------------
-        url_search = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+        # DataSubPaging failed? Try Grid.
+        url_search = "https://amisapp.misa.vn/crm/g2/api/business/Product/grid"
         
-        # Filter Code (Equals)
+        # Filter Code (Contains) to be safe
         payload_code = {
-            "Page": 1, "PageSize": 1,
-            "Filters": [{"FieldName": "ProductCode", "Operator": 0, "Value": clean_name}], # 0: Equals
-            "LayoutCode": "Product"
+            "Page": 1, "PageSize": 10,
+            "Filters": [{"FieldName": "ProductCode", "Operator": 1, "Value": clean_name}], # 1: Contains
+            "LayoutCode": "Product",
+            "Columns": "ProductID,ProductCode,ProductName"
         }
         try:
+            _logger.info(f"   → Trying Code Search (Grid): {clean_name}")
             res = session.post(url_search, headers=headers, json=payload_code, timeout=10)
             data = res.json().get("Data", [])
-            if data:
-                prod_id = data[0].get("ProductID") or data[0].get("ID")
-                _logger.info(f"   → Found by Code: {clean_name}")
-        except: pass
+            _logger.info(f"   → Code Search Result: {len(data)} items")
+            
+            for item in data:
+                # Ưu tiên chính xác 100%
+                if str(item.get("ProductCode")).strip().lower() == clean_name.lower():
+                    prod_id = item.get("ProductID") or item.get("ID")
+                    _logger.info(f"   ✅ Exact Code Match: {prod_id}")
+                    break
+            
+            # Nếu không có match chính xác, lấy cái đầu tiên tìm thấy
+            if not prod_id and data:
+                 prod_id = data[0].get("ProductID") or data[0].get("ID")
+                 _logger.info(f"   ✅ Approximate Code Match: {prod_id}")
+
+        except Exception as e:
+             _logger.warning(f"⚠️ Code Search Error: {e}")
 
         # ---------------------------------------------------------
-        # 2. Tìm theo PRODUCT NAME (Ưu tiên 2 - Chứa)
+        # 2. Tìm theo PRODUCT NAME (Ưu tiên 2 - Fallback)
         # ---------------------------------------------------------
         if not prod_id:
             payload_name = {
-                "Page": 1, "PageSize": 1,
-                "Filters": [{"FieldName": "ProductName", "Operator": 1, "Value": clean_name}], # 1: Contains
-                "LayoutCode": "Product"
+                "Page": 1, "PageSize": 5,
+                "Filters": [{"FieldName": "ProductName", "Operator": 1, "Value": clean_name}],
+                "LayoutCode": "Product",
+                "Columns": "ProductID,ProductCode,ProductName"
             }
             try:
+                _logger.info(f"   → Trying Name Search (Grid): {clean_name}")
                 res = session.post(url_search, headers=headers, json=payload_name, timeout=10)
                 data = res.json().get("Data", [])
+                
                 if data:
                     prod_id = data[0].get("ProductID") or data[0].get("ID")
-                    _logger.info(f"   → Found by Name: {clean_name}")
-            except: pass
+                    _logger.info(f"   ✅ Name Match: {prod_id}")
+            except Exception as e:
+                _logger.warning(f"⚠️ Name Search Error: {e}")
 
         if not prod_id:
              _logger.warning(f"⚠️ [API Search] Not found: {clean_name}")
