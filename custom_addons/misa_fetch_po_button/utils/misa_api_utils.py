@@ -1234,53 +1234,62 @@ class MisaApiUtils(models.AbstractModel):
         clean_name = str(name).strip()
         _logger.info(f"🔎 [API Search] Searching for: '{clean_name}'")
 
-        # 1. Tìm ID trước (DataSubPaging)
+        session = self._get_retry_session()
+        prod_id = None
+        
+        # ---------------------------------------------------------
+        # 1. Tìm theo PRODUCT CODE (Ưu tiên 1 - Chính xác)
+        # ---------------------------------------------------------
         url_search = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
-        payload = {
-            "Page": 1, 
-            "PageSize": 20,
-            "Filters": [
-                {
-                    "FieldName": "ProductName", 
-                    "Operator": 1, # Contains
-                    "OperandType": 0, 
-                    "Value": clean_name
-                }
-            ],
+        
+        # Filter Code (Equals)
+        payload_code = {
+            "Page": 1, "PageSize": 1,
+            "Filters": [{"FieldName": "ProductCode", "Operator": 0, "Value": clean_name}], # 0: Equals
             "LayoutCode": "Product"
         }
-
-        session = self._get_retry_session()
         try:
-            res = session.post(url_search, headers=headers, json=payload, timeout=20)
+            res = session.post(url_search, headers=headers, json=payload_code, timeout=10)
             data = res.json().get("Data", [])
-            
-            if not res.ok or not data:
-                _logger.warning(f"⚠️ [API Search] Not found: {name}")
-                return None
-            
-            # Lấy sản phẩm đầu tiên
-            first_prod = data[0]
-            prod_id = first_prod.get("ProductID") or first_prod.get("ID")
-            _logger.info(f"✅ Found product ID: {prod_id}")
+            if data:
+                prod_id = data[0].get("ProductID") or data[0].get("ID")
+                _logger.info(f"   → Found by Code: {clean_name}")
+        except: pass
 
-            # 2. Lấy Full Detail (FormDataNew)
-            # URL format: .../FormDataNew/Product/{ID}/45
-            url_detail = f"https://amisapp.misa.vn/crm/g2/api/business/Product/FormDataNew/Product/{prod_id}/45"
+        # ---------------------------------------------------------
+        # 2. Tìm theo PRODUCT NAME (Ưu tiên 2 - Chứa)
+        # ---------------------------------------------------------
+        if not prod_id:
+            payload_name = {
+                "Page": 1, "PageSize": 1,
+                "Filters": [{"FieldName": "ProductName", "Operator": 1, "Value": clean_name}], # 1: Contains
+                "LayoutCode": "Product"
+            }
+            try:
+                res = session.post(url_search, headers=headers, json=payload_name, timeout=10)
+                data = res.json().get("Data", [])
+                if data:
+                    prod_id = data[0].get("ProductID") or data[0].get("ID")
+                    _logger.info(f"   → Found by Name: {clean_name}")
+            except: pass
+
+        if not prod_id:
+             _logger.warning(f"⚠️ [API Search] Not found: {clean_name}")
+             return None
+
+        # 3. Lấy Full Detail
+        url_detail = f"https://amisapp.misa.vn/crm/g2/api/business/Product/FormDataNew/Product/{prod_id}/45"
             
-            # Clean header for GET
-            get_headers = headers.copy()
-            for k in ['content-length', 'Content-Length', 'content-type', 'Content-Type']:
-                get_headers.pop(k, None)
+        # Clean header for GET
+        get_headers = headers.copy()
+        for k in ['content-length', 'Content-Length', 'content-type', 'Content-Type']:
+            get_headers.pop(k, None)
 
-            res_detail = session.get(url_detail, headers=get_headers, timeout=20)
-            if res_detail.ok and res_detail.json().get("Success"):
-                full_data = res_detail.json().get("Data")
-                return full_data
-            else:
-                _logger.warning(f"⚠️ Detail Fetch Failed: {res_detail.text}")
-                return None
+        res_detail = session.get(url_detail, headers=get_headers, timeout=20)
+        if res_detail.ok and res_detail.json().get("Success"):
+            full_data = res_detail.json().get("Data")
+            return full_data
+        else:
+            _logger.warning(f"⚠️ Detail Fetch Failed: {res_detail.text}")
+            return None
 
-        except Exception as e:
-            _logger.error(f"❌ Error searching product: {e}")
-            raise e

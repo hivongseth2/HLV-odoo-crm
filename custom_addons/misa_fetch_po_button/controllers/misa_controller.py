@@ -72,34 +72,41 @@ class MisaController(http.Controller):
                 "message": str(e)
             }
 
-    @http.route('/api/misa/product/search', type='json', auth='public', methods=['POST'], csrf=False)
+    @http.route('/api/misa/product/search', type='http', auth='public', methods=['POST'], csrf=False)
     def api_search_product_misa(self, **kwargs):
         """
-        API tìm kiếm sản phẩm MISA và trả về Full Detail.
-        Body:
-        {
-            "name": "Búa"
-        }
+        API tìm kiếm sản phẩm MISA (HTTP Type -> Support raw JSON).
+        Body: {"name": "..."}
         """
         try:
-            name = kwargs.get('name')
+            # Parse Header & Body
+            import json
+            data = request.get_json_data()
+            name = data.get('name')
+            
             if not name:
-                return {"status": "error", "message": "Thiếu tham số 'name'"}
+                return request.make_response(
+                    json.dumps({"status": "error", "message": "Thiếu tham số 'name'"}),
+                    headers=[('Content-Type', 'application/json')]
+                )
 
             misa_utils = request.env['misa.api.utils'].sudo()
-            data = misa_utils.search_product_misa_raw(name)
+            result_data = misa_utils.search_product_misa_raw(name)
             
-            if not data:
-                return {"status": "error", "message": "Không tìm thấy sản phẩm"}
+            if not result_data:
+                return request.make_response(
+                    json.dumps({"status": "error", "message": "Không tìm thấy sản phẩm"}),
+                    headers=[('Content-Type', 'application/json')]
+                )
 
-            return {
-                "status": "success",
-                "data": data
-            }
+            return request.make_response(
+                json.dumps({"status": "success", "data": result_data}),
+                headers=[('Content-Type', 'application/json')]
+            )
 
         except Exception as e:
             _logger.exception("API Search MISA Error")
-            return {
-                "status": "error",
-                "message": str(e)
-            }
+            return request.make_response(
+                json.dumps({"status": "error", "message": str(e)}),
+                headers=[('Content-Type', 'application/json')]
+            )
