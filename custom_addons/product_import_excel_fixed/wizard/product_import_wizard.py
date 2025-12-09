@@ -15,9 +15,10 @@ class ProductImportWizard(models.TransientModel):
     file = fields.Binary(string="Excel File", required=True)
     filename = fields.Char(string="File Name")
     import_type = fields.Selection([
+        ('product_new', 'Import sản phẩm mới'),
         ('product_name', 'Cập nhật tên sản phẩm'),
         ('combo', 'Import Combo Products'),
-    ], string="Loại Import", default='product_name', required=True)
+    ], string="Loại Import", default='product_new', required=True)
 
     update_existing = fields.Boolean(string="Cập nhật nếu đã tồn tại", default=False,
         help="Nếu được chọn, các combo đã tồn tại sẽ được cập nhật tên và danh sách hàng con (xoá cũ thêm mới).")
@@ -184,10 +185,84 @@ class ProductImportWizard(models.TransientModel):
         if not self.file:
             return
 
-        if self.import_type == 'product_name':
+        if self.import_type == 'product_new':
+            return self._import_product_new()
+        elif self.import_type == 'product_name':
             return self._import_product_name()
         elif self.import_type == 'combo':
             return self._import_combo()
+
+    # -------- Import Product New --------
+    def _import_product_new(self):
+        """
+        Import sản phẩm mới từ Excel.
+        - Nếu sản phẩm đã tồn tại (theo Mã/default_code) → bỏ qua
+        - Nếu chưa có → tạo mới với sale_ok, purchase_ok, is_storable = True
+        
+        Cấu trúc Excel:
+        - Cột 'Mã': default_code (mã tham chiếu nội bộ) - BẮT BUỘC
+        - Cột 'Tên': Tên sản phẩm
+        - Cột 'ĐVT': Đơn vị tính (mặc định 'Cái' nếu không có)
+        """
+        df = self._read_excel(self.file, dtype={'Mã': str, 'Tên': str, 'ĐVT': str})
+
+        # Thống kê
+        created = 0
+        skipped_exists = 0
+        skipped_no_code = 0
+        errors = []
+
+        for _, row in df.iterrows():
+            code = self._clean_string(row.get('Mã'))
+            name = self._clean_string(row.get('Tên'))
+            uom_name = self._clean_string(row.get('ĐVT'))
+
+            if not code:
+                skipped_no_code += 1
+                continue
+
+            try:
+                product, is_new = self._get_or_create_product(
+                    code=code,
+                    name=name or code,
+                    unit_name=uom_name or 'Cái'
+                )
+
+                if is_new:
+                    created += 1
+                else:
+                    skipped_exists += 1
+
+            except Exception as e:
+                errors.append(f"[{code}]: {str(e)}")
+                _logger.exception("❌ Lỗi tạo sản phẩm [%s]: %s", code, e)
+
+        # Tạo thông báo kết quả
+        msg_lines = [
+            "Hoàn tất Import sản phẩm mới.",
+            f"- Sản phẩm tạo mới: {created}",
+            f"- Bỏ qua (đã tồn tại): {skipped_exists}",
+            f"- Bỏ qua (không có 'Mã'): {skipped_no_code}",
+        ]
+
+        if errors:
+            msg_lines.append(f"- Lỗi: {len(errors)}")
+            for err in errors[:5]:
+                msg_lines.append(f"  • {err}")
+
+        msg = "\n".join(msg_lines)
+        _logger.info(msg)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Import Sản phẩm mới',
+                'message': msg,
+                'type': 'success' if not errors else 'warning',
+                'sticky': True,
+            }
+        }
 
     # -------- Import Product Name (logic cũ) --------
     def _import_product_name(self):
