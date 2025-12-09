@@ -1240,8 +1240,8 @@ class MisaApiUtils(models.AbstractModel):
         # ---------------------------------------------------------
         # 1. Tìm theo PRODUCT CODE (Ưu tiên 1 - Grid API)
         # ---------------------------------------------------------
-        # DataSubPaging failed? Try Grid.
-        url_search = "https://amisapp.misa.vn/crm/g2/api/business/Product/grid"
+        # Use user provided URL: .../g1/api/business/Product/Grid
+        url_search = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
         
         # Filter Code (Contains) to be safe
         payload_code = {
