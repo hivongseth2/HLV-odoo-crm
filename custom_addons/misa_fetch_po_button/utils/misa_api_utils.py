@@ -966,48 +966,41 @@ class MisaApiUtils(models.AbstractModel):
         return None, None
 
     def _get_category_id_by_name(self, headers, name):
-        """Tìm Category ID theo tên (API Grid - Server Side Filter)"""
+        """Tìm Category ID theo tên (API Grid - Fetch All & Filter Client Side)"""
         url = "https://amisapp.misa.vn/crm/g2/api/business/ProductCategory/grid"
-        clean_name = str(name).strip()
+        clean_name = str(name).strip().lower()
         
-        # Dùng server-side filter: Nhanh hơn & Không bị giới hạn 500 dòng
+        # Quay về fetch list (an toàn hơn server side filter) nhưng tăng pageSize
+        # Server side filter gây lỗi 500 với object ProductCategory
         payload = {
-            "Filters": [
-                {
-                    "FieldName": "ProductCategoryName",
-                    "Operator": 1, 
-                    "OperandType": 0,
-                    "Value": clean_name
-                }
-            ], 
+            "Filters": [], 
             "page": 1, 
-            "pageSize": 20, 
+            "pageSize": 5000, # Lấy 5000 dòng để bao gồm hết
             "Columns": "ProductCategoryID,ProductCategoryName", 
             "layoutCode": "ProductCategory"
         }
         
         session = self._get_retry_session()
         try:
-            _logger.info(f"🔎 [MISA] Finding Category: '{clean_name}'")
-            res = session.post(url, headers=headers, json=payload, timeout=20)
+            _logger.info(f"🔎 [MISA] Fetching all categories to find: '{name}'")
+            res = session.post(url, headers=headers, json=payload, timeout=30)
             
             if res.ok and res.json().get("Success"):
-                data = res.json().get("Data", [])
-                _logger.info(f"🔎 [MISA] Found {len(data)} categories for '{clean_name}'. Data: {data}")
+                items = res.json().get("Data", [])
+                _logger.info(f"🔎 [MISA] Total categories fetched: {len(items)}")
                 
-                if data:
-                    # Lấy phần tử đầu tiên tìm thấy
-                    first_item = data[0]
-                    # FIX QUAN TRỌNG: Cần lấy ProductCategoryID (Int) thay vì ID (GUID/None)
-                    # Vì Columns chỉ xin ProductCategoryID nên ID có thể là None
-                    cat_id = first_item.get("ProductCategoryID")
-                    if cat_id:
-                        return cat_id
-                    
-                    # Fallback nếu API trả về ID
-                    return first_item.get("ID")
+                for item in items:
+                    c_name = str(item.get("ProductCategoryName") or "").strip().lower()
+                    if c_name == clean_name:
+                         # Found!
+                         cat_id = item.get("ProductCategoryID")
+                         _logger.info(f"✅ Found Category '{name}': ProductCategoryID={cat_id}")
+                         if cat_id:
+                             return cat_id
+                         return item.get("ID")
+                         
             else:
-                 _logger.warning(f"⚠️ [MISA] Category Search Failed: {res.text}")
+                 _logger.warning(f"⚠️ [MISA] Category List Fetch Failed: {res.text}")
 
         except Exception as e:
              _logger.warning(f"⚠️ Lỗi tìm Category MISA '{name}': {e}")
