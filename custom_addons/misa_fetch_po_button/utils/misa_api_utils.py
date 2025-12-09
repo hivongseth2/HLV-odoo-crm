@@ -966,21 +966,46 @@ class MisaApiUtils(models.AbstractModel):
         return None, None
 
     def _get_category_id_by_name(self, headers, name):
-        """Tìm Category ID theo tên (API Grid)"""
+        """Tìm Category ID theo tên (API Grid - Server Side Filter)"""
         url = "https://amisapp.misa.vn/crm/g2/api/business/ProductCategory/grid"
+        
+        # Dùng server-side filter: Nhanh hơn & Không bị giới hạn 500 dòng
         payload = {
-            "Filters": [], "page": 1, "pageSize": 500, 
-            "Columns": "ProductCategoryID,ProductCategoryName", "layoutCode": "ProductCategory"
+            "Filters": [
+                {
+                    "FieldName": "ProductCategoryName",
+                    "Operator": 1,  # Operator 1 = 'Contains' or 'Equals'
+                    "OperandType": 0,
+                    "Value": str(name)
+                }
+            ], 
+            "page": 1, 
+            "pageSize": 20, 
+            "Columns": "ProductCategoryID,ProductCategoryName", 
+            "layoutCode": "ProductCategory"
         }
+        
         session = self._get_retry_session()
         try:
             res = session.post(url, headers=headers, json=payload, timeout=20)
+            
             if res.ok and res.json().get("Success"):
-                search = name.lower()
-                for item in res.json().get("Data", []):
-                    if item.get("ProductCategoryName", "").lower() == search:
-                        return item.get("ID")
-        except: pass
+                data = res.json().get("Data", [])
+                if data:
+                    # Lấy phần tử đầu tiên tìm thấy
+                    first_item = data[0]
+                    # FIX QUAN TRỌNG: Cần lấy ProductCategoryID (Int) thay vì ID (GUID/None)
+                    # Vì Columns chỉ xin ProductCategoryID nên ID có thể là None
+                    cat_id = first_item.get("ProductCategoryID")
+                    if cat_id:
+                        return cat_id
+                    
+                    # Fallback nếu API trả về ID
+                    return first_item.get("ID")
+
+        except Exception as e:
+             _logger.warning(f"⚠️ Lỗi tìm Category MISA '{name}': {e}")
+        
         return None
 
     def _get_retry_session(self):
