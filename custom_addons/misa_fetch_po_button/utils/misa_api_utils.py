@@ -1231,8 +1231,23 @@ class MisaApiUtils(models.AbstractModel):
         headers = misa_config.get_crm_header(token)
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
         
+        # -------------------------------------------------------------
+        # 🔥 FIX HEADER: Remove hardcoded content-length from config
+        # -------------------------------------------------------------
+        if "content-length" in headers: del headers["content-length"]
+        if "Content-Length" in headers: del headers["Content-Length"]
+        
+        # Add Browser Headers (Important for g2)
+        headers.update({
+             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+             "Origin": "https://amisapp.misa.vn",
+             "Referer": "https://amisapp.misa.vn/",
+             "companycode": headers.get("companycode", "3R2PY2F4") # Ensure companycode
+        })
+
         clean_name = str(name).strip()
         _logger.info(f"🔎 [API Search] Searching for: '{clean_name}'")
+        # _logger.info(f"    Headers: {headers}") # Debug if needed
 
         session = self._get_retry_session()
         prod_id = None
