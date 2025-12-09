@@ -966,44 +966,99 @@ class MisaApiUtils(models.AbstractModel):
         return None, None
 
     def _get_category_id_by_name(self, headers, name):
-        """Tìm Category ID theo tên (API Grid - Fetch All & Filter Client Side)"""
-        url = "https://amisapp.misa.vn/crm/g2/api/business/ProductCategory/grid"
+        """Tìm Category ID: Ưu tiên Tree API -> Fallback Grid Pagination"""
         clean_name = str(name).strip().lower()
-        
-        # Quay về fetch list (an toàn hơn server side filter) nhưng tăng pageSize
-        # Server side filter gây lỗi 500 với object ProductCategory
-        payload = {
-            "Filters": [], 
-            "page": 1, 
-            "pageSize": 5000, # Lấy 5000 dòng để bao gồm hết
-            "Columns": "ProductCategoryID,ProductCategoryName", 
-            "layoutCode": "ProductCategory"
-        }
-        
         session = self._get_retry_session()
+
+        # =====================================================================
+        # CÁCH 1: TREE API (Nhanh, lấy cấu trúc cây)
+        # =====================================================================
         try:
-            _logger.info(f"🔎 [MISA] Fetching all categories to find: '{name}'")
-            res = session.post(url, headers=headers, json=payload, timeout=30)
+            # Clean header cho GET request
+            get_headers = headers.copy()
+            for k in ['content-length', 'Content-Length', 'content-type', 'Content-Type']:
+                get_headers.pop(k, None)
+            
+            # API Tree Generic
+            # User sample: .../tree/69551/false (69551=Product ID)
+            # Since we are creating, use 0 or dummy ID.
+            url_tree = "https://amisapp.misa.vn/crm/g1/api/business/ProductCategory/tree/0/false"
+            
+            _logger.info(f"🔎 [MISA] Start Tree Search for: '{clean_name}'")
+            res = session.get(url_tree, headers=get_headers, timeout=20)
             
             if res.ok and res.json().get("Success"):
-                items = res.json().get("Data", [])
-                _logger.info(f"🔎 [MISA] Total categories fetched: {len(items)}")
+                raw_data = res.json().get("Data")
+                # Data trả về là String JSON -> cần parse
+                nodes = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
                 
+                if isinstance(nodes, list):
+                    # Hàm đệ quy tìm kiếm
+                    def recursive_search(n_list):
+                        for node in n_list:
+                            # So sánh tên
+                            if str(node.get("ProductCategoryName") or "").strip().lower() == clean_name:
+                                return node.get("ID")
+                            # Tìm trong con
+                            childs = node.get("Children")
+                            if childs and isinstance(childs, list):
+                                found = recursive_search(childs)
+                                if found: return found
+                        return None
+                    
+                    found_id = recursive_search(nodes)
+                    if found_id:
+                        _logger.info(f"✅ [Tree] Found Category ID: {found_id}")
+                        return found_id
+                    _logger.info("   → Not found in Tree.")
+            else:
+                 _logger.warning(f"⚠️ [Tree] API Failed: {res.text}")
+
+        except Exception as e:
+            _logger.warning(f"⚠️ [Tree] Exception: {e}")
+
+        # =====================================================================
+        # CÁCH 2: GRID PAGINATION (Fallback - Chậm nhưng chắc)
+        # =====================================================================
+        _logger.info(f"Values fallback to Grid Pagination for: '{clean_name}'")
+        
+        url_grid = "https://amisapp.misa.vn/crm/g2/api/business/ProductCategory/grid"
+        page = 1
+        page_size = 200 # An toàn, tránh 500 error
+        max_loop = 50 
+
+        while page <= max_loop:
+            payload = {
+                "Filters": [], 
+                "page": page, 
+                "pageSize": page_size, 
+                "Columns": "ProductCategoryID,ProductCategoryName", 
+                "layoutCode": "ProductCategory"
+            }
+            
+            try:
+                res = session.post(url_grid, headers=headers, json=payload, timeout=20)
+                
+                if not res.ok or not res.json().get("Success"):
+                     break
+                
+                items = res.json().get("Data", [])
+                if not items:
+                    break
+
                 for item in items:
                     c_name = str(item.get("ProductCategoryName") or "").strip().lower()
                     if c_name == clean_name:
-                         # Found!
                          cat_id = item.get("ProductCategoryID")
-                         _logger.info(f"✅ Found Category '{name}': ProductCategoryID={cat_id}")
-                         if cat_id:
-                             return cat_id
-                         return item.get("ID")
-                         
-            else:
-                 _logger.warning(f"⚠️ [MISA] Category List Fetch Failed: {res.text}")
-
-        except Exception as e:
-             _logger.warning(f"⚠️ Lỗi tìm Category MISA '{name}': {e}")
+                         _logger.info(f"✅ [Grid] Found at Page {page}: {cat_id}")
+                         return cat_id or item.get("ID")
+                
+                if len(items) < page_size:
+                    break
+                page += 1
+                
+            except:
+                break
         
         return None
 
