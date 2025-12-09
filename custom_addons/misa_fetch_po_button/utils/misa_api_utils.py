@@ -1215,3 +1215,72 @@ class MisaApiUtils(models.AbstractModel):
             "IsExchangeProduct": None, "ExchangePoint": 0,
             "TotalAmountBasedUPriceAndDATax": False, "AmountBasedOnPriceAfterTax": False
         }
+
+    # -------------------------------------------------------------------------
+    # API RAW: SEARCH PRODUCT (NEW)
+    # -------------------------------------------------------------------------
+    def search_product_misa_raw(self, name):
+        """
+        Tìm sản phẩm theo tên và trả về full detail.
+        """
+        misa_config = self.env['misa.config']
+        token = self._fetch_login_crm_token()
+        if not token:
+            raise Exception("Lỗi Token MISA")
+
+        headers = misa_config.get_crm_header(token)
+        headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+        
+        clean_name = str(name).strip()
+        _logger.info(f"🔎 [API Search] Searching for: '{clean_name}'")
+
+        # 1. Tìm ID trước (DataSubPaging)
+        url_search = "https://amisapp.misa.vn/crm/g2/api/business/Product/DataSubPaging"
+        payload = {
+            "Page": 1, 
+            "PageSize": 20,
+            "Filters": [
+                {
+                    "FieldName": "ProductName", 
+                    "Operator": 1, # Contains
+                    "OperandType": 0, 
+                    "Value": clean_name
+                }
+            ],
+            "LayoutCode": "Product"
+        }
+
+        session = self._get_retry_session()
+        try:
+            res = session.post(url_search, headers=headers, json=payload, timeout=20)
+            data = res.json().get("Data", [])
+            
+            if not res.ok or not data:
+                _logger.warning(f"⚠️ [API Search] Not found: {name}")
+                return None
+            
+            # Lấy sản phẩm đầu tiên
+            first_prod = data[0]
+            prod_id = first_prod.get("ProductID") or first_prod.get("ID")
+            _logger.info(f"✅ Found product ID: {prod_id}")
+
+            # 2. Lấy Full Detail (FormDataNew)
+            # URL format: .../FormDataNew/Product/{ID}/45
+            url_detail = f"https://amisapp.misa.vn/crm/g2/api/business/Product/FormDataNew/Product/{prod_id}/45"
+            
+            # Clean header for GET
+            get_headers = headers.copy()
+            for k in ['content-length', 'Content-Length', 'content-type', 'Content-Type']:
+                get_headers.pop(k, None)
+
+            res_detail = session.get(url_detail, headers=get_headers, timeout=20)
+            if res_detail.ok and res_detail.json().get("Success"):
+                full_data = res_detail.json().get("Data")
+                return full_data
+            else:
+                _logger.warning(f"⚠️ Detail Fetch Failed: {res_detail.text}")
+                return None
+
+        except Exception as e:
+            _logger.error(f"❌ Error searching product: {e}")
+            raise e

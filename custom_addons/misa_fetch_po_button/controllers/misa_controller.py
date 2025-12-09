@@ -71,3 +71,35 @@ class MisaController(http.Controller):
                 "status": "error",
                 "message": str(e)
             }
+
+    @http.route('/api/misa/product/search', type='json', auth='public', methods=['POST'], csrf=False)
+    def api_search_product_misa(self, **kwargs):
+        """
+        API tìm kiếm sản phẩm MISA và trả về Full Detail.
+        Body:
+        {
+            "name": "Búa"
+        }
+        """
+        try:
+            name = kwargs.get('name')
+            if not name:
+                return {"status": "error", "message": "Thiếu tham số 'name'"}
+
+            misa_utils = request.env['misa.api.utils'].sudo()
+            data = misa_utils.search_product_misa_raw(name)
+            
+            if not data:
+                return {"status": "error", "message": "Không tìm thấy sản phẩm"}
+
+            return {
+                "status": "success",
+                "data": data
+            }
+
+        except Exception as e:
+            _logger.exception("API Search MISA Error")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
