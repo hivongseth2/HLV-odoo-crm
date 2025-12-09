@@ -968,15 +968,16 @@ class MisaApiUtils(models.AbstractModel):
     def _get_category_id_by_name(self, headers, name):
         """Tìm Category ID theo tên (API Grid - Server Side Filter)"""
         url = "https://amisapp.misa.vn/crm/g2/api/business/ProductCategory/grid"
+        clean_name = str(name).strip()
         
         # Dùng server-side filter: Nhanh hơn & Không bị giới hạn 500 dòng
         payload = {
             "Filters": [
                 {
                     "FieldName": "ProductCategoryName",
-                    "Operator": 1,  # Operator 1 = 'Contains' or 'Equals'
+                    "Operator": 1, 
                     "OperandType": 0,
-                    "Value": str(name)
+                    "Value": clean_name
                 }
             ], 
             "page": 1, 
@@ -987,10 +988,13 @@ class MisaApiUtils(models.AbstractModel):
         
         session = self._get_retry_session()
         try:
+            _logger.info(f"🔎 [MISA] Finding Category: '{clean_name}'")
             res = session.post(url, headers=headers, json=payload, timeout=20)
             
             if res.ok and res.json().get("Success"):
                 data = res.json().get("Data", [])
+                _logger.info(f"🔎 [MISA] Found {len(data)} categories for '{clean_name}'. Data: {data}")
+                
                 if data:
                     # Lấy phần tử đầu tiên tìm thấy
                     first_item = data[0]
@@ -1002,6 +1006,8 @@ class MisaApiUtils(models.AbstractModel):
                     
                     # Fallback nếu API trả về ID
                     return first_item.get("ID")
+            else:
+                 _logger.warning(f"⚠️ [MISA] Category Search Failed: {res.text}")
 
         except Exception as e:
              _logger.warning(f"⚠️ Lỗi tìm Category MISA '{name}': {e}")
