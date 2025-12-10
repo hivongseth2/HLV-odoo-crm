@@ -12,9 +12,10 @@ let _hlvCurrentController = null;
  */
 const FILTER_CONFIG = {
     'name': { type: 'text', label: 'Tham chiếu', field: 'name' },
-    'partner_id': { type: 'text', label: 'Liên hệ', field: 'partner_id.name' },
+    'x_studio_lin_h_1': { type: 'text', label: 'Liên hệ', field: 'x_studio_lin_h_1' },
     'location_id': { type: 'text', label: 'Từ', field: 'location_id.complete_name' },
     'location_dest_id': { type: 'text', label: 'Đến', field: 'location_dest_id.complete_name' },
+    'date': { type: 'date', label: 'Ngày tạo', field: 'date' },
     'scheduled_date': { type: 'date', label: 'Ngày lên lịch', field: 'scheduled_date' },
     'date_deadline': { type: 'date', label: 'Ngày hạn', field: 'date_deadline' },
     'origin': { type: 'text', label: 'Chứng từ gốc', field: 'origin' },
@@ -121,7 +122,7 @@ patch(ListRenderer.prototype, {
         `;
 
         let inputHtml = '';
-        
+
         if (config.type === 'text') {
             inputHtml = `
                 <input type="text" class="form-control form-control-sm hlv-filter-input"
@@ -141,7 +142,7 @@ patch(ListRenderer.prototype, {
                 <button class="btn btn-sm btn-primary w-100 hlv-filter-apply">Áp dụng</button>
             `;
         } else if (config.type === 'select') {
-            const optionsHtml = config.options.map(opt => 
+            const optionsHtml = config.options.map(opt =>
                 `<option value="${opt.value}">${opt.label}</option>`
             ).join('');
             inputHtml = `
