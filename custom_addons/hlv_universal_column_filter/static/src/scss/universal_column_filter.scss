@@ -86,3 +86,18 @@
     background-color: #5a6268;
     border-color: #545b62;
 }
+
+/* Product search bar in control panel (same as PO preview) */
+.hlv-product-search-bar {
+    flex-shrink: 0;
+}
+
+.hlv-product-search-bar .hlv-product-input {
+    border-color: #dee2e6;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.hlv-product-search-bar .hlv-product-input:focus {
+    border-color: #714B67;
+    box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.25);
+}

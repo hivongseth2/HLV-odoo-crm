@@ -7,24 +7,27 @@ import { onMounted, onPatched } from "@odoo/owl";
 // Store reference to current controller
 let _hlvCurrentController = null;
 
-// Models to apply filters
+// Models to apply filters (không bao gồm purchase.order vì đã có module riêng)
 const ENABLED_MODELS = [
-    // 'purchase.order',
     'stock.picking',
     'sale.order',
 ];
 
+// Config cho product search - model -> order line field và product field path
+const PRODUCT_SEARCH_CONFIG = {
+    'stock.picking': {
+        lineField: 'move_ids',
+        productPath: 'move_ids.product_id',
+    },
+    'sale.order': {
+        lineField: 'order_line',
+        productPath: 'order_line.product_id',
+    },
+};
+
 // Selection field options by model
 const SELECTION_FIELDS = {
     'state': {
-        'purchase.order': [
-            { value: 'draft', label: 'RFQ', color: '#6c757d' },
-            { value: 'sent', label: 'RFQ Sent', color: '#17a2b8' },
-            { value: 'to approve', label: 'To Approve', color: '#ffc107' },
-            { value: 'purchase', label: 'Purchase Order', color: '#28a745' },
-            { value: 'done', label: 'Locked', color: '#714B67' },
-            { value: 'cancel', label: 'Cancelled', color: '#dc3545' },
-        ],
         'stock.picking': [
             { value: 'draft', label: 'Nháp', color: '#6c757d' },
             { value: 'waiting', label: 'Đang chờ', color: '#ffc107' },
@@ -42,23 +45,11 @@ const SELECTION_FIELDS = {
         ],
     },
     'invoice_status': {
-        'purchase.order': [
-            { value: 'no', label: 'Chưa thanh toán', color: '#6c757d' },
-            { value: 'to invoice', label: 'Cần thanh toán', color: '#ffc107' },
-            { value: 'invoiced', label: 'Đã thanh toán', color: '#28a745' },
-        ],
         'sale.order': [
             { value: 'upselling', label: 'Cơ hội Up-sell', color: '#17a2b8' },
             { value: 'invoiced', label: 'Đã thanh toán', color: '#28a745' },
             { value: 'to invoice', label: 'Cần thanh toán', color: '#ffc107' },
             { value: 'no', label: 'Không', color: '#6c757d' },
-        ],
-    },
-    'receipt_status': {
-        'purchase.order': [
-            { value: 'pending', label: 'Chưa nhận', color: '#ffc107' },
-            { value: 'partial', label: 'Đã nhận một phần', color: '#17a2b8' },
-            { value: 'full', label: 'Đã nhận hết', color: '#28a745' },
         ],
     },
 };
@@ -112,13 +103,173 @@ function getFieldLabel(headerEl) {
 }
 
 /**
- * Patch ListController to store reference
+ * Patch ListController to store reference and add product search bar
  */
 patch(ListController.prototype, {
     setup() {
         super.setup(...arguments);
         if (ENABLED_MODELS.includes(this.props.resModel)) {
             _hlvCurrentController = this;
+
+            onMounted(() => {
+                this._hlvAddProductSearchBar();
+            });
+            onPatched(() => {
+                this._hlvAddProductSearchBar();
+            });
+        }
+    },
+
+    /**
+     * Add product search bar to control panel (same style as PO preview)
+     */
+    _hlvAddProductSearchBar() {
+        if (!ENABLED_MODELS.includes(this.props.resModel)) return;
+
+        const controlPanel = document.querySelector('.o_control_panel');
+        if (!controlPanel) return;
+
+        // Skip if already added
+        if (document.querySelector('.hlv-product-search-bar')) return;
+
+        const buttonsArea = controlPanel.querySelector('.o_control_panel_actions') ||
+            controlPanel.querySelector('.o_cp_action_menus');
+        const breadcrumbArea = controlPanel.querySelector('.o_control_panel_breadcrumbs');
+
+        const searchBar = document.createElement('div');
+        searchBar.className = 'hlv-product-search-bar d-flex gap-2 align-items-center';
+        searchBar.style.cssText = 'margin-left: auto; margin-right: 16px;';
+
+        searchBar.innerHTML = `
+            <div class="hlv-search-group d-flex align-items-center">
+                <label class="hlv-search-label me-2" style="font-weight: 500; color: #714B67; white-space: nowrap;">SP:</label>
+                <input type="text" class="form-control form-control-sm hlv-product-input"
+                       placeholder="Tìm sản phẩm..." style="width: 180px;">
+            </div>
+        `;
+
+        if (buttonsArea && buttonsArea.parentElement) {
+            buttonsArea.parentElement.insertBefore(searchBar, buttonsArea);
+        } else if (breadcrumbArea && breadcrumbArea.parentElement) {
+            breadcrumbArea.parentElement.appendChild(searchBar);
+        } else {
+            const mainArea = controlPanel.querySelector('.o_control_panel_main');
+            if (mainArea) {
+                mainArea.appendChild(searchBar);
+            }
+        }
+
+        const productInput = searchBar.querySelector('.hlv-product-input');
+
+        productInput?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const value = productInput.value.trim();
+                if (value) {
+                    this._hlvSearchByProduct(value);
+                    productInput.value = '';
+                }
+            }
+        });
+    },
+
+    /**
+     * Search by product in order lines
+     */
+    async _hlvSearchByProduct(value) {
+        console.log('[HLV] Product search:', value);
+
+        const resModel = this.props.resModel;
+        const config = PRODUCT_SEARCH_CONFIG[resModel];
+        if (!config) return;
+
+        const searchModel = this.env.searchModel;
+        if (!searchModel?.createNewFilters) {
+            console.error('[HLV] SearchModel not available');
+            return;
+        }
+
+        // Get currently selected products from ACTIVE filters
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const selectedProducts = new Set();
+        const filterIdsToRemove = [];
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item?.description?.startsWith('SP:')) {
+                filterIdsToRemove.push(itemId);
+                const productNames = item.description.substring(4).split(' hoặc ').map(s => s.trim());
+                productNames.forEach(name => selectedProducts.add(name));
+            }
+        }
+
+        // Remove existing product filters
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Failed to remove filter:', id, e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (!value) return;
+
+        // Toggle selected product
+        if (selectedProducts.has(value)) {
+            selectedProducts.delete(value);
+        } else {
+            selectedProducts.add(value);
+        }
+
+        if (selectedProducts.size === 0) return;
+
+        // Build OR domain for products
+        const productArray = Array.from(selectedProducts);
+        let domain;
+        let description;
+
+        if (productArray.length === 1) {
+            domain = [
+                '|',
+                [`${config.productPath}.name`, 'ilike', `%${productArray[0]}%`],
+                [`${config.productPath}.default_code`, 'ilike', `%${productArray[0]}%`]
+            ];
+            description = `SP: ${productArray[0]}`;
+        } else {
+            domain = [];
+            for (let i = 0; i < productArray.length - 1; i++) {
+                domain.push('|');
+            }
+            productArray.forEach(product => {
+                domain.push(
+                    '|',
+                    [`${config.productPath}.name`, 'ilike', `%${product}%`],
+                    [`${config.productPath}.default_code`, 'ilike', `%${product}%`]
+                );
+            });
+            description = `SP: ${productArray.join(' hoặc ')}`;
+        }
+
+        try {
+            searchModel.createNewFilters([{
+                description: description,
+                domain: domain,
+                type: 'filter',
+            }]);
+            console.log('[HLV] Applied product filter');
+        } catch (e) {
+            console.error('[HLV] Failed:', e);
         }
     },
 });
@@ -155,7 +306,6 @@ patch(ListRenderer.prototype, {
             if (header.dataset.hlvFilterAdded) return;
             header.dataset.hlvFilterAdded = 'true';
 
-            // Determine filter type
             let filterType = 'text';
             let options = null;
 
@@ -192,7 +342,7 @@ patch(ListRenderer.prototype, {
     },
 
     /**
-     * Show text search popup (same style as PO preview supplier search)
+     * Show text search popup
      */
     _hlvShowTextPopup(triggerBtn, fieldName, label) {
         document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
@@ -239,7 +389,7 @@ patch(ListRenderer.prototype, {
     },
 
     /**
-     * Show select dropdown (same style as PO preview receipt status)
+     * Show select dropdown
      */
     _hlvShowSelectDropdown(triggerBtn, fieldName, label, options) {
         document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
@@ -261,7 +411,6 @@ patch(ListRenderer.prototype, {
             overflow: hidden;
         `;
 
-        // Add "Tất cả" option at the end
         const allOptions = [...options, { value: '', label: '— Tất cả —', color: '#714B67' }];
 
         allOptions.forEach((item, idx) => {
@@ -302,7 +451,7 @@ patch(ListRenderer.prototype, {
     },
 
     /**
-     * Show date range picker (same style as PO preview)
+     * Show date range picker
      */
     _hlvShowDateDropdown(triggerBtn, fieldName, label) {
         document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
@@ -393,7 +542,6 @@ patch(ListRenderer.prototype, {
         const searchModel = controller.env.searchModel;
         if (!searchModel?.createNewFilters) return;
 
-        // Remove existing filters for this field
         await this._hlvRemoveExistingFilters(label);
 
         const domain = [[fieldName, 'ilike', value]];
@@ -422,10 +570,9 @@ patch(ListRenderer.prototype, {
         const searchModel = controller.env.searchModel;
         if (!searchModel?.createNewFilters) return;
 
-        // Remove existing filters for this field
         await this._hlvRemoveExistingFilters(label);
 
-        if (!value) return; // "Tất cả" selected - just clear
+        if (!value) return;
 
         const domain = [[fieldName, '=', value]];
         const description = `${label}: ${displayLabel}`;
@@ -453,7 +600,6 @@ patch(ListRenderer.prototype, {
         const searchModel = controller.env.searchModel;
         if (!searchModel?.createNewFilters) return;
 
-        // Remove existing filters for this field
         await this._hlvRemoveExistingFilters(label);
 
         let domain = [];
