@@ -34,26 +34,27 @@ class SaleOrder(models.Model):
     @api.depends('picking_ids', 'picking_ids.state', 'picking_ids.location_id', 'picking_ids.date_done')
     def _compute_warehouse_info(self):
         for order in self:
-            plan_codes = set()
-            done_codes = set()
+            plan_names = set()
+            done_names = set()
             
             # Lấy các phiếu không hủy
             valid_pickings = order.picking_ids.filtered(lambda p: p.state != 'cancel')
             
             for picking in valid_pickings:
                 if picking.location_id and picking.location_id.warehouse_id:
-                    code = picking.location_id.warehouse_id.code
+                    # Sử dụng name thay vì code để hiển thị thân thiện hơn
+                    name = picking.location_id.warehouse_id.name
                     
                     # Logic cũ: Tất cả các kho có trong phiếu -> Là Kế hoạch
-                    plan_codes.add(code)
+                    plan_names.add(name)
                     
                     # Logic mới: Chỉ phiếu đã xong -> Là Thực tế
                     if picking.state == 'done':
-                        done_codes.add(code)
+                        done_names.add(name)
             
             # Gán dữ liệu
-            order.effective_warehouse_names = ", ".join(sorted(list(plan_codes))) if plan_codes else ""
-            order.warehouse_done_names = ", ".join(sorted(list(done_codes))) if done_codes else ""
+            order.effective_warehouse_names = ", ".join(sorted(list(plan_names))) if plan_names else ""
+            order.warehouse_done_names = ", ".join(sorted(list(done_names))) if done_names else ""
 
     def action_view_order_lines_popup(self):
         self.ensure_one()

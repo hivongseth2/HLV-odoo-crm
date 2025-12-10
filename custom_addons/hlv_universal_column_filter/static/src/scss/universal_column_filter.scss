@@ -1,0 +1,103 @@
+/* HLV Universal Column Filter Styles - Đồng bộ với PO Preview Module */
+
+/* Filter button in column header (same as PO preview) */
+.hlv-filter-btn {
+    color: #6c757d;
+    font-size: 0.85rem;
+    padding: 2px 6px;
+    text-decoration: none;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.hlv-filter-btn:hover,
+.hlv-filter-btn:focus {
+    color: #714B67;
+}
+
+/* Portal dropdown (same animation as PO preview) */
+.hlv-filter-dropdown-portal {
+    animation: hlvDropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes hlvDropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Dropdown item active state */
+.hlv-filter-dropdown-item:active {
+    background-color: #714B67 !important;
+    color: #fff !important;
+}
+
+/* Date picker inputs */
+.hlv-filter-dropdown-portal .hlv-date-from,
+.hlv-filter-dropdown-portal .hlv-date-to {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.hlv-filter-dropdown-portal .hlv-date-from:focus,
+.hlv-filter-dropdown-portal .hlv-date-to:focus {
+    border-color: #714B67;
+    box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.25);
+}
+
+/* Text popup input (same as PO preview search popup) */
+.hlv-filter-dropdown-portal .hlv-popup-input {
+    border-color: #dee2e6;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.hlv-filter-dropdown-portal .hlv-popup-input:focus {
+    border-color: #714B67;
+    box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.25);
+}
+
+/* Apply/Clear buttons */
+.hlv-filter-dropdown-portal .hlv-date-apply {
+    background-color: #714B67;
+    border-color: #714B67;
+}
+
+.hlv-filter-dropdown-portal .hlv-date-apply:hover {
+    background-color: #5a3d53;
+    border-color: #5a3d53;
+}
+
+.hlv-filter-dropdown-portal .hlv-date-clear {
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+
+.hlv-filter-dropdown-portal .hlv-date-clear:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
+}
+
+/* Product search bar in control panel (same as PO preview) */
+.hlv-product-search-bar {
+    flex-shrink: 0;
+}
+
+.hlv-product-search-bar .hlv-product-input {
+    border-color: #dee2e6;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.hlv-product-search-bar .hlv-product-input:focus {
+    border-color: #714B67;
+    box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.25);
+}
