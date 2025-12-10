@@ -69,6 +69,10 @@ class StockMoveLine(models.Model):
         """
         Override write để chặn việc tăng qty_done vượt quá demand
         """
+        # Bypass validation nếu được gọi từ packaging context
+        if self.env.context.get('skip_qty_validation'):
+            return super(StockMoveLine, self).write(vals)
+            
         if 'qty_done' in vals:
             for line in self:
                 current_qty = line.qty_done
@@ -90,6 +94,10 @@ class StockMoveLine(models.Model):
         """
         Override create để kiểm tra khi tạo dòng mới từ barcode scan
         """
+        # Bypass validation nếu được gọi từ packaging context
+        if self.env.context.get('skip_qty_validation'):
+            return super(StockMoveLine, self).create(vals_list)
+            
         for vals in vals_list:
             qty_done = vals.get('qty_done', 0)
             product_id = vals.get('product_id')
