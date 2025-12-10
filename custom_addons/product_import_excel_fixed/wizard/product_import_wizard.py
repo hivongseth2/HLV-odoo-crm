@@ -346,14 +346,14 @@ _logger = logging.getLogger(__name__)
 
 class ProductImportWizard(models.TransientModel):
     _name = "product.import.wizard"
-    _description = "Wizard to import product from Excel"
+    _description = "Wizard Import sản phẩm từ Excel"
 
-    file = fields.Binary(string="Excel File", required=True)
-    filename = fields.Char(string="File Name")
+    file = fields.Binary(string="Tệp Excel", required=True)
+    filename = fields.Char(string="Tên tệp")
     import_type = fields.Selection([
-        ('product_name', 'Cập nhật tên sản phẩm'),
-        ('combo', 'Import Combo Products'),
-    ], string="Loại Import", default='product_name', required=True)
+        ('product', 'Import sản phẩm'),
+        ('combo', 'Import sản phẩm Combo'),
+    ], string="Loại Import", default='product', required=True)
 
     update_existing = fields.Boolean(
         string="Cập nhật sản phẩm đã tồn tại", 
@@ -366,6 +366,12 @@ class ProductImportWizard(models.TransientModel):
         default=500,
         help="Số lượng sản phẩm xử lý trong mỗi batch. Với file lớn (>1000 dòng), "
              "nên để 300-500 để tránh quá tải hệ thống. Mặc định: 500."
+    )
+    
+    max_batches = fields.Integer(
+        string="Giới hạn số Batch",
+        default=0,
+        help="Giới hạn số batch chạy (dùng để test). Để 0 = không giới hạn, chạy hết file."
     )
 
     # -------- Helpers --------
@@ -439,7 +445,6 @@ class ProductImportWizard(models.TransientModel):
         product = ProductProduct.search([('default_code', '=', code)], limit=1)
 
         if product:
-            # _logger.info("🔁 Sản phẩm %s đã tồn tại", code)
             return product, False  # False = không tạo mới
 
         # Tạo mới nếu chưa có
@@ -454,7 +459,7 @@ class ProductImportWizard(models.TransientModel):
             'sale_ok': True,
             'is_storable': True,
         })
-        _logger.info("🆕 Tạo sản phẩm mới: [%s] %s với UOM: %s", code, name, uom.name)
+        _logger.info("🆕 Tạo sản phẩm mới: [%s] %s với ĐVT: %s", code, name, uom.name)
         return tmpl.product_variant_id, True  # True = đã tạo mới
 
     def _get_excel_engine(self, filename):
@@ -530,8 +535,8 @@ class ProductImportWizard(models.TransientModel):
         if not self.file:
             return
 
-        if self.import_type == 'product_name':
-            return self._import_product_name()
+        if self.import_type == 'product':
+            return self._import_product()
         elif self.import_type == 'combo':
             return self._import_combo()
 
@@ -552,33 +557,43 @@ class ProductImportWizard(models.TransientModel):
         - Nếu chưa có → tạo mới với sale_ok, purchase_ok, is_storable = True
         
         Cấu trúc Excel:
-        - Cột 'Mã': default_code (mã tham chiếu nội bộ) - BẮT BUỘC
-        - Cột 'Tên': Tên sản phẩm
+        - Cột 'Mã hàng': default_code (mã tham chiếu nội bộ) - BẮT BUỘC
+        - Cột 'Tên hàng': Tên sản phẩm
         - Cột 'ĐVT': Đơn vị tính (mặc định 'Cái' nếu không có)
         """
         df = self._read_excel(self.file, dtype={'Mã hàng': str, 'Tên hàng': str, 'ĐVT': str})
 
-        Product = self.env['product.template'].sudo()
+        ProductTemplate = self.env['product.template'].sudo()
 
+        # Thống kê
+        created = 0
         updated = 0
+        skipped_exists = 0
         skipped_no_code = 0
-        skipped_not_found = 0
-        skipped_no_name = 0
-        same_name = 0
+        skipped_same = 0
+        errors = []
 
         # Batch processing
         batch_size = self.batch_size or 500
         total_rows = len(df)
         total_batches = (total_rows + batch_size - 1) // batch_size  # Ceiling division
         
+        # Giới hạn số batch nếu được set (dùng để test)
+        max_batches = self.max_batches or 0
+        if max_batches > 0 and max_batches < total_batches:
+            batches_to_run = max_batches
+            _logger.info("⚠️ GIỚI HẠN: Chỉ chạy %d/%d batch (test mode)", max_batches, total_batches)
+        else:
+            batches_to_run = total_batches
+        
         _logger.info("="*60)
         _logger.info("🚀 BẮT ĐẦU IMPORT SẢN PHẨM")
-        _logger.info("   Tổng số dòng: %d | Batch size: %d | Số batch: %d", 
-                     total_rows, batch_size, total_batches)
+        _logger.info("   Tổng số dòng: %d | Batch size: %d | Số batch sẽ chạy: %d/%d", 
+                     total_rows, batch_size, batches_to_run, total_batches)
         _logger.info("="*60)
 
         # Xử lý từng batch
-        for batch_num in range(total_batches):
+        for batch_num in range(batches_to_run):
             start_idx = batch_num * batch_size
             end_idx = min(start_idx + batch_size, total_rows)
             batch_df = df.iloc[start_idx:end_idx]
@@ -667,13 +682,18 @@ class ProductImportWizard(models.TransientModel):
         _logger.info("="*60)
         
         msg_lines = [
-            f"Hoàn tất Import sản phẩm ({total_batches} batch).",
+            f"Hoàn tất Import sản phẩm ({batches_to_run}/{total_batches} batch).",
             f"- Tạo mới: {created}",
             f"- Cập nhật: {updated}",
             f"- Bỏ qua (đã tồn tại): {skipped_exists}",
             f"- Bỏ qua (không thay đổi): {skipped_same}",
-            f"- Bỏ qua (không có 'Mã'): {skipped_no_code}",
+            f"- Bỏ qua (không có 'Mã hàng'): {skipped_no_code}",
         ]
+        
+        # Thêm thông báo nếu còn batch chưa chạy
+        if batches_to_run < total_batches:
+            remaining_rows = total_rows - (batches_to_run * batch_size)
+            msg_lines.append(f"⚠️ Còn lại: {remaining_rows} dòng chưa import")
 
         if errors:
             msg_lines.append(f"- Lỗi: {len(errors)}")
@@ -687,32 +707,32 @@ class ProductImportWizard(models.TransientModel):
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Import Sản phẩm',
+                'title': 'Kết quả Import sản phẩm',
                 'message': msg,
-                'type': 'success',
+                'type': 'success' if not errors else 'warning',
                 'sticky': True,
             }
         }
 
-    # -------- Import Combo Products --------
+    # -------- Import sản phẩm Combo --------
     def _import_combo(self):
         """
-        Import combo products từ file Excel.
+        Import sản phẩm combo từ file Excel.
 
         Cấu trúc Excel (có merged cells):
-        - Cột B (Mã Combo): default_code của combo - CÓ THỂ MERGED nhiều dòng
-        - Cột C (Tên Combo): Tên combo - CÓ THỂ MERGED nhiều dòng
-        - Cột D (Mã Hàng Con): default_code của child product
-        - Cột E (Tên Hàng Con): Tên child product
-        - Cột F (ĐVT): Đơn vị tính
-        - Cột G (Số Lượng): Số lượng child trong combo
+        - Cột 'Mã Combo': default_code của combo - CÓ THỂ MERGED nhiều dòng
+        - Cột 'Tên Combo': Tên combo - CÓ THỂ MERGED nhiều dòng
+        - Cột 'Mã Hàng Con': default_code của sản phẩm con
+        - Cột 'Tên Hàng Con': Tên sản phẩm con
+        - Cột 'ĐVT': Đơn vị tính
+        - Cột 'Số Lượng': Số lượng sản phẩm con trong combo
 
         Logic:
         - Nếu combo chưa tồn tại (theo Mã Combo): tạo mới với is_combo=True
         - Nếu combo đã tồn tại:
-            - Nếu update_existing=True: Cập nhật tên, Xoá hết child cũ, Tạo child mới.
-            - Nếu update_existing=False: Bỏ qua.
-        - Child products: tự động tạo nếu không tồn tại trong hệ thống
+            - Nếu update_existing=True: Cập nhật tên, xoá hết thành phần cũ, thêm thành phần mới
+            - Nếu update_existing=False: Bỏ qua
+        - Sản phẩm con: tự động tạo nếu không tồn tại trong hệ thống
         """
         df = self._read_excel(self.file, dtype={
             'Mã Combo': str,
@@ -737,7 +757,7 @@ class ProductImportWizard(models.TransientModel):
         combo_updated = 0
         combo_skipped = 0
         child_added = 0
-        child_created = 0  # Số child products được tạo mới
+        child_created = 0  # Số sản phẩm con được tạo mới
         errors = []
 
         # Nhóm dữ liệu theo Mã Combo
@@ -787,7 +807,7 @@ class ProductImportWizard(models.TransientModel):
                     is_update = True
                     _logger.info("♻️ Combo đã tồn tại, tiến hành cập nhật: [%s]", combo_code)
 
-            # Lấy hoặc tạo child products
+            # Lấy hoặc tạo sản phẩm con
             valid_children = []
             for child in children:
                 # Sử dụng _get_or_create_product để tự động tạo nếu không có
@@ -799,11 +819,10 @@ class ProductImportWizard(models.TransientModel):
 
                 if is_new:
                     child_created += 1
-                    # _logger.info("🆕 Tạo child product mới: [%s] %s", child['code'], child['name'])
 
-                # Kiểm tra child không phải là combo
+                # Kiểm tra sản phẩm con không phải là combo
                 if child_product.is_combo:
-                    _logger.warning("⚠️ Child product [%s] là combo, bỏ qua", child['code'])
+                    _logger.warning("⚠️ Sản phẩm con [%s] là combo, bỏ qua", child['code'])
                     continue
 
                 valid_children.append({
@@ -812,11 +831,11 @@ class ProductImportWizard(models.TransientModel):
                 })
 
             if not valid_children:
-                errors.append(f"Combo [{combo_code}]: Không có child product hợp lệ")
-                _logger.error("❌ Combo [%s] không có child product hợp lệ", combo_code)
+                errors.append(f"Combo [{combo_code}]: Không có sản phẩm con hợp lệ")
+                _logger.error("❌ Combo [%s] không có sản phẩm con hợp lệ", combo_code)
                 continue
 
-            # Tạo combo product mới hoặc Cập nhật
+            # Tạo combo mới hoặc Cập nhật
             try:
                 if is_update:
                     # Cập nhật tên nếu có thay đổi (và khác rỗng)
@@ -828,7 +847,7 @@ class ProductImportWizard(models.TransientModel):
                         existing_combo.is_combo = True
                         existing_combo.type = 'service'
 
-                    # Xoá toàn bộ child cũ
+                    # Xoá toàn bộ thành phần cũ
                     existing_combo.combo_product_id.unlink()
                     _logger.info("   🗑️ Đã xoá các thành phần cũ của combo [%s]", combo_code)
 
@@ -836,7 +855,7 @@ class ProductImportWizard(models.TransientModel):
                     combo_updated += 1
                 else:
                     # Tạo mới hoàn toàn
-                    # Lấy UoM mặc định (Cái)
+                    # Lấy ĐVT mặc định (Cái)
                     default_uom = self.env['uom.uom'].sudo().search([
                         ('name', 'ilike', 'Cái')
                     ], limit=1)
@@ -857,7 +876,7 @@ class ProductImportWizard(models.TransientModel):
                     combo_created += 1
                     _logger.info("✅ Tạo combo mới: [%s] %s", combo_code, combo_name)
 
-                # Tạo combo lines (children)
+                # Tạo các thành phần combo
                 for child_data in valid_children:
                     ComboProduct.create({
                         'product_template_id': target_combo.id,
@@ -866,7 +885,6 @@ class ProductImportWizard(models.TransientModel):
                         'name': child_data['product'].name,
                     })
                     child_added += 1
-                    # _logger.info("   ➕ Thêm child: [%s] x %s", child_data['product'].default_code, child_data['qty'])
 
             except Exception as e:
                 errors.append(f"Combo [{combo_code}]: {str(e)}")
@@ -874,12 +892,12 @@ class ProductImportWizard(models.TransientModel):
 
         # Tạo thông báo kết quả
         msg_lines = [
-            "Hoàn tất xử lý Combo Products.",
+            "Hoàn tất Import sản phẩm Combo.",
             f"- Combo tạo mới: {combo_created}",
             f"- Combo cập nhật: {combo_updated}",
             f"- Combo bỏ qua: {combo_skipped}",
-            f"- Child products đã thêm vào combo: {child_added}",
-            f"- Child products tạo mới (hệ thống): {child_created}",
+            f"- Thành phần đã thêm vào combo: {child_added}",
+            f"- Sản phẩm con tạo mới: {child_created}",
         ]
 
         if errors:
@@ -894,7 +912,7 @@ class ProductImportWizard(models.TransientModel):
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Kết quả Import Combo',
+                'title': 'Kết quả Import sản phẩm Combo',
                 'message': msg,
                 'type': 'success' if not errors else 'warning',
                 'sticky': True,
