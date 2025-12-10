@@ -1,0 +1,91 @@
+/* HLV Universal Column Filter Styles */
+
+/* Make column header inline with filter button */
+th[data-hlv-filter-added="true"] {
+    white-space: nowrap !important;
+
+    >div,
+    >span {
+        display: inline !important;
+    }
+}
+
+/* Filter button in column header */
+.hlv-filter-btn {
+    display: inline-block !important;
+    vertical-align: middle;
+    color: #714B67 !important;
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
+    margin-left: 4px;
+    padding: 0 2px !important;
+    line-height: 1;
+
+    &:hover {
+        opacity: 1;
+        color: #714B67 !important;
+    }
+
+    i {
+        font-size: 9px;
+        vertical-align: middle;
+    }
+}
+
+/* Filter popup */
+.hlv-filter-popup {
+    font-family: inherit;
+    animation: hlvFadeIn 0.15s ease-out;
+
+    .hlv-filter-header {
+        border-bottom: 1px solid #f0f0f0;
+        padding-bottom: 8px;
+        margin-bottom: 8px;
+    }
+
+    .hlv-filter-input,
+    .hlv-filter-select,
+    .hlv-filter-date-from,
+    .hlv-filter-date-to {
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+
+        &:focus {
+            border-color: #714B67;
+            box-shadow: 0 0 0 2px rgba(113, 75, 103, 0.1);
+            outline: none;
+        }
+    }
+
+    .hlv-filter-apply {
+        background-color: #714B67;
+        border-color: #714B67;
+
+        &:hover {
+            background-color: #5a3d53;
+            border-color: #5a3d53;
+        }
+    }
+
+    .text-muted {
+        font-size: 11px;
+    }
+}
+
+/* Animation */
+@keyframes hlvFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Show filter on hover */
+th[data-hlv-filter-added="true"]:hover .hlv-filter-btn {
+    opacity: 1;
+}
