@@ -75,16 +75,21 @@ class MisaController(http.Controller):
     @http.route('/api/misa/product/search', type='json', auth='public', methods=['POST'], csrf=False)
     def api_search_product_misa(self, **kwargs):
         """
-        API tìm kiếm sản phẩm MISA theo tên.
+        API tìm kiếm sản phẩm MISA theo tên hoặc mã sản phẩm.
         
         Body mẫu (JSON):
         {
             "jsonrpc": "2.0",
             "params": {
                 "name": "Tên sản phẩm cần tìm",
+                "code": "Mã sản phẩm cần tìm",
                 "limit": 20
             }
         }
+        
+        Lưu ý:
+        - Có thể truyền "name" hoặc "code" hoặc cả 2
+        - Nếu truyền cả 2, sẽ tìm theo điều kiện AND (cả tên và mã đều khớp)
         
         Response:
         {
@@ -112,13 +117,14 @@ class MisaController(http.Controller):
         try:
             # 1. Lấy tham số
             name = kwargs.get('name')
+            code = kwargs.get('code')
             limit = kwargs.get('limit', 20)
 
-            # Validate cơ bản
-            if not name:
+            # Validate cơ bản - cần ít nhất 1 trong 2: name hoặc code
+            if not name and not code:
                 return {
                     "status": "error", 
-                    "message": "Thiếu thông tin bắt buộc: name"
+                    "message": "Thiếu thông tin bắt buộc: cần truyền 'name' hoặc 'code' (hoặc cả 2)"
                 }
 
             # 2. Gọi logic xử lý (Dùng sudo để bypass quyền)
@@ -126,6 +132,7 @@ class MisaController(http.Controller):
             
             products = misa_utils.search_product_by_name(
                 name=name, 
+                code=code,
                 limit=int(limit)
             )
 

@@ -1206,12 +1206,13 @@ class MisaApiUtils(models.AbstractModel):
     # =========================================================================
     # API SEARCH PRODUCT BY NAME
     # =========================================================================
-    def search_product_by_name(self, name, limit=20):
+    def search_product_by_name(self, name=None, code=None, limit=20):
         """
-        Tìm kiếm sản phẩm trong MISA CRM theo tên.
+        Tìm kiếm sản phẩm trong MISA CRM theo tên và/hoặc mã sản phẩm.
         
         Args:
-            name (str): Tên sản phẩm cần tìm (tìm kiếm gần đúng)
+            name (str, optional): Tên sản phẩm cần tìm (tìm kiếm gần đúng - contains)
+            code (str, optional): Mã sản phẩm cần tìm (tìm kiếm gần đúng - contains)
             limit (int): Số lượng kết quả tối đa (mặc định 20)
             
         Returns:
@@ -1227,6 +1228,9 @@ class MisaApiUtils(models.AbstractModel):
         """
         import uuid
         
+        if not name and not code:
+            raise Exception("Cần truyền ít nhất 'name' hoặc 'code' để tìm kiếm")
+        
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
@@ -1238,28 +1242,52 @@ class MisaApiUtils(models.AbstractModel):
         # API endpoint cho tìm kiếm sản phẩm (chữ hoa Grid)
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/Grid"
         
-        # Payload tìm kiếm theo tên - format giống _misa_get_product_id_by_code
+        # Xây dựng filters linh hoạt dựa vào params được truyền
         # Operator = 7 là "Contains" (chứa) trong MISA
         # Operator = 1 là "Equals" (bằng)
+        filters = []
+        filter_idx = 1
+        
+        if name:
+            filters.append({
+                "Group": None,
+                "Addition": 1,
+                "InputType": 1,
+                "IsFromFormula": True,
+                "Operator": 7,  # 7 = Contains
+                "Property": "ProductName",
+                "Text": name.strip(),
+                "Value": name.strip()
+            })
+            filter_idx += 1
+        
+        if code:
+            filters.append({
+                "Group": None,
+                "Addition": 1,  # 1 = AND
+                "InputType": 1,
+                "IsFromFormula": True,
+                "Operator": 7,  # 7 = Contains
+                "Property": "ProductCode",
+                "Text": code.strip(),
+                "Value": code.strip()
+            })
+        
+        # Xây dựng Formula dựa trên số lượng filters
+        if len(filters) == 1:
+            formula = "( 1 )"
+        else:
+            # AND giữa các điều kiện: ( 1 AND 2 )
+            formula = "( " + " AND ".join(str(i+1) for i in range(len(filters))) + " )"
+        
         payload = {
             "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",
             "Sorts": [],
             "Start": 0,
             "Page": 1,
             "PageSize": limit,
-            "Filters": [
-                {
-                    "Group": None,
-                    "Addition": 1,
-                    "InputType": 1,
-                    "IsFromFormula": True,
-                    "Operator": 7,  # 7 = Contains (chứa)
-                    "Property": "ProductName",
-                    "Text": name.strip(),
-                    "Value": name.strip()
-                }
-            ],
-            "Formula": "( 1 )",
+            "Filters": filters,
+            "Formula": formula,
             "LayoutCode": "Product",
             "DefaultTotal": False,
             "IsMappingData": False,
