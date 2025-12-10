@@ -355,8 +355,18 @@ class ProductImportWizard(models.TransientModel):
         ('combo', 'Import Combo Products'),
     ], string="Loại Import", default='product_name', required=True)
 
-    update_existing = fields.Boolean(string="Cập nhật nếu đã tồn tại", default=False,
-        help="Nếu được chọn, các combo đã tồn tại sẽ được cập nhật tên và danh sách hàng con (xoá cũ thêm mới).")
+    update_existing = fields.Boolean(
+        string="Cập nhật sản phẩm đã tồn tại", 
+        default=False,
+        help="Nếu được chọn, các sản phẩm đã tồn tại sẽ được cập nhật thông tin (tên, đơn vị tính)."
+    )
+    
+    batch_size = fields.Integer(
+        string="Số lượng mỗi Batch",
+        default=500,
+        help="Số lượng sản phẩm xử lý trong mỗi batch. Với file lớn (>1000 dòng), "
+             "nên để 300-500 để tránh quá tải hệ thống. Mặc định: 500."
+    )
 
     # -------- Helpers --------
     def _clean_string(self, val):
@@ -525,10 +535,28 @@ class ProductImportWizard(models.TransientModel):
         elif self.import_type == 'combo':
             return self._import_combo()
 
-    # -------- Import Product Name (logic cũ) --------
-    def _import_product_name(self):
-        """Import cập nhật tên sản phẩm theo Mã."""
-        df = self._read_excel(self.file, dtype={'Mã': str, 'Tên': str})
+    # -------- Import Sản phẩm --------
+    def _import_product(self):
+        """
+        Import sản phẩm từ Excel với xử lý theo batch.
+        
+        BATCH PROCESSING:
+        - Dữ liệu được chia thành các batch nhỏ (mặc định 500 sản phẩm/batch)
+        - Sau mỗi batch, database sẽ commit để lưu dữ liệu
+        - Nếu lỗi xảy ra giữa chừng, các batch đã hoàn thành vẫn được giữ lại
+        - Log tiến độ sau mỗi batch để theo dõi
+        
+        - Nếu sản phẩm đã tồn tại (theo Mã/default_code):
+            - update_existing = False → bỏ qua
+            - update_existing = True → cập nhật tên và đơn vị tính
+        - Nếu chưa có → tạo mới với sale_ok, purchase_ok, is_storable = True
+        
+        Cấu trúc Excel:
+        - Cột 'Mã': default_code (mã tham chiếu nội bộ) - BẮT BUỘC
+        - Cột 'Tên': Tên sản phẩm
+        - Cột 'ĐVT': Đơn vị tính (mặc định 'Cái' nếu không có)
+        """
+        df = self._read_excel(self.file, dtype={'Mã hàng': str, 'Tên hàng': str, 'ĐVT': str})
 
         Product = self.env['product.template'].sudo()
 
@@ -538,41 +566,121 @@ class ProductImportWizard(models.TransientModel):
         skipped_no_name = 0
         same_name = 0
 
-        for _, row in df.iterrows():
-            code = self._clean_string(row.get('Mã'))
-            new_name = self._clean_string(row.get('Tên'))
+        # Batch processing
+        batch_size = self.batch_size or 500
+        total_rows = len(df)
+        total_batches = (total_rows + batch_size - 1) // batch_size  # Ceiling division
+        
+        _logger.info("="*60)
+        _logger.info("🚀 BẮT ĐẦU IMPORT SẢN PHẨM")
+        _logger.info("   Tổng số dòng: %d | Batch size: %d | Số batch: %d", 
+                     total_rows, batch_size, total_batches)
+        _logger.info("="*60)
 
-            if not code:
-                skipped_no_code += 1
-                continue
-            if not new_name:
-                skipped_no_name += 1
-                continue
+        # Xử lý từng batch
+        for batch_num in range(total_batches):
+            start_idx = batch_num * batch_size
+            end_idx = min(start_idx + batch_size, total_rows)
+            batch_df = df.iloc[start_idx:end_idx]
+            
+            batch_created = 0
+            batch_updated = 0
+            batch_errors = 0
+            
+            _logger.info("📦 Đang xử lý Batch %d/%d (dòng %d-%d)...", 
+                         batch_num + 1, total_batches, start_idx + 1, end_idx)
 
-            prod = Product.search([('default_code', '=', code)], limit=1)
-            if not prod:
-                skipped_not_found += 1
-                _logger.info("⏭️ Bỏ qua: không tìm thấy sản phẩm có default_code='%s'", code)
-                continue
+            for _, row in batch_df.iterrows():
+                code = self._clean_string(row.get('Mã hàng'))
+                name = self._clean_string(row.get('Tên hàng'))
+                uom_name = self._clean_string(row.get('ĐVT'))
 
-            if (prod.name or '').strip() != new_name.strip():
+                if not code:
+                    skipped_no_code += 1
+                    continue
+
                 try:
-                    prod.write({'name': new_name})
-                    updated += 1
-                    _logger.info("✅ Cập nhật tên: [%s] '%s' -> '%s'", code, prod.name, new_name)
-                except Exception as e:
-                    _logger.exception("❌ Lỗi cập nhật tên cho [%s]: %s", code, e)
-            else:
-                same_name += 1
+                    # Tìm sản phẩm theo mã
+                    existing_product = ProductTemplate.search([('default_code', '=', code)], limit=1)
 
-        msg = (
-            "Hoàn tất cập nhật tên sản phẩm theo Mã.\n"
-            f"- Đã cập nhật: {updated}\n"
-            f"- Bỏ qua (trùng tên): {same_name}\n"
-            f"- Bỏ qua (không có 'Mã'): {skipped_no_code}\n"
-            f"- Bỏ qua (không có 'Tên'): {skipped_no_name}\n"
-            f"- Bỏ qua (không tìm thấy theo 'Mã'): {skipped_not_found}\n"
-        )
+                    if existing_product:
+                        if not self.update_existing:
+                            # Không cập nhật → bỏ qua
+                            skipped_exists += 1
+                            continue
+                        else:
+                            # Cập nhật sản phẩm đã tồn tại
+                            write_vals = {}
+                            
+                            # Cập nhật tên nếu có và khác
+                            if name and name != (existing_product.name or '').strip():
+                                write_vals['name'] = name
+                            
+                            # Cập nhật đơn vị tính nếu có và khác
+                            if uom_name:
+                                new_uom = self._get_or_create_uom(uom_name)
+                                if new_uom.id != existing_product.uom_id.id:
+                                    write_vals['uom_id'] = new_uom.id
+                                    write_vals['uom_po_id'] = new_uom.id
+                            
+                            if write_vals:
+                                existing_product.write(write_vals)
+                                updated += 1
+                                batch_updated += 1
+                            else:
+                                skipped_same += 1
+                    else:
+                        # Tạo mới sản phẩm
+                        uom = self._get_or_create_uom(uom_name or 'Cái')
+                        ProductTemplate.create({
+                            'name': name or code,
+                            'default_code': code,
+                            'type': 'consu',
+                            'uom_id': uom.id,
+                            'uom_po_id': uom.id,
+                            'purchase_ok': True,
+                            'sale_ok': True,
+                            'is_storable': True,
+                        })
+                        created += 1
+                        batch_created += 1
+
+                except Exception as e:
+                    errors.append(f"[{code}]: {str(e)}")
+                    batch_errors += 1
+                    _logger.exception("❌ Lỗi xử lý sản phẩm [%s]: %s", code, e)
+
+            # ⭐ COMMIT DATABASE SAU MỖI BATCH
+            # Điều này đảm bảo dữ liệu được lưu ngay cả khi có lỗi ở batch sau
+            try:
+                self.env.cr.commit()
+                _logger.info("✅ Batch %d/%d hoàn thành: Tạo mới=%d, Cập nhật=%d, Lỗi=%d",
+                             batch_num + 1, total_batches, batch_created, batch_updated, batch_errors)
+            except Exception as e:
+                _logger.error("❌ Lỗi commit batch %d: %s", batch_num + 1, e)
+                # Rollback và tiếp tục batch tiếp theo
+                self.env.cr.rollback()
+
+        # Tạo thông báo kết quả
+        _logger.info("="*60)
+        _logger.info("🏁 HOÀN TẤT IMPORT SẢN PHẨM")
+        _logger.info("="*60)
+        
+        msg_lines = [
+            f"Hoàn tất Import sản phẩm ({total_batches} batch).",
+            f"- Tạo mới: {created}",
+            f"- Cập nhật: {updated}",
+            f"- Bỏ qua (đã tồn tại): {skipped_exists}",
+            f"- Bỏ qua (không thay đổi): {skipped_same}",
+            f"- Bỏ qua (không có 'Mã'): {skipped_no_code}",
+        ]
+
+        if errors:
+            msg_lines.append(f"- Lỗi: {len(errors)}")
+            for err in errors[:5]:
+                msg_lines.append(f"  • {err}")
+
+        msg = "\n".join(msg_lines)
         _logger.info(msg)
 
         return {
