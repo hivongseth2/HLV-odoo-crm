@@ -10,6 +10,7 @@
           <field name="file" filename="filename"/>
           <field name="filename" invisible="1"/>
           <field name="update_existing"/>
+          <field name="batch_size" invisible="import_type != 'product'"/>
         </group>
 
         <!-- Hướng dẫn cho Import Sản phẩm -->
