@@ -1,79 +1,29 @@
-/* HLV Universal Column Filter Styles */
+/* HLV Universal Column Filter Styles - Đồng bộ với PO Preview Module */
 
-/* Make column header inline with filter button */
-th[data-hlv-filter-added="true"] {
-    white-space: nowrap !important;
-
-    >div,
-    >span {
-        display: inline !important;
-    }
-}
-
-/* Filter button in column header */
+/* Filter button in column header (same as PO preview) */
 .hlv-filter-btn {
-    display: inline-block !important;
+    color: #6c757d;
+    font-size: 0.85rem;
+    padding: 2px 6px;
+    text-decoration: none;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
     vertical-align: middle;
-    color: #714B67 !important;
-    opacity: 0.4;
-    transition: opacity 0.2s ease;
-    margin-left: 4px;
-    padding: 0 2px !important;
-    line-height: 1;
-
-    &:hover {
-        opacity: 1;
-        color: #714B67 !important;
-    }
-
-    i {
-        font-size: 9px;
-        vertical-align: middle;
-    }
 }
 
-/* Filter popup */
-.hlv-filter-popup {
-    font-family: inherit;
-    animation: hlvFadeIn 0.15s ease-out;
-
-    .hlv-filter-header {
-        border-bottom: 1px solid #f0f0f0;
-        padding-bottom: 8px;
-        margin-bottom: 8px;
-    }
-
-    .hlv-filter-input,
-    .hlv-filter-select,
-    .hlv-filter-date-from,
-    .hlv-filter-date-to {
-        border: 1px solid #e0e0e0;
-        border-radius: 4px;
-
-        &:focus {
-            border-color: #714B67;
-            box-shadow: 0 0 0 2px rgba(113, 75, 103, 0.1);
-            outline: none;
-        }
-    }
-
-    .hlv-filter-apply {
-        background-color: #714B67;
-        border-color: #714B67;
-
-        &:hover {
-            background-color: #5a3d53;
-            border-color: #5a3d53;
-        }
-    }
-
-    .text-muted {
-        font-size: 11px;
-    }
+.hlv-filter-btn:hover,
+.hlv-filter-btn:focus {
+    color: #714B67;
 }
 
-/* Animation */
-@keyframes hlvFadeIn {
+/* Portal dropdown (same animation as PO preview) */
+.hlv-filter-dropdown-portal {
+    animation: hlvDropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes hlvDropdownFadeIn {
     from {
         opacity: 0;
         transform: translateY(-4px);
@@ -85,7 +35,54 @@ th[data-hlv-filter-added="true"] {
     }
 }
 
-/* Show filter on hover */
-th[data-hlv-filter-added="true"]:hover .hlv-filter-btn {
-    opacity: 1;
+/* Dropdown item active state */
+.hlv-filter-dropdown-item:active {
+    background-color: #714B67 !important;
+    color: #fff !important;
+}
+
+/* Date picker inputs */
+.hlv-filter-dropdown-portal .hlv-date-from,
+.hlv-filter-dropdown-portal .hlv-date-to {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.hlv-filter-dropdown-portal .hlv-date-from:focus,
+.hlv-filter-dropdown-portal .hlv-date-to:focus {
+    border-color: #714B67;
+    box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.25);
+}
+
+/* Text popup input (same as PO preview search popup) */
+.hlv-filter-dropdown-portal .hlv-popup-input {
+    border-color: #dee2e6;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.hlv-filter-dropdown-portal .hlv-popup-input:focus {
+    border-color: #714B67;
+    box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.25);
+}
+
+/* Apply/Clear buttons */
+.hlv-filter-dropdown-portal .hlv-date-apply {
+    background-color: #714B67;
+    border-color: #714B67;
+}
+
+.hlv-filter-dropdown-portal .hlv-date-apply:hover {
+    background-color: #5a3d53;
+    border-color: #5a3d53;
+}
+
+.hlv-filter-dropdown-portal .hlv-date-clear {
+    background-color: #6c757d;
+    border-color: #6c757d;
+}
+
+.hlv-filter-dropdown-portal .hlv-date-clear:hover {
+    background-color: #5a6268;
+    border-color: #545b62;
 }
