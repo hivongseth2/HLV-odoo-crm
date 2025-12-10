@@ -83,14 +83,15 @@ class StockPickingPartial(models.Model):
                 continue
 
             # Luôn tạo move_line mới cho package, không gán trực tiếp move_line nguồn vào package
-            move_line.sudo().copy({
+            # Sử dụng skip_qty_validation để bypass validation tạm thời (sẽ giảm qty_done nguồn ngay sau)
+            move_line.sudo().with_context(skip_qty_validation=True).copy({
                 'qty_done': take_qty,
                 'result_package_id': new_package.id,
             })
 
             # Giảm qty_done trên dòng nguồn
             remaining = src_done - take_qty
-            move_line.sudo().write({'qty_done': remaining})
+            move_line.sudo().with_context(skip_qty_validation=True).write({'qty_done': remaining})
         
         return {
             'package_id': new_package.id,
@@ -380,7 +381,7 @@ class StockPickingPartial(models.Model):
                 raise ValidationError(f"⚠️ Số lượng không được vượt quá {available_qty:.2f} (tối đa cho sản phẩm này)")
         
         old_qty = move_line.qty_done
-        move_line.qty_done = new_qty
+        move_line.with_context(skip_qty_validation=True).write({'qty_done': new_qty})
         
         return {
             'success': True,
@@ -403,8 +404,10 @@ class StockPickingPartial(models.Model):
             raise ValidationError("Move line này không thuộc package này!")
         
         # Xoá khỏi package
-        move_line.result_package_id = None
-        move_line.qty_done = 0
+        move_line.with_context(skip_qty_validation=True).write({
+            'result_package_id': False,
+            'qty_done': 0
+        })
         
         return {
             'success': True,
@@ -444,9 +447,11 @@ class StockPickingPartial(models.Model):
             raise ValidationError("Gói đích không có trong phiếu này hoặc không hợp lệ!")
         
         # Cập nhật package hiện tại
-        move_line.qty_done -= qty
-        if move_line.qty_done == 0:
-            move_line.result_package_id = None
+        new_qty = move_line.qty_done - qty
+        update_vals = {'qty_done': new_qty}
+        if new_qty == 0:
+            update_vals['result_package_id'] = False
+        move_line.with_context(skip_qty_validation=True).write(update_vals)
         
         # Kiểm tra xem sản phẩm có trong package đích không
         existing_in_target = self.env['stock.move.line'].sudo().search([
@@ -457,10 +462,12 @@ class StockPickingPartial(models.Model):
         
         if existing_in_target:
             # Cộng vào sản phẩm hiện có
-            existing_in_target.qty_done += qty
+            existing_in_target.with_context(skip_qty_validation=True).write({
+                'qty_done': existing_in_target.qty_done + qty
+            })
         else:
             # Tạo move_line mới cho package đích
-            new_move_line = move_line.copy({
+            new_move_line = move_line.with_context(skip_qty_validation=True).copy({
                 'result_package_id': to_package_id,
                 'qty_done': qty,
             })
@@ -528,21 +535,23 @@ class StockPickingPartial(models.Model):
                 
                 if dest_line:
                     # Merge vào dest_line
-                    dest_line[0].qty_done += take
+                    dest_line[0].with_context(skip_qty_validation=True).write({
+                        'qty_done': dest_line[0].qty_done + take
+                    })
                     
                     # Giảm source
                     if take == available:
-                        ml.unlink() # Hết qty -> xóa
+                        ml.with_context(skip_qty_validation=True).unlink() # Hết qty -> xóa
                     else:
-                        ml.qty_done -= take
+                        ml.with_context(skip_qty_validation=True).write({'qty_done': ml.qty_done - take})
                 else:
                     # Không có dòng đích
                     if take == available:
-                        ml.result_package_id = package_id
+                        ml.with_context(skip_qty_validation=True).write({'result_package_id': package_id})
                     else:
                         # Tách dòng
-                        ml.qty_done -= take
-                        ml.copy({
+                        ml.with_context(skip_qty_validation=True).write({'qty_done': ml.qty_done - take})
+                        ml.with_context(skip_qty_validation=True).copy({
                             'qty_done': take,
                             'result_package_id': package_id
                         })

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="stock_warehouse_dashboard.StockDashboardField" owl="1">
+        <!-- Removed 'border' and 'shadow-sm' to avoid double border with Kanban Record -->
+        <div class="d-flex flex-column h-100 rounded overflow-hidden bg-white hover-shadow transition-base">
+            
+            <!-- HEADER -->
+            <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center">
+                <!-- Click here opens Old Operations Dashboard -->
+                <h4 class="mb-0 fw-bold text-dark text-uppercase position-relative d-flex align-items-center cursor-pointer" 
+                    style="letter-spacing: 0.5px; overflow: hidden;"
+                    t-on-click="onWarehouseClick"
+                    title="Vào giao diện hoạt động kho">
+                    <i class="fa fa-building-o me-2 text-muted"/>
+                    <span class="text-truncate" style="max-width: 180px;" t-esc="props.record.data.name"/>
+                </h4>
+                
+                <!-- Date Picker Wrapper - Click Stop Propagation -->
+                <div class="d-flex align-items-center">
+                    
+                    <!-- Date Filter -->
+                    <div class="position-relative d-flex align-items-center justify-content-center" 
+                         style="width: 30px; height: 30px; cursor: pointer;"
+                         t-on-click.stop="ignoreClick"
+                         title="Lọc theo ngày">
+                        
+                        <!-- Visible Icon -->
+                        <i class="fa fa-calendar text-primary fs-5"/>
+                        
+                        <!-- Invisible Input covering the icon -->
+                        <input type="date" 
+                               class="position-absolute w-100 h-100 top-0 start-0" 
+                               style="opacity: 0; cursor: pointer;"
+                               t-att-value="state.date" 
+                               t-on-change="onDateChanged"
+                               t-on-click.stop="ignoreClick"/>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BODY -->
+            <div class="flex-grow-1 d-flex flex-column justify-content-center p-3">
+                
+                <!-- Total / Today Header -->
+                <!-- Click here opens MISA Filtered Orders (swapped logic) -->
+                <div class="d-flex justify-content-center align-items-center mb-3 cursor-pointer"
+                     t-on-click="onOrderHeaderClick"
+                     title="Xem chi tiết các đơn này">
+                    <span class="text-uppercase fs-6 text-muted fw-bold small">
+                        Đơn hàng <t t-esc="displayDate"/>
+                    </span>
+                    <span class="badge bg-secondary ms-2 rounded-pill px-2 text-decoration-none">
+                        <t t-esc="state.data.total"/>
+                    </span>
+                </div>
+
+                <!-- 3 Stats Columns -->
+                <div class="row g-0 text-center">
+                    
+                    <!-- DONE -->
+                    <div class="col-4 border-end">
+                        <a href="#" t-on-click.prevent="() => this.onOrderClick('full')"
+                           class="d-block text-decoration-none py-2 px-1 hover-zoom cursor-pointer">
+                            <div class="display-6 fw-bold text-success mb-0" style="line-height: 1;">
+                                <t t-esc="state.data.full"/>
+                            </div>
+                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">Đã Xong</small>
+                        </a>
+                    </div>
+
+                    <!-- PARTIAL -->
+                    <div class="col-4 border-end">
+                        <a href="#" t-on-click.prevent="() => this.onOrderClick('partial')"
+                           class="d-block text-decoration-none py-2 px-1 hover-zoom cursor-pointer">
+                            <div class="display-6 fw-bold text-warning mb-0" style="line-height: 1;">
+                                <t t-esc="state.data.partial"/>
+                            </div>
+                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">1 Phần</small>
+                        </a>
+                    </div>
+
+                    <!-- NOT DONE -->
+                    <div class="col-4">
+                        <a href="#" t-on-click.prevent="() => this.onOrderClick('not_full')"
+                           class="d-block text-decoration-none py-2 px-1 hover-zoom cursor-pointer">
+                            <div class="display-6 fw-bold text-danger mb-0" style="line-height: 1;">
+                                <t t-esc="state.data.not_full"/>
+                            </div>
+                            <small class="text-muted fw-bold " style="font-size: 0.7rem;">
+                                    <span style="display:block; text-uppercase">CHƯA XUẤT</span>
+                                    <span style="display:block;">(gồm 1 phần)</span>
+                            </small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-light p-1 border-top"></div>
+        </div>
+    </t>
+</templates>

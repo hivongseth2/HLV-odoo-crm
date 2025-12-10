@@ -37,6 +37,38 @@ class StockWarehouse(models.Model):
             }
             warehouse.warehouse_dashboard_data = json.dumps(final_data)
 
+    @api.model
+    def get_dashboard_data(self, warehouse_id, date_str):
+        """
+        API computed dashboard data cho widget JS
+        """
+        warehouse = self.browse(warehouse_id)
+        if not warehouse.exists():
+            return {}
+
+        SaleOrder = self.env['sale.order']
+        # date_str expects 'YYYY-MM-DD'
+        
+        misa_domain = [
+            ('warehouse_id', '=', warehouse.id),
+            ('x_studio_misa_order_date', '=', date_str),
+            ('state', 'in', ['sale', 'done'])
+        ]
+        orders = SaleOrder.search(misa_domain)
+        total_orders = len(orders)
+        
+        full_orders = len(orders.filtered(lambda o: o.delivery_status == 'full'))
+        partial_orders = len(orders.filtered(lambda o: o.delivery_status == 'partial'))
+        not_full_count = total_orders - full_orders
+
+        return {
+            'total': total_orders,
+            'full': full_orders,
+            'partial': partial_orders,
+            'not_full': not_full_count,
+            'currency_id': warehouse.company_id.currency_id.id,
+        }
+
     def open_warehouse_operations(self):
         self.ensure_one()
         action = self.env["ir.actions.actions"]._for_xml_id("stock.stock_picking_type_action")

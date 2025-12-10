@@ -13,69 +13,7 @@
                 <field name="warehouse_dashboard_data"/>
                 <templates>
                     <t t-name="kanban-box">
-                        <div class="d-flex flex-column h-100 shadow-sm border rounded overflow-hidden bg-white hover-shadow transition-base">
-                            
-                            <div class="p-3 bg-light border-bottom text-center">
-                                <h4 class="mb-0 fw-bold text-dark text-uppercase" style="letter-spacing: 0.5px;">
-                                    <i class="fa fa-building-o me-2 text-muted"/>
-                                    <field name="name"/>
-                                </h4>
-                            </div>
-
-                            <div class="flex-grow-1 d-flex flex-column justify-content-center p-3">
-                                <t t-set="raw_data" t-value="JSON.parse(record.warehouse_dashboard_data.value || '{}')"/>
-                                <t t-set="misa_data" t-value="raw_data.misa || {total: 0, full: 0, partial: 0, not_full: 0}"/>
-
-                                <div class="d-flex justify-content-center align-items-center mb-3">
-                                    <span class="text-uppercase fs-6 text-muted fw-bold small">
-                                        Đơn hàng hôm nay
-                                    </span>
-                                    <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'all'}"
-                                       class="badge bg-secondary ms-2 rounded-pill px-2 text-decoration-none" 
-                                       title="Tổng đơn phát sinh hôm nay">
-                                        <t t-esc="misa_data.total"/>
-                                    </a>
-                                </div>
-
-                                <div class="row g-0 text-center">
-                                    <div class="col-4 border-end">
-                                        <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'full'}"
-                                           class="d-block text-decoration-none py-2 px-1 hover-zoom">
-                                            <div class="display-6 fw-bold text-success mb-0" style="line-height: 1;">
-                                                <t t-esc="misa_data.full"/>
-                                            </div>
-                                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">Đã Xong</small>
-                                        </a>
-                                    </div>
-
-                                    <div class="col-4 border-end">
-                                        <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'partial'}"
-                                           class="d-block text-decoration-none py-2 px-1 hover-zoom">
-                                            <div class="display-6 fw-bold text-warning mb-0" style="line-height: 1;">
-                                                <t t-esc="misa_data.partial"/>
-                                            </div>
-                                            <small class="text-muted fw-bold text-uppercase" style="font-size: 0.7rem;">1 Phần</small>
-                                        </a>
-                                    </div>
-
-                                    <div class="col-4">
-                                        <a type="object" name="open_misa_sale_orders" context="{'misa_filter': 'not_full'}"
-                                           class="d-block text-decoration-none py-2 px-1 hover-zoom">
-                                            <div class="display-6 fw-bold text-danger mb-0" style="line-height: 1;">
-                                                <t t-esc="misa_data.not_full"/>
-                                            </div>
-                                            <small class="text-muted fw-bold " style="font-size: 0.7rem;">
-                                                    <span style="display:block; text-uppercase">CHƯA XUẤT</span>
-                                                    <span style="display:block;">(gồm cả đơn xuất 1 phần)</span>
-                                            </small>
-
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="bg-light p-1 border-top"></div>
-                        </div>
+                        <field name="warehouse_dashboard_data" widget="stock_dashboard_field"/>
                     </t>
                 </templates>
             </kanban>
