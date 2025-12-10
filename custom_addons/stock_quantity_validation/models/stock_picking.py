@@ -146,6 +146,10 @@ class StockMoveLine(models.Model):
         Điều này ngăn chặn việc quét mã vạch dư hoặc nhập thủ công số lượng vượt mức.
         Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
         """
+        # Bypass validation nếu được gọi từ packaging context
+        if self.env.context.get('skip_qty_validation'):
+            return
+            
         EPS = 1e-6  # Epsilon để xử lý sai số floating point
 
         for line in self:
@@ -209,8 +213,9 @@ class StockMoveLine(models.Model):
         """
         lines = super(StockMoveLine, self).create(vals_list)
 
-        # Validate sau khi tạo
-        lines._check_qty_done_not_exceed_demand()
+        # Validate sau khi tạo (bypass nếu có skip flag)
+        if not self.env.context.get('skip_qty_validation'):
+            lines._check_qty_done_not_exceed_demand()
 
         return lines
 
@@ -220,8 +225,8 @@ class StockMoveLine(models.Model):
         """
         res = super(StockMoveLine, self).write(vals)
 
-        # Chỉ validate nếu có thay đổi qty_done hoặc quantity
-        if 'qty_done' in vals or 'quantity' in vals:
+        # Chỉ validate nếu có thay đổi qty_done hoặc quantity (bypass nếu có skip flag)
+        if ('qty_done' in vals or 'quantity' in vals) and not self.env.context.get('skip_qty_validation'):
             self._check_qty_done_not_exceed_demand()
 
         return res
