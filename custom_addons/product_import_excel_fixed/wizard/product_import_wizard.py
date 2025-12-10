@@ -215,11 +215,11 @@ class ProductImportWizard(models.TransientModel):
         - Nếu chưa có → tạo mới với sale_ok, purchase_ok, is_storable = True
         
         Cấu trúc Excel:
-        - Cột 'Mã': default_code (mã tham chiếu nội bộ) - BẮT BUỘC
-        - Cột 'Tên': Tên sản phẩm
+        - Cột 'Mã hàng': default_code (mã tham chiếu nội bộ) - BẮT BUỘC
+        - Cột 'Tên hàng': Tên sản phẩm
         - Cột 'ĐVT': Đơn vị tính (mặc định 'Cái' nếu không có)
         """
-        df = self._read_excel(self.file, dtype={'Mã': str, 'Tên': str, 'ĐVT': str})
+        df = self._read_excel(self.file, dtype={'Mã hàng': str, 'Tên hàng': str, 'ĐVT': str})
 
         ProductTemplate = self.env['product.template'].sudo()
 
@@ -256,8 +256,8 @@ class ProductImportWizard(models.TransientModel):
                          batch_num + 1, total_batches, start_idx + 1, end_idx)
 
             for _, row in batch_df.iterrows():
-                code = self._clean_string(row.get('Mã'))
-                name = self._clean_string(row.get('Tên'))
+                code = self._clean_string(row.get('Mã hàng'))
+                name = self._clean_string(row.get('Tên hàng'))
                 uom_name = self._clean_string(row.get('ĐVT'))
 
                 if not code:

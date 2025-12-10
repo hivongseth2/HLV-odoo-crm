@@ -18,8 +18,8 @@
           <div>
             <p><strong>File Excel cần có các cột:</strong></p>
             <ul>
-              <li><strong>Mã</strong>: Mã tham chiếu nội bộ (bắt buộc)</li>
-              <li><strong>Tên</strong>: Tên sản phẩm</li>
+              <li><strong>Mã hàng</strong>: Mã tham chiếu nội bộ (bắt buộc)</li>
+              <li><strong>Tên hàng</strong>: Tên sản phẩm</li>
               <li><strong>ĐVT</strong>: Đơn vị tính (mặc định: Cái)</li>
             </ul>
             <p><em>Sản phẩm mới sẽ được tạo với: Có thể bán, Có thể mua, Theo dõi tồn kho = Có</em></p>
