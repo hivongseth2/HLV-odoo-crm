@@ -152,6 +152,7 @@ const PREVIEW_CONFIG = {
         ],
         footer: (d) => `Mở rộng: Tổng tiền ${fmtCurrency(d.amount_total)}`
     },
+    /*
     'sale.order': {
         headerFields: ['name', 'partner_id', 'state', 'amount_total', 'date_order', 'invoice_status'],
         lineModel: 'sale.order.line',
@@ -180,6 +181,7 @@ const PREVIEW_CONFIG = {
         ],
         footer: (d) => `Tổng tiền: ${fmtCurrency(d.amount_total)}`
     },
+    */
     'stock.picking': {
         headerFields: ['name', 'partner_id', 'state', 'scheduled_date', 'origin', 'picking_type_id'],
         lineModel: 'stock.move',
