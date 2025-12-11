@@ -960,12 +960,21 @@ Cảm ơn bạn!''',
     def _get_all_reminder_recipients(self):
         """
         Lấy tất cả các Zalo User IDs cần gửi tin nhắn nhắc nhở.
-        Bao gồm: online_recipient_user_id, offline_recipient_user_id, incoming_recipient_user_id
+        Bao gồm:
+        - recipient_ids: Danh sách user_id mặc định (dùng cho WordPress webhook)
+        - online_recipient_user_id, offline_recipient_user_id, incoming_recipient_user_id: Kế toán
+        - saler_mapping_text: Mapping mã sale -> user_id
 
         :return: Set of unique user IDs
         """
         self.ensure_one()
         recipients = set()
+
+        # Thêm từ recipient_ids (Recipient User IDs - dùng cho WordPress)
+        default_recipients = self.get_recipient_list()
+        for uid in default_recipients:
+            if uid:
+                recipients.add(uid.strip())
 
         if self.online_recipient_user_id:
             recipients.add(self.online_recipient_user_id.strip())
