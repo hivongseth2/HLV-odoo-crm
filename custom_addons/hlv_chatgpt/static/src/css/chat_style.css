@@ -1,0 +1,20 @@
+/* Ép buộc vùng hiển thị chat thành 1 cột dọc */
+.o_chat_history .o_kanban_renderer {
+    display: block !important;
+    width: 100% !important;
+}
+
+/* Ép buộc mỗi tin nhắn chiếm 100% chiều ngang */
+.o_chat_history .o_kanban_record {
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+/* Ẩn thanh Ghost (thẻ ảo) của Odoo nếu có */
+.o_chat_history .o_kanban_ghost {
+    display: none !important;
+}
