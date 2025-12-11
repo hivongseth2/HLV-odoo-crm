@@ -259,43 +259,54 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
     // Insert after current row
     tr.parentNode.insertBefore(previewRow, tr.nextSibling);
 
-    // Container for panel with ENHANCED VISIBILITY
+    // Container for panel with ENHANCED    // Build container with enhanced styling and arrow
     const target = document.createElement("div");
-    target.className = "hlv-universal-preview-inline";
+    target.className = "hlv-preview-panel";
     target.style.cssText = `
-        padding: 16px;
-        background: #fff; 
+        background: #fff;
         border: 1px solid #dcdcdc;
         border-left: 6px solid #714B67;
         box-shadow: 0 6px 12px -4px rgba(0,0,0,0.15);
-        margin: 8px 12px 12px 12px;
-        border-radius: 4px;
-        animation: hlv-slide-down 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+        padding: 0;
+        margin: 10px 12px 12px 12px;
         position: relative;
+        border-radius: 4px;
     `;
 
-    // Add slide down animation
-    const style = document.createElement('style');
-    style.innerHTML = `
-        @keyframes hlv-slide-down {
-            from { opacity: 0; transform: translateY(-8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .hlv-u-summary { display: flex; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid #dee2e6; }
-        .hlv-u-summary-item label { display: block; font-size: 0.75rem; color: #555; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
-        .hlv-u-summary-item div { font-weight: 500; font-size: 1rem; color: #222; }
-        .table-preview th { background: #f8f9fa; font-size: 0.8rem; text-transform: uppercase; color: #555; font-weight: 700; border-bottom: 2px solid #dee2e6; padding: 10px 14px; }
-        .table-preview td { font-size: 0.95rem; padding: 10px 14px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; color: #333; }
-        .table-preview tr:last-child td { border-bottom: none; }
-        .hlv-u-title { font-weight: 700; color: #714B67; font-size: 1.1rem; }
-    `;
-    target.appendChild(style);
+    // Add arrow styles (checked if exists to avoid duplication)
+    if (!document.getElementById('hlv-preview-arrow-style')) {
+        const style = document.createElement('style');
+        style.id = 'hlv-preview-arrow-style';
+        style.innerHTML = `
+            .hlv-preview-panel::before {
+                content: "";
+                position: absolute;
+                top: -10px;
+                left: 20px;
+                border-width: 0 10px 10px 10px;
+                border-style: solid;
+                border-color: transparent transparent #dcdcdc transparent;
+                z-index: 0;
+            }
+            .hlv-preview-panel::after {
+                content: "";
+                position: absolute;
+                top: -9px;
+                left: 21px;
+                border-width: 0 9px 9px 9px;
+                border-style: solid;
+                border-color: transparent transparent #fff transparent;
+                z-index: 1;
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     target.innerHTML += `
-        <div class="hlv-u-header d-flex justify-content-between align-items-center mb-3">
+        < div class="hlv-u-header d-flex justify-content-between align-items-center mb-3" >
             <h5 class="hlv-u-title m-0"><span class="fa fa-file-text-o me-2 opacity-50"></span>${config.title({})}</h5>
             <button class="btn btn-sm btn-outline-secondary hlv-close-preview rounded-circle p-1" style="width: 28px; height: 28px; line-height: 1;"><i class="fa fa-times"></i></button>
-        </div>
+        </div >
         <div class="hlv-u-body">
             <div class="hlv-u-spinner text-center py-4"><span class="fa fa-circle-o-notch fa-spin fa-2x text-muted"></span></div>
         </div>
@@ -330,20 +341,20 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
 
         // Update title to allow it to be dynamic based on record if needed (currently using empty obj in loading)
         // Re-render title correctly
-        titleEl.innerHTML = `<span class="fa fa-file-text-o me-2"></span>${config.title(record)}`;
+        titleEl.innerHTML = `< span class="fa fa-file-text-o me-2" ></span > ${config.title(record)} `;
 
         // Render Summary
         const summaryHtml = config.summary.map(s => `
-            <div class="hlv-u-summary-item">
+        < div class="hlv-u-summary-item" >
                 <label>${s.label}</label>
                 <div>${s.value(record) || '---'}</div>
-            </div>
+            </div >
         `).join('');
 
         // Render Table Headers
         const thHtml = config.columns.map(c => `
-            <th class="${c.align ? 'text-' + c.align : 'text-start'}" style="${c.width ? 'width:' + c.width : ''}">${c.header}</th>
-        `).join('');
+        < th class="${c.align ? 'text-' + c.align : 'text-start'}" style = "${c.width ? 'width:' + c.width : ''}" > ${c.header}</th >
+            `).join('');
 
         // Render Rows
         const rowsHtml = lines.map(line => {
@@ -355,9 +366,9 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
                 else if (c.type === 'number') text = val || 0;
                 else text = val || '';
 
-                return `<td class="${c.align ? 'text-' + c.align : 'text-start'} ${c.bold ? 'fw-bold' : ''}">${text}</td>`;
+                return `< td class="${c.align ? 'text-' + c.align : 'text-start'} ${c.bold ? 'fw-bold' : ''}" > ${text}</td > `;
             }).join('');
-            return `<tr>${tds}</tr>`;
+            return `< tr > ${tds}</tr > `;
         }).join('');
 
         // Footer
@@ -366,15 +377,15 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
             const footerText = config.footer(record);
             if (footerText) {
                 footerHtml = `
-                    <div class="mt-2 text-end fw-bold text-dark border-top pt-2">
-                        ${footerText}
-                    </div>
-                 `;
+        < div class="mt-2 text-end fw-bold text-dark border-top pt-2" >
+            ${footerText}
+                    </div >
+        `;
             }
         }
 
         bodyEl.innerHTML = `
-            <div class="hlv-u-summary">${summaryHtml}</div>
+        < div class="hlv-u-summary" > ${summaryHtml}</div >
             <div class="table-responsive bg-white border rounded">
                 <table class="table table-preview w-100 mb-0">
                     <thead><tr>${thHtml}</tr></thead>
@@ -382,11 +393,11 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
                 </table>
             </div>
             ${footerHtml}
-        `;
+    `;
 
     } catch (e) {
         console.error(e);
-        target.querySelector(".hlv-u-body").innerHTML = `<div class="text-danger p-3">Lỗi tải dữ liệu: ${e.message}</div>`;
+        target.querySelector(".hlv-u-body").innerHTML = `< div class="text-danger p-3" > Lỗi tải dữ liệu: ${e.message}</div > `;
     }
 }
 
@@ -462,12 +473,12 @@ patch(ListController.prototype, {
         searchBar.style.cssText = 'margin-left: auto; margin-right: 16px;';
 
         searchBar.innerHTML = `
-            <div class="hlv-search-group d-flex align-items-center">
+        < div class="hlv-search-group d-flex align-items-center" >
                 <label class="hlv-search-label me-2" style="font-weight: 500; color: #714B67; white-space: nowrap;">SP:</label>
                 <input type="text" class="form-control form-control-sm hlv-product-input"
                        placeholder="Tìm sản phẩm..." style="width: 180px;">
             </div>
-        `;
+    `;
 
         if (buttonsArea && buttonsArea.parentElement) {
             buttonsArea.parentElement.insertBefore(searchBar, buttonsArea);
@@ -563,10 +574,10 @@ patch(ListController.prototype, {
         if (productArray.length === 1) {
             domain = [
                 '|',
-                [`${config.productPath}.name`, 'ilike', `%${productArray[0]}%`],
-                [`${config.productPath}.default_code`, 'ilike', `%${productArray[0]}%`]
+                [`${config.productPath}.name`, 'ilike', ` % ${productArray[0]}% `],
+                [`${config.productPath}.default_code`, 'ilike', ` % ${productArray[0]}% `]
             ];
-            description = `SP: ${productArray[0]}`;
+            description = `SP: ${productArray[0]} `;
         } else {
             domain = [];
             for (let i = 0; i < productArray.length - 1; i++) {
@@ -575,11 +586,11 @@ patch(ListController.prototype, {
             productArray.forEach(product => {
                 domain.push(
                     '|',
-                    [`${config.productPath}.name`, 'ilike', `%${product}%`],
-                    [`${config.productPath}.default_code`, 'ilike', `%${product}%`]
+                    [`${config.productPath}.name`, 'ilike', ` % ${product}% `],
+                    [`${config.productPath}.default_code`, 'ilike', ` % ${product}% `]
                 );
             });
-            description = `SP: ${productArray.join(' hoặc ')}`;
+            description = `SP: ${productArray.join(' hoặc ')} `;
         }
 
         try {
@@ -705,17 +716,17 @@ patch(ListRenderer.prototype, {
             const filterBtn = document.createElement('span');
             filterBtn.className = 'hlv-filter-icon ms-1';
             filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
-            filterBtn.title = `Lọc theo ${label}`;
+            filterBtn.title = `Lọc theo ${label} `;
 
             // Inline CSS for the icon to look cleaner and permanent
             filterBtn.style.cssText = `
-                cursor: pointer; 
-                opacity: 0.5; 
-                font-size: 0.85rem; 
-                margin-left: 6px; 
-                color: #555;
-                transition: all 0.2s;
-            `;
+    cursor: pointer;
+    opacity: 0.5;
+    font - size: 0.85rem;
+    margin - left: 6px;
+    color: #555;
+    transition: all 0.2s;
+    `;
 
             // Just hover effects for color
             filterBtn.addEventListener('mouseenter', () => { filterBtn.style.opacity = '1'; filterBtn.style.color = '#714B67'; });
@@ -750,22 +761,22 @@ patch(ListRenderer.prototype, {
         const popup = document.createElement('div');
         popup.className = 'hlv-filter-dropdown-portal';
         popup.style.cssText = `
-            position: fixed;
-            top: ${rect.bottom + 4}px;
-            left: ${Math.max(10, rect.left - 100)}px;
-            min-width: 200px;
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-            z-index: 10000;
-            padding: 10px;
-        `;
+    position: fixed;
+    top: ${rect.bottom + 4} px;
+    left: ${Math.max(10, rect.left - 100)} px;
+    min - width: 200px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border - radius: 6px;
+    box - shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    z - index: 10000;
+    padding: 10px;
+    `;
         popup.innerHTML = `
-            <input type="text" class="form-control form-control-sm hlv-popup-input"
-                   placeholder="Nhập ${label}..." autofocus style="width: 100%;">
-            <div class="mt-2 text-muted small">Nhấn Enter để tìm</div>
-        `;
+        < input type = "text" class="form-control form-control-sm hlv-popup-input"
+    placeholder = "Nhập ${label}..." autofocus style = "width: 100%;" >
+        <div class="mt-2 text-muted small">Nhấn Enter để tìm</div>
+    `;
 
         document.body.appendChild(popup);
 
@@ -797,17 +808,17 @@ patch(ListRenderer.prototype, {
         const dropdown = document.createElement('div');
         dropdown.className = 'hlv-filter-dropdown-portal';
         dropdown.style.cssText = `
-            position: fixed;
-            top: ${rect.bottom + 4}px;
-            left: ${Math.max(10, rect.left - 80)}px;
-            min-width: 160px;
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-            z-index: 10000;
-            overflow: hidden;
-        `;
+    position: fixed;
+    top: ${rect.bottom + 4} px;
+    left: ${Math.max(10, rect.left - 80)} px;
+    min - width: 160px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border - radius: 6px;
+    box - shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    z - index: 10000;
+    overflow: hidden;
+    `;
 
         const allOptions = [...options, { value: '', label: '— Tất cả —', color: '#714B67' }];
 
@@ -816,21 +827,21 @@ patch(ListRenderer.prototype, {
             div.className = 'hlv-filter-dropdown-item';
 
             const colorDot = item.color
-                ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};margin-right:8px;"></span>`
+                ? `< span style = "display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};margin-right:8px;" ></span > `
                 : '';
 
             div.innerHTML = colorDot + item.label;
             div.style.cssText = `
-                padding: 10px 16px;
-                cursor: pointer;
-                font-size: 0.9rem;
-                color: ${item.value === '' ? '#714B67' : '#333'};
-                font-weight: ${item.value === '' ? '600' : '400'};
-                border-bottom: ${idx < allOptions.length - 1 ? '1px solid #f0f0f0' : 'none'};
-                transition: background-color 0.15s;
-                display: flex;
-                align-items: center;
-            `;
+    padding: 10px 16px;
+    cursor: pointer;
+    font - size: 0.9rem;
+    color: ${item.value === '' ? '#714B67' : '#333'};
+    font - weight: ${item.value === '' ? '600' : '400'};
+    border - bottom: ${idx < allOptions.length - 1 ? '1px solid #f0f0f0' : 'none'};
+    transition: background - color 0.15s;
+    display: flex;
+    align - items: center;
+    `;
 
             div.addEventListener('mouseenter', () => div.style.backgroundColor = '#f8f4f7');
             div.addEventListener('mouseleave', () => div.style.backgroundColor = '');
@@ -859,20 +870,20 @@ patch(ListRenderer.prototype, {
         const dropdown = document.createElement('div');
         dropdown.className = 'hlv-filter-dropdown-portal';
         dropdown.style.cssText = `
-            position: fixed;
-            top: ${rect.bottom + 4}px;
-            left: ${Math.max(10, rect.left - 100)}px;
-            min-width: 240px;
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-            z-index: 10000;
-            padding: 12px;
-        `;
+    position: fixed;
+    top: ${rect.bottom + 4} px;
+    left: ${Math.max(10, rect.left - 100)} px;
+    min - width: 240px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border - radius: 6px;
+    box - shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    z - index: 10000;
+    padding: 12px;
+    `;
 
         dropdown.innerHTML = `
-            <div style="margin-bottom: 8px; font-weight: 500; color: #714B67;">${label}</div>
+        < div style = "margin-bottom: 8px; font-weight: 500; color: #714B67;" > ${label}</div >
             <div style="margin-bottom: 8px;">
                 <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Từ ngày:</label>
                 <input type="date" class="form-control form-control-sm hlv-date-from" style="margin-bottom: 8px;">
@@ -885,7 +896,7 @@ patch(ListRenderer.prototype, {
                 <button class="btn btn-sm btn-primary hlv-date-apply" style="flex: 1;">Áp dụng</button>
                 <button class="btn btn-sm btn-secondary hlv-date-clear" style="flex: 1;">Xóa</button>
             </div>
-        `;
+    `;
 
         document.body.appendChild(dropdown);
 
@@ -953,7 +964,7 @@ patch(ListRenderer.prototype, {
             const itemId = queryItem.searchItemId;
             const item = searchItems[itemId];
 
-            if (item && item.description && item.description.startsWith(`${label}:`)) {
+            if (item && item.description && item.description.startsWith(`${label}: `)) {
                 filterIdsToRemove.push(itemId);
                 const domain = item.domain;
                 if (domain) {
@@ -1000,9 +1011,9 @@ patch(ListRenderer.prototype, {
 
         // Display description
         if (valueArray.length === 1) {
-            newDescription = `${label}: ${valueArray[0]}`;
+            newDescription = `${label}: ${valueArray[0]} `;
         } else {
-            newDescription = `${label}: ${valueArray.join(' hoặc ')}`;
+            newDescription = `${label}: ${valueArray.join(' hoặc ')} `;
         }
 
         // Build all atomic conditions: for each Value, for each Field
@@ -1059,7 +1070,7 @@ patch(ListRenderer.prototype, {
             const itemId = queryItem.searchItemId;
             const item = searchItems[itemId];
 
-            if (item && item.description && item.description.startsWith(`${label}:`)) {
+            if (item && item.description && item.description.startsWith(`${label}: `)) {
                 filterIdsToRemove.push(itemId);
 
                 // Parse existing labels from description (e.g. "Status: Draft or Sent")
@@ -1135,7 +1146,7 @@ patch(ListRenderer.prototype, {
 
         if (valueArray.length === 1) {
             newDomain = [[fieldName, '=', valueArray[0]]];
-            newDescription = `${label}: ${labelArray[0]}`;
+            newDescription = `${label}: ${labelArray[0]} `;
         } else {
             newDomain = [];
             // Add OR operators
@@ -1146,7 +1157,7 @@ patch(ListRenderer.prototype, {
             valueArray.forEach(val => {
                 newDomain.push([fieldName, '=', val]);
             });
-            newDescription = `${label}: ${labelArray.join(' hoặc ')}`;
+            newDescription = `${label}: ${labelArray.join(' hoặc ')} `;
         }
 
         try {
@@ -1207,15 +1218,15 @@ patch(ListRenderer.prototype, {
                 [fieldName, '>=', utcStart],
                 [fieldName, '<=', utcEnd]
             ];
-            description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+            description += `${new Date(fromValue).toLocaleDateString('vi-VN')} - ${new Date(toValue).toLocaleDateString('vi-VN')} `;
         } else if (fromValue) {
             const utcStart = toUTCDateTime(fromValue, '00:00:00');
             domain = [[fieldName, '>=', utcStart]];
-            description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')}`;
+            description += `từ ${new Date(fromValue).toLocaleDateString('vi-VN')} `;
         } else if (toValue) {
             const utcEnd = toUTCDateTime(toValue, '23:59:59');
             domain = [[fieldName, '<=', utcEnd]];
-            description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')}`;
+            description += `đến ${new Date(toValue).toLocaleDateString('vi-VN')} `;
         }
 
         if (domain.length === 0) return;
@@ -1249,7 +1260,7 @@ patch(ListRenderer.prototype, {
             const itemId = queryItem.searchItemId;
             const item = searchItems[itemId];
 
-            if (item?.description?.startsWith(`${label}:`)) {
+            if (item?.description?.startsWith(`${label}: `)) {
                 filterIdsToRemove.push(itemId);
             }
         }
@@ -1290,17 +1301,17 @@ patch(ListRenderer.prototype, {
         const dropdown = document.createElement('div');
         dropdown.className = 'hlv-filter-dropdown-portal';
         dropdown.style.cssText = `
-            position: fixed;
-            top: ${rect.bottom + 4}px;
-            left: ${Math.max(10, rect.left - 80)}px;
-            min-width: 180px;
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-            z-index: 10000;
-            overflow: hidden;
-        `;
+    position: fixed;
+    top: ${rect.bottom + 4} px;
+    left: ${Math.max(10, rect.left - 80)} px;
+    min - width: 180px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border - radius: 6px;
+    box - shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    z - index: 10000;
+    overflow: hidden;
+    `;
 
         dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #666;">Đang tải...</div>';
         document.body.appendChild(dropdown);
@@ -1348,14 +1359,14 @@ patch(ListRenderer.prototype, {
             div.className = 'hlv-filter-dropdown-item';
             div.innerHTML = item.label;
             div.style.cssText = `
-                padding: 10px 16px;
-                cursor: pointer;
-                font-size: 0.9rem;
-                color: ${item.value === '' ? '#714B67' : '#333'};
-                font-weight: ${item.value === '' ? '600' : '400'};
-                border-bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
-                transition: background-color 0.15s;
-            `;
+    padding: 10px 16px;
+    cursor: pointer;
+    font - size: 0.9rem;
+    color: ${item.value === '' ? '#714B67' : '#333'};
+    font - weight: ${item.value === '' ? '600' : '400'};
+    border - bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
+    transition: background - color 0.15s;
+    `;
 
             div.addEventListener('mouseenter', () => div.style.backgroundColor = '#f8f4f7');
             div.addEventListener('mouseleave', () => div.style.backgroundColor = '');
@@ -1394,7 +1405,7 @@ patch(ListRenderer.prototype, {
         for (const queryItem of query) {
             const itemId = queryItem.searchItemId;
             const item = searchItems[itemId];
-            if (item && item.description && item.description.startsWith(`${label}:`)) {
+            if (item && item.description && item.description.startsWith(`${label}: `)) {
                 filterIdsToRemove.push(itemId);
                 // Extract IDs from domain if we want toggle logic?
                 // The original code uses Map<name, id>. 
@@ -1460,7 +1471,7 @@ patch(ListRenderer.prototype, {
         if (idArray.length === 1) {
             newDomain = [['picking_type_id', '=', idArray[0]]];
             // Ideally we want the warehouse name here.
-            newDescription = `${label}: ${valueLabel}`;
+            newDescription = `${label}: ${valueLabel} `;
         } else {
             newDomain = [];
             for (let i = 0; i < idArray.length - 1; i++) newDomain.push('|');
