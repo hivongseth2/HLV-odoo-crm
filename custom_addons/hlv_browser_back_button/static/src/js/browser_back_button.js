@@ -57,7 +57,14 @@ function modifyAppButton(appButton) {
         ev.stopImmediatePropagation();
 
         console.log('[HLV] App button clicked in detail view - using history.back()');
+
+        // Sử dụng history.back() và sau đó reload để sync state với OWL
         window.history.back();
+
+        // Delay nhỏ rồi reload để đảm bảo trang hoạt động đúng
+        setTimeout(function () {
+            window.location.reload();
+        }, 50);
 
         return false;
     }, true);
