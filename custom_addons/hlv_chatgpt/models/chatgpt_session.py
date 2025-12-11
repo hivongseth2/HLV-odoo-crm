@@ -20,10 +20,18 @@ class HlvChatgptSession(models.Model):
     user_id = fields.Many2one('res.users', string='Người tạo', default=lambda self: self.env.user)
     last_activity = fields.Datetime(string='Hoạt động cuối', default=fields.Datetime.now)
     
+    # === THÊM FIELD STATE ĐỂ FIX LỖI ===
+    state = fields.Selection([
+        ('new', 'Mới'),
+        ('active', 'Đang hoạt động'),
+        ('archived', 'Lưu trữ')
+    ], default='new', string='Trạng thái')
+    # ===================================
+
     # Dùng One2many để lưu lịch sử chat
     message_ids = fields.One2many('hlv.chatgpt.message', 'session_id', string='Nội dung hội thoại')
     
-    # Ô nhập liệu nhanh (không lưu vào DB lâu dài, chỉ để hứng dữ liệu)
+    # Ô nhập liệu nhanh
     input_text = fields.Text(string='Nhập tin nhắn...')
 
     def action_send_message(self):
@@ -32,7 +40,7 @@ class HlvChatgptSession(models.Model):
         if not self.input_text:
             raise UserError("Vui lòng nhập nội dung tin nhắn.")
 
-        # 1. Tạo tin nhắn của User vào lịch sử
+        # 1. Tạo tin nhắn của User
         self.env['hlv.chatgpt.message'].create({
             'session_id': self.id,
             'role': 'user',
@@ -40,12 +48,13 @@ class HlvChatgptSession(models.Model):
         })
         
         user_query = self.input_text
-        self.input_text = "" # Xóa ô nhập sau khi gửi
+        self.input_text = "" 
+        self.state = 'active' # Cập nhật trạng thái
 
         # 2. Gọi API OpenAI
         ai_response = self._call_openai_api(user_query)
 
-        # 3. Tạo tin nhắn của AI vào lịch sử
+        # 3. Tạo tin nhắn của AI
         self.env['hlv.chatgpt.message'].create({
             'session_id': self.id,
             'role': 'assistant',
@@ -66,7 +75,7 @@ class HlvChatgptSession(models.Model):
         client = OpenAI(api_key=config.api_key)
 
         try:
-            # === GỌI API THEO ĐÚNG LOGIC CỦA BẠN ===
+            # === GỌI API ===
             response = client.responses.create(
                 model="gpt-4o", 
                 prompt={
@@ -102,7 +111,7 @@ class HlvChatgptSession(models.Model):
 class HlvChatgptMessage(models.Model):
     _name = 'hlv.chatgpt.message'
     _description = 'Chi tiết tin nhắn'
-    _order = 'create_date asc' # Tin cũ ở trên, mới ở dưới
+    _order = 'create_date asc'
 
     session_id = fields.Many2one('hlv.chatgpt.session', string='Phiên chat', ondelete='cascade')
     role = fields.Selection([('user', 'Bạn'), ('assistant', 'AI')], string='Người gửi', required=True)
