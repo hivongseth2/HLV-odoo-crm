@@ -542,15 +542,82 @@ patch(ListRenderer.prototype, {
         const searchModel = controller.env.searchModel;
         if (!searchModel?.createNewFilters) return;
 
-        await this._hlvRemoveExistingFilters(label);
+        // 1. Identify active filters for this field
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const activeValues = new Set();
+        const filterIdsToRemove = [];
 
-        const domain = [[fieldName, 'ilike', value]];
-        const description = `${label}: ${value}`;
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+
+            if (item && item.description && item.description.startsWith(`${label}:`)) {
+                filterIdsToRemove.push(itemId);
+                const domain = item.domain;
+                if (domain) {
+                    this._hlvExtractValuesFromDomain(domain, fieldName, activeValues);
+                }
+            }
+        }
+
+        // 2. Remove existing filters
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV Filter] Remove failed:', e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (!value) {
+            // Empty value passed -> treat as clear if no other values selected
+            // But usually this function is called with a specific value to ADD/TOGGLE.
+            // If value is empty string, maybe just return? 
+            // Or if explicit clear was needed, we'd use _hlvClearFilter.
+            if (activeValues.size === 0) return;
+        } else {
+            // 3. Toggle the new value
+            if (activeValues.has(value)) {
+                activeValues.delete(value);
+            } else {
+                activeValues.add(value);
+            }
+        }
+
+        if (activeValues.size === 0) return;
+
+        // 4. Build new Domain
+        const valueArray = Array.from(activeValues);
+        let newDomain;
+        let newDescription;
+
+        if (valueArray.length === 1) {
+            newDomain = [[fieldName, 'ilike', valueArray[0]]];
+            newDescription = `${label}: ${valueArray[0]}`;
+        } else {
+            newDomain = [];
+            for (let i = 0; i < valueArray.length - 1; i++) {
+                newDomain.push('|');
+            }
+            valueArray.forEach(val => {
+                newDomain.push([fieldName, 'ilike', val]);
+            });
+            newDescription = `${label}: ${valueArray.join(' hoặc ')}`;
+        }
 
         try {
             searchModel.createNewFilters([{
-                description: description,
-                domain: domain,
+                description: newDescription,
+                domain: newDomain,
                 type: 'filter',
             }]);
         } catch (e) {
@@ -570,21 +637,136 @@ patch(ListRenderer.prototype, {
         const searchModel = controller.env.searchModel;
         if (!searchModel?.createNewFilters) return;
 
-        await this._hlvRemoveExistingFilters(label);
+        // 1. Identify active filters for this field
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const activeLabels = new Set();
+        const activeValues = new Set();
+        const filterIdsToRemove = [];
 
-        if (!value) return;
+        // Check active filters to find existing selections
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
 
-        const domain = [[fieldName, '=', value]];
-        const description = `${label}: ${displayLabel}`;
+            if (item && item.description && item.description.startsWith(`${label}:`)) {
+                filterIdsToRemove.push(itemId);
+
+                // Parse existing labels from description (e.g. "Status: Draft or Sent")
+                // Note: We only have labels here, not values.
+                // We rely on the fact that we are rebuilding the filter from scratch based on toggled logic.
+                // HOWEVER, retrieving the *value* (ID) from the label is hard without a map.
+                // Simplified approach: 
+                // We will rely on `searchModel.query` to find the exact domain to extract values?
+                // Parsing domain is more reliable than description.
+
+                const domain = item.domain;
+                if (domain) {
+                    // Domain could be [['field', '=', 'val']] or ['|', ['field','=','v1'], ['field','=','v2']]
+                    // or nested: ['|', '|', cond1, cond2, cond3]
+                    this._hlvExtractValuesFromDomain(domain, fieldName, activeValues);
+                }
+            }
+        }
+
+        // 2. Remove existing filters
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV Filter] Remove failed:', e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (value === '') {
+            // "All" selected -> do nothing (already cleared)
+            return;
+        }
+
+        // 3. Toggle the new value
+        if (activeValues.has(value)) {
+            activeValues.delete(value);
+        } else {
+            activeValues.add(value);
+        }
+
+        if (activeValues.size === 0) return;
+
+        // 4. Build new Domain and Description
+        const valueArray = Array.from(activeValues);
+        let newDomain;
+        let newDescription;
+
+        // Helper to find label for a value
+        const getLabelForValue = (val) => {
+            // Try to match with the current selection if possible, or we need the options list.
+            // Since we don't have the options list here easily without passing it, 
+            // checking if 'value' matches 'val' is the best we can do for the *current* click.
+            // For others, we might resort to just showing the value if we can't map it.
+            // IMPROVEMENT: Pass options or store map.
+            // For now, if we match the clicked one, use displayLabel. 
+            // If not, we might be stuck with the value or need to lookup.
+            // Let's rely on `SELECTION_FIELDS` global which is available in this file.
+            const resModel = controller.props.resModel;
+            const options = getSelectionOptions(fieldName, resModel);
+            const opt = options?.find(o => o.value === val);
+            return opt ? opt.label : val;
+        };
+
+        const labelArray = valueArray.map(getLabelForValue);
+
+        if (valueArray.length === 1) {
+            newDomain = [[fieldName, '=', valueArray[0]]];
+            newDescription = `${label}: ${labelArray[0]}`;
+        } else {
+            newDomain = [];
+            // Add OR operators
+            // N items need N-1 ORs
+            for (let i = 0; i < valueArray.length - 1; i++) {
+                newDomain.push('|');
+            }
+            valueArray.forEach(val => {
+                newDomain.push([fieldName, '=', val]);
+            });
+            newDescription = `${label}: ${labelArray.join(' hoặc ')}`;
+        }
 
         try {
             searchModel.createNewFilters([{
-                description: description,
-                domain: domain,
+                description: newDescription,
+                domain: newDomain,
                 type: 'filter',
             }]);
         } catch (e) {
             console.error('[HLV Filter] Failed:', e);
+        }
+    },
+
+    /**
+     * Helper to extract values from a domain tree recursively
+     */
+    _hlvExtractValuesFromDomain(domain, fieldName, valueSet) {
+        if (!Array.isArray(domain)) return;
+
+        // Single condition: ['field', '=', 'val']
+        if (domain.length === 3 && domain[0] === fieldName && (domain[1] === '=' || domain[1] === 'ilike')) {
+            valueSet.add(domain[2]);
+            return;
+        }
+
+        // Recursive OR/AND/list
+        for (const element of domain) {
+            if (Array.isArray(element)) {
+                this._hlvExtractValuesFromDomain(element, fieldName, valueSet);
+            }
         }
     },
 
