@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_hlv_chatgpt_session_list" model="ir.ui.view">
+        <field name="name">hlv.chatgpt.session.list</field>
+        <field name="model">hlv.chatgpt.session</field>
+        <field name="arch" type="xml">
+            <list decoration-info="state=='draft'" decoration-success="state=='done'" decoration-danger="state=='error'">
+                <field name="create_date"/>
+                <field name="user_input"/>
+                <field name="response_text" optional="show"/>
+                <field name="state" widget="badge" 
+                       decoration-info="state == 'draft'"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'error'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_hlv_chatgpt_session_form" model="ir.ui.view">
+        <field name="name">hlv.chatgpt.session.form</field>
+        <field name="model">hlv.chatgpt.session</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_send_to_chatgpt" 
+                            string="Gửi tin nhắn" 
+                            type="object" 
+                            class="btn-primary" 
+                            invisible="state not in ['draft', 'error']"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group string="Hỏi">
+                        <field name="user_input" placeholder="Nhập câu hỏi của bạn tại đây..."/>
+                    </group>
+                    
+                    <group string="Đáp" invisible="not response_text">
+                        <field name="response_text"/>
+                    </group>
+                    
+                    <notebook>
+                        <page string="Debug (Raw Response)">
+                            <field name="raw_response"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_hlv_chatgpt_session" model="ir.actions.act_window">
+        <field name="name">Test Chat</field>
+        <field name="res_model">hlv.chatgpt.session</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem id="menu_hlv_chatgpt_session" parent="menu_hlv_chatgpt_root" action="action_hlv_chatgpt_session" sequence="10"/>
+</odoo>
