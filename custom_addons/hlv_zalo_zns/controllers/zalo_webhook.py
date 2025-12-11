@@ -20,9 +20,9 @@ class ZaloSheetWebhook(http.Controller):
 
             # 2. Lấy thông tin cần thiết
             id_don_mua = data.get('id_don_mua', 'N/A')
-            nv_yeu_cau = data.get('nv_yeu_cau', 'N/A')
+            nv_yeu_cau = data.get('nv_yeu_cau', '').strip() # Thêm .strip() để xóa khoảng trắng thừa nếu có
 
-            # 3. Soạn nội dung tin nhắn (Đã sửa theo yêu cầu mới)
+            # 3. Soạn nội dung tin nhắn
             message_text = (
                 f"📝 ĐƠN MUA HÀNG CẦN DUYỆT\n"
                 f"- ID Đơn: {id_don_mua}\n"
@@ -35,7 +35,27 @@ class ZaloSheetWebhook(http.Controller):
 
             results = []
             if config:
-                recipient_ids = ['9076053104406687668', '8987516370203943162']
+                # --- LOGIC MỚI BẮT ĐẦU TỪ ĐÂY ---
+                
+                # Danh sách nhân viên đặc biệt
+                special_staffs = [
+                    "ĐẶNG THỊ HỒNG HẠNH", 
+                    "TRẦN HOÀNG PHI LONG", 
+                    "DƯƠNG THỊ HÀ", 
+                    "TRƯƠNG THÁI QUANG"
+                ]
+
+                # Kiểm tra xem nhân viên yêu cầu có nằm trong danh sách không
+                # Sử dụng upper() để so sánh không phân biệt hoa thường cho chắc chắn
+                if nv_yeu_cau.upper() in [name.upper() for name in special_staffs]:
+                    # Nhóm này gửi cho user: 8987516370203943162
+                    recipient_ids = ['8987516370203943162']
+                else:
+                    # Còn lại gửi cho user kia: 9076053104406687668
+                    recipient_ids = ['9076053104406687668']
+                
+                # --- KẾT THÚC LOGIC MỚI ---
+
                 for user_id in recipient_ids:
                     res = config.send_notification_message(user_id, message_text)
                     results.append({'user_id': user_id, 'result': res})
