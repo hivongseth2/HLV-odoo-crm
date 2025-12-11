@@ -31,6 +31,12 @@ class ProductImportWizard(models.TransientModel):
         help="Số lượng sản phẩm xử lý trong mỗi batch. Với file lớn (>1000 dòng), "
              "nên để 300-500 để tránh quá tải hệ thống. Mặc định: 500."
     )
+    
+    max_batches = fields.Integer(
+        string="Giới hạn số Batch",
+        default=0,
+        help="Giới hạn số batch chạy (dùng để test). Để 0 = không giới hạn, chạy hết file."
+    )
 
     # -------- Helpers --------
     def _clean_string(self, val):
@@ -236,14 +242,22 @@ class ProductImportWizard(models.TransientModel):
         total_rows = len(df)
         total_batches = (total_rows + batch_size - 1) // batch_size  # Ceiling division
         
+        # Giới hạn số batch nếu được set (dùng để test)
+        max_batches = self.max_batches or 0
+        if max_batches > 0 and max_batches < total_batches:
+            batches_to_run = max_batches
+            _logger.info("⚠️ GIỚI HẠN: Chỉ chạy %d/%d batch (test mode)", max_batches, total_batches)
+        else:
+            batches_to_run = total_batches
+        
         _logger.info("="*60)
         _logger.info("🚀 BẮT ĐẦU IMPORT SẢN PHẨM")
-        _logger.info("   Tổng số dòng: %d | Batch size: %d | Số batch: %d", 
-                     total_rows, batch_size, total_batches)
+        _logger.info("   Tổng số dòng: %d | Batch size: %d | Số batch sẽ chạy: %d/%d", 
+                     total_rows, batch_size, batches_to_run, total_batches)
         _logger.info("="*60)
 
         # Xử lý từng batch
-        for batch_num in range(total_batches):
+        for batch_num in range(batches_to_run):
             start_idx = batch_num * batch_size
             end_idx = min(start_idx + batch_size, total_rows)
             batch_df = df.iloc[start_idx:end_idx]
@@ -332,13 +346,18 @@ class ProductImportWizard(models.TransientModel):
         _logger.info("="*60)
         
         msg_lines = [
-            f"Hoàn tất Import sản phẩm ({total_batches} batch).",
+            f"Hoàn tất Import sản phẩm ({batches_to_run}/{total_batches} batch).",
             f"- Tạo mới: {created}",
             f"- Cập nhật: {updated}",
             f"- Bỏ qua (đã tồn tại): {skipped_exists}",
             f"- Bỏ qua (không thay đổi): {skipped_same}",
-            f"- Bỏ qua (không có 'Mã'): {skipped_no_code}",
+            f"- Bỏ qua (không có 'Mã hàng'): {skipped_no_code}",
         ]
+        
+        # Thêm thông báo nếu còn batch chưa chạy
+        if batches_to_run < total_batches:
+            remaining_rows = total_rows - (batches_to_run * batch_size)
+            msg_lines.append(f"⚠️ Còn lại: {remaining_rows} dòng chưa import")
 
         if errors:
             msg_lines.append(f"- Lỗi: {len(errors)}")
