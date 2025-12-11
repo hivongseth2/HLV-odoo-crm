@@ -795,10 +795,10 @@ class SaleApiImportWizard(models.TransientModel):
                 zns = bool(order.get("CustomField23", False))
 
                 # Bỏ qua đơn đã giao (DeliveryStatusID=2)
-                delivery_status = order.get("DeliveryStatusID", "0")
-                if delivery_status is not None and str(delivery_status).strip() == "2":
-                    _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
-                    continue
+                # delivery_status = order.get("DeliveryStatusID", "0")
+                # if delivery_status is not None and str(delivery_status).strip() == "2":
+                #     _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
+                #     continue
                 
                 # Nếu là 'Từ chối ghi' → hủy các SO hiện có trùng tên rồi bỏ qua import
                 if revenue_status_id == 4 or status == "từ chối ghi":
