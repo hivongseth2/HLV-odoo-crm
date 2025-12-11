@@ -152,7 +152,7 @@ const PREVIEW_CONFIG = {
         headerFields: ['name', 'partner_id', 'state', 'scheduled_date', 'origin', 'picking_type_id'],
         lineModel: 'stock.move',
         lineLinkField: 'picking_id',
-        lineFields: ['product_id', 'description_picking', 'product_uom_qty', 'quantity_done', 'product_uom'],
+        lineFields: ['product_id', 'description_picking', 'product_uom_qty', 'quantity', 'product_uom'],
         title: (d) => `${d.name || 'Phiếu kho'} - ${d.picking_type_id?.[1] || ''}`,
         summary: [
             { label: 'Đối tác', value: (d) => d.partner_id?.[1] || '---' },
@@ -172,7 +172,7 @@ const PREVIEW_CONFIG = {
             { header: 'Mô tả', field: 'description_picking', type: 'text', width: '30%' },
             { header: 'ĐVT', field: 'product_uom', type: 'many2one', align: 'center' },
             { header: 'Nhu cầu', field: 'product_uom_qty', type: 'number', align: 'end' },
-            { header: 'Hoàn tất', field: 'quantity_done', type: 'number', align: 'end', bold: true },
+            { header: 'Hoàn tất', field: 'quantity', type: 'number', align: 'end', bold: true },
         ],
         footer: (d) => ''
     }
@@ -606,7 +606,7 @@ patch(ListRenderer.prototype, {
     },
 
     /**
-     * Add filter buttons to ALL column headers dynamically
+     * Add filter buttons to ALL column headers dynamically with NICER UI
      */
     _hlvAddUniversalFilters() {
         const resModel = this.props.list?.resModel;
@@ -636,11 +636,33 @@ patch(ListRenderer.prototype, {
 
             const label = getFieldLabel(header);
 
-            const filterBtn = document.createElement('button');
-            filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
-            filterBtn.type = 'button';
-            filterBtn.title = `Lọc theo ${label}`;
+            // Redesigned Filter Button
+            const filterBtn = document.createElement('span');
+            filterBtn.className = 'hlv-filter-icon ms-1';
             filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
+            filterBtn.title = `Lọc theo ${label}`;
+
+            // Inline CSS for the icon to look cleaner
+            filterBtn.style.cssText = `
+                cursor: pointer; 
+                opacity: 0.3; 
+                font-size: 0.8rem; 
+                margin-left: 6px; 
+                transition: all 0.2s;
+                visibility: hidden; 
+            `;
+
+            // Show on hover of the TH
+            header.addEventListener('mouseenter', () => { filterBtn.style.visibility = 'visible'; filterBtn.style.opacity = '0.5'; });
+            header.addEventListener('mouseleave', () => {
+                // Only hide if not active (TODO: check active state)
+                // For now simplifies to showing on hover or consistent
+                filterBtn.style.visibility = 'hidden';
+            });
+
+            // Interaction styles
+            filterBtn.addEventListener('mouseenter', () => { filterBtn.style.opacity = '1'; filterBtn.style.color = '#714B67'; });
+            filterBtn.addEventListener('mouseleave', () => { filterBtn.style.opacity = '0.5'; filterBtn.style.color = ''; });
 
             filterBtn.addEventListener('click', (e) => {
                 e.preventDefault();
