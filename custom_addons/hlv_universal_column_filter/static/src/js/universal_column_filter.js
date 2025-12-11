@@ -267,7 +267,7 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
         border: 1px solid #dcdcdc;
         border-left: 6px solid #714B67;
         box-shadow: 0 6px 12px -4px rgba(0,0,0,0.15);
-        padding: 0;
+        padding: 16px;
         margin: 10px 12px 12px 12px;
         position: relative;
         border-radius: 4px;
