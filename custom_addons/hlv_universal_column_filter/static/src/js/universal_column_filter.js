@@ -61,6 +61,19 @@ const DATE_FIELD_PATTERNS = [
     'date_order', 'date_planned', 'date_done', 'commitment_date', 'date_approve'
 ];
 
+// Fields to exclude from filtering (non-stored, computed, or specific custom fields)
+const EXCLUDED_FIELDS = [
+    'activity_exception_decoration', 'message_needaction', // System fields
+];
+
+// Field Mapping for Non-Stored fields (Map displayed column -> Searchable db field(s))
+const FIELD_MAPPING = {
+    'stock.picking': {
+        // Map 'Liên hệ' to both partner name and commercial partner name to match compute logic
+        'x_studio_lin_h_1': ['partner_id.name', 'partner_id.commercial_partner_id.name'],
+    }
+};
+
 /**
  * Format number as currency (Vietnamese locale)
  */
@@ -209,7 +222,8 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
 
     // Create new TR
     const previewRow = document.createElement('tr');
-    previewRow.className = 'hlv-preview-row bg-light';
+    previewRow.className = 'hlv-preview-row';
+    // No background on TR itself to let the div have shadow/margin
 
     // Count columns to colspan
     const colCount = tr.querySelectorAll('td').length;
@@ -218,43 +232,49 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
     cell.colSpan = colCount;
     cell.style.padding = '0';
     cell.style.borderTop = 'none';
+    cell.style.backgroundColor = 'transparent'; // Let the div handle background
 
     previewRow.appendChild(cell);
 
     // Insert after current row
     tr.parentNode.insertBefore(previewRow, tr.nextSibling);
 
-    // Container for panel
+    // Container for panel with ENHANCED VISIBILITY
     const target = document.createElement("div");
     target.className = "hlv-universal-preview-inline";
     target.style.cssText = `
         padding: 16px;
-        background: #fdfdfd; 
-        border-bottom: 2px solid #e0e0e0;
-        box-shadow: inset 0 4px 6px -4px rgba(0,0,0,0.1);
-        animation: hlv-slide-down 0.2s ease-out;
+        background: #fff; 
+        border: 1px solid #dcdcdc;
+        border-left: 6px solid #714B67;
+        box-shadow: 0 6px 12px -4px rgba(0,0,0,0.15);
+        margin: 8px 12px 12px 12px;
+        border-radius: 4px;
+        animation: hlv-slide-down 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+        position: relative;
     `;
 
     // Add slide down animation
     const style = document.createElement('style');
     style.innerHTML = `
         @keyframes hlv-slide-down {
-            from { opacity: 0; transform: translateY(-10px); }
+            from { opacity: 0; transform: translateY(-8px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .hlv-u-summary { display: flex; gap: 30px; margin-bottom: 16px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px dashed #eee; }
-        .hlv-u-summary-item label { display: block; font-size: 0.75rem; color: #888; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .hlv-u-summary-item div { font-weight: 500; font-size: 0.95rem; color: #333; }
-        .table-preview th { background: #f8f9fa; font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: 600; border-bottom: 1px solid #ddd; padding: 8px 12px; }
-        .table-preview td { font-size: 0.9rem; padding: 8px 12px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; color: #444; }
+        .hlv-u-summary { display: flex; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid #dee2e6; }
+        .hlv-u-summary-item label { display: block; font-size: 0.75rem; color: #555; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
+        .hlv-u-summary-item div { font-weight: 500; font-size: 1rem; color: #222; }
+        .table-preview th { background: #f8f9fa; font-size: 0.8rem; text-transform: uppercase; color: #555; font-weight: 700; border-bottom: 2px solid #dee2e6; padding: 10px 14px; }
+        .table-preview td { font-size: 0.95rem; padding: 10px 14px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; color: #333; }
         .table-preview tr:last-child td { border-bottom: none; }
+        .hlv-u-title { font-weight: 700; color: #714B67; font-size: 1.1rem; }
     `;
     target.appendChild(style);
 
     target.innerHTML += `
-        <div class="hlv-u-header d-flex justify-content-between align-items-center mb-2">
-            <h5 class="hlv-u-title m-0 text-primary"><span class="fa fa-file-text-o me-2"></span>${config.title({})}</h5>
-            <button class="btn btn-sm btn-light hlv-close-preview"><i class="fa fa-times"></i></button>
+        <div class="hlv-u-header d-flex justify-content-between align-items-center mb-3">
+            <h5 class="hlv-u-title m-0"><span class="fa fa-file-text-o me-2 opacity-50"></span>${config.title({})}</h5>
+            <button class="btn btn-sm btn-outline-secondary hlv-close-preview rounded-circle p-1" style="width: 28px; height: 28px; line-height: 1;"><i class="fa fa-times"></i></button>
         </div>
         <div class="hlv-u-body">
             <div class="hlv-u-spinner text-center py-4"><span class="fa fa-circle-o-notch fa-spin fa-2x text-muted"></span></div>
@@ -644,6 +664,7 @@ patch(ListRenderer.prototype, {
         headers.forEach(header => {
             const fieldName = header.dataset.name;
             if (!fieldName || fieldName === '__checkbox__') return;
+            if (EXCLUDED_FIELDS.includes(fieldName)) return; // Skip excluded fields
             if (header.dataset.hlvFilterAdded) return;
             header.dataset.hlvFilterAdded = 'true';
 
@@ -894,6 +915,9 @@ patch(ListRenderer.prototype, {
         const controller = _hlvCurrentController;
         if (!controller) return;
 
+        const resModel = controller.props.resModel;
+        const mappedField = FIELD_MAPPING[resModel]?.[fieldName] || fieldName;
+
         const searchModel = controller.env.searchModel;
         if (!searchModel?.createNewFilters) return;
 
@@ -911,7 +935,7 @@ patch(ListRenderer.prototype, {
                 filterIdsToRemove.push(itemId);
                 const domain = item.domain;
                 if (domain) {
-                    this._hlvExtractValuesFromDomain(domain, fieldName, activeValues);
+                    this._hlvExtractValuesFromDomain(domain, mappedField, activeValues);
                 }
             }
         }
@@ -934,10 +958,6 @@ patch(ListRenderer.prototype, {
         }
 
         if (!value) {
-            // Empty value passed -> treat as clear if no other values selected
-            // But usually this function is called with a specific value to ADD/TOGGLE.
-            // If value is empty string, maybe just return? 
-            // Or if explicit clear was needed, we'd use _hlvClearFilter.
             if (activeValues.size === 0) return;
         } else {
             // 3. Toggle the new value
@@ -952,21 +972,34 @@ patch(ListRenderer.prototype, {
 
         // 4. Build new Domain
         const valueArray = Array.from(activeValues);
+        const fields = Array.isArray(mappedField) ? mappedField : [mappedField];
         let newDomain;
         let newDescription;
 
+        // Display description
         if (valueArray.length === 1) {
-            newDomain = [[fieldName, 'ilike', valueArray[0]]];
             newDescription = `${label}: ${valueArray[0]}`;
         } else {
+            newDescription = `${label}: ${valueArray.join(' hoặc ')}`;
+        }
+
+        // Build all atomic conditions: for each Value, for each Field
+        const conditions = [];
+        valueArray.forEach(val => {
+            fields.forEach(field => {
+                conditions.push([field, 'ilike', val]);
+            });
+        });
+
+        if (conditions.length === 1) {
+            newDomain = conditions;
+        } else {
             newDomain = [];
-            for (let i = 0; i < valueArray.length - 1; i++) {
+            // Prepend OR operators (N-1)
+            for (let i = 0; i < conditions.length - 1; i++) {
                 newDomain.push('|');
             }
-            valueArray.forEach(val => {
-                newDomain.push([fieldName, 'ilike', val]);
-            });
-            newDescription = `${label}: ${valueArray.join(' hoặc ')}`;
+            newDomain.push(...conditions);
         }
 
         try {
@@ -1111,8 +1144,11 @@ patch(ListRenderer.prototype, {
     _hlvExtractValuesFromDomain(domain, fieldName, valueSet) {
         if (!Array.isArray(domain)) return;
 
+        // Support matching against multiple fields (e.g. mapped fields)
+        const fields = Array.isArray(fieldName) ? fieldName : [fieldName];
+
         // Single condition: ['field', '=', 'val']
-        if (domain.length === 3 && domain[0] === fieldName && (domain[1] === '=' || domain[1] === 'ilike')) {
+        if (domain.length === 3 && fields.includes(domain[0]) && (domain[1] === '=' || domain[1] === 'ilike')) {
             valueSet.add(domain[2]);
             return;
         }
