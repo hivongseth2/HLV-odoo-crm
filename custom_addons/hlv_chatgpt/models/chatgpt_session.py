@@ -51,7 +51,10 @@ class HlvChatgptSession(models.Model):
                     "id": config.prompt_id,
                     "version": config.prompt_version or "3"
                 },
-                input=[self.user_input],  # Truyền câu hỏi vào mảng input
+                input=[{
+                    "role": "user",
+                    "content": self.user_input
+                }],  # Truyền câu hỏi vào mảng input
                 text={
                     "format": {
                         "type": "text"
