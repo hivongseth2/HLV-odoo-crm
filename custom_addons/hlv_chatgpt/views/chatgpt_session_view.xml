@@ -9,7 +9,7 @@
                 <field name="content"/>
                 <field name="create_date"/>
                 <templates>
-                    <t t-name="kanban-box">
+                    <t t-name="card">
                         <div class="w-100 ps-2 pe-2">
                             <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-2">
                                 
@@ -31,7 +31,6 @@
                                         border-bottom-#{record.role.raw_value == 'user' ? 'right' : 'left'}-radius: 4px;
                                      ">
                                     <div style="white-space: pre-wrap;"><field name="content"/></div>
-                                    
                                     <div class="text-end mt-1" 
                                          t-attf-style="font-size: 10px; opacity: 0.6; color: inherit;">
                                         <field name="create_date" widget="relative_time"/>
@@ -53,7 +52,8 @@
                 <header>
                     <field name="state" widget="statusbar" invisible="1"/> 
                 </header>
-                <sheet class="p-0"> <div class="p-3 border-bottom d-flex align-items-center bg-white sticky-top" style="z-index: 100;">
+                <sheet class="p-0">
+                    <div class="p-3 border-bottom d-flex align-items-center bg-white sticky-top" style="z-index: 100;">
                         <div class="flex-grow-1">
                             <field name="name" class="h4 mb-0 text-primary fw-bold" placeholder="Chủ đề hội thoại..."/>
                             <div class="small text-muted">
@@ -68,12 +68,7 @@
                     <div class="o_chat_history p-3" 
                          style="background-color: #ffffff; height: 65vh; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;">
                         
-                        <field name="message_ids" mode="kanban" nolabel="1">
-                            <kanban create="0" delete="0">
-                                <field name="role"/>
-                                <field name="content"/>
-                            </kanban>
-                        </field>
+                        <field name="message_ids" mode="kanban" nolabel="1"/>
                         
                     </div>
 
