@@ -172,7 +172,13 @@ class SaleOrder(models.Model):
         partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText")
         order_no     = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo")
         # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-        delivery_no  = data.get("DeliveryOrderNumber") or order_no
+        raw_delivery_no = data.get("DeliveryOrderNumber")
+        other_sys_code = data.get("OtherSysOrderCode")
+        if raw_delivery_no and str(raw_delivery_no).startswith("VN"):
+             delivery_no = other_sys_code
+        else:
+             delivery_no = raw_delivery_no or order_no
+        # delivery_no  = data.get("DeliveryOrderNumber") or order_no
         # delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress")  # Ưu tiên ShippingAddress
