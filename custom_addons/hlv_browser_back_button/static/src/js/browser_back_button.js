@@ -58,13 +58,8 @@ function modifyAppButton(appButton) {
 
         console.log('[HLV] App button clicked in detail view - using history.back()');
 
-        // Sử dụng history.back() và sau đó reload để sync state với OWL
+        // Sử dụng history.back() - popstate listener sẽ reload trang
         window.history.back();
-
-        // Delay nhỏ rồi reload để đảm bảo trang hoạt động đúng
-        setTimeout(function () {
-            window.location.reload();
-        }, 50);
 
         return false;
     }, true);
@@ -108,6 +103,9 @@ function initObserver() {
     console.log('[HLV] MutationObserver initialized');
 }
 
+// Flag để track nếu back được trigger bởi HLV
+let hlvBackTriggered = false;
+
 // Khởi tạo module
 function init() {
     scanAndModifyAppButtons();
@@ -115,6 +113,13 @@ function init() {
 
     // Scan định kỳ
     setInterval(scanAndModifyAppButtons, 2000);
+
+    // Thêm popstate listener để reload khi back/forward
+    window.addEventListener('popstate', function (event) {
+        console.log('[HLV] Popstate detected - reloading page');
+        // Reload trang để OWL khởi tạo lại đúng cách
+        window.location.reload();
+    });
 
     console.log('[HLV] Browser Back Button module initialized');
 }
@@ -127,5 +132,3 @@ if (document.readyState === 'loading') {
 }
 
 console.log('[HLV] Browser Back Button module loaded');
-
-
