@@ -105,11 +105,22 @@ function fmtCurrency(value) {
     }
 }
 
+// Badge Styles (Soft/High Contrast)
+const BADGE_STYLES = {
+    'success': 'background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc;',
+    'warning': 'background-color: #fff3cd; color: #664d03; border: 1px solid #ffecb5;',
+    'danger': 'background-color: #f8d7da; color: #842029; border: 1px solid #f5c2c7;',
+    'info': 'background-color: #cff4fc; color: #055160; border: 1px solid #b6effb;',
+    'primary': 'background-color: #cfe2ff; color: #084298; border: 1px solid #b6d4fe;',
+    'secondary': 'background-color: #e2e3e5; color: #41464b; border: 1px solid #d3d6d8;',
+};
+
 /**
  * Render badge HTML
  */
-function renderBadge(status, label, className = 'bg-secondary') {
-    return `<span class="badge ${className}">${label || status}</span>`;
+function renderBadge(status, label, styleKey = 'secondary') {
+    const style = BADGE_STYLES[styleKey] || BADGE_STYLES['secondary'];
+    return `<span class="badge" style="${style} padding: 0.35em 0.65em; font-size: 0.85em; font-weight: 500;">${label || status}</span>`;
 }
 
 /**
@@ -128,15 +139,15 @@ const PREVIEW_CONFIG = {
                 label: 'Trạng thái',
                 value: (d) => {
                     const statusMap = { 'draft': 'Nháp', 'sent': 'Đã gửi', 'to approve': 'Chờ duyệt', 'purchase': 'Đơn hàng', 'done': 'Khóa', 'cancel': 'Đã hủy' };
-                    const colorMap = { 'purchase': 'bg-success', 'done': 'bg-secondary', 'cancel': 'bg-danger', 'draft': 'bg-info' };
-                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'bg-primary')
+                    const colorMap = { 'purchase': 'success', 'done': 'secondary', 'cancel': 'danger', 'draft': 'info', 'sent': 'primary', 'to approve': 'warning' };
+                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'primary')
                 }
             },
             {
                 label: 'Nhập kho',
                 value: (d) => {
                     const map = { 'pending': 'Chưa nhận', 'partial': 'Một phần', 'full': 'Đã nhận hết' };
-                    const color = { 'full': 'bg-success', 'partial': 'bg-warning text-dark', 'pending': 'bg-secondary' };
+                    const color = { 'full': 'success', 'partial': 'warning', 'pending': 'secondary' };
                     return renderBadge(d.receipt_status, map[d.receipt_status], color[d.receipt_status]);
                 }
             }
@@ -165,8 +176,8 @@ const PREVIEW_CONFIG = {
                 label: 'Trạng thái',
                 value: (d) => {
                     const statusMap = { 'draft': 'Báo giá', 'sent': 'Đã gửi', 'sale': 'Đơn hàng', 'done': 'Khóa', 'cancel': 'Đã hủy' };
-                    const colorMap = { 'sale': 'bg-success', 'done': 'bg-secondary', 'cancel': 'bg-danger', 'draft': 'bg-info' };
-                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'bg-primary')
+                    const colorMap = { 'sale': 'success', 'done': 'secondary', 'cancel': 'danger', 'draft': 'info', 'sent': 'primary' };
+                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'primary')
                 }
             }
         ],
@@ -196,8 +207,8 @@ const PREVIEW_CONFIG = {
                 label: 'Trạng thái',
                 value: (d) => {
                     const statusMap = { 'draft': 'Nháp', 'waiting': 'Đang chờ', 'confirmed': 'Chờ xử lý', 'assigned': 'Sẵn sàng', 'done': 'Hoàn thành', 'cancel': 'Đã hủy' };
-                    const colorMap = { 'done': 'bg-success', 'assigned': 'bg-primary', 'confirmed': 'bg-info', 'cancel': 'bg-danger' };
-                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'bg-secondary')
+                    const colorMap = { 'done': 'success', 'assigned': 'primary', 'confirmed': 'info', 'cancel': 'danger', 'waiting': 'warning', 'draft': 'secondary' };
+                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'secondary')
                 }
             }
         ],
