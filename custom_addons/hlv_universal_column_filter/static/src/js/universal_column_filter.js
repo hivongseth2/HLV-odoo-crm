@@ -303,10 +303,10 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
     }
 
     target.innerHTML += `
-        < div class="hlv-u-header d-flex justify-content-between align-items-center mb-3" >
+        <div class="hlv-u-header d-flex justify-content-between align-items-center mb-3">
             <h5 class="hlv-u-title m-0"><span class="fa fa-file-text-o me-2 opacity-50"></span>${config.title({})}</h5>
             <button class="btn btn-sm btn-outline-secondary hlv-close-preview rounded-circle p-1" style="width: 28px; height: 28px; line-height: 1;"><i class="fa fa-times"></i></button>
-        </div >
+        </div>
         <div class="hlv-u-body">
             <div class="hlv-u-spinner text-center py-4"><span class="fa fa-circle-o-notch fa-spin fa-2x text-muted"></span></div>
         </div>
@@ -341,20 +341,20 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
 
         // Update title to allow it to be dynamic based on record if needed (currently using empty obj in loading)
         // Re-render title correctly
-        titleEl.innerHTML = `< span class="fa fa-file-text-o me-2" ></span > ${config.title(record)} `;
+        titleEl.innerHTML = `<span class="fa fa-file-text-o me-2"></span>${config.title(record)}`;
 
         // Render Summary
         const summaryHtml = config.summary.map(s => `
-        < div class="hlv-u-summary-item" >
+            <div class="hlv-u-summary-item">
                 <label>${s.label}</label>
                 <div>${s.value(record) || '---'}</div>
-            </div >
+            </div>
         `).join('');
 
         // Render Table Headers
         const thHtml = config.columns.map(c => `
-        < th class="${c.align ? 'text-' + c.align : 'text-start'}" style = "${c.width ? 'width:' + c.width : ''}" > ${c.header}</th >
-            `).join('');
+            <th class="${c.align ? 'text-' + c.align : 'text-start'}" style="${c.width ? 'width:' + c.width : ''}">${c.header}</th>
+        `).join('');
 
         // Render Rows
         const rowsHtml = lines.map(line => {
@@ -366,9 +366,9 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
                 else if (c.type === 'number') text = val || 0;
                 else text = val || '';
 
-                return `< td class="${c.align ? 'text-' + c.align : 'text-start'} ${c.bold ? 'fw-bold' : ''}" > ${text}</td > `;
+                return `<td class="${c.align ? 'text-' + c.align : 'text-start'} ${c.bold ? 'fw-bold' : ''}">${text}</td>`;
             }).join('');
-            return `< tr > ${tds}</tr > `;
+            return `<tr>${tds}</tr>`;
         }).join('');
 
         // Footer
@@ -377,15 +377,15 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
             const footerText = config.footer(record);
             if (footerText) {
                 footerHtml = `
-        < div class="mt-2 text-end fw-bold text-dark border-top pt-2" >
-            ${footerText}
-                    </div >
+            <div class="mt-2 text-end fw-bold text-dark border-top pt-2">
+                ${footerText}
+            </div>
         `;
             }
         }
 
         bodyEl.innerHTML = `
-        < div class="hlv-u-summary" > ${summaryHtml}</div >
+            <div class="hlv-u-summary">${summaryHtml}</div>
             <div class="table-responsive bg-white border rounded">
                 <table class="table table-preview w-100 mb-0">
                     <thead><tr>${thHtml}</tr></thead>
@@ -393,11 +393,11 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
                 </table>
             </div>
             ${footerHtml}
-    `;
+        `;
 
     } catch (e) {
         console.error(e);
-        target.querySelector(".hlv-u-body").innerHTML = `< div class="text-danger p-3" > Lỗi tải dữ liệu: ${e.message}</div > `;
+        target.querySelector(".hlv-u-body").innerHTML = `<div class="text-danger p-3">Lỗi tải dữ liệu: ${e.message}</div>`;
     }
 }
 
@@ -1359,14 +1359,14 @@ patch(ListRenderer.prototype, {
             div.className = 'hlv-filter-dropdown-item';
             div.innerHTML = item.label;
             div.style.cssText = `
-    padding: 10px 16px;
-    cursor: pointer;
-    font - size: 0.9rem;
-    color: ${item.value === '' ? '#714B67' : '#333'};
-    font - weight: ${item.value === '' ? '600' : '400'};
-    border - bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
-    transition: background - color 0.15s;
-    `;
+                padding: 10px 16px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                color: ${item.value === '' ? '#714B67' : '#333'};
+                font-weight: ${item.value === '' ? '600' : '400'};
+                border-bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
+                transition: background-color 0.15s;
+            `;
 
             div.addEventListener('mouseenter', () => div.style.backgroundColor = '#f8f4f7');
             div.addEventListener('mouseleave', () => div.style.backgroundColor = '');
