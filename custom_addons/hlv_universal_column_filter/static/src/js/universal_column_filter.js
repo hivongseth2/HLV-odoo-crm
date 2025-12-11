@@ -7,7 +7,6 @@ import { onMounted, onPatched } from "@odoo/owl";
 // Store reference to current controller
 let _hlvCurrentController = null;
 
-// Models to apply filters (không bao gồm purchase.order vì đã có module riêng)
 // Models to apply filters (bao gồm cả purchase.order)
 const ENABLED_MODELS = [
     'purchase.order',
@@ -179,76 +178,98 @@ const PREVIEW_CONFIG = {
 };
 
 /**
- * Show Generic Preview Panel
+ * Show Generic Preview Panel as an EXPANDABLE ROW
  */
-async function showPreviewPanel(env, resModel, resId) {
+async function showPreviewPanel(env, resModel, resId, triggerBtn) {
     const config = PREVIEW_CONFIG[resModel];
     if (!config) return;
 
-    // Use specific class to avoid conflict if both modules are active, 
-    // or reuse same to look consistent. Let's use 'hlv-universal-preview'.
+    // Find the TR row
+    const tr = triggerBtn.closest('tr');
+    if (!tr) return;
 
-    // Remove existing
-    try { document.querySelectorAll(".hlv-universal-preview").forEach(n => n.remove()); } catch { }
+    // Check if already open
+    if (tr.classList.contains('hlv-preview-open')) {
+        tr.classList.remove('hlv-preview-open');
+        const nextRow = tr.nextElementSibling;
+        if (nextRow && nextRow.classList.contains('hlv-preview-row')) {
+            nextRow.remove();
+        }
+        return; // Toggle off
+    }
 
+    // Close other open previews if single-mode desired (optional, but good for cleanliness)
+    document.querySelectorAll('.hlv-preview-open').forEach(row => {
+        row.classList.remove('hlv-preview-open');
+        const next = row.nextElementSibling;
+        if (next && next.classList.contains('hlv-preview-row')) next.remove();
+    });
+
+    tr.classList.add('hlv-preview-open');
+
+    // Create new TR
+    const previewRow = document.createElement('tr');
+    previewRow.className = 'hlv-preview-row bg-light';
+
+    // Count columns to colspan
+    const colCount = tr.querySelectorAll('td').length;
+
+    const cell = document.createElement('td');
+    cell.colSpan = colCount;
+    cell.style.padding = '0';
+    cell.style.borderTop = 'none';
+
+    previewRow.appendChild(cell);
+
+    // Insert after current row
+    tr.parentNode.insertBefore(previewRow, tr.nextSibling);
+
+    // Container for panel
     const target = document.createElement("div");
-    target.className = "hlv-universal-preview";
-    // Inline CSS for the panel (same as po_preview but generic)
-    target.innerHTML = `
-        <style>
-            .hlv-universal-preview {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                width: 900px;
-                max-width: 95vw;
-                background: #fff;
-                border: 1px solid #ccc;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-                z-index: 9999;
-                border-radius: 8px;
-                overflow: hidden;
-                display: flex;
-                flex-direction: column;
-                max-height: 90vh;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            }
-            .hlv-u-header {
-                padding: 12px 16px;
-                background: #f8f9fa;
-                border-bottom: 1px solid #dee2e6;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            .hlv-u-title { font-size: 1.1rem; font-weight: 600; color: #333; }
-            .hlv-u-body { padding: 16px; overflow-y: auto; flex: 1; }
-            .hlv-u-spinner { display: flex; justify-content: center; padding: 40px; }
-            .hlv-u-summary { display: flex; gap: 24px; margin-bottom: 20px; flex-wrap: wrap; }
-            .hlv-u-summary-item label { display: block; font-size: 0.8rem; color: #666; margin-bottom: 2px; }
-            .hlv-u-summary-item div { font-weight: 500; }
-            .hlv-close-btn { cursor: pointer; border: none; background: transparent; font-size: 1.2rem; color: #666; }
-            .hlv-close-btn:hover { color: #000; }
-        </style>
-        <div class="hlv-u-header">
-            <div class="hlv-u-title">Đang tải...</div>
-            <button class="hlv-close-btn">&times;</button>
+    target.className = "hlv-universal-preview-inline";
+    target.style.cssText = `
+        padding: 16px;
+        background: #fdfdfd; 
+        border-bottom: 2px solid #e0e0e0;
+        box-shadow: inset 0 4px 6px -4px rgba(0,0,0,0.1);
+        animation: hlv-slide-down 0.2s ease-out;
+    `;
+
+    // Add slide down animation
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes hlv-slide-down {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .hlv-u-summary { display: flex; gap: 30px; margin-bottom: 16px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px dashed #eee; }
+        .hlv-u-summary-item label { display: block; font-size: 0.75rem; color: #888; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .hlv-u-summary-item div { font-weight: 500; font-size: 0.95rem; color: #333; }
+        .table-preview th { background: #f8f9fa; font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: 600; border-bottom: 1px solid #ddd; padding: 8px 12px; }
+        .table-preview td { font-size: 0.9rem; padding: 8px 12px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; color: #444; }
+        .table-preview tr:last-child td { border-bottom: none; }
+    `;
+    target.appendChild(style);
+
+    target.innerHTML += `
+        <div class="hlv-u-header d-flex justify-content-between align-items-center mb-2">
+            <h5 class="hlv-u-title m-0 text-primary"><span class="fa fa-file-text-o me-2"></span>${config.title({})}</h5>
+            <button class="btn btn-sm btn-light hlv-close-preview"><i class="fa fa-times"></i></button>
         </div>
         <div class="hlv-u-body">
-            <div class="hlv-u-spinner"><span class="fa fa-circle-o-notch fa-spin fa-2x text-primary"></span></div>
+            <div class="hlv-u-spinner text-center py-4"><span class="fa fa-circle-o-notch fa-spin fa-2x text-muted"></span></div>
         </div>
     `;
-    document.body.appendChild(target);
 
-    const destroy = () => { try { target.remove(); target.removeEventListener('keydown', onKey); } catch { } };
-    target.querySelector(".hlv-close-btn").addEventListener("click", destroy);
+    cell.appendChild(target);
 
-    // Close on click outside
-    target.addEventListener("click", (e) => { if (e.target === target) destroy(); });
-    // Close on escape
-    const onKey = (e) => { if (e.key === 'Escape') destroy(); };
-    document.addEventListener("keydown", onKey);
+    // Close logic
+    target.querySelector('.hlv-close-preview').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // Stop propagation
+        tr.classList.remove('hlv-preview-open');
+        previewRow.remove();
+    });
 
     try {
         const orm = env.services.orm;
@@ -267,7 +288,9 @@ async function showPreviewPanel(env, resModel, resId) {
         const titleEl = target.querySelector(".hlv-u-title");
         const bodyEl = target.querySelector(".hlv-u-body");
 
-        titleEl.textContent = config.title(record);
+        // Update title to allow it to be dynamic based on record if needed (currently using empty obj in loading)
+        // Re-render title correctly
+        titleEl.innerHTML = `<span class="fa fa-file-text-o me-2"></span>${config.title(record)}`;
 
         // Render Summary
         const summaryHtml = config.summary.map(s => `
@@ -303,7 +326,7 @@ async function showPreviewPanel(env, resModel, resId) {
             const footerText = config.footer(record);
             if (footerText) {
                 footerHtml = `
-                    <div class="mt-3 text-end fw-bold border-top pt-2">
+                    <div class="mt-2 text-end fw-bold text-dark border-top pt-2">
                         ${footerText}
                     </div>
                  `;
@@ -312,9 +335,9 @@ async function showPreviewPanel(env, resModel, resId) {
 
         bodyEl.innerHTML = `
             <div class="hlv-u-summary">${summaryHtml}</div>
-            <div class="table-responsive">
-                <table class="table table-sm table-striped table-hover mb-0">
-                    <thead class="table-light"><tr>${thHtml}</tr></thead>
+            <div class="table-responsive bg-white border rounded">
+                <table class="table table-preview w-100 mb-0">
+                    <thead><tr>${thHtml}</tr></thead>
                     <tbody>${rowsHtml}</tbody>
                 </table>
             </div>
@@ -597,7 +620,8 @@ patch(ListRenderer.prototype, {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                showPreviewPanel(this.env, resModel, resId);
+                // Pass btn as trigger
+                showPreviewPanel(this.env, resModel, resId, btn);
             });
 
             // Prepend or append? Let's append to not mess up alignment if possible, same as Purchase.
@@ -636,33 +660,25 @@ patch(ListRenderer.prototype, {
 
             const label = getFieldLabel(header);
 
-            // Redesigned Filter Button
+            // Redesigned Filter Button - Always Visible
             const filterBtn = document.createElement('span');
             filterBtn.className = 'hlv-filter-icon ms-1';
             filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
             filterBtn.title = `Lọc theo ${label}`;
 
-            // Inline CSS for the icon to look cleaner
+            // Inline CSS for the icon to look cleaner and permanent
             filterBtn.style.cssText = `
                 cursor: pointer; 
-                opacity: 0.3; 
-                font-size: 0.8rem; 
+                opacity: 0.5; 
+                font-size: 0.85rem; 
                 margin-left: 6px; 
+                color: #555;
                 transition: all 0.2s;
-                visibility: hidden; 
             `;
 
-            // Show on hover of the TH
-            header.addEventListener('mouseenter', () => { filterBtn.style.visibility = 'visible'; filterBtn.style.opacity = '0.5'; });
-            header.addEventListener('mouseleave', () => {
-                // Only hide if not active (TODO: check active state)
-                // For now simplifies to showing on hover or consistent
-                filterBtn.style.visibility = 'hidden';
-            });
-
-            // Interaction styles
+            // Just hover effects for color
             filterBtn.addEventListener('mouseenter', () => { filterBtn.style.opacity = '1'; filterBtn.style.color = '#714B67'; });
-            filterBtn.addEventListener('mouseleave', () => { filterBtn.style.opacity = '0.5'; filterBtn.style.color = ''; });
+            filterBtn.addEventListener('mouseleave', () => { filterBtn.style.opacity = '0.5'; filterBtn.style.color = '#555'; });
 
             filterBtn.addEventListener('click', (e) => {
                 e.preventDefault();
