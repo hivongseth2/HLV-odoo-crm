@@ -480,7 +480,7 @@ patch(ListController.prototype, {
         searchBar.style.cssText = 'margin-left: auto; margin-right: 16px;';
 
         searchBar.innerHTML = `
-        < div class="hlv-search-group d-flex align-items-center" >
+            <div class="hlv-search-group d-flex align-items-center">
                 <label class="hlv-search-label me-2" style="font-weight: 500; color: #714B67; white-space: nowrap;">SP:</label>
                 <input type="text" class="form-control form-control-sm hlv-product-input"
                        placeholder="Tìm sản phẩm..." style="width: 180px;">
@@ -581,10 +581,10 @@ patch(ListController.prototype, {
         if (productArray.length === 1) {
             domain = [
                 '|',
-                [`${config.productPath}.name`, 'ilike', ` % ${productArray[0]}% `],
-                [`${config.productPath}.default_code`, 'ilike', ` % ${productArray[0]}% `]
+                [`${config.productPath}.name`, 'ilike', `%${productArray[0]}%`],
+                [`${config.productPath}.default_code`, 'ilike', `%${productArray[0]}%`]
             ];
-            description = `SP: ${productArray[0]} `;
+            description = `SP: ${productArray[0]}`;
         } else {
             domain = [];
             for (let i = 0; i < productArray.length - 1; i++) {
@@ -593,11 +593,11 @@ patch(ListController.prototype, {
             productArray.forEach(product => {
                 domain.push(
                     '|',
-                    [`${config.productPath}.name`, 'ilike', ` % ${product}% `],
-                    [`${config.productPath}.default_code`, 'ilike', ` % ${product}% `]
+                    [`${config.productPath}.name`, 'ilike', `%${product}%`],
+                    [`${config.productPath}.default_code`, 'ilike', `%${product}%`]
                 );
             });
-            description = `SP: ${productArray.join(' hoặc ')} `;
+            description = `SP: ${productArray.join(' hoặc ')}`;
         }
 
         try {
