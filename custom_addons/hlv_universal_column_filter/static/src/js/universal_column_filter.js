@@ -7,8 +7,9 @@ import { onMounted, onPatched } from "@odoo/owl";
 // Store reference to current controller
 let _hlvCurrentController = null;
 
-// Models to apply filters (không bao gồm purchase.order vì đã có module riêng)
+// Models to apply filters (bao gồm cả purchase.order)
 const ENABLED_MODELS = [
+    'purchase.order',
     'stock.picking',
     'sale.order',
 ];
@@ -61,12 +62,292 @@ const DATE_FIELD_PATTERNS = [
 ];
 
 /**
- * Convert local date to UTC datetime string
+ * Format number as currency (Vietnamese locale)
  */
-function toUTCDateTime(dateStr, timeStr) {
-    if (!dateStr) return null;
-    const localDate = new Date(`${dateStr}T${timeStr}`);
-    return localDate.toISOString().replace('T', ' ').split('.')[0];
+function fmtCurrency(value) {
+    try {
+        return new Intl.NumberFormat("vi-VN").format(value ?? 0);
+    } catch {
+        return String(value ?? "");
+    }
+}
+
+/**
+ * Render badge HTML
+ */
+function renderBadge(status, label, className = 'bg-secondary') {
+    return `<span class="badge ${className}">${label || status}</span>`;
+}
+
+/**
+ * Configuration for Preview Panel
+ */
+const PREVIEW_CONFIG = {
+    'purchase.order': {
+        headerFields: ['name', 'partner_id', 'state', 'amount_total', 'date_planned', 'receipt_status'],
+        lineModel: 'purchase.order.line',
+        lineLinkField: 'order_id',
+        lineFields: ['product_id', 'name', 'product_qty', 'qty_received', 'price_unit', 'price_subtotal', 'product_uom'],
+        title: (d) => `${d.name || 'Đơn mua'} - ${d.partner_id?.[1] || ''}`,
+        summary: [
+            { label: 'Ngày dự kiến', value: (d) => d.date_planned ? new Date(d.date_planned).toLocaleDateString('vi-VN') : '' },
+            {
+                label: 'Trạng thái',
+                value: (d) => {
+                    const statusMap = { 'draft': 'Nháp', 'sent': 'Đã gửi', 'to approve': 'Chờ duyệt', 'purchase': 'Đơn hàng', 'done': 'Khóa', 'cancel': 'Đã hủy' };
+                    const colorMap = { 'purchase': 'bg-success', 'done': 'bg-secondary', 'cancel': 'bg-danger', 'draft': 'bg-info' };
+                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'bg-primary')
+                }
+            },
+            {
+                label: 'Nhập kho',
+                value: (d) => {
+                    const map = { 'pending': 'Chưa nhận', 'partial': 'Một phần', 'full': 'Đã nhận hết' };
+                    const color = { 'full': 'bg-success', 'partial': 'bg-warning text-dark', 'pending': 'bg-secondary' };
+                    return renderBadge(d.receipt_status, map[d.receipt_status], color[d.receipt_status]);
+                }
+            }
+        ],
+        columns: [
+            { header: 'Sản phẩm', field: 'product_id', type: 'many2one', width: '35%' },
+            { header: 'Mô tả', field: 'name', type: 'text', width: '25%' },
+            { header: 'ĐVT', field: 'product_uom', type: 'many2one', align: 'center' },
+            { header: 'SL đặt', field: 'product_qty', type: 'number', align: 'end' },
+            { header: 'SL nhận', field: 'qty_received', type: 'number', align: 'end' },
+            { header: 'Đơn giá', field: 'price_unit', type: 'currency', align: 'end' },
+            { header: 'Thành tiền', field: 'price_subtotal', type: 'currency', align: 'end', bold: true },
+        ],
+        footer: (d) => `Mở rộng: Tổng tiền ${fmtCurrency(d.amount_total)}`
+    },
+    'sale.order': {
+        headerFields: ['name', 'partner_id', 'state', 'amount_total', 'date_order', 'invoice_status'],
+        lineModel: 'sale.order.line',
+        lineLinkField: 'order_id',
+        lineFields: ['product_id', 'name', 'product_uom_qty', 'qty_delivered', 'price_unit', 'price_subtotal', 'product_uom'],
+        title: (d) => `${d.name || 'Đơn bán'} - ${d.partner_id?.[1] || ''}`,
+        summary: [
+            { label: 'Ngày đặt', value: (d) => d.date_order ? new Date(d.date_order).toLocaleDateString('vi-VN') : '' },
+            {
+                label: 'Trạng thái',
+                value: (d) => {
+                    const statusMap = { 'draft': 'Báo giá', 'sent': 'Đã gửi', 'sale': 'Đơn hàng', 'done': 'Khóa', 'cancel': 'Đã hủy' };
+                    const colorMap = { 'sale': 'bg-success', 'done': 'bg-secondary', 'cancel': 'bg-danger', 'draft': 'bg-info' };
+                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'bg-primary')
+                }
+            }
+        ],
+        columns: [
+            { header: 'Sản phẩm', field: 'product_id', type: 'many2one', width: '35%' },
+            { header: 'Mô tả', field: 'name', type: 'text', width: '25%' },
+            { header: 'ĐVT', field: 'product_uom', type: 'many2one', align: 'center' },
+            { header: 'SL đặt', field: 'product_uom_qty', type: 'number', align: 'end' },
+            { header: 'SL giao', field: 'qty_delivered', type: 'number', align: 'end' },
+            { header: 'Đơn giá', field: 'price_unit', type: 'currency', align: 'end' },
+            { header: 'Thành tiền', field: 'price_subtotal', type: 'currency', align: 'end', bold: true },
+        ],
+        footer: (d) => `Tổng tiền: ${fmtCurrency(d.amount_total)}`
+    },
+    'stock.picking': {
+        headerFields: ['name', 'partner_id', 'state', 'scheduled_date', 'origin', 'picking_type_id'],
+        lineModel: 'stock.move',
+        lineLinkField: 'picking_id',
+        lineFields: ['product_id', 'description_picking', 'product_uom_qty', 'quantity', 'product_uom'],
+        title: (d) => `${d.name || 'Phiếu kho'} - ${d.picking_type_id?.[1] || ''}`,
+        summary: [
+            { label: 'Đối tác', value: (d) => d.partner_id?.[1] || '---' },
+            { label: 'Nguồn', value: (d) => d.origin || '' },
+            { label: 'Ngày dự kiến', value: (d) => d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString('vi-VN') : '' },
+            {
+                label: 'Trạng thái',
+                value: (d) => {
+                    const statusMap = { 'draft': 'Nháp', 'waiting': 'Đang chờ', 'confirmed': 'Chờ xử lý', 'assigned': 'Sẵn sàng', 'done': 'Hoàn thành', 'cancel': 'Đã hủy' };
+                    const colorMap = { 'done': 'bg-success', 'assigned': 'bg-primary', 'confirmed': 'bg-info', 'cancel': 'bg-danger' };
+                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'bg-secondary')
+                }
+            }
+        ],
+        columns: [
+            { header: 'Sản phẩm', field: 'product_id', type: 'many2one', width: '40%' },
+            { header: 'Mô tả', field: 'description_picking', type: 'text', width: '30%' },
+            { header: 'ĐVT', field: 'product_uom', type: 'many2one', align: 'center' },
+            { header: 'Nhu cầu', field: 'product_uom_qty', type: 'number', align: 'end' },
+            { header: 'Hoàn tất', field: 'quantity', type: 'number', align: 'end', bold: true },
+        ],
+        footer: (d) => ''
+    }
+};
+
+/**
+ * Show Generic Preview Panel as an EXPANDABLE ROW
+ */
+async function showPreviewPanel(env, resModel, resId, triggerBtn) {
+    const config = PREVIEW_CONFIG[resModel];
+    if (!config) return;
+
+    // Find the TR row
+    const tr = triggerBtn.closest('tr');
+    if (!tr) return;
+
+    // Check if already open
+    if (tr.classList.contains('hlv-preview-open')) {
+        tr.classList.remove('hlv-preview-open');
+        const nextRow = tr.nextElementSibling;
+        if (nextRow && nextRow.classList.contains('hlv-preview-row')) {
+            nextRow.remove();
+        }
+        return; // Toggle off
+    }
+
+    // Close other open previews if single-mode desired (optional, but good for cleanliness)
+    document.querySelectorAll('.hlv-preview-open').forEach(row => {
+        row.classList.remove('hlv-preview-open');
+        const next = row.nextElementSibling;
+        if (next && next.classList.contains('hlv-preview-row')) next.remove();
+    });
+
+    tr.classList.add('hlv-preview-open');
+
+    // Create new TR
+    const previewRow = document.createElement('tr');
+    previewRow.className = 'hlv-preview-row bg-light';
+
+    // Count columns to colspan
+    const colCount = tr.querySelectorAll('td').length;
+
+    const cell = document.createElement('td');
+    cell.colSpan = colCount;
+    cell.style.padding = '0';
+    cell.style.borderTop = 'none';
+
+    previewRow.appendChild(cell);
+
+    // Insert after current row
+    tr.parentNode.insertBefore(previewRow, tr.nextSibling);
+
+    // Container for panel
+    const target = document.createElement("div");
+    target.className = "hlv-universal-preview-inline";
+    target.style.cssText = `
+        padding: 16px;
+        background: #fdfdfd; 
+        border-bottom: 2px solid #e0e0e0;
+        box-shadow: inset 0 4px 6px -4px rgba(0,0,0,0.1);
+        animation: hlv-slide-down 0.2s ease-out;
+    `;
+
+    // Add slide down animation
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes hlv-slide-down {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .hlv-u-summary { display: flex; gap: 30px; margin-bottom: 16px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px dashed #eee; }
+        .hlv-u-summary-item label { display: block; font-size: 0.75rem; color: #888; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .hlv-u-summary-item div { font-weight: 500; font-size: 0.95rem; color: #333; }
+        .table-preview th { background: #f8f9fa; font-size: 0.8rem; text-transform: uppercase; color: #666; font-weight: 600; border-bottom: 1px solid #ddd; padding: 8px 12px; }
+        .table-preview td { font-size: 0.9rem; padding: 8px 12px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; color: #444; }
+        .table-preview tr:last-child td { border-bottom: none; }
+    `;
+    target.appendChild(style);
+
+    target.innerHTML += `
+        <div class="hlv-u-header d-flex justify-content-between align-items-center mb-2">
+            <h5 class="hlv-u-title m-0 text-primary"><span class="fa fa-file-text-o me-2"></span>${config.title({})}</h5>
+            <button class="btn btn-sm btn-light hlv-close-preview"><i class="fa fa-times"></i></button>
+        </div>
+        <div class="hlv-u-body">
+            <div class="hlv-u-spinner text-center py-4"><span class="fa fa-circle-o-notch fa-spin fa-2x text-muted"></span></div>
+        </div>
+    `;
+
+    cell.appendChild(target);
+
+    // Close logic
+    target.querySelector('.hlv-close-preview').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // Stop propagation
+        tr.classList.remove('hlv-preview-open');
+        previewRow.remove();
+    });
+
+    try {
+        const orm = env.services.orm;
+        // Fetch Header
+        const [record] = await orm.read(resModel, [resId], config.headerFields);
+        if (!record) throw new Error("Record not found");
+
+        // Fetch Lines
+        const lines = await orm.searchRead(
+            config.lineModel,
+            [[config.lineLinkField, '=', resId]],
+            config.lineFields
+        );
+
+        // Render Content
+        const titleEl = target.querySelector(".hlv-u-title");
+        const bodyEl = target.querySelector(".hlv-u-body");
+
+        // Update title to allow it to be dynamic based on record if needed (currently using empty obj in loading)
+        // Re-render title correctly
+        titleEl.innerHTML = `<span class="fa fa-file-text-o me-2"></span>${config.title(record)}`;
+
+        // Render Summary
+        const summaryHtml = config.summary.map(s => `
+            <div class="hlv-u-summary-item">
+                <label>${s.label}</label>
+                <div>${s.value(record) || '---'}</div>
+            </div>
+        `).join('');
+
+        // Render Table Headers
+        const thHtml = config.columns.map(c => `
+            <th class="${c.align ? 'text-' + c.align : 'text-start'}" style="${c.width ? 'width:' + c.width : ''}">${c.header}</th>
+        `).join('');
+
+        // Render Rows
+        const rowsHtml = lines.map(line => {
+            const tds = config.columns.map(c => {
+                let text = '';
+                const val = line[c.field];
+                if (c.type === 'many2one') text = val?.[1] || '';
+                else if (c.type === 'currency') text = fmtCurrency(val);
+                else if (c.type === 'number') text = val || 0;
+                else text = val || '';
+
+                return `<td class="${c.align ? 'text-' + c.align : 'text-start'} ${c.bold ? 'fw-bold' : ''}">${text}</td>`;
+            }).join('');
+            return `<tr>${tds}</tr>`;
+        }).join('');
+
+        // Footer
+        let footerHtml = '';
+        if (config.footer) {
+            const footerText = config.footer(record);
+            if (footerText) {
+                footerHtml = `
+                    <div class="mt-2 text-end fw-bold text-dark border-top pt-2">
+                        ${footerText}
+                    </div>
+                 `;
+            }
+        }
+
+        bodyEl.innerHTML = `
+            <div class="hlv-u-summary">${summaryHtml}</div>
+            <div class="table-responsive bg-white border rounded">
+                <table class="table table-preview w-100 mb-0">
+                    <thead><tr>${thHtml}</tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+            ${footerHtml}
+        `;
+
+    } catch (e) {
+        console.error(e);
+        target.querySelector(".hlv-u-body").innerHTML = `<div class="text-danger p-3">Lỗi tải dữ liệu: ${e.message}</div>`;
+    }
 }
 
 /**
@@ -283,13 +564,73 @@ patch(ListRenderer.prototype, {
 
         const resModel = this.props.list?.resModel;
         if (resModel && ENABLED_MODELS.includes(resModel)) {
-            onMounted(() => this._hlvAddUniversalFilters());
-            onPatched(() => this._hlvAddUniversalFilters());
+            onMounted(() => {
+                this._hlvAddUniversalFilters();
+                this._hlvAddPreviewButtons();
+            });
+            onPatched(() => {
+                this._hlvAddUniversalFilters();
+                this._hlvAddPreviewButtons();
+            });
         }
     },
 
     /**
-     * Add filter buttons to ALL column headers dynamically
+     * Add "Eye" preview buttons to rows
+     */
+    _hlvAddPreviewButtons() {
+        const resModel = this.props.list?.resModel;
+        if (!resModel || !PREVIEW_CONFIG[resModel]) return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        // Try to find the helper function to get ID. 
+        // Typically ListRenderer has access to props.list.records.
+        // We iterate rows to find data-id.
+
+        const rows = tableEl.querySelectorAll('tbody tr.o_data_row');
+        rows.forEach(row => {
+            if (row.dataset.hlvPreviewAdded) return;
+            row.dataset.hlvPreviewAdded = 'true';
+
+            // Find last cell to inject button
+            const lastTd = row.querySelector('td:last-child');
+            if (!lastTd) return;
+
+            // Check if button already exists (redundant check but safe)
+            if (lastTd.querySelector('.hlv-u-preview-btn')) return;
+
+            // Get ResID
+            // ListRenderer usually stores resId in the record object mapped to data-id
+            // We need to find the record from props.
+            const datapointId = row.dataset.id;
+            const record = this.props.list?.records?.find(r => r.id === datapointId);
+            const resId = record?.resId;
+
+            if (!resId) return;
+
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-sm btn-link hlv-u-preview-btn ms-1 text-decoration-none';
+            btn.innerHTML = '<i class="fa fa-eye"></i>';
+            btn.title = 'Xem nhanh';
+            btn.type = 'button';
+            btn.style.padding = '0 4px';
+
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Pass btn as trigger
+                showPreviewPanel(this.env, resModel, resId, btn);
+            });
+
+            // Prepend or append? Let's append to not mess up alignment if possible, same as Purchase.
+            lastTd.appendChild(btn);
+        });
+    },
+
+    /**
+     * Add filter buttons to ALL column headers dynamically with NICER UI
      */
     _hlvAddUniversalFilters() {
         const resModel = this.props.list?.resModel;
@@ -319,11 +660,25 @@ patch(ListRenderer.prototype, {
 
             const label = getFieldLabel(header);
 
-            const filterBtn = document.createElement('button');
-            filterBtn.className = 'btn btn-link p-0 hlv-filter-btn ms-1';
-            filterBtn.type = 'button';
-            filterBtn.title = `Lọc theo ${label}`;
+            // Redesigned Filter Button - Always Visible
+            const filterBtn = document.createElement('span');
+            filterBtn.className = 'hlv-filter-icon ms-1';
             filterBtn.innerHTML = '<i class="fa fa-filter"></i>';
+            filterBtn.title = `Lọc theo ${label}`;
+
+            // Inline CSS for the icon to look cleaner and permanent
+            filterBtn.style.cssText = `
+                cursor: pointer; 
+                opacity: 0.5; 
+                font-size: 0.85rem; 
+                margin-left: 6px; 
+                color: #555;
+                transition: all 0.2s;
+            `;
+
+            // Just hover effects for color
+            filterBtn.addEventListener('mouseenter', () => { filterBtn.style.opacity = '1'; filterBtn.style.color = '#714B67'; });
+            filterBtn.addEventListener('mouseleave', () => { filterBtn.style.opacity = '0.5'; filterBtn.style.color = '#555'; });
 
             filterBtn.addEventListener('click', (e) => {
                 e.preventDefault();
