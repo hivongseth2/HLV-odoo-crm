@@ -9,31 +9,32 @@
                 <field name="content"/>
                 <field name="create_date"/>
                 <templates>
-                    <t t-name="card">
-                        <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-3">
-                            
-                            <div t-attf-class="flex-shrink-0 #{record.role.raw_value == 'user' ? 'ms-2' : 'me-2'}">
-                                <div class="d-flex align-items-center justify-content-center rounded-circle text-white" 
-                                     t-attf-style="width: 40px; height: 40px; background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#6c757d'};">
-                                    <i t-attf-class="fa #{record.role.raw_value == 'user' ? 'fa-user' : 'fa-robot'} fa-lg"></i>
-                                </div>
-                            </div>
-
-                            <div t-attf-class="p-3 shadow-sm position-relative" 
-                                 t-attf-style="
-                                    max-width: 75%; 
-                                    border-radius: 18px; 
-                                    font-size: 15px;
-                                    line-height: 1.5;
-                                    background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#F0F2F5'};
-                                    color: #{record.role.raw_value == 'user' ? '#ffffff' : '#050505'};
-                                    border-bottom-#{record.role.raw_value == 'user' ? 'right' : 'left'}-radius: 4px;
-                                 ">
-                                <div style="white-space: pre-wrap; word-wrap: break-word;"><field name="content"/></div>
+                    <t t-name="kanban-box">
+                        <div class="w-100">
+                            <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-3">
                                 
-                                <div class="text-end mt-1" 
-                                     t-attf-style="font-size: 11px; opacity: 0.7; color: #{record.role.raw_value == 'user' ? '#e4e6eb' : '#65676b'};">
-                                    <field name="create_date" widget="relative_time"/>
+                                <div t-attf-class="flex-shrink-0 #{record.role.raw_value == 'user' ? 'ms-2' : 'me-2'}">
+                                    <div class="d-flex align-items-center justify-content-center rounded-circle text-white" 
+                                         t-attf-style="width: 40px; height: 40px; background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#6c757d'};">
+                                        <i t-attf-class="fa #{record.role.raw_value == 'user' ? 'fa-user' : 'fa-robot'} fa-lg"></i>
+                                    </div>
+                                </div>
+
+                                <div t-attf-class="p-3 shadow-sm position-relative" 
+                                     t-attf-style="
+                                        max-width: 75%; 
+                                        border-radius: 18px; 
+                                        font-size: 15px;
+                                        line-height: 1.5;
+                                        background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#F0F2F5'};
+                                        color: #{record.role.raw_value == 'user' ? '#ffffff' : '#050505'};
+                                        border-bottom-#{record.role.raw_value == 'user' ? 'right' : 'left'}-radius: 4px;
+                                     ">
+                                    <div style="white-space: pre-wrap; word-wrap: break-word;"><field name="content"/></div>
+                                    <div class="text-end mt-1" 
+                                         t-attf-style="font-size: 11px; opacity: 0.7; color: #{record.role.raw_value == 'user' ? '#e4e6eb' : '#65676b'};">
+                                        <field name="create_date" widget="relative_time"/>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -64,6 +65,32 @@
                             <kanban create="0" delete="0">
                                 <field name="role"/>
                                 <field name="content"/>
+                                <templates>
+                                    <t t-name="kanban-box">
+                                        <div class="w-100">
+                                            <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-3">
+                                                <div t-attf-class="flex-shrink-0 #{record.role.raw_value == 'user' ? 'ms-2' : 'me-2'}">
+                                                    <div class="d-flex align-items-center justify-content-center rounded-circle text-white" 
+                                                         t-attf-style="width: 40px; height: 40px; background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#6c757d'};">
+                                                        <i t-attf-class="fa #{record.role.raw_value == 'user' ? 'fa-user' : 'fa-robot'} fa-lg"></i>
+                                                    </div>
+                                                </div>
+                                                <div t-attf-class="p-3 shadow-sm position-relative" 
+                                                     t-attf-style="
+                                                        max-width: 75%; 
+                                                        border-radius: 18px; 
+                                                        font-size: 15px;
+                                                        line-height: 1.5;
+                                                        background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#F0F2F5'};
+                                                        color: #{record.role.raw_value == 'user' ? '#ffffff' : '#050505'};
+                                                        border-bottom-#{record.role.raw_value == 'user' ? 'right' : 'left'}-radius: 4px;
+                                                     ">
+                                                    <div style="white-space: pre-wrap; word-wrap: break-word;"><field name="content"/></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </templates>
                             </kanban>
                         </field>
                         
