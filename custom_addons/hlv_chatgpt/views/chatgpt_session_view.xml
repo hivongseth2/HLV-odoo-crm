@@ -8,7 +8,10 @@
                 <field name="create_date"/>
                 <field name="user_input"/>
                 <field name="response_text" optional="show"/>
-                <field name="state"/>
+                <field name="state" widget="badge" 
+                       decoration-info="state == 'draft'"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'error'"/>
             </list>
         </field>
     </record>
@@ -19,16 +22,22 @@
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <button name="action_send_to_chatgpt" string="Gửi tin nhắn" type="object" class="btn-primary" states="draft,error"/>
+                    <button name="action_send_to_chatgpt" 
+                            string="Gửi tin nhắn" 
+                            type="object" 
+                            class="btn-primary" 
+                            invisible="state not in ['draft', 'error']"/>
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
                     <group string="Hỏi">
                         <field name="user_input" placeholder="Nhập câu hỏi của bạn tại đây..."/>
                     </group>
-                    <group string="Đáp" attrs="{'invisible': [('response_text', '=', False)]}">
+                    
+                    <group string="Đáp" invisible="not response_text">
                         <field name="response_text"/>
                     </group>
+                    
                     <notebook>
                         <page string="Debug (Raw Response)">
                             <field name="raw_response"/>
