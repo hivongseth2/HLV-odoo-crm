@@ -671,11 +671,31 @@ patch(ListRenderer.prototype, {
             if (!resId) return;
 
             const btn = document.createElement('button');
-            btn.className = 'btn btn-sm btn-link hlv-u-preview-btn ms-1 text-decoration-none';
-            btn.innerHTML = '<i class="fa fa-eye"></i>';
+            btn.className = 'btn btn-sm hlv-u-preview-btn ms-1';
+            btn.innerHTML = '<span class="fa fa-eye me-1"></span>Xem';
             btn.title = 'Xem nhanh';
             btn.type = 'button';
-            btn.style.padding = '0 4px';
+            // Style as a pill button for better visibility/interaction
+            btn.style.cssText = `
+                background-color: #eef2f7;
+                color: #4c4c4c;
+                border: 1px solid #dae0e5;
+                border-radius: 12px;
+                padding: 1px 10px;
+                font-size: 0.8rem;
+                font-weight: 500;
+                transition: all 0.2s;
+            `;
+            btn.addEventListener('mouseenter', () => {
+                btn.style.backgroundColor = '#714B67';
+                btn.style.color = '#fff';
+                btn.style.borderColor = '#714B67';
+            });
+            btn.addEventListener('mouseleave', () => {
+                btn.style.backgroundColor = '#eef2f7';
+                btn.style.color = '#4c4c4c';
+                btn.style.borderColor = '#dae0e5';
+            });
 
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
