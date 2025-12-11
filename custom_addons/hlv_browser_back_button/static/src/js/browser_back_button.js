@@ -5,50 +5,83 @@
  * 
  * Thay đổi hành vi của nút ứng dụng (app button) trong Odoo:
  * - CHỈ khi đang ở trong view chi tiết (có breadcrumb .o_back_button)
- * - Sử dụng history.back() thay vì về menu chính
- * - Giúp người dùng quay lại trang trước đó với các bộ lọc được giữ nguyên
+ * - Sử dụng actionService.restore() để quay về trang trước với filters được giữ nguyên
  * 
- * QUAN TRỌNG: Không modify khi ở menu hoặc list view để tránh phá hỏng navigation
+ * Approach: Kết hợp popstate listener với actionService.restore()
  */
 
-// Kiểm tra xem có đang ở trong detail view không (có breadcrumb)
+import { actionService } from "@web/webclient/actions/action_service";
+import { patch } from "@web/core/utils/patch";
+import { browser } from "@web/core/browser/browser";
+
+// Biến global để lưu reference đến action service instance
+let _actionServiceInstance = null;
+
+// Patch actionService để lấy reference và setup popstate listener
+patch(actionService, {
+    start(env) {
+        // Gọi hàm start gốc để lấy service instance
+        const service = super.start(env);
+
+        // Lưu reference để sử dụng trong event handlers
+        _actionServiceInstance = service;
+
+        // Định nghĩa hàm xử lý popstate event
+        const onPopState = async (ev) => {
+            console.log('[HLV] Popstate detected - using actionService.restore()');
+            try {
+                // restore() sẽ lấy controller trước đó từ stack và hiển thị
+                // Giữ nguyên filters, scroll position, etc.
+                await service.restore();
+            } catch (error) {
+                console.debug("[HLV] Cannot restore state:", error);
+            }
+        };
+
+        // Gắn sự kiện lắng nghe popstate
+        browser.addEventListener("popstate", onPopState);
+
+        console.log('[HLV] Browser Back Button: ActionService patched');
+
+        return service;
+    }
+});
+
+// Kiểm tra xem có đang ở trong detail view không
 function isInDetailView() {
-    // Nếu có .o_back_button, tức là đang ở trong một record/view chi tiết
     return document.querySelector('.o_back_button') !== null;
+}
+
+// Hàm để trigger back navigation sử dụng history.back()
+// Popstate listener sẽ bắt event này và gọi restore()
+function triggerBackNavigation() {
+    if (_actionServiceInstance) {
+        // Sử dụng history.back() để trigger popstate event
+        // Popstate handler sẽ gọi actionService.restore()
+        window.history.back();
+    } else {
+        console.warn('[HLV] ActionService not available');
+        window.history.back();
+    }
 }
 
 // Hàm thay đổi behavior của nút ứng dụng
 function modifyAppButton(appButton) {
     if (!appButton) return;
 
-    // LUÔN reset trạng thái modified để có thể re-check
-    // vì trạng thái detail view có thể thay đổi khi navigate
-
-    // Kiểm tra xem đang ở detail view không
     if (!isInDetailView()) {
-        // Không phải detail view - đảm bảo nút hoạt động bình thường
-        if (appButton.dataset.hlvModified) {
-            // Đã modified trước đó - cần restore
-            // Reload trang để restore (cách đơn giản nhất)
-            // Hoặc không làm gì vì OWL sẽ re-render
-        }
         return;
     }
 
-    // Đang ở detail view - modify nút
-    if (appButton.dataset.hlvModified === 'true') return; // Đã modified rồi
+    if (appButton.dataset.hlvModified === 'true') return;
 
-    // Đánh dấu đã xử lý
     appButton.dataset.hlvModified = 'true';
 
     // Clone để remove OWL bindings
     const newButton = appButton.cloneNode(true);
 
-    // Thêm event listener mới
     newButton.addEventListener('click', function (ev) {
-        // Double check vẫn đang ở detail view
         if (!isInDetailView()) {
-            // Không còn ở detail view - cho phép default behavior
             return true;
         }
 
@@ -56,10 +89,8 @@ function modifyAppButton(appButton) {
         ev.stopPropagation();
         ev.stopImmediatePropagation();
 
-        console.log('[HLV] App button clicked in detail view - using history.back()');
-
-        // Sử dụng history.back() - popstate listener sẽ reload trang
-        window.history.back();
+        console.log('[HLV] App button clicked - triggering back navigation');
+        triggerBackNavigation();
 
         return false;
     }, true);
@@ -70,7 +101,6 @@ function modifyAppButton(appButton) {
         }
     }, true);
 
-    // Replace button
     if (appButton.parentNode) {
         appButton.parentNode.replaceChild(newButton, appButton);
         console.log('[HLV] Modified app button for detail view');
@@ -79,7 +109,6 @@ function modifyAppButton(appButton) {
 
 // Scan và modify nút ứng dụng
 function scanAndModifyAppButtons() {
-    // Chỉ scan khi đang ở detail view
     if (!isInDetailView()) {
         return;
     }
@@ -90,8 +119,7 @@ function scanAndModifyAppButtons() {
 
 // Khởi tạo MutationObserver
 function initObserver() {
-    const observer = new MutationObserver((mutations) => {
-        // Delay để OWL render xong
+    const observer = new MutationObserver(() => {
         setTimeout(scanAndModifyAppButtons, 200);
     });
 
@@ -99,36 +127,17 @@ function initObserver() {
         childList: true,
         subtree: true
     });
-
-    console.log('[HLV] MutationObserver initialized');
 }
-
-// Flag để track nếu back được trigger bởi HLV
-let hlvBackTriggered = false;
 
 // Khởi tạo module
 function init() {
     scanAndModifyAppButtons();
     initObserver();
-
-    // Scan định kỳ
     setInterval(scanAndModifyAppButtons, 2000);
-
-    // Thêm popstate listener để reload khi back/forward
-    window.addEventListener('popstate', function (event) {
-        console.log('[HLV] Popstate detected - reloading page');
-        // Reload trang để OWL khởi tạo lại đúng cách
-        window.location.reload();
-    });
-
     console.log('[HLV] Browser Back Button module initialized');
 }
 
-// Khởi tạo
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
-}
+// Khởi tạo sau một chút delay để đảm bảo actionService đã được patch
+setTimeout(init, 500);
 
 console.log('[HLV] Browser Back Button module loaded');
