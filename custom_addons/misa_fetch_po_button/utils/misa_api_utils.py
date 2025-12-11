@@ -429,8 +429,8 @@ class MisaApiUtils(models.AbstractModel):
         misa_delivery = (cd.get("CustomField14") or "").strip() or None
 
         # Lấy mã vận đơn từ OtherSysOrderCode và DeliveryOrderNumber
-        # other_sys_order_code = (cd.get("OtherSysOrderCode") or "").strip() or None
-        # delivery_order_number = (cd.get("DeliveryOrderNumber") or "").strip() or None
+        other_sys_order_code = (cd.get("OtherSysOrderCode") or "").strip() or None
+        delivery_order_number = (cd.get("DeliveryOrderNumber") or "").strip() or None
 
         # Lấy tên người nhận hàng từ ShippingContactIDText
         shipping_contact = (cd.get("ShippingContactIDText") or "").strip() or None
@@ -445,17 +445,11 @@ class MisaApiUtils(models.AbstractModel):
             "sale_order_date": sale_date,
             "misa_delivery": misa_delivery,
             "shipping_contact": shipping_contact,
+            "other_sys_order_code": other_sys_order_code,
+            "delivery_order_number": delivery_order_number,
             "httt": httt,
             "htgh": htgh
         }
-        # return {
-        #     "owner_code": owner_code,
-        #     "sale_order_date": sale_date,
-        #     "misa_delivery": misa_delivery,
-        #     "other_sys_order_code": other_sys_order_code,
-        #     "delivery_order_number": delivery_order_number,
-        #     "shipping_contact": shipping_contact
-        # }    
     
 
 
