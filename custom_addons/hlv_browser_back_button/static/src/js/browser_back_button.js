@@ -1,118 +1,124 @@
-// /** @odoo-module */
+/** @odoo-module */
 
-// /**
-//  * HLV Browser Back Button
-//  * 
-//  * Thay đổi hành vi của nút ứng dụng (app button) trong Odoo:
-//  * - Khi click vào nút tên ứng dụng (Bán hàng, Mua hàng, etc.), 
-//  *   sử dụng history.back() thay vì về menu chính
-//  * - Giúp người dùng quay lại trang trước đó với các bộ lọc được giữ nguyên
-//  * 
-//  * Target: .o_menu_toggle (nút với icon 9 ô vuông + tên ứng dụng)
-//  */
+/**
+ * HLV Browser Back Button
+ * 
+ * Thay đổi hành vi của nút ứng dụng (app button) trong Odoo:
+ * - CHỈ khi đang ở trong view chi tiết (có breadcrumb .o_back_button)
+ * - Sử dụng history.back() thay vì về menu chính
+ * - Giúp người dùng quay lại trang trước đó với các bộ lọc được giữ nguyên
+ * 
+ * QUAN TRỌNG: Không modify khi ở menu hoặc list view để tránh phá hỏng navigation
+ */
 
-// // Hàm thay đổi behavior của nút ứng dụng
-// function modifyAppButton(appButton) {
-//     if (!appButton || appButton.dataset.hlvModified) return;
+// Kiểm tra xem có đang ở trong detail view không (có breadcrumb)
+function isInDetailView() {
+    // Nếu có .o_back_button, tức là đang ở trong một record/view chi tiết
+    return document.querySelector('.o_back_button') !== null;
+}
 
-//     // Đánh dấu đã xử lý
-//     appButton.dataset.hlvModified = 'true';
+// Hàm thay đổi behavior của nút ứng dụng
+function modifyAppButton(appButton) {
+    if (!appButton) return;
 
-//     // Clone link để remove TẤT CẢ event listeners (bao gồm OWL bindings)
-//     const newButton = appButton.cloneNode(true);
+    // LUÔN reset trạng thái modified để có thể re-check
+    // vì trạng thái detail view có thể thay đổi khi navigate
 
-//     // Thêm event listener mới
-//     newButton.addEventListener('click', function (ev) {
-//         ev.preventDefault();
-//         ev.stopPropagation();
-//         ev.stopImmediatePropagation();
+    // Kiểm tra xem đang ở detail view không
+    if (!isInDetailView()) {
+        // Không phải detail view - đảm bảo nút hoạt động bình thường
+        if (appButton.dataset.hlvModified) {
+            // Đã modified trước đó - cần restore
+            // Reload trang để restore (cách đơn giản nhất)
+            // Hoặc không làm gì vì OWL sẽ re-render
+        }
+        return;
+    }
 
-//         console.log('[HLV] App button clicked - using history.back()');
-//         window.history.back();
+    // Đang ở detail view - modify nút
+    if (appButton.dataset.hlvModified === 'true') return; // Đã modified rồi
 
-//         return false;
-//     }, true); // capture phase
+    // Đánh dấu đã xử lý
+    appButton.dataset.hlvModified = 'true';
 
-//     // Thêm mousedown listener để chặn sớm hơn
-//     newButton.addEventListener('mousedown', function (ev) {
-//         ev.stopPropagation();
-//     }, true);
+    // Clone để remove OWL bindings
+    const newButton = appButton.cloneNode(true);
 
-//     // Replace button cũ bằng button mới
-//     appButton.parentNode.replaceChild(newButton, appButton);
+    // Thêm event listener mới
+    newButton.addEventListener('click', function (ev) {
+        // Double check vẫn đang ở detail view
+        if (!isInDetailView()) {
+            // Không còn ở detail view - cho phép default behavior
+            return true;
+        }
 
-//     console.log('[HLV] Replaced app button:', newButton);
-// }
+        ev.preventDefault();
+        ev.stopPropagation();
+        ev.stopImmediatePropagation();
 
-// // Scan và modify nút ứng dụng
-// function scanAndModifyAppButtons() {
-//     // Target: .o_menu_toggle (nút ứng dụng với logo và tên app)
-//     const appButtons = document.querySelectorAll('.o_menu_toggle');
-//     appButtons.forEach(modifyAppButton);
-// }
+        console.log('[HLV] App button clicked in detail view - using history.back()');
+        window.history.back();
 
-// // Khởi tạo MutationObserver để theo dõi DOM changes
-// function initObserver() {
-//     const observer = new MutationObserver((mutations) => {
-//         let shouldScan = false;
+        return false;
+    }, true);
 
-//         for (const mutation of mutations) {
-//             if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-//                 for (const node of mutation.addedNodes) {
-//                     if (node.nodeType === Node.ELEMENT_NODE) {
-//                         // Check if it's an app button or contains one
-//                         if (node.classList?.contains('o_menu_toggle') ||
-//                             node.querySelector?.('.o_menu_toggle')) {
-//                             shouldScan = true;
-//                             break;
-//                         }
-//                         // Also check for navbar
-//                         if (node.classList?.contains('o_main_navbar') ||
-//                             node.querySelector?.('.o_main_navbar')) {
-//                             shouldScan = true;
-//                             break;
-//                         }
-//                     }
-//                 }
-//             }
-//             if (shouldScan) break;
-//         }
+    newButton.addEventListener('mousedown', function (ev) {
+        if (isInDetailView()) {
+            ev.stopPropagation();
+        }
+    }, true);
 
-//         if (shouldScan) {
-//             // Delay một chút để OWL render xong
-//             setTimeout(scanAndModifyAppButtons, 100);
-//         }
-//     });
+    // Replace button
+    if (appButton.parentNode) {
+        appButton.parentNode.replaceChild(newButton, appButton);
+        console.log('[HLV] Modified app button for detail view');
+    }
+}
 
-//     // Observe toàn bộ document
-//     observer.observe(document.body, {
-//         childList: true,
-//         subtree: true
-//     });
+// Scan và modify nút ứng dụng
+function scanAndModifyAppButtons() {
+    // Chỉ scan khi đang ở detail view
+    if (!isInDetailView()) {
+        return;
+    }
 
-//     console.log('[HLV] MutationObserver initialized');
-// }
+    const appButtons = document.querySelectorAll('.o_menu_toggle:not([data-hlv-modified="true"])');
+    appButtons.forEach(modifyAppButton);
+}
 
-// // Khởi tạo module
-// function init() {
-//     // Scan ngay lập tức
-//     scanAndModifyAppButtons();
+// Khởi tạo MutationObserver
+function initObserver() {
+    const observer = new MutationObserver((mutations) => {
+        // Delay để OWL render xong
+        setTimeout(scanAndModifyAppButtons, 200);
+    });
 
-//     // Thiết lập observer cho dynamic content
-//     initObserver();
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
 
-//     // Scan lại sau mỗi 2 giây (backup)
-//     setInterval(scanAndModifyAppButtons, 2000);
+    console.log('[HLV] MutationObserver initialized');
+}
 
-//     console.log('[HLV] Browser Back Button module initialized');
-// }
+// Khởi tạo module
+function init() {
+    scanAndModifyAppButtons();
+    initObserver();
 
-// // Khởi tạo khi document ready
-// if (document.readyState === 'loading') {
-//     document.addEventListener('DOMContentLoaded', init);
-// } else {
-//     init();
-// }
+    // Scan định kỳ
+    setInterval(scanAndModifyAppButtons, 2000);
 
-// console.log('[HLV] Browser Back Button module loaded');
+    console.log('[HLV] Browser Back Button module initialized');
+}
+
+// Khởi tạo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
+
+console.log('[HLV] Browser Back Button module loaded');
+
 
