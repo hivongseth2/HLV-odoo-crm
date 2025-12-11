@@ -10,29 +10,30 @@
                 <field name="create_date"/>
                 <templates>
                     <t t-name="kanban-box">
-                        <div class="w-100">
-                            <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-3">
+                        <div class="w-100 ps-2 pe-2">
+                            <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-2">
                                 
-                                <div t-attf-class="flex-shrink-0 #{record.role.raw_value == 'user' ? 'ms-2' : 'me-2'}">
-                                    <div class="d-flex align-items-center justify-content-center rounded-circle text-white" 
-                                         t-attf-style="width: 40px; height: 40px; background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#6c757d'};">
-                                        <i t-attf-class="fa #{record.role.raw_value == 'user' ? 'fa-user' : 'fa-robot'} fa-lg"></i>
+                                <div t-attf-class="flex-shrink-0 #{record.role.raw_value == 'user' ? 'ms-2' : 'me-2'} align-self-end">
+                                    <div class="d-flex align-items-center justify-content-center rounded-circle shadow-sm" 
+                                         t-attf-style="width: 32px; height: 32px; background-color: #{record.role.raw_value == 'user' ? '#0084ff' : '#e4e6eb'}; color: #{record.role.raw_value == 'user' ? '#fff' : '#050505'};">
+                                        <i t-attf-class="fa #{record.role.raw_value == 'user' ? 'fa-user' : 'fa-robot'} small"></i>
                                     </div>
                                 </div>
 
-                                <div t-attf-class="p-3 shadow-sm position-relative" 
+                                <div t-attf-class="p-3 shadow-sm position-relative text-break" 
                                      t-attf-style="
-                                        max-width: 75%; 
+                                        max-width: 70%; 
                                         border-radius: 18px; 
-                                        font-size: 15px;
+                                        font-size: 14px;
                                         line-height: 1.5;
-                                        background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#F0F2F5'};
+                                        background-color: #{record.role.raw_value == 'user' ? '#0084ff' : '#f0f2f5'};
                                         color: #{record.role.raw_value == 'user' ? '#ffffff' : '#050505'};
                                         border-bottom-#{record.role.raw_value == 'user' ? 'right' : 'left'}-radius: 4px;
                                      ">
-                                    <div style="white-space: pre-wrap; word-wrap: break-word;"><field name="content"/></div>
+                                    <div style="white-space: pre-wrap;"><field name="content"/></div>
+                                    
                                     <div class="text-end mt-1" 
-                                         t-attf-style="font-size: 11px; opacity: 0.7; color: #{record.role.raw_value == 'user' ? '#e4e6eb' : '#65676b'};">
+                                         t-attf-style="font-size: 10px; opacity: 0.6; color: inherit;">
                                         <field name="create_date" widget="relative_time"/>
                                     </div>
                                 </div>
@@ -48,67 +49,51 @@
         <field name="name">hlv.chatgpt.session.form</field>
         <field name="model">hlv.chatgpt.session</field>
         <field name="arch" type="xml">
-            <form string="Hội thoại AI" class="o_chat_form">
+            <form string="Hội thoại AI" class="o_chat_form" js_class="hlv_chat_form">
                 <header>
                     <field name="state" widget="statusbar" invisible="1"/> 
                 </header>
-                <sheet>
-                    <div class="oe_title mb-3 border-bottom pb-2">
-                        <label for="name" class="small text-muted fw-bold text-uppercase"/>
-                        <h2 class="mb-0"><field name="name" placeholder="Nhập chủ đề cuộc trò chuyện..."/></h2>
+                <sheet class="p-0"> <div class="p-3 border-bottom d-flex align-items-center bg-white sticky-top" style="z-index: 100;">
+                        <div class="flex-grow-1">
+                            <field name="name" class="h4 mb-0 text-primary fw-bold" placeholder="Chủ đề hội thoại..."/>
+                            <div class="small text-muted">
+                                <i class="fa fa-clock-o me-1"></i>Hoạt động: <field name="last_activity" widget="relative_time"/>
+                            </div>
+                        </div>
+                        <div>
+                             <field name="user_id" widget="many2one_avatar_user"/>
+                        </div>
                     </div>
                     
-                    <div class="o_chat_history p-4 rounded-3 mb-4" 
-                         style="background-color: #ffffff; border: 1px solid #e0e0e0; height: 60vh; overflow-y: auto; overflow-x: hidden;">
+                    <div class="o_chat_history p-3" 
+                         style="background-color: #ffffff; height: 65vh; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;">
                         
                         <field name="message_ids" mode="kanban" nolabel="1">
                             <kanban create="0" delete="0">
                                 <field name="role"/>
                                 <field name="content"/>
-                                <templates>
-                                    <t t-name="kanban-box">
-                                        <div class="w-100">
-                                            <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-3">
-                                                <div t-attf-class="flex-shrink-0 #{record.role.raw_value == 'user' ? 'ms-2' : 'me-2'}">
-                                                    <div class="d-flex align-items-center justify-content-center rounded-circle text-white" 
-                                                         t-attf-style="width: 40px; height: 40px; background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#6c757d'};">
-                                                        <i t-attf-class="fa #{record.role.raw_value == 'user' ? 'fa-user' : 'fa-robot'} fa-lg"></i>
-                                                    </div>
-                                                </div>
-                                                <div t-attf-class="p-3 shadow-sm position-relative" 
-                                                     t-attf-style="
-                                                        max-width: 75%; 
-                                                        border-radius: 18px; 
-                                                        font-size: 15px;
-                                                        line-height: 1.5;
-                                                        background-color: #{record.role.raw_value == 'user' ? '#0971F1' : '#F0F2F5'};
-                                                        color: #{record.role.raw_value == 'user' ? '#ffffff' : '#050505'};
-                                                        border-bottom-#{record.role.raw_value == 'user' ? 'right' : 'left'}-radius: 4px;
-                                                     ">
-                                                    <div style="white-space: pre-wrap; word-wrap: break-word;"><field name="content"/></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </t>
-                                </templates>
                             </kanban>
                         </field>
                         
                     </div>
 
-                    <div class="o_chat_input_area p-2 rounded-3 bg-light border d-flex align-items-center gap-2 sticky-bottom">
-                        <div class="flex-grow-1">
+                    <div class="p-3 bg-white border-top sticky-bottom">
+                        <div class="d-flex gap-2 align-items-end bg-light rounded-3 p-2 border">
                             <field name="input_text" 
-                                   placeholder="Nhập tin nhắn tại đây (Shift+Enter để xuống dòng)..." 
-                                   class="border-0 bg-transparent p-2 w-100"
-                                   style="resize: none; outline: none; font-size: 15px;"
+                                   placeholder="Nhập tin nhắn... (Enter để Gửi)" 
+                                   class="border-0 bg-transparent flex-grow-1"
+                                   style="resize: none; outline: none; font-size: 15px; max-height: 100px; overflow-y: auto;"
                                    nolabel="1"/>
+                                   
+                            <button name="action_send_message" 
+                                    string="" 
+                                    type="object" 
+                                    class="btn btn-link text-primary p-2 rounded-circle hover-bg-gray" 
+                                    icon="fa-paper-plane fa-lg"/>
                         </div>
-                        <button name="action_send_message" 
-                                string="GỬI" 
-                                type="object" 
-                                class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" 
-                                icon="fa-paper-plane"/>
+                        <div class="text-muted text-end mt-1" style="font-size: 11px;">
+                            <i>Enter để gửi, Shift+Enter để xuống dòng</i>
+                        </div>
                     </div>
                 </sheet>
             </form>
@@ -123,6 +108,7 @@
                 <field name="name" string="Chủ đề"/>
                 <field name="user_id" widget="many2one_avatar_user"/>
                 <field name="last_activity" widget="remaining_days"/>
+                <field name="state" widget="badge" decoration-success="state == 'active'"/>
             </list>
         </field>
     </record>
@@ -131,11 +117,6 @@
         <field name="name">Chat AI</field>
         <field name="res_model">hlv.chatgpt.session</field>
         <field name="view_mode">list,form</field>
-        <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-                Bắt đầu cuộc trò chuyện mới với AI
-            </p>
-        </field>
     </record>
 
     <menuitem id="menu_hlv_chatgpt_session" parent="menu_hlv_chatgpt_root" action="action_hlv_chatgpt_session" sequence="10"/>
