@@ -8,7 +8,9 @@ import { onMounted, onPatched } from "@odoo/owl";
 let _hlvCurrentController = null;
 
 // Models to apply filters (không bao gồm purchase.order vì đã có module riêng)
+// Models to apply filters (bao gồm cả purchase.order)
 const ENABLED_MODELS = [
+    'purchase.order',
     'stock.picking',
     'sale.order',
 ];
@@ -61,12 +63,268 @@ const DATE_FIELD_PATTERNS = [
 ];
 
 /**
- * Convert local date to UTC datetime string
+ * Format number as currency (Vietnamese locale)
  */
-function toUTCDateTime(dateStr, timeStr) {
-    if (!dateStr) return null;
-    const localDate = new Date(`${dateStr}T${timeStr}`);
-    return localDate.toISOString().replace('T', ' ').split('.')[0];
+function fmtCurrency(value) {
+    try {
+        return new Intl.NumberFormat("vi-VN").format(value ?? 0);
+    } catch {
+        return String(value ?? "");
+    }
+}
+
+/**
+ * Render badge HTML
+ */
+function renderBadge(status, label, className = 'bg-secondary') {
+    return `<span class="badge ${className}">${label || status}</span>`;
+}
+
+/**
+ * Configuration for Preview Panel
+ */
+const PREVIEW_CONFIG = {
+    'purchase.order': {
+        headerFields: ['name', 'partner_id', 'state', 'amount_total', 'date_planned', 'receipt_status'],
+        lineModel: 'purchase.order.line',
+        lineLinkField: 'order_id',
+        lineFields: ['product_id', 'name', 'product_qty', 'qty_received', 'price_unit', 'price_subtotal', 'product_uom'],
+        title: (d) => `${d.name || 'Đơn mua'} - ${d.partner_id?.[1] || ''}`,
+        summary: [
+            { label: 'Ngày dự kiến', value: (d) => d.date_planned ? new Date(d.date_planned).toLocaleDateString('vi-VN') : '' },
+            {
+                label: 'Trạng thái',
+                value: (d) => {
+                    const statusMap = { 'draft': 'Nháp', 'sent': 'Đã gửi', 'to approve': 'Chờ duyệt', 'purchase': 'Đơn hàng', 'done': 'Khóa', 'cancel': 'Đã hủy' };
+                    const colorMap = { 'purchase': 'bg-success', 'done': 'bg-secondary', 'cancel': 'bg-danger', 'draft': 'bg-info' };
+                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'bg-primary')
+                }
+            },
+            {
+                label: 'Nhập kho',
+                value: (d) => {
+                    const map = { 'pending': 'Chưa nhận', 'partial': 'Một phần', 'full': 'Đã nhận hết' };
+                    const color = { 'full': 'bg-success', 'partial': 'bg-warning text-dark', 'pending': 'bg-secondary' };
+                    return renderBadge(d.receipt_status, map[d.receipt_status], color[d.receipt_status]);
+                }
+            }
+        ],
+        columns: [
+            { header: 'Sản phẩm', field: 'product_id', type: 'many2one', width: '35%' },
+            { header: 'Mô tả', field: 'name', type: 'text', width: '25%' },
+            { header: 'ĐVT', field: 'product_uom', type: 'many2one', align: 'center' },
+            { header: 'SL đặt', field: 'product_qty', type: 'number', align: 'end' },
+            { header: 'SL nhận', field: 'qty_received', type: 'number', align: 'end' },
+            { header: 'Đơn giá', field: 'price_unit', type: 'currency', align: 'end' },
+            { header: 'Thành tiền', field: 'price_subtotal', type: 'currency', align: 'end', bold: true },
+        ],
+        footer: (d) => `Mở rộng: Tổng tiền ${fmtCurrency(d.amount_total)}`
+    },
+    'sale.order': {
+        headerFields: ['name', 'partner_id', 'state', 'amount_total', 'date_order', 'invoice_status'],
+        lineModel: 'sale.order.line',
+        lineLinkField: 'order_id',
+        lineFields: ['product_id', 'name', 'product_uom_qty', 'qty_delivered', 'price_unit', 'price_subtotal', 'product_uom'],
+        title: (d) => `${d.name || 'Đơn bán'} - ${d.partner_id?.[1] || ''}`,
+        summary: [
+            { label: 'Ngày đặt', value: (d) => d.date_order ? new Date(d.date_order).toLocaleDateString('vi-VN') : '' },
+            {
+                label: 'Trạng thái',
+                value: (d) => {
+                    const statusMap = { 'draft': 'Báo giá', 'sent': 'Đã gửi', 'sale': 'Đơn hàng', 'done': 'Khóa', 'cancel': 'Đã hủy' };
+                    const colorMap = { 'sale': 'bg-success', 'done': 'bg-secondary', 'cancel': 'bg-danger', 'draft': 'bg-info' };
+                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'bg-primary')
+                }
+            }
+        ],
+        columns: [
+            { header: 'Sản phẩm', field: 'product_id', type: 'many2one', width: '35%' },
+            { header: 'Mô tả', field: 'name', type: 'text', width: '25%' },
+            { header: 'ĐVT', field: 'product_uom', type: 'many2one', align: 'center' },
+            { header: 'SL đặt', field: 'product_uom_qty', type: 'number', align: 'end' },
+            { header: 'SL giao', field: 'qty_delivered', type: 'number', align: 'end' },
+            { header: 'Đơn giá', field: 'price_unit', type: 'currency', align: 'end' },
+            { header: 'Thành tiền', field: 'price_subtotal', type: 'currency', align: 'end', bold: true },
+        ],
+        footer: (d) => `Tổng tiền: ${fmtCurrency(d.amount_total)}`
+    },
+    'stock.picking': {
+        headerFields: ['name', 'partner_id', 'state', 'scheduled_date', 'origin', 'picking_type_id'],
+        lineModel: 'stock.move',
+        lineLinkField: 'picking_id',
+        lineFields: ['product_id', 'description_picking', 'product_uom_qty', 'quantity_done', 'product_uom'],
+        title: (d) => `${d.name || 'Phiếu kho'} - ${d.picking_type_id?.[1] || ''}`,
+        summary: [
+            { label: 'Đối tác', value: (d) => d.partner_id?.[1] || '---' },
+            { label: 'Nguồn', value: (d) => d.origin || '' },
+            { label: 'Ngày dự kiến', value: (d) => d.scheduled_date ? new Date(d.scheduled_date).toLocaleDateString('vi-VN') : '' },
+            {
+                label: 'Trạng thái',
+                value: (d) => {
+                    const statusMap = { 'draft': 'Nháp', 'waiting': 'Đang chờ', 'confirmed': 'Chờ xử lý', 'assigned': 'Sẵn sàng', 'done': 'Hoàn thành', 'cancel': 'Đã hủy' };
+                    const colorMap = { 'done': 'bg-success', 'assigned': 'bg-primary', 'confirmed': 'bg-info', 'cancel': 'bg-danger' };
+                    return renderBadge(d.state, statusMap[d.state], colorMap[d.state] || 'bg-secondary')
+                }
+            }
+        ],
+        columns: [
+            { header: 'Sản phẩm', field: 'product_id', type: 'many2one', width: '40%' },
+            { header: 'Mô tả', field: 'description_picking', type: 'text', width: '30%' },
+            { header: 'ĐVT', field: 'product_uom', type: 'many2one', align: 'center' },
+            { header: 'Nhu cầu', field: 'product_uom_qty', type: 'number', align: 'end' },
+            { header: 'Hoàn tất', field: 'quantity_done', type: 'number', align: 'end', bold: true },
+        ],
+        footer: (d) => ''
+    }
+};
+
+/**
+ * Show Generic Preview Panel
+ */
+async function showPreviewPanel(env, resModel, resId) {
+    const config = PREVIEW_CONFIG[resModel];
+    if (!config) return;
+
+    // Use specific class to avoid conflict if both modules are active, 
+    // or reuse same to look consistent. Let's use 'hlv-universal-preview'.
+
+    // Remove existing
+    try { document.querySelectorAll(".hlv-universal-preview").forEach(n => n.remove()); } catch { }
+
+    const target = document.createElement("div");
+    target.className = "hlv-universal-preview";
+    // Inline CSS for the panel (same as po_preview but generic)
+    target.innerHTML = `
+        <style>
+            .hlv-universal-preview {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 900px;
+                max-width: 95vw;
+                background: #fff;
+                border: 1px solid #ccc;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                z-index: 9999;
+                border-radius: 8px;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                max-height: 90vh;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
+            .hlv-u-header {
+                padding: 12px 16px;
+                background: #f8f9fa;
+                border-bottom: 1px solid #dee2e6;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .hlv-u-title { font-size: 1.1rem; font-weight: 600; color: #333; }
+            .hlv-u-body { padding: 16px; overflow-y: auto; flex: 1; }
+            .hlv-u-spinner { display: flex; justify-content: center; padding: 40px; }
+            .hlv-u-summary { display: flex; gap: 24px; margin-bottom: 20px; flex-wrap: wrap; }
+            .hlv-u-summary-item label { display: block; font-size: 0.8rem; color: #666; margin-bottom: 2px; }
+            .hlv-u-summary-item div { font-weight: 500; }
+            .hlv-close-btn { cursor: pointer; border: none; background: transparent; font-size: 1.2rem; color: #666; }
+            .hlv-close-btn:hover { color: #000; }
+        </style>
+        <div class="hlv-u-header">
+            <div class="hlv-u-title">Đang tải...</div>
+            <button class="hlv-close-btn">&times;</button>
+        </div>
+        <div class="hlv-u-body">
+            <div class="hlv-u-spinner"><span class="fa fa-circle-o-notch fa-spin fa-2x text-primary"></span></div>
+        </div>
+    `;
+    document.body.appendChild(target);
+
+    const destroy = () => { try { target.remove(); target.removeEventListener('keydown', onKey); } catch { } };
+    target.querySelector(".hlv-close-btn").addEventListener("click", destroy);
+
+    // Close on click outside
+    target.addEventListener("click", (e) => { if (e.target === target) destroy(); });
+    // Close on escape
+    const onKey = (e) => { if (e.key === 'Escape') destroy(); };
+    document.addEventListener("keydown", onKey);
+
+    try {
+        const orm = env.services.orm;
+        // Fetch Header
+        const [record] = await orm.read(resModel, [resId], config.headerFields);
+        if (!record) throw new Error("Record not found");
+
+        // Fetch Lines
+        const lines = await orm.searchRead(
+            config.lineModel,
+            [[config.lineLinkField, '=', resId]],
+            config.lineFields
+        );
+
+        // Render Content
+        const titleEl = target.querySelector(".hlv-u-title");
+        const bodyEl = target.querySelector(".hlv-u-body");
+
+        titleEl.textContent = config.title(record);
+
+        // Render Summary
+        const summaryHtml = config.summary.map(s => `
+            <div class="hlv-u-summary-item">
+                <label>${s.label}</label>
+                <div>${s.value(record) || '---'}</div>
+            </div>
+        `).join('');
+
+        // Render Table Headers
+        const thHtml = config.columns.map(c => `
+            <th class="${c.align ? 'text-' + c.align : 'text-start'}" style="${c.width ? 'width:' + c.width : ''}">${c.header}</th>
+        `).join('');
+
+        // Render Rows
+        const rowsHtml = lines.map(line => {
+            const tds = config.columns.map(c => {
+                let text = '';
+                const val = line[c.field];
+                if (c.type === 'many2one') text = val?.[1] || '';
+                else if (c.type === 'currency') text = fmtCurrency(val);
+                else if (c.type === 'number') text = val || 0;
+                else text = val || '';
+
+                return `<td class="${c.align ? 'text-' + c.align : 'text-start'} ${c.bold ? 'fw-bold' : ''}">${text}</td>`;
+            }).join('');
+            return `<tr>${tds}</tr>`;
+        }).join('');
+
+        // Footer
+        let footerHtml = '';
+        if (config.footer) {
+            const footerText = config.footer(record);
+            if (footerText) {
+                footerHtml = `
+                    <div class="mt-3 text-end fw-bold border-top pt-2">
+                        ${footerText}
+                    </div>
+                 `;
+            }
+        }
+
+        bodyEl.innerHTML = `
+            <div class="hlv-u-summary">${summaryHtml}</div>
+            <div class="table-responsive">
+                <table class="table table-sm table-striped table-hover mb-0">
+                    <thead class="table-light"><tr>${thHtml}</tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            </div>
+            ${footerHtml}
+        `;
+
+    } catch (e) {
+        console.error(e);
+        target.querySelector(".hlv-u-body").innerHTML = `<div class="text-danger p-3">Lỗi tải dữ liệu: ${e.message}</div>`;
+    }
 }
 
 /**
@@ -283,9 +541,68 @@ patch(ListRenderer.prototype, {
 
         const resModel = this.props.list?.resModel;
         if (resModel && ENABLED_MODELS.includes(resModel)) {
-            onMounted(() => this._hlvAddUniversalFilters());
-            onPatched(() => this._hlvAddUniversalFilters());
+            onMounted(() => {
+                this._hlvAddUniversalFilters();
+                this._hlvAddPreviewButtons();
+            });
+            onPatched(() => {
+                this._hlvAddUniversalFilters();
+                this._hlvAddPreviewButtons();
+            });
         }
+    },
+
+    /**
+     * Add "Eye" preview buttons to rows
+     */
+    _hlvAddPreviewButtons() {
+        const resModel = this.props.list?.resModel;
+        if (!resModel || !PREVIEW_CONFIG[resModel]) return;
+
+        const tableEl = this.tableRef?.el;
+        if (!tableEl) return;
+
+        // Try to find the helper function to get ID. 
+        // Typically ListRenderer has access to props.list.records.
+        // We iterate rows to find data-id.
+
+        const rows = tableEl.querySelectorAll('tbody tr.o_data_row');
+        rows.forEach(row => {
+            if (row.dataset.hlvPreviewAdded) return;
+            row.dataset.hlvPreviewAdded = 'true';
+
+            // Find last cell to inject button
+            const lastTd = row.querySelector('td:last-child');
+            if (!lastTd) return;
+
+            // Check if button already exists (redundant check but safe)
+            if (lastTd.querySelector('.hlv-u-preview-btn')) return;
+
+            // Get ResID
+            // ListRenderer usually stores resId in the record object mapped to data-id
+            // We need to find the record from props.
+            const datapointId = row.dataset.id;
+            const record = this.props.list?.records?.find(r => r.id === datapointId);
+            const resId = record?.resId;
+
+            if (!resId) return;
+
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-sm btn-link hlv-u-preview-btn ms-1 text-decoration-none';
+            btn.innerHTML = '<i class="fa fa-eye"></i>';
+            btn.title = 'Xem nhanh';
+            btn.type = 'button';
+            btn.style.padding = '0 4px';
+
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showPreviewPanel(this.env, resModel, resId);
+            });
+
+            // Prepend or append? Let's append to not mess up alignment if possible, same as Purchase.
+            lastTd.appendChild(btn);
+        });
     },
 
     /**
