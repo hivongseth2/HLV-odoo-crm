@@ -1,8 +1,5 @@
 /** @odoo-module */
 
-import { patch } from "@web/core/utils/patch";
-import { Breadcrumbs } from "@web/webclient/breadcrumbs/breadcrumbs";
-
 /**
  * HLV Browser Back Button
  * 
@@ -12,35 +9,47 @@ import { Breadcrumbs } from "@web/webclient/breadcrumbs/breadcrumbs";
  * - Giữ nguyên các bộ lọc và trạng thái tìm kiếm
  */
 
-patch(Breadcrumbs.prototype, {
-    /**
-     * Override onBreadcrumbClicked để sử dụng history.back()
-     * cho breadcrumb đầu tiên (nút back chính hiển thị tên ứng dụng)
-     * 
-     * @param {Event} ev - Click event
-     * @param {Number} index - Index của breadcrumb được click
-     */
-    onBreadcrumbClicked(ev, index) {
-        // Kiểm tra nếu click vào breadcrumb đầu tiên (index = 0)
-        // và có nhiều hơn 1 breadcrumb (đang ở trong một record/view)
-        const breadcrumbs = this.props.breadcrumbs || [];
+// Đợi DOM ready
+function initBrowserBackButton() {
+    // Event handler for breadcrumb clicks
+    function handleBreadcrumbClick(ev) {
+        // Tìm breadcrumb link đã được click
+        const breadcrumbLink = ev.target.closest('.o_breadcrumb a');
 
-        if (index === 0 && breadcrumbs.length > 1) {
+        if (!breadcrumbLink) return;
+
+        // Kiểm tra xem có phải là breadcrumb đầu tiên không
+        const breadcrumbContainer = breadcrumbLink.closest('.o_breadcrumb');
+        if (!breadcrumbContainer) return;
+
+        const allBreadcrumbs = document.querySelectorAll('.o_breadcrumb .breadcrumb-item, .o_breadcrumb a');
+
+        // Nếu breadcrumb link được click là link đầu tiên (back button)
+        const allLinks = Array.from(document.querySelectorAll('.o_breadcrumb a'));
+        const clickedIndex = allLinks.indexOf(breadcrumbLink);
+
+        // Chỉ intercept nếu là click vào back button (breadcrumb đầu tiên)
+        // và có nhiều hơn 1 breadcrumb
+        if (clickedIndex === 0 && allLinks.length >= 1) {
             ev.preventDefault();
             ev.stopPropagation();
+            ev.stopImmediatePropagation();
 
-            // Sử dụng history.back() để quay lại trang trước đó
-            // Điều này giữ nguyên các bộ lọc và trạng thái tìm kiếm
+            console.log('[HLV] Back button clicked - using history.back()');
             window.history.back();
-            return;
-        }
-
-        // Với các breadcrumb khác (không phải đầu tiên), 
-        // sử dụng hành vi mặc định của Odoo
-        if (super.onBreadcrumbClicked) {
-            super.onBreadcrumbClicked(ev, index);
+            return false;
         }
     }
-});
 
-console.log("[HLV] Browser Back Button module loaded - Back button now uses browser history");
+    // Thêm event listener với capture phase để intercept trước Odoo
+    document.addEventListener('click', handleBreadcrumbClick, true);
+
+    console.log('[HLV] Browser Back Button module loaded - Back button now uses browser history');
+}
+
+// Khởi tạo ngay khi module được load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBrowserBackButton);
+} else {
+    initBrowserBackButton();
+}
