@@ -889,9 +889,9 @@ class PurchaseOrder(models.Model):
 class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
 
-    # =========================================================================
+    # ======================================================================
     # SQL CONSTRAINT: Chốt chặn chống trùng name
-    # =========================================================================
+    # ======================================================================
     _sql_constraints = [
         ('name_uniq', 'unique(name)', 'Mã đơn mua hàng (Name) đã tồn tại! Vui lòng kiểm tra lại.'),
     ]
