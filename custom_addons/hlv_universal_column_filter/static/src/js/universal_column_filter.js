@@ -727,13 +727,13 @@ patch(ListRenderer.prototype, {
 
             // Inline CSS for the icon to look cleaner and permanent
             filterBtn.style.cssText = `
-    cursor: pointer;
-    opacity: 0.5;
-    font - size: 0.85rem;
-    margin - left: 6px;
-    color: #555;
-    transition: all 0.2s;
-    `;
+                cursor: pointer;
+                opacity: 0.5;
+                font-size: 0.85rem;
+                margin-left: 6px;
+                color: #555;
+                transition: all 0.2s;
+            `;
 
             // Just hover effects for color
             filterBtn.addEventListener('mouseenter', () => { filterBtn.style.opacity = '1'; filterBtn.style.color = '#714B67'; });
@@ -768,22 +768,22 @@ patch(ListRenderer.prototype, {
         const popup = document.createElement('div');
         popup.className = 'hlv-filter-dropdown-portal';
         popup.style.cssText = `
-    position: fixed;
-    top: ${rect.bottom + 4} px;
-    left: ${Math.max(10, rect.left - 100)} px;
-    min - width: 200px;
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border - radius: 6px;
-    box - shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-    z - index: 10000;
-    padding: 10px;
-    `;
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${Math.max(10, rect.left - 100)}px;
+            min-width: 200px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            padding: 10px;
+        `;
         popup.innerHTML = `
-        < input type = "text" class="form-control form-control-sm hlv-popup-input"
-    placeholder = "Nhập ${label}..." autofocus style = "width: 100%;" >
-        <div class="mt-2 text-muted small">Nhấn Enter để tìm</div>
-    `;
+            <input type="text" class="form-control form-control-sm hlv-popup-input"
+                   placeholder="Nhập ${label}..." autofocus style="width: 100%;">
+            <div class="mt-2 text-muted small">Nhấn Enter để tìm</div>
+        `;
 
         document.body.appendChild(popup);
 
@@ -815,17 +815,17 @@ patch(ListRenderer.prototype, {
         const dropdown = document.createElement('div');
         dropdown.className = 'hlv-filter-dropdown-portal';
         dropdown.style.cssText = `
-    position: fixed;
-    top: ${rect.bottom + 4} px;
-    left: ${Math.max(10, rect.left - 80)} px;
-    min - width: 160px;
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border - radius: 6px;
-    box - shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-    z - index: 10000;
-    overflow: hidden;
-    `;
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${Math.max(10, rect.left - 80)}px;
+            min-width: 160px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            overflow: hidden;
+        `;
 
         const allOptions = [...options, { value: '', label: '— Tất cả —', color: '#714B67' }];
 
@@ -834,21 +834,21 @@ patch(ListRenderer.prototype, {
             div.className = 'hlv-filter-dropdown-item';
 
             const colorDot = item.color
-                ? `< span style = "display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};margin-right:8px;" ></span > `
+                ? `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${item.color};margin-right:8px;"></span>`
                 : '';
 
             div.innerHTML = colorDot + item.label;
             div.style.cssText = `
-    padding: 10px 16px;
-    cursor: pointer;
-    font - size: 0.9rem;
-    color: ${item.value === '' ? '#714B67' : '#333'};
-    font - weight: ${item.value === '' ? '600' : '400'};
-    border - bottom: ${idx < allOptions.length - 1 ? '1px solid #f0f0f0' : 'none'};
-    transition: background - color 0.15s;
-    display: flex;
-    align - items: center;
-    `;
+                padding: 10px 16px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                color: ${item.value === '' ? '#714B67' : '#333'};
+                font-weight: ${item.value === '' ? '600' : '400'};
+                border-bottom: ${idx < allOptions.length - 1 ? '1px solid #f0f0f0' : 'none'};
+                transition: background-color 0.15s;
+                display: flex;
+                align-items: center;
+            `;
 
             div.addEventListener('mouseenter', () => div.style.backgroundColor = '#f8f4f7');
             div.addEventListener('mouseleave', () => div.style.backgroundColor = '');
@@ -877,20 +877,20 @@ patch(ListRenderer.prototype, {
         const dropdown = document.createElement('div');
         dropdown.className = 'hlv-filter-dropdown-portal';
         dropdown.style.cssText = `
-    position: fixed;
-    top: ${rect.bottom + 4} px;
-    left: ${Math.max(10, rect.left - 100)} px;
-    min - width: 240px;
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border - radius: 6px;
-    box - shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-    z - index: 10000;
-    padding: 12px;
-    `;
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${Math.max(10, rect.left - 100)}px;
+            min-width: 240px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            padding: 12px;
+        `;
 
         dropdown.innerHTML = `
-        < div style = "margin-bottom: 8px; font-weight: 500; color: #714B67;" > ${label}</div >
+            <div style="margin-bottom: 8px; font-weight: 500; color: #714B67;">${label}</div>
             <div style="margin-bottom: 8px;">
                 <label style="font-size: 0.85rem; color: #666; margin-bottom: 4px; display: block;">Từ ngày:</label>
                 <input type="date" class="form-control form-control-sm hlv-date-from" style="margin-bottom: 8px;">
@@ -903,7 +903,7 @@ patch(ListRenderer.prototype, {
                 <button class="btn btn-sm btn-primary hlv-date-apply" style="flex: 1;">Áp dụng</button>
                 <button class="btn btn-sm btn-secondary hlv-date-clear" style="flex: 1;">Xóa</button>
             </div>
-    `;
+        `;
 
         document.body.appendChild(dropdown);
 
