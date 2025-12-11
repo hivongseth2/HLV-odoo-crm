@@ -43,12 +43,26 @@
                             <kanban>
                                 <field name="role"/>
                                 <field name="content"/>
+                                <field name="create_date"/>
+                                <templates>
+                                    <t t-name="card">
+                                        <div t-attf-class="d-flex #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-2">
+                                            <div t-attf-class="p-3 rounded shadow-sm #{record.role.raw_value == 'user' ? 'bg-primary text-white' : 'bg-light text-dark'}" 
+                                                 style="max-width: 80%; white-space: pre-wrap;">
+                                                <div class="fw-bold mb-1" style="font-size: 0.8rem;">
+                                                    <field name="role"/>
+                                                </div>
+                                                <div><field name="content"/></div>
+                                            </div>
+                                        </div>
+                                    </t>
+                                </templates>
                             </kanban>
                         </field>
                     </div>
 
                     <div class="o_chat_input d-flex gap-2">
-                        <field name="input_text" placeholder="Nhập yêu cầu của bạn tại đây (Shift+Enter để xuống dòng)..." 
+                        <field name="input_text" placeholder="Nhập yêu cầu tại đây (Shift+Enter xuống dòng)..." 
                                style="height: 60px; border-radius: 10px;" class="flex-grow-1"/>
                         <button name="action_send_message" string="Gửi" type="object" class="btn btn-primary px-4" icon="fa-paper-plane"/>
                     </div>
