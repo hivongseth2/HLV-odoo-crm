@@ -31,17 +31,24 @@ const SELECTION_FIELDS = {
     'state': {
         'stock.picking': [
             { value: 'draft', label: 'Nháp', color: '#6c757d' },
-            { value: 'waiting', label: 'Đang chờ', color: '#ffc107' },
-            { value: 'confirmed', label: 'Chờ xử lý', color: '#17a2b8' },
+            { value: 'waiting', label: 'Đang chờ hoạt động khác', color: '#ffc107' },
+            { value: 'confirmed', label: 'Đang chờ', color: '#17a2b8' },
             { value: 'assigned', label: 'Sẵn sàng', color: '#28a745' },
-            { value: 'done', label: 'Hoàn thành', color: '#714B67' },
+            { value: 'done', label: 'Hoàn tất', color: '#714B67' },
             { value: 'cancel', label: 'Đã hủy', color: '#dc3545' },
         ],
         'sale.order': [
             { value: 'draft', label: 'Báo giá', color: '#6c757d' },
-            { value: 'sent', label: 'Đã gửi', color: '#17a2b8' },
-            { value: 'sale', label: 'Đơn hàng', color: '#28a745' },
-            { value: 'done', label: 'Khóa', color: '#714B67' },
+            { value: 'sent', label: 'Báo giá đã gửi', color: '#17a2b8' },
+            { value: 'sale', label: 'Đơn bán hàng', color: '#28a745' },
+            { value: 'cancel', label: 'Đã hủy', color: '#dc3545' },
+        ],
+        'purchase.order': [
+            { value: 'draft', label: 'RFQ', color: '#6c757d' },
+            { value: 'sent', label: 'RFQ đã gửi', color: '#17a2b8' },
+            { value: 'to approve', label: 'Cần phê duyệt', color: '#ffc107' },
+            { value: 'purchase', label: 'Đơn mua hàng', color: '#28a745' },
+            { value: 'done', label: 'Đã khoá', color: '#714B67' },
             { value: 'cancel', label: 'Đã hủy', color: '#dc3545' },
         ],
     },
@@ -52,7 +59,20 @@ const SELECTION_FIELDS = {
             { value: 'to invoice', label: 'Cần thanh toán', color: '#ffc107' },
             { value: 'no', label: 'Không', color: '#6c757d' },
         ],
+        'purchase.order': [
+            { value: 'no', label: 'Không có gì để thanh toán', color: '#6c757d' },
+            { value: 'to invoice', label: 'Chờ hoá đơn', color: '#ffc107' },
+            { value: 'invoiced', label: 'Đã thanh toán hết', color: '#28a745' },
+        ],
     },
+    'delivery_status': {
+        'sale.order': [
+            { value: 'pending', label: 'Chưa giao', color: '#ffc107' },
+            { value: 'started', label: 'Đã bắt đầu', color: '#17a2b8' },
+            { value: 'partial', label: 'Đã giao một phần', color: '#fd7e14' },
+            { value: 'full', label: 'Đã giao hết', color: '#28a745' },
+        ],
+    }
 };
 
 // Date field patterns
@@ -708,6 +728,8 @@ patch(ListRenderer.prototype, {
                     this._hlvShowSelectDropdown(filterBtn, fieldName, label, options);
                 } else if (filterType === 'date') {
                     this._hlvShowDateDropdown(filterBtn, fieldName, label);
+                } else if (fieldName === 'x_studio_kho_nhn') {
+                    this._hlvShowWarehouseFilterDropdown(filterBtn, label);
                 } else {
                     this._hlvShowTextPopup(filterBtn, fieldName, label);
                 }
@@ -1255,5 +1277,209 @@ patch(ListRenderer.prototype, {
     async _hlvClearFilter(fieldName, label) {
         await this._hlvRemoveExistingFilters(label);
         console.log('[HLV Filter] Cleared:', label);
+    },
+
+    /**
+     * Show Warehouse Filter Dropdown (ported from PO preview)
+     */
+    async _hlvShowWarehouseFilterDropdown(triggerBtn, label) {
+        document.querySelectorAll('.hlv-filter-dropdown-portal').forEach(d => d.remove());
+
+        const rect = triggerBtn.getBoundingClientRect();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'hlv-filter-dropdown-portal';
+        dropdown.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${Math.max(10, rect.left - 80)}px;
+            min-width: 180px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            overflow: hidden;
+        `;
+
+        dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #666;">Đang tải...</div>';
+        document.body.appendChild(dropdown);
+
+        // Fetch warehouses (picking types)
+        const controller = _hlvCurrentController;
+        if (!controller) {
+            dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #d9534f;">Lỗi tải dữ liệu</div>';
+            return;
+        }
+
+        const orm = controller.env.services.orm;
+        let warehouses = [];
+
+        try {
+            warehouses = await orm.searchRead(
+                'stock.picking.type',
+                [['code', '=', 'incoming']],
+                ['id', 'name', 'warehouse_id'],
+                { order: 'name' }
+            );
+        } catch (e) {
+            console.error('[HLV] Failed to fetch picking types:', e);
+            dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #d9534f;">Lỗi tải dữ liệu</div>';
+            return;
+        }
+
+        dropdown.innerHTML = '';
+
+        const items = [
+            ...warehouses.map(pt => ({
+                value: pt.id,
+                label: pt.warehouse_id ? pt.warehouse_id[1] : pt.name
+            })),
+            { value: '', label: '— Tất cả —', color: '#714B67' }
+        ];
+
+        if (items.length === 1) {
+            dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #666;">Không có dữ liệu</div>';
+            return;
+        }
+
+        items.forEach((item, idx) => {
+            const div = document.createElement('div');
+            div.className = 'hlv-filter-dropdown-item';
+            div.innerHTML = item.label;
+            div.style.cssText = `
+                padding: 10px 16px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                color: ${item.value === '' ? '#714B67' : '#333'};
+                font-weight: ${item.value === '' ? '600' : '400'};
+                border-bottom: ${idx < items.length - 1 ? '1px solid #f0f0f0' : 'none'};
+                transition: background-color 0.15s;
+            `;
+
+            div.addEventListener('mouseenter', () => div.style.backgroundColor = '#f8f4f7');
+            div.addEventListener('mouseleave', () => div.style.backgroundColor = '');
+            div.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropdown.remove();
+                this._hlvApplyWarehouseFilter(item.value, item.label, label);
+            });
+
+            dropdown.appendChild(div);
+        });
+
+        this._hlvSetupPopupClose(dropdown, triggerBtn);
+    },
+
+    /**
+     * Apply Warehouse Filter (Filter by picking_type_id)
+     */
+    async _hlvApplyWarehouseFilter(value, valueLabel, label) {
+        console.log('[HLV] Warehouse filter:', value, valueLabel);
+
+        const controller = _hlvCurrentController;
+        if (!controller) return;
+
+        const searchModel = controller.env.searchModel;
+        if (!searchModel?.createNewFilters) return;
+
+        // Remove existing warehouse filters (matching label "Kho nhận" or similar passed)
+        // Usually label is "Kho nhận" from column header
+        const query = searchModel.query || [];
+        const searchItems = searchModel.searchItems || {};
+        const activeIds = new Set();
+        const filterIdsToRemove = [];
+
+        for (const queryItem of query) {
+            const itemId = queryItem.searchItemId;
+            const item = searchItems[itemId];
+            if (item && item.description && item.description.startsWith(`${label}:`)) {
+                filterIdsToRemove.push(itemId);
+                // Extract IDs from domain if we want toggle logic?
+                // The original code uses Map<name, id>. 
+                // Let's simplify and use the same toggle logic as other filters if we want multi-select.
+                // Or single select? The original PO panel seemed to support multi.
+
+                const domain = item.domain;
+                if (domain) {
+                    this._hlvExtractValuesFromDomain(domain, 'picking_type_id', activeIds);
+                }
+            }
+        }
+
+        for (const id of filterIdsToRemove) {
+            try {
+                if (searchModel.toggleSearchItem) {
+                    searchModel.toggleSearchItem(id);
+                } else {
+                    searchModel.deactivateGroup(id);
+                }
+            } catch (e) {
+                console.error('[HLV] Remove failed:', e);
+            }
+        }
+
+        if (filterIdsToRemove.length > 0) {
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        if (value === '') return; // Clear
+
+        // Toggle
+        if (activeIds.has(value)) {
+            activeIds.delete(value);
+        } else {
+            activeIds.add(value);
+        }
+
+        if (activeIds.size === 0) return;
+
+        // Build Domain
+        // Domain is picking_type_id = value
+        const idArray = Array.from(activeIds);
+        let newDomain;
+        let newDescription;
+
+        // We need labels for description. Since we only passed one label, 
+        // if we have multiple IDs we might need to fetch names or just show counts/IDs?
+        // Limitation: If we toggle multiple, we lose the labels of previous ones unless we store map.
+        // For now, let's just use the current label if single, or generic "Multiple" if multiple?
+        // Or re-implement map logic? 
+        // Simplest: Just use valueLabel for single. For multiple, maybe join IDs (not pretty)?
+        // Original code used map to store names. 
+        // Let's stick to single select or simple additive description? 
+        // Actually, let's just use the label passed. If multiple, it will append? No, we rebuild filter.
+        // Let's assume user clicks one by one.
+        // Better: Use `valueLabel` for the current one. 
+        // Recovering labels for existing IDs is hard without map.
+        // **Compromise**: Just construct description with current label if single. 
+        // If multiple, maybe we shouldn't support multi for warehouse yet to be safe, 
+        // OR we try to keep it simple.
+
+        if (idArray.length === 1) {
+            newDomain = [['picking_type_id', '=', idArray[0]]];
+            // Ideally we want the warehouse name here.
+            newDescription = `${label}: ${valueLabel}`;
+        } else {
+            newDomain = [];
+            for (let i = 0; i < idArray.length - 1; i++) newDomain.push('|');
+            idArray.forEach(id => newDomain.push(['picking_type_id', '=', id]));
+            // We can't easily reconstruct the names without fetching.
+            // Just show "Multiple" or similar?
+            // Or... just use the last label?
+            // Let's assume single select is dominant use case or user accepts less perfect label.
+            newDescription = `${label}: ${idArray.length} Kho`;
+        }
+
+        try {
+            searchModel.createNewFilters([{
+                description: newDescription,
+                domain: newDomain,
+                type: 'filter',
+            }]);
+        } catch (e) {
+            console.error('[HLV] Failed:', e);
+        }
     },
 });
