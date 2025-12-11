@@ -298,6 +298,13 @@ async function showPreviewPanel(env, resModel, resId, triggerBtn) {
                 border-color: transparent transparent #fff transparent;
                 z-index: 1;
             }
+            .hlv-u-summary { display: flex; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid #dee2e6; }
+            .hlv-u-summary-item label { display: block; font-size: 0.75rem; color: #555; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700; }
+            .hlv-u-summary-item div { font-weight: 500; font-size: 1rem; color: #222; }
+            .table-preview th { background: #f8f9fa; font-size: 0.8rem; text-transform: uppercase; color: #555; font-weight: 700; border-bottom: 2px solid #dee2e6; padding: 10px 14px; }
+            .table-preview td { font-size: 0.95rem; padding: 10px 14px; vertical-align: middle; border-bottom: 1px solid #f0f0f0; color: #333; }
+            .table-preview tr:last-child td { border-bottom: none; }
+            .hlv-u-title { font-weight: 700; color: #714B67; font-size: 1.1rem; }
         `;
         document.head.appendChild(style);
     }
