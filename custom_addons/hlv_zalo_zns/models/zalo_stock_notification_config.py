@@ -77,6 +77,11 @@ class ZaloStockNotificationConfig(models.Model):
         help='Nếu bật, sẽ sử dụng token từ Shared Token Manager thay vì token riêng'
     )
     
+    oa_secret_key = fields.Char(
+        'OA Secret Key (Webhook)', 
+        help='Key dùng để verify webhook. Copy từ màn hình Webhook trên Zalo Developer.'
+    )
+    
     # ===== OLD: Deprecated token fields (kept for backward compatibility) =====
     app_id = fields.Char('App ID', default='', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
     secret_key = fields.Char('Secret Key', default='', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
