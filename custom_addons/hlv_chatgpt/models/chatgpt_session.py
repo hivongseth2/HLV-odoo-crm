@@ -3,7 +3,6 @@ import logging
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
-# Import thư viện OpenAI
 try:
     from openai import OpenAI
 except ImportError:
@@ -13,91 +12,99 @@ _logger = logging.getLogger(__name__)
 
 class HlvChatgptSession(models.Model):
     _name = 'hlv.chatgpt.session'
-    _description = 'Phiên chat test với ChatGPT'
-    _rec_name = 'user_input'
-    _order = 'create_date desc'
+    _description = 'Phiên Chat AI'
+    _rec_name = 'name'
+    _order = 'last_activity desc'
 
-    user_input = fields.Text(string='Câu hỏi của bạn', required=True)
-    response_text = fields.Text(string='ChatGPT trả lời', readonly=True)
-    raw_response = fields.Text(string='Raw Response (Debug)', readonly=True, help="Lưu toàn bộ cục JSON trả về để debug")
-    state = fields.Selection([
-        ('draft', 'Mới'),
-        ('done', 'Đã trả lời'),
-        ('error', 'Lỗi')
-    ], default='draft', string='Trạng thái')
+    name = fields.Char(string='Chủ đề', default='Cuộc hội thoại mới', required=True)
+    user_id = fields.Many2one('res.users', string='Người tạo', default=lambda self: self.env.user)
+    last_activity = fields.Datetime(string='Hoạt động cuối', default=fields.Datetime.now)
+    
+    # Dùng One2many để lưu lịch sử chat
+    message_ids = fields.One2many('hlv.chatgpt.message', 'session_id', string='Nội dung hội thoại')
+    
+    # Ô nhập liệu nhanh (không lưu vào DB lâu dài, chỉ để hứng dữ liệu)
+    input_text = fields.Text(string='Nhập tin nhắn...')
 
-    def action_send_to_chatgpt(self):
-        """Hàm gửi tin nhắn sang OpenAI dựa trên Config"""
+    def action_send_message(self):
+        """Gửi tin nhắn và nhận phản hồi"""
         self.ensure_one()
-        
-        # 1. Kiểm tra thư viện
-        if not OpenAI:
-            raise UserError("Server chưa cài thư viện openai. Vui lòng chạy: pip3 install openai")
+        if not self.input_text:
+            raise UserError("Vui lòng nhập nội dung tin nhắn.")
 
-        # 2. Lấy cấu hình
+        # 1. Tạo tin nhắn của User vào lịch sử
+        self.env['hlv.chatgpt.message'].create({
+            'session_id': self.id,
+            'role': 'user',
+            'content': self.input_text
+        })
+        
+        user_query = self.input_text
+        self.input_text = "" # Xóa ô nhập sau khi gửi
+
+        # 2. Gọi API OpenAI
+        ai_response = self._call_openai_api(user_query)
+
+        # 3. Tạo tin nhắn của AI vào lịch sử
+        self.env['hlv.chatgpt.message'].create({
+            'session_id': self.id,
+            'role': 'assistant',
+            'content': ai_response
+        })
+        
+        self.last_activity = fields.Datetime.now()
+
+    def _call_openai_api(self, query):
+        """Hàm xử lý gọi API tách biệt"""
+        if not OpenAI:
+            return "Lỗi: Server chưa cài thư viện openai."
+        
         config = self.env['hlv.chatgpt.config'].get_config()
         if not config:
-            raise UserError("Chưa có cấu hình OpenAI đang Active.")
-        
-        # 3. Khởi tạo Client
+            return "Lỗi: Chưa có cấu hình OpenAI Active."
+
         client = OpenAI(api_key=config.api_key)
 
         try:
-            _logger.info("Đang gửi request tới OpenAI Prompt ID: %s", config.prompt_id)
-            
-            # === CODE GỌI API THEO MẪU BẠN GỬI ===
+            # === GỌI API THEO ĐÚNG LOGIC CỦA BẠN ===
             response = client.responses.create(
+                model="gpt-4o", 
                 prompt={
                     "id": config.prompt_id,
                     "version": config.prompt_version or "3"
                 },
                 input=[{
                     "role": "user",
-                    "content": self.user_input
-                }],  # Truyền câu hỏi vào mảng input
-                text={
-                    "format": {
-                        "type": "text"
-                    }
-                },
-                reasoning={},
-                tools=[
-                    {
-                        "type": "file_search",
-                        "vector_store_ids": [
-                            config.vector_store_id
-                        ]
-                    }
-                ],
-                max_output_tokens=2048,
-                store=True,
-                include=["reasoning.encrypted_content"]
+                    "content": query
+                }],
+                text={"format": {"type": "text"}},
+                tools=[{
+                    "type": "file_search",
+                    "vector_store_ids": [config.vector_store_id]
+                }],
             )
             
-            # 4. Xử lý kết quả trả về
-            # Lưu ý: Cấu trúc response object của endpoint này có thể khác nhau tùy version
-            # Mình sẽ cố gắng lấy text, nếu không được sẽ dump toàn bộ object ra
-            
-            final_reply = ""
+            # Xử lý kết quả trả về
             if hasattr(response, 'output_text'):
-                final_reply = response.output_text
-            elif hasattr(response, 'choices') and response.choices:
-                final_reply = response.choices[0].message.content
-            # Kiểm tra nếu trả về dạng khác (vì endpoint responses.create khá mới)
+                return response.output_text
             elif hasattr(response, 'output'):
-                 final_reply = response.output
+                 return response.output
+            elif hasattr(response, 'choices') and response.choices:
+                return response.choices[0].message.content
             else:
-                final_reply = str(response) # Fallback
-
-            self.write({
-                'response_text': final_reply,
-                'raw_response': str(response),
-                'state': 'done'
-            })
+                return str(response)
 
         except Exception as e:
-            _logger.exception("Lỗi gọi API OpenAI")
-            self.write({
-                'response_text': f"Lỗi: {str(e)}",
-                'state': 'error'
-            })
+            _logger.exception("Lỗi OpenAI API")
+            return f"Hệ thống gặp lỗi: {str(e)}"
+
+
+class HlvChatgptMessage(models.Model):
+    _name = 'hlv.chatgpt.message'
+    _description = 'Chi tiết tin nhắn'
+    _order = 'create_date asc' # Tin cũ ở trên, mới ở dưới
+
+    session_id = fields.Many2one('hlv.chatgpt.session', string='Phiên chat', ondelete='cascade')
+    role = fields.Selection([('user', 'Bạn'), ('assistant', 'AI')], string='Người gửi', required=True)
+    content = fields.Text(string='Nội dung')
+    create_date = fields.Datetime(string='Thời gian')

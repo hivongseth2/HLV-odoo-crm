@@ -1,18 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_hlv_chatgpt_session_list" model="ir.ui.view">
-        <field name="name">hlv.chatgpt.session.list</field>
-        <field name="model">hlv.chatgpt.session</field>
+    <record id="view_hlv_chatgpt_message_kanban" model="ir.ui.view">
+        <field name="name">hlv.chatgpt.message.kanban</field>
+        <field name="model">hlv.chatgpt.message</field>
         <field name="arch" type="xml">
-            <list decoration-info="state=='draft'" decoration-success="state=='done'" decoration-danger="state=='error'">
+            <kanban>
+                <field name="role"/>
+                <field name="content"/>
                 <field name="create_date"/>
-                <field name="user_input"/>
-                <field name="response_text" optional="show"/>
-                <field name="state" widget="badge" 
-                       decoration-info="state == 'draft'"
-                       decoration-success="state == 'done'"
-                       decoration-danger="state == 'error'"/>
-            </list>
+                <templates>
+                    <t t-name="card">
+                        <div t-attf-class="d-flex #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-2">
+                            <div t-attf-class="p-3 rounded shadow-sm #{record.role.raw_value == 'user' ? 'bg-primary text-white' : 'bg-light text-dark'}" 
+                                 style="max-width: 80%; white-space: pre-wrap;">
+                                <div class="fw-bold mb-1" style="font-size: 0.8rem;">
+                                    <i t-attf-class="fa #{record.role.raw_value == 'user' ? 'fa-user' : 'fa-robot'} me-1"></i>
+                                    <field name="role"/>
+                                    <span class="opacity-75 ms-2" style="font-size: 0.7rem;"><field name="create_date" widget="relative_time"/></span>
+                                </div>
+                                <div><field name="content"/></div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
         </field>
     </record>
 
@@ -20,36 +31,46 @@
         <field name="name">hlv.chatgpt.session.form</field>
         <field name="model">hlv.chatgpt.session</field>
         <field name="arch" type="xml">
-            <form>
-                <header>
-                    <button name="action_send_to_chatgpt" 
-                            string="Gửi tin nhắn" 
-                            type="object" 
-                            class="btn-primary" 
-                            invisible="state not in ['draft', 'error']"/>
-                    <field name="state" widget="statusbar"/>
-                </header>
+            <form string="Hội thoại AI">
                 <sheet>
-                    <group string="Hỏi">
-                        <field name="user_input" placeholder="Nhập câu hỏi của bạn tại đây..."/>
-                    </group>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only"/>
+                        <h1><field name="name" placeholder="Ví dụ: Tạo mã hàng Bulong..."/></h1>
+                    </div>
                     
-                    <group string="Đáp" invisible="not response_text">
-                        <field name="response_text"/>
-                    </group>
-                    
-                    <notebook>
-                        <page string="Debug (Raw Response)">
-                            <field name="raw_response"/>
-                        </page>
-                    </notebook>
+                    <div class="o_chat_history mb-3 p-3 border rounded bg-white" style="height: 500px; overflow-y: auto; background-color: #f8f9fa;">
+                        <field name="message_ids" mode="kanban">
+                            <kanban>
+                                <field name="role"/>
+                                <field name="content"/>
+                            </kanban>
+                        </field>
+                    </div>
+
+                    <div class="o_chat_input d-flex gap-2">
+                        <field name="input_text" placeholder="Nhập yêu cầu của bạn tại đây (Shift+Enter để xuống dòng)..." 
+                               style="height: 60px; border-radius: 10px;" class="flex-grow-1"/>
+                        <button name="action_send_message" string="Gửi" type="object" class="btn btn-primary px-4" icon="fa-paper-plane"/>
+                    </div>
                 </sheet>
             </form>
         </field>
     </record>
 
+    <record id="view_hlv_chatgpt_session_list" model="ir.ui.view">
+        <field name="name">hlv.chatgpt.session.list</field>
+        <field name="model">hlv.chatgpt.session</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="user_id"/>
+                <field name="last_activity"/>
+            </list>
+        </field>
+    </record>
+
     <record id="action_hlv_chatgpt_session" model="ir.actions.act_window">
-        <field name="name">Test Chat</field>
+        <field name="name">Chat Nội Bộ AI</field>
         <field name="res_model">hlv.chatgpt.session</field>
         <field name="view_mode">list,form</field>
     </record>
