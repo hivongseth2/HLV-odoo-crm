@@ -32,6 +32,11 @@ class HlvChatgptConfig(models.Model):
         required=True, 
         help="ID Prompt đặt tên (pmpt_...)"
     )
+    product_vector_store_id = fields.Char(
+        string='Vector Store ID (Kho)',
+        help="ID của Vector Store chứa file danh sách sản phẩm (vs_...)",
+        default="" 
+    )
 
     @api.model
     def get_config(self):
