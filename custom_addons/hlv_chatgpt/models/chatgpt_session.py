@@ -15,7 +15,8 @@ class HlvChatgptSession(models.Model):
     _description = 'Phiên Chat AI'
     _rec_name = 'name'
     _order = 'last_activity desc'
-
+    
+    zalo_user_id = fields.Char(string="Zalo User ID", index=True, help="ID người dùng từ Zalo OA")
     name = fields.Char(string='Chủ đề', default='Cuộc hội thoại mới', required=True)
     user_id = fields.Many2one('res.users', string='Người tạo', default=lambda self: self.env.user)
     last_activity = fields.Datetime(string='Hoạt động cuối', default=fields.Datetime.now)
@@ -106,6 +107,46 @@ class HlvChatgptSession(models.Model):
         except Exception as e:
             _logger.exception("Lỗi OpenAI API")
             return f"Hệ thống gặp lỗi: {str(e)}"
+        
+        
+    def process_zalo_message(self, zalo_user_id, message_content):
+        """
+        Hàm này được gọi từ Webhook Zalo.
+        Logic: Tìm session cũ hoặc tạo mới -> Hỏi AI -> Trả về câu trả lời
+        """
+        # A. Tìm phiên chat gần nhất của User này (hoặc tạo mới)
+        session = self.search([
+            ('zalo_user_id', '=', zalo_user_id)
+        ], limit=1, order='last_activity desc')
+
+        if not session:
+            session = self.create({
+                'name': f'Zalo Chat - {zalo_user_id}',
+                'zalo_user_id': zalo_user_id,
+                'state': 'active'
+            })
+
+        # B. Lưu tin nhắn của User vào lịch sử
+        self.env['hlv.chatgpt.message'].create({
+            'session_id': session.id,
+            'role': 'user',
+            'content': message_content
+        })
+
+        # C. Gọi API OpenAI (Sử dụng lại hàm _call_openai_api đã viết)
+        ai_response_text = session._call_openai_api(message_content)
+
+        # D. Lưu câu trả lời của AI vào lịch sử
+        self.env['hlv.chatgpt.message'].create({
+            'session_id': session.id,
+            'role': 'assistant',
+            'content': ai_response_text
+        })
+
+        # E. Cập nhật thời gian hoạt động
+        session.write({'last_activity': fields.Datetime.now()})
+
+        return ai_response_text
 
 
 class HlvChatgptMessage(models.Model):
