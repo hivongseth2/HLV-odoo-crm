@@ -126,18 +126,26 @@ class HlvChatgptSession(models.Model):
     # 3. CORE LOGIC: CHẠY PROMPT LOOP
     # =================================================================================
     def _run_prompt_loop(self, client, prompt_id, messages_history):
-        """Vòng lặp: Gọi API -> Check Tool -> Chạy Tool -> Gọi lại API"""
+        """
+        Vòng lặp: Gọi API -> Check Tool -> Chạy Tool -> Gọi lại API.
+        QUAN TRỌNG: Hàm này nhận vào messages_history là một LIST COPY, 
+        nên việc append bên trong không ảnh hưởng đến list gốc bên ngoài.
+        """
         
-        for _ in range(3): # Max 3 turns to avoid loops
+        # Tạo bản sao cục bộ để xử lý (tránh làm bẩn history gốc khi retry)
+        local_history = list(messages_history)
+
+        for i in range(3): # Max 3 turns
             try:
-                _logger.info("🚀 Calling Prompt ID: %s", prompt_id)
+                _logger.info("🚀 [%s] Calling Prompt ID: %s", i+1, prompt_id)
+                
                 response = client.responses.create(
                     model="gpt-4o",
                     prompt={"id": prompt_id},
-                    input=messages_history,
+                    input=local_history,
                 )
                 
-                # Parse Response (Hỗ trợ cấu trúc mới nhất của OpenAI)
+                # Parse Response
                 output_msg = None
                 if hasattr(response, 'choices'): output_msg = response.choices[0].message
                 elif hasattr(response, 'output'): 
@@ -152,8 +160,8 @@ class HlvChatgptSession(models.Model):
                 tool_calls = getattr(output_msg, 'tool_calls', None)
                 
                 if tool_calls:
-                    # Append AI message (with tool calls) to history
-                    messages_history.append(output_msg)
+                    # Append AI message (with tool calls) to local history
+                    local_history.append(output_msg)
                     
                     for tool in tool_calls:
                         fname = tool.function.name
@@ -174,8 +182,8 @@ class HlvChatgptSession(models.Model):
                         else:
                             tool_res = json.dumps({"error": "Function unknown"})
 
-                        # Append Tool Output to history
-                        messages_history.append({
+                        # Append Tool Output to local history
+                        local_history.append({
                             "role": "tool", "tool_call_id": tool.id, "content": tool_res
                         })
                     
@@ -183,25 +191,17 @@ class HlvChatgptSession(models.Model):
                     continue
                 
                 else:
-                    # Không có tool call -> Đây là câu trả lời cuối cùng (Text)
+                    # Final Text Response
                     final_text = output_msg.content
                     
                     if isinstance(final_text, list):
-                        # Lấy phần tử đầu tiên của list
                         first_item = final_text[0]
-                        
-                        # Kiểm tra xem có thuộc tính .text không
                         if hasattr(first_item, 'text'):
-                            text_content = first_item.text
-                            # FIX LỖI: Kiểm tra xem .text là object (có .value) hay là string
-                            if hasattr(text_content, 'value'):
-                                final_text = text_content.value
-                            else:
-                                final_text = str(text_content)
+                            txt = first_item.text
+                            final_text = txt.value if hasattr(txt, 'value') else str(txt)
                         else:
-                            # Fallback nếu cấu trúc lạ
                             final_text = str(first_item)
-                    
+                            
                     return {"status": "done", "text": final_text}
 
             except Exception as e:
@@ -217,40 +217,51 @@ class HlvChatgptSession(models.Model):
 
         client = OpenAI(api_key=config.api_key)
 
-        # 1. Build History (Context)
-        history = []
+        # 1. Build Base History (Từ DB)
+        # Chỉ lấy text chat thông thường, bỏ qua các tool call cũ để tiết kiệm token và tránh lỗi
+        base_history = []
         for msg in self.message_ids:
-            history.append({"role": msg.role, "content": msg.content or ""})
+            base_history.append({"role": msg.role, "content": msg.content or ""})
         
-        # 2. Determine Prompt ID
-        # Logic: Mặc định dùng Router. Nếu đang ở mode chuyên gia thì dùng chuyên gia.
+        # Thêm câu hỏi mới của User
+        base_history.append({"role": "user", "content": query})
+        
+        # 2. Xác định Prompt ID ban đầu
+        # Nếu đang ở chế độ Router -> Gọi Router
+        # Nếu đang ở chế độ Stock -> Gọi Stock luôn (Chat tiếp)
         target_id = config.router_prompt_id
         if self.current_agent == 'stock': target_id = config.stock_prompt_id
         elif self.current_agent == 'naming': target_id = config.naming_prompt_id
 
-        # 3. Run Loop
-        result = self._run_prompt_loop(client, target_id, history)
+        # 3. CHẠY VÒNG 1 (Với Prompt hiện tại)
+        # QUAN TRỌNG: Truyền list(base_history) để tạo bản sao
+        result = self._run_prompt_loop(client, target_id, list(base_history))
 
-        # 4. Handle Result
+        # 4. XỬ LÝ KẾT QUẢ
         if result['status'] == 'done':
             return result['text']
         
         elif result['status'] == 'handoff':
+            # === PHÁT HIỆN CHUYỂN HƯỚNG ===
             new_target = result['target']
-            self.current_agent = new_target # Switch Agent
-            _logger.info("🔀 Handoff to: %s", new_target)
+            self.current_agent = new_target # Lưu trạng thái mới
             
-            # Switch Prompt ID
+            _logger.info("🔀 Handoff detected! Switching to: %s", new_target)
+            
+            # Chọn Prompt ID mới
             new_prompt_id = config.stock_prompt_id if new_target == 'stock' else config.naming_prompt_id
             
-            # Run again immediately with new Prompt (Send the same history)
-            # Note: The history already contains the user query, so we just run the new prompt on it
-            final_res = self._run_prompt_loop(client, new_prompt_id, history)
+            # CHẠY VÒNG 2 (Với Prompt mới)
+            # QUAN TRỌNG: Gửi lại 'base_history' sạch (chỉ chứa câu hỏi user), 
+            # KHÔNG gửi kèm cái tool call handoff của Router vừa rồi.
+            final_res = self._run_prompt_loop(client, new_prompt_id, list(base_history))
             
-            if final_res['status'] == 'done': return final_res['text']
+            if final_res['status'] == 'done':
+                return final_res['text']
+            else:
+                return f"Lỗi tại Agent đích ({new_target}): {final_res.get('text')}"
             
-        return "Hệ thống đang bận."
-
+        return f"Hệ thống bận. Lỗi: {result.get('text')}"
 class HlvChatgptMessage(models.Model):
     _name = 'hlv.chatgpt.message'
     _description = 'Chi tiết tin nhắn'
