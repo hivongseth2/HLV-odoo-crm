@@ -133,7 +133,7 @@ class SaleOrderCancelRequest(models.Model):
         type_label = dict(self._fields['type'].selection).get(self.type, self.type).upper()
 
         # Build message
-        msg = f"🔔 YÊU CẦU {type_label} ĐƠN HÀNG\n"
+        msg = f"✅ ĐƠN HÀNG ĐÃ HỦY TRÊN MISA\n"
         msg += f"• Sale: {self.salesperson_name}\n"
         msg += f"• Mã Đơn: {self.order_reference}\n"
         if self.order_id:
