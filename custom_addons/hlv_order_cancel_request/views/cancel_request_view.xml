@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sale_order_cancel_request_tree" model="ir.ui.view">
+        <field name="name">sale.order.cancel.request.tree</field>
+        <field name="model">sale.order.cancel.request</field>
+        <field name="arch" type="xml">
+            <tree string="Cancellation Requests" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'">
+                <field name="name"/>
+                <field name="create_date" string="Requested On"/>
+                <field name="salesperson_name"/>
+                <field name="order_reference"/>
+                <field name="type"/>
+                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-warning="state == 'submitted'" decoration-success="state == 'done'" decoration-danger="state == 'rejected'"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_sale_order_cancel_request_form" model="ir.ui.view">
+        <field name="name">sale.order.cancel.request.form</field>
+        <field name="model">sale.order.cancel.request</field>
+        <field name="arch" type="xml">
+            <form string="Cancellation Request">
+                <header>
+                    <button name="action_submit" string="Submit" type="object" class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_done" string="Mark Done" type="object" class="oe_highlight" invisible="state != 'submitted'"/>
+                    <button name="action_reject" string="Reject" type="object" invisible="state not in ('draft', 'submitted')"/>
+                    <button name="action_draft" string="Reset to Draft" type="object" invisible="state == 'draft'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,submitted,done"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="salesperson_name" readonly="state != 'draft'"/>
+                            <field name="order_reference" readonly="state != 'draft'"/>
+                            <field name="order_id" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="type" readonly="state != 'draft'"/>
+                            <field name="reason" readonly="state != 'draft'"/>
+                        </group>
+                    </group>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </div>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_sale_order_cancel_request_search" model="ir.ui.view">
+        <field name="name">sale.order.cancel.request.search</field>
+        <field name="model">sale.order.cancel.request</field>
+        <field name="arch" type="xml">
+            <search string="Search Requests">
+                <field name="name"/>
+                <field name="salesperson_name"/>
+                <field name="order_reference"/>
+                <filter string="Draft" name="draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Submitted" name="submitted" domain="[('state', '=', 'submitted')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="State" name="group_by_state" context="{'group_by': 'state'}"/>
+                    <filter string="Type" name="group_by_type" context="{'group_by': 'type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_sale_order_cancel_request" model="ir.actions.act_window">
+        <field name="name">Cancellation Requests</field>
+        <field name="res_model">sale.order.cancel.request</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_sale_order_cancel_request_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No cancellation requests found.
+            </p>
+        </field>
+    </record>
+
+    <menuitem id="menu_sale_order_cancel_request"
+              name="Cancellation Requests"
+              parent="sale.menu_sale_config"
+              action="action_sale_order_cancel_request"
+              sequence="50"/>
+</odoo>

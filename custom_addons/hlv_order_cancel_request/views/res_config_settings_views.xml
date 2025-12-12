@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.cancel.request</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="90"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="Cancellation Requests" string="Cancellation Requests" name="hlv_order_cancel_request">
+                    <block title="Website Configuration" name="cancel_request_website_setting">
+                        <setting string="Website Access" help="Set the password for the public cancellation request page.">
+                            <field name="cancel_request_password" password="True"/>
+                        </setting>
+                    </block>
+                    <block title="Zalo Notifications" name="cancel_request_zalo_setting">
+                        <setting string="Recipients" help="Configure Zalo User IDs for notifications.">
+                            <group>
+                                <field name="cancel_request_accountant_uid"/>
+                                <field name="cancel_request_warehouse_uid"/>
+                            </group>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>
