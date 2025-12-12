@@ -37,19 +37,17 @@
                     <group>
                         <group string="Thông tin Yêu cầu">
                             <field name="salesperson_name" readonly="state != 'draft'"/>
-                            <field name="type" widget="radio" options="{'horizontal': true}" readonly="state != 'draft'"/>
+                            <field name="type" readonly="state != 'draft'"/>
                             <field name="create_date" string="Ngày tạo" readonly="1"/>
+                            <field name="state" invisible="1"/>
                         </group>
                         <group string="Thông tin Đơn hàng">
                             <field name="order_reference" readonly="state != 'draft'"/>
                             <field name="order_id" readonly="1"/>
                         </group>
                     </group>
-                    <notebook>
-                        <page string="Lý do / Nội dung" name="reason_page">
-                            <field name="reason" readonly="state != 'draft'" placeholder="Nhập lý do chi tiết..." nolabel="1"/>
-                        </page>
-                    </notebook>
+                    <separator string="Lý do / Nội dung"/>
+                    <field name="reason" readonly="state != 'draft'" placeholder="Nhập lý do chi tiết..."/>
                 </sheet>
                 <div class="oe_chatter">
                     <field name="message_follower_ids" widget="mail_followers"/>
