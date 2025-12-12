@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_hlv_chatgpt_config,hlv.chatgpt.config,model_hlv_chatgpt_config,base.group_system,1,1,1,1
+access_hlv_chatgpt_session,hlv.chatgpt.session,model_hlv_chatgpt_session,base.group_user,1,1,1,1
+access_hlv_chatgpt_message,hlv.chatgpt.message,model_hlv_chatgpt_message,base.group_user,1,1,1,1
