@@ -49,11 +49,7 @@
                     <separator string="Lý do / Nội dung"/>
                     <field name="reason" readonly="state != 'draft'" placeholder="Nhập lý do chi tiết..."/>
                 </sheet>
-                <div class="oe_chatter">
-                    <field name="message_follower_ids" widget="mail_followers"/>
-                    <field name="activity_ids" widget="mail_activity"/>
-                    <field name="message_ids" widget="mail_thread"/>
-                </div>
+                <chatter/>
             </form>
         </field>
     </record>
