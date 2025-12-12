@@ -4,7 +4,7 @@
         <field name="name">sale.order.cancel.request.tree</field>
         <field name="model">sale.order.cancel.request</field>
         <field name="arch" type="xml">
-            <list string="Yêu cầu Hủy Đơn" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'">
+            <list string="Yêu cầu Hủy Đơn" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'" create="0">
                 <field name="name"/>
                 <field name="create_date" string="Ngày Yêu Cầu"/>
                 <field name="salesperson_name"/>
@@ -19,7 +19,7 @@
         <field name="name">sale.order.cancel.request.form</field>
         <field name="model">sale.order.cancel.request</field>
         <field name="arch" type="xml">
-            <form string="Yêu cầu Hủy Đơn">
+            <form string="Yêu cầu Hủy Đơn" create="0">
                 <header>
                     <button name="action_submit" string="Gửi Yêu Cầu" type="object" class="oe_highlight" invisible="state != 'draft'"/>
                     <button name="action_done" string="Đã Xử Lý" type="object" class="oe_highlight" invisible="state != 'submitted'"/>
