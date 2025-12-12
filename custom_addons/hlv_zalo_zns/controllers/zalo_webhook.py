@@ -87,7 +87,7 @@ class ZaloSheetWebhook(http.Controller):
             # 1. Lấy dữ liệu raw body
             raw_data = request.httprequest.data
             
-            # Lấy config đang Active (chế độ chạy riêng)
+            # Lấy config Zalo đang Active
             ConfigModel = request.env['hlv.zalo.stock.notification'].sudo()
             config = ConfigModel.search([('active', '=', True)], limit=1)
 
@@ -119,23 +119,64 @@ class ZaloSheetWebhook(http.Controller):
             sender = data.get('sender', {})
             user_id = sender.get('id')
             
-            _logger.info("Zalo OA Event (Private Mode): %s | User: %s", event_name, user_id)
+            # Lấy thông tin tin nhắn và msg_id để check trùng
+            message_obj = data.get('message', {})
+            msg_id = message_obj.get('msg_id')
+            message_content = message_obj.get('text', '').strip()
+            
+            _logger.info("Zalo OA Event: %s | User: %s | MsgID: %s", event_name, user_id, msg_id)
 
-            # 4. Xử lý tin nhắn text
-            if event_name == 'user_send_text':
-                message_content = data.get('message', {}).get('text', '').strip()
+            # === 4. CHỐNG TRÙNG LẶP (DEDUPLICATION) ===
+            # Nếu Zalo gửi lại (Retry), msg_id sẽ giống hệt nhau.
+            if msg_id:
+                # Tìm xem message này đã được lưu trong lịch sử chưa
+                is_duplicate = request.env['hlv.chatgpt.message'].sudo().search_count([
+                    ('zalo_msg_id', '=', msg_id)
+                ])
                 
-                # Check ID nhanh
+                if is_duplicate > 0:
+                    _logger.info("🚫 BỎ QUA TIN NHẮN TRÙNG LẶP (MsgID: %s)", msg_id)
+                    # Trả về 200 OK ngay để Zalo biết đã xử lý xong, không gửi lại nữa
+                    return Response("OK", status=200)
+            # ==========================================
+
+            # 5. Xử lý tin nhắn text
+            if event_name == 'user_send_text':
+                
+                # --- CASE A: Tra cứu ID ---
                 if message_content.lower() in ['id', 'uid', 'check id']:
                     if config:
-                        # Dùng hàm gửi tin có sẵn của Config đó
-                        reply_msg = f"Mã User ID của bạn là:\n{user_id}"
-                        config.send_notification_message(user_id, reply_msg)
-                    else:
-                        _logger.warning("Không tìm thấy Config Active để reply tin nhắn")
+                        # Gửi tin nhắn trả lời ngay
+                        config.send_notification_message(user_id, f"Mã User ID của bạn là:\n{user_id}")
+                
+                # --- CASE B: CHAT VỚI CHATGPT ---
+                # Điều kiện: Có config Zalo + Có config ChatGPT active + Nội dung không rỗng
+                elif config and request.env['hlv.chatgpt.config'].sudo().search_count([('active', '=', True)]) > 0 and message_content:
+                    
+                    _logger.info("🔄 Chuyển tin nhắn từ %s sang ChatGPT...", user_id)
+                    
+                    # Gọi Model Session để xử lý
+                    ChatSession = request.env['hlv.chatgpt.session'].sudo()
+                    
+                    try:
+                        # Gọi hàm xử lý và TRUYỀN THÊM zalo_msg_id để lưu vào DB
+                        ai_reply = ChatSession.process_zalo_message(
+                            user_id, 
+                            message_content, 
+                            zalo_msg_id=msg_id  # <--- Quan trọng: Truyền ID để lưu, lần sau check trùng sẽ thấy
+                        )
+                        
+                        # Gửi kết quả về Zalo
+                        if ai_reply:
+                            config.send_notification_message(user_id, ai_reply)
+                            
+                    except Exception as e:
+                        _logger.exception("❌ Lỗi khi gọi ChatGPT từ Zalo Webhook: %s", e)
+                        # Có thể gửi tin báo lỗi cho khách nếu muốn
+                        # config.send_notification_message(user_id, "Hệ thống đang bận, vui lòng thử lại sau.")
 
             return Response("OK", status=200)
 
         except Exception as e:
-            _logger.exception("Lỗi xử lý Zalo OA Webhook: %s", e)
+            _logger.exception("Lỗi Webhook OA: %s", e)
             return Response("Internal Server Error", status=500)

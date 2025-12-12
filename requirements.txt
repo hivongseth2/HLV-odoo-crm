@@ -8,5 +8,5 @@ google-auth
 google-auth-oauthlib
 pydrive2
 oauth2client
-
+openai
 
