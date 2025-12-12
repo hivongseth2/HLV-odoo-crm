@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 {
     'name': 'HLV ChatGPT Manager',
-    'version': '18.0.2.0.0',
+    'version': '1.1',
     'summary': 'Chat AI Multi-Agent (Router + Specialists) sử dụng Prompt ID',
     'author': 'HLV',
     'depends': ['base', 'product', 'stock'],
