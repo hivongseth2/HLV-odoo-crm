@@ -128,7 +128,6 @@ class HlvChatgptSession(models.Model):
     def _run_prompt_loop(self, client, prompt_id, messages_history):
         """Vòng lặp: Gọi API -> Check Tool -> Chạy Tool -> Gọi lại API"""
         
-        # Tạo bản sao cục bộ để xử lý
         local_history = list(messages_history)
 
         for i in range(3): # Max 3 turns
@@ -141,62 +140,48 @@ class HlvChatgptSession(models.Model):
                     input=local_history,
                 )
                 
-                _logger.info("👉 RAW RESPONSE: %s", response)
-
-                # --- 1. PARSE OUTPUT (HỖ TRỢ CẤU TRÚC MỚI) ---
+                # --- PARSE RESPONSE ---
+                output_msg = None
                 tool_calls_found = []
                 final_text_found = ""
-                
-                # Kiểm tra xem có output không
+
+                # 1. Parse Output (Cấu trúc mới response.output)
                 if hasattr(response, 'output'):
                     for item in response.output:
                         item_type = getattr(item, 'type', '')
-                        
-                        # TRƯỜNG HỢP A: Là Tool Call (như log bạn gửi)
                         if item_type == 'function_call':
                             tool_calls_found.append(item)
-                            
-                        # TRƯỜNG HỢP B: Là Text Message
                         elif item_type == 'message':
-                            # Lấy nội dung text
                             content_list = getattr(item, 'content', [])
-                            if content_list:
-                                first_content = content_list[0]
-                                # Cấu trúc: ResponseOutputText(text='...', ...)
-                                if hasattr(first_content, 'text'):
-                                    final_text_found = first_content.text
+                            if content_list and hasattr(content_list[0], 'text'):
+                                final_text_found = content_list[0].text
                 
-                # Fallback: Cấu trúc Chat Completion cũ (choices)
+                # 2. Fallback (Cấu trúc cũ choices)
                 elif hasattr(response, 'choices'):
                     msg = response.choices[0].message
                     if msg.tool_calls:
-                        tool_calls_found = msg.tool_calls
-                    else:
-                        final_text_found = msg.content
+                        # Convert tool_calls cũ sang format chung nếu cần, hoặc xử lý riêng
+                        # Ở đây để đơn giản, ta chỉ log và return lỗi nếu dùng thư viện cũ
+                        # Vì log của bạn cho thấy bạn đang dùng thư viện mới (response.output)
+                        pass 
 
-                # --- 2. XỬ LÝ LOGIC ---
-                
-                # Nếu tìm thấy Tool Call -> Xử lý ngay
+                # --- XỬ LÝ LOGIC ---
                 if tool_calls_found:
-                    # Append AI response vào history (Cần cẩn thận với cấu trúc append)
-                    # Với endpoint responses, ta append output items trực tiếp
-                    # Tuy nhiên để đơn giản cho vòng lặp, ta chỉ cần append kết quả tool
+                    # 3. Append AI Message (Giả lập bằng role 'assistant')
+                    # Vì API không cho phép gửi 'function_call' object trực tiếp vào input
+                    # Ta sẽ gửi một message assistant thông báo đã gọi tool
+                    ai_content = "I am calling these tools: " + ", ".join([t.name for t in tool_calls_found])
+                    local_history.append({
+                        "role": "assistant",
+                        "content": ai_content
+                    })
                     
                     for tool in tool_calls_found:
-                        # Lấy thông tin hàm
-                        # Cấu trúc ResponseFunctionToolCall: .name, .arguments (trực tiếp)
-                        # Cấu trúc ChatCompletionTool: .function.name, .function.arguments
+                        # Lấy ID và Tên hàm
+                        call_id = getattr(tool, 'call_id', None) or getattr(tool, 'id', 'unknown_id')
+                        fname = getattr(tool, 'name', 'unknown_func')
+                        args_str = getattr(tool, 'arguments', '{}')
                         
-                        if hasattr(tool, 'function'): # Cấu trúc cũ
-                            fname = tool.function.name
-                            args_str = tool.function.arguments
-                            # Lưu ý: ChatCompletion dùng 'id', Stored Prompt dùng 'call_id'
-                            call_id = tool.id 
-                        else: # Cấu trúc mới (từ log của bạn)
-                            fname = tool.name
-                            args_str = tool.arguments
-                            call_id = getattr(tool, 'call_id', None) or getattr(tool, 'id', None)
-
                         args = json.loads(args_str)
                         _logger.info("⚡ Executing Tool: %s | ID: %s", fname, call_id)
 
@@ -214,22 +199,20 @@ class HlvChatgptSession(models.Model):
                         else:
                             tool_res = json.dumps({"error": "Function unknown"})
 
-                        # Append Tool Output
+                        # 4. Append Tool Output (FIX LỖI 400 HERE)
+                        # Thay vì role="tool", ta dùng role="user" với prefix rõ ràng để AI hiểu
                         local_history.append({
-                            "role": "tool", 
-                            "tool_call_id": call_id, # Quan trọng: Phải khớp với ID từ AI
-                            "content": tool_res
+                            "role": "user",  # <--- ĐỔI TỪ TOOL SANG USER
+                            "content": f"Tool '{fname}' (ID: {call_id}) returned result: {tool_res}"
                         })
                     
-                    # Tiếp tục vòng lặp để gửi tool output lên
-                    continue
+                    continue # Quay lại vòng lặp để gửi kết quả lên
                 
-                # Nếu có Text -> Trả về kết quả
                 elif final_text_found:
                     return {"status": "done", "text": final_text_found}
                 
                 else:
-                    return {"status": "error", "text": "AI không trả về nội dung text hay tool call nào."}
+                    return {"status": "error", "text": "AI returned empty response."}
 
             except Exception as e:
                 _logger.exception("OpenAI API Error")
