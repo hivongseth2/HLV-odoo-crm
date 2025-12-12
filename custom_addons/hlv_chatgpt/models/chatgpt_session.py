@@ -109,7 +109,7 @@ class HlvChatgptSession(models.Model):
             return f"Hệ thống gặp lỗi: {str(e)}"
         
         
-    def process_zalo_message(self, zalo_user_id, message_content):
+    def process_zalo_message(self, zalo_user_id, message_content,zalo_msg_id=False):
         """
         Hàm này được gọi từ Webhook Zalo.
         Logic: Tìm session cũ hoặc tạo mới -> Hỏi AI -> Trả về câu trả lời
@@ -130,7 +130,8 @@ class HlvChatgptSession(models.Model):
         self.env['hlv.chatgpt.message'].create({
             'session_id': session.id,
             'role': 'user',
-            'content': message_content
+            'content': message_content,
+            'zalo_msg_id': zalo_msg_id
         })
 
         # C. Gọi API OpenAI (Sử dụng lại hàm _call_openai_api đã viết)
@@ -158,3 +159,4 @@ class HlvChatgptMessage(models.Model):
     role = fields.Selection([('user', 'Bạn'), ('assistant', 'AI')], string='Người gửi', required=True)
     content = fields.Text(string='Nội dung')
     create_date = fields.Datetime(string='Thời gian')
+    zalo_msg_id = fields.Char('Zalo Message ID', index=True, help="ID tin nhắn từ Zalo để tránh trùng lặp")
