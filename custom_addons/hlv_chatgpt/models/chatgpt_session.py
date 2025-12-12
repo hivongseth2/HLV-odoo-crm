@@ -64,101 +64,108 @@ class HlvChatgptSession(models.Model):
 
     def _execute_search_product_stock(self, keyword):
         """
-        V7: Search Thông Minh Đa Chiều (Tên + Mã + Nhóm + Mô tả + Biến thể)
-        Giải quyết vấn đề: Tìm từ lóng (bo mạch), tìm mã gần đúng (pin b).
+        V8: Search Phân Tầng (Tiered Search)
+        Mục tiêu: Đảm bảo tìm ra đúng Mã Hàng kể cả khi nó bị chìm giữa 1000 phụ kiện.
         """
-        _logger.info("🔧 AI Smart Search V7 Input: %s", keyword)
+        _logger.info("🔧 AI Smart Search V8 Input: %s", keyword)
         
         if not keyword: return json.dumps({"error": "Thiếu từ khóa"})
 
-        # 1. Xử lý từ khóa (Giữ lại các từ quan trọng, chỉ xóa từ rác)
-        stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "giúp", "em", "mình", "shop", "ad", "admin", "check", "bao", "nhiêu", "tiền", "cái", "con", "cây", "chiếc", "bạn", "ơi", "cho", "hỏi", "với"]
-        
-        keyword_clean = keyword.lower()
-        for w in stop_words: 
-            keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
-        keyword_clean = keyword_clean.strip() or keyword.lower()
-
-        _logger.info("🔧 Cleaned Keyword: %s", keyword_clean)
-
-        # 2. Tách từ khóa
-        tokens = keyword_clean.split()
-        
-        # 3. Xây dựng Domain tìm kiếm "Bao vây"
-        # Tìm trong: Tên, Mã, Barcode, Tên Biến Thể, Tên Nhóm Hàng, Mô tả
-        domain = [('active', '=', True)]
-        
-        # LOGIC CHÍNH: Tìm sản phẩm chứa các từ khóa trong BẤT KỲ trường nào
-        # Ví dụ: "bo mạch makita" -> Tìm sp có (Tên/Mã/Nhóm chứa "bo") AND (Tên/Mã/Nhóm chứa "mạch") ...
-        for token in tokens:
-            sub_domain = [
-                '|', '|', '|', '|', '|',
-                ('name', 'ilike', token),
-                ('default_code', 'ilike', token),
-                ('barcode', 'ilike', token),
-                ('product_variant_ids.default_code', 'ilike', token),
-                ('categ_id.name', 'ilike', token),      # Quan trọng: Tìm trong tên nhóm hàng
-                ('description_sale', 'ilike', token)    # Quan trọng: Tìm trong mô tả
-            ]
-            domain += sub_domain
-
         Product = self.env['product.product'].sudo()
+        collected_ids = [] # Danh sách ID đã tìm thấy để tránh trùng
+        final_products = self.env['product.product']
+
+        # Xử lý từ khóa
+        keyword_clean = keyword.strip()
         
-        # Tăng limit để vét được nhiều kết quả
-        products = Product.search(domain, limit=40)
+        # --- TẦNG 1: QUÉT MÃ CHÍNH XÁC (QUAN TRỌNG NHẤT) ---
+        # Nếu AI gửi đúng mã (tìm được từ file), tầng này sẽ bắt dính ngay lập tức.
+        # Tìm chính xác 100% hoặc chứa mã
+        domain_tier1 = [
+            ('active', '=', True),
+            '|', 
+            ('default_code', '=ilike', keyword_clean), # Khớp mã tuyệt đối (không phân biệt hoa thường)
+            ('default_code', 'ilike', keyword_clean)   # Mã chứa từ khóa
+        ]
+        products_tier1 = Product.search(domain_tier1, limit=10)
+        
+        for p in products_tier1:
+            if p.id not in collected_ids:
+                final_products += p
+                collected_ids.append(p.id)
 
-        # FALLBACK: Nếu tìm chặt chẽ (AND) không ra -> Thử tìm lỏng (OR) với từ khóa gốc
-        # Ví dụ: Khách gõ "bo mạch makita" nhưng tên chỉ là "Mạch điện tử Makita" -> Tìm AND "bo" sẽ tạch.
-        # Fallback sẽ tìm những sp chứa "makita" hoặc "mạch".
-        if not products and len(tokens) > 1:
-            _logger.info("🔧 Fallback search (Loose logic)...")
-            # Chỉ tìm OR trên Tên và Mã để tránh rác quá nhiều
-            domain_loose = [('active', '=', True), '|', ('name', 'ilike', keyword_clean), ('default_code', 'ilike', keyword_clean)]
-            # Hoặc tìm chứa 1 trong các token
-            if not Product.search_count(domain_loose):
-                 domain_loose = [('active', '=', True), '|'] * (len(tokens) - 1)
-                 for token in tokens:
-                     domain_loose += ['|', ('name', 'ilike', token), ('default_code', 'ilike', token)]
+        # --- TẦNG 2: TÌM THEO TÊN (START WITH) ---
+        # Ưu tiên những sp có tên bắt đầu bằng từ khóa
+        if len(collected_ids) < 20: # Chỉ tìm tiếp nếu chưa đủ hàng
+            domain_tier2 = [
+                ('active', '=', True),
+                ('id', 'not in', collected_ids), # Loại trừ những thằng đã tìm thấy ở trên
+                ('name', 'ilike', keyword_clean + '%') # Bắt đầu bằng từ khóa
+            ]
+            products_tier2 = Product.search(domain_tier2, limit=10)
             
-            products = Product.search(domain_loose, limit=20)
+            for p in products_tier2:
+                final_products += p
+                collected_ids.append(p.id)
 
-        if not products:
-            return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm nào khớp với '{keyword_clean}'"})
+        # --- TẦNG 3: TÌM RỘNG (TOKENIZE) - LOGIC CŨ ---
+        # Chỉ chạy khi 2 tầng trên chưa tìm đủ hàng
+        if len(collected_ids) < 40:
+            limit_remain = 40 - len(collected_ids)
+            
+            # Xử lý stop words cho tầng này
+            stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "shop", "ad", "ơi", "chiếc", "cái"]
+            kw_token = keyword.lower()
+            for w in stop_words: kw_token = kw_token.replace(f" {w} ", " ").replace(f"{w} ", "")
+            tokens = kw_token.split()
 
-        # 4. Chấm điểm & Sắp xếp (Ranking Logic V7)
+            if tokens:
+                domain_tier3 = [('active', '=', True), ('id', 'not in', collected_ids)]
+                for token in tokens:
+                    domain_tier3 += [
+                        '|', '|', '|', '|',
+                        ('name', 'ilike', token),
+                        ('default_code', 'ilike', token),
+                        ('barcode', 'ilike', token),
+                        ('categ_id.name', 'ilike', token),
+                        ('description_sale', 'ilike', token)
+                    ]
+                
+                products_tier3 = Product.search(domain_tier3, limit=limit_remain)
+                final_products += products_tier3
+
+        if not final_products:
+            return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm '{keyword}'."})
+
+        # --- CHẤM ĐIỂM & SẮP XẾP (PYTHON) ---
+        # Lúc này final_products đã chứa: [Mã Chính xác] + [Tên Bắt đầu] + [Tìm rộng]
+        # Chúng ta sort lại một lần nữa cho chắc chắn.
+        
         result_list = []
-        for p in products:
+        for p in final_products:
             score = 0
             p_name = p.name.lower()
             p_code = (p.default_code or "").lower()
-            p_cat = (p.categ_id.name or "").lower()
-            
-            # --- TIÊU CHÍ 1: KHỚP MÃ (QUAN TRỌNG NHẤT) ---
-            if p_code == keyword_clean: score += 10000
-            elif keyword_clean in p_code: score += 2000
-            
-            # --- TIÊU CHÍ 2: TỒN KHO ---
-            if p.qty_available > 0: score += 1000
-            
-            # --- TIÊU CHÍ 3: KHỚP TÊN/NHÓM ---
-            if keyword_clean in p_name: score += 500
-            if keyword_clean in p_cat: score += 300 # Khớp nhóm hàng cũng được cộng điểm
-            
-            # --- TIÊU CHÍ 4: ĐỘ KHỚP TỪ KHÓA ---
-            # Đếm xem có bao nhiêu từ trong keyword xuất hiện trong tên/mã
-            matches = sum(1 for t in tokens if t in p_name or t in p_code)
-            score += matches * 100
+            kw_low = keyword_clean.lower()
 
-            # --- TIÊU CHÍ 5: XỬ LÝ "RÁC" THÔNG MINH ---
-            # Nếu khách tìm "Pin" (keyword có chữ pin), thì KHÔNG trừ điểm sp Pin.
-            # Nhưng nếu khách tìm máy, mà ra phụ kiện thì mới trừ.
+            # 1. Điểm Tuyệt đối cho Mã
+            if p_code == kw_low: score += 10000
+            elif kw_low in p_code: score += 5000
             
-            junk_words = ["vỏ", "tem", "nhãn", "hộp", "thùng", "ốc", "vít"]
-            # Nếu keyword không chứa từ rác nào, mà tên sp lại chứa -> Trừ điểm
-            if not any(j in keyword_clean for j in junk_words):
+            # 2. Điểm Tồn kho
+            if p.qty_available > 0: score += 2000
+            
+            # 3. Điểm Tên
+            if p_name.startswith(kw_low): score += 1000
+            if kw_low in p_name: score += 500
+
+            # 4. Trừ điểm rác (Phụ kiện)
+            junk_words = ["vỏ", "tem", "nhãn", "hộp", "thùng", "ốc", "vít", "phụ tùng", "chổi than"]
+            # Nếu khách không tìm đích danh từ rác thì mới trừ
+            if not any(j in kw_low for j in junk_words):
                 for junk in junk_words:
                     if junk in p_name:
-                        score -= 2000 # Đẩy phụ kiện rác xuống đáy
+                        score -= 3000 # Đẩy xuống đáy xã hội
                         break
 
             result_list.append({
@@ -167,11 +174,10 @@ class HlvChatgptSession(models.Model):
                 "price": p.list_price,
                 "qty": p.qty_available,
                 "uom": p.uom_id.name,
-                "category": p.categ_id.name or "",
                 "score": score
             })
 
-        # Sắp xếp giảm dần theo điểm
+        # Sort
         result_list.sort(key=lambda x: x['score'], reverse=True)
         
         # Lấy Top 10
