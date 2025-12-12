@@ -61,112 +61,90 @@ class HlvChatgptSession(models.Model):
             "code": p.default_code, 
             "status": "Active" if p.active else "Archived"
         } for p in products], ensure_ascii=False)
-
     def _execute_search_product_stock(self, keyword):
         """
-        V8: Search Phân Tầng (Tiered Search)
-        Mục tiêu: Đảm bảo tìm ra đúng Mã Hàng kể cả khi nó bị chìm giữa 1000 phụ kiện.
+        V9: Chiến lược Ưu Tiên Tên (Name-First Strategy)
+        Phù hợp khi AI gửi xuống Tên đầy đủ từ file Vector.
         """
-        _logger.info("🔧 AI Smart Search V8 Input: %s", keyword)
-        
+        _logger.info("🔧 AI Smart Search V9 Input: %s", keyword)
         if not keyword: return json.dumps({"error": "Thiếu từ khóa"})
 
         Product = self.env['product.product'].sudo()
-        collected_ids = [] # Danh sách ID đã tìm thấy để tránh trùng
-        final_products = self.env['product.product']
-
-        # Xử lý từ khóa
         keyword_clean = keyword.strip()
         
-        # --- TẦNG 1: QUÉT MÃ CHÍNH XÁC (QUAN TRỌNG NHẤT) ---
-        # Nếu AI gửi đúng mã (tìm được từ file), tầng này sẽ bắt dính ngay lập tức.
-        # Tìm chính xác 100% hoặc chứa mã
-        domain_tier1 = [
-            ('active', '=', True),
-            '|', 
-            ('default_code', '=ilike', keyword_clean), # Khớp mã tuyệt đối (không phân biệt hoa thường)
-            ('default_code', 'ilike', keyword_clean)   # Mã chứa từ khóa
-        ]
-        products_tier1 = Product.search(domain_tier1, limit=10)
+        # 1. Tách từ khóa
+        stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "shop", "ad", "ơi", "chiếc", "cái", "là", "của"]
+        kw_token = keyword.lower()
+        for w in stop_words: kw_token = kw_token.replace(f" {w} ", " ").replace(f"{w} ", "")
+        tokens = kw_token.split()
+
+        # 2. Search SQL (Tìm rộng)
+        # Nếu keyword dài, ta chỉ cần tìm sp chứa ít nhất 1-2 từ quan trọng là được, sau đó Python lọc lại
+        domain = [('active', '=', True)]
         
-        for p in products_tier1:
-            if p.id not in collected_ids:
-                final_products += p
-                collected_ids.append(p.id)
-
-        # --- TẦNG 2: TÌM THEO TÊN (START WITH) ---
-        # Ưu tiên những sp có tên bắt đầu bằng từ khóa
-        if len(collected_ids) < 20: # Chỉ tìm tiếp nếu chưa đủ hàng
-            domain_tier2 = [
-                ('active', '=', True),
-                ('id', 'not in', collected_ids), # Loại trừ những thằng đã tìm thấy ở trên
-                ('name', 'ilike', keyword_clean + '%') # Bắt đầu bằng từ khóa
-            ]
-            products_tier2 = Product.search(domain_tier2, limit=10)
+        if len(tokens) > 0:
+            # Lấy các từ có độ dài > 2 ký tự để search cho chính xác
+            valid_tokens = [t for t in tokens if len(t) > 2]
+            if not valid_tokens: valid_tokens = tokens
             
-            for p in products_tier2:
-                final_products += p
-                collected_ids.append(p.id)
+            # Tìm những sp chứa ít nhất 1 trong các từ này
+            sub_domain = ['|'] * (len(valid_tokens) - 1)
+            for token in valid_tokens:
+                sub_domain += [
+                    '|', '|',
+                    ('name', 'ilike', token),
+                    ('default_code', 'ilike', token),
+                    ('product_variant_ids.default_code', 'ilike', token)
+                ]
+            domain += sub_domain
 
-        # --- TẦNG 3: TÌM RỘNG (TOKENIZE) - LOGIC CŨ ---
-        # Chỉ chạy khi 2 tầng trên chưa tìm đủ hàng
-        if len(collected_ids) < 40:
-            limit_remain = 40 - len(collected_ids)
-            
-            # Xử lý stop words cho tầng này
-            stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "shop", "ad", "ơi", "chiếc", "cái"]
-            kw_token = keyword.lower()
-            for w in stop_words: kw_token = kw_token.replace(f" {w} ", " ").replace(f"{w} ", "")
-            tokens = kw_token.split()
+        # Lấy rộng 50 kết quả
+        products = Product.search(domain, limit=50)
 
-            if tokens:
-                domain_tier3 = [('active', '=', True), ('id', 'not in', collected_ids)]
-                for token in tokens:
-                    domain_tier3 += [
-                        '|', '|', '|', '|',
-                        ('name', 'ilike', token),
-                        ('default_code', 'ilike', token),
-                        ('barcode', 'ilike', token),
-                        ('categ_id.name', 'ilike', token),
-                        ('description_sale', 'ilike', token)
-                    ]
-                
-                products_tier3 = Product.search(domain_tier3, limit=limit_remain)
-                final_products += products_tier3
-
-        if not final_products:
+        if not products:
             return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm '{keyword}'."})
 
-        # --- CHẤM ĐIỂM & SẮP XẾP (PYTHON) ---
-        # Lúc này final_products đã chứa: [Mã Chính xác] + [Tên Bắt đầu] + [Tìm rộng]
-        # Chúng ta sort lại một lần nữa cho chắc chắn.
-        
+        # 3. CHẤM ĐIỂM & SẮP XẾP (PYTHON RANKING)
         result_list = []
-        for p in final_products:
+        kw_low = keyword_clean.lower()
+
+        for p in products:
             score = 0
             p_name = p.name.lower()
             p_code = (p.default_code or "").lower()
-            kw_low = keyword_clean.lower()
-
-            # 1. Điểm Tuyệt đối cho Mã
-            if p_code == kw_low: score += 10000
-            elif kw_low in p_code: score += 5000
             
-            # 2. Điểm Tồn kho
-            if p.qty_available > 0: score += 2000
+            # --- TIÊU CHÍ 1: KHỚP TÊN (QUAN TRỌNG NHẤT) ---
+            # Đếm số từ trong keyword xuất hiện trong tên sản phẩm
+            matches = sum(1 for t in tokens if t in p_name)
             
-            # 3. Điểm Tên
-            if p_name.startswith(kw_low): score += 1000
-            if kw_low in p_name: score += 500
+            # Tỷ lệ khớp (VD: Keyword 5 từ, Tên chứa 4 từ -> 80%)
+            match_ratio = matches / len(tokens) if tokens else 0
+            
+            score += match_ratio * 5000 # Điểm rất cao cho việc khớp tên
+            
+            # Nếu tên khớp y chang hoặc chứa trọn vẹn keyword
+            if kw_low in p_name: 
+                score += 3000
 
-            # 4. Trừ điểm rác (Phụ kiện)
-            junk_words = ["vỏ", "tem", "nhãn", "hộp", "thùng", "ốc", "vít", "phụ tùng", "chổi than"]
-            # Nếu khách không tìm đích danh từ rác thì mới trừ
-            if not any(j in kw_low for j in junk_words):
+            # --- TIÊU CHÍ 2: KHỚP MÃ ---
+            if kw_low in p_code: score += 2000
+            
+            # --- TIÊU CHÍ 3: TỒN KHO ---
+            if p.qty_available > 0: score += 1000
+
+            # --- TIÊU CHÍ 4: TRỪ ĐIỂM RÁC ---
+            junk_words = ["vỏ", "tem", "nhãn", "hộp", "thùng", "ốc", "vít", "phụ tùng"]
+            # Nếu trong keyword KHÔNG CÓ từ rác mà tên sp LẠI CÓ -> Trừ điểm
+            found_junk_in_keyword = any(j in kw_low for j in junk_words)
+            if not found_junk_in_keyword:
                 for junk in junk_words:
                     if junk in p_name:
-                        score -= 3000 # Đẩy xuống đáy xã hội
+                        score -= 2000
                         break
+            
+            # Trừ điểm Combo nếu không tìm combo
+            if "combo" in p_name and "combo" not in kw_low:
+                score -= 1000
 
             result_list.append({
                 "name": p.name,
@@ -177,7 +155,7 @@ class HlvChatgptSession(models.Model):
                 "score": score
             })
 
-        # Sort
+        # Sort giảm dần theo điểm
         result_list.sort(key=lambda x: x['score'], reverse=True)
         
         # Lấy Top 10
