@@ -141,45 +141,64 @@ class HlvChatgptSession(models.Model):
                     input=local_history,
                 )
                 
-                # === DEBUG QUAN TRỌNG: IN RA LOG CẤU TRÚC TRẢ VỀ ===
-                _logger.info("👉 RAW RESPONSE KẾT QUẢ: %s", response)
-                # ===================================================
-                
-                # Logic Parse Response (Vét cạn mọi trường hợp)
-                output_msg = None
-                
-                # Case 1: Cấu trúc chuẩn Chat Completion (choices -> message)
-                if hasattr(response, 'choices') and response.choices:
-                    output_msg = response.choices[0].message
-                
-                # Case 2: Cấu trúc Stored Prompt (output -> message)
-                elif hasattr(response, 'output'): 
-                    # Nếu output là List
-                    if isinstance(response.output, list):
-                        for item in response.output:
-                            # Tìm item có type là 'message'
-                            if getattr(item, 'type', '') == 'message': 
-                                output_msg = item
-                                break
-                    # Nếu output là Object trực tiếp (tùy version SDK)
-                    elif getattr(response.output, 'type', '') == 'message':
-                        output_msg = response.output
+                _logger.info("👉 RAW RESPONSE: %s", response)
 
-                if not output_msg: 
-                    _logger.error("❌ Không tìm thấy message trong response!")
-                    return {"status": "error", "text": "Empty response from OpenAI (Check Logs)"}
-
-                # Check Tool Calls (Hỗ trợ cả object và dict)
-                tool_calls = getattr(output_msg, 'tool_calls', None)
+                # --- 1. PARSE OUTPUT (HỖ TRỢ CẤU TRÚC MỚI) ---
+                tool_calls_found = []
+                final_text_found = ""
                 
-                if tool_calls:
-                    # Append AI message
-                    local_history.append(output_msg)
+                # Kiểm tra xem có output không
+                if hasattr(response, 'output'):
+                    for item in response.output:
+                        item_type = getattr(item, 'type', '')
+                        
+                        # TRƯỜNG HỢP A: Là Tool Call (như log bạn gửi)
+                        if item_type == 'function_call':
+                            tool_calls_found.append(item)
+                            
+                        # TRƯỜNG HỢP B: Là Text Message
+                        elif item_type == 'message':
+                            # Lấy nội dung text
+                            content_list = getattr(item, 'content', [])
+                            if content_list:
+                                first_content = content_list[0]
+                                # Cấu trúc: ResponseOutputText(text='...', ...)
+                                if hasattr(first_content, 'text'):
+                                    final_text_found = first_content.text
+                
+                # Fallback: Cấu trúc Chat Completion cũ (choices)
+                elif hasattr(response, 'choices'):
+                    msg = response.choices[0].message
+                    if msg.tool_calls:
+                        tool_calls_found = msg.tool_calls
+                    else:
+                        final_text_found = msg.content
+
+                # --- 2. XỬ LÝ LOGIC ---
+                
+                # Nếu tìm thấy Tool Call -> Xử lý ngay
+                if tool_calls_found:
+                    # Append AI response vào history (Cần cẩn thận với cấu trúc append)
+                    # Với endpoint responses, ta append output items trực tiếp
+                    # Tuy nhiên để đơn giản cho vòng lặp, ta chỉ cần append kết quả tool
                     
-                    for tool in tool_calls:
-                        fname = tool.function.name
-                        args = json.loads(tool.function.arguments)
-                        _logger.info("⚡ Executing Tool: %s | Args: %s", fname, args)
+                    for tool in tool_calls_found:
+                        # Lấy thông tin hàm
+                        # Cấu trúc ResponseFunctionToolCall: .name, .arguments (trực tiếp)
+                        # Cấu trúc ChatCompletionTool: .function.name, .function.arguments
+                        
+                        if hasattr(tool, 'function'): # Cấu trúc cũ
+                            fname = tool.function.name
+                            args_str = tool.function.arguments
+                            # Lưu ý: ChatCompletion dùng 'id', Stored Prompt dùng 'call_id'
+                            call_id = tool.id 
+                        else: # Cấu trúc mới (từ log của bạn)
+                            fname = tool.name
+                            args_str = tool.arguments
+                            call_id = getattr(tool, 'call_id', None) or getattr(tool, 'id', None)
+
+                        args = json.loads(args_str)
+                        _logger.info("⚡ Executing Tool: %s | ID: %s", fname, call_id)
 
                         # --- ROUTER LOGIC ---
                         if fname == "handoff_to_stock_agent":
@@ -197,36 +216,24 @@ class HlvChatgptSession(models.Model):
 
                         # Append Tool Output
                         local_history.append({
-                            "role": "tool", "tool_call_id": tool.id, "content": tool_res
+                            "role": "tool", 
+                            "tool_call_id": call_id, # Quan trọng: Phải khớp với ID từ AI
+                            "content": tool_res
                         })
                     
+                    # Tiếp tục vòng lặp để gửi tool output lên
                     continue
                 
+                # Nếu có Text -> Trả về kết quả
+                elif final_text_found:
+                    return {"status": "done", "text": final_text_found}
+                
                 else:
-                    # Final Text Response
-                    final_text = ""
-                    
-                    # Lấy content an toàn
-                    content_obj = getattr(output_msg, 'content', "")
-                    
-                    if isinstance(content_obj, list):
-                        # Trường hợp content là list block (VD: [{"type": "text", "text": "..."}])
-                        first_item = content_obj[0]
-                        if hasattr(first_item, 'text'):
-                            txt = first_item.text
-                            # Kiểm tra xem .text là object hay string
-                            final_text = getattr(txt, 'value', str(txt))
-                        else:
-                            final_text = str(first_item)
-                    else:
-                        # Trường hợp content là string thuần
-                        final_text = str(content_obj)
-                            
-                    return {"status": "done", "text": final_text}
+                    return {"status": "error", "text": "AI không trả về nội dung text hay tool call nào."}
 
             except Exception as e:
                 _logger.exception("OpenAI API Error")
-                return {"status": "error", "text": f"Lỗi API: {str(e)}"}
+                return {"status": "error", "text": str(e)}
         
         return {"status": "error", "text": "Timeout loop"}
 
