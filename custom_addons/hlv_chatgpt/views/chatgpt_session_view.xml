@@ -11,30 +11,38 @@
                 <templates>
                     <t t-name="card">
                         <div class="w-100 ps-2 pe-2">
-                            <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-2">
+                            <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-4">
                                 
-                                <div t-attf-class="flex-shrink-0 #{record.role.raw_value == 'user' ? 'ms-2' : 'me-2'} align-self-end">
-                                    <div class="d-flex align-items-center justify-content-center rounded-circle shadow-sm" 
-                                         t-attf-style="width: 32px; height: 32px; background-color: #{record.role.raw_value == 'user' ? '#0084ff' : '#e4e6eb'}; color: #{record.role.raw_value == 'user' ? '#fff' : '#050505'};">
-                                        <i t-attf-class="fa #{record.role.raw_value == 'user' ? 'fa-user' : 'fa-robot'} small"></i>
+                                <div t-attf-class="flex-shrink-0 #{record.role.raw_value == 'user' ? 'ms-3' : 'me-3'}">
+                                    <div t-if="record.role.raw_value == 'assistant'" 
+                                         class="d-flex align-items-center justify-content-center rounded-circle shadow-sm" 
+                                         style="width: 38px; height: 38px; background-color: #10a37f; color: white;">
+                                        <i class="fa fa-bolt fa-lg"></i>
+                                    </div>
+                                    <div t-if="record.role.raw_value == 'user'" 
+                                         class="d-flex align-items-center justify-content-center rounded-circle shadow-sm" 
+                                         style="width: 38px; height: 38px; background-color: #5d5d5d; color: white;">
+                                        <i class="fa fa-user fa-lg"></i>
                                     </div>
                                 </div>
 
                                 <div t-attf-class="p-3 shadow-sm position-relative text-break" 
                                      t-attf-style="
-                                        max-width: 70%; 
-                                        border-radius: 18px; 
-                                        font-size: 14px;
-                                        line-height: 1.5;
-                                        background-color: #{record.role.raw_value == 'user' ? '#0084ff' : '#f0f2f5'};
-                                        color: #{record.role.raw_value == 'user' ? '#ffffff' : '#050505'};
-                                        border-bottom-#{record.role.raw_value == 'user' ? 'right' : 'left'}-radius: 4px;
+                                        max-width: 80%; 
+                                        border-radius: 12px; 
+                                        font-size: 15px;
+                                        line-height: 1.6;
+                                        box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
+                                        background-color: #{record.role.raw_value == 'user' ? '#ffffff' : '#f7f7f8'};
+                                        border: #{record.role.raw_value == 'user' ? '1px solid #e5e5e5' : 'none'};
+                                        color: #343541;
                                      ">
-                                    <div style="white-space: pre-wrap;"><field name="content"/></div>
-                                    <div class="text-end mt-1" 
-                                         t-attf-style="font-size: 10px; opacity: 0.6; color: inherit;">
-                                        <field name="create_date" widget="relative_time"/>
+                                    <div class="fw-bold mb-1 text-uppercase" style="font-size: 10px; opacity: 0.5;">
+                                        <span t-if="record.role.raw_value == 'assistant'">ChatGPT AI</span>
+                                        <span t-if="record.role.raw_value == 'user'">Bạn</span>
                                     </div>
+
+                                    <div style="white-space: pre-wrap;"><field name="content"/></div>
                                 </div>
                             </div>
                         </div>
@@ -53,41 +61,47 @@
                     <field name="state" widget="statusbar" invisible="1"/> 
                 </header>
                 <sheet class="p-0">
-                    <div class="p-3 border-bottom d-flex align-items-center bg-white sticky-top" style="z-index: 100;">
-                        <div class="flex-grow-1">
-                            <field name="name" class="h4 mb-0 text-primary fw-bold" placeholder="Chủ đề hội thoại..."/>
-                            <div class="small text-muted">
-                                <i class="fa fa-clock-o me-1"></i>Hoạt động: <field name="last_activity" widget="relative_time"/>
+                    <div class="p-3 border-bottom d-flex align-items-center bg-white sticky-top shadow-sm" style="z-index: 100;">
+                        <div class="me-3">
+                            <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                <i class="fa fa-comments text-primary fa-lg"></i>
                             </div>
                         </div>
-                        <div>
-                             <field name="user_id" widget="many2one_avatar_user"/>
+                        <div class="flex-grow-1">
+                            <field name="name" class="h4 mb-0 fw-bold text-dark" placeholder="Chủ đề hội thoại..."/>
+                            <div class="small text-muted d-flex align-items-center">
+                                <span class="badge bg-success me-2" style="font-weight: normal;">Online</span>
+                                <i class="fa fa-clock-o me-1"></i> <field name="last_activity" widget="relative_time"/>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="o_chat_history p-3" 
-                         style="background-color: #ffffff; height: 65vh; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;">
+                    <div class="o_chat_history p-4" 
+                         style="background-color: #ffffff; height: 78vh; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;">
                         
                         <field name="message_ids" mode="kanban" nolabel="1"/>
                         
                     </div>
 
-                    <div class="p-3 bg-white border-top sticky-bottom">
-                        <div class="d-flex gap-2 align-items-end bg-light rounded-3 p-2 border">
-                            <field name="input_text" 
-                                   placeholder="Nhập tin nhắn... (Enter để Gửi)" 
-                                   class="border-0 bg-transparent flex-grow-1"
-                                   style="resize: none; outline: none; font-size: 15px; max-height: 100px; overflow-y: auto;"
-                                   nolabel="1"/>
+                    <div class="p-4 bg-white border-top sticky-bottom shadow-lg">
+                        <div class="d-flex gap-3 align-items-end position-relative">
+                            <div class="flex-grow-1 bg-light rounded-3 border p-1 focus-shadow transition-all">
+                                <field name="input_text" 
+                                       placeholder="Nhập tin nhắn tại đây..." 
+                                       class="border-0 bg-transparent w-100 chat-input-field px-2"
+                                       style="resize: none; outline: none; font-size: 16px; min-height: 50px; max-height: 150px; overflow-y: auto;"
+                                       nolabel="1"/>
+                            </div>
                                    
                             <button name="action_send_message" 
                                     string="" 
                                     type="object" 
-                                    class="btn btn-link text-primary p-2 rounded-circle hover-bg-gray" 
-                                    icon="fa-paper-plane fa-lg"/>
+                                    class="btn btn-primary rounded-3 p-3 btn-send-chat shadow-sm" 
+                                    style="background-color: #10a37f; border-color: #10a37f;"
+                                    icon="fa-paper-plane"/>
                         </div>
-                        <div class="text-muted text-end mt-1" style="font-size: 11px;">
-                            <i>Enter để gửi, Shift+Enter để xuống dòng</i>
+                        <div class="text-center mt-2" style="font-size: 11px; color: #999;">
+                            <span>Nhấn <b>Enter</b> để gửi, <b>Shift+Enter</b> để xuống dòng. AI có thể mắc lỗi, hãy kiểm tra thông tin quan trọng.</span>
                         </div>
                     </div>
                 </sheet>
