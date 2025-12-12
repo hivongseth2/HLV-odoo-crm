@@ -24,6 +24,10 @@ const PRODUCT_SEARCH_CONFIG = {
         lineField: 'order_line',
         productPath: 'order_line.product_id',
     },
+    'purchase.order': {
+        lineField: 'order_line',
+        productPath: 'order_line.product_id',
+    },
 };
 
 // Selection field options by model
@@ -1341,17 +1345,17 @@ patch(ListRenderer.prototype, {
         const dropdown = document.createElement('div');
         dropdown.className = 'hlv-filter-dropdown-portal';
         dropdown.style.cssText = `
-    position: fixed;
-    top: ${rect.bottom + 4} px;
-    left: ${Math.max(10, rect.left - 80)} px;
-    min - width: 180px;
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border - radius: 6px;
-    box - shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-    z - index: 10000;
-    overflow: hidden;
-    `;
+            position: fixed;
+            top: ${rect.bottom + 4}px;
+            left: ${Math.max(10, rect.left - 80)}px;
+            min-width: 180px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            overflow: hidden;
+        `;
 
         dropdown.innerHTML = '<div style="padding: 10px 16px; text-align: center; color: #666;">Đang tải...</div>';
         document.body.appendChild(dropdown);
