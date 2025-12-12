@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <template id="cancel_request_layout" name="Cancellation Request Layout" inherit_id="website.layout" primary="True">
+    <template id="cancel_request_layout" name="Cancellation Request Layout" inherit_id="web.frontend_layout" primary="True">
         <xpath expr="//div[@id='wrapwrap']" position="before">
             <t t-set="no_header" t-value="True"/>
             <t t-set="no_footer" t-value="True"/>
         </xpath>
-        <xpath expr="//div[@id='wrap']" position="replace">
+        <xpath expr="//main" position="replace">
             <div id="wrap" class="o_portal_wrap">
                 <div class="container py-5">
                     <div class="row justify-content-center">
