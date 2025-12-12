@@ -70,29 +70,73 @@ class HlvChatgptSession(models.Model):
     # -------------------------------------------------------------------------
     def _execute_tool_search_product(self, keyword):
         """
-        Logic thực tế: Tìm sản phẩm trong Odoo và trả về chuỗi text kết quả.
+        Trả về dữ liệu JSON thô để AI tự quyết định cách hiển thị.
         """
-        _logger.info("🤖 AI đang tra cứu tồn kho với từ khóa: %s", keyword)
+        _logger.info("🤖 AI tra cứu (Smart Search JSON): %s", keyword)
         
-        # Tìm kiếm sản phẩm (tìm theo tên hoặc mã)
-        products = self.env['product.product'].sudo().search([
-            '|',
-            ('name', 'ilike', keyword),
-            ('default_code', 'ilike', keyword),
-            ('active', '=', True)
-        ], limit=5) # Giới hạn 5 kết quả để tránh quá tải token
+        if not keyword:
+            return json.dumps({"error": "Thiếu từ khóa tìm kiếm"})
+
+        keyword = keyword.strip()
+        tokens = keyword.split()
+        
+        # 1. Search rộng (lấy cả Combo, phụ kiện...)
+        domain = [('active', '=', True)]
+        for token in tokens:
+            token_domain = [
+                '|', '|', '|',
+                ('name', 'ilike', token),
+                ('default_code', 'ilike', token),
+                ('barcode', 'ilike', token),
+                ('description_sale', 'ilike', token)
+            ]
+            domain += token_domain
+
+        Product = self.env['product.product'].sudo()
+        # Lấy nhiều kết quả hơn (ví dụ 15) để AI có đủ dữ liệu lọc
+        products = Product.search(domain, limit=15)
+
+        if not products and len(tokens) > 1:
+             # Fallback search lỏng
+            domain_loose = [('active', '=', True), ('name', 'ilike', keyword)] 
+            products = Product.search(domain_loose, limit=10)
 
         if not products:
-            return f"Không tìm thấy sản phẩm nào khớp với từ khóa '{keyword}'."
+            return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm '{keyword}'"})
 
-        result_text = f"Kết quả tìm kiếm cho '{keyword}':\n"
+        # 2. Xử lý dữ liệu trả về
+        result_list = []
         for p in products:
-            # Lấy tồn kho thực tế (Qty Available)
-            qty = p.qty_available
-            price = "{:,.0f}".format(p.list_price)
-            result_text += f"- {p.display_name} | Mã: {p.default_code or 'N/A'} | Tồn: {qty} | Giá: {price} đ\n"
-        
-        return result_text
+            # Tính điểm ưu tiên (Score) để sort
+            # Nếu tên sản phẩm BẮT ĐẦU bằng từ khóa -> Điểm cao (Ưu tiên máy lẻ)
+            # Nếu tên sản phẩm chứa "Combo" -> Điểm thấp hơn (trừ khi khách tìm combo)
+            score = 0
+            p_name_lower = p.name.lower()
+            keyword_lower = keyword.lower()
+
+            if p_name_lower.startswith(keyword_lower):
+                score += 10
+            if "combo" in p_name_lower:
+                score -= 5 # Hạ ưu tiên Combo xuống một chút
+            
+            result_list.append({
+                "name": p.name,
+                "code": p.default_code or "N/A",
+                "price": p.list_price,
+                "qty": p.qty_available,
+                "uom": p.uom_id.name,
+                "score": score # Trường ảo để sort
+            })
+
+        # 3. Sắp xếp lại danh sách: Điểm cao lên đầu
+        result_list.sort(key=lambda x: x['score'], reverse=True)
+
+        # Xóa trường score trước khi gửi cho AI cho gọn
+        for item in result_list:
+            del item['score']
+
+        # Trả về JSON String
+        return json.dumps(result_list, ensure_ascii=False)
 
     def action_send_message(self):
         """Gửi tin nhắn và nhận phản hồi"""
@@ -130,9 +174,24 @@ class HlvChatgptSession(models.Model):
 
         client = OpenAI(api_key=config.api_key)
         
-        # Lấy lịch sử chat để AI có ngữ cảnh
-        messages = [{"role": "system", "content": "Bạn là trợ lý ảo bán hàng thông minh của công ty Hoàng Long Vũ. Bạn có khả năng tra cứu tồn kho và giá cả. Khi trả lời về giá, hãy thêm đơn vị VNĐ."}]
+        # === SYSTEM PROMPT "KHÔN NGOAN" HƠN ===
+        system_instruction = """
+        Bạn là trợ lý bán hàng chuyên nghiệp của Hoàng Long Vũ (HLV).
+        Nhiệm vụ: Tra cứu tồn kho và báo giá.
         
+        QUY TẮC XỬ LÝ DỮ LIỆU TÌM KIẾM (QUAN TRỌNG):
+        1. Hệ thống sẽ trả về danh sách sản phẩm dạng JSON bao gồm cả Máy lẻ và Combo.
+        2. Nếu khách hàng CHỈ hỏi tên máy (ví dụ: "M18 FPD3"):
+           - Ưu tiên số 1: Hiển thị Máy thân (Body/Bare) hoặc Máy bộ (Kit) chính xác.
+           - ẨN bớt các gói Combo phức tạp (trừ khi máy lẻ hết hàng thì mới gợi ý Combo).
+           - Không liệt kê quá 3-5 sản phẩm chính, tránh spam.
+        3. Nếu khách hàng hỏi "Combo":
+           - Lúc này mới hiển thị danh sách các Combo.
+        4. Trình bày ngắn gọn: "Tên hàng (Mã) - Tồn: X - Giá: Y".
+        5. Luôn format giá tiền có dấu phân cách (ví dụ: 1.200.000 đ).
+        """
+
+        messages = [{"role": "system", "content": system_instruction}]
         # Lấy 5 tin nhắn gần nhất để làm context (tiết kiệm token)
         recent_msgs = self.env['hlv.chatgpt.message'].search([
             ('session_id', '=', self.id)
