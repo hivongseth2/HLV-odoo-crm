@@ -68,7 +68,10 @@ class HlvChatgptSession(models.Model):
         if not keyword: return json.dumps({"error": "Thiếu từ khóa"})
 
         # Stop words removal
-        stop_words = ["thường", "máy", "cái", "con", "cây", "bộ", "khoan", "pin", "sạc", "thân", "body", "bare", "search", "tìm", "kiểm", "tra", "tồn", "kho", "giá"]
+        stop_words = [
+            "kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "giúp", "em", "mình", "shop", "ad", "admin",
+            "check", "bao", "nhiêu", "tiền", "cái", "con", "cây", "chiếc"
+        ]
         keyword_clean = keyword.lower()
         for w in stop_words: keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
         keyword_clean = keyword_clean.strip() or keyword
