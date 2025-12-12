@@ -63,47 +63,118 @@ class HlvChatgptSession(models.Model):
         } for p in products], ensure_ascii=False)
 
     def _execute_search_product_stock(self, keyword):
-        """Logic Search V3: Tokenize + Score Sorting"""
-        _logger.info("🔧 Search Stock: %s", keyword)
+        """
+        V7: Search thông minh + Mở rộng phạm vi tìm kiếm
+        """
+        _logger.info("🔧 AI Smart Search V7 Input: %s", keyword)
+        
         if not keyword: return json.dumps({"error": "Thiếu từ khóa"})
 
-        # Stop words removal
-        stop_words = [
-            "kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "giúp", "em", "mình", "shop", "ad", "admin",
-            "check", "bao", "nhiêu", "tiền", "cái", "con", "cây", "chiếc"
-        ]
+        # 1. Xử lý từ khóa (Giữ lại các từ quan trọng)
+        # Chỉ loại bỏ các từ thực sự vô nghĩa
+        stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "giúp", "em", "mình", "shop", "ad", "admin", "check", "bao", "nhiêu", "tiền", "cái", "con", "cây", "chiếc", "bạn", "ơi", "cho", "hỏi"]
+        
         keyword_clean = keyword.lower()
-        for w in stop_words: keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
-        keyword_clean = keyword_clean.strip() or keyword
+        for w in stop_words: 
+            keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
+        keyword_clean = keyword_clean.strip() or keyword.lower()
 
-        # Search
+        _logger.info("🔧 Cleaned Keyword: %s", keyword_clean)
+
+        # 2. Tách từ khóa để tìm kiếm linh hoạt (AND logic)
         tokens = keyword_clean.split()
+        
+        # 3. Xây dựng Domain tìm kiếm
+        # Tìm trong: Tên, Mã nội bộ, Mã vạch, Tên biến thể, Tên nhóm hàng, Mô tả
         domain = [('active', '=', True)]
+        
+        # Logic: Sản phẩm phải chứa TẤT CẢ các từ trong tokens (nhưng không cần đúng thứ tự)
+        # Ví dụ: "kìm hioki" -> Tìm sp có chứa "kìm" AND chứa "hioki"
         for token in tokens:
-            domain += ['|', '|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token), ('description_sale', 'ilike', token)]
-        
-        products = self.env['product.product'].sudo().search(domain, limit=15)
-        
-        if not products: 
-            return json.dumps({"status": "empty", "message": f"Không tìm thấy '{keyword_clean}'"})
+            sub_domain = [
+                '|', '|', '|', '|', '|',
+                ('name', 'ilike', token),
+                ('default_code', 'ilike', token),
+                ('barcode', 'ilike', token),
+                ('product_variant_ids.default_code', 'ilike', token),
+                ('categ_id.name', 'ilike', token),
+                ('description_sale', 'ilike', token) # Thêm tìm trong mô tả
+            ]
+            domain += sub_domain
 
-        # Sort & Format
-        result = []
+        Product = self.env['product.product'].sudo()
+        
+        # Tăng limit lên để lấy nhiều kết quả tiềm năng hơn
+        products = Product.search(domain, limit=50)
+
+        # Fallback: Nếu tìm AND không ra, thử tìm OR (chứa ít nhất 1 từ)
+        if not products and len(tokens) > 1:
+            _logger.info("🔧 Fallback search (OR logic)...")
+            domain_or = [('active', '=', True), '|'] * (len(tokens) - 1)
+            for token in tokens:
+                # Chỉ tìm OR trên Tên và Mã để tránh rác
+                domain_or += ['|', ('name', 'ilike', token), ('default_code', 'ilike', token)]
+            products = Product.search(domain_or, limit=20)
+
+        if not products:
+            return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm nào khớp với '{keyword_clean}'"})
+
+        # 4. Chấm điểm & Sắp xếp (Ranking)
+        result_list = []
         for p in products:
             score = 0
-            if p.qty_available > 0: score += 1000
-            if keyword_clean in p.name.lower(): score += 100
-            if "combo" in p.name.lower() and "combo" not in keyword_clean: score -= 50
+            p_name = p.name.lower()
+            p_code = (p.default_code or "").lower()
             
-            result.append({
-                "name": p.name, "code": p.default_code, "price": p.list_price, 
-                "qty": p.qty_available, "uom": p.uom_id.name, "score": score
+            # Tiêu chí 1: Khớp mã chính xác hoặc gần đúng
+            if p_code == keyword_clean: score += 10000
+            elif keyword_clean in p_code: score += 2000
+            
+            # Tiêu chí 2: Khớp tên bắt đầu
+            if p_name.startswith(keyword_clean): score += 500
+            
+            # Tiêu chí 3: Tồn kho (Ưu tiên hàng có sẵn)
+            if p.qty_available > 0: score += 1000
+            
+            # Tiêu chí 4: Độ khớp từ khóa (Càng chứa nhiều từ càng tốt)
+            matches = sum(1 for t in tokens if t in p_name or t in p_code)
+            score += matches * 100
+
+            # Tiêu chí 5: Phạt hàng phụ kiện/rác nếu không tìm đích danh
+            # Trừ điểm nếu tên sp chứa các từ khóa phụ kiện mà trong keyword tìm kiếm KHÔNG có
+            junk_words = ["vỏ", "tem", "nhãn", "hộp", "thùng", "mạch", "phụ tùng", "ốc", "vít", "công tắc", "chổi than"]
+            is_junk = False
+            for junk in junk_words:
+                if junk in p_name and junk not in keyword_clean:
+                    score -= 2000 # Phạt nặng để chìm xuống
+                    is_junk = True
+                    break
+            
+            # Tiêu chí 6: Ưu tiên Nhóm hàng
+            # Nếu tìm "kìm", ưu tiên sp thuộc nhóm "Kìm" hoặc "Dụng cụ đo"
+            if p.categ_id and any(t in p.categ_id.name.lower() for t in tokens):
+                score += 300
+
+            result_list.append({
+                "name": p.name,
+                "code": p.default_code or "N/A",
+                "price": p.list_price,
+                "qty": p.qty_available,
+                "uom": p.uom_id.name,
+                "category": p.categ_id.name or "",
+                "score": score
             })
+
+        # Sắp xếp giảm dần theo điểm
+        result_list.sort(key=lambda x: x['score'], reverse=True)
         
-        result.sort(key=lambda x: x['score'], reverse=True)
-        for item in result: del item['score']
+        # Lấy Top 10 kết quả tốt nhất
+        final_results = result_list[:10]
         
-        return json.dumps(result, ensure_ascii=False)
+        # Cleanup
+        for item in final_results: del item['score']
+
+        return json.dumps(final_results, ensure_ascii=False)
 
     # =================================================================================
     # 2. XỬ LÝ GỬI NHẬN (ACTION BUTTON & ZALO PROCESS)
