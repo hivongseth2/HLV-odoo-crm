@@ -2,7 +2,7 @@
 import logging
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-
+import json 
 try:
     from openai import OpenAI
 except ImportError:
