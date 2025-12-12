@@ -45,10 +45,10 @@ class SaleOrderCancelRequest(models.Model):
     def action_submit(self):
         self.ensure_one()
         self.state = 'submitted'
-        self._send_zalo_notification_on_submit()
 
     def action_done(self):
         self.state = 'done'
+        self._send_zalo_notification_on_done()
 
     def action_reject(self):
         self.state = 'rejected'
@@ -59,9 +59,9 @@ class SaleOrderCancelRequest(models.Model):
     def _expand_states(self, states, domain, order):
         return [key for key, val in type(self).state.selection]
 
-    def _send_zalo_notification_on_submit(self):
+    def _send_zalo_notification_on_done(self):
         """
-        Send Zalo notification to Accountant and Warehouse when a request is submitted.
+        Send Zalo notification to Accountant and Warehouse when a request is done/processed.
         """
         # Get recipients from config
         Config = self.env['ir.config_parameter'].sudo()
