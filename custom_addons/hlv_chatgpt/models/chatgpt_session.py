@@ -1,8 +1,9 @@
-# models/chatgpt_session.py
+# -*- coding: utf-8 -*-
 import logging
+import json
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-import json 
+
 try:
     from openai import OpenAI
 except ImportError:
@@ -16,257 +17,117 @@ class HlvChatgptSession(models.Model):
     _rec_name = 'name'
     _order = 'last_activity desc'
     
-    zalo_user_id = fields.Char(string="Zalo User ID", index=True, help="ID người dùng từ Zalo OA")
-    name = fields.Char(string='Chủ đề', default='Cuộc hội thoại mới', required=True)
-    user_id = fields.Many2one('res.users', string='Người tạo', default=lambda self: self.env.user)
-    last_activity = fields.Datetime(string='Hoạt động cuối', default=fields.Datetime.now)
-    
-    
-    
-    
-    
-    
-    # === THÊM FIELD STATE ĐỂ FIX LỖI ===
     state = fields.Selection([
         ('new', 'Mới'),
         ('active', 'Đang hoạt động'),
         ('archived', 'Lưu trữ')
     ], default='new', string='Trạng thái')
-    # ===================================
+    # ======================================
 
-    # Dùng One2many để lưu lịch sử chat
+    name = fields.Char(string='Chủ đề', default='Cuộc hội thoại mới', required=True)
+    user_id = fields.Many2one('res.users', string='Người tạo', default=lambda self: self.env.user)
+    last_activity = fields.Datetime(string='Hoạt động cuối', default=fields.Datetime.now)
+    
+    # --- ZALO INTERGRATION ---
+    zalo_user_id = fields.Char(string="Zalo User ID", index=True, help="ID người dùng từ Zalo OA")
+    # -------------------------
+
+    # Quản lý trạng thái Agent hiện tại (Router hay Chuyên gia)
+    current_agent = fields.Selection([
+        ('router', 'Router (Tổng đài)'),
+        ('stock', 'Stock Expert (Kho)'),
+        ('naming', 'Naming Expert (Đặt tên)')
+    ], default='router', string="Đang chat với")
+
     message_ids = fields.One2many('hlv.chatgpt.message', 'session_id', string='Nội dung hội thoại')
-    
-    # Ô nhập liệu nhanh
     input_text = fields.Text(string='Nhập tin nhắn...')
-    
-    
-    def _get_tools_schema(self):
-        """
-        Khai báo danh sách các hành động mà AI có thể làm.
-        """
-        return [
-            {
-                "type": "function",
-                "function": {
-                    "name": "search_product_stock",
-                    "description": "Tra cứu thông tin sản phẩm, giá bán và số lượng tồn kho trong hệ thống.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "keyword": {
-                                "type": "string", 
-                                "description": "Tên sản phẩm hoặc mã sản phẩm người dùng muốn tìm. Ví dụ: 'máy khoan', '6203'..."
-                            }
-                        },
-                        "required": ["keyword"]
-                    }
-                }
-            }
-        ]
 
-    # -------------------------------------------------------------------------
-    # 2. HÀM THỰC THI LOGIC TRONG ODOO (ACTION)
-    # -------------------------------------------------------------------------
-    def _execute_tool_search_product(self, keyword):
-        """
-        Trả về dữ liệu JSON thô để AI tự quyết định cách hiển thị.
-        """
-        _logger.info("🤖 AI tra cứu (Smart Search JSON): %s", keyword)
+    # =================================================================================
+    # 1. CÁC HÀM TOOL ODOO (SEARCH LOGIC)
+    # =================================================================================
+    def _execute_check_product_existence(self, keyword):
+        _logger.info("🔧 Check Existence: %s", keyword)
+        if not keyword: return json.dumps({"error": "Thiếu từ khóa"})
         
-        if not keyword:
-            return json.dumps({"error": "Thiếu từ khóa tìm kiếm"})
+        products = self.env['product.product'].sudo().with_context(active_test=False).search([
+            '|', ('default_code', 'ilike', keyword), ('name', 'ilike', keyword)
+        ], limit=5)
+        
+        if not products: 
+            return json.dumps({"status": "not_found", "message": f"Chưa có mã nào khớp '{keyword}'."})
+        
+        return json.dumps([{
+            "name": p.name, 
+            "code": p.default_code, 
+            "status": "Active" if p.active else "Archived"
+        } for p in products], ensure_ascii=False)
 
-        keyword = keyword.strip()
-        tokens = keyword.split()
-        
-        # 1. Search rộng (lấy cả Combo, phụ kiện...)
+    def _execute_search_product_stock(self, keyword):
+        """Logic Search V3: Tokenize + Score Sorting"""
+        _logger.info("🔧 Search Stock: %s", keyword)
+        if not keyword: return json.dumps({"error": "Thiếu từ khóa"})
+
+        # Stop words removal
+        stop_words = ["thường", "máy", "cái", "con", "cây", "bộ", "khoan", "pin", "sạc", "thân", "body", "bare", "search", "tìm", "kiểm", "tra", "tồn", "kho", "giá"]
+        keyword_clean = keyword.lower()
+        for w in stop_words: keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
+        keyword_clean = keyword_clean.strip() or keyword
+
+        # Search
+        tokens = keyword_clean.split()
         domain = [('active', '=', True)]
         for token in tokens:
-            token_domain = [
-                '|', '|', '|',
-                ('name', 'ilike', token),
-                ('default_code', 'ilike', token),
-                ('barcode', 'ilike', token),
-                ('description_sale', 'ilike', token)
-            ]
-            domain += token_domain
+            domain += ['|', '|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token), ('description_sale', 'ilike', token)]
+        
+        products = self.env['product.product'].sudo().search(domain, limit=15)
+        
+        if not products: 
+            return json.dumps({"status": "empty", "message": f"Không tìm thấy '{keyword_clean}'"})
 
-        Product = self.env['product.product'].sudo()
-        # Lấy nhiều kết quả hơn (ví dụ 15) để AI có đủ dữ liệu lọc
-        products = Product.search(domain, limit=15)
-
-        if not products and len(tokens) > 1:
-             # Fallback search lỏng
-            domain_loose = [('active', '=', True), ('name', 'ilike', keyword)] 
-            products = Product.search(domain_loose, limit=20)
-
-        if not products:
-            return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm '{keyword}'"})
-
-        # 2. Xử lý dữ liệu trả về
-        result_list = []
+        # Sort & Format
+        result = []
         for p in products:
-            # Tính điểm ưu tiên (Score) để sort
-            # Nếu tên sản phẩm BẮT ĐẦU bằng từ khóa -> Điểm cao (Ưu tiên máy lẻ)
-            # Nếu tên sản phẩm chứa "Combo" -> Điểm thấp hơn (trừ khi khách tìm combo)
             score = 0
-            p_name_lower = p.name.lower()
-            keyword_lower = keyword.lower()
-
-            if p_name_lower.startswith(keyword_lower):
-                score += 10
-            if "combo" in p_name_lower:
-                score -= 5 # Hạ ưu tiên Combo xuống một chút
+            if p.qty_available > 0: score += 1000
+            if keyword_clean in p.name.lower(): score += 100
+            if "combo" in p.name.lower() and "combo" not in keyword_clean: score -= 50
             
-            result_list.append({
-                "name": p.name,
-                "code": p.default_code or "N/A",
-                "price": p.list_price,
-                "qty": p.qty_available,
-                "uom": p.uom_id.name,
-                "score": score # Trường ảo để sort
+            result.append({
+                "name": p.name, "code": p.default_code, "price": p.list_price, 
+                "qty": p.qty_available, "uom": p.uom_id.name, "score": score
             })
+        
+        result.sort(key=lambda x: x['score'], reverse=True)
+        for item in result: del item['score']
+        
+        return json.dumps(result, ensure_ascii=False)
 
-        # 3. Sắp xếp lại danh sách: Điểm cao lên đầu
-        result_list.sort(key=lambda x: x['score'], reverse=True)
-
-        # Xóa trường score trước khi gửi cho AI cho gọn
-        for item in result_list:
-            del item['score']
-
-        # Trả về JSON String
-        return json.dumps(result_list, ensure_ascii=False)
-
+    # =================================================================================
+    # 2. XỬ LÝ GỬI NHẬN (ACTION BUTTON & ZALO PROCESS)
+    # =================================================================================
     def action_send_message(self):
-        """Gửi tin nhắn và nhận phản hồi"""
         self.ensure_one()
-        if not self.input_text:
-            raise UserError("Vui lòng nhập nội dung tin nhắn.")
+        if not self.input_text: raise UserError("Vui lòng nhập nội dung.")
 
-        # 1. Tạo tin nhắn của User
+        # Lưu tin nhắn User
         self.env['hlv.chatgpt.message'].create({
-            'session_id': self.id,
-            'role': 'user',
-            'content': self.input_text
+            'session_id': self.id, 'role': 'user', 'content': self.input_text
         })
         
         user_query = self.input_text
-        self.input_text = "" 
-        self.state = 'active' # Cập nhật trạng thái
+        self.input_text = ""
+        self.state = 'active'
 
-        # 2. Gọi API OpenAI
-        ai_response = self._call_openai_api(user_query)
+        # Gọi AI
+        ai_reply = self._call_openai_api(user_query)
 
-        # 3. Tạo tin nhắn của AI
+        # Lưu tin nhắn AI
         self.env['hlv.chatgpt.message'].create({
-            'session_id': self.id,
-            'role': 'assistant',
-            'content': ai_response
+            'session_id': self.id, 'role': 'assistant', 'content': ai_reply
         })
-        
         self.last_activity = fields.Datetime.now()
 
-    def _call_openai_api(self, query):
-        if not OpenAI: return "Lỗi: Server chưa cài thư viện openai."
-        config = self.env['hlv.chatgpt.config'].get_config()
-        if not config: return "Lỗi: Chưa có cấu hình OpenAI Active."
-
-        client = OpenAI(api_key=config.api_key)
-        
-        # === SYSTEM PROMPT "KHÔN NGOAN" HƠN ===
-        system_instruction = """
-        Bạn là trợ lý bán hàng chuyên nghiệp của Hoàng Long Vũ (HLV), chuyên về dụng cụ cầm tay (Milwaukee, Bosch, Makita...).
-        
-        NHIỆM VỤ CỦA BẠN:
-        1. Hiểu ý định khách hàng dù họ dùng từ ngữ dân dã.
-        2. Tra cứu tồn kho chính xác bằng công cụ được cung cấp.
-        3. Tư vấn bán hàng khéo léo.
-
-        QUY TẮC "PHIÊN DỊCH" TỪ KHÓA (QUAN TRỌNG):
-        - Khách nói "máy thường", "máy không", "body", "bare", "thân máy" -> Tức là muốn tìm "Thân máy" (Sản phẩm lẻ, không kèm pin sạc).
-        - Khách nói "bộ", "full bộ", "combo" -> Tức là muốn tìm "Combo" hoặc "Kit".
-        - Khách nói mã tắt (ví dụ "FPD3") -> Hãy tìm kiếm bằng mã đó.
-        
-        QUY TẮC SỬ DỤNG CÔNG CỤ TÌM KIẾM:
-        - Khi gọi tool 'search_product_stock', hãy trích xuất TỪ KHÓA CHÍNH (Model/Mã sản phẩm) từ câu hỏi.
-        - Ví dụ: Khách hỏi "con FPD3 thường còn không", đừng search cả câu. Hãy search từ khóa "FPD3". Sau đó tự lọc kết quả JSON trả về để tìm cái nào là "Thân máy" (thường có mã -0, -0X hoặc tên có chữ Bare/Thân).
-        
-        QUY TẮC TRẢ LỜI:
-        - Nếu tìm ra nhiều kết quả (JSON trả về danh sách), hãy lọc theo ý khách.
-        - Ví dụ: Khách hỏi "FPD3 thường", danh sách trả về cả Combo và Thân máy. Hãy CHỈ báo giá con "Thân máy".
-        - Luôn báo giá có định dạng (VD: 3.890.000 đ).
-        """
-
-        messages = [{"role": "system", "content": system_instruction}]
-        # Lấy 5 tin nhắn gần nhất để làm context (tiết kiệm token)
-        recent_msgs = self.env['hlv.chatgpt.message'].search([
-            ('session_id', '=', self.id)
-        ], order='create_date desc', limit=5)
-        
-        for msg in reversed(recent_msgs):
-            # Lưu ý: OpenAI yêu cầu role chuẩn (user/assistant)
-            # Vì model message của mình lưu role 'assistant' rồi nên dùng được luôn
-            messages.append({"role": msg.role, "content": msg.content or ""})
-
-        # Thêm câu hỏi hiện tại của user
-        messages.append({"role": "user", "content": query})
-
-        try:
-            # === BƯỚC 1: Gửi Request lần đầu (Kèm Tools) ===
-            completion = client.chat.completions.create(
-                model="gpt-4o", # Nên dùng gpt-4o hoặc gpt-3.5-turbo-0125 để hỗ trợ tool tốt
-                messages=messages,
-                tools=self._get_tools_schema(),
-                tool_choice="auto" # Để AI tự quyết định có dùng tool hay không
-            )
-            
-            response_message = completion.choices[0].message
-            tool_calls = response_message.tool_calls
-
-            # === BƯỚC 2: Kiểm tra xem AI có muốn dùng Tool không? ===
-            if tool_calls:
-                _logger.info("🤖 AI quyết định gọi Tool: %s", tool_calls)
-                
-                # Thêm tin nhắn của AI (chứa tool_calls) vào lịch sử hội thoại tạm
-                messages.append(response_message)
-
-                # Duyệt qua các tool mà AI muốn gọi (có thể gọi nhiều tool 1 lúc)
-                for tool_call in tool_calls:
-                    function_name = tool_call.function.name
-                    function_args = json.loads(tool_call.function.arguments)
-                    
-                    tool_output = "Lỗi: Không tìm thấy chức năng này."
-                    
-                    # Mapping tên hàm -> Logic Odoo
-                    if function_name == "search_product_stock":
-                        tool_output = self._execute_tool_search_product(function_args.get("keyword"))
-                    
-                    # Thêm kết quả từ Odoo vào lịch sử hội thoại tạm để AI đọc
-                    messages.append({
-                        "tool_call_id": tool_call.id,
-                        "role": "tool",
-                        "name": function_name,
-                        "content": tool_output,
-                    })
-
-                # === BƯỚC 3: Gửi lại toàn bộ kết quả cho AI để nó viết câu trả lời cuối cùng ===
-                second_response = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=messages
-                )
-                return second_response.choices[0].message.content
-
-            else:
-                # Nếu AI không dùng tool, trả về text bình thường
-                return response_message.content
-
-        except Exception as e:
-            _logger.exception("Lỗi OpenAI API Tool Call")
-            return f"Hệ thống gặp lỗi khi xử lý: {str(e)}"
-        
-        
-    def process_zalo_message(self, zalo_user_id, message_content,zalo_msg_id=False):
+    def process_zalo_message(self, zalo_user_id, message_content, zalo_msg_id=False):
         """
         Hàm này được gọi từ Webhook Zalo.
         Logic: Tìm session cũ hoặc tạo mới -> Hỏi AI -> Trả về câu trả lời
@@ -292,6 +153,7 @@ class HlvChatgptSession(models.Model):
         })
 
         # C. Gọi API OpenAI (Sử dụng lại hàm _call_openai_api đã viết)
+        # Lưu ý: Cần gọi trong ngữ cảnh của session tìm được
         ai_response_text = session._call_openai_api(message_content)
 
         # D. Lưu câu trả lời của AI vào lịch sử
@@ -306,6 +168,144 @@ class HlvChatgptSession(models.Model):
 
         return ai_response_text
 
+    # =================================================================================
+    # 3. CORE LOGIC: CHẠY PROMPT LOOP
+    # =================================================================================
+    def _run_prompt_loop(self, client, prompt_id, messages_history):
+        """Vòng lặp: Gọi API -> Check Tool -> Chạy Tool -> Gọi lại API"""
+        
+        local_history = list(messages_history)
+
+        for i in range(3): # Max 3 turns
+            try:
+                _logger.info("🚀 [%s] Calling Prompt ID: %s", i+1, prompt_id)
+                
+                response = client.responses.create(
+                    model="gpt-4o",
+                    prompt={"id": prompt_id},
+                    input=local_history,
+                )
+                
+                # --- PARSE RESPONSE ---
+                output_msg = None
+                tool_calls_found = []
+                final_text_found = ""
+
+                # 1. Parse Output (Cấu trúc mới response.output)
+                if hasattr(response, 'output'):
+                    for item in response.output:
+                        item_type = getattr(item, 'type', '')
+                        if item_type == 'function_call':
+                            tool_calls_found.append(item)
+                        elif item_type == 'message':
+                            content_list = getattr(item, 'content', [])
+                            if content_list and hasattr(content_list[0], 'text'):
+                                final_text_found = content_list[0].text
+                
+                # 2. Fallback (Cấu trúc cũ choices)
+                elif hasattr(response, 'choices'):
+                    msg = response.choices[0].message
+                    if msg.tool_calls:
+                        pass 
+
+                # --- XỬ LÝ LOGIC ---
+                if tool_calls_found:
+                    # 3. Append AI Message (Giả lập bằng role 'assistant')
+                    ai_content = "I am calling these tools: " + ", ".join([t.name for t in tool_calls_found])
+                    local_history.append({
+                        "role": "assistant",
+                        "content": ai_content
+                    })
+                    
+                    for tool in tool_calls_found:
+                        call_id = getattr(tool, 'call_id', None) or getattr(tool, 'id', 'unknown_id')
+                        fname = getattr(tool, 'name', 'unknown_func')
+                        args_str = getattr(tool, 'arguments', '{}')
+                        
+                        args = json.loads(args_str)
+                        _logger.info("⚡ Executing Tool: %s | ID: %s", fname, call_id)
+
+                        # --- ROUTER LOGIC ---
+                        if fname == "handoff_to_stock_agent":
+                            return {"status": "handoff", "target": "stock"}
+                        elif fname == "handoff_to_naming_agent":
+                            return {"status": "handoff", "target": "naming"}
+                        
+                        # --- STOCK LOGIC ---
+                        elif fname == "search_product_stock":
+                            tool_res = self._execute_search_product_stock(args.get('keyword'))
+                        elif fname == "check_product_existence":
+                            tool_res = self._execute_check_product_existence(args.get('keyword'))
+                        else:
+                            tool_res = json.dumps({"error": "Function unknown"})
+
+                        # 4. Append Tool Output (FIX LỖI 400 HERE)
+                        local_history.append({
+                            "role": "user",  # <--- ĐỔI TỪ TOOL SANG USER
+                            "content": f"Tool '{fname}' (ID: {call_id}) returned result: {tool_res}"
+                        })
+                    
+                    continue # Quay lại vòng lặp để gửi kết quả lên
+                
+                elif final_text_found:
+                    return {"status": "done", "text": final_text_found}
+                
+                else:
+                    return {"status": "error", "text": "AI returned empty response."}
+
+            except Exception as e:
+                _logger.exception("OpenAI API Error")
+                return {"status": "error", "text": str(e)}
+        
+        return {"status": "error", "text": "Timeout loop"}
+
+    def _call_openai_api(self, query):
+        if not OpenAI: return "Lỗi: Chưa cài openai."
+        config = self.env['hlv.chatgpt.config'].get_config()
+        if not config: return "Lỗi: Chưa cấu hình."
+
+        client = OpenAI(api_key=config.api_key)
+
+        # 1. Build Base History (Từ DB)
+        # Chỉ lấy text chat thông thường, bỏ qua các tool call cũ để tiết kiệm token và tránh lỗi
+        base_history = []
+        for msg in self.message_ids:
+            base_history.append({"role": msg.role, "content": msg.content or ""})
+        
+        # Thêm câu hỏi mới của User
+        base_history.append({"role": "user", "content": query})
+        
+        # 2. Determine Prompt ID
+        target_id = config.router_prompt_id
+        if self.current_agent == 'stock': target_id = config.stock_prompt_id
+        elif self.current_agent == 'naming': target_id = config.naming_prompt_id
+
+        # 3. CHẠY VÒNG 1 (Với Prompt hiện tại)
+        result = self._run_prompt_loop(client, target_id, list(base_history))
+
+        # 4. XỬ LÝ KẾT QUẢ
+        if result['status'] == 'done':
+            return result['text']
+        
+        elif result['status'] == 'handoff':
+            # === PHÁT HIỆN CHUYỂN HƯỚNG ===
+            new_target = result['target']
+            self.current_agent = new_target # Lưu trạng thái mới
+            
+            _logger.info("🔀 Handoff detected! Switching to: %s", new_target)
+            
+            # Chọn Prompt ID mới
+            new_prompt_id = config.stock_prompt_id if new_target == 'stock' else config.naming_prompt_id
+            
+            # CHẠY VÒNG 2 (Với Prompt mới)
+            final_res = self._run_prompt_loop(client, new_prompt_id, list(base_history))
+            
+            if final_res['status'] == 'done':
+                return final_res['text']
+            else:
+                return f"Lỗi tại Agent đích ({new_target}): {final_res.get('text')}"
+            
+        return f"Hệ thống bận. Lỗi: {result.get('text')}"
 
 class HlvChatgptMessage(models.Model):
     _name = 'hlv.chatgpt.message'
@@ -313,7 +313,9 @@ class HlvChatgptMessage(models.Model):
     _order = 'create_date asc'
 
     session_id = fields.Many2one('hlv.chatgpt.session', string='Phiên chat', ondelete='cascade')
-    role = fields.Selection([('user', 'Bạn'), ('assistant', 'AI')], string='Người gửi', required=True)
+    role = fields.Selection([('user', 'Bạn'), ('assistant', 'AI'), ('tool', 'Tool')], string='Role', required=True)
     content = fields.Text(string='Nội dung')
-    create_date = fields.Datetime(string='Thời gian')
+    
+    # --- ZALO INTERGRATION ---
     zalo_msg_id = fields.Char('Zalo Message ID', index=True, help="ID tin nhắn từ Zalo để tránh trùng lặp")
+    # -------------------------
