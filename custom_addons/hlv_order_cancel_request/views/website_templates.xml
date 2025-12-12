@@ -127,7 +127,7 @@
                 </div>
                 <h4 class="mb-3">Gửi yêu cầu thành công!</h4>
                 <p class="text-muted mb-4">
-                    Mã yêu cầu: <strong class="text-dark"><t t-esc="request.name if request else 'N/A'"/></strong><br/>
+                    Mã yêu cầu: <strong class="text-dark"><t t-esc="cancel_req.name if cancel_req else 'N/A'"/></strong><br/>
                     Thông báo đã được gửi đến Kế toán và Thủ kho.
                 </p>
                 <a href="/cancel-request/form" class="btn btn-outline-primary">Tạo yêu cầu mới</a>

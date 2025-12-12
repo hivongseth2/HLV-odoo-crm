@@ -98,4 +98,4 @@ class CancelRequestController(http.Controller):
         if req_id:
             req = request.env['sale.order.cancel.request'].sudo().browse(int(req_id))
             
-        return request.render('hlv_order_cancel_request.cancel_request_success', {'request': req})
+        return request.render('hlv_order_cancel_request.cancel_request_success', {'cancel_req': req})
