@@ -16,6 +16,13 @@ class HlvChatgptSession(models.Model):
     _description = 'Phiên Chat AI'
     _rec_name = 'name'
     _order = 'last_activity desc'
+    
+    state = fields.Selection([
+        ('new', 'Mới'),
+        ('active', 'Đang hoạt động'),
+        ('archived', 'Lưu trữ')
+    ], default='new', string='Trạng thái')
+    # ======================================
 
     name = fields.Char(string='Chủ đề', default='Cuộc hội thoại mới', required=True)
     user_id = fields.Many2one('res.users', string='Người tạo', default=lambda self: self.env.user)
