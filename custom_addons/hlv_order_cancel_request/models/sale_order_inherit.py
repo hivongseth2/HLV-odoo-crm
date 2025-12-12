@@ -6,16 +6,16 @@ class SaleOrder(models.Model):
     def write(self, vals):
         # Check if state is changing to 'cancel'
         # We need to capture orders that are GOING TO BE cancelled
-        orders_to_notify = self.env['sale.order']
-        if 'state' in vals and vals['state'] == 'cancel':
-            # Identify orders that are not yet cancelled
-            orders_to_notify = self.filtered(lambda so: so.state != 'cancel')
+        # orders_to_notify = self.env['sale.order']
+        # if 'state' in vals and vals['state'] == 'cancel':
+        #     # Identify orders that are not yet cancelled
+        #     orders_to_notify = self.filtered(lambda so: so.state != 'cancel')
             
         res = super(SaleOrder, self).write(vals)
 
-        if orders_to_notify:
-            for order in orders_to_notify:
-                order._send_zalo_cancel_notification()
+        # if orders_to_notify:
+        #     for order in orders_to_notify:
+        #         order._send_zalo_cancel_notification()
         
         return res
 

@@ -45,6 +45,7 @@ class SaleOrderCancelRequest(models.Model):
     def action_submit(self):
         self.ensure_one()
         self.state = 'submitted'
+        self._send_zalo_notification_on_submit()
 
     def action_done(self):
         self.state = 'done'
@@ -58,6 +59,55 @@ class SaleOrderCancelRequest(models.Model):
 
     def _expand_states(self, states, domain, order):
         return [key for key, val in type(self).state.selection]
+
+    def _send_zalo_notification_on_submit(self):
+        """
+        Send Zalo notification to Accountant and Warehouse when a request is submitted.
+        """
+        # Get recipients from config
+        Config = self.env['ir.config_parameter'].sudo()
+        accountant_uid = Config.get_param('hlv_order_cancel_request.accountant_zalo_uid')
+        warehouse_uid = Config.get_param('hlv_order_cancel_request.warehouse_zalo_uid')
+        
+        recipients = []
+        if accountant_uid: recipients.append(accountant_uid)
+        if warehouse_uid: recipients.append(warehouse_uid)
+        
+        if not recipients:
+            return
+
+        action_id = self.env.ref('hlv_order_cancel_request.action_sale_order_cancel_request').id
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        backend_url = f"{base_url}/odoo/action-{action_id}/{self.id}"
+
+        type_label = dict(self._fields['type'].selection).get(self.type, self.type).upper()
+
+        # Build message
+        msg = f"🔔 XÁC NHẬN YÊU CẦU {type_label} ĐƠN HÀNG\n"
+        msg += f"• Sale: {self.salesperson_name}\n"
+        msg += f"• Mã Đơn: {self.order_reference}\n"
+        if self.order_id:
+             msg += f"• Đơn Odoo: {self.order_id.name}\n"
+        msg += f"• Lý do: {self.reason}\n"
+        msg += f"• ID Yêu cầu: {self.name}\n"
+        msg += f"👉 Xem chi tiết: {backend_url}"
+
+        # Send via hlv_zalo_zns config
+        # We need an active Zalo config to send messages
+        zalo_config = self.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
+        if not zalo_config:
+            # Fallback or log warning if no zalo config found
+            return
+
+        for uid in recipients:
+             # Clean up UID if comma separated
+             uids = [u.strip() for u in uid.split(',') if u.strip()]
+             for u in uids:
+                 try:
+                     zalo_config.send_notification_message(u, msg)
+                 except Exception as e:
+                     # Log error but don't stop flow
+                     pass
 
     def _send_zalo_notification_on_done(self):
         """
