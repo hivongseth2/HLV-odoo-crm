@@ -11,7 +11,7 @@ class CancelRequestController(http.Controller):
             return request.redirect('/cancel-request/form')
         return request.redirect('/cancel-request/login')
 
-    @http.route('/cancel-request/login', type='http', auth='public', website=True)
+    @http.route('/cancel-request/login', type='http', auth='public', website=True, csrf=False)
     def login(self, **kwargs):
         """Render login page"""
         error = None
