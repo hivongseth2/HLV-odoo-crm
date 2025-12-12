@@ -76,13 +76,21 @@ class SaleOrderCancelRequest(models.Model):
             return
 
         # Build message
-        msg = f"🔔 YÊU CẦU {self.type.upper()} ĐƠN HÀNG\n"
+        action_id = self.env.ref('hlv_order_cancel_request.action_sale_order_cancel_request').id
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        backend_url = f"{base_url}/odoo/action-{action_id}/{self.id}"
+
+        type_label = dict(self._fields['type'].selection).get(self.type, self.type).upper()
+
+        # Build message
+        msg = f"🔔 YÊU CẦU {type_label} ĐƠN HÀNG\n"
         msg += f"• Sale: {self.salesperson_name}\n"
         msg += f"• Mã Đơn: {self.order_reference}\n"
         if self.order_id:
              msg += f"• Đơn Odoo: {self.order_id.name}\n"
         msg += f"• Lý do: {self.reason}\n"
-        msg += f"• ID Yêu cầu: {self.name}"
+        msg += f"• ID Yêu cầu: {self.name}\n"
+        msg += f"👉 Xem chi tiết: {backend_url}"
 
         # Send via hlv_zalo_zns config
         # We need an active Zalo config to send messages
