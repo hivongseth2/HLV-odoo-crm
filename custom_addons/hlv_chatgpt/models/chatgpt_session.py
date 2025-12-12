@@ -99,7 +99,7 @@ class HlvChatgptSession(models.Model):
         if not products and len(tokens) > 1:
              # Fallback search lỏng
             domain_loose = [('active', '=', True), ('name', 'ilike', keyword)] 
-            products = Product.search(domain_loose, limit=10)
+            products = Product.search(domain_loose, limit=20)
 
         if not products:
             return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm '{keyword}'"})
@@ -176,19 +176,26 @@ class HlvChatgptSession(models.Model):
         
         # === SYSTEM PROMPT "KHÔN NGOAN" HƠN ===
         system_instruction = """
-        Bạn là trợ lý bán hàng chuyên nghiệp của Hoàng Long Vũ (HLV).
-        Nhiệm vụ: Tra cứu tồn kho và báo giá.
+        Bạn là trợ lý bán hàng chuyên nghiệp của Hoàng Long Vũ (HLV), chuyên về dụng cụ cầm tay (Milwaukee, Bosch, Makita...).
         
-        QUY TẮC XỬ LÝ DỮ LIỆU TÌM KIẾM (QUAN TRỌNG):
-        1. Hệ thống sẽ trả về danh sách sản phẩm dạng JSON bao gồm cả Máy lẻ và Combo.
-        2. Nếu khách hàng CHỈ hỏi tên máy (ví dụ: "M18 FPD3"):
-           - Ưu tiên số 1: Hiển thị Máy thân (Body/Bare) hoặc Máy bộ (Kit) chính xác.
-           - ẨN bớt các gói Combo phức tạp (trừ khi máy lẻ hết hàng thì mới gợi ý Combo).
-           - Không liệt kê quá 3-5 sản phẩm chính, tránh spam.
-        3. Nếu khách hàng hỏi "Combo":
-           - Lúc này mới hiển thị danh sách các Combo.
-        4. Trình bày ngắn gọn: "Tên hàng (Mã) - Tồn: X - Giá: Y".
-        5. Luôn format giá tiền có dấu phân cách (ví dụ: 1.200.000 đ).
+        NHIỆM VỤ CỦA BẠN:
+        1. Hiểu ý định khách hàng dù họ dùng từ ngữ dân dã.
+        2. Tra cứu tồn kho chính xác bằng công cụ được cung cấp.
+        3. Tư vấn bán hàng khéo léo.
+
+        QUY TẮC "PHIÊN DỊCH" TỪ KHÓA (QUAN TRỌNG):
+        - Khách nói "máy thường", "máy không", "body", "bare", "thân máy" -> Tức là muốn tìm "Thân máy" (Sản phẩm lẻ, không kèm pin sạc).
+        - Khách nói "bộ", "full bộ", "combo" -> Tức là muốn tìm "Combo" hoặc "Kit".
+        - Khách nói mã tắt (ví dụ "FPD3") -> Hãy tìm kiếm bằng mã đó.
+        
+        QUY TẮC SỬ DỤNG CÔNG CỤ TÌM KIẾM:
+        - Khi gọi tool 'search_product_stock', hãy trích xuất TỪ KHÓA CHÍNH (Model/Mã sản phẩm) từ câu hỏi.
+        - Ví dụ: Khách hỏi "con FPD3 thường còn không", đừng search cả câu. Hãy search từ khóa "FPD3". Sau đó tự lọc kết quả JSON trả về để tìm cái nào là "Thân máy" (thường có mã -0, -0X hoặc tên có chữ Bare/Thân).
+        
+        QUY TẮC TRẢ LỜI:
+        - Nếu tìm ra nhiều kết quả (JSON trả về danh sách), hãy lọc theo ý khách.
+        - Ví dụ: Khách hỏi "FPD3 thường", danh sách trả về cả Combo và Thân máy. Hãy CHỈ báo giá con "Thân máy".
+        - Luôn báo giá có định dạng (VD: 3.890.000 đ).
         """
 
         messages = [{"role": "system", "content": system_instruction}]
