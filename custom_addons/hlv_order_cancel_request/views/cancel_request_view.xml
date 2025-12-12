@@ -4,9 +4,9 @@
         <field name="name">sale.order.cancel.request.tree</field>
         <field name="model">sale.order.cancel.request</field>
         <field name="arch" type="xml">
-            <list string="Cancellation Requests" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'">
+            <list string="Yêu cầu Hủy Đơn" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'">
                 <field name="name"/>
-                <field name="create_date" string="Requested On"/>
+                <field name="create_date" string="Ngày Yêu Cầu"/>
                 <field name="salesperson_name"/>
                 <field name="order_reference"/>
                 <field name="type"/>
@@ -19,12 +19,12 @@
         <field name="name">sale.order.cancel.request.form</field>
         <field name="model">sale.order.cancel.request</field>
         <field name="arch" type="xml">
-            <form string="Cancellation Request">
+            <form string="Yêu cầu Hủy Đơn">
                 <header>
-                    <button name="action_submit" string="Submit" type="object" class="oe_highlight" invisible="state != 'draft'"/>
-                    <button name="action_done" string="Mark Done" type="object" class="oe_highlight" invisible="state != 'submitted'"/>
-                    <button name="action_reject" string="Reject" type="object" invisible="state not in ('draft', 'submitted')"/>
-                    <button name="action_draft" string="Reset to Draft" type="object" invisible="state == 'draft'"/>
+                    <button name="action_submit" string="Gửi Yêu Cầu" type="object" class="oe_highlight" invisible="state != 'draft'"/>
+                    <button name="action_done" string="Đã Xử Lý" type="object" class="oe_highlight" invisible="state != 'submitted'"/>
+                    <button name="action_reject" string="Từ Chối" type="object" invisible="state not in ('draft', 'submitted')"/>
+                    <button name="action_draft" string="Về Nháp" type="object" invisible="state == 'draft'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,submitted,done"/>
                 </header>
                 <sheet>
@@ -58,34 +58,34 @@
         <field name="name">sale.order.cancel.request.search</field>
         <field name="model">sale.order.cancel.request</field>
         <field name="arch" type="xml">
-            <search string="Search Requests">
+            <search string="Tìm kiếm">
                 <field name="name"/>
                 <field name="salesperson_name"/>
                 <field name="order_reference"/>
-                <filter string="Draft" name="draft" domain="[('state', '=', 'draft')]"/>
-                <filter string="Submitted" name="submitted" domain="[('state', '=', 'submitted')]"/>
-                <group expand="0" string="Group By">
-                    <filter string="State" name="group_by_state" context="{'group_by': 'state'}"/>
-                    <filter string="Type" name="group_by_type" context="{'group_by': 'type'}"/>
+                <filter string="Nháp" name="draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Đã Gửi" name="submitted" domain="[('state', '=', 'submitted')]"/>
+                <group expand="0" string="Nhóm Theo">
+                    <filter string="Trạng Thái" name="group_by_state" context="{'group_by': 'state'}"/>
+                    <filter string="Loại" name="group_by_type" context="{'group_by': 'type'}"/>
                 </group>
             </search>
         </field>
     </record>
 
     <record id="action_sale_order_cancel_request" model="ir.actions.act_window">
-        <field name="name">Cancellation Requests</field>
+        <field name="name">Yêu cầu Hủy Đơn</field>
         <field name="res_model">sale.order.cancel.request</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_sale_order_cancel_request_search"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
-                No cancellation requests found.
+                Không có yêu cầu hủy đơn nào.
             </p>
         </field>
     </record>
 
     <menuitem id="menu_sale_order_cancel_request"
-              name="Cancellation Requests"
+              name="Yêu cầu Hủy Đơn"
               parent="sale.menu_sale_config"
               action="action_sale_order_cancel_request"
               sequence="50"/>

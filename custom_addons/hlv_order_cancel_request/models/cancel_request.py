@@ -2,34 +2,34 @@ from odoo import models, fields, api, _
 
 class SaleOrderCancelRequest(models.Model):
     _name = 'sale.order.cancel.request'
-    _description = 'Sale Order Cancellation Request'
+    _description = 'Yêu cầu Hủy Đơn Hàng'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'create_date desc'
 
-    name = fields.Char(string='Request ID', required=True, copy=False, readonly=True, index=True, default=lambda self: _('New'))
-    salesperson_name = fields.Char(string='Salesperson Name', required=True, tracking=True)
-    order_reference = fields.Char(string='Order Reference', required=True, tracking=True, help="Order number entered by salesperson e.g. SO12345")
+    name = fields.Char(string='Mã Yêu Cầu', required=True, copy=False, readonly=True, index=True, default=lambda self: _('Mới'))
+    salesperson_name = fields.Char(string='Tên Sale / Mã Sale', required=True, tracking=True)
+    order_reference = fields.Char(string='Mã Đơn Hàng', required=True, tracking=True, help="Mã đơn hàng được nhập bởi Sale, ví dụ: SO12345")
     
-    order_id = fields.Many2one('sale.order', string='Sale Order', compute='_compute_order_id', store=True, readonly=False)
+    order_id = fields.Many2one('sale.order', string='Đơn Bán Hàng', compute='_compute_order_id', store=True, readonly=False)
     
     type = fields.Selection([
-        ('cancel', 'Cancellation'),
-        ('modify', 'Modification')
-    ], string='Request Type', default='cancel', required=True, tracking=True)
+        ('cancel', 'Hủy Đơn'),
+        ('modify', 'Chỉnh Sửa')
+    ], string='Loại Yêu Cầu', default='cancel', required=True, tracking=True)
     
-    reason = fields.Text(string='Reason', required=True, tracking=True)
+    reason = fields.Text(string='Lý do', required=True, tracking=True)
     
     state = fields.Selection([
-        ('draft', 'Draft'),
-        ('submitted', 'Submitted'),
-        ('done', 'Done'),
-        ('rejected', 'Rejected')
-    ], string='Status', default='draft', tracking=True, group_expand='_expand_states')
+        ('draft', 'Nháp'),
+        ('submitted', 'Đã Gửi'),
+        ('done', 'Hoàn Thành'),
+        ('rejected', 'Đã Từ Chối')
+    ], string='Trạng Thái', default='draft', tracking=True, group_expand='_expand_states')
 
     @api.model
     def create(self, vals):
-        if vals.get('name', _('New')) == _('New'):
-            vals['name'] = self.env['ir.sequence'].next_by_code('sale.order.cancel.request') or _('New')
+        if vals.get('name', _('Mới')) == _('Mới'):
+            vals['name'] = self.env['ir.sequence'].next_by_code('sale.order.cancel.request') or _('Mới')
         return super(SaleOrderCancelRequest, self).create(vals)
 
     @api.depends('order_reference')

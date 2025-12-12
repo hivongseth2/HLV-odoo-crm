@@ -1,5 +1,6 @@
 from odoo import http, _
 from odoo.http import request
+import json
 
 class CancelRequestController(http.Controller):
 
@@ -63,6 +64,29 @@ class CancelRequestController(http.Controller):
             values = kwargs
 
         return request.render('hlv_order_cancel_request.cancel_request_form', {'values': values, 'error': error})
+
+    @http.route('/cancel-request/autocomplete/saler', type='http', auth='public', website=True)
+    def autocomplete_saler(self, term='', **kwargs):
+        """Autocomplete for salesperson based on x_studio_misa_saler_code"""
+        if not request.session.get('cancel_request_authenticated'):
+             return json.dumps([])
+        
+        domain = [('x_studio_misa_saler_code', 'ilike', term)]
+        # We want distinct codes/names?
+        # Actually x_studio_misa_saler_code is typically a short code. 
+        # But user said "name is x_studio_misa_saler_code" -> so I just suggest from this field.
+        
+        # Optimize: select distinct on this field.
+        # But Odoo ORM search_read is easier
+        orders = request.env['sale.order'].sudo().search(domain, limit=20)
+        
+        # Use set to distinct
+        values = set()
+        for o in orders:
+            if o.x_studio_misa_saler_code:
+                values.add(o.x_studio_misa_saler_code)
+                
+        return json.dumps(list(values))
 
     @http.route('/cancel-request/success', type='http', auth='public', website=True)
     def success(self, req_id=None, **kwargs):
