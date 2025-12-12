@@ -6,37 +6,40 @@ import { formView } from "@web/views/form/form_view";
 export class ChatFormController extends FormController {
     setup() {
         super.setup();
+        console.log("HLV Chat Widget: Controller Loaded!"); // Log để kiểm tra JS đã chạy chưa
     }
 
     /**
-     * Ghi đè hàm onSaved hoặc thêm sự kiện lắng nghe
-     * Tuy nhiên, cách đơn giản nhất trong Odoo 16/17/18 là can thiệp vào onRender
-     * hoặc bind sự kiện trực tiếp lên field.
+     * Bắt sự kiện phím bấm trên toàn bộ Form View
      */
-    
-    // Xử lý sự kiện phím bấm trên toàn bộ Form này
     onKeydown(ev) {
-        // Nếu đang focus vào ô nhập liệu có name="input_text"
-        if (ev.target.name === "input_text" || ev.target.getAttribute("name") === "input_text") {
-            if (ev.key === "Enter" && !ev.shiftKey) {
+        // Kiểm tra nếu phím nhấn là Enter (và không giữ Shift)
+        if (ev.key === "Enter" && !ev.shiftKey) {
+
+            // Logic mới: Kiểm tra nếu đang focus vào ô Textarea bất kỳ trong view này
+            if (ev.target.tagName === "TEXTAREA") {
+                console.log("HLV Chat Widget: Enter detected!");
+
                 ev.preventDefault(); // Chặn xuống dòng
-                ev.stopPropagation();
-                
-                // Tìm nút Gửi và click
-                const sendBtn = this.root.el.querySelector('button[name="action_send_message"]');
+                ev.stopPropagation(); // Chặn sự kiện lan truyền
+
+                // Tìm nút Gửi (class .btn-send-chat) và click
+                const sendBtn = this.root.el.querySelector('.btn-send-chat');
                 if (sendBtn) {
                     sendBtn.click();
+                } else {
+                    console.warn("HLV Chat Widget: Send button not found!");
                 }
             }
         }
     }
 }
 
-// Kế thừa Form View để gắn Controller mới vào
+// Định nghĩa View mới sử dụng Controller ở trên
 export const chatFormView = {
     ...formView,
     Controller: ChatFormController,
 };
 
-// Đăng ký view mới vào registry với tên 'hlv_chat_form'
+// Đăng ký vào hệ thống
 registry.category("views").add("hlv_chat_form", chatFormView);

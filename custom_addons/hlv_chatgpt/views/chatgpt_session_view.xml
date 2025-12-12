@@ -14,27 +14,30 @@
                             <div t-attf-class="d-flex w-100 #{record.role.raw_value == 'user' ? 'flex-row-reverse' : 'flex-row'} mb-2">
                                 
                                 <div t-attf-class="flex-shrink-0 #{record.role.raw_value == 'user' ? 'ms-2' : 'me-2'} align-self-end">
-                                    <div class="d-flex align-items-center justify-content-center rounded-circle shadow-sm" 
-                                         t-attf-style="width: 32px; height: 32px; background-color: #{record.role.raw_value == 'user' ? '#0084ff' : '#e4e6eb'}; color: #{record.role.raw_value == 'user' ? '#fff' : '#050505'};">
-                                        <i t-attf-class="fa #{record.role.raw_value == 'user' ? 'fa-user' : 'fa-robot'} small"></i>
+                                    <div t-if="record.role.raw_value == 'assistant'" 
+                                         class="d-flex align-items-center justify-content-center rounded-circle shadow-sm" 
+                                         style="width: 28px; height: 28px; background-color: #10a37f; color: white;">
+                                        <i class="fa fa-bolt fa-sm"></i>
+                                    </div>
+                                    <div t-if="record.role.raw_value == 'user'" 
+                                         class="d-flex align-items-center justify-content-center rounded-circle shadow-sm" 
+                                         style="width: 28px; height: 28px; background-color: #5d5d5d; color: white;">
+                                        <i class="fa fa-user fa-sm"></i>
                                     </div>
                                 </div>
 
-                                <div t-attf-class="p-3 shadow-sm position-relative text-break" 
+                                <div t-attf-class="px-3 py-2 shadow-sm position-relative text-break" 
                                      t-attf-style="
-                                        max-width: 70%; 
-                                        border-radius: 18px; 
-                                        font-size: 14px;
-                                        line-height: 1.5;
-                                        background-color: #{record.role.raw_value == 'user' ? '#0084ff' : '#f0f2f5'};
-                                        color: #{record.role.raw_value == 'user' ? '#ffffff' : '#050505'};
-                                        border-bottom-#{record.role.raw_value == 'user' ? 'right' : 'left'}-radius: 4px;
+                                        max-width: 85%; 
+                                        border-radius: 12px; 
+                                        font-size: 13.5px; 
+                                        line-height: 1.4;
+                                        box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+                                        background-color: #{record.role.raw_value == 'user' ? '#ffffff' : '#f7f7f8'};
+                                        border: #{record.role.raw_value == 'user' ? '1px solid #e5e5e5' : 'none'};
+                                        color: #343541;
                                      ">
                                     <div style="white-space: pre-wrap;"><field name="content"/></div>
-                                    <div class="text-end mt-1" 
-                                         t-attf-style="font-size: 10px; opacity: 0.6; color: inherit;">
-                                        <field name="create_date" widget="relative_time"/>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -53,41 +56,40 @@
                     <field name="state" widget="statusbar" invisible="1"/> 
                 </header>
                 <sheet class="p-0">
-                    <div class="p-3 border-bottom d-flex align-items-center bg-white sticky-top" style="z-index: 100;">
-                        <div class="flex-grow-1">
-                            <field name="name" class="h4 mb-0 text-primary fw-bold" placeholder="Chủ đề hội thoại..."/>
-                            <div class="small text-muted">
-                                <i class="fa fa-clock-o me-1"></i>Hoạt động: <field name="last_activity" widget="relative_time"/>
-                            </div>
+                    <div class="px-3 py-2 border-bottom d-flex align-items-center bg-white sticky-top shadow-sm" style="z-index: 100; height: 50px;">
+                        <div class="flex-grow-1 d-flex align-items-center">
+                            <i class="fa fa-comments-o text-primary me-2"></i>
+                            <field name="name" class="fw-bold text-dark mb-0" placeholder="Chủ đề..." style="border:none; font-size: 14px; width: 100%;"/>
                         </div>
-                        <div>
-                             <field name="user_id" widget="many2one_avatar_user"/>
+                        <div class="small text-muted ms-2">
+                             <field name="last_activity" widget="relative_time"/>
                         </div>
                     </div>
                     
-                    <div class="o_chat_history p-3" 
-                         style="background-color: #ffffff; height: 65vh; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;">
-                        
+                    <div class="o_chat_history px-3 py-2" 
+                         style="background-color: #ffffff; height: 82vh; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;">
                         <field name="message_ids" mode="kanban" nolabel="1"/>
-                        
                     </div>
 
-                    <div class="p-3 bg-white border-top sticky-bottom">
-                        <div class="d-flex gap-2 align-items-end bg-light rounded-3 p-2 border">
-                            <field name="input_text" 
-                                   placeholder="Nhập tin nhắn... (Enter để Gửi)" 
-                                   class="border-0 bg-transparent flex-grow-1"
-                                   style="resize: none; outline: none; font-size: 15px; max-height: 100px; overflow-y: auto;"
-                                   nolabel="1"/>
+                    <div class="p-2 bg-white border-top sticky-bottom shadow-lg">
+                        <div class="d-flex gap-2 align-items-end position-relative">
+                            <div class="flex-grow-1 bg-light rounded-3 border px-2 py-1 focus-shadow transition-all">
+                                <field name="input_text" 
+                                       placeholder="Nhập tin nhắn..." 
+                                       class="border-0 bg-transparent w-100"
+                                       style="resize: none; outline: none; font-size: 14px; min-height: 40px; max-height: 120px; overflow-y: auto;"
+                                       nolabel="1"/>
+                            </div>
                                    
                             <button name="action_send_message" 
                                     string="" 
                                     type="object" 
-                                    class="btn btn-link text-primary p-2 rounded-circle hover-bg-gray" 
-                                    icon="fa-paper-plane fa-lg"/>
+                                    class="btn btn-primary rounded-3 btn-send-chat shadow-sm d-flex align-items-center justify-content-center" 
+                                    style="background-color: #10a37f; border-color: #10a37f; width: 42px; height: 42px;"
+                                    icon="fa-paper-plane"/>
                         </div>
-                        <div class="text-muted text-end mt-1" style="font-size: 11px;">
-                            <i>Enter để gửi, Shift+Enter để xuống dòng</i>
+                        <div class="text-end mt-1 me-1" style="font-size: 10px; color: #aaa;">
+                            <span>Enter để gửi</span>
                         </div>
                     </div>
                 </sheet>
