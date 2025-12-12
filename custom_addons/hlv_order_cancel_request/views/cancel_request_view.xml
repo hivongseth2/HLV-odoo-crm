@@ -4,14 +4,14 @@
         <field name="name">sale.order.cancel.request.tree</field>
         <field name="model">sale.order.cancel.request</field>
         <field name="arch" type="xml">
-            <tree string="Cancellation Requests" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'">
+            <list string="Cancellation Requests" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'">
                 <field name="name"/>
                 <field name="create_date" string="Requested On"/>
                 <field name="salesperson_name"/>
                 <field name="order_reference"/>
                 <field name="type"/>
                 <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-warning="state == 'submitted'" decoration-success="state == 'done'" decoration-danger="state == 'rejected'"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -75,7 +75,7 @@
     <record id="action_sale_order_cancel_request" model="ir.actions.act_window">
         <field name="name">Cancellation Requests</field>
         <field name="res_model">sale.order.cancel.request</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_sale_order_cancel_request_search"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
