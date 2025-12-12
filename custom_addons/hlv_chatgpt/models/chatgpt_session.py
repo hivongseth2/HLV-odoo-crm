@@ -183,9 +183,25 @@ class HlvChatgptSession(models.Model):
                     continue
                 
                 else:
-                    # Final Text Response
+                    # Không có tool call -> Đây là câu trả lời cuối cùng (Text)
                     final_text = output_msg.content
-                    if isinstance(final_text, list): final_text = final_text[0].text.value
+                    
+                    if isinstance(final_text, list):
+                        # Lấy phần tử đầu tiên của list
+                        first_item = final_text[0]
+                        
+                        # Kiểm tra xem có thuộc tính .text không
+                        if hasattr(first_item, 'text'):
+                            text_content = first_item.text
+                            # FIX LỖI: Kiểm tra xem .text là object (có .value) hay là string
+                            if hasattr(text_content, 'value'):
+                                final_text = text_content.value
+                            else:
+                                final_text = str(text_content)
+                        else:
+                            # Fallback nếu cấu trúc lạ
+                            final_text = str(first_item)
+                    
                     return {"status": "done", "text": final_text}
 
             except Exception as e:
