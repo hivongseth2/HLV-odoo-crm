@@ -59,44 +59,97 @@ class HlvChatgptSession(models.Model):
         } for p in products], ensure_ascii=False)
 
     def _execute_search_product_stock(self, keyword):
-        """Logic Search V3: Tokenize + Score Sorting"""
-        _logger.info("🔧 Search Stock: %s", keyword)
+        """
+        V4: Search Siêu Rộng (Tên + Mã + Nhóm hàng + Mô tả)
+        Kết hợp sức mạnh suy luận của AI và dữ liệu Odoo.
+        """
+        _logger.info("🔧 AI Smart Search V4 Input: %s", keyword)
+        
         if not keyword: return json.dumps({"error": "Thiếu từ khóa"})
 
-        # Stop words removal
-        stop_words = ["thường", "máy", "cái", "con", "cây", "bộ", "khoan", "pin", "sạc", "thân", "body", "bare", "search", "tìm", "kiểm", "tra", "tồn", "kho", "giá"]
+        # 1. Clean từ khóa
+        stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "giúp", "em", "mình", "shop"]
         keyword_clean = keyword.lower()
-        for w in stop_words: keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
-        keyword_clean = keyword_clean.strip() or keyword
+        for w in stop_words: 
+            keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
+        keyword_clean = keyword_clean.strip()
 
-        # Search
+        # 2. Tách từ (Tokenize)
         tokens = keyword_clean.split()
+        
+        # 3. Xây dựng Domain tìm kiếm "Bao vây"
+        # Logic: Tìm trong Tên OR Mã OR Barcode OR Mô tả OR Tên Nhóm hàng
         domain = [('active', '=', True)]
+        
         for token in tokens:
-            domain += ['|', '|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token), ('description_sale', 'ilike', token)]
-        
-        products = self.env['product.product'].sudo().search(domain, limit=15)
-        
-        if not products: 
-            return json.dumps({"status": "empty", "message": f"Không tìm thấy '{keyword_clean}'"})
+            token_domain = [
+                '|', '|', '|', '|',
+                ('name', 'ilike', token),             # Tìm trong Tên
+                ('default_code', 'ilike', token),     # Tìm trong Mã nội bộ
+                ('barcode', 'ilike', token),          # Tìm trong Mã vạch
+                ('description_sale', 'ilike', token), # Tìm trong Mô tả kỹ thuật
+                ('categ_id.name', 'ilike', token)     # Tìm trong Tên Nhóm hàng (Category)
+            ]
+            domain += token_domain
 
-        # Sort & Format
-        result = []
+        Product = self.env['product.product'].sudo()
+        
+        # Lấy 20 kết quả để AI có nhiều lựa chọn lọc
+        products = Product.search(domain, limit=20)
+
+        # Fallback: Nếu search gắt (AND) không ra, thử search lỏng (OR) với từ khóa gốc
+        if not products and len(tokens) > 1:
+            _logger.info("🔧 Fallback search loose...")
+            products = Product.search([
+                ('active', '=', True), 
+                '|', ('name', 'ilike', keyword_clean), ('default_code', 'ilike', keyword_clean)
+            ], limit=10)
+
+        if not products:
+            # Gợi ý cho AI biết là không tìm thấy để nó báo khách
+            return json.dumps({
+                "status": "empty", 
+                "message": f"Hệ thống không tìm thấy sản phẩm nào khớp với '{keyword_clean}'. Hãy thử từ khóa ngắn hơn hoặc mã model."
+            })
+
+        # 4. Xử lý kết quả & Tính điểm ưu tiên (Smart Ranking)
+        result_list = []
         for p in products:
             score = 0
-            if p.qty_available > 0: score += 1000
-            if keyword_clean in p.name.lower(): score += 100
-            if "combo" in p.name.lower() and "combo" not in keyword_clean: score -= 50
+            p_name_low = p.name.lower()
             
-            result.append({
-                "name": p.name, "code": p.default_code, "price": p.list_price, 
-                "qty": p.qty_available, "uom": p.uom_id.name, "score": score
+            # Ưu tiên 1: Có tồn kho
+            if p.qty_available > 0: score += 2000
+            
+            # Ưu tiên 2: Khớp mã chính xác (Code thường ngắn và duy nhất)
+            if p.default_code and keyword_clean in p.default_code.lower():
+                score += 500
+                
+            # Ưu tiên 3: Tên sản phẩm bắt đầu bằng từ khóa
+            if p_name_low.startswith(keyword_clean): 
+                score += 100
+
+            # Ưu tiên 4: Trừ điểm Combo (nếu khách không hỏi combo)
+            if "combo" in p_name_low and "combo" not in keyword_clean:
+                score -= 50
+
+            result_list.append({
+                "name": p.name,
+                "code": p.default_code or "",
+                "category": p.categ_id.name or "", # Trả về nhóm hàng để AI hiểu ngữ cảnh
+                "price": p.list_price,
+                "qty": p.qty_available,
+                "uom": p.uom_id.name,
+                "score": score
             })
+
+        # Sort giảm dần theo điểm
+        result_list.sort(key=lambda x: x['score'], reverse=True)
         
-        result.sort(key=lambda x: x['score'], reverse=True)
-        for item in result: del item['score']
-        
-        return json.dumps(result, ensure_ascii=False)
+        # Cleanup score
+        for item in result_list: del item['score']
+
+        return json.dumps(result_list, ensure_ascii=False)
 
     # =================================================================================
     # 2. XỬ LÝ GỬI NHẬN (ACTION BUTTON)
