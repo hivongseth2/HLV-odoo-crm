@@ -120,7 +120,8 @@ class ZaloSheetWebhook(http.Controller):
                 
                 # --- CASE B: CHAT VỚI CHATGPT (MỚI) ---
                 # Điều kiện: Có config Zalo, có bật ChatGPT, và nội dung không rỗng
-                elif config and config.enable_chatgpt and message_content:
+                # elif config and config.enable_chatgpt and message_content:
+                elif config and request.env['hlv.chatgpt.config'].sudo().search_count([('active', '=', True)]) > 0 and message_content:
                     _logger.info("Zalo Webhook: Chuyển tin nhắn từ %s sang ChatGPT", user_id)
                     
                     # Gọi sang Model ChatGPT Session để xử lý
