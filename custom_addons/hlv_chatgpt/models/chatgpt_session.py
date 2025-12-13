@@ -175,97 +175,120 @@ class HlvChatgptSession(models.Model):
     # 3. CORE LOGIC: CHẠY PROMPT LOOP
     # =================================================================================
     def _run_prompt_loop(self, client, prompt_id, messages_history):
-        """Vòng lặp: Gọi API -> Check Tool -> Chạy Tool -> Gọi lại API"""
-        
+        """Vòng lặp an toàn: Hỗ trợ cả Dict và Object để tránh lỗi AttributeError"""
         local_history = list(messages_history)
         _logger.info("🏁 Loop Start | Prompt ID: %s", prompt_id)
 
+        # --- Helper Function: Lấy dữ liệu an toàn bất chấp Dict hay Object ---
+        def get_val(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+        # -------------------------------------------------------------------
+
         for i in range(3): # Max 3 turns
             try:
-                # 1. GỌI API (Sửa lại cho chuẩn thư viện OpenAI mới nhất)
+                # 1. GỌI API
                 response = client.chat.completions.create(
                     model="gpt-4o",
-                    prompt={"id": prompt_id}, # Hoặc model="gpt-4o", messages=... tuỳ cách bạn dùng prompt id
-                    input=local_history,      # Lưu ý: check kỹ lại doc xem thư viện bạn dùng tham số là 'input' hay 'messages'
+                    prompt={"id": prompt_id},
+                    input=local_history,
                 )
                 
-                # 2. PARSE KẾT QUẢ (An toàn hơn)
+                # 2. PARSE RESPONSE (Dùng hàm get_val để tránh lỗi)
                 tool_calls_found = []
                 final_text_found = ""
                 
-                # Support cả 2 kiểu cấu trúc object trả về (cho chắc ăn)
-                if hasattr(response, 'output'): # Cấu trúc lạ/Wrapper
-                    for item in response.output:
-                        if getattr(item, 'type', '') == 'function_call': tool_calls_found.append(item)
-                        elif getattr(item, 'type', '') == 'message': final_text_found = item.content[0].text
-                
-                elif hasattr(response, 'choices'): # Cấu trúc chuẩn OpenAI
-                    msg = response.choices[0].message
-                    if msg.tool_calls: tool_calls_found = msg.tool_calls
-                    if msg.content: final_text_found = msg.content
+                # Lấy output list an toàn
+                output_items = get_val(response, 'output')
+                choices = get_val(response, 'choices')
 
-                # --- XỬ LÝ NẾU CÓ TOOL CALL ---
+                if output_items: # Cấu trúc mới/Wrapper
+                    for item in output_items:
+                        itype = get_val(item, 'type')
+                        if itype == 'function_call': 
+                            tool_calls_found.append(item)
+                        elif itype == 'message': 
+                            content_list = get_val(item, 'content', [])
+                            if content_list:
+                                final_text_found = get_val(content_list[0], 'text')
+                
+                elif choices: # Cấu trúc chuẩn OpenAI
+                    choice = choices[0]
+                    msg = get_val(choice, 'message')
+                    t_calls = get_val(msg, 'tool_calls')
+                    if t_calls: tool_calls_found = t_calls
+                    
+                    content = get_val(msg, 'content')
+                    if content: final_text_found = content
+
+                # --- XỬ LÝ TOOL CALL ---
                 if tool_calls_found:
-                    # Tạo list tên tool để log (xử lý an toàn)
+                    # 1. Log AI Message (Fix lỗi tại đây)
                     tool_names = []
                     for t in tool_calls_found:
-                        # Lấy function name an toàn
-                        fn = getattr(t, 'function', None)
-                        name = getattr(t, 'name', None) or (getattr(fn, 'name', 'unknown') if fn else 'unknown')
-                        tool_names.append(name)
+                        # Thử lấy trong 'function' trước
+                        func = get_val(t, 'function')
+                        if func:
+                            name = get_val(func, 'name')
+                        else:
+                            name = get_val(t, 'name') # Fallback
+                        tool_names.append(str(name))
 
                     ai_msg = "I am calling tools: " + ", ".join(tool_names)
                     local_history.append({"role": "assistant", "content": ai_msg})
                     
                     handoff_target = None
                     
-                    # Thực thi từng tool
+                    # 2. Thực thi từng tool
                     for tool in tool_calls_found:
-                        # --- PARSE DỮ LIỆU CẨN THẬN ---
-                        # 1. Lấy Name
-                        if hasattr(tool, 'function'): # Chuẩn OpenAI
-                            fname = tool.function.name
-                            args_str = tool.function.arguments
-                        else: # Cấu trúc khác
-                            fname = getattr(tool, 'name', 'unknown')
-                            args_str = getattr(tool, 'arguments', '{}')
+                        # Lấy function name và args an toàn
+                        func = get_val(tool, 'function')
+                        if func:
+                            fname = get_val(func, 'name')
+                            args_str = get_val(func, 'arguments')
+                        else:
+                            fname = get_val(tool, 'name')
+                            args_str = get_val(tool, 'arguments')
                         
-                        call_id = getattr(tool, 'id', 'call_id')
+                        call_id = get_val(tool, 'id') or get_val(tool, 'call_id') or 'unknown_id'
                         
-                        # 2. Parse Args
+                        # Parse Arguments
                         try:
-                            args = json.loads(args_str)
+                            if isinstance(args_str, dict): 
+                                args = args_str
+                            else: 
+                                args = json.loads(args_str or '{}')
                         except:
                             args = {}
 
                         _logger.info("⚡ Tool: %s | Args: %s", fname, args)
 
-                        # --- CHECK HANDOFF ---
+                        # Check Handoff
                         if fname == "handoff_to_stock_agent": handoff_target = "stock"
                         elif fname == "handoff_to_naming_agent": handoff_target = "naming"
                         
-                        # --- EXECUTE ---
+                        # Execute Search
                         tool_res = "Done"
                         if fname == "search_product_stock":
                             tool_res = self._execute_search_product_stock(args.get('keyword'))
                         elif fname == "check_product_existence":
                             tool_res = self._execute_check_product_existence(args.get('keyword'))
-                        # elif ... thêm các tool khác
-
-                        # 3. APPEND HISTORY (Giả lập User gửi kết quả - Tránh lỗi 400)
+                        
+                        # 3. Append kết quả vào history
                         local_history.append({
                             "role": "user", 
                             "content": f"Tool '{fname}' (ID: {call_id}) Result: {tool_res}"
                         })
 
-                    # Check Handoff sau khi chạy xong tool (để đảm bảo history được lưu)
+                    # 4. Handoff nếu cần
                     if handoff_target:
                         return {"status": "handoff", "target": handoff_target}
 
-                    # CONTINUE để vòng lặp chạy tiếp, gửi kết quả tool lên cho AI
+                    # 5. Continue vòng lặp
                     continue 
                 
-                # --- NẾU KHÔNG CÓ TOOL -> TRẢ LỜI TEXT ---
+                # --- TRẢ LỜI TEXT ---
                 elif final_text_found:
                     return {"status": "done", "text": final_text_found}
             
