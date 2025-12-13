@@ -4,6 +4,8 @@ from odoo import models, fields, api
 class HlvChatgptConfig(models.Model):
     _name = 'hlv.chatgpt.config'
     _description = 'Cấu hình Multi-Agent'
+    
+    active = fields.Boolean(string='Kích hoạt', default=True)
 
     name = fields.Char(string='Tên cấu hình', default='Cấu hình Chính')
     api_key = fields.Char(string='OpenAI API Key', required=True)
