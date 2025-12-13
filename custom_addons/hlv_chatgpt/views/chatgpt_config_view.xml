@@ -19,7 +19,6 @@
                             <field name="stock_id" placeholder="asst_5iZ1U3pGzUOMvRs14iHBQAK0"/>
                             <field name="naming_id" placeholder="asst_EnBglJacCItJt8xTqD8TTu1P"/>
                         </group>
-                        </group>
                     </group>
                 </sheet>
             </form>
