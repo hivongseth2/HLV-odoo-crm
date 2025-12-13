@@ -189,11 +189,14 @@ class HlvChatgptSession(models.Model):
         for i in range(3): # Max 3 turns
             try:
                 # 1. GỌI API
-                response = client.chat.completions.create(
+          
+                
+                response = client.responses.create(
                     model="gpt-4o",
                     prompt={"id": prompt_id},
-                    messages=local_history,
+                    input=local_history,
                 )
+                
                 
                 # 2. PARSE RESPONSE (Dùng hàm get_val để tránh lỗi)
                 tool_calls_found = []
