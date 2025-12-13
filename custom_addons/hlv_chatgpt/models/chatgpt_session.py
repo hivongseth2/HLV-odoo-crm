@@ -215,14 +215,51 @@ class HlvChatgptSession(models.Model):
                     local_history.append({"role": "assistant", "content": "Executing tools..."})
                     
                     for tool in tool_calls_found:
-                        fname = getattr(tool, 'name', getattr(tool.function, 'name', 'unknown'))
-                        args_raw = getattr(tool, 'arguments', getattr(tool.function, 'arguments', '{}'))
-                        try: args = json.loads(args_raw)
-                        except: args = {}
+                        # === LOGIC PARSE ĐA NĂNG (MỚI) ===
+                        # Hỗ trợ cả ResponseFunctionToolCall (API Mới) và ChatCompletion (API Cũ)
+                        
+                        fname = "unknown"
+                        args_str = "{}"
+                        call_id = "unknown_id"
 
-                        _logger.info("⚡ Tool: %s", fname)
+                        # 1. Lấy ID
+                        if hasattr(tool, 'call_id'): call_id = tool.call_id
+                        elif hasattr(tool, 'id'): call_id = tool.id
+                        
+                        # 2. Lấy Name & Arguments
+                        # TRƯỜNG HỢP A: API Cũ (Có thuộc tính .function)
+                        if hasattr(tool, 'function') and tool.function:
+                            fname = tool.function.name
+                            args_str = tool.function.arguments
+                        
+                        # TRƯỜNG HỢP B: API Mới (ResponseFunctionToolCall - Thuộc tính phẳng)
+                        elif hasattr(tool, 'name'):
+                            fname = tool.name
+                            args_str = getattr(tool, 'arguments', '{}')
+                        
+                        # TRƯỜNG HỢP C: Dạng Dict (Phòng hờ)
+                        elif isinstance(tool, dict):
+                            # Thử kiểu cũ
+                            if 'function' in tool:
+                                fname = tool['function'].get('name')
+                                args_str = tool['function'].get('arguments')
+                            # Thử kiểu mới
+                            else:
+                                fname = tool.get('name')
+                                args_str = tool.get('arguments')
 
-                        # --- LOGIC HANDOFF (QUAN TRỌNG) ---
+                        # 3. Parse JSON Arguments
+                        try:
+                            if isinstance(args_str, dict): args = args_str # Nếu đã là dict thì dùng luôn
+                            else: args = json.loads(args_str or '{}')
+                        except: 
+                            args = {}
+
+                        _logger.info("⚡ Tool Detected: %s | Args: %s", fname, args)
+
+                        # === XỬ LÝ LOGIC TOOL (NHƯ CŨ) ===
+                        
+                        # 1. Handoff to Realtime Stock (TỪ CON A -> CON B)
                         if fname == "handoff_to_realtime_stock":
                             passed_keyword = args.get('keyword', '')
                             return {
@@ -231,24 +268,26 @@ class HlvChatgptSession(models.Model):
                                 "context": passed_keyword
                             }
                         
-                        # --- LOGIC CÁC TOOL KHÁC ---
-                        if fname == "handoff_to_stock_agent": return {"status": "handoff", "target": "stock"}
-                        if fname == "handoff_to_naming_agent": return {"status": "handoff", "target": "naming"}
-
-                        # Execute File Search (Mặc định của OpenAI File Search tool)
-                        # Nếu là file_search, thường OpenAI tự xử lý nội bộ hoặc trả về references
-                        # Ta chỉ cần append kết quả giả lập nếu cần, hoặc để vòng lặp tiếp tục
+                        # 2. Handoff to Stock (Router -> Con A)
+                        elif fname == "handoff_to_stock_agent": 
+                            return {"status": "handoff", "target": "stock"}
                         
+                        # 3. Handoff to Naming (Router -> Naming)
+                        elif fname == "handoff_to_naming_agent": 
+                            return {"status": "handoff", "target": "naming"}
+
+                        # 4. Search Stock (Con B thực thi)
                         tool_res = "Done"
                         if fname == "search_product_stock":
                              tool_res = self._execute_search_product_stock(args.get('keyword'))
                         
+                        # Append kết quả vào lịch sử
                         local_history.append({
-                            "role": "user", 
-                            "content": f"Tool '{fname}' Result: {tool_res}"
+                            "role": "user",  # API Responses yêu cầu role user hoặc tool
+                            "content": f"Tool '{fname}' (ID: {call_id}) Result: {tool_res}"
                         })
 
-                    continue # Quay lại vòng lặp để AI quyết định bước tiếp theo
+                    continue # Quay lại vòng lặp
 
                 # ---------------------------------------------------------
                 # TRƯỜNG HỢP 2: TRẢ LỜI TEXT (Nguy hiểm với con A)
