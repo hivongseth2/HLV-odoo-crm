@@ -38,7 +38,7 @@ class HlvChatgptConfig(models.Model):
         default="" 
     )
     
-    stock_assistant_id = fields.Char(string="Stock Assistant ID", required=True , default='asst_5iZ1U3pGzUOMvRs14iHBQAK0&thread=thread_wac1wy3bDOsyqegGnIdZ4hfZ')
+    stock_assistant_id = fields.Char(string="Stock Assistant ID", required=True , default='asst_5iZ1U3pGzUOMvRs14iHBQAK0')
     
 
     @api.model
