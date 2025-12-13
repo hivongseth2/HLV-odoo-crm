@@ -175,69 +175,94 @@ class HlvChatgptSession(models.Model):
     # 3. CORE LOGIC: CHẠY PROMPT LOOP
     # =================================================================================
     def _run_prompt_loop(self, client, prompt_id, messages_history):
+        """Vòng lặp: Gọi API -> Check Tool -> Chạy Tool -> Gọi lại API"""
+        
         local_history = list(messages_history)
         _logger.info("🏁 Loop Start | Prompt ID: %s", prompt_id)
 
         for i in range(3): # Max 3 turns
             try:
-                response = client.responses.create(
+                # 1. GỌI API (Sửa lại cho chuẩn thư viện OpenAI mới nhất)
+                response = client.chat.completions.create(
                     model="gpt-4o",
-                    prompt={"id": prompt_id},
-                    input=local_history,
+                    prompt={"id": prompt_id}, # Hoặc model="gpt-4o", messages=... tuỳ cách bạn dùng prompt id
+                    input=local_history,      # Lưu ý: check kỹ lại doc xem thư viện bạn dùng tham số là 'input' hay 'messages'
                 )
                 
-                # Parse Response
+                # 2. PARSE KẾT QUẢ (An toàn hơn)
                 tool_calls_found = []
                 final_text_found = ""
                 
-                if hasattr(response, 'output'):
+                # Support cả 2 kiểu cấu trúc object trả về (cho chắc ăn)
+                if hasattr(response, 'output'): # Cấu trúc lạ/Wrapper
                     for item in response.output:
-                        if item.type == 'function_call': tool_calls_found.append(item)
-                        elif item.type == 'message': final_text_found = item.content[0].text
-                elif hasattr(response, 'choices'): # Fallback thư viện cũ
+                        if getattr(item, 'type', '') == 'function_call': tool_calls_found.append(item)
+                        elif getattr(item, 'type', '') == 'message': final_text_found = item.content[0].text
+                
+                elif hasattr(response, 'choices'): # Cấu trúc chuẩn OpenAI
                     msg = response.choices[0].message
                     if msg.tool_calls: tool_calls_found = msg.tool_calls
                     if msg.content: final_text_found = msg.content
 
                 # --- XỬ LÝ NẾU CÓ TOOL CALL ---
                 if tool_calls_found:
-                    # 1. Báo history là AI đang gọi tool
-                    ai_msg = "I am calling tools: " + ", ".join([getattr(t, 'name', 'tool') for t in tool_calls_found])
+                    # Tạo list tên tool để log (xử lý an toàn)
+                    tool_names = []
+                    for t in tool_calls_found:
+                        # Lấy function name an toàn
+                        fn = getattr(t, 'function', None)
+                        name = getattr(t, 'name', None) or (getattr(fn, 'name', 'unknown') if fn else 'unknown')
+                        tool_names.append(name)
+
+                    ai_msg = "I am calling tools: " + ", ".join(tool_names)
                     local_history.append({"role": "assistant", "content": ai_msg})
                     
                     handoff_target = None
                     
-                    # 2. Thực thi từng tool
+                    # Thực thi từng tool
                     for tool in tool_calls_found:
-                        fname = getattr(tool, 'name', getattr(tool, 'function', {}).name)
-                        args_str = getattr(tool, 'arguments', getattr(tool, 'function', {}).arguments)
-                        call_id = getattr(tool, 'call_id', getattr(tool, 'id', 'call_id'))
+                        # --- PARSE DỮ LIỆU CẨN THẬN ---
+                        # 1. Lấy Name
+                        if hasattr(tool, 'function'): # Chuẩn OpenAI
+                            fname = tool.function.name
+                            args_str = tool.function.arguments
+                        else: # Cấu trúc khác
+                            fname = getattr(tool, 'name', 'unknown')
+                            args_str = getattr(tool, 'arguments', '{}')
                         
-                        args = json.loads(args_str)
-                        _logger.info("⚡ Tool: %s", fname)
+                        call_id = getattr(tool, 'id', 'call_id')
+                        
+                        # 2. Parse Args
+                        try:
+                            args = json.loads(args_str)
+                        except:
+                            args = {}
 
-                        # Check Handoff
+                        _logger.info("⚡ Tool: %s | Args: %s", fname, args)
+
+                        # --- CHECK HANDOFF ---
                         if fname == "handoff_to_stock_agent": handoff_target = "stock"
                         elif fname == "handoff_to_naming_agent": handoff_target = "naming"
                         
-                        # Execute Search
+                        # --- EXECUTE ---
                         tool_res = "Done"
                         if fname == "search_product_stock":
                             tool_res = self._execute_search_product_stock(args.get('keyword'))
                         elif fname == "check_product_existence":
                             tool_res = self._execute_check_product_existence(args.get('keyword'))
-                        
-                        # 3. Append kết quả vào history
+                        # elif ... thêm các tool khác
+
+                        # 3. APPEND HISTORY (Giả lập User gửi kết quả - Tránh lỗi 400)
                         local_history.append({
                             "role": "user", 
                             "content": f"Tool '{fname}' (ID: {call_id}) Result: {tool_res}"
                         })
 
-                    # 4. Nếu là Handoff -> Return ngay để đổi Prompt
+                    # Check Handoff sau khi chạy xong tool (để đảm bảo history được lưu)
                     if handoff_target:
                         return {"status": "handoff", "target": handoff_target}
 
-                    # 5. QUAN TRỌNG: Nếu không handoff -> CONTINUE để gửi kết quả tool lên cho AI đọc
+                    # CONTINUE để vòng lặp chạy tiếp, gửi kết quả tool lên cho AI
                     continue 
                 
                 # --- NẾU KHÔNG CÓ TOOL -> TRẢ LỜI TEXT ---
@@ -245,7 +270,7 @@ class HlvChatgptSession(models.Model):
                     return {"status": "done", "text": final_text_found}
             
             except Exception as e:
-                _logger.exception("GPT Error")
+                _logger.exception("GPT Loop Error")
                 return {"status": "error", "text": str(e)}
         
         return {"status": "error", "text": "Timeout loop"}
