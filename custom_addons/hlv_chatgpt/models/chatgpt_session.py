@@ -178,10 +178,11 @@ class HlvChatgptSession(models.Model):
         """Vòng lặp: Gọi API -> Check Tool -> Chạy Tool -> Gọi lại API"""
         
         local_history = list(messages_history)
+        _logger.info("🏁 Starting Loop with Prompt ID: %s", prompt_id) # Log để kiểm tra ID
 
         for i in range(3): # Max 3 turns
             try:
-                _logger.info("🚀 [%s] Calling Prompt ID: %s", i+1, prompt_id)
+                _logger.info("🚀 [%s] Calling OpenAI...", i+1)
                 
                 response = client.responses.create(
                     model="gpt-4o",
@@ -190,11 +191,10 @@ class HlvChatgptSession(models.Model):
                 )
                 
                 # --- PARSE RESPONSE ---
-                output_msg = None
                 tool_calls_found = []
                 final_text_found = ""
 
-                # 1. Parse Output (Cấu trúc mới response.output)
+                # 1. Parse Output
                 if hasattr(response, 'output'):
                     for item in response.output:
                         item_type = getattr(item, 'type', '')
@@ -205,50 +205,57 @@ class HlvChatgptSession(models.Model):
                             if content_list and hasattr(content_list[0], 'text'):
                                 final_text_found = content_list[0].text
                 
-                # 2. Fallback (Cấu trúc cũ choices)
-                elif hasattr(response, 'choices'):
-                    msg = response.choices[0].message
-                    if msg.tool_calls:
-                        pass 
-
                 # --- XỬ LÝ LOGIC ---
                 if tool_calls_found:
-                    # 3. Append AI Message (Giả lập bằng role 'assistant')
-                    ai_content = "I am calling these tools: " + ", ".join([t.name for t in tool_calls_found])
+                    # Append thông báo của Assistant (để giữ lịch sử trôi chảy)
+                    ai_content = "I am calling tools: " + ", ".join([getattr(t, 'name', 'unknown') for t in tool_calls_found])
                     local_history.append({
                         "role": "assistant",
                         "content": ai_content
                     })
                     
+                    # BIẾN CỜ ĐỂ CHECK HANDOFF
+                    handoff_target = None
+
                     for tool in tool_calls_found:
                         call_id = getattr(tool, 'call_id', None) or getattr(tool, 'id', 'unknown_id')
                         fname = getattr(tool, 'name', 'unknown_func')
                         args_str = getattr(tool, 'arguments', '{}')
-                        
                         args = json.loads(args_str)
-                        _logger.info("⚡ Executing Tool: %s | ID: %s", fname, call_id)
-
-                        # --- ROUTER LOGIC ---
-                        if fname == "handoff_to_stock_agent":
-                            return {"status": "handoff", "target": "stock"}
-                        elif fname == "handoff_to_naming_agent":
-                            return {"status": "handoff", "target": "naming"}
                         
-                        # --- STOCK LOGIC ---
-                        elif fname == "search_product_stock":
+                        _logger.info("⚡ Tool Detected: %s", fname)
+
+                        # --- ROUTER LOGIC (Ưu tiên cao nhất) ---
+                        if fname == "handoff_to_stock_agent":
+                            handoff_target = "stock"
+                            break # Thoát vòng for tool để return ngay
+                        elif fname == "handoff_to_naming_agent":
+                            handoff_target = "naming"
+                            break # Thoát vòng for tool để return ngay
+                        
+                        # --- CÁC TOOL KHÁC ---
+                        tool_res = ""
+                        if fname == "search_product_stock":
                             tool_res = self._execute_search_product_stock(args.get('keyword'))
                         elif fname == "check_product_existence":
                             tool_res = self._execute_check_product_existence(args.get('keyword'))
+                        elif fname == "update_knowledge_base": # Nếu bạn đã thêm tool này
+                            tool_res = self._execute_update_knowledge_base()
                         else:
-                            tool_res = json.dumps({"error": "Function unknown"})
+                            tool_res = json.dumps({"error": f"Function {fname} unknown"})
 
-                        # 4. Append Tool Output (FIX LỖI 400 HERE)
+                        # Append kết quả Tool vào History (giả lập User gửi kết quả)
                         local_history.append({
-                            "role": "user",  # <--- ĐỔI TỪ TOOL SANG USER
-                            "content": f"Tool '{fname}' (ID: {call_id}) returned result: {tool_res}"
+                            "role": "user",
+                            "content": f"Tool '{fname}' result: {tool_res}"
                         })
+
+                    # --- CHECK HANDOFF SAU KHI XỬ LÝ TOOL ---
+                    if handoff_target:
+                        return {"status": "handoff", "target": handoff_target}
                     
-                    continue # Quay lại vòng lặp để gửi kết quả lên
+                    # Nếu không handoff, lặp lại vòng while để AI đọc kết quả tool và trả lời
+                    continue 
                 
                 elif final_text_found:
                     return {"status": "done", "text": final_text_found}
@@ -261,7 +268,7 @@ class HlvChatgptSession(models.Model):
                 return {"status": "error", "text": str(e)}
         
         return {"status": "error", "text": "Timeout loop"}
-
+    
     def _call_openai_api(self, query):
         if not OpenAI: return "Lỗi: Chưa cài openai."
         config = self.env['hlv.chatgpt.config'].get_config()
