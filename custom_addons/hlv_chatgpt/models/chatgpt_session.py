@@ -190,7 +190,6 @@ class HlvChatgptSession(models.Model):
                     model="gpt-4o",
                     prompt={"id": prompt_id},
                     input=local_history,
-                    tools=[] 
                 )
                 
                 # 2. PARSE KẾT QUẢ
