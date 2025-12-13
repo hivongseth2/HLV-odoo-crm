@@ -175,138 +175,105 @@ class HlvChatgptSession(models.Model):
     # 3. CORE LOGIC: CHẠY PROMPT LOOP
     # =================================================================================
     def _run_prompt_loop(self, client, prompt_id, messages_history):
-        """Vòng lặp an toàn: Hỗ trợ cả Dict và Object để tránh lỗi AttributeError"""
         local_history = list(messages_history)
-        _logger.info("🏁 Loop Start | Prompt ID: %s", prompt_id)
+        
+        # Lấy config để biết mình đang ở con Agent nào
+        config = self.env['hlv.chatgpt.config'].get_config()
+        is_lookup_agent = (prompt_id == config.stock_prompt_id) # Con A (Tra file)
 
-        # --- Helper Function: Lấy dữ liệu an toàn bất chấp Dict hay Object ---
-        def get_val(obj, key, default=None):
-            if isinstance(obj, dict):
-                return obj.get(key, default)
-            return getattr(obj, key, default)
-        # -------------------------------------------------------------------
+        _logger.info("🏁 Loop Start | ID: %s", prompt_id)
 
-        for i in range(3): # Max 3 turns
+        for i in range(4): # Tăng lên 4 lượt cho chắc (Search -> Result -> Handoff -> Done)
             try:
                 # 1. GỌI API
-          
-                
                 response = client.responses.create(
                     model="gpt-4o",
                     prompt={"id": prompt_id},
                     input=local_history,
+                    tools=[] 
                 )
                 
-                
-                # 2. PARSE RESPONSE (Dùng hàm get_val để tránh lỗi)
+                # 2. PARSE KẾT QUẢ
                 tool_calls_found = []
                 final_text_found = ""
                 
-                # Lấy output list an toàn
-                output_items = get_val(response, 'output')
-                choices = get_val(response, 'choices')
+                if hasattr(response, 'output_items'): items = response.output_items
+                elif hasattr(response, 'output'): items = response.output
+                else: items = []
 
-                if output_items: # Cấu trúc mới/Wrapper
-                    for item in output_items:
-                        itype = get_val(item, 'type')
-                        if itype == 'function_call': 
-                            tool_calls_found.append(item)
-                        elif itype == 'message': 
-                            content_list = get_val(item, 'content', [])
-                            if content_list:
-                                final_text_found = get_val(content_list[0], 'text')
-                
-                elif choices: # Cấu trúc chuẩn OpenAI
-                    choice = choices[0]
-                    msg = get_val(choice, 'message')
-                    t_calls = get_val(msg, 'tool_calls')
-                    if t_calls: tool_calls_found = t_calls
-                    
-                    content = get_val(msg, 'content')
-                    if content: final_text_found = content
+                for item in items:
+                    if getattr(item, 'type', '') == 'function_call':
+                        tool_calls_found.append(item)
+                    elif getattr(item, 'type', '') == 'message':
+                        for content_part in getattr(item, 'content', []):
+                            if getattr(content_part, 'type', '') == 'text':
+                                final_text_found = getattr(content_part, 'text', '')
 
-                # --- XỬ LÝ TOOL CALL ---
+                # ---------------------------------------------------------
+                # TRƯỜNG HỢP 1: CÓ TOOL CALL (Tốt)
+                # ---------------------------------------------------------
                 if tool_calls_found:
-                    # 1. Log AI Message (Fix lỗi tại đây)
-                    tool_names = []
-                    for t in tool_calls_found:
-                        # Thử lấy trong 'function' trước
-                        func = get_val(t, 'function')
-                        if func:
-                            name = get_val(func, 'name')
-                        else:
-                            name = get_val(t, 'name') # Fallback
-                        tool_names.append(str(name))
-
-                    ai_msg = "I am calling tools: " + ", ".join(tool_names)
-                    local_history.append({"role": "assistant", "content": ai_msg})
+                    local_history.append({"role": "assistant", "content": "Executing tools..."})
                     
-                    handoff_target = None
-                    
-                    # 2. Thực thi từng tool
                     for tool in tool_calls_found:
-                        # Lấy function name và args an toàn
-                        func = get_val(tool, 'function')
-                        if func:
-                            fname = get_val(func, 'name')
-                            args_str = get_val(func, 'arguments')
-                        else:
-                            fname = get_val(tool, 'name')
-                            args_str = get_val(tool, 'arguments')
-                        
-                        call_id = get_val(tool, 'id') or get_val(tool, 'call_id') or 'unknown_id'
-                        
-                        # Parse Arguments
-                        try:
-                            if isinstance(args_str, dict): 
-                                args = args_str
-                            else: 
-                                args = json.loads(args_str or '{}')
-                        except:
-                            args = {}
+                        fname = getattr(tool, 'name', getattr(tool.function, 'name', 'unknown'))
+                        args_raw = getattr(tool, 'arguments', getattr(tool.function, 'arguments', '{}'))
+                        try: args = json.loads(args_raw)
+                        except: args = {}
 
-                        _logger.info("⚡ Tool: %s | Args: %s", fname, args)
-                            # định nghĩa shake hand
-                        # Check Handoff
-                        if fname == "handoff_to_stock_agent": handoff_target = "stock"
-                        elif fname == "handoff_to_naming_agent": handoff_target = "naming"
-                        elif fname == "handoff_to_realtime_stock":
-                            # Lấy keyword mà con A gửi gắm
+                        _logger.info("⚡ Tool: %s", fname)
+
+                        # --- LOGIC HANDOFF (QUAN TRỌNG) ---
+                        if fname == "handoff_to_realtime_stock":
                             passed_keyword = args.get('keyword', '')
-                            
-                            # Return đặc biệt kèm context
                             return {
                                 "status": "handoff", 
-                                "target": "realtime_stock", # Tên định danh cho con B
-                                "context": passed_keyword   # Dữ liệu truyền sang
+                                "target": "realtime_stock", 
+                                "context": passed_keyword
                             }
                         
-                        # Execute Search
+                        # --- LOGIC CÁC TOOL KHÁC ---
+                        if fname == "handoff_to_stock_agent": return {"status": "handoff", "target": "stock"}
+                        if fname == "handoff_to_naming_agent": return {"status": "handoff", "target": "naming"}
+
+                        # Execute File Search (Mặc định của OpenAI File Search tool)
+                        # Nếu là file_search, thường OpenAI tự xử lý nội bộ hoặc trả về references
+                        # Ta chỉ cần append kết quả giả lập nếu cần, hoặc để vòng lặp tiếp tục
+                        
                         tool_res = "Done"
                         if fname == "search_product_stock":
-                            tool_res = self._execute_search_product_stock(args.get('keyword'))
-                        elif fname == "check_product_existence":
-                            tool_res = self._execute_check_product_existence(args.get('keyword'))
+                             tool_res = self._execute_search_product_stock(args.get('keyword'))
                         
-                        # 3. Append kết quả vào history
                         local_history.append({
                             "role": "user", 
-                            "content": f"Tool '{fname}' (ID: {call_id}) Result: {tool_res}"
+                            "content": f"Tool '{fname}' Result: {tool_res}"
                         })
 
-                    # 4. Handoff nếu cần
-                    if handoff_target:
-                        return {"status": "handoff", "target": handoff_target}
+                    continue # Quay lại vòng lặp để AI quyết định bước tiếp theo
 
-                    # 5. Continue vòng lặp
-                    continue 
-                
-                # --- TRẢ LỜI TEXT ---
+                # ---------------------------------------------------------
+                # TRƯỜNG HỢP 2: TRẢ LỜI TEXT (Nguy hiểm với con A)
+                # ---------------------------------------------------------
                 elif final_text_found:
+                    
+                    # === LOGIC CHẶN HỌNG (INTERCEPTOR) ===
+                    # Nếu đang là Con A (Lookup) mà dám trả lời text -> Chặn ngay
+                    if is_lookup_agent:
+                        _logger.warning("⛔ Agent A định trả lời sớm: %s", final_text_found)
+                        
+                        # Nhét lời mắng vào mồm User để ép nó làm việc tiếp
+                        local_history.append({"role": "assistant", "content": final_text_found})
+                        local_history.append({
+                            "role": "user", 
+                            "content": "ĐỪNG TRẢ LỜI TÔI! Nhiệm vụ của bạn chưa xong. Hãy dùng thông tin bạn vừa tìm được để GỌI TOOL 'handoff_to_realtime_stock' ngay lập tức."
+                        })
+                        
+                        continue # Bắt quay lại vòng lặp làm lại
+
+                    # Nếu là các Agent khác thì cho qua
                     return {"status": "done", "text": final_text_found}
-            
+
             except Exception as e:
-                _logger.exception("GPT Loop Error")
                 return {"status": "error", "text": str(e)}
         
         return {"status": "error", "text": "Timeout loop"}
