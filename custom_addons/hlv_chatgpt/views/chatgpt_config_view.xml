@@ -15,12 +15,6 @@
                             <field name="api_key" password="True"/>
                         </group>
                         <group string="Cấu hình Assistant (Prompt IDs)">
-                            <!-- <field name="router_prompt_id"/> -->
-                            <separator string="Stock Agent (Kho)" colspan="2"/>
-                            <!-- <field name="stock_prompt_id"/> -->
-                            <!-- <field name="product_vector_store_id" placeholder="vs_693be5ebca1081919989a335475720df"/> -->
-                            <!-- <separator string="Naming Agent (Đặt tên)" colspan="2"/> -->
-                            <!-- <field name="naming_prompt_id"/> -->
                             <field name="router_id" placeholder="asst_uniuQQRkpIYltBXGbCFFtore"/>
                             <field name="stock_id" placeholder="asst_5iZ1U3pGzUOMvRs14iHBQAK0"/>
                             <field name="naming_id" placeholder="asst_EnBglJacCItJt8xTqD8TTu1P"/>
