@@ -82,7 +82,7 @@ class HlvChatgptSession(models.Model):
         for token in tokens:
             domain += ['|', '|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token), ('description_sale', 'ilike', token)]
         
-        products = self.env['product.product'].sudo().search(domain, limit=15)
+        products = self.env['product.product'].sudo().search(domain, limit=50)
         
         if not products: 
             return json.dumps({"status": "empty", "message": f"Không tìm thấy '{keyword_clean}'"})
