@@ -5,7 +5,7 @@ class HlvChatgptConfig(models.Model):
     _name = 'hlv.chatgpt.config'
     _description = 'Cấu hình Multi-Agent'
     
-    active = fields.Boolean(string='Kích hoạt', default=True)
+    active = fields.Boolean(default=True)
 
     name = fields.Char(string='Tên cấu hình', default='Cấu hình Chính')
     api_key = fields.Char(string='OpenAI API Key', required=True)
@@ -17,4 +17,4 @@ class HlvChatgptConfig(models.Model):
 
     @api.model
     def get_config(self):
-        return self.search([], limit=1)
+        return self.search([('active', '=', True)], limit=1)
