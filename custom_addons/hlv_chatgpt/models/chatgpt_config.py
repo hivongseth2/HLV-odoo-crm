@@ -37,7 +37,11 @@ class HlvChatgptConfig(models.Model):
         help="ID của Vector Store chứa file danh sách sản phẩm (vs_...)",
         default="" 
     )
-
+    realtime_stock_prompt_id = fields.Char(
+            string='Realtime Stock Prompt ID', 
+            default='pmpt_693d17e8dfb48197b560cd1e3b91c951006b7c137af799ab', # ID MỚI CỦA BẠN
+            required=True
+        )
     @api.model
     def get_config(self):
         return self.search([('active', '=', True)], limit=1)

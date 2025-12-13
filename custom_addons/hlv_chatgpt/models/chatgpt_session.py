@@ -266,10 +266,20 @@ class HlvChatgptSession(models.Model):
                             args = {}
 
                         _logger.info("⚡ Tool: %s | Args: %s", fname, args)
-
+                            # định nghĩa shake hand
                         # Check Handoff
                         if fname == "handoff_to_stock_agent": handoff_target = "stock"
                         elif fname == "handoff_to_naming_agent": handoff_target = "naming"
+                        elif fname == "handoff_to_realtime_stock":
+                            # Lấy keyword mà con A gửi gắm
+                            passed_keyword = args.get('keyword', '')
+                            
+                            # Return đặc biệt kèm context
+                            return {
+                                "status": "handoff", 
+                                "target": "realtime_stock", # Tên định danh cho con B
+                                "context": passed_keyword   # Dữ liệu truyền sang
+                            }
                         
                         # Execute Search
                         tool_res = "Done"
@@ -302,52 +312,94 @@ class HlvChatgptSession(models.Model):
         return {"status": "error", "text": "Timeout loop"}
     
     def _call_openai_api(self, query):
-        if not OpenAI: return "Lỗi: Chưa cài openai."
+        # 1. KIỂM TRA MÔI TRƯỜNG
+        if not OpenAI: return "Lỗi: Chưa cài thư viện openai (pip install openai)."
         config = self.env['hlv.chatgpt.config'].get_config()
-        if not config: return "Lỗi: Chưa cấu hình."
+        if not config: return "Lỗi: Chưa cấu hình API Key."
 
         client = OpenAI(api_key=config.api_key)
 
-        # 1. Build Base History (Từ DB)
-        # Chỉ lấy text chat thông thường, bỏ qua các tool call cũ để tiết kiệm token và tránh lỗi
+        # 2. XÂY DỰNG LỊCH SỬ CHAT (BASE HISTORY)
         base_history = []
         for msg in self.message_ids:
+            # Chỉ lấy role và content text, bỏ qua các chi tiết kỹ thuật thừa
             base_history.append({"role": msg.role, "content": msg.content or ""})
         
-        # Thêm câu hỏi mới của User
+        # Thêm câu hỏi mới nhất của User
         base_history.append({"role": "user", "content": query})
         
-        # 2. Determine Prompt ID
-        target_id = config.router_prompt_id
-        # if self.current_agent == 'stock': target_id = config.stock_prompt_id
+        # 3. XÁC ĐỊNH ĐIỂM XUẤT PHÁT (ROUTER)
+        # Mặc định luôn đi qua Router để phân luồng lại từ đầu
+        target_id = config.router_prompt_id 
+        
+        # (Tùy chọn) Nếu muốn giữ trạng thái chat với Agent cũ thì mở comment đoạn dưới:
+        # if self.current_agent == 'stock': target_id = config.stock_prompt_id # Đây là con A (Tra file)
+        # elif self.current_agent == 'realtime_stock': target_id = config.realtime_stock_prompt_id # Đây là con B
         # elif self.current_agent == 'naming': target_id = config.naming_prompt_id
 
-        # 3. CHẠY VÒNG 1 (Với Prompt hiện tại)
+        _logger.info("🚀 VÒNG 1: Bắt đầu với ID %s", target_id)
+
+        # =========================================================
+        # 4. CHẠY VÒNG 1 (ROUND 1)
+        # =========================================================
         result = self._run_prompt_loop(client, target_id, list(base_history))
 
-        # 4. XỬ LÝ KẾT QUẢ
+        # 5. XỬ LÝ KẾT QUẢ VÒNG 1
         if result['status'] == 'done':
+            # Nếu AI trả lời luôn (VD: Xã giao, hoặc Agent cũ trả lời) -> Xong.
             return result['text']
         
         elif result['status'] == 'handoff':
-            # === PHÁT HIỆN CHUYỂN HƯỚNG ===
+            # === PHÁT HIỆN CHUYỂN TUYẾN ===
             new_target = result['target']
             self.current_agent = new_target # Lưu trạng thái mới
             
-            _logger.info("🔀 Handoff detected! Switching to: %s", new_target)
+            _logger.info("🔀 Handoff detected! Switching to Agent: %s", new_target)
             
-            # Chọn Prompt ID mới
-            new_prompt_id = config.stock_prompt_id if new_target == 'stock' else config.naming_prompt_id
+            # --- MAPPING TARGET -> PROMPT ID ---
+            new_prompt_id = ""
             
-            # CHẠY VÒNG 2 (Với Prompt mới)
+            if new_target == 'stock': 
+                # Con A: Product Lookup (Tra file)
+                new_prompt_id = config.stock_prompt_id 
+                
+            elif new_target == 'naming': 
+                new_prompt_id = config.naming_prompt_id
+                
+            elif new_target == 'realtime_stock': 
+                # Con B: Realtime Stock (Tra tồn) - ID MỚI CỦA BẠN
+                new_prompt_id = config.realtime_stock_prompt_id 
+            
+            else:
+                return f"Lỗi: Không tìm thấy Prompt ID cho target '{new_target}'"
+
+            # --- KỸ THUẬT: INJECT CONTEXT (TRUYỀN THAM SỐ GIỮA CÁC AGENT) ---
+            # Nếu Con A (Stock) chuyển sang Con B (Realtime) kèm từ khóa
+            passed_keyword = result.get('context')
+            
+            if passed_keyword:
+                _logger.info("💉 Injecting Context: %s", passed_keyword)
+                
+                # CHÈN LỆNH ÉP BUỘC VÀO LỊCH SỬ
+                # Câu này đóng vai trò như cầu nối, biến output của con A thành input của con B
+                base_history.append({
+                    "role": "system",  # Dùng role system để có trọng lượng cao
+                    "content": f"Product Lookup Agent đã tìm thấy thông tin chính xác: '{passed_keyword}'. Hãy dùng từ khóa này để gọi tool 'search_product_stock' ngay lập tức."
+                })
+            
+            # =========================================================
+            # 6. CHẠY VÒNG 2 (ROUND 2) - VỚI AGENT MỚI + CONTEXT MỚI
+            # =========================================================
             final_res = self._run_prompt_loop(client, new_prompt_id, list(base_history))
             
             if final_res['status'] == 'done':
                 return final_res['text']
+            elif final_res['status'] == 'handoff':
+                return "Lỗi: Agent vòng 2 lại yêu cầu chuyển tiếp (Vòng lặp vô tận)."
             else:
                 return f"Lỗi tại Agent đích ({new_target}): {final_res.get('text')}"
             
-        return f"Hệ thống bận. Lỗi: {result.get('text')}"
+        return f"Hệ thống bận hoặc lỗi không xác định: {result.get('text')}"
 
 class HlvChatgptMessage(models.Model):
     _name = 'hlv.chatgpt.message'
