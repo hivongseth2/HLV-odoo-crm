@@ -192,7 +192,7 @@ class HlvChatgptSession(models.Model):
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     prompt={"id": prompt_id},
-                    input=local_history,
+                    messages=local_history,
                 )
                 
                 # 2. PARSE RESPONSE (Dùng hàm get_val để tránh lỗi)
