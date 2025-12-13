@@ -16,7 +16,7 @@ class HlvChatgptSession(models.Model):
     _description = 'Phiên Chat AI'
     _rec_name = 'name'
     _order = 'last_activity desc'
-    
+    openai_thread_id = fields.Char(string="OpenAI Thread ID", readonly=True)
     state = fields.Selection([
         ('new', 'Mới'),
         ('active', 'Đang hoạt động'),
@@ -38,6 +38,98 @@ class HlvChatgptSession(models.Model):
     message_ids = fields.One2many('hlv.chatgpt.message', 'session_id', string='Nội dung hội thoại')
     input_text = fields.Text(string='Nhập tin nhắn...')
 
+
+
+
+    def _run_assistant_workflow(self, client, assistant_id, user_query):
+            """
+            Chạy Workflow tự động bằng Assistants API.
+            Ưu điểm: Tự động Search File -> Tự động Gọi Tool -> Tự động Trả lời.
+            """
+            _logger.info("🚀 Starting Workflow | Assistant: %s", assistant_id)
+
+            # 1. QUẢN LÝ THREAD (LUỒNG CHAT)
+            # Nếu session này chưa có thread_id thì tạo mới, có rồi thì dùng lại để nhớ ngữ cảnh
+            thread_id = self.openai_thread_id
+            if not thread_id:
+                thread = client.beta.threads.create()
+                self.openai_thread_id = thread.id # Lưu vào DB Odoo
+                thread_id = thread.id
+                _logger.info("✨ Created New Thread: %s", thread_id)
+            else:
+                _logger.info("🔄 Resuming Thread: %s", thread_id)
+
+            # 2. GỬI TIN NHẮN CỦA USER VÀO THREAD
+            client.beta.threads.messages.create(
+                thread_id=thread_id,
+                role="user",
+                content=user_query
+            )
+
+            # 3. CHẠY RUN (Kích hoạt Assistant)
+            run = client.beta.threads.runs.create_and_poll(
+                thread_id=thread_id,
+                assistant_id=assistant_id,
+            )
+
+            # 4. XỬ LÝ KẾT QUẢ (LOOP NGẦM CỦA OPENAI)
+            final_response = "Hệ thống không phản hồi."
+
+            # Nếu AI cần gọi Tool (Ví dụ: search_product_stock)
+            if run.status == 'requires_action':
+                tool_outputs = []
+                
+                # Lấy danh sách các tool nó muốn gọi
+                for tool in run.required_action.submit_tool_outputs.tool_calls:
+                    fname = tool.function.name
+                    args_str = tool.function.arguments
+                    call_id = tool.id
+                    
+                    try: args = json.loads(args_str)
+                    except: args = {}
+                    
+                    _logger.info("⚡ Workflow calling Tool: %s | Args: %s", fname, args)
+
+                    # --- GỌI HÀM ODOO CỦA BẠN ---
+                    output_str = "{}"
+                    if fname == "search_product_stock":
+                        # Gọi lại hàm V9 xịn xò bạn đã viết
+                        output_str = self._execute_search_product_stock(args.get('keyword'))
+                    
+                    # Đóng gói kết quả
+                    tool_outputs.append({
+                        "tool_call_id": call_id,
+                        "output": output_str
+                    })
+
+                # Gửi kết quả Tool về lại cho OpenAI
+                if tool_outputs:
+                    try:
+                        run = client.beta.threads.runs.submit_tool_outputs_and_poll(
+                            thread_id=thread_id,
+                            run_id=run.id,
+                            tool_outputs=tool_outputs
+                        )
+                    except Exception as e:
+                        return f"Lỗi khi gửi kết quả tool: {str(e)}"
+
+            # 5. LẤY CÂU TRẢ LỜI CUỐI CÙNG
+            if run.status == 'completed': 
+                # Lấy tin nhắn mới nhất từ Assistant
+                messages = client.beta.threads.messages.list(thread_id=thread_id, limit=1)
+                if messages.data:
+                    # Content trả về là 1 list, lấy text
+                    for content in messages.data[0].content:
+                        if hasattr(content, 'text'):
+                            final_response = content.text.value
+                            # Xóa citation [source] nếu cần cho sạch đẹp (Optional)
+                            import re
+                            final_response = re.sub(r'【.*?】', '', final_response)
+
+            else:
+                final_response = f"Workflow kết thúc với trạng thái lạ: {run.status}"
+
+            return final_response
     # =================================================================================
     # 1. CÁC HÀM TOOL ODOO (SEARCH LOGIC)
     # =================================================================================
@@ -274,57 +366,24 @@ class HlvChatgptSession(models.Model):
         return {"status": "error", "text": "Timeout loop"}
 
     def _call_openai_api(self, query):
-        if not OpenAI: return "Lỗi: Chưa cài openai."
         config = self.env['hlv.chatgpt.config'].get_config()
-        if not config: return "Lỗi: Chưa cấu hình."
+        if not config or not config.api_key: return "Lỗi: Chưa cấu hình API Key."
+        if not config.stock_assistant_id: return "Lỗi: Chưa nhập Assistant ID."
 
         client = OpenAI(api_key=config.api_key)
 
-        # 1. Build Base History (Từ DB)
-        # Chỉ lấy text chat thông thường, bỏ qua các tool call cũ để tiết kiệm token và tránh lỗi
-        base_history = []
-        for msg in self.message_ids:
-            base_history.append({"role": msg.role, "content": msg.content or ""})
-        
-        # Thêm câu hỏi mới của User
-        base_history.append({"role": "user", "content": query})
-        
-        # 2. Xác định Prompt ID ban đầu
-        # Nếu đang ở chế độ Router -> Gọi Router
-        # Nếu đang ở chế độ Stock -> Gọi Stock luôn (Chat tiếp)
-        target_id = config.router_prompt_id
-        if self.current_agent == 'stock': target_id = config.stock_prompt_id
-        elif self.current_agent == 'naming': target_id = config.naming_prompt_id
+        try:
+            # GỌI HÀM WORKFLOW MỚI (Thay vì _run_prompt_loop cũ)
+            response_text = self._run_assistant_workflow(
+                client=client,
+                assistant_id=config.stock_assistant_id, # ID asst_5iZ... lấy từ config
+                user_query=query
+            )
+            return response_text
 
-        # 3. CHẠY VÒNG 1 (Với Prompt hiện tại)
-        # QUAN TRỌNG: Truyền list(base_history) để tạo bản sao
-        result = self._run_prompt_loop(client, target_id, list(base_history))
-
-        # 4. XỬ LÝ KẾT QUẢ
-        if result['status'] == 'done':
-            return result['text']
-        
-        elif result['status'] == 'handoff':
-            # === PHÁT HIỆN CHUYỂN HƯỚNG ===
-            new_target = result['target']
-            self.current_agent = new_target # Lưu trạng thái mới
-            
-            _logger.info("🔀 Handoff detected! Switching to: %s", new_target)
-            
-            # Chọn Prompt ID mới
-            new_prompt_id = config.stock_prompt_id if new_target == 'stock' else config.naming_prompt_id
-            
-            # CHẠY VÒNG 2 (Với Prompt mới)
-            # QUAN TRỌNG: Gửi lại 'base_history' sạch (chỉ chứa câu hỏi user), 
-            # KHÔNG gửi kèm cái tool call handoff của Router vừa rồi.
-            final_res = self._run_prompt_loop(client, new_prompt_id, list(base_history))
-            
-            if final_res['status'] == 'done':
-                return final_res['text']
-            else:
-                return f"Lỗi tại Agent đích ({new_target}): {final_res.get('text')}"
-            
-        return f"Hệ thống bận. Lỗi: {result.get('text')}"
+        except Exception as e:
+            _logger.exception("OpenAI Workflow Error")
+            return f"Lỗi hệ thống: {str(e)}"
 class HlvChatgptMessage(models.Model):
     _name = 'hlv.chatgpt.message'
     _description = 'Chi tiết tin nhắn'

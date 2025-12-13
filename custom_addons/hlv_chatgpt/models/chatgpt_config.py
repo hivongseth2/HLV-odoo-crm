@@ -37,6 +37,8 @@ class HlvChatgptConfig(models.Model):
         help="ID của Vector Store chứa file danh sách sản phẩm (vs_...)",
         default="" 
     )
+    
+    stock_assistant_id = fields.Char(string="Stock Assistant ID", required=True)
 
     @api.model
     def get_config(self):
