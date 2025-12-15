@@ -34,6 +34,7 @@ class MisaController(http.Controller):
             unit = kwargs.get('unit', 'Cái')     # Mặc định Cái
             category = kwargs.get('category', 'Hàng hóa')
             p_type = kwargs.get('type', 'goods') # goods hoặc service
+            category_id = kwargs.get('category_id', None)
 
             # Validate cơ bản
             if not code or not name:
@@ -52,7 +53,8 @@ class MisaController(http.Controller):
                 tax_percent=tax, 
                 unit_name=unit, 
                 category_name=category,
-                product_type=p_type
+                product_type=p_type,
+                category_id=category_id
             )
 
             # 3. Trả về kết quả

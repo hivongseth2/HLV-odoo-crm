@@ -354,7 +354,8 @@ class HlvChatgptSession(models.Model):
                 tax_percent=args.get('tax', 10),
                 unit_name=args.get('unit', 'Cái'),
                 category_name=args.get('category', 'Hàng hóa'),
-                product_type=args.get('type', 'goods')
+                product_type=args.get('type', 'goods'),
+                cat_id = args.get('category_id', None),
             )
             
             return json.dumps({

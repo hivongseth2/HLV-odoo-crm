@@ -1056,7 +1056,7 @@ class MisaApiUtils(models.AbstractModel):
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
-    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods"):
+    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods",cat_id=None):
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
@@ -1066,7 +1066,8 @@ class MisaApiUtils(models.AbstractModel):
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
         # --- 1. XỬ LÝ ID ---
-        cat_id = self._get_category_id_by_name(headers, category_name)
+        # cat_id = self._get_category_id_by_name(headers, category_name)
+        cat_id= cat_id
         if not cat_id:
              cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
 
