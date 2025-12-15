@@ -125,8 +125,20 @@ class HlvChatgptSession(models.Model):
                 # --- LOGIC NGHIỆP VỤ (STOCK) ---
                 elif fname == "search_product_stock":
                     output_str = self._execute_search_product_stock(args.get('keyword'))
+                    
+                elif fname == "search_product_misa":
+                    # Gọi hàm Search
+                    output_str = self._execute_search_misa(args)
+                
+                elif fname == "create_product_misa":
+                    # Gọi hàm Create
+                    output_str = self._execute_create_misa(args)
+                
+                
                 else:
                     output_str = json.dumps({"error": "Unknown function"})
+                    
+            
 
                 tool_outputs.append({"tool_call_id": call_id, "output": output_str})
 
@@ -156,7 +168,10 @@ class HlvChatgptSession(models.Model):
             final_response = re.sub(r'【.*?】', '', final_response)
             
         return final_response
-
+    
+    
+    
+    # CÁC HÀM THỰC THI LOGIC (IMPLEMENTATION)
     # =================================================================================
     # 3. STOCK LOGIC (Hàm Search V9)
     # =================================================================================
@@ -296,6 +311,60 @@ class HlvChatgptSession(models.Model):
         self.env['hlv.chatgpt.message'].create({
             'session_id': self.id, 'role': 'system', 'content': 'Đã chuyển về Tổng đài.'
         })
+        
+    def _execute_search_misa(self, args):
+        """Tìm kiếm sản phẩm trong MISA/Odoo"""
+        _logger.info("🔍 MISA Search: %s", args)
+        try:
+            name = args.get('name')
+            code = args.get('code')
+            if not name and not code:
+                return json.dumps({"status": "error", "message": "Cần nhập tên hoặc mã để tìm."})
+
+            # Gọi trực tiếp Model util của bạn (bypass HTTP request cho nhanh)
+            misa_utils = self.env['misa.api.utils'].sudo()
+            products = misa_utils.search_product_by_name(name=name, code=code, limit=5)
+            
+            if not products:
+                return json.dumps({"status": "not_found", "message": "Không tìm thấy sản phẩm nào trùng khớp."}, ensure_ascii=False)
+            
+            return json.dumps({
+                "status": "found", 
+                "count": len(products),
+                "products": products,
+                "instruction": "Đã tìm thấy sản phẩm trùng. HÃY CẢNH BÁO NGƯỜI DÙNG VÀ KHÔNG TỰ Ý TẠO MỚI."
+            }, ensure_ascii=False)
+
+        except Exception as e:
+            return json.dumps({"status": "error", "message": str(e)})
+
+    def _execute_create_misa(self, args):
+        """Tạo sản phẩm MISA"""
+        _logger.info("🆕 MISA Create: %s", args)
+        try:
+            # Gọi trực tiếp Model util
+            misa_utils = self.env['misa.api.utils'].sudo()
+            
+            # Mapping tham số từ AI sang hàm của bạn
+            # AI gửi: code, name, price, tax, unit, category, type
+            misa_id = misa_utils.create_product_misa_raw(
+                code=args.get('code'),
+                name=args.get('name'),
+                price=args.get('price', 0),
+                tax_percent=args.get('tax', 10),
+                unit_name=args.get('unit', 'Cái'),
+                category_name=args.get('category', 'Hàng hóa'),
+                product_type=args.get('type', 'goods')
+            )
+            
+            return json.dumps({
+                "status": "success", 
+                "message": f"Đã tạo thành công sản phẩm mã {args.get('code')}",
+                "misa_id": misa_id
+            }, ensure_ascii=False)
+
+        except Exception as e:
+            return json.dumps({"status": "error", "message": str(e)}, ensure_ascii=False)
 
 class HlvChatgptMessage(models.Model):
     _name = 'hlv.chatgpt.message'
