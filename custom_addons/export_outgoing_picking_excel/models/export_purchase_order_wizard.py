@@ -232,7 +232,7 @@ class PurchaseExportWizard(models.TransientModel):
             # Invoice-ish fields
             'mau_so_hd': '01GTKT0/001',
             'ky_hieu_hd': 'AB/20E',
-            'so_hoa_don': picking.origin or "", # Or invoice number if linked? Keep as origin/PO name for now or empty
+            'so_hoa_don': purchase.origin or "", # Or invoice number if linked? Keep as origin/PO name for now or empty
             'ngay_hoa_don': receipt_date_str, # Changed: Receipt Date
 
             # Bank chi
@@ -288,8 +288,8 @@ class PurchaseExportWizard(models.TransientModel):
             'ma_don_vi': '',
             'ma_doi_tuong_thcp': '',
             'ma_cong_trinh': '',
-            'so_don_dat_hang': purchase_name, # Changed: PO Name
-            'so_don_mua_hang': '',
+            'so_don_dat_hang': '',
+            'so_don_mua_hang': purchase_name, # Changed: PO Name
             'so_hop_dong_mua': '',
             'so_hop_dong_ban': '',
             'ma_thong_ke': '',
