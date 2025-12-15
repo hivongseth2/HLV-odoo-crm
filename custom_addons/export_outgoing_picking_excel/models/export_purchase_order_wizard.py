@@ -105,6 +105,7 @@ class PurchaseExportWizard(models.TransientModel):
             {'key': 'so_khe_uoc_di_vay', 'name': 'Số khế ước đi vay', 'width': 20},
             {'key': 'so_khe_uoc_cho_vay', 'name': 'Số khế ước cho vay', 'width': 20},
             {'key': 'cp_khong_hop_ly', 'name': 'CP không hợp lý', 'width': 18},
+            {'key': 'misa_sync', 'name': 'Đã lập chứng từ', 'width': 15},
         ]
 
     def _domain(self):
