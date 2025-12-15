@@ -758,7 +758,7 @@ class SaleOrder(models.Model):
 
         # Tìm dòng đầu tiên có StockIDText hợp lệ
         for l in (lines or []):
-            sid = (l.get("StockIDText") or "").strip()
+            sid = (l.get("CustomField2") or "").strip()
             if sid:
                 stock_id = sid
                 break
