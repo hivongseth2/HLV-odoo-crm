@@ -69,7 +69,13 @@ class SaleApiImportWizard(models.TransientModel):
                     return {'type': 'ir.actions.act_window_close'}
 
                 product_lines = order.get("sale_order_product_mappings", [])
-                filtered_lines = [l for l in product_lines if l.get("stock_name") == "HCM"]
+                # filtered_lines = [l for l in product_lines if l.get("stock_name") == "HCM"]
+                
+                filtered_lines = [
+                        l for l in product_lines
+                        if l.get("stock_name") in ("HCM", "HLV")
+                    ]
+
                 if not filtered_lines:
                     continue
 

@@ -605,7 +605,8 @@ class MisaPOSync(models.TransientModel):
                 "HCM": "TSN/Stock",
                 "BENCAM": "KBC/Tồn kho",
                 "HIENDUC": "KHD/Tồn kho",
-                "HCM_SHOWROOM": "TSNSR/Stock"
+                "HCM_SHOWROOM": "TSNSR/Stock",
+                "HLV":"TSN/Stock"
             }
 
         if stock_code not in stock_mapping:

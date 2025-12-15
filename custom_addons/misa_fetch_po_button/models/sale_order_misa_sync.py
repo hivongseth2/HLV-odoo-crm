@@ -747,6 +747,7 @@ class SaleOrder(models.Model):
             "BENCAM": "KBC/Tồn kho",
             "HIENDUC": "KHD/Tồn kho",
             "HCM_SHOWROOM": "TSNSR/Stock",
+             "HLV":"TSN/Stock"
         }
 
         old_wh = None
