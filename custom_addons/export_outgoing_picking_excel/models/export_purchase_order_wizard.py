@@ -105,7 +105,6 @@ class PurchaseExportWizard(models.TransientModel):
             {'key': 'so_khe_uoc_di_vay', 'name': 'Số khế ước đi vay', 'width': 20},
             {'key': 'so_khe_uoc_cho_vay', 'name': 'Số khế ước cho vay', 'width': 20},
             {'key': 'cp_khong_hop_ly', 'name': 'CP không hợp lý', 'width': 18},
-            {'key': 'misa_sync', 'name': 'Đã lập chứng từ', 'width': 15},
         ]
 
     def _domain(self):
@@ -113,9 +112,10 @@ class PurchaseExportWizard(models.TransientModel):
         if self.date_from > self.date_to:
             raise UserError(_("Khoảng ngày không hợp lệ."))
         return [
-            ("date_order", ">=", fields.Date.to_date(self.date_from)),
-            ("date_order", "<=", fields.Date.to_date(self.date_to)),
-            ("receipt_status", "!=", "pending"),
+            ("picking_type_code", "=", "incoming"),
+            ("state", "=", "done"),
+            ("date_done", ">=", fields.Date.to_date(self.date_from)),
+            ("date_done", "<=", fields.Date.to_date(self.date_to)),
         ]
 
     def _partner_code(self, partner):
@@ -148,41 +148,74 @@ class PurchaseExportWizard(models.TransientModel):
                 seen.add(token)
         return ", ".join(out)
 
-    def _get_purchase_line_rows(self, purchase):
-        order_date_str = _to_date_str(purchase.date_order)
-        purchase_name  = purchase.name or ""
-        partner        = purchase.partner_id
-        partner_code   = self._partner_code(partner)
-        partner_name   = partner.name or ""
-        partner_vat    = partner.vat or ""
-        partner_addr   = self._compose_partner_address(partner)
-        ma_kho         = self._get_warehouse_code(purchase.picking_ids[:1] and purchase.picking_ids[0] or None)
+    def _get_picking_line_rows(self, picking):
+        receipt_date_str = _to_date_str(picking.date_done)
+        picking_name = picking.name or ""
+        purchase_name = picking.origin or "" # Số đơn đặt hàng
+        
+        partner = picking.partner_id
+        partner_code = self._partner_code(partner)
+        partner_name = partner.name or ""
+        partner_vat = partner.vat or ""
+        partner_addr = self._compose_partner_address(partner)
+        ma_kho = self._get_warehouse_code(picking)
 
         rows = []
-        for pol in purchase.order_line:
-            if not pol.product_id:
-                continue
+        
+        # Helper to process a move/move_line
+        def process_line(move, qty, uom):
+            if not move.product_id:
+                return
+            
+            # Purchase Order Line information
+            pol = move.purchase_line_id
+            
             rows.append(self._build_row_data(
-                purchase, pol, pol.product_id,
-                order_date_str, purchase_name, partner_code, partner_name,
+                picking, pol, move.product_id, qty, uom,
+                receipt_date_str, picking_name, purchase_name, partner_code, partner_name,
                 partner_addr, partner_vat, ma_kho
             ))
+
+        # Iterate over move lines if available, otherwise moves without package
+        if picking.move_line_ids:
+            for ml in picking.move_line_ids:
+                process_line(ml.move_id, ml.qty_done, ml.product_uom_id)
+        else:
+            for move in picking.move_ids_without_package:
+                process_line(move, move.quantity_done, move.product_uom)
+                
         return rows
 
-    def _build_row_data(self, purchase, pol, prod,
-                        order_date_str, purchase_name, partner_code, partner_name,
+    def _build_row_data(self, picking, pol, prod, qty, uom,
+                        receipt_date_str, picking_name, purchase_name, partner_code, partner_name,
                         partner_address, partner_vat, ma_kho):
         product_code = prod.default_code or getattr(prod, 'barcode', '') or ""
         product_name = prod.display_name or prod.name or ""
-        uom          = pol.product_uom or prod.uom_id
         uom_name     = uom.name if uom else ""
-        qty          = pol.product_qty or 0.0
-        don_gia      = pol.price_unit or 0.0
-        thanh_tien   = pol.price_subtotal or 0.0
-        ty_le_ck     = getattr(pol, "discount", 0.0) or 0.0
-
-        ty_le_thue_gtgt = next((t.amount or 0.0 for t in pol.taxes_id), 0.0)
-        tien_thue_gtgt  = thanh_tien * ty_le_thue_gtgt / 100.0
+        
+        don_gia      = 0.0
+        thanh_tien   = 0.0
+        ty_le_ck     = 0.0
+        ty_le_thue_gtgt = 0.0
+        tien_thue_gtgt = 0.0
+        
+        purchase = False
+        
+        if pol:
+            purchase = pol.order_id
+            don_gia = pol.price_unit or 0.0
+            thanh_tien = don_gia * qty
+            ty_le_ck = getattr(pol, "discount", 0.0) or 0.0
+            
+            # Calculate taxes based on the ratio from the PO line
+            # Tax amount per unit * qty or Tax percent * amount?
+            # Re-calculating closely to how Odoo does it might be complex with tax inclusion/exclusion
+            # Simplified approach: (Total Tax / Total Amount) * Line Amount
+            # Or just use the tax percent if standard.
+            
+            # Here keeping consistent with previous logic:
+            ty_le_thue_gtgt = next((t.amount or 0.0 for t in pol.taxes_id), 0.0)
+            tien_thue_gtgt  = thanh_tien * ty_le_thue_gtgt / 100.0
 
         return {
             # Fixed fields
@@ -193,14 +226,14 @@ class PurchaseExportWizard(models.TransientModel):
             # Dates (ngày hiện tại)
             'ngay_hach_toan': _to_date_str(date.today()),
             'ngay_chung_tu': _to_date_str(date.today()),
-            'so_phieu_nhap': purchase_name,
+            'so_phieu_nhap': picking_name, # Changed: Picking Name
             'so_ct_ghi_no': '',
 
             # Invoice-ish fields
             'mau_so_hd': '01GTKT0/001',
             'ky_hieu_hd': 'AB/20E',
-            'so_hoa_don': purchase.origin or "",
-            'ngay_hoa_don': order_date_str,
+            'so_hoa_don': purchase.origin or "", # Or invoice number if linked? Keep as origin/PO name for now or empty
+            'ngay_hoa_don': receipt_date_str, # Changed: Receipt Date
 
             # Bank chi
             'so_tk_chi': '04080082835',
@@ -256,14 +289,14 @@ class PurchaseExportWizard(models.TransientModel):
             'ma_doi_tuong_thcp': '',
             'ma_cong_trinh': '',
             'so_don_dat_hang': '',
-            'so_don_mua_hang': '',
+            'so_don_mua_hang': purchase_name, # Changed: PO Name
             'so_hop_dong_mua': '',
             'so_hop_dong_ban': '',
             'ma_thong_ke': '',
             'so_khe_uoc_di_vay': '',
             'so_khe_uoc_cho_vay': '',
             'cp_khong_hop_ly': 'Không',
-            'misa_sync': getattr(purchase, 'x_studio_misa_sync', False),
+            'misa_sync': getattr(purchase, 'x_studio_misa_sync', False) if purchase else False,
         }
 
     def _create_excel_workbook(self, data_rows):
@@ -320,14 +353,14 @@ class PurchaseExportWizard(models.TransientModel):
         if Workbook is None:
             raise UserError(_("Thiếu thư viện openpyxl. Vui lòng cài đặt 'openpyxl' cho Python."))
 
-        purchases = self.env["purchase.order"].sudo().search(self._domain(), order="date_order asc, id asc")
-        if not purchases:
-            raise UserError(_("Không tìm thấy đơn mua hàng nào trong khoảng ngày đã chọn."))
+        pickings = self.env["stock.picking"].sudo().search(self._domain(), order="date_done asc, id asc")
+        if not pickings:
+            raise UserError(_("Không tìm thấy phiếu nhập kho nào trong khoảng ngày đã chọn."))
 
         # Tạo dữ liệu
         all_rows = []
-        for purchase in purchases:
-            all_rows.extend(self._get_purchase_line_rows(purchase))
+        for picking in pickings:
+            all_rows.extend(self._get_picking_line_rows(picking))
 
         if not all_rows:
             raise UserError(_("Không có dữ liệu chi tiết để xuất."))
