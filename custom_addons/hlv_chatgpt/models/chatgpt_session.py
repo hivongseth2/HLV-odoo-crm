@@ -116,6 +116,11 @@ class HlvChatgptSession(models.Model):
                     is_handoff = True
                     next_agent_key = 'naming'
                     output_str = "Handoff initiated."
+                    
+                elif fname == "handoff_to_router":
+                    is_handoff = True
+                    next_agent_key = 'router' # Quay về Router
+                    output_str = "Quay về Tổng đài."
 
                 # --- LOGIC NGHIỆP VỤ (STOCK) ---
                 elif fname == "search_product_stock":
