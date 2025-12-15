@@ -161,14 +161,14 @@ class HlvChatgptSession(models.Model):
     # 3. STOCK LOGIC (Hàm Search V9)
     # =================================================================================
     def _execute_search_product_stock(self, keyword):
-        """V9: Search Thông Minh - Ưu tiên khớp Tên & Lọc rác"""
-        _logger.info("🔧 AI Search V9 Input: %s", keyword)
+        """V12: Massive Search - Trả về 200 kết quả để AI tự lọc"""
+        _logger.info("🔧 AI Search V12 (Massive) Input: %s", keyword)
         if not keyword: return json.dumps({"error": "Thiếu từ khóa"})
 
         Product = self.env['product.product'].sudo()
         
-        # 1. CLEANING
-        stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "bao", "nhiêu", "là", "gì", "cho", "tôi", "muốn", "mua", "bán", "sản", "phẩm", "hàng"]
+        # 1. CLEANING (Vẫn giữ để lọc từ rác)
+        stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "bao", "nhiêu", "là", "gì", "cho", "tôi", "muốn", "mua", "bán", "sản", "phẩm", "hàng", "chiếc", "cái"]
         keyword_clean = keyword.lower()
         for w in stop_words: 
             keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
@@ -176,22 +176,24 @@ class HlvChatgptSession(models.Model):
         
         tokens = keyword_clean.split()
 
-        # 2. BROAD SEARCH
+        # 2. SEARCH STRATEGY (Vẫn dùng AND để tránh rác quá mức, nhưng mở13 rộng limit)
         domain = [('active', '=', True)]
-        if tokens:
-            final_domain = []
-            for token in tokens:
-                sub_domain = ['|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token)]
-                if not final_domain: final_domain = sub_domain
-                else: final_domain = ['|'] + final_domain + sub_domain
-            domain += final_domain
+        for token in tokens:
+            domain += ['|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token)]
 
+        # --- THAY ĐỔI 1: TĂNG LIMIT SEARCH DB ---
+        # Tìm hẳn 300 thằng để lọc sau
         products = Product.search(domain, limit=300)
         
+        # Logic Retry (Nếu tìm 300 thằng mà vẫn không ra gì thì mới báo lỗi)
         if not products:
-             return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm nào khớp '{keyword_clean}'."})
+            return json.dumps({
+                "status": "not_found",
+                "message": f"Không tìm thấy sản phẩm nào khớp với '{keyword}'.",
+                "suggestion_to_ai": "Hãy thử tìm lại (Retry) bằng từ khóa ngắn gọn hơn (Ví dụ: Chỉ tìm Mã Model)."
+            }, ensure_ascii=False)
 
-        # 3. SCORING
+        # 3. SCORING (Vẫn cần chấm điểm để đẩy hàng xịn lên đầu danh sách)
         result_list = []
         junk_keywords = ["vỏ", "pin", "sạc", "thùng", "combo", "phụ tùng", "tem", "nhãn"]
         
@@ -200,26 +202,43 @@ class HlvChatgptSession(models.Model):
             p_name = p.name.lower()
             p_code = (p.default_code or "").lower()
             
+            # Logic chấm điểm
             matched = sum(1 for t in tokens if t in p_name or t in p_code)
             score += matched * 1000
-            if keyword_clean in p_name: score += 2000
-            if keyword_clean in p_code: score += 3000
-            if p.qty_available > 0: score += 1000
+            if keyword_clean in p_code: score += 5000 
+            if p.qty_available > 0: score += 2000     
 
+            # Trừ điểm rác (để rác chìm xuống dưới cùng của danh sách 200)
             for junk in junk_keywords:
                 if junk in p_name and junk not in keyword_clean:
                     score -= 5000 
 
             result_list.append({
-                "name": p.name, "code": p.default_code, "price": p.list_price,
-                "qty": p.qty_available, "uom": p.uom_id.name, "_score": score
+                "name": p.name, 
+                "code": p.default_code, 
+                "qty": p.qty_available, 
+                "price": p.list_price, 
+                "_score": score
             })
 
+        # 4. SORT & RETURN
+        # Sắp xếp để AI đọc mấy thằng điểm cao trước
         result_list.sort(key=lambda x: x['_score'], reverse=True)
-        final_results = result_list[:100]
+        
+        # --- THAY ĐỔI 2: TRẢ VỀ SỐ LƯỢNG LỚN ---
+        # Lấy Top 200 (hoặc tất cả nếu ít hơn 200)
+        final_results = result_list[:200] 
+        
+        # Xóa điểm số trước khi gửi đi cho gọn JSON
         for item in final_results: del item['_score']
 
-        return json.dumps(final_results, ensure_ascii=False)
+        # Trả về JSON
+        return json.dumps({
+            "status": "success",
+            "count": len(final_results),
+            "data": final_results,
+            "instruction": "Dữ liệu trên là CHÍNH XÁC. Hãy tìm trong danh sách này sản phẩm phù hợp nhất với yêu cầu khách hàng."
+        }, ensure_ascii=False)
 
     # =================================================================================
     # 4. ZALO INTEGRATION & UI ACTIONS (Hàm bạn bị thiếu nằm ở đây)
