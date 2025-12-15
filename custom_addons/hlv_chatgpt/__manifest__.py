@@ -1,6 +1,6 @@
 {
     'name': 'HLV ChatGPT Manager',
-    'version': '1.1',
+    'version': '1.0',
     'summary': 'Chat AI Multi-Agent (Router + Specialists) sử dụng Prompt ID',
     'author': 'HLV',
     'depends': ['base', 'product', 'stock'],
