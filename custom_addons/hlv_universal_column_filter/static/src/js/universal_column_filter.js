@@ -14,6 +14,13 @@ const ENABLED_MODELS = [
     'sale.order',
 ];
 
+function toUTCDateTime(dateStr, timeStr) {
+    if (!dateStr) return null;
+    const localDate = new Date(`${dateStr}T${timeStr}`);
+    return localDate.toISOString().replace('T', ' ').split('.')[0];
+}
+
+
 // Config cho product search - model -> order line field và product field path
 const PRODUCT_SEARCH_CONFIG = {
     'stock.picking': {
@@ -1241,6 +1248,7 @@ patch(ListRenderer.prototype, {
     /**
      * Apply date range filter
      */
+    
     async _hlvApplyDateFilter(fieldName, label, fromValue, toValue) {
         console.log('[HLV Filter] Date:', fieldName, fromValue, toValue);
 
