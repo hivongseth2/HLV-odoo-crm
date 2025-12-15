@@ -821,7 +821,7 @@ class SaleApiImportWizard(models.TransientModel):
 
                 # --- Lấy chi tiết dòng hàng ---
                 order_id = order.get("ID")
-                misa_id_str = str(order_id) if order_id else False  # ### NEW
+                misa_id_str = str(order_id) if order_id else False  
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
                 
                 if customer_name not in e_accounts :
