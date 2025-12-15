@@ -159,7 +159,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'tien_von', 'name': 'Tiền vốn', 'width': 15},
             {'key': 'hang_hoa_giu_ho', 'name': 'Hàng hóa giữ hộ/bán hộ', 'width': 25},
             {'key': 'vi_tri', 'name': 'vị trí', 'width': 25},
-            {'key': 'misa_sync', 'name': 'Misa Sync', 'width': 15},
+            {'key': 'misa_sync', 'name': 'Đã lập chứng từ', 'width': 15},
         ]
 
     def _domain(self):
