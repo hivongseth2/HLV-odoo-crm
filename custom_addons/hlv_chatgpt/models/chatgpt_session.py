@@ -186,7 +186,7 @@ class HlvChatgptSession(models.Model):
                 else: final_domain = ['|'] + final_domain + sub_domain
             domain += final_domain
 
-        products = Product.search(domain, limit=30)
+        products = Product.search(domain, limit=100)
         
         if not products:
              return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm nào khớp '{keyword_clean}'."})
@@ -216,7 +216,7 @@ class HlvChatgptSession(models.Model):
             })
 
         result_list.sort(key=lambda x: x['_score'], reverse=True)
-        final_results = result_list[:5]
+        final_results = result_list[:40]
         for item in final_results: del item['_score']
 
         return json.dumps(final_results, ensure_ascii=False)
