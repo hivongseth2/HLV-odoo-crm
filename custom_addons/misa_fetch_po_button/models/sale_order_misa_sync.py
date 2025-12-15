@@ -52,6 +52,7 @@ class SaleOrder(models.Model):
         order_detail_url = "https://amisapp.misa.vn/crm/g2/api/business/SaleOrder/DataSubPaging"
         payload_detail = misa_config.get_crm_sale_order_detail_payload(misa_order_id)
         product_lines = misa_utils.get_list_product_by_order_crm(order_detail_url, headers, payload_detail)
+        logging.debug("productline", product_lines)
         return product_lines or []
         # ===== Helpers lấy/convert UoM từ MISA =====
 
