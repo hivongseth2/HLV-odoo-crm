@@ -247,7 +247,7 @@ class PurchaseExportWizard(models.TransientModel):
 
             # Misc fixed
             'nguoi_giao_hang': 'Vũ Thị Bích Thủy',
-            'dien_giai': purchase.origin or "",
+            'dien_giai': picking.origin or "",
             'so_tk_nhan': '0486523679',
             'ten_ngan_hang_nhan': 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam',
             'ly_do_chi': '',
