@@ -168,7 +168,7 @@ class HlvChatgptSession(models.Model):
         Product = self.env['product.product'].sudo()
         
         # 1. CLEANING
-        stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "bao", "nhiêu", "cái", "con", "máy", "bộ"]
+        stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "bao", "nhiêu", "là", "gì", "cho", "tôi", "muốn", "mua", "bán", "sản", "phẩm", "hàng"]
         keyword_clean = keyword.lower()
         for w in stop_words: 
             keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
@@ -186,7 +186,7 @@ class HlvChatgptSession(models.Model):
                 else: final_domain = ['|'] + final_domain + sub_domain
             domain += final_domain
 
-        products = Product.search(domain, limit=100)
+        products = Product.search(domain, limit=300)
         
         if not products:
              return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm nào khớp '{keyword_clean}'."})
@@ -216,7 +216,7 @@ class HlvChatgptSession(models.Model):
             })
 
         result_list.sort(key=lambda x: x['_score'], reverse=True)
-        final_results = result_list[:40]
+        final_results = result_list[:100]
         for item in final_results: del item['_score']
 
         return json.dumps(final_results, ensure_ascii=False)

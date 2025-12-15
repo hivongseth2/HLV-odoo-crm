@@ -91,6 +91,7 @@ class MisaTransferFetch(models.TransientModel):
             "HIENDUC":    "KHD/Tồn kho",
             "HCM_SHOWROOM":"TSNSR/Stock",
             "HANGMUON":"KMUON/Tồn kho",
+            "HLV":"HLV/Stock"
 
         }
         default_location_path = "Partners/Vendors"

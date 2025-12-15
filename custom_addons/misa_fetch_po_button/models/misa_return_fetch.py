@@ -34,7 +34,7 @@ class MisaReturnFetch(models.TransientModel):
         date_to_utc = datetime.combine(self.date_to, datetime.max.time()) - timedelta(hours=7)
         stock_mapping = {
             "HCM": "TSN/Stock", "BENCAM": "KBC/Tồn kho",
-            "HIENDUC": "KHD/Tồn kho", "HCM_SHOWROOM": "TSNSR/Stock"
+            "HIENDUC": "KHD/Tồn kho", "HCM_SHOWROOM": "TSNSR/Stock","HLV":"HLV/Stock"
         }
         total_created = self._fetch_and_process_returns(
             misa_utils, headers, date_from_utc, date_to_utc, 
