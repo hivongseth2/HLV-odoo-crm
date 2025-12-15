@@ -809,6 +809,7 @@ class SaleApiImportWizard(models.TransientModel):
                     #     for so in found:
                     #         self._force_cancel_sale_order(so, revenue_status_id, status)
                     continue
+                
 
 
 
@@ -823,7 +824,8 @@ class SaleApiImportWizard(models.TransientModel):
                 misa_id_str = str(order_id) if order_id else False  # ### NEW
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
                 
-                
+                if customer_name not in e_accounts :
+                    continue
                 if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
                     continue
 
