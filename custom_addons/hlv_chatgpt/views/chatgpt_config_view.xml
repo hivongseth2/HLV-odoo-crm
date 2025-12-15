@@ -10,14 +10,14 @@
                         <h1><field name="name"/></h1>
                     </div>
                     <group>
-                        <group string="Xác thực">
+                        <group string="Kết nối OpenAI">
                             <field name="active"/>
                             <field name="api_key" password="True"/>
                         </group>
-                        <group string="Tham số Prompt">
-                            <field name="prompt_id"/>
-                            <field name="prompt_version"/>
-                            <field name="vector_store_id"/>
+                        <group string="Cấu hình Assistant (Prompt IDs)">
+                            <field name="router_id" placeholder="asst_uniuQQRkpIYltBXGbCFFtore"/>
+                            <field name="stock_id" placeholder="asst_5iZ1U3pGzUOMvRs14iHBQAK0"/>
+                            <field name="naming_id" placeholder="asst_EnBglJacCItJt8xTqD8TTu1P"/>
                         </group>
                     </group>
                 </sheet>
@@ -32,5 +32,5 @@
     </record>
 
     <menuitem id="menu_hlv_chatgpt_root" name="HLV ChatGPT" sequence="10" web_icon="base,static/description/settings.png"/>
-    <menuitem id="menu_hlv_chatgpt_config" parent="menu_hlv_chatgpt_root" action="action_hlv_chatgpt_config" sequence="20"/>
+    <menuitem id="menu_hlv_chatgpt_config" parent="menu_hlv_chatgpt_root" action="action_hlv_chatgpt_config" sequence="99"/>
 </odoo>

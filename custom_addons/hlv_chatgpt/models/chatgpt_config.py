@@ -1,20 +1,19 @@
-# models/chatgpt_config.py
+# -*- coding: utf-8 -*-
 from odoo import models, fields, api
 
 class HlvChatgptConfig(models.Model):
     _name = 'hlv.chatgpt.config'
-    _description = 'Cấu hình OpenAI'
+    _description = 'Cấu hình Multi-Agent'
     
-    name = fields.Char(default='Cấu hình OpenAI', required=True)
     active = fields.Boolean(default=True)
+
+    name = fields.Char(string='Tên cấu hình', default='Cấu hình Chính')
+    api_key = fields.Char(string='OpenAI API Key', required=True)
     
-    # Thông số API
-    api_key = fields.Char(string='OpenAI API Key', required=True, help="Bắt đầu bằng sk-...")
-    
-    # Thông số Prompt & Vector Store (Lấy từ code mẫu của bạn)
-    prompt_id = fields.Char(string='Prompt ID', default='pmpt_69328af234508194a465ab3aad5c351f02f284d1c9c1b152')
-    prompt_version = fields.Char(string='Version', default='3')
-    vector_store_id = fields.Char(string='Vector Store ID', default='vs_69328ab5789081918759b56def1c641a')
+    # --- 3 CON AGENT ---
+    router_id = fields.Char(string='Router ID (Tổng đài)', required=True, help="ID asst_...")
+    stock_id = fields.Char(string='Stock ID (Kho)', required=True, help="ID asst_...")
+    naming_id = fields.Char(string='Naming ID (Đặt tên)', required=True, help="ID asst_...")
 
     @api.model
     def get_config(self):
