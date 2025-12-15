@@ -60,9 +60,9 @@ class HlvChatgptSession(models.Model):
         return self._run_assistant_workflow(client, target_assistant_id, query, config)
 
     def _get_assistant_id_by_key(self, config, key):
-        # """Hàm phụ trợ lấy ID từ config"""
-        # if key == 'stock': return config.stock_id
-        # if key == 'naming': return config.naming_id
+        """Hàm phụ trợ lấy ID từ config"""
+        if key == 'stock': return config.stock_id
+        if key == 'naming': return config.naming_id
         return config.router_id # Mặc định là router
 
     # =================================================================================
