@@ -176,7 +176,7 @@ class HlvChatgptSession(models.Model):
         
         tokens = keyword_clean.split()
 
-        # 2. SEARCH STRATEGY (Vẫn dùng AND để tránh rác quá mức, nhưng mở rộng limit)
+        # 2. SEARCH STRATEGY (Vẫn dùng AND để tránh rác quá mức, nhưng mở13 rộng limit)
         domain = [('active', '=', True)]
         for token in tokens:
             domain += ['|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token)]
