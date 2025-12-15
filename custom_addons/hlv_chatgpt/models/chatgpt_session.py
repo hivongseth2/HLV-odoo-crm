@@ -186,7 +186,7 @@ class HlvChatgptSession(models.Model):
                 else: final_domain = ['|'] + final_domain + sub_domain
             domain += final_domain
 
-        products = Product.search(domain, limit=100)
+        products = Product.search(domain, limit=300)
         
         if not products:
              return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm nào khớp '{keyword_clean}'."})
