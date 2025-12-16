@@ -5,7 +5,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-class MisaWebsiteController(http.Controller):
+class MisaPurchaseLookupController(http.Controller):
     """Controller cho trang web tra cứu chứng từ MISA công khai"""
 
     # Mapping các giá trị trạng thái
@@ -97,7 +97,7 @@ class MisaWebsiteController(http.Controller):
                 _logger.exception("Error searching MISA purchase voucher")
                 error = str(e)
         
-        return request.render('misa_fetch_po_button.misa_purchase_lookup', {
+        return request.render('website_public_inventory_18.misa_purchase_lookup', {
             'journal_memo': journal_memo,
             'vouchers': vouchers,
             'error': error,

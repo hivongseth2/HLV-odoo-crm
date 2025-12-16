@@ -25,7 +25,7 @@
     background: white;
     border-radius: 12px;
     padding: 25px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
     margin-top: -30px;
     position: relative;
     z-index: 10;
@@ -71,7 +71,7 @@
 .misa-voucher-card {
     background: white;
     border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
     margin-bottom: 20px;
     overflow: hidden;
     transition: all 0.3s ease;
@@ -80,7 +80,7 @@
 
 .misa-voucher-card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
 }
 
 .voucher-header {
@@ -188,14 +188,14 @@
     padding: 30px 20px;
     background: white;
     border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
     margin-bottom: 20px;
     transition: all 0.3s ease;
 }
 
 .instruction-item:hover {
     transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
 }
 
 .instruction-icon {
@@ -230,31 +230,31 @@
     .misa-lookup-header h1 {
         font-size: 1.6rem;
     }
-    
+
     .voucher-header {
         flex-direction: column;
         text-align: center;
     }
-    
+
     .voucher-badges {
         margin-top: 10px;
     }
-    
+
     .info-label {
         display: block;
         width: 100%;
         margin-bottom: 3px;
     }
-    
+
     .misa-search-form .input-group {
         flex-direction: column;
     }
-    
+
     .misa-search-form .form-control {
         border-radius: 8px;
         margin-bottom: 10px;
     }
-    
+
     .misa-search-form .btn-primary {
         border-radius: 8px;
         width: 100%;
