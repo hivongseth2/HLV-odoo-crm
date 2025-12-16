@@ -1366,17 +1366,13 @@ class MisaApiUtils(models.AbstractModel):
         """
         Tìm kiếm chứng từ mua hàng trong MISA (actapp) theo diễn giải (journal_memo).
         
-        Args:
-            journal_memo (str): Nội dung diễn giải cần tìm (Contains)
-            limit (int): Số lượng kết quả tối đa
-            
-        Returns:
-            list: Danh sách chứng từ rút gọn
+        Sử dụng customFilter với các property ID phổ biến (4008=RefNo, 57, 2656, 4030...)
+        để tìm kiếm chuỗi trong nhiều trường (vì API yêu cầu ID số).
         """
         if not journal_memo:
             raise Exception("Cần truyền 'journal_memo' để tìm kiếm")
             
-        # 1. Lấy token (actapp uses _get_misa_token logic)
+        # 1. Lấy token
         access_token = self._get_misa_token()
         
         # 2. Config Header
@@ -1386,24 +1382,36 @@ class MisaApiUtils(models.AbstractModel):
         # 3. Build Payload
         url = "https://actapp.misa.vn/g2/api/pu/v1/pu_list/paging_filter_v2"
         
-        # Note: Using "journal_memo" as property name. 
-        # Operator 7 = Contains (common in MISA)
+        # Search value
+        val = journal_memo.strip()
+        
+        # Filter đa trường (RefNo, Memo, PartnerName, etc.)
+        # Operator 7 = Contains
+        # Property 4008 = RefNo
+        # Property 57, 2656, 4030 = Các trường string khác (có thể là DienGiai)
+        custom_filter = [{
+            "property": 4008,
+            "value": val,
+            "operator": 7, # Contains
+            "operand": 1,
+            "data_type": 1,
+            "childrens": [
+                {"property": 57, "value": val, "operator": 7, "operand": 2, "data_type": 1},
+                {"property": 2656, "value": val, "operator": 7, "operand": 2, "data_type": 1},
+                {"property": 4030, "value": val, "operator": 7, "operand": 2, "data_type": 1},
+                # Thêm 4018 từ user report (nếu có)
+                {"property": 4018, "value": val, "operator": 7, "operand": 2, "data_type": 1}
+            ]
+        }]
+        
         payload = {
-            "filter": [
-                {
-                    "property": "journal_memo",
-                    "value": journal_memo.strip(),
-                    "operator": 7, 
-                    "operand": 0,
-                    "data_type": 1 
-                }
-            ],
+            "customFilter": custom_filter,
             "pageIndex": 1,
             "pageSize": int(limit),
-            "view": 2 # Default view for Purchase List
+            "view": 2
         }
         
-        _logger.info(f"🔎 [MISA PURCHASE SEARCH] Tìm kiếm journal_memo: '{journal_memo}'")
+        _logger.info(f"🔎 [MISA PURCHASE SEARCH] Tìm kiếm journal_memo (đa trường): '{val}'")
         
         session = self._get_retry_session()
         try:
