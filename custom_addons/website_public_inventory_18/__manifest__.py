@@ -7,21 +7,24 @@
     "website": "https://example.com",
     "category": "Website/Inventory",
     "license": "LGPL-3",
-    "depends": ["website", "stock", "sale"],
+    "depends": ["website", "stock", "sale", "misa_fetch_po_button"],
     "data": [
         "views/templates.xml",
         "views/order_lookup_templates.xml",
         "views/menu.xml",
         "views/res_config_settings_views.xml",
         "views/chatbot_templates.xml",
+        "views/misa_purchase_lookup.xml",
     ],
     "assets": {
         "web.assets_frontend": [
             "website_public_inventory_18/static/src/css/order_lookup.css",
             "website_public_inventory_18/static/src/css/chatbot.css",
+            "website_public_inventory_18/static/src/css/misa_lookup.css",
             "website_public_inventory_18/static/src/js/chatbot.js",
         ],
     },
     "installable": True,
     "application": False,
 }
+
