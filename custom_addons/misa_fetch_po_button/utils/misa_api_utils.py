@@ -1366,7 +1366,7 @@ class MisaApiUtils(models.AbstractModel):
         """
         Tìm kiếm chứng từ nhập kho mua hàng trong MISA (actapp) theo diễn giải (journal_memo).
         
-        Sử dụng API pu_list/paging_filter_v2 với view=92 để lấy chứng từ nhập kho (reftype 302)
+        Sử dụng API pu_list/paging_filter_v2 với view=40 để lấy chứng từ nhập kho (reftype 302)
         với đầy đủ thông tin: refno_finance, posted_date, paid_status, in_outward_refno, v.v.
         """
         if not journal_memo:
@@ -1379,8 +1379,9 @@ class MisaApiUtils(models.AbstractModel):
         misa_config = self.env['misa.config']
         headers = misa_config.get_default_headers(access_token)
         
-        # 3. Dùng pu_list với view=92 (chứng từ nhập kho)
-        url = "https://actapp.misa.vn/g1/api/pu/v1/pu_list/paging_filter_v2"
+        # 3. Dùng pu_list với view=40 (chứng từ nhập kho mua hàng - reftype 302)
+        # QUAN TRỌNG: Dùng g2 (không phải g1)
+        url = "https://actapp.misa.vn/g2/api/pu/v1/pu_list/paging_filter_v2"
         
         val = journal_memo.strip()
         
@@ -1388,6 +1389,7 @@ class MisaApiUtils(models.AbstractModel):
         # Property 57 = journal_memo
         # Operator 7 = Contains
         payload = {
+            "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
             "filter": [{
                 "property": 57,
                 "value": val,
@@ -1397,11 +1399,10 @@ class MisaApiUtils(models.AbstractModel):
             }],
             "pageIndex": 1,
             "pageSize": int(limit),
-            "view": 92,  # View cho chứng từ nhập kho mua hàng
+            "view": 40,  # View cho chứng từ nhập kho mua hàng (reftype 302)
             "useSp": False, 
             "loadMode": 2,
-            "summaryColumns": [5039, 5104, 247],
-            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1}]"
+            "summaryColumns": [5080, 5730, 5128, 5059]
         }
         
         _logger.info(f"🔎 [MISA PURCHASE VOUCHER SEARCH] Tìm kiếm journal_memo: '{val}'")
@@ -1415,14 +1416,15 @@ class MisaApiUtils(models.AbstractModel):
                 _logger.error(f"❌ MISA Purchase Voucher Search HTTP {res.status_code}: {res.text}")
                 try:
                     err = res.json()
-                    msg = err.get("UserMessage") or err.get("Message") or "Lỗi không xác định"
+                    msg = err.get("UserMessage") or err.get("Message") or err.get("SystemMessage") or "Lỗi không xác định"
                 except:
                     msg = res.text
                 raise Exception(f"Lỗi API MISA: {msg}")
                 
             data = res.json()
             if not data.get("Success"):
-                 raise Exception(f"MISA Refused: {data.get('ErrorsMessage')}")
+                err_msg = data.get("SystemMessage") or data.get("ErrorsMessage") or "Unknown error"
+                raise Exception(f"MISA Refused: {err_msg}")
                  
             page_data = data.get("Data", {}).get("PageData", [])
             
