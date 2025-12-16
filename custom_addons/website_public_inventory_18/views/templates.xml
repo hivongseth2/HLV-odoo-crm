@@ -3,140 +3,91 @@
   <template id="inventory_page" name="Public Inventory Page">
     <t t-call="website.layout">
       <style>
-        /* --- CSS GỐC GIỮ NGUYÊN --- */
+        /* --- CSS CƠ BẢN (SEARCH & TAGS) --- */
         .search-wrapper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #ced4da; border-radius: 0.375rem; background-color: #fff; min-height: 45px; cursor: text; transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out; }
         .search-wrapper:focus-within { border-color: #86b7fe; outline: 0; box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); }
         .search-chip { display: inline-flex; align-items: center; background-color: #e9ecef; color: #495057; font-size: 0.9rem; padding: 4px 10px; border-radius: 16px; user-select: none; max-width: 100%; }
         .search-chip span { text-overflow: ellipsis; max-width: 300px; white-space: nowrap; overflow: hidden; }
         .search-chip .btn-close-chip { margin-left: 6px; cursor: pointer; color: #adb5bd; font-weight: bold; line-height: 1; font-size: 16px; }
-        .search-chip .btn-close-chip:hover { color: #dc3545; }
         .search-input-field { border: none; outline: none; flex-grow: 1; min-width: 120px; font-size: 16px; padding: 0; margin: 0; background: transparent; color: #212529; }
         #search-suggestions { border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); border: 1px solid rgba(0,0,0,.05); max-height: 60vh; }
-        .suggestion-item:active { background-color: #e9ecef; }
         
-        /* --- CSS RESPONSIVE MỚI --- */
-        
-        /* 1. Tinh chỉnh Layout chung */
-        .mb-6 { margin-bottom: 4rem !important; }
+        /* --- CSS MOBILE RESPONSIVE (FIXED) --- */
         @media (max-width: 768px) {
+            /* 1. Form tìm kiếm gọn gàng */
             .mb-6 { margin-bottom: 2rem !important; }
-            .container { padding-left: 12px; padding-right: 12px; }
-            h1 { font-size: 1.5rem; }
-            h2 { font-size: 1.25rem; }
-        }
+            #search-form .col-md-5, #search-form .col-md-2, #search-form .col-md-3 { margin-bottom: 10px; }
+            #search-form .col-md-3 { justify-content: space-between !important; background: #f8f9fa; padding: 10px; border-radius: 8px; }
 
-        /* 2. Form tìm kiếm trên Mobile */
-        @media (max-width: 768px) {
-            #search-form .col-md-5, 
-            #search-form .col-md-2, 
-            #search-form .col-md-3 {
-                margin-bottom: 10px;
-            }
-            /* Căn chỉnh checkbox đẹp hơn */
-            #search-form .col-md-3 {
-                justify-content: space-between !important; 
-                background: #f8f9fa;
-                padding: 10px;
-                border-radius: 8px;
-            }
-            .search-chip { font-size: 0.8rem; padding: 2px 8px; }
-        }
-
-        /* 3. Biến đổi Table thành Card View trên Mobile */
-        @media (max-width: 768px) {
-            /* Ẩn header bảng */
+            /* 2. Biến TABLE chính thành CARD VIEW */
             #inv-table thead { display: none; }
-
-            /* Biến mỗi dòng (tr) thành một khối (card) */
-            #inv-table tbody tr {
-                display: flex;
-                flex-wrap: wrap;
-                position: relative;
+            #inv-table tbody tr.main-row {
+                display: grid;
+                grid-template-columns: 80px 1fr; /* Cột ảnh + Cột thông tin */
+                grid-template-rows: auto auto;
+                gap: 8px;
                 background: #fff;
                 margin-bottom: 12px;
+                padding: 12px;
                 border: 1px solid #e9ecef;
                 border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                padding: 10px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+                position: relative;
+            }
+
+            /* Ảnh sản phẩm */
+            #inv-table tbody tr.main-row td:nth-child(2) { grid-row: 1 / 3; grid-column: 1 / 2; width: auto !important; padding: 0 !important; border: none; }
+            
+            /* Tên & Mã (Nằm bên phải ảnh) */
+            #inv-table tbody tr.main-row td:nth-child(3) { display: none; } /* Ẩn cột mã gốc đi, gộp vào tên */
+            #inv-table tbody tr.main-row td:nth-child(4) { 
+                grid-column: 2 / 3; 
+                display: flex; flex-direction: column; 
+                padding: 0 !important; border: none; 
+            }
+            /* Style lại tên cho to rõ */
+            #inv-table tbody tr.main-row td:nth-child(4) .text-wrap { font-weight: 700; color: #0d6efd; font-size: 1rem; line-height: 1.3; }
+            /* Thêm mã vào dưới tên bằng CSS giả lập hoặc JS (ở đây dùng JS render lại HTML chi tiết thì tốt hơn, nhưng CSS tạm ẩn bớt) */
+
+            /* Nút Expand (+) - Đặt tuyệt đối góc trên phải */
+            #inv-table tbody tr.main-row td:nth-child(1) {
+                position: absolute; top: 8px; right: 8px; 
+                padding: 0 !important; border: none;
+                z-index: 10;
+            }
+
+            /* Các thông số: Tồn, Giá - Đẩy xuống dòng dưới */
+            #inv-table tbody tr.main-row td:nth-child(8), /* Thực tế */
+            #inv-table tbody tr.main-row td:nth-child(9)  /* Giá bán */
+            {
+                grid-column: 1 / 3;
+                display: flex; justify-content: space-between; align-items: center;
+                padding: 4px 0 !important; border: none; border-top: 1px dashed #eee;
+                margin-top: 4px;
             }
             
-            /* Xóa border mặc định của ô */
-            #inv-table tbody tr td { border: none !important; padding: 0 !important; }
+            /* Thêm label cho dễ hiểu */
+            #inv-table tbody tr.main-row td:nth-child(8):before { content: "Tồn kho thực tế:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(9):before { content: "Giá niêm yết:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(9) { text-align: right; font-weight: bold; color: #198754; }
 
-            /* --- CẤU TRÚC CARD --- */
+            /* Ẩn các cột thừa */
+            #inv-table tbody tr.main-row td:nth-child(5), /* Barcode */
+            #inv-table tbody tr.main-row td:nth-child(6), /* ĐVT */
+            #inv-table tbody tr.main-row td:nth-child(7), /* Dự báo */
+            #inv-table tbody tr.main-row td:nth-child(10) { display: none; }
+
+            /* 3. FIX LỖI ẢNH CỦA BẠN (Row Chi tiết) */
+            /* Row chứa chi tiết sẽ full width */
+            #inv-table tbody tr.detail-row { display: block; border: none; background: transparent; padding: 0; margin-top: -10px; margin-bottom: 15px; }
+            #inv-table tbody tr.detail-row td { display: block; padding: 0 !important; border: none; background: transparent; }
             
-            /* Cột 1: Nút Expand (Góc trên phải) */
-            #inv-table tbody tr td:nth-child(1) {
-                position: absolute; top: 10px; right: 10px; width: auto; z-index: 5;
-            }
-
-            /* Cột 2: Ảnh (Trái) */
-            #inv-table tbody tr td:nth-child(2) {
-                width: 70px; margin-right: 10px;
-                order: 1;
-            }
-
-            /* Cột 4: Tên sản phẩm (Phải ảnh - Dòng 1) */
-            #inv-table tbody tr td:nth-child(4) {
-                width: calc(100% - 90px); /* Trừ đi ảnh và khoảng cách */
-                order: 2;
-                font-weight: 600; font-size: 0.95rem; color: #0d6efd;
-                margin-bottom: 2px;
-                padding-right: 30px !important; /* Chừa chỗ cho nút expand */
-            }
-
-            /* Cột 3: Mã sản phẩm (Phải ảnh - Dòng 2) */
-            #inv-table tbody tr td:nth-child(3) {
-                width: calc(100% - 90px);
-                order: 3;
-                font-size: 0.85rem; color: #6c757d;
-                margin-bottom: 8px;
-            }
-
-            /* Cột 5 (Barcode), 6 (ĐVT), 7 (Dự báo), 10 (Link): Ẩn bớt cho gọn */
-            #inv-table tbody tr td:nth-child(5),
-            #inv-table tbody tr td:nth-child(6),
-            #inv-table tbody tr td:nth-child(7),
-            #inv-table tbody tr td:nth-child(10) { 
-                display: none; 
-            }
-
-            /* Đường kẻ ngăn cách phần thông tin số liệu */
-            #inv-table tbody tr::after {
-                content: ""; display: block; width: 100%; height: 1px; 
-                background: #f0f0f0; margin: 8px 0; order: 4;
-            }
-
-            /* Cột 8: Tồn thực tế (Nửa trái bên dưới) */
-            #inv-table tbody tr td:nth-child(8) {
-                width: 50%; order: 5;
-                display: flex; flex-direction: column; align-items: flex-start;
-            }
-            /* Thêm Label giả bằng CSS */
-            #inv-table tbody tr td:nth-child(8)::before { content: "Thực tế:"; font-size: 0.75rem; color: #999; }
-            #inv-table tbody tr td:nth-child(8) span { font-size: 1.1rem; font-weight: bold; }
-
-            /* Cột 9: Giá bán (Nửa phải bên dưới) */
-            #inv-table tbody tr td:nth-child(9) {
-                width: 50%; order: 6;
-                display: flex; flex-direction: column; align-items: flex-end;
-            }
-            #inv-table tbody tr td:nth-child(9)::before { content: "Giá bán:"; font-size: 0.75rem; color: #999; }
-            
-            /* Xử lý riêng cho dòng chi tiết (Detail Row - khi bấm expand) */
-            #inv-table tbody tr.detail-row {
-                background-color: #f8f9fa;
-                border-top: none;
-                margin-top: -12px; /* Dính liền với card trên */
-                border-radius: 0 0 8px 8px;
-                padding: 0;
-                display: block; /* Trả về dạng block để chứa bảng con */
-            }
-            #inv-table tbody tr.detail-row td {
-                width: 100% !important;
-                display: block;
-                padding: 10px !important;
-            }
+            /* Container chi tiết bên trong */
+            .detail-container-mobile { background: #f8f9fa; border-radius: 0 0 8px 8px; padding: 10px; border: 1px solid #e9ecef; border-top: none; }
+            .detail-item-mobile { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e0e0e0; font-size: 0.9rem; }
+            .detail-item-mobile:last-child { border-bottom: none; }
+            .detail-item-mobile .lbl { font-weight: 600; color: #495057; }
+            .detail-item-mobile .val { font-weight: bold; }
         }
       </style>
 
@@ -171,7 +122,6 @@
                     </div>
                     <div id="search-suggestions" class="position-absolute w-100 bg-white overflow-auto" style="display:none; z-index:1050; top:100%; left:0; margin-top:4px;"></div>
                 </div>
-
                 <div class="col-md-2">
                   <select name="warehouse_id" class="form-select" style="height: 47px;"> <option t-att-selected="not warehouse_id" value="">Tất cả kho</option>
                     <t t-foreach="warehouses" t-as="w">
@@ -179,31 +129,24 @@
                     </t>
                   </select>
                 </div>
-
                 <div class="col-md-3 d-flex align-items-center justify-content-center gap-3">
                   <div class="form-check form-switch pt-1">
-                    <input class="form-check-input" type="checkbox" id="comboSearchCheck" name="combo_search" value="1"
-                           t-att-checked="request.params.get('combo_search') in ('1','true','on')"/>
+                    <input class="form-check-input" type="checkbox" id="comboSearchCheck" name="combo_search" value="1" t-att-checked="request.params.get('combo_search') in ('1','true','on')"/>
                     <label class="form-check-label user-select-none" for="comboSearchCheck">Tìm Combo</label>
                   </div>
                   <div class="form-check form-switch pt-1">
-                    <input class="form-check-input" type="checkbox" id="lowStockCheck" name="low_stock" value="1"
-                           t-att-checked="request.params.get('low_stock') in ('1','true','on')"/>
+                    <input class="form-check-input" type="checkbox" id="lowStockCheck" name="low_stock" value="1" t-att-checked="request.params.get('low_stock') in ('1','true','on')"/>
                     <label class="form-check-label user-select-none" for="lowStockCheck">Tồn ≤ 5</label>
                   </div>
                 </div>
-
                 <div class="col-md-2">
-                  <button class="btn btn-primary w-100 fw-bold" style="height: 47px;" type="submit">
-                    <i class="fa fa-search me-1"></i> Tìm kiếm
-                  </button>
+                  <button class="btn btn-primary w-100 fw-bold" style="height: 47px;" type="submit"><i class="fa fa-search me-1"></i> Tìm kiếm</button>
                 </div>
               </form>
 
               <t t-if="rows">
-                <div class="card shadow-sm border-0">
-                    <div class="table-responsive">
-                      <table class="table table-hover align-middle mb-0" id="inv-table">
+                <div class="card shadow-sm border-0 bg-transparent">
+                    <div class="table-responsive" style="overflow-x: visible;"> <table class="table table-hover align-middle mb-0" id="inv-table" style="border-collapse: separate; border-spacing: 0;">
                         <thead class="bg-light">
                           <tr>
                             <th style="width:40px;"></th>
@@ -221,7 +164,7 @@
                         <tbody>
                           <t t-foreach="rows" t-as="r">
                             <t t-set="is_combo" t-value="r.get('is_combo', False)"/>
-                            <tr t-att-id="'row-'+str(r['id'])">
+                            <tr t-att-id="'row-'+str(r['id'])" class="main-row">
                               <td>
                                 <button type="button" class="btn btn-sm btn-light text-primary btn-expand rounded-circle"
                                         t-att-data-pid="r['id']"
@@ -239,6 +182,7 @@
                                 <div class="text-wrap" style="min-width: 200px;">
                                     <t t-esc="r['name']"/>
                                     <t t-if="is_combo"><span class="badge bg-warning text-dark ms-1">COMBO</span></t>
+                                    <div class="d-md-none text-muted small mt-1">Mã: <t t-esc="r['default_code']"/> | Barcode: <t t-esc="r['barcode']"/></div>
                                 </div>
                               </td>
                               <td class="text-muted"><small><t t-esc="r['barcode']"/></small></td>
@@ -265,7 +209,6 @@
                       </table>
                     </div>
                 </div>
-
                 <div class="d-flex justify-content-center mt-4">
                     <nav t-if="pages &gt; 1">
                         <ul class="pagination pagination-lg">
@@ -294,19 +237,17 @@
        <script type="text/javascript"><![CDATA[
             (function () {
               var searchTimeout = null;
-
+              // ... (Giữ nguyên phần initChipInput và Search Suggestion cũ) ...
               function initChipInput() {
                   var $realInput = $('#real-search-q');
                   var $container = $('#chip-container');
                   var $visualInput = $('#visual-search-input');
                   var currentChips = [];
-
                   var initialVal = $realInput.val();
                   if(initialVal) {
                       currentChips = initialVal.split(',').map(function(s){ return s.trim(); }).filter(function(s){ return s; });
                       renderChips();
                   }
-
                   function renderChips() {
                       $container.find('.search-chip').remove();
                       currentChips.forEach(function(term, index) {
@@ -315,33 +256,26 @@
                       });
                       updateRealInput();
                   }
-
                   function updateRealInput() { $realInput.val(currentChips.join(', ')); }
-
                   window.addSearchChip = function(term) {
                       term = term.trim().replace(/,/g, '');
                       if(term && !currentChips.includes(term)) { currentChips.push(term); renderChips(); }
                       $visualInput.val(''); $visualInput.focus();
                   }
-
                   $container.on('click', '.btn-close-chip', function() {
                       currentChips.splice($(this).data('index'), 1); renderChips(); $visualInput.focus();
                   });
-
                   $visualInput.on('keydown', function(e) {
                       var val = $(this).val();
                       if(e.key === 'Backspace' && val === '' && currentChips.length > 0) { currentChips.pop(); renderChips(); }
                       else if (e.key === 'Enter') { e.preventDefault(); if (val.trim()) addSearchChip(val); $('#search-form').submit(); }
                       else if (e.key === ',') { e.preventDefault(); if (val.trim()) addSearchChip(val); }
                   });
-
                   $container.on('click', function(e) { if(e.target === this) $visualInput.focus(); });
               }
-
               function debounce(func, wait) {
                 return function() { clearTimeout(searchTimeout); var context=this, args=arguments; searchTimeout = setTimeout(function() { func.apply(context, args); }, wait); };
               }
-
               function searchProducts(term, callback) {
                 var isComboSearch = $('#comboSearchCheck').is(':checked');
                 $.ajax({
@@ -351,7 +285,6 @@
                   success: function(resp) { callback((resp && resp.result && resp.result.products) ? resp.result.products : []); }
                 });
               }
-
               function renderSuggestions(products) {
                 var $dropdown = $('#search-suggestions');
                 if (!products || products.length === 0) { $dropdown.hide().empty(); return; }
@@ -376,31 +309,32 @@
                 initChipInput(); 
                 var $visualInput = $('#visual-search-input');
                 var $dropdown = $('#search-suggestions');
-
                 $visualInput.on('input', debounce(function() {
                   var term = $(this).val().trim();
                   if (term.length >= 2) searchProducts(term, renderSuggestions);
                   else $dropdown.hide();
                 }, 300));
-
                 $(document).on('click', '.suggestion-item', function() {
                   var name = $(this).data('name');
                   if (name) { window.addSearchChip(name); $dropdown.hide(); $('#search-form').submit(); }
                 });
-
                 $(document).on('click', function(e) { if (!$(e.target).closest('#chip-container, #search-suggestions').length) $dropdown.hide(); });
                 
+                // --- XỬ LÝ EXPAND ROW ---
                 $(document).on('click', '.btn-expand', function () {
                    var $btn = $(this);
                    var pid = $btn.data('pid');
                    var isCombo = String($btn.data('is-combo')) === 'true';
-                   var $row = $btn.closest('tr');
+                   var $row = $btn.closest('tr'); // Dòng chính
                    var $next = $row.next();
 
+                   // Toggle logic
                    if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) { $next.remove(); $btn.html('<i class="fa fa-plus"></i>'); return; }
                    
+                   // Tạo placeholder khi đang load
                    var colCount = $row.children('td').length;
-                   var $detail = $('<tr class="detail-row bg-white"><td colspan="' + colCount + '" class="p-3 shadow-inset" style="background-color:#f8f9fa;"><div class="d-flex align-items-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải dữ liệu...</div></td></tr>');
+                   // FIX: Thêm class detail-row và padding chuẩn
+                   var $detail = $('<tr class="detail-row"><td colspan="' + colCount + '"><div class="p-3 bg-light text-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải...</div></td></tr>');
                    $row.after($detail);
                    $btn.html('<i class="fa fa-minus"></i>');
 
@@ -413,8 +347,13 @@
                       data: JSON.stringify({jsonrpc: "2.0", method: "call", params: { product_id: pid, warehouse_id: currentWid, detail_mode: detailMode }, id: 1}),
                       success: function(resp) {
                           var res = (resp && resp.result) ? resp.result : {};
-                          if(res.ok) $detail.find('td').html(buildDetailTable(res));
-                          else $detail.find('td').html('<div class="text-danger small">Lỗi: ' + (res.error || 'Unknown') + '</div>');
+                          if(res.ok) {
+                              // Render nội dung
+                              var htmlContent = buildDetailTable(res);
+                              $detail.find('td').html(htmlContent);
+                          } else {
+                              $detail.find('td').html('<div class="text-danger small p-3">Lỗi: ' + (res.error || 'Unknown') + '</div>');
+                          }
                       }
                    });
                 });
@@ -422,56 +361,75 @@
               
               function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US'); }
               
+              // --- QUAN TRỌNG: SỬA HÀM NÀY ĐỂ FIX LỖI ẢNH CỦA BẠN ---
+              // Thay vì sinh thẻ table cứng, ta sinh HTML dạng DIV để mobile hiển thị đẹp
               function buildDetailTable(data) {
                   var html = '';
                   var rows = data.rows || [];
 
-                  // CẬP NHẬT: Layout Combo (Card)
+                  // TRƯỜNG HỢP 1: COMBO (Giữ nguyên card cũ nhưng tinh chỉnh CSS class)
                   if(data.mode === 'components_by_warehouse') {
-                      html += '<div class="row g-3">';
+                      html += '<div class="p-3 detail-container-mobile"><div class="row g-3">';
                       rows.forEach(function(c){
                           var imgUrl = c.image_url || '/web/static/img/placeholder.png';
                           html += '<div class="col-12 col-md-12">';
                           html += '  <div class="card h-100 border shadow-sm">';
-                          // Header
                           html += '    <div class="card-header bg-white d-flex align-items-center py-2">';
-                          html += '      <img src="' + imgUrl + '" class="rounded border me-3" style="width:48px; height:48px; object-fit:contain;">';
+                          html += '      <img src="' + imgUrl + '" class="rounded border me-3" style="width:40px; height:40px; object-fit:contain;">';
                           html += '      <div class="flex-grow-1">';
                           html += '        <div class="fw-bold text-primary">' + c.name + '</div>';
-                          html += '        <div class="small text-muted">Mã: ' + c.default_code + ' | ĐVT: ' + c.uom + '</div>';
-                          html += '      </div>';
-                          html += '      <div class="text-end border-start ps-3">';
-                          html += '        <div class="small text-muted">SL</div>'; 
-                          html += '        <div class="fw-bold fs-5 text-dark">' + fmt(c.component_qty_in_combo) + '</div>';
+                          html += '        <div class="small text-muted">SL Combo: <b>' + fmt(c.component_qty_in_combo) + '</b></div>';
                           html += '      </div>';
                           html += '    </div>';
-                          // Body
+                          
+                          // Render danh sách kho của thành phần
                           html += '    <div class="card-body p-0">';
-                          html += '      <table class="table table-sm table-striped mb-0">';
-                          html += '        <thead class="bg-light text-muted small">';
-                          html += '          <tr><th class="ps-3 border-0">Kho hàng</th><th class="text-end border-0">Tồn thực tế</th><th class="text-end border-0">Đã giữ</th><th class="text-end border-0 pe-3">Khả dụng</th></tr>';
-                          html += '        </thead>';
-                          html += '        <tbody>';
+                          // Dùng Grid thay Table cho list con
                           (c.warehouses||[]).forEach(function(w){
-                              var availClass = (w.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
-                              html += '          <tr><td class="ps-3">' + w.warehouse_name + '</td><td class="text-end">' + fmt(w.qty_total) + '</td><td class="text-end text-muted">' + fmt(w.qty_reserved) + '</td><td class="text-end pe-3 ' + availClass + '">' + fmt(w.qty_available) + '</td></tr>';
+                              var availClass = (w.qty_available > 0) ? 'text-success' : 'text-muted';
+                              html += '<div class="d-flex justify-content-between p-2 border-bottom detail-item-mobile">';
+                              html += '  <div class="lbl">' + w.warehouse_name + '</div>';
+                              html += '  <div class="val ' + availClass + '">Sẵn: ' + fmt(w.qty_available) + '</div>';
+                              html += '</div>';
                           });
-                          html += '        </tbody></table></div></div></div>';
+                          html += '    </div>'; // end body
+                          html += '  </div></div>';
                       });
-                      html += '</div>';
+                      html += '</div></div>';
                   } 
                   
-                  // CẬP NHẬT: Layout Thường (Table)
+                  // TRƯỜNG HỢP 2: SẢN PHẨM THƯỜNG (Cái bị lỗi trong ảnh)
+                  // Ta chuyển từ Table sang Div Layout
                   else {
-                      html += '<div class="card border shadow-sm w-100" style="overflow-x:auto;">';
-                      html += '  <table class="table table-hover mb-0">';
-                      html += '    <thead class="bg-light text-muted"><tr><th class="ps-3">Kho hàng</th><th class="text-end">Tồn thực tế</th><th class="text-end">Đã giữ</th><th class="text-end pe-3">Khả dụng</th></tr></thead>';
-                      html += '    <tbody>';
+                      // Desktop: Table hiển thị bình thường
+                      // Mobile: Hiển thị dạng list dọc
+                      html += '<div class="detail-container-mobile">';
+                      
+                      // Header cho Desktop
+                      html += '<div class="d-none d-md-block p-3 bg-light">';
+                      html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
                       rows.forEach(function(r){
                           var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
-                          html += '      <tr><td class="ps-3">' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end text-muted">' + fmt(r.qty_reserved) + '</td><td class="text-end pe-3 ' + availClass + '">' + fmt(r.qty_available) + '</td></tr>';
+                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td></tr>';
                       });
-                      html += '    </tbody></table></div>';
+                      html += '</tbody></table></div>';
+
+                      // Layout cho Mobile (Khắc phục lỗi "cái gì vậy cha")
+                      html += '<div class="d-md-none p-2">';
+                      rows.forEach(function(r){
+                           var availClass = (r.qty_available > 0) ? 'text-success' : 'text-muted';
+                           html += '<div class="detail-item-mobile bg-white p-2 mb-2 rounded border">';
+                           html += '  <div class="d-flex justify-content-between mb-1"><span class="fw-bold text-dark">' + r.warehouse_name + '</span></div>';
+                           html += '  <div class="d-flex justify-content-between small text-muted">';
+                           html += '     <span>Tổng: ' + fmt(r.qty_total) + '</span>';
+                           html += '     <span>Giữ: ' + fmt(r.qty_reserved) + '</span>';
+                           html += '     <span class="' + availClass + ' fw-bold">Sẵn: ' + fmt(r.qty_available) + '</span>';
+                           html += '  </div>';
+                           html += '</div>';
+                      });
+                      html += '</div>';
+                      
+                      html += '</div>';
                   }
                   
                   return html;
