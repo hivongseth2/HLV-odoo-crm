@@ -3,7 +3,6 @@
   <template id="inventory_page" name="Public Inventory Page">
     <t t-call="website.layout">
       <style>
-        /* --- GIỮ NGUYÊN CSS CŨ --- */
         .search-wrapper { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #ced4da; border-radius: 0.375rem; background-color: #fff; min-height: 45px; cursor: text; transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out; }
         .search-wrapper:focus-within { border-color: #86b7fe; outline: 0; box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); }
         .search-chip { display: inline-flex; align-items: center; background-color: #e9ecef; color: #495057; font-size: 0.9rem; padding: 4px 10px; border-radius: 16px; user-select: none; max-width: 100%; }
@@ -12,6 +11,7 @@
         .search-input-field { border: none; outline: none; flex-grow: 1; min-width: 120px; font-size: 16px; padding: 0; margin: 0; background: transparent; color: #212529; }
         #search-suggestions { border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); border: 1px solid rgba(0,0,0,.05); max-height: 60vh; }
         
+        /* --- CSS MOBILE RESPONSIVE --- */
         @media (max-width: 768px) {
             .mb-6 { margin-bottom: 2rem !important; }
             #search-form .col-md-5, #search-form .col-md-2, #search-form .col-md-3 { margin-bottom: 10px; }
@@ -53,18 +53,19 @@
             #inv-table tbody tr.main-row td:nth-child(5), #inv-table tbody tr.main-row td:nth-child(6), 
             #inv-table tbody tr.main-row td:nth-child(7), #inv-table tbody tr.main-row td:nth-child(10) { display: none; }
 
-            /* CSS CHO PHẦN CHI TIẾT */
+            /* --- CSS CHO PHẦN CHI TIẾT (ĐÃ LÀM ĐẸP) --- */
             #inv-table tbody tr.detail-row { display: block; padding: 0; margin-top: -10px; margin-bottom: 15px; border: none; }
             #inv-table tbody tr.detail-row td { display: block; padding: 0 !important; border: none; }
             
             .detail-container-mobile { 
-                background: #f1f3f5; 
+                background: #f1f3f5; /* Nền xám nhẹ tách biệt */
                 border-radius: 0 0 8px 8px; 
                 padding: 10px; 
                 border: 1px solid #e9ecef; 
                 border-top: none; 
             }
             
+            /* Card từng kho */
             .wh-card {
                 background: #fff;
                 border-radius: 8px;
@@ -105,6 +106,7 @@
                 font-weight: 600;
                 color: #212529;
             }
+            /* Highlight cột Sẵn sàng */
             .wh-stat-col.highlight .wh-label { color: #198754; opacity: 0.8; }
             .wh-stat-col.highlight .wh-val { color: #198754; font-size: 1.2rem; font-weight: 800; }
             .wh-stat-col.dim .wh-val { color: #ced4da; }
@@ -113,7 +115,7 @@
 
       <main id="wrap" class="oe_structure">
         <t t-if="not pw_ok">
-          <section>
+           <section>
             <div class="container mt-5 mb-6" style="max-width:560px;">
               <h1 class="mb-3 text-center">Tra cứu tồn kho</h1>
               <t t-if="pw_err"><div class="alert alert-danger">Mật khẩu không đúng. Vui lòng <strong>tải lại trang (F5)</strong>.</div></t>
@@ -257,7 +259,7 @@
        <script type="text/javascript"><![CDATA[
             (function () {
               var searchTimeout = null;
-              // ... INIT CHIP & DEBOUNCE FUNCTIONS GIỮ NGUYÊN ...
+              // ... INIT CHIP ...
               function initChipInput() {
                   var $realInput = $('#real-search-q');
                   var $container = $('#chip-container');
@@ -294,6 +296,7 @@
                   $container.on('click', function(e) { if(e.target === this) $visualInput.focus(); });
               }
 
+              // ... DEBOUNCE & SEARCH AJAX ...
               function debounce(func, wait) {
                 return function() { clearTimeout(searchTimeout); var context=this, args=arguments; searchTimeout = setTimeout(function() { func.apply(context, args); }, wait); };
               }
@@ -373,13 +376,11 @@
                       }
                    });
                 });
-
-                // >>> TỰ ĐỘNG BUNG HẾT DÒNG KHI LOAD TRANG <<<
-                $('.btn-expand').trigger('click');
               });
               
               function fmt(n) { return (parseFloat(n)||0).toLocaleString('en-US'); }
               
+              // --- HÀM BUILD LAYOUT MỚI: DÙNG GRID 3 CỘT CHO SẠCH ĐẸP ---
               function buildDetailTable(data) {
                   var html = '';
                   var rows = data.rows || [];
@@ -400,6 +401,7 @@
                           html += '    </div>';
                           html += '    <div class="card-body p-0">';
                           (c.warehouses||[]).forEach(function(w){
+                              // Layout Grid cho từng kho trong Combo
                               html += '<div class="border-bottom p-2">';
                               html += '  <div class="fw-bold small mb-1">' + w.warehouse_name + '</div>';
                               html += '  <div class="d-flex">';
@@ -413,9 +415,11 @@
                       html += '</div></div>';
                   } 
                   
-                  // CASE 2: SẢN PHẨM THƯỜNG
+                  // CASE 2: SẢN PHẨM THƯỜNG (Cái cần sửa)
                   else {
                       html += '<div class="detail-container-mobile">';
+                      
+                      // Desktop: Table Table (Ẩn trên mobile)
                       html += '<div class="d-none d-md-block p-3 bg-white border rounded">';
                       html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
                       rows.forEach(function(r){
@@ -424,19 +428,24 @@
                       });
                       html += '</tbody></table></div>';
 
+                      // Mobile: Dashboard Card Layout (Grid 3 cột)
                       html += '<div class="d-md-none">';
                       rows.forEach(function(r){
                            html += '<div class="wh-card">';
                            html += '  <div class="wh-header">' + r.warehouse_name + '</div>';
                            html += '  <div class="wh-stats">';
+                           // Cột 1: Tổng
                            html += '    <div class="wh-stat-col ' + (r.qty_total==0 ? 'dim':'') + '"><div class="wh-label">Tổng</div><div class="wh-val">' + fmt(r.qty_total) + '</div></div>';
+                           // Cột 2: Đã giữ
                            html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div></div>';
+                           // Cột 3: Sẵn sàng (To nhất)
                            html += '    <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val">' + fmt(r.qty_available) + '</div></div>';
                            html += '  </div>';
                            html += '</div>';
                       });
-                      html += '</div>';
-                      html += '</div>';
+                      html += '</div>'; // end mobile list
+                      
+                      html += '</div>'; // end container
                   }
                   
                   return html;
