@@ -1388,15 +1388,41 @@ class MisaApiUtils(models.AbstractModel):
         # Filter theo journal_memo (diễn giải)
         # Property 57 = journal_memo
         # Operator 7 = Contains
+        # Property 3654 = posted_date (date filter bắt buộc)
+        # Operator 10 = >= (từ ngày), Operator 12 = <= (đến ngày)
+        from datetime import datetime, timedelta
+        
+        # Date range: 1 năm gần đây
+        date_to = datetime.utcnow()
+        date_from = date_to - timedelta(days=365)
+        
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
-            "filter": [{
-                "property": 57,
-                "value": val,
-                "operator": 7,  # Contains
-                "operand": 1,
-                "data_type": 1
-            }],
+            "filter": [
+                # Date range filter (bắt buộc)
+                {
+                    "property": 3654,
+                    "value": date_from.strftime("%Y-%m-%dT%H:%M:%S.00Z"),
+                    "operator": 10,  # >=
+                    "operand": 1,
+                    "data_type": 3
+                },
+                {
+                    "property": 3654,
+                    "value": date_to.strftime("%Y-%m-%dT%H:%M:%S.00Z"),
+                    "operator": 12,  # <=
+                    "operand": 1,
+                    "data_type": 3
+                },
+                # Journal memo filter
+                {
+                    "property": 57,
+                    "value": val,
+                    "operator": 7,  # Contains
+                    "operand": 1,
+                    "data_type": 1
+                }
+            ],
             "pageIndex": 1,
             "pageSize": int(limit),
             "view": 40,  # View cho chứng từ nhập kho mua hàng (reftype 302)
