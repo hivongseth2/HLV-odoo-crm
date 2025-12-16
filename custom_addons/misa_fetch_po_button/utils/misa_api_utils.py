@@ -1407,9 +1407,10 @@ class MisaApiUtils(models.AbstractModel):
             "pageIndex": 1,
             "pageSize": int(limit),
             "view": 2,
-            # Add required fields from misa_po_sync.py just in case
             "useSp": False, 
-            "loadMode": 2
+            "loadMode": 2,
+            "summaryColumns": [5039, 5104, 247], # Required to get full fields?
+            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1}]" # Sort by Date desc
         }
         
         _logger.info(f"🔎 [MISA PURCHASE SEARCH] Tìm kiếm journal_memo (đa trường): '{val}'")
