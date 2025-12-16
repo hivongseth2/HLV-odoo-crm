@@ -1406,10 +1406,9 @@ class MisaApiUtils(models.AbstractModel):
             "customFilter": custom_filter,
             "pageIndex": 1,
             "pageSize": int(limit),
-            "view": 2,
+            "view": 2, # Default view
             "useSp": False, 
             "loadMode": 2,
-            "summaryColumns": [5039, 5104, 247], # Required to get full fields?
             "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1}]" # Sort by Date desc
         }
         
