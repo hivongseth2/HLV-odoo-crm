@@ -1434,25 +1434,9 @@ class MisaApiUtils(models.AbstractModel):
                  
             page_data = data.get("Data", {}).get("PageData", [])
             
-            # 5. Filter & Format Fields
-            result = []
-            for item in page_data:
-                # Chỉ lấy các trường quan trọng
-                result.append({
-                    "refid": item.get("refid"),
-                    "refno_finance": item.get("refno_finance"),       # Số chứng từ
-                    "journal_memo": item.get("journal_memo"),         # Diễn giải
-                    "posted_date": item.get("posted_date"),           # Ngày hạch toán
-                    "total_amount": item.get("total_amount"),         # Tổng tiền
-                    "currency_id": item.get("currency_id"),           # Loại tiền
-                    "account_object_code": item.get("account_object_code"), # Mã NCC
-                    "account_object_name": item.get("account_object_name"), # Tên NCC
-                    "branch_name": item.get("branch_name"),           # Chi nhánh
-                    "refdate": item.get("refdate"),                   # Ngày chứng từ
-                })
-                
-            _logger.info(f"✅ [MISA PURCHASE SEARCH] Tìm thấy {len(result)} chứng từ")
-            return result
+            # 5. Trả về toàn bộ dữ liệu gốc từ MISA (không filter)
+            _logger.info(f"✅ [MISA PURCHASE SEARCH] Tìm thấy {len(page_data)} chứng từ")
+            return page_data
             
         except Exception as e:
             _logger.exception(f"❌ Search Purchase Error: {e}")
