@@ -5,6 +5,7 @@ import re
 from dateutil import parser as dtparser
 from requests.utils import dict_from_cookiejar
 from http.cookiejar import Cookie
+
 _logger = logging.getLogger(__name__)
 
 class MisaApiUtils(models.AbstractModel):
@@ -1017,6 +1018,11 @@ class MisaApiUtils(models.AbstractModel):
 
     def _get_retry_session(self):
         """Tạo session có cơ chế thử lại khi lỗi mạng"""
+        # Import cục bộ để tránh lỗi 'unresolved' ở đầu file nếu IDE chưa cấu hình đúng
+        import requests
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        
         session = requests.Session()
         retry = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
         adapter = HTTPAdapter(max_retries=retry)
@@ -1067,9 +1073,9 @@ class MisaApiUtils(models.AbstractModel):
 
         # --- 1. XỬ LÝ ID ---
         # cat_id = self._get_category_id_by_name(headers, category_name)
-        cat_id= cat_id
-        if not cat_id:
-             cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
+        cat_id = cat_id
+        # if not cat_id:
+        #      cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
 
         unit_id, unit_text = self._find_dictionary_item(headers, "UsageUnitID", unit_name)
         if not unit_id:
