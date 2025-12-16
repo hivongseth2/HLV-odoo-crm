@@ -347,6 +347,9 @@ class HlvChatgptSession(models.Model):
             
             # Mapping tham số từ AI sang hàm của bạn
             # AI gửi: code, name, price, tax, unit, category, type
+            _logger.warning("code", args.get('code', '') + "name" + args.get('name', '') + "price" + str(args.get('price', 0)) + "tax" + str(args.get('tax', 10)) + "unit" + args.get('unit', 'Cái') + "category" + args.get('category', 'Hàng hóa') + "type" + args.get('type', 'goods'))
+
+            
             misa_id = misa_utils.create_product_misa_raw(
                 code=args.get('code'),
                 name=args.get('name'),
