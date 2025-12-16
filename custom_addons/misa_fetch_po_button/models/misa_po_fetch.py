@@ -385,7 +385,7 @@ class MisaPOFetch(models.TransientModel):
 
                 while True:
                     detail_payload = {
-                        "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+                        "columns": [2157, 1355, 2161, 4670, 1127,5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
                         "filter": [
                             {
                                 "property": 3993,
@@ -423,9 +423,10 @@ class MisaPOFetch(models.TransientModel):
                 # Sau khi loop hết các trang thì gán lại cho lines để xử lý như cũ
                 lines = all_detail_lines
                 stock_code = (
-                    lines[0].get("stock_code", "").strip().replace(" ", "").upper()
+                    # lines[0].get("stock_code", "").strip().replace(" ", "").upper()
+                    lines[0].get("custom_field5", "").strip().replace(" ", "").upper()
                     if lines else None
-)
+                                )
                 if stock_code not in stock_mapping:
                     _logger.warning("📛 Kho %s không nằm trong mapping, bỏ PO %s", stock_code, refno)
                     continue
