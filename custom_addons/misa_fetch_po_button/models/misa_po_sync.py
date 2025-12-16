@@ -567,7 +567,7 @@ class MisaPOSync(models.TransientModel):
         partner = odoo_utils._get_or_create_partner(supplier_name)
 
         detail_payload = {
-            "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+            "columns": [2157, 1355, 2161, 4670, 1127,5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
             "filter": [
                 {
                     "property": 3993,
@@ -599,7 +599,10 @@ class MisaPOSync(models.TransientModel):
         if not lines:
             raise models.UserError(f"⚠️ Đơn {refno} không có chi tiết sản phẩm")
 
-        stock_code = lines[0].get("stock_code", "").strip().replace(" ", "").upper()
+        # stock_code = lines[0].get("stock_code", "").strip().replace(" ", "").upper()
+        stock_code = lines[0].get("custom_field5", "").strip().replace(" ", "").upper()
+
+        
         
         stock_mapping = {
                 "HCM": "TSN/Stock",
