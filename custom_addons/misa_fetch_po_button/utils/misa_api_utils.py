@@ -1386,10 +1386,9 @@ class MisaApiUtils(models.AbstractModel):
         val = journal_memo.strip()
         
         # Filter theo journal_memo (diễn giải)
-        # Property 57 = journal_memo
-        # Operator 7 = Contains
-        # Property 3654 = posted_date (date filter bắt buộc)
-        # Operator 10 = >= (từ ngày), Operator 12 = <= (đến ngày)
+        # MISA yêu cầu 2 array:
+        # - filter: date range (bắt buộc)
+        # - customFilter: text search với parent-children structure
         from datetime import datetime, timedelta
         
         # Date range: 1 năm gần đây
@@ -1398,8 +1397,8 @@ class MisaApiUtils(models.AbstractModel):
         
         payload = {
             "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+            # Date range filter (bắt buộc)
             "filter": [
-                # Date range filter (bắt buộc)
                 {
                     "property": 3654,
                     "value": date_from.strftime("%Y-%m-%dT%H:%M:%S.00Z"),
@@ -1413,16 +1412,22 @@ class MisaApiUtils(models.AbstractModel):
                     "operator": 12,  # <=
                     "operand": 1,
                     "data_type": 3
-                },
-                # Journal memo filter
-                {
-                    "property": 57,
-                    "value": val,
-                    "operator": 7,  # Contains
-                    "operand": 1,
-                    "data_type": 1
                 }
             ],
+            # Custom filter cho text search (parent-children structure)
+            "customFilter": [{
+                "property": 4018,
+                "value": val,
+                "operator": 1,  # Equals
+                "operand": 1,
+                "data_type": 1,
+                "childrens": [
+                    {"property": 2189, "value": val, "operator": 1, "operand": 2, "data_type": 1},
+                    {"property": 57, "value": val, "operator": 1, "operand": 2, "data_type": 1},
+                    {"property": 2656, "value": val, "operator": 1, "operand": 2, "data_type": 1},
+                    {"property": 4029, "value": val, "operator": 1, "operand": 2}
+                ]
+            }],
             "pageIndex": 1,
             "pageSize": int(limit),
             "view": 40,  # View cho chứng từ nhập kho mua hàng (reftype 302)
