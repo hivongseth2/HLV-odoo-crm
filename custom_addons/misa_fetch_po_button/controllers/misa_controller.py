@@ -152,3 +152,50 @@ class MisaController(http.Controller):
                 "status": "error",
                 "message": str(e)
             }
+
+    @http.route('/api/misa/purchase/search', type='json', auth='public', methods=['POST'], csrf=False)
+    def api_search_purchase_misa(self, **kwargs):
+        """
+        API tìm kiếm chứng từ mua hàng MISA (actapp) theo diễn giải.
+        
+        Body mẫu (JSON):
+        {
+            "jsonrpc": "2.0",
+            "params": {
+                "journal_memo": "DH1255...",
+                "limit": 20
+            }
+        }
+        
+        Response:
+        {
+            "status": "success",
+            "message": "Tìm thấy N chứng từ",
+            "data": [ ... ]
+        }
+        """
+        try:
+            journal_memo = kwargs.get('journal_memo')
+            limit = kwargs.get('limit', 20)
+            
+            if not journal_memo:
+                return {
+                    "status": "error",
+                    "message": "Thiếu tham số 'journal_memo'"
+                }
+                
+            misa_utils = request.env['misa.api.utils'].sudo()
+            result = misa_utils.search_purchase_voucher(journal_memo, limit)
+            
+            return {
+                "status": "success",
+                "message": f"Tìm thấy {len(result)} chứng từ",
+                "data": result
+            }
+            
+        except Exception as e:
+            _logger.exception("API MISA Purchase Search Error")
+            return {
+                "status": "error",
+                "message": str(e)
+            }

@@ -1358,3 +1358,93 @@ class MisaApiUtils(models.AbstractModel):
             "IsExchangeProduct": None, "ExchangePoint": 0,
             "TotalAmountBasedUPriceAndDATax": False, "AmountBasedOnPriceAfterTax": False
         }
+
+    # =========================================================================
+    # API SEARCH PURCHASE VOUCHER (CHỨNG TỪ MUA HÀNG)
+    # =========================================================================
+    def search_purchase_voucher(self, journal_memo, limit=20):
+        """
+        Tìm kiếm chứng từ mua hàng trong MISA (actapp) theo diễn giải (journal_memo).
+        
+        Args:
+            journal_memo (str): Nội dung diễn giải cần tìm (Contains)
+            limit (int): Số lượng kết quả tối đa
+            
+        Returns:
+            list: Danh sách chứng từ rút gọn
+        """
+        if not journal_memo:
+            raise Exception("Cần truyền 'journal_memo' để tìm kiếm")
+            
+        # 1. Lấy token (actapp uses _get_misa_token logic)
+        access_token = self._get_misa_token()
+        
+        # 2. Config Header
+        misa_config = self.env['misa.config']
+        headers = misa_config.get_default_headers(access_token)
+        
+        # 3. Build Payload
+        url = "https://actapp.misa.vn/g2/api/pu/v1/pu_list/paging_filter_v2"
+        
+        # Note: Using "journal_memo" as property name. 
+        # Operator 7 = Contains (common in MISA)
+        payload = {
+            "filter": [
+                {
+                    "property": "journal_memo",
+                    "value": journal_memo.strip(),
+                    "operator": 7, 
+                    "operand": 0,
+                    "data_type": 1 
+                }
+            ],
+            "pageIndex": 1,
+            "pageSize": int(limit),
+            "view": 2 # Default view for Purchase List
+        }
+        
+        _logger.info(f"🔎 [MISA PURCHASE SEARCH] Tìm kiếm journal_memo: '{journal_memo}'")
+        
+        session = self._get_retry_session()
+        try:
+            # 4. Call API
+            res = session.post(url, headers=headers, json=payload, timeout=30)
+            
+            if res.status_code != 200:
+                _logger.error(f"❌ MISA Purchase Search HTTP {res.status_code}: {res.text}")
+                try:
+                    err = res.json()
+                    msg = err.get("UserMessage") or err.get("Message") or "Lỗi không xác định"
+                except:
+                    msg = res.text
+                raise Exception(f"Lỗi API MISA: {msg}")
+                
+            data = res.json()
+            if not data.get("Success"):
+                 raise Exception(f"MISA Refused: {data.get('ErrorsMessage')}")
+                 
+            page_data = data.get("Data", {}).get("PageData", [])
+            
+            # 5. Filter & Format Fields
+            result = []
+            for item in page_data:
+                # Chỉ lấy các trường quan trọng
+                result.append({
+                    "refid": item.get("refid"),
+                    "refno_finance": item.get("refno_finance"),       # Số chứng từ
+                    "journal_memo": item.get("journal_memo"),         # Diễn giải
+                    "posted_date": item.get("posted_date"),           # Ngày hạch toán
+                    "total_amount": item.get("total_amount"),         # Tổng tiền
+                    "currency_id": item.get("currency_id"),           # Loại tiền
+                    "account_object_code": item.get("account_object_code"), # Mã NCC
+                    "account_object_name": item.get("account_object_name"), # Tên NCC
+                    "branch_name": item.get("branch_name"),           # Chi nhánh
+                    "refdate": item.get("refdate"),                   # Ngày chứng từ
+                })
+                
+            _logger.info(f"✅ [MISA PURCHASE SEARCH] Tìm thấy {len(result)} chứng từ")
+            return result
+            
+        except Exception as e:
+            _logger.exception(f"❌ Search Purchase Error: {e}")
+            raise e
