@@ -1398,9 +1398,7 @@ class MisaApiUtils(models.AbstractModel):
             "childrens": [
                 {"property": 57, "value": val, "operator": 7, "operand": 2, "data_type": 1},
                 {"property": 2656, "value": val, "operator": 7, "operand": 2, "data_type": 1},
-                {"property": 4030, "value": val, "operator": 7, "operand": 2, "data_type": 1},
-                # Thêm 4018 từ user report (nếu có)
-                {"property": 4018, "value": val, "operator": 7, "operand": 2, "data_type": 1}
+                {"property": 4030, "value": val, "operator": 7, "operand": 2} # Remove data_type
             ]
         }]
         
@@ -1408,7 +1406,10 @@ class MisaApiUtils(models.AbstractModel):
             "customFilter": custom_filter,
             "pageIndex": 1,
             "pageSize": int(limit),
-            "view": 2
+            "view": 2,
+            # Add required fields from misa_po_sync.py just in case
+            "useSp": False, 
+            "loadMode": 2
         }
         
         _logger.info(f"🔎 [MISA PURCHASE SEARCH] Tìm kiếm journal_memo (đa trường): '{val}'")
