@@ -1360,14 +1360,15 @@ class MisaApiUtils(models.AbstractModel):
         }
 
     # =========================================================================
-    # API SEARCH PURCHASE VOUCHER (CHỨNG TỪ MUA HÀNG)
+    # API SEARCH PURCHASE VOUCHER (CHỨNG TỪ NHẬP KHO MUA HÀNG)
     # =========================================================================
     def search_purchase_voucher(self, journal_memo, limit=20):
         """
-        Tìm kiếm chứng từ mua hàng trong MISA (actapp) theo diễn giải (journal_memo).
+        Tìm kiếm chứng từ nhập kho mua hàng trong MISA (actapp) theo diễn giải (journal_memo).
         
-        Sử dụng customFilter với các property ID phổ biến (4008=RefNo, 57, 2656, 4030...)
-        để tìm kiếm chuỗi trong nhiều trường (vì API yêu cầu ID số).
+        Sử dụng API pu_voucher/paging_filter_v2 với view=92 để lấy đầy đủ thông tin
+        chứng từ nhập kho (reftype 302), bao gồm: refno_finance, posted_date, paid_status,
+        in_outward_refno, employee_code, v.v.
         """
         if not journal_memo:
             raise Exception("Cần truyền 'journal_memo' để tìm kiếm")
@@ -1379,40 +1380,34 @@ class MisaApiUtils(models.AbstractModel):
         misa_config = self.env['misa.config']
         headers = misa_config.get_default_headers(access_token)
         
-        # 3. Build Payload
-        url = "https://actapp.misa.vn/g2/api/pu/v1/pu_list/paging_filter_v2"
+        # 3. Build Payload - Sử dụng API pu_voucher cho chứng từ nhập kho (reftype 302)
+        url = "https://actapp.misa.vn/g1/api/pu/v1/pu_voucher/paging_filter_v2"
         
         # Search value
         val = journal_memo.strip()
         
-        # Filter đa trường (RefNo, Memo, PartnerName, etc.)
+        # Filter theo journal_memo (diễn giải)
+        # Property 57 = journal_memo (Diễn giải)
         # Operator 7 = Contains
-        # Property 4008 = RefNo
-        # Property 57, 2656, 4030 = Các trường string khác (có thể là DienGiai)
         custom_filter = [{
-            "property": 4008,
+            "property": 57,
             "value": val,
-            "operator": 7, # Contains
+            "operator": 7,  # Contains
             "operand": 1,
-            "data_type": 1,
-            "childrens": [
-                {"property": 57, "value": val, "operator": 7, "operand": 2, "data_type": 1},
-                {"property": 2656, "value": val, "operator": 7, "operand": 2, "data_type": 1},
-                {"property": 4030, "value": val, "operator": 7, "operand": 2} # Remove data_type
-            ]
+            "data_type": 1
         }]
         
         payload = {
             "customFilter": custom_filter,
             "pageIndex": 1,
             "pageSize": int(limit),
-            "view": 2, # Default view
+            "view": 92,  # View cho chứng từ nhập kho mua hàng
             "useSp": False, 
             "loadMode": 2,
-            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1}]" # Sort by Date desc
+            "sort": "[{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1}]"  # Sort by Date desc
         }
         
-        _logger.info(f"🔎 [MISA PURCHASE SEARCH] Tìm kiếm journal_memo (đa trường): '{val}'")
+        _logger.info(f"🔎 [MISA PURCHASE VOUCHER SEARCH] Tìm kiếm journal_memo: '{val}'")
         
         session = self._get_retry_session()
         try:
@@ -1420,7 +1415,7 @@ class MisaApiUtils(models.AbstractModel):
             res = session.post(url, headers=headers, json=payload, timeout=30)
             
             if res.status_code != 200:
-                _logger.error(f"❌ MISA Purchase Search HTTP {res.status_code}: {res.text}")
+                _logger.error(f"❌ MISA Purchase Voucher Search HTTP {res.status_code}: {res.text}")
                 try:
                     err = res.json()
                     msg = err.get("UserMessage") or err.get("Message") or "Lỗi không xác định"
@@ -1435,9 +1430,10 @@ class MisaApiUtils(models.AbstractModel):
             page_data = data.get("Data", {}).get("PageData", [])
             
             # 5. Trả về toàn bộ dữ liệu gốc từ MISA (không filter)
-            _logger.info(f"✅ [MISA PURCHASE SEARCH] Tìm thấy {len(page_data)} chứng từ")
+            _logger.info(f"✅ [MISA PURCHASE VOUCHER SEARCH] Tìm thấy {len(page_data)} chứng từ")
             return page_data
             
         except Exception as e:
-            _logger.exception(f"❌ Search Purchase Error: {e}")
+            _logger.exception(f"❌ Search Purchase Voucher Error: {e}")
             raise e
+
