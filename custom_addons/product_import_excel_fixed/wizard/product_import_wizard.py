@@ -688,19 +688,20 @@ class ProductImportWizard(models.TransientModel):
             
             # Access by position to be robust against header names
             try:
-                sku_val = row.iloc[idx_sku]
-                sku = str(sku_val).strip() if pd.notna(sku_val) else ''
+                sku = self._clean_string(row.iloc[idx_sku])
                 
                 # Check control columns for discontinuation
                 note_l = str(row.iloc[idx_note_l]).lower() if pd.notna(row.iloc[idx_note_l]) else ''
                 note_r = str(row.iloc[idx_note_r]).lower() if pd.notna(row.iloc[idx_note_r]) else ''
                 
                 # Skip conditions
+                # Chỉ bỏ qua nếu không có SKU
                 if not sku or sku.lower() == 'sku' or sku.lower() == 'nan':
                     skipped_no_sku += 1
                     continue
                     
-                if 'bỏ mẫu' in note_l or 'ngừng kinh doanh' in note_r or 'hết hàng' in note_r or 'ngừng kinh doanh' in note_l:
+                # Chỉ bỏ qua nếu "bỏ mẫu" hoặc "ngừng kinh doanh". "Hết hàng" vẫn cập nhật giá.
+                if 'bỏ mẫu' in note_l or 'ngừng kinh doanh' in note_r or 'ngừng kinh doanh' in note_l:
                     skipped_discontinued += 1
                     continue
 
@@ -708,6 +709,9 @@ class ProductImportWizard(models.TransientModel):
                 product = ProductTemplate.search([('default_code', '=', sku)], limit=1)
                 if not product:
                     skipped_not_found += 1
+                    # Log chi tiết 10 sản phẩm đầu tiên không tìm thấy để debug
+                    if len(errors) < 10:
+                        errors.append(f"Không tìm thấy SKU: {sku}")
                     continue
                 
                 # Extract Prices
