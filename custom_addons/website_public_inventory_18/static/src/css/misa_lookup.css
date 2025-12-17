@@ -157,17 +157,56 @@
     color: #6b7280;
 }
 
-/* Minimal Status Styles */
+/* Soft Badge Styles */
 .badge {
-    background: #f3f4f6 !important;
-    /* Light gray background for structure */
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 500;
     font-size: 0.8rem;
     display: inline-block;
-    color: #374151 !important;
-    border: 1px solid #e5e7eb;
+    border: 1px solid transparent;
+    /* Subtle border structure */
+    letter-spacing: 0.01em;
+}
+
+/* Remove the dot */
+.badge::before {
+    display: none;
+}
+
+/* Success (Green) - Paid */
+.badge-success {
+    background-color: #ecfdf5 !important;
+    color: #047857 !important;
+    border-color: #a7f3d0 !important;
+}
+
+/* Danger (Red) - Unpaid */
+.badge-danger {
+    background-color: #fef2f2 !important;
+    color: #b91c1c !important;
+    border-color: #fecaca !important;
+}
+
+/* Warning (Amber) - Partial */
+.badge-warning {
+    background-color: #fffbeb !important;
+    color: #b45309 !important;
+    border-color: #fde68a !important;
+}
+
+/* Info (Blue) - Invoiced */
+.badge-info {
+    background-color: #eff6ff !important;
+    color: #1d4ed8 !important;
+    border-color: #bfdbfe !important;
+}
+
+/* Secondary (Gray) - Not Invoiced */
+.badge-secondary {
+    background-color: #f3f4f6 !important;
+    color: #4b5563 !important;
+    border-color: #e5e7eb !important;
 }
 
 /* Responsive */
