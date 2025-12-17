@@ -1224,7 +1224,7 @@ class MisaApiUtils(models.AbstractModel):
         try:
             res = session.post(url, headers=headers, json=payload, timeout=30)
             
-            _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code} | Body: {res.text}")
+            _logger.info(f"📥 [MISA RESPONSE] Staus: {res.status_code} | Body: {res.text}")
 
             
             res_json = res.json()
