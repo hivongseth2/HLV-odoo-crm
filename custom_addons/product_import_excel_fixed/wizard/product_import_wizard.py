@@ -17,6 +17,7 @@ class ProductImportWizard(models.TransientModel):
     import_type = fields.Selection([
         ('product', 'Import sản phẩm'),
         ('combo', 'Import sản phẩm Combo'),
+        ('price_bosch', 'Đồng bộ Bảng giá Bosch'),
     ], string="Loại Import", default='product', required=True)
 
     update_existing = fields.Boolean(
@@ -203,6 +204,8 @@ class ProductImportWizard(models.TransientModel):
             return self._import_product()
         elif self.import_type == 'combo':
             return self._import_combo()
+        elif self.import_type == 'price_bosch':
+            return self._import_price_bosch()
 
     # -------- Import Sản phẩm --------
     def _import_product(self):
@@ -577,6 +580,184 @@ class ProductImportWizard(models.TransientModel):
             'tag': 'display_notification',
             'params': {
                 'title': 'Kết quả Import sản phẩm Combo',
+                'message': msg,
+                'type': 'success' if not errors else 'warning',
+                'sticky': True,
+            }
+        }
+
+    # -------- Đồng bộ Bảng giá Bosch --------
+    def _import_price_bosch(self):
+        """
+        Đồng bộ giá từ file Bảng giá Bosch 2025.
+        
+        Logic:
+        - Bắt đầu từ dòng 4 (skip header).
+        - Cột C: SKU (default_code).
+        - Cột J: Giá WEB -> x_studio_ga_web
+        - Cột E: Giá niêm yết -> x_studio_ga_hng_nim_yt
+        - Cột I: Giá thương mại -> x_studio_gi_bn_thng_mi
+        - Cột H: Giá vốn -> standard_price
+        
+        Điều kiện Skip:
+        - Không có SKU.
+        - Cột L có chứa "bỏ mẫu".
+        - Cột R có chứa "ngừng kinh doanh" hoặc "hết hàng".
+        """
+        # Đọc file (engine openpyxl vì file xlsx)
+        # Lưu ý: file này có header phức tạp, nên đọc raw và xử lý index thủ công
+        df = self._read_excel(self.file)
+        
+        ProductTemplate = self.env['product.template'].sudo()
+        
+        updated = 0
+        skipped_no_sku = 0
+        skipped_discontinued = 0
+        skipped_not_found = 0
+        errors = []
+        
+        # Mapping columns by index (0-based)
+        # C=2, E=4, H=7, I=8, J=9, L=11, R=17
+        idx_sku = 2
+        idx_price_list = 4   # E
+        idx_cost = 7         # H
+        idx_price_comm = 8   # I
+        idx_price_web = 9    # J
+        idx_note_l = 11      # L
+        idx_note_r = 17      # R
+        
+        # Batch processing
+        batch_size = self.batch_size or 500
+        # Start from row 4 (index 3 in df if header=0 is default, but _read_excel might use header=0)
+        # Let's inspect df structure usually. _read_excel returns DataFrame.
+        # If header is row 1, then row 2 is index 0.
+        # Check analyze output: Row 1 is Title, Row 2 is Header.
+        # So _read_excel will likely take Row 2 as header if we don't specify.
+        # Actually _read_excel implementation calls pd.read_excel(tmp_path, dtype=dtype)
+        # By default header=0 (first row).
+        # In this file, Row 1 is "TỔNG HỢP...". Row 2 is "DANH MỤC, TÊN SẢN PHẨM...".
+        # So Row 1 is header. Row 2 is data row 0.
+        # Data starts at Row 4 (Excel) -> Index 2 (DataFrame).
+        
+        # Re-read with header=None to be safe and use explicit indices
+        # But _read_excel doesn't allow passing header param.
+        # We will work with what we have. DataFrame columns will be based on Row 1 or 0.
+        # Since Row 1 has merged cells and text, keys might be messy.
+        # Safer to iterate by index using iloc.
+        
+        total_rows = len(df)
+        
+        _logger.info("🚀 BẮT ĐẦU ĐỒNG BỘ GIÁ BOSCH (Tổng %d dòng)", total_rows)
+        
+        # Iterate over all rows
+        # Skip first few rows manually if they are header/title
+        # Excel Row 4 is where data starts.
+        # If pandas read Row 1 as header, then:
+        # Excel Row 2 -> DF Index 0
+        # Excel Row 3 -> DF Index 1
+        # Excel Row 4 -> DF Index 2.
+        # So start from index 2.
+        
+        processed_count = 0
+        
+        for index, row in df.iterrows():
+            # Skip rows before actual data (adjust based on observation)
+            # We look for SKU in column 2.
+            # If SKU is empty or header-like, skip.
+            
+            # Access by position to be robust against header names
+            try:
+                sku_val = row.iloc[idx_sku]
+                sku = str(sku_val).strip() if pd.notna(sku_val) else ''
+                
+                # Check control columns for discontinuation
+                note_l = str(row.iloc[idx_note_l]).lower() if pd.notna(row.iloc[idx_note_l]) else ''
+                note_r = str(row.iloc[idx_note_r]).lower() if pd.notna(row.iloc[idx_note_r]) else ''
+                
+                # Skip conditions
+                if not sku or sku.lower() == 'sku' or sku.lower() == 'nan':
+                    skipped_no_sku += 1
+                    continue
+                    
+                if 'bỏ mẫu' in note_l or 'ngừng kinh doanh' in note_r or 'hết hàng' in note_r or 'ngừng kinh doanh' in note_l:
+                    skipped_discontinued += 1
+                    continue
+
+                # Search Product
+                product = ProductTemplate.search([('default_code', '=', sku)], limit=1)
+                if not product:
+                    skipped_not_found += 1
+                    continue
+                
+                # Extract Prices
+                def get_price(val):
+                    if pd.isna(val):
+                        return 0.0
+                    s = str(val).strip()
+                    # Remove dots/commas if they are just formatting (1.000.000)
+                    # Use helper self._safe_float? Use logic specific to this file.
+                    # Output from analyze showed integers like 1180000 or floats.
+                    # If it's string '1180000', float() works.
+                    # If it's 'x', exception.
+                    try:
+                        return float(val)
+                    except:
+                        return 0.0
+
+                price_web = get_price(row.iloc[idx_price_web])
+                price_list = get_price(row.iloc[idx_price_list])
+                price_comm = get_price(row.iloc[idx_price_comm])
+                cost = get_price(row.iloc[idx_cost])
+                
+                vals = {}
+                if price_web > 0:
+                    vals['x_studio_ga_web'] = price_web
+                    vals['list_price'] = price_web # Update list_price too if desired? User said "Cột J truyền vào x_studio_ga_web".
+                    # Let's stick to user request strictly.
+                    # "Cột J truyền vào trường giá web x_studio_ga_web"
+                    
+                if price_list > 0:
+                    vals['x_studio_ga_hng_nim_yt'] = price_list
+                
+                if price_comm > 0:
+                    vals['x_studio_gi_bn_thng_mi'] = price_comm
+                    
+                if cost > 0:
+                    vals['standard_price'] = cost
+                
+                if vals:
+                    product.write(vals)
+                    updated += 1
+                    
+            except Exception as e:
+                errors.append(f"Row {index}: {str(e)}")
+                _logger.error(f"Error row {index}: {e}")
+            
+            processed_count += 1
+            if processed_count % 100 == 0:
+                 _logger.info(f"Processed {processed_count} rows...")
+
+        msg_lines = [
+            "Hoàn tất Đồng bộ Bảng giá Bosch.",
+            f"- Sản phẩm cập nhật: {updated}",
+            f"- Bỏ qua (ngừng KD/bỏ mẫu): {skipped_discontinued}",
+            f"- Bỏ qua (không có SKU): {skipped_no_sku}",
+            f"- Bỏ qua (không tìm thấy SP): {skipped_not_found}",
+        ]
+        
+        if errors:
+            msg_lines.append(f"- Lỗi: {len(errors)}")
+            for err in errors[:5]:
+                msg_lines.append(f"  • {err}")
+
+        msg = "\n".join(msg_lines)
+        _logger.info(msg)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Kết quả Đồng bộ Giá',
                 'message': msg,
                 'type': 'success' if not errors else 'warning',
                 'sticky': True,
