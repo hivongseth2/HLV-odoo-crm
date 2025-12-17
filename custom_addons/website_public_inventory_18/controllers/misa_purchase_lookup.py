@@ -88,15 +88,14 @@ class MisaPurchaseLookupController(http.Controller):
         error = None
         searched = False
         pager = {}
-        
         items_per_page = 20
+        count = 0
         
         if journal_memo:
             searched = True
             try:
                 misa_utils = request.env['misa.api.utils'].sudo()
                 # Fetch more results to allow aggregation/pagination (e.g., 200 items max)
-                # Since we filter by exact journal_memo lists, usually we don't get thousands unless searching many codes.
                 raw_vouchers = misa_utils.search_purchase_voucher(journal_memo, limit=200)
                 all_vouchers = [self._map_voucher_data(v) for v in raw_vouchers]
                 
@@ -124,6 +123,6 @@ class MisaPurchaseLookupController(http.Controller):
             'vouchers': vouchers,
             'error': error,
             'searched': searched,
-            'voucher_count': len(vouchers) if not pager else pager['total'], # Show total count, not page count
+            'voucher_count': count,
             'pager': pager,
         })
