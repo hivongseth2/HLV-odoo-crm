@@ -176,6 +176,9 @@ class ZaloSheetWebhook(http.Controller):
                                 # Tìm lại config trong môi trường mới
                                 thread_config = ConfigModel.search([('active', '=', True)], limit=1)
                                 
+                                _logger.info("✅ nội dung %s", message_content)
+
+                                
                                 # 1. Gọi AI xử lý (Mất thời gian bao lâu cũng được)
                                 ai_reply = ChatSession.process_zalo_message(
                                     user_id, 
