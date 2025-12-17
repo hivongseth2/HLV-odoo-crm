@@ -1,8 +1,8 @@
 import json
 import logging
-from odoo import http
+from odoo import http, registry, SUPERUSER_ID, api
 from odoo.http import request, Response
-
+import threading  
 _logger = logging.getLogger(__name__)
 
 class ZaloSheetWebhook(http.Controller):
@@ -151,29 +151,55 @@ class ZaloSheetWebhook(http.Controller):
                 
                 # --- CASE B: CHAT VỚI CHATGPT ---
                 # Điều kiện: Có config Zalo + Có config ChatGPT active + Nội dung không rỗng
+                # --- CASE B: CHAT VỚI CHATGPT (Đã sửa Multi-thread) ---
                 elif config and request.env['hlv.chatgpt.config'].sudo().search_count([('active', '=', True)]) > 0 and message_content:
                     
-                    _logger.info("🔄 Chuyển tin nhắn từ %s sang ChatGPT...", user_id)
+                    _logger.info("🔄 Đã nhận tin nhắn từ %s. Đang chuyển vào luồng xử lý ngầm...", user_id)
+
+                    # --- CHUẨN BỊ DỮ LIỆU CHO LUỒNG CON ---
+                    # Vì luồng con không truy cập được request.env hiện tại, ta phải lấy tên DB để kết nối lại
+                    db_name = request.db
                     
-                    # Gọi Model Session để xử lý
-                    ChatSession = request.env['hlv.chatgpt.session'].sudo()
-                    
-                    try:
-                        # Gọi hàm xử lý và TRUYỀN THÊM zalo_msg_id để lưu vào DB
-                        ai_reply = ChatSession.process_zalo_message(
-                            user_id, 
-                            message_content, 
-                            zalo_msg_id=msg_id  # <--- Quan trọng: Truyền ID để lưu, lần sau check trùng sẽ thấy
-                        )
-                        
-                        # Gửi kết quả về Zalo
-                        if ai_reply:
-                            config.send_notification_message(user_id, ai_reply)
+                    # Hàm chạy ngầm (Background Task)
+                    def run_ai_background():
+                        # Tạo kết nối DB mới riêng cho luồng này
+                        db_registry = registry(db_name)
+                        with db_registry.cursor() as new_cr:
+                            # Tạo môi trường (Environment) với quyền Superuser (Admin) để tránh lỗi quyền
+                            env = api.Environment(new_cr, SUPERUSER_ID, {})
                             
-                    except Exception as e:
-                        _logger.exception("❌ Lỗi khi gọi ChatGPT từ Zalo Webhook: %s", e)
-                        # Có thể gửi tin báo lỗi cho khách nếu muốn
-                        # config.send_notification_message(user_id, "Hệ thống đang bận, vui lòng thử lại sau.")
+                            try:
+                                # Lấy lại các Model trong môi trường mới
+                                ChatSession = env['hlv.chatgpt.session']
+                                ConfigModel = env['hlv.zalo.stock.notification']
+                                
+                                # Tìm lại config trong môi trường mới
+                                thread_config = ConfigModel.search([('active', '=', True)], limit=1)
+                                
+                                _logger.info("✅ nội dung %s", message_content)
+
+                                
+                                # 1. Gọi AI xử lý (Mất thời gian bao lâu cũng được)
+                                ai_reply = ChatSession.process_zalo_message(
+                                    user_id, 
+                                    message_content, 
+                                    zalo_msg_id=msg_id
+                                )
+                                
+                                # 2. Gửi kết quả về Zalo
+                                if ai_reply and thread_config:
+                                    thread_config.send_notification_message(user_id, ai_reply)
+                                    _logger.info("✅ Threading: Đã gửi tin nhắn AI xong cho %s", user_id)
+                                    
+                            except Exception as e:
+                                _logger.exception("❌ Lỗi trong luồng AI Background: %s", e)
+                                # new_cr.rollback() # Odoo tự rollback nếu lỗi, nhưng có thể thêm cho chắc
+
+                    # --- KÍCH HOẠT LUỒNG CHẠY NGAY ---
+                    t = threading.Thread(target=run_ai_background)
+                    t.start()
+                    
+                    # Code chính tiếp tục chạy xuống dưới để return 200 OK ngay lập tức
 
             return Response("OK", status=200)
 

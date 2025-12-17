@@ -1223,7 +1223,9 @@ class MisaApiUtils(models.AbstractModel):
         session = self._get_retry_session()
         try:
             res = session.post(url, headers=headers, json=payload, timeout=30)
-            _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code}")
+            
+            _logger.info(f"📥 [MISA RESPONSE] Staus: {res.status_code} | Body: {res.text}")
+
             
             res_json = res.json()
             
