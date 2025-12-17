@@ -133,6 +133,16 @@
         <t t-if="pw_ok">
           <section>
             <div class="container mt-3 mb-6">
+              <!-- Navigation Tabs -->
+              <ul class="nav nav-pills mb-4 justify-content-center" style="border-bottom: 2px solid #e9ecef; padding-bottom: 20px;">
+                   <li class="nav-item mx-1">
+                       <a class="nav-link active bg-primary text-white" href="/search_stock" style="font-weight: 600;">Tra cứu tồn kho</a>
+                   </li>
+                   <li class="nav-item mx-1">
+                       <a class="nav-link text-dark" href="/misa/purchase/lookup" style="font-weight: 500; background-color: #f8f9fa;">Tra cứu chứng từ mua hàng</a>
+                   </li>
+              </ul>
+              
               <h2 class="mb-4 text-primary fw-bold">Tra cứu tồn kho</h2>
               <form t-att-action="request.httprequest.path" method="get" class="row g-2 mb-4" id="search-form">
                 <div class="col-md-5 position-relative">
