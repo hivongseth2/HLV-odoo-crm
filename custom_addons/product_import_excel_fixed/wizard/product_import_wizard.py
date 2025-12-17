@@ -630,11 +630,13 @@ class ProductImportWizard(models.TransientModel):
                 }
         
         ProductTemplate = self.env['product.template'].sudo()
+        ProductProduct = self.env['product.product'].sudo()
         
         updated = 0
         skipped_no_sku = 0
         skipped_discontinued = 0
         skipped_not_found = 0
+        skipped_archived = 0
         errors = []
         
         # Mapping columns by index (0-based)
@@ -705,13 +707,35 @@ class ProductImportWizard(models.TransientModel):
                     skipped_discontinued += 1
                     continue
 
-                # Search Product
+                # 1. Search Active Template
                 product = ProductTemplate.search([('default_code', '=', sku)], limit=1)
+                
+                # 2. Search Active Variant (if not found in Template)
+                if not product:
+                    variant = ProductProduct.search([('default_code', '=', sku)], limit=1)
+                    if variant:
+                        product = variant.product_tmpl_id
+                
+                # 3. Check Archived (if still not found)
+                if not product:
+                    # Search Archived Template
+                    archived_tmpl = ProductTemplate.with_context(active_test=False).search([('default_code', '=', sku), ('active', '=', False)], limit=1)
+                    if archived_tmpl:
+                        skipped_archived += 1
+                        continue
+                    
+                    # Search Archived Variant
+                    archived_variant = ProductProduct.with_context(active_test=False).search([('default_code', '=', sku), ('active', '=', False)], limit=1)
+                    if archived_variant:
+                        skipped_archived += 1
+                        continue
+
+                # Final check
                 if not product:
                     skipped_not_found += 1
                     # Log chi tiết 10 sản phẩm đầu tiên không tìm thấy để debug
                     if len(errors) < 10:
-                        errors.append(f"Không tìm thấy SKU: {sku}")
+                        errors.append(f"Không tìm thấy SKU (cả Active/Archived): {sku}")
                     continue
                 
                 # Extract Prices
@@ -766,6 +790,7 @@ class ProductImportWizard(models.TransientModel):
             "Hoàn tất Đồng bộ Bảng giá Bosch.",
             f"- Sản phẩm cập nhật: {updated}",
             f"- Bỏ qua (ngừng KD/bỏ mẫu): {skipped_discontinued}",
+            f"- Bỏ qua (Đã lưu trữ/Archived): {skipped_archived}",
             f"- Bỏ qua (không có SKU): {skipped_no_sku}",
             f"- Bỏ qua (không tìm thấy SP): {skipped_not_found}",
         ]
