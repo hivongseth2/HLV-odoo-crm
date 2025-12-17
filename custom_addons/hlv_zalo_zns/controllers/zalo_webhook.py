@@ -2,7 +2,7 @@ import json
 import logging
 from odoo import http, registry, SUPERUSER_ID, api
 from odoo.http import request, Response
-
+import threading  
 _logger = logging.getLogger(__name__)
 
 class ZaloSheetWebhook(http.Controller):
