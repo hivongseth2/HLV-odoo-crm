@@ -1190,7 +1190,7 @@ class MisaApiUtils(models.AbstractModel):
         if name:
             filters.append({
                 "Group": None, "Addition": 1, "InputType": 1, "IsFromFormula": True,
-                "Operator": 7, "Property": "ProductName", "Text": name.strip(), "Value": name.strip()
+                "Operator": 8, "Property": "ProductName", "Text": name.strip(), "Value": name.strip()
             })
         
         if code:
