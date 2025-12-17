@@ -64,14 +64,14 @@
                                     <tbody>
                                         <t t-foreach="vouchers" t-as="v">
                                             <tr>
-                                                <td class="text-center"><t t-esc="v['posted_date']"/></td>
-                                                <td class="text-center font-weight-bold text-primary"><t t-esc="v['refno_finance']"/></td>
+                                                <td class="text-center text-muted"><t t-esc="v['posted_date']"/></td>
+                                                <td class="text-center font-weight-bold"><span class="refno"><t t-esc="v['refno_finance']"/></span></td>
                                                 <td class="text-center text-muted"><t t-esc="v['inv_no']"/></td>
                                                 <td>
-                                                    <div class="font-weight-bold"><t t-esc="v['account_object_name']"/></div>
-                                                    <small class="text-muted" t-if="v['account_object_code']"><t t-esc="v['account_object_code']"/></small>
+                                                    <span class="vendor-name"><t t-esc="v['account_object_name']"/></span>
+                                                    <span class="vendor-code" t-if="v['account_object_code']"><t t-esc="v['account_object_code']"/></span>
                                                 </td>
-                                                <td><t t-esc="v['journal_memo']"/></td>
+                                                <td class="text-dark"><t t-esc="v['journal_memo']"/></td>
                                                 <td class="text-center">
                                                     <span t-attf-class="badge #{v['include_invoice']['class']}" t-esc="v['include_invoice']['label']"/>
                                                 </td>
