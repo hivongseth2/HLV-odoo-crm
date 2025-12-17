@@ -1,259 +1,182 @@
-/* MISA Purchase Lookup Page Styles - Clean Minimalist Design */
+/* MISA Purchase Lookup Page Styles - Standard Business Design */
 
 /* Global & Typography */
 .misa-lookup-container {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f9fafb;
-    /* Very light gray */
+    background-color: #f3f4f6;
     min-height: 100vh;
     color: #111827;
-    /* Near black */
     -webkit-font-smoothing: antialiased;
+    padding: 60px 40px;
+    /* Added side padding */
 }
 
-/* Header Section - Clean & Flat */
-.misa-lookup-header {
+/* Main Unified Card */
+.misa-main-card {
     background: white;
-    padding: 60px 0 40px;
-    border-bottom: 1px solid #e5e7eb;
-    margin-bottom: 20px;
+    max-width: 1400px;
+    /* Wider to accommodate table */
+    margin: 0 auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    padding: 40px;
+    border: 1px solid #e5e7eb;
 }
 
-.misa-lookup-header h1 {
-    font-size: 2rem;
+/* Header inside Card */
+.misa-header-section {
+    margin-bottom: 30px;
+    border-bottom: 2px solid #f3f4f6;
+    padding-bottom: 20px;
+}
+
+.misa-header-section h1 {
+    font-size: 1.75rem;
     font-weight: 700;
     color: #111827;
     margin: 0;
-    letter-spacing: -0.01em;
 }
 
-/* Search Card - Simple & Clean */
-.misa-search-card {
-    max-width: 800px;
-    margin: 0 auto 40px;
-    padding: 0 20px;
+/* Search Section inside Card */
+.misa-search-section {
+    margin-bottom: 30px;
 }
 
 .misa-search-form .input-group {
     background: white;
     border: 1px solid #d1d5db;
-    border-radius: 8px;
-    /* Subtle radius */
+    border-radius: 6px;
     overflow: hidden;
-    transition: border-color 0.2s;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
 .misa-search-form .input-group:focus-within {
-    border-color: #000;
-    /* Distinct focus */
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .misa-search-form .form-control {
     border: none;
-    padding: 16px 20px;
+    padding: 12px 16px;
     font-size: 1rem;
     color: #111827;
-    background: transparent;
-}
-
-.misa-search-form .form-control:focus {
-    box-shadow: none;
 }
 
 .misa-search-form .btn-primary {
-    background: #111827;
-    /* Black */
+    background: #2563eb;
+    /* Standard Blue */
     color: white;
     border: none;
-    padding: 0 30px;
-    font-weight: 500;
-    font-size: 0.95rem;
+    padding: 0 24px;
+    font-weight: 600;
 }
 
 .misa-search-form .btn-primary:hover {
-    background: #374151;
-    /* Dark Gray */
+    background: #1d4ed8;
 }
 
-/* Results Section */
-.container-fluid {
-    padding-left: 40px !important;
-    padding-right: 40px !important;
-    max-width: 1600px;
-    margin: 0 auto;
+/* Results Section inside Card */
+.misa-results-section {
+    margin-top: 0;
+}
+
+.misa-status-text {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #4b5563;
+    margin-bottom: 15px;
+    display: block;
 }
 
 /* Table Card - No Shadow, just Border */
 .table-responsive {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    margin-bottom: 40px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
 }
 
 .misa-lookup-table {
     margin: 0;
+    width: 100%;
     border-collapse: collapse;
+    /* Ensure grid lines connect */
 }
 
 .misa-lookup-table thead th {
-    background-color: #f9fafb;
-    color: #4b5563;
-    /* Gray 600 */
-    font-weight: 600;
-    font-size: 0.75rem;
+    background-color: #e5e7eb;
+    /* Darker gray header */
+    color: #374151;
+    font-weight: 700;
+    font-size: 0.8rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 16px 24px;
-    border-bottom: 1px solid #e5e7eb;
-    border-top: none;
+    padding: 12px 16px;
+    border: 1px solid #d1d5db;
+    /* Visible border */
     white-space: nowrap;
 }
 
 .misa-lookup-table tbody td {
-    padding: 16px 24px;
+    padding: 12px 16px;
     vertical-align: middle;
-    /* Center vertically */
-    color: #374151;
-    /* Gray 700 */
-    border-bottom: 1px solid #f3f4f6;
+    color: #1f2937;
+    border: 1px solid #e5e7eb;
+    /* Visible cell borders */
     font-size: 0.9rem;
 }
 
-.misa-lookup-table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-.misa-lookup-table tbody tr:hover {
+/* Zebra Striping */
+.misa-lookup-table tbody tr:nth-child(even) {
     background-color: #f9fafb;
 }
 
-/* Column Specifics */
-/* Date Column - Prevent wrapping */
+.misa-lookup-table tbody tr:hover {
+    background-color: #f3f4f6;
+}
+
+/* Column Tweaks */
 .misa-lookup-table td:first-child {
     white-space: nowrap;
-    color: #6b7280;
+    font-weight: 500;
 }
 
 .misa-lookup-table .refno {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-weight: 500;
-    color: #111827;
-    background: #f3f4f6;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.85rem;
+    font-family: monospace;
+    font-weight: 600;
+    color: #2563eb;
+    background: transparent;
+    padding: 0;
 }
 
 .misa-lookup-table .vendor-name {
-    font-weight: 500;
+    font-weight: 600;
     color: #111827;
     display: block;
-    margin-bottom: 2px;
 }
 
 .misa-lookup-table .vendor-code {
     font-size: 0.75rem;
-    color: #9ca3af;
-    /* Gray 400 */
+    color: #6b7280;
 }
 
-/* Minimal Status Styles (Replacing Badges) */
+/* Minimal Status Styles */
 .badge {
-    background: transparent !important;
-    padding: 0;
-    font-weight: 500;
-    font-size: 0.85rem;
-    display: inline-flex;
-    align-items: center;
-}
-
-.badge::before {
-    content: '';
+    background: #f3f4f6 !important;
+    /* Light gray background for structure */
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.8rem;
     display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    margin-right: 8px;
-}
-
-/* Success */
-.badge-success {
-    color: #111827 !important;
-}
-
-.badge-success::before {
-    background-color: #10b981;
-}
-
-/* Emerald */
-
-/* Danger/Unpaid */
-.badge-danger {
-    color: #111827 !important;
-}
-
-.badge-danger::before {
-    background-color: #ef4444;
-}
-
-/* Red */
-
-/* Warning/Partial */
-.badge-warning {
-    color: #111827 !important;
-}
-
-.badge-warning::before {
-    background-color: #f59e0b;
-}
-
-/* Amber */
-
-/* Info */
-.badge-info {
-    color: #111827 !important;
-}
-
-.badge-info::before {
-    background-color: #3b82f6;
-}
-
-/* Blue */
-
-/* Secondary/Empty */
-.badge-secondary {
-    color: #6b7280 !important;
-}
-
-.badge-secondary::before {
-    background-color: #d1d5db;
-}
-
-/* Gray */
-
-
-/* Instructions */
-.misa-instructions {
-    text-align: center;
-    padding: 80px 0;
-    color: #9ca3af;
-}
-
-.misa-instructions p {
-    font-size: 1.1rem;
-    font-weight: 400;
+    color: #374151 !important;
+    border: 1px solid #e5e7eb;
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-    .container-fluid {
-        padding-left: 15px !important;
-        padding-right: 15px !important;
+    .misa-lookup-container {
+        padding: 20px 15px;
     }
 
-    .misa-lookup-header h1 {
-        font-size: 1.5rem;
+    .misa-main-card {
+        padding: 20px;
     }
 }
