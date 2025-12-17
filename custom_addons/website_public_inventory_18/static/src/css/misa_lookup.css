@@ -195,18 +195,18 @@
     border-color: #fde68a !important;
 }
 
-/* Info (Blue) - Invoiced */
+/* Info (Blue -> Green) - Invoiced */
 .badge-info {
-    background-color: #eff6ff !important;
-    color: #1d4ed8 !important;
-    border-color: #bfdbfe !important;
+    background-color: #ecfdf5 !important;
+    color: #047857 !important;
+    border-color: #a7f3d0 !important;
 }
 
-/* Secondary (Gray) - Not Invoiced */
+/* Secondary (Gray -> Red) - Not Invoiced */
 .badge-secondary {
-    background-color: #f3f4f6 !important;
-    color: #4b5563 !important;
-    border-color: #e5e7eb !important;
+    background-color: #fef2f2 !important;
+    color: #b91c1c !important;
+    border-color: #fecaca !important;
 }
 
 /* Responsive */
