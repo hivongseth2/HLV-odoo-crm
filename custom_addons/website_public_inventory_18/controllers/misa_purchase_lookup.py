@@ -80,20 +80,41 @@ class MisaPurchaseLookupController(http.Controller):
             'modified_by': voucher.get('modified_by', ''),
         }
 
-    @http.route('/misa/purchase/lookup', type='http', auth='public', website=True)
-    def misa_purchase_lookup(self, **kwargs):
-        """Trang tra cứu chứng từ mua hàng MISA"""
+    @http.route(['/misa/purchase/lookup', '/misa/purchase/lookup/page/<int:page>'], type='http', auth='public', website=True)
+    def misa_purchase_lookup(self, page=1, **kwargs):
+        """Trang tra cứu chứng từ mua hàng MISA (có phân trang)"""
         journal_memo = kwargs.get('journal_memo', '').strip()
         vouchers = []
         error = None
         searched = False
+        pager = {}
+        
+        items_per_page = 20
         
         if journal_memo:
             searched = True
             try:
                 misa_utils = request.env['misa.api.utils'].sudo()
-                raw_vouchers = misa_utils.search_purchase_voucher(journal_memo, limit=50)
-                vouchers = [self._map_voucher_data(v) for v in raw_vouchers]
+                # Fetch more results to allow aggregation/pagination (e.g., 200 items max)
+                # Since we filter by exact journal_memo lists, usually we don't get thousands unless searching many codes.
+                raw_vouchers = misa_utils.search_purchase_voucher(journal_memo, limit=200)
+                all_vouchers = [self._map_voucher_data(v) for v in raw_vouchers]
+                
+                # Pagination Logic
+                count = len(all_vouchers)
+                pager = request.website.pager(
+                    url='/misa/purchase/lookup',
+                    total=count,
+                    page=page,
+                    step=items_per_page,
+                    scope=7,
+                    url_args={'journal_memo': journal_memo}
+                )
+                
+                # Slice current page
+                offset = (page - 1) * items_per_page
+                vouchers = all_vouchers[offset: offset + items_per_page]
+                
             except Exception as e:
                 _logger.exception("Error searching MISA purchase voucher")
                 error = str(e)
@@ -103,5 +124,6 @@ class MisaPurchaseLookupController(http.Controller):
             'vouchers': vouchers,
             'error': error,
             'searched': searched,
-            'voucher_count': len(vouchers),
+            'voucher_count': len(vouchers) if not pager else pager['total'], # Show total count, not page count
+            'pager': pager,
         })

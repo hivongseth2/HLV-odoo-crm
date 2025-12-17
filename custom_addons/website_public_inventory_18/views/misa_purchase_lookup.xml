@@ -83,6 +83,11 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                
+                                <!-- Pagination -->
+                                <div class="products_pager form-inline justify-content-center mt-3">
+                                    <t t-call="website.pager"/>
+                                </div>
                             </t>
                         </div>
                     </t>
