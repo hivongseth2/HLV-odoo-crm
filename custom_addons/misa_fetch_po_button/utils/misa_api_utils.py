@@ -1365,7 +1365,8 @@ class MisaApiUtils(models.AbstractModel):
     def search_purchase_voucher(self, journal_memo, limit=20):
         """
         Tìm kiếm chứng từ nhập kho mua hàng trong MISA (actapp) theo diễn giải (journal_memo).
-        
+        Hỗ trợ tìm nhiều mã phân cách bởi dấu phẩy (eg: "DH1, DH2").
+
         Sử dụng API pu_list/paging_filter_v2 với view=40 để lấy chứng từ nhập kho (reftype 302)
         với đầy đủ thông tin: refno_finance, posted_date, paid_status, in_outward_refno, v.v.
         """
@@ -1380,90 +1381,94 @@ class MisaApiUtils(models.AbstractModel):
         headers = misa_config.get_default_headers(access_token)
         
         # 3. Dùng pu_list với view=40 (chứng từ nhập kho mua hàng - reftype 302)
-        # QUAN TRỌNG: Dùng g2 (không phải g1)
         url = "https://actapp.misa.vn/g2/api/pu/v1/pu_list/paging_filter_v2"
         
-        val = journal_memo.strip()
+        # Xử lý input: split theo dấu phẩy
+        search_terms = [s.strip() for s in journal_memo.split(',') if s.strip()]
         
-        # Filter theo journal_memo (diễn giải)
-        # MISA yêu cầu 2 array:
-        # - filter: date range (bắt buộc)
-        # - customFilter: text search với parent-children structure
+        if not search_terms:
+            return []
+
+        # Helper function để gọi API cho 1 giá trị
         from datetime import datetime, timedelta
         
         # Date range: 1 năm gần đây
         date_to = datetime.utcnow()
         date_from = date_to - timedelta(days=365)
         
-        payload = {
-            "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
-            # Date range filter (bắt buộc)
-            "filter": [
-                {
-                    "property": 3654,
-                    "value": date_from.strftime("%Y-%m-%dT%H:%M:%S.00Z"),
-                    "operator": 10,  # >=
-                    "operand": 1,
-                    "data_type": 3
-                },
-                {
-                    "property": 3654,
-                    "value": date_to.strftime("%Y-%m-%dT%H:%M:%S.00Z"),
-                    "operator": 12,  # <=
-                    "operand": 1,
-                    "data_type": 3
-                }
-            ],
-            # Custom filter cho text search (parent-children structure)
-            "customFilter": [{
-                "property": 4018,
-                "value": val,
-                "operator": 1,  # Equals
-                "operand": 1,
-                "data_type": 1,
-                "childrens": [
-                    {"property": 2189, "value": val, "operator": 1, "operand": 2, "data_type": 1},
-                    {"property": 57, "value": val, "operator": 1, "operand": 2, "data_type": 1},
-                    {"property": 2656, "value": val, "operator": 1, "operand": 2, "data_type": 1},
-                    {"property": 4029, "value": val, "operator": 1, "operand": 2}
-                ]
-            }],
-            "pageIndex": 1,
-            "pageSize": int(limit),
-            "view": 40,  # View cho chứng từ nhập kho mua hàng (reftype 302)
-            "useSp": False, 
-            "loadMode": 2,
-            "summaryColumns": [5080, 5730, 5128, 5059]
-        }
-        
-        _logger.info(f"🔎 [MISA PURCHASE VOUCHER SEARCH] Tìm kiếm journal_memo: '{val}'")
-        
         session = self._get_retry_session()
-        try:
-            res = session.post(url, headers=headers, json=payload, timeout=30)
-            _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code}, Body: {res.text[:500]}")
+        all_results = []
+        seen_refids = set()
+
+        for val in search_terms:
+            _logger.info(f"🔎 [MISA PURCHASE VOUCHER SEARCH] Tìm kiếm term: '{val}'")
             
-            if res.status_code != 200:
-                _logger.error(f"❌ MISA Purchase Voucher Search HTTP {res.status_code}: {res.text}")
-                try:
-                    err = res.json()
-                    msg = err.get("UserMessage") or err.get("Message") or err.get("SystemMessage") or "Lỗi không xác định"
-                except:
-                    msg = res.text
-                raise Exception(f"Lỗi API MISA: {msg}")
+            payload = {
+                "sort": "[{\"property\":3654,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":3972,\"desc\":true,\"data_type\":3,\"operand\":1},{\"property\":4018,\"desc\":true,\"data_type\":1,\"operand\":1}]",
+                # Date range filter (bắt buộc)
+                "filter": [
+                    {
+                        "property": 3654,
+                        "value": date_from.strftime("%Y-%m-%dT%H:%M:%S.00Z"),
+                        "operator": 10,  # >=
+                        "operand": 1,
+                        "data_type": 3
+                    },
+                    {
+                        "property": 3654,
+                        "value": date_to.strftime("%Y-%m-%dT%H:%M:%S.00Z"),
+                        "operator": 12,  # <=
+                        "operand": 1,
+                        "data_type": 3
+                    }
+                ],
+                # Custom filter cho text search (parent-children structure)
+                "customFilter": [{
+                    "property": 4018,
+                    "value": val,
+                    "operator": 1,  # Equals (SO SÁNH BẰNG ĐỂ CHÍNH XÁC)
+                    "operand": 1,
+                    "data_type": 1,
+                    "childrens": [
+                        {"property": 2189, "value": val, "operator": 1, "operand": 2, "data_type": 1},
+                        {"property": 57, "value": val, "operator": 1, "operand": 2, "data_type": 1},
+                        {"property": 2656, "value": val, "operator": 1, "operand": 2, "data_type": 1},
+                        {"property": 4029, "value": val, "operator": 1, "operand": 2}
+                    ]
+                }],
+                "pageIndex": 1,
+                "pageSize": int(limit),
+                "view": 40,  # View cho chứng từ nhập kho mua hàng (reftype 302)
+                "useSp": False, 
+                "loadMode": 2,
+                "summaryColumns": [5080, 5730, 5128, 5059]
+            }
+            
+            try:
+                res = session.post(url, headers=headers, json=payload, timeout=30)
+                if res.status_code != 200:
+                    _logger.error(f"❌ MISA Purchase Voucher Search HTTP {res.status_code}: {res.text}")
+                    continue # Skip lỗi mạng của 1 item để chạy tiếp item khác
+                    
+                data = res.json()
+                if not data.get("Success"):
+                    _logger.warning(f"⚠️ MISA Refused for term '{val}': {data}")
+                    continue
+                    
+                page_data = data.get("Data", {}).get("PageData", [])
                 
-            data = res.json()
-            if not data.get("Success"):
-                err_msg = data.get("SystemMessage") or data.get("ErrorsMessage") or "Unknown error"
-                raise Exception(f"MISA Refused: {err_msg}")
-                 
-            page_data = data.get("Data", {}).get("PageData", [])
-            
-            _logger.info(f"✅ [MISA PURCHASE VOUCHER SEARCH] Tìm thấy {len(page_data)} chứng từ")
-            return page_data
-            
-        except Exception as e:
-            _logger.exception(f"❌ Search Purchase Voucher Error: {e}")
-            raise e
+                # Merge into results
+                for item in page_data:
+                    refid = item.get("refid")
+                    if refid and refid not in seen_refids:
+                        seen_refids.add(refid)
+                        all_results.append(item)
+                        
+            except Exception as e:
+                _logger.exception(f"❌ Search Purchase Voucher Error for term '{val}': {e}")
+                # Không raise e để tiếp tục loop các term khác
+        
+        _logger.info(f"✅ [MISA PURCHASE VOUCHER SEARCH] Tổng tìm thấy {len(all_results)} chứng từ cho {len(search_terms)} keywords")
+        return all_results
 
 

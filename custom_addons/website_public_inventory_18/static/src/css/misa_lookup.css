@@ -4,38 +4,30 @@
 .misa-lookup-header {
     background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
     color: white;
-    padding: 40px 0;
+    padding: 30px 0;
     text-align: center;
     margin-bottom: 0;
 }
 
 .misa-lookup-header h1 {
-    font-size: 2.2rem;
+    font-size: 1.8rem;
     font-weight: 600;
-    margin-bottom: 10px;
-}
-
-.misa-lookup-header .lead {
-    opacity: 0.9;
-    font-size: 1.1rem;
+    margin-bottom: 0;
 }
 
 /* Search Card */
 .misa-search-card {
     background: white;
-    border-radius: 12px;
-    padding: 25px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    margin-top: -30px;
-    position: relative;
-    z-index: 10;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .misa-search-form .form-control {
-    border-radius: 8px 0 0 8px;
-    border: 2px solid #e0e0e0;
-    padding: 12px 20px;
-    font-size: 1.1rem;
+    border-radius: 6px 0 0 6px;
+    border: 1px solid #ced4da;
+    padding: 10px 15px;
+    font-size: 1rem;
 }
 
 .misa-search-form .form-control:focus {
@@ -46,223 +38,75 @@
 .misa-search-form .btn-primary {
     background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
     border: none;
-    border-radius: 0 8px 8px 0;
-    padding: 12px 30px;
+    border-radius: 0 6px 6px 0;
+    padding: 10px 25px;
     font-weight: 600;
-    transition: all 0.3s ease;
 }
 
-.misa-search-form .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(30, 60, 114, 0.4);
-}
-
-/* Results Header */
-.misa-results-header h4 {
+/* Table Styles */
+.misa-lookup-table th {
+    vertical-align: middle;
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
     font-weight: 600;
-    margin-bottom: 20px;
+    color: #495057;
+    font-size: 0.95rem;
 }
 
-/* Voucher Cards */
-.misa-voucher-list {
-    margin-top: 20px;
+.misa-lookup-table td {
+    vertical-align: middle;
+    font-size: 0.95rem;
+    color: #212529;
 }
 
-.misa-voucher-card {
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    margin-bottom: 20px;
-    overflow: hidden;
-    transition: all 0.3s ease;
-    border: 1px solid #f0f0f0;
+.misa-lookup-table tbody tr:hover {
+    background-color: #f1f3f5;
 }
 
-.misa-voucher-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
-}
-
-.voucher-header {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    padding: 15px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.voucher-refno {
-    font-size: 1.2rem;
-    color: #1e3c72;
-}
-
-.voucher-refno i {
-    margin-right: 8px;
-}
-
-.voucher-badges .badge {
-    margin-left: 8px;
-    padding: 6px 12px;
-    font-size: 0.85rem;
+/* Badges */
+.badge {
+    padding: 6px 10px;
+    font-size: 0.8rem;
     font-weight: 500;
-    border-radius: 20px;
+    border-radius: 4px;
 }
 
 .badge-success {
-    background-color: #28a745 !important;
+    background-color: #28a745;
     color: white;
 }
 
 .badge-danger {
-    background-color: #dc3545 !important;
+    background-color: #dc3545;
     color: white;
 }
 
 .badge-warning {
-    background-color: #ffc107 !important;
+    background-color: #ffc107;
     color: #212529;
 }
 
 .badge-info {
-    background-color: #17a2b8 !important;
+    background-color: #17a2b8;
     color: white;
 }
 
 .badge-secondary {
-    background-color: #6c757d !important;
+    background-color: #6c757d;
     color: white;
 }
 
-.voucher-body {
-    padding: 20px;
-}
-
-.info-row {
-    padding: 8px 0;
-    border-bottom: 1px solid #f5f5f5;
-}
-
-.info-row:last-child {
-    border-bottom: none;
-}
-
-.info-label {
-    display: inline-block;
-    width: 140px;
-    color: #666;
-    font-size: 0.9rem;
-}
-
-.info-label i {
-    width: 20px;
-    text-align: center;
-    margin-right: 5px;
-    color: #2a5298;
-}
-
-.info-value {
-    font-weight: 500;
-    color: #333;
-}
-
-.info-value.amount {
-    font-size: 1.1rem;
-    color: #28a745;
-    font-weight: 700;
-}
-
-.voucher-footer {
-    background: #fafafa;
-    padding: 12px 20px;
-    border-top: 1px solid #f0f0f0;
-}
-
-/* Instructions */
-.misa-instructions {
-    text-align: center;
-    padding: 40px 0;
-}
-
-.instruction-item {
-    padding: 30px 20px;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    margin-bottom: 20px;
-    transition: all 0.3s ease;
-}
-
-.instruction-item:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
-}
-
-.instruction-icon {
-    width: 70px;
-    height: 70px;
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 20px;
-}
-
-.instruction-icon i {
-    font-size: 28px;
-    color: white;
-}
-
-.instruction-item h5 {
-    font-weight: 600;
-    color: #1e3c72;
-    margin-bottom: 10px;
-}
-
-.instruction-item p {
-    color: #666;
-    margin-bottom: 0;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .misa-lookup-header h1 {
-        font-size: 1.6rem;
-    }
-
-    .voucher-header {
-        flex-direction: column;
-        text-align: center;
-    }
-
-    .voucher-badges {
-        margin-top: 10px;
-    }
-
-    .info-label {
-        display: block;
-        width: 100%;
-        margin-bottom: 3px;
-    }
-
-    .misa-search-form .input-group {
-        flex-direction: column;
-    }
-
-    .misa-search-form .form-control {
-        border-radius: 8px;
-        margin-bottom: 10px;
-    }
-
-    .misa-search-form .btn-primary {
-        border-radius: 8px;
-        width: 100%;
-    }
-}
-
-/* Container background */
+/* Wrapper */
 .misa-lookup-container {
-    background: #f5f7fa;
+    background: #eaeff4;
+    /* Slightly darker/cooler background to make table pop */
     min-height: 100vh;
+}
+
+/* Responsive Table */
+@media (max-width: 992px) {
+    .misa-lookup-table {
+        min-width: 900px;
+        /* Force scroll on small screens */
+    }
 }

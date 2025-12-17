@@ -8,19 +8,18 @@
                 <div class="misa-lookup-header">
                     <div class="container">
                         <h1><i class="fa fa-search"/> Tra cứu Chứng từ Mua hàng MISA</h1>
-                        <p class="lead">Nhập mã diễn giải (journal_memo) để tìm kiếm chứng từ</p>
                     </div>
                 </div>
 
-                <div class="container py-4">
+                <div class="container-fluid py-4 px-4 m-0"> <!-- Full width container -->
                     <!-- Search Form -->
-                    <div class="misa-search-card">
+                    <div class="misa-search-card mb-4" style="margin-top: 0;">
                         <form method="get" action="/misa/purchase/lookup" class="misa-search-form">
                             <div class="input-group">
                                 <input type="text" 
                                        name="journal_memo" 
                                        class="form-control form-control-lg" 
-                                       placeholder="Nhập mã diễn giải (VD: DH125524949225720)"
+                                       placeholder="Nhập mã diễn giải (VD: DH125524949225720). Tìm nhiều mã cách nhau dấu phẩy."
                                        t-att-value="journal_memo"/>
                                 <button type="submit" class="btn btn-primary btn-lg">
                                     <i class="fa fa-search"/> Tìm kiếm
@@ -36,121 +35,62 @@
                         </div>
                     </t>
 
-                    <!-- Results -->
+                    <!-- Results Table -->
                     <t t-if="searched and not error">
-                        <div class="misa-results-header mt-4">
-                            <h4>
-                                <t t-if="voucher_count > 0">
-                                    <span class="text-success"><i class="fa fa-check-circle"/> Tìm thấy <t t-esc="voucher_count"/> chứng từ</span>
-                                </t>
-                                <t t-else="">
-                                    <span class="text-warning"><i class="fa fa-info-circle"/> Không tìm thấy chứng từ nào</span>
-                                </t>
-                            </h4>
-                        </div>
+                       
+                        <h4 class="mb-3">
+                             <t t-if="voucher_count > 0">
+                                <span class="text-success"><i class="fa fa-check-circle"/> Tìm thấy <t t-esc="voucher_count"/> chứng từ</span>
+                            </t>
+                            <t t-else="">
+                                <span class="text-warning"><i class="fa fa-info-circle"/> Không tìm thấy chứng từ nào</span>
+                            </t>
+                        </h4>
 
                         <t t-if="voucher_count > 0">
-                            <!-- Voucher Cards -->
-                            <div class="misa-voucher-list">
-                                <t t-foreach="vouchers" t-as="v">
-                                    <div class="misa-voucher-card">
-                                        <div class="voucher-header">
-                                            <div class="voucher-refno">
-                                                <i class="fa fa-file-text-o"/> 
-                                                <strong t-esc="v['refno_finance']"/>
-                                            </div>
-                                            <div class="voucher-badges">
-                                                <span t-attf-class="badge #{v['paid_status']['class']}" t-esc="v['paid_status']['label']"/>
-                                                <span t-attf-class="badge #{v['include_invoice']['class']}" t-esc="v['include_invoice']['label']"/>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="voucher-body">
-                                            <div class="row">
-                                                <div class="col-md-6">
-                                                    <div class="info-row">
-                                                        <span class="info-label"><i class="fa fa-calendar"/> Ngày chứng từ:</span>
-                                                        <span class="info-value" t-esc="v['refdate']"/>
-                                                    </div>
-                                                    <div class="info-row">
-                                                        <span class="info-label"><i class="fa fa-bookmark"/> Diễn giải:</span>
-                                                        <span class="info-value text-primary" t-esc="v['journal_memo']"/>
-                                                    </div>
-                                                    <div class="info-row">
-                                                        <span class="info-label"><i class="fa fa-building"/> Nhà cung cấp:</span>
-                                                        <span class="info-value">
-                                                            <strong t-esc="v['account_object_name']"/>
-                                                            <small class="text-muted" t-if="v['account_object_code']"> (<t t-esc="v['account_object_code']"/>)</small>
-                                                        </span>
-                                                    </div>
-                                                    <div class="info-row" t-if="v['custom_field1']">
-                                                        <span class="info-label"><i class="fa fa-tag"/> Ghi chú 1:</span>
-                                                        <span class="info-value" t-esc="v['custom_field1']"/>
-                                                    </div>
-                                                </div>
-                                                <div class="col-md-6">
-                                                    <div class="info-row">
-                                                        <span class="info-label"><i class="fa fa-money"/> Tổng tiền:</span>
-                                                        <span class="info-value amount">
-                                                            <t t-esc="v['total_amount']"/> <t t-esc="v['currency_id']"/>
-                                                        </span>
-                                                    </div>
-                                                    <div class="info-row">
-                                                        <span class="info-label"><i class="fa fa-file-o"/> Loại chứng từ:</span>
-                                                        <span class="info-value" t-esc="v['reftype']"/>
-                                                    </div>
-                                                    <div class="info-row" t-if="v['employee_name']">
-                                                        <span class="info-label"><i class="fa fa-user"/> Nhân viên:</span>
-                                                        <span class="info-value" t-esc="v['employee_name']"/>
-                                                    </div>
-                                                    <div class="info-row" t-if="v['custom_field2']">
-                                                        <span class="info-label"><i class="fa fa-truck"/> Giao hàng:</span>
-                                                        <span class="info-value" t-esc="v['custom_field2']"/>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="voucher-footer">
-                                            <small class="text-muted">
-                                                <i class="fa fa-home"/> <t t-esc="v['branch_name']"/>
-                                                <t t-if="v['created_by']">
-                                                    | <i class="fa fa-user-plus"/> Tạo bởi: <t t-esc="v['created_by']"/>
-                                                </t>
-                                            </small>
-                                        </div>
-                                    </div>
-                                </t>
+                            <div class="table-responsive bg-white rounded shadow-sm">
+                                <table class="table table-hover table-bordered mb-0 misa-lookup-table">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th class="text-center" style="width: 100px;">Ngày hạch toán</th>
+                                            <th class="text-center" style="width: 120px;">Số chứng từ</th>
+                                            <th class="text-center" style="width: 120px;">Số hóa đơn</th>
+                                            <th style="min-width: 200px;">Nhà cung cấp</th>
+                                            <th style="min-width: 250px;">Diễn giải</th>
+                                            <th class="text-center" style="width: 130px;">TT nhận hóa đơn</th>
+                                            <th class="text-center" style="width: 130px;">TT thanh toán</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <t t-foreach="vouchers" t-as="v">
+                                            <tr>
+                                                <td class="text-center"><t t-esc="v['posted_date']"/></td>
+                                                <td class="text-center font-weight-bold text-primary"><t t-esc="v['refno_finance']"/></td>
+                                                <td class="text-center text-muted"><t t-esc="v['inv_no']"/></td>
+                                                <td>
+                                                    <div class="font-weight-bold"><t t-esc="v['account_object_name']"/></div>
+                                                    <small class="text-muted" t-if="v['account_object_code']"><t t-esc="v['account_object_code']"/></small>
+                                                </td>
+                                                <td><t t-esc="v['journal_memo']"/></td>
+                                                <td class="text-center">
+                                                    <span t-attf-class="badge #{v['include_invoice']['class']}" t-esc="v['include_invoice']['label']"/>
+                                                </td>
+                                                <td class="text-center">
+                                                    <span t-attf-class="badge #{v['paid_status']['class']}" t-esc="v['paid_status']['label']"/>
+                                                </td>
+                                            </tr>
+                                        </t>
+                                    </tbody>
+                                </table>
                             </div>
                         </t>
                     </t>
 
                     <!-- Instructions when no search -->
                     <t t-if="not searched">
-                        <div class="misa-instructions mt-5">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="instruction-item">
-                                        <div class="instruction-icon"><i class="fa fa-keyboard-o"/></div>
-                                        <h5>Bước 1</h5>
-                                        <p>Nhập mã diễn giải vào ô tìm kiếm</p>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="instruction-item">
-                                        <div class="instruction-icon"><i class="fa fa-search"/></div>
-                                        <h5>Bước 2</h5>
-                                        <p>Nhấn nút Tìm kiếm</p>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="instruction-item">
-                                        <div class="instruction-icon"><i class="fa fa-list-alt"/></div>
-                                        <h5>Bước 3</h5>
-                                        <p>Xem kết quả chi tiết</p>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="misa-instructions mt-5 text-center text-muted">
+                            <i class="fa fa-search fa-4x mb-3" style="opacity: 0.2;"></i>
+                            <p class="lead">Vui lòng nhập mã để tìm kiếm</p>
                         </div>
                     </t>
                 </div>

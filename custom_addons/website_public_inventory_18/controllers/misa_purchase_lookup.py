@@ -55,6 +55,7 @@ class MisaPurchaseLookupController(http.Controller):
         return {
             'refid': voucher.get('refid', ''),
             'refno_finance': voucher.get('refno_finance', voucher.get('refno', '')),
+            'inv_no': voucher.get('inv_no') or '', # Số hóa đơn
             'refdate': self._format_date(voucher.get('refdate')),
             'posted_date': self._format_date(voucher.get('posted_date')),
             'journal_memo': voucher.get('journal_memo', ''),
