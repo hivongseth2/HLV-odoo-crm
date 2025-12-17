@@ -601,6 +601,7 @@ class ProductImportWizard(models.TransientModel):
         - Bắt đầu từ dòng 4 (skip header).
         - Cột C: SKU (default_code).
         - Cột J: Giá WEB -> x_studio_ga_web
+        - Cột K: Giá sàn TMDT -> x_studio_gia_san_tmdt
         - Cột E: Giá niêm yết -> x_studio_ga_hng_nim_yt
         - Cột I: Giá thương mại -> x_studio_gi_bn_thng_mi
         - Cột H: Giá vốn -> standard_price
@@ -646,6 +647,7 @@ class ProductImportWizard(models.TransientModel):
         idx_cost = 7         # H
         idx_price_comm = 8   # I
         idx_price_web = 9    # J
+        idx_price_tmdt = 10  # K
         idx_note_l = 11      # L
         idx_note_r = 17      # R
         
@@ -754,6 +756,7 @@ class ProductImportWizard(models.TransientModel):
                         return 0.0
 
                 price_web = get_price(row.iloc[idx_price_web])
+                price_tmdt = get_price(row.iloc[idx_price_tmdt])
                 price_list = get_price(row.iloc[idx_price_list])
                 price_comm = get_price(row.iloc[idx_price_comm])
                 cost = get_price(row.iloc[idx_cost])
@@ -764,6 +767,9 @@ class ProductImportWizard(models.TransientModel):
                     vals['list_price'] = price_web # Update list_price too if desired? User said "Cột J truyền vào x_studio_ga_web".
                     # Let's stick to user request strictly.
                     # "Cột J truyền vào trường giá web x_studio_ga_web"
+                
+                if price_tmdt > 0:
+                    vals['x_studio_gia_san_tmdt'] = price_tmdt
                     
                 if price_list > 0:
                     vals['x_studio_ga_hng_nim_yt'] = price_list
