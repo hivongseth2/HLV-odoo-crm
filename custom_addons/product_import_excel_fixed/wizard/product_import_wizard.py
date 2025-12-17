@@ -136,10 +136,11 @@ class ProductImportWizard(models.TransientModel):
                 return 'openpyxl'
         return None
 
-    def _read_excel(self, file_content, dtype=None):
+    def _read_excel(self, file_content, dtype=None, sheet_name=0):
         """
         Đọc file Excel, tự động xác định engine.
         Hỗ trợ cả file HTML giả dạng .xls (như MISA xuất ra).
+        :param sheet_name: Tên sheet hoặc index (mặc định 0 - sheet đầu tiên)
         """
         import os
 
@@ -188,10 +189,15 @@ class ProductImportWizard(models.TransientModel):
                 tmp_path = tmp.name
 
             try:
+                # Prepare kwargs
+                kwargs = {'dtype': dtype}
                 if engine:
-                    return pd.read_excel(tmp_path, dtype=dtype, engine=engine)
-                else:
-                    return pd.read_excel(tmp_path, dtype=dtype)
+                    kwargs['engine'] = engine
+                
+                # Check if file supports sheets (Excel)
+                kwargs['sheet_name'] = sheet_name
+
+                return pd.read_excel(tmp_path, **kwargs)
             finally:
                 os.unlink(tmp_path)
 
@@ -606,7 +612,22 @@ class ProductImportWizard(models.TransientModel):
         """
         # Đọc file (engine openpyxl vì file xlsx)
         # Lưu ý: file này có header phức tạp, nên đọc raw và xử lý index thủ công
-        df = self._read_excel(self.file)
+        # Đọc file (engine openpyxl vì file xlsx)
+        # Lưu ý: file này có header phức tạp, nên đọc raw và xử lý index thủ công
+        try:
+            df = self._read_excel(self.file, sheet_name='BẢNG GIÁ 2025')
+        except ValueError:
+            # Fallback nếu không tìm thấy sheet tên chính xác
+            _logger.warning("Không tìm thấy sheet 'BẢNG GIÁ 2025', thử đọc sheet thứ 2 (index 1)")
+            try:
+                df = self._read_excel(self.file, sheet_name=1)
+            except Exception as e:
+                _logger.error("Không thể đọc sheet dữ liệu: %s", e)
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {'title': 'Lỗi', 'message': f'Không tìm thấy sheet dữ liệu BẢNG GIÁ 2025: {e}', 'type': 'danger', 'sticky': True}
+                }
         
         ProductTemplate = self.env['product.template'].sudo()
         
