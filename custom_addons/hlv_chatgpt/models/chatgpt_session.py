@@ -50,9 +50,12 @@ class HlvChatgptSession(models.Model):
 
         client = OpenAI(api_key=config.api_key)
         
-        # 1. Xác định Assistant ID dựa trên trạng thái hiện tại
-        target_assistant_id = self._get_assistant_id_by_key(config, self.current_agent_key)
-        
+        target_assistant_id = config.router_id
+        # 1. GỌI ROUTER TRƯỚC
+        # target_assistant_id = self._get_assistant_id_by_key(config, self.current_agent_key)
+        _logger.info("📡 Incoming Message: Routing to Main Router first...")
+        target_assistant_id = config.router_id
+        self.current_agent_key = 'router'
         if not target_assistant_id:
             return f"Lỗi: Không tìm thấy ID cho agent '{self.current_agent_key}'"
 
