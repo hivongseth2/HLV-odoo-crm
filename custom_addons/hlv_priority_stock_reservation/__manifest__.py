@@ -2,23 +2,20 @@
 {
     'name': "HLV Priority Stock Reservation",
     'summary': """
-        Automatically unreserve stock from low priority orders (far deadline)
-        when a priority order needs stock.
+        Tự động hủy dự trữ các đơn hàng có hạn giao xa để ưu tiên cho đơn hàng đang kiểm tra.
     """,
     'description': """
-        This module overrides action_assign to implement a "steal" logic:
-        1. When Check Availability is clicked.
-        2. If stock is insufficient.
-        3. Identify "victim" pickings that have a further `x_studio_hn_giao_hng` date.
-        4. Unreserve victims to free up stock.
-        5. Assign stock to the current picking.
+        Module này ghi đè action_assign trên stock.picking để thực hiện logic:
+        1. Khi người dùng nhấn 'Kiểm tra tình trạng còn hàng' (Check Availability).
+        2. Nếu đơn hàng không đủ hàng để dự trữ.
+        3. Hệ thống tìm các đơn hàng khác đang giữ hàng nhưng có ngày giao (x_studio_hn_giao_hng) xa hơn đơn hiện tại.
+        4. Tự động hủy dự trữ của các đơn đó để nhường hàng cho đơn hiện tại.
     """,
     'author': "Antigravity",
     'website': "https://www.example.com",
     'category': 'Inventory/Inventory',
     'version': '1.0',
     'depends': ['stock'],
-    'data': [
-    ],
+    'data': [],
     'license': 'LGPL-3',
 }

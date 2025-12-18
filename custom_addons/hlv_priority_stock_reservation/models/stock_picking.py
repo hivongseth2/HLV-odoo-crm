@@ -8,23 +8,19 @@ class StockPicking(models.Model):
 
     def action_assign(self):
         """
-        Override to implement "Priority Reservation" logic.
-        If current picking can't reserve enough stock, try to find other pickings
-        that are holding stock but have a further deadline (x_studio_hn_giao_hng),
-        and unreserve them.
+        Ghi đè action_assign để thực hiện ưu tiên dự trữ hàng.
+        Nếu đơn hiện tại thiếu hàng, sẽ tự động hủy dự trữ các đơn có ngày giao xa nhất.
         """
-        # 1. Standard assign first to see what we can get normally
+        # 1. Thực hiện dự trữ tiêu chuẩn trước
         res = super(StockPicking, self).action_assign()
         
-        # 2. Check if we need to steal stock
-        # Process only pickings that are NOT fully done/cancel
+        # 2. Xử lý "cướp" hàng nếu vẫn chưa đủ
         for picking in self:
             if picking.state in ['done', 'cancel']:
                 continue
                 
-            # Check if fully reserved. 
-            # We check if there are any moves that are 'confirmed' (waiting) or 'partially_available'
-            # and demand > reserved.
+            # Kiểm tra xem có dòng nào chưa được dự trữ đủ không
+            # Odoo 17/18: dùng sum(m.move_line_ids.mapped('quantity')) để lấy số lượng đã dự trữ
             moves_missing_stock = picking.move_ids_without_package.filtered(
                 lambda m: m.state in ['confirmed', 'partially_available'] and m.product_uom_qty > sum(m.move_line_ids.mapped('quantity'))
             )
@@ -36,25 +32,20 @@ class StockPicking(models.Model):
 
     def _steal_stock_from_later_deadlines(self, picking, moves_needing_stock):
         """
-        Logic to find victims and unreserve them.
+        Tìm các mặt hàng đang bị giữ bởi các đơn khác có hạn giao xa hơn và hủy dự trữ của chúng.
         """
         for move in moves_needing_stock:
+            # Số lượng đã dự trữ hiện tại
             reserved_qty = sum(move.move_line_ids.mapped('quantity'))
             qty_needed = move.product_uom_qty - reserved_qty
+            
             if qty_needed <= 0:
                 continue
 
             product = move.product_id
             location_id = move.location_id
             
-            # Find candidate moves to unreserve
-            # We look for moves:
-            # - Same product
-            # - Same location
-            # - Picking is NOT this picking
-            # - Picking state is assigned or partially available
-            # - Victim picking (picking_id) exists
-            
+            # Tìm các move đang giữ hàng của cùng sản phẩm tại cùng vị trí
             domain = [
                 ('product_id', '=', product.id),
                 ('location_id', '=', location_id.id),
@@ -64,67 +55,50 @@ class StockPicking(models.Model):
                 ('picking_id.state', 'in', ['assigned', 'partially_available']),
             ]
             
-            # Fetch candidates
             candidate_moves = self.env['stock.move'].search(domain)
-            
             if not candidate_moves:
                 continue
                 
-            # Filter and Sort candidates in Python
-            # Reason: x_studio_hn_giao_hng might be a date or False.
-            
+            # Sắp xếp theo ngày giao hàng (x_studio_hn_giao_hng)
+            # Ưu tiên các đơn KHÔNG có ngày giao (False) -> coi như xa vô tận
             def get_sort_key(m):
-                # We want pickings with FURTHEST deadline to be first in the list (so we unreserve them first).
-                # If No Deadline (False), we treat it as infinite future (Very high priority to unreserve).
-                # So we want False > Future Date > Near Date.
-                # If we sort by date normally: 2026 > 2025. False is usually minimal.
-                # So we need a custom key.
-                
                 deadline = getattr(m.picking_id, 'x_studio_hn_giao_hng', False)
                 if not deadline:
-                    return date.max # Max date acts as Infinity
+                    return date.max
                 return deadline
 
-            # Sort DESCENDING: Max Date (Infinity/False) -> Future -> Near
+            # Sắp xếp giảm dần (Ngày xa nhất lên đầu)
             sorted_candidates = sorted(candidate_moves, key=get_sort_key, reverse=True)
             
             qty_freed = 0
-            moves_reassigned = False
+            any_freed = False
             
             for cand in sorted_candidates:
-                # Calculate how much we can take from this candidate
-                cand_reserved = sum(cand.move_line_ids.mapped('quantity'))
-                can_take = cand_reserved
+                # Lấy số lượng mà move này đang giữ
+                can_take = sum(cand.move_line_ids.mapped('quantity'))
                 if can_take <= 0:
                     continue
                 
-                # We only need enough to fill our gap
-                take_amount = min(can_take, qty_needed - qty_freed)
-                
-                # Unreserve logic
-                # calling _do_unreserve() on stock.move unreserves EVERYTHING on that move usually.
-                # It doesn't support partial unreserve easily without explicit splitting.
-                # For simplicity, we unreserve the whole move. 
-                # If we unreserve too much, it's fine, it becomes available for others (or us).
-                
                 try:
+                    # Ghi log tiếng Việt vào đơn bị hủy dự trữ
+                    cand.picking_id.message_post(body=_(
+                        "Hệ thống đã tự động hủy dự trữ %s %s của sản phẩm '%s' để ưu tiên cho đơn hàng %s."
+                    ) % (can_take, product.uom_id.name, product.display_name, picking.name))
+                    
+                    # Hủy dự trữ
                     cand._do_unreserve()
                     
-                    # Log
-                    cand.picking_id.message_post(body=_(
-                        "System automatically unreserved %s units of %s to prioritize picking %s (Reason: Deadline comparison)."
-                    ) % (can_take, product.display_name, picking.name))
-                    
                     qty_freed += can_take
-                    moves_reassigned = True
-                except Exception as e:
+                    any_freed = True
+                except Exception:
                     continue
 
+                # Nếu đã đủ số lượng cần cướp thì dừng
                 if qty_freed >= qty_needed:
                     break
             
-            # Re-assign OUR move if we freed anything
-            if moves_reassigned:
+            # Nếu có giải phóng được hàng, thử dự trữ lại cho đơn hiện tại
+            if any_freed:
                 try:
                     move._action_assign()
                 except Exception:
