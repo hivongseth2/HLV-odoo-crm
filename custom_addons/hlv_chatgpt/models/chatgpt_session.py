@@ -4,6 +4,7 @@ import json
 import re
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
+import requests
 
 _logger = logging.getLogger(__name__)
 
