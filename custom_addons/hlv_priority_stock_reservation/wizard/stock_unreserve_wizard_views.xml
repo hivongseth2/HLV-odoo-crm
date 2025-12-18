@@ -5,26 +5,25 @@
         <field name="model">stock.unreserve.wizard</field>
         <field name="arch" type="xml">
             <form string="Hủy dự trữ để nhường hàng">
-                <group>
-                    <field name="picking_id"/>
-                </group>
+                <p class="text-danger fw-bold">
+                    ⚠️ Chú ý: Đơn hàng hiện tại (<field name="picking_id" readonly="1" class="oe_inline"/>) vẫn còn thiếu hàng sau khi đã dự trữ hết hàng trống trong kho.
+                </p>
                 <p class="text-muted">
-                    Dưới đây là danh sách các đơn hàng khác đang dự trữ các sản phẩm mà đơn này đang thiếu. 
-                    Vui lòng chọn đơn hàng bạn muốn hủy dự trữ để ưu tiên cho đơn này.
+                    Vui lòng nhập <b>số lượng muốn lấy</b> từ các đơn hàng dưới đây để ưu tiên cho đơn này.
                 </p>
                 <field name="line_ids">
                     <list editable="bottom" create="false" delete="false">
-                        <field name="is_selected"/>
                         <field name="picking_id"/>
                         <field name="product_id"/>
-                        <field name="reserved_qty"/>
-                        <field name="uom_id"/>
-                        <field name="deadline_date"/>
+                        <field name="reserved_qty" string="Đang giữ"/>
+                        <field name="unreserve_qty" string="Lấy bao nhiêu?" class="text-primary fw-bold"/>
+                        <field name="uom_id" string="Đơn vị"/>
+                        <field name="deadline_date" string="Hạn giao"/>
                     </list>
                 </field>
                 <footer>
-                    <button name="action_confirm" string="Xác nhận hủy dự trữ và thử lại" type="object" class="btn-primary"/>
-                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                    <button name="action_confirm" string="Xác nhận lấy hàng và dự trữ lại" type="object" class="btn-primary"/>
+                    <button string="Bỏ qua" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
         </field>
