@@ -26,7 +26,7 @@ class StockPicking(models.Model):
             # We check if there are any moves that are 'confirmed' (waiting) or 'partially_available'
             # and demand > reserved.
             moves_missing_stock = picking.move_ids_without_package.filtered(
-                lambda m: m.state in ['confirmed', 'partially_available'] and m.product_uom_qty > m.reserved_availability
+                lambda m: m.state in ['confirmed', 'partially_available'] and m.product_uom_qty > sum(m.move_line_ids.mapped('quantity'))
             )
             
             if moves_missing_stock:
@@ -39,7 +39,8 @@ class StockPicking(models.Model):
         Logic to find victims and unreserve them.
         """
         for move in moves_needing_stock:
-            qty_needed = move.product_uom_qty - move.reserved_availability
+            reserved_qty = sum(move.move_line_ids.mapped('quantity'))
+            qty_needed = move.product_uom_qty - reserved_qty
             if qty_needed <= 0:
                 continue
 
@@ -92,7 +93,8 @@ class StockPicking(models.Model):
             
             for cand in sorted_candidates:
                 # Calculate how much we can take from this candidate
-                can_take = cand.reserved_availability
+                cand_reserved = sum(cand.move_line_ids.mapped('quantity'))
+                can_take = cand_reserved
                 if can_take <= 0:
                     continue
                 
