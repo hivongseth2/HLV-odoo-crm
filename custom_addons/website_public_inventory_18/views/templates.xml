@@ -69,22 +69,32 @@
             */
             #inv-table tbody tr.main-row td:nth-child(8) {
                 grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: center;
-                padding: 6px 0 !important; border: none; border-top: 1px dashed #eee; margin-top: 4px;
+                padding: 4px 0 !important; border: none; border-top: 1px dashed #eee; margin-top: 4px;
             }
+            /* Show all prices on mobile as stacked rows */
+            #inv-table tbody tr.main-row td:nth-child(9),
+            #inv-table tbody tr.main-row td:nth-child(10),
+            #inv-table tbody tr.main-row td:nth-child(11),
+            #inv-table tbody tr.main-row td:nth-child(12),
             #inv-table tbody tr.main-row td:nth-child(13) {
                 grid-column: 1 / 3; display: flex; justify-content: space-between; align-items: center;
-                padding: 6px 0 !important; border: none; 
+                padding: 2px 0 !important; border: none; font-size: 0.95rem;
             }
 
             #inv-table tbody tr.main-row td:nth-child(8):before { content: "Tổng tồn kho:"; color: #6c757d; font-size: 0.9rem; }
+            
+            /* Labels for new prices */
+            #inv-table tbody tr.main-row td:nth-child(9):before { content: "Giá Web:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(10):before { content: "Giá sàn TMDT:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(11):before { content: "Giá niêm yết:"; color: #6c757d; font-size: 0.9rem; }
+            #inv-table tbody tr.main-row td:nth-child(12):before { content: "Giá thương mại:"; color: #6c757d; font-size: 0.9rem; }
             #inv-table tbody tr.main-row td:nth-child(13):before { content: "Giá bán:"; color: #6c757d; font-size: 0.9rem; }
-            #inv-table tbody tr.main-row td:nth-child(13) { text-align: right; font-weight: bold; color: #198754; }
+            
+            #inv-table tbody tr.main-row td:nth-child(13) { font-weight: bold; color: #198754; }
 
-            /* Hide extended info and new price columns on mobile main card to avoid clutter */
+            /* Hide extended info but KEEP prices visible */
             #inv-table tbody tr.main-row td:nth-child(5), #inv-table tbody tr.main-row td:nth-child(6), 
-            #inv-table tbody tr.main-row td:nth-child(7), #inv-table tbody tr.main-row td:nth-child(14),
-            #inv-table tbody tr.main-row td:nth-child(9), #inv-table tbody tr.main-row td:nth-child(10),
-            #inv-table tbody tr.main-row td:nth-child(11), #inv-table tbody tr.main-row td:nth-child(12)
+            #inv-table tbody tr.main-row td:nth-child(7), #inv-table tbody tr.main-row td:nth-child(14)
              { display: none; }
 
             /* --- CSS CHO PHẦN CHI TIẾT (ĐÃ LÀM ĐẸP) --- */
