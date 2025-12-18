@@ -857,9 +857,12 @@ class SaleApiImportWizard(models.TransientModel):
                 if customer_name in e_accounts and not pick_code:
                     continue
 
+                _logger.info("checking e_accounts for %s", customer_name)
                 if customer_name in e_accounts:
+                    _logger.info("✅ Customer '%s' is in e_accounts -> base_pick_name = pick_code (%s)", customer_name, pick_code)
                     base_pick_name = pick_code
                 else:
+                    _logger.info("ℹ️ Customer '%s' NOT in e_accounts -> base_pick_name = SaleOrderNo (%s)", customer_name, order.get('SaleOrderNo'))
                     base_pick_name = order.get('SaleOrderNo')
                 # tỉnh/thành để map state/city
                 province_text = (
