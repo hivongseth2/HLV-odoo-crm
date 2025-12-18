@@ -826,6 +826,8 @@ class MisaApiUtils(models.AbstractModel):
             "ProductCode": code,
             "ProductName": product.name,
             "ProductCategoryID": cat_id,
+            "DefaultStockID": "29", 
+            "DefaultStockIDText": "HLV",
             "ProductCategoryIDText": odoo_cat_name if cat_id != 23 else "Hàng hóa",
             "UsageUnitID": unit_id, 
             "UsageUnitIDText": unit_text,
