@@ -26,11 +26,12 @@ class SaleOrderCancelRequest(models.Model):
         ('rejected', 'Đã Từ Chối')
     ], string='Trạng Thái', default='draft', tracking=True, group_expand='_expand_states')
 
-    @api.model
-    def create(self, vals):
-        if vals.get('name', _('Mới')) == _('Mới'):
-            vals['name'] = self.env['ir.sequence'].next_by_code('sale.order.cancel.request') or _('Mới')
-        return super(SaleOrderCancelRequest, self).create(vals)
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('name', _('Mới')) == _('Mới'):
+                vals['name'] = self.env['ir.sequence'].next_by_code('sale.order.cancel.request') or _('Mới')
+        return super(SaleOrderCancelRequest, self).create(vals_list)
 
     @api.depends('order_reference')
     def _compute_order_id(self):
