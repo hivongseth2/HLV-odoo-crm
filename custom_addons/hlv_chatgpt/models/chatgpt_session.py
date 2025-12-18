@@ -42,7 +42,7 @@ class HlvChatgptSession(models.Model):
     # =================================================================================
     # 1. ORCHESTRATOR (NGƯỜI ĐIỀU PHỐI)
     # =================================================================================
-    def _call_openai_api(self, query):
+    def _call_openai_api(self, query,image_url=False):
         if not OpenAI: return "Lỗi server: Thiếu thư viện OpenAI."
         
         config = self.env['hlv.chatgpt.config'].get_config()
@@ -60,7 +60,7 @@ class HlvChatgptSession(models.Model):
             return f"Lỗi: Không tìm thấy ID cho agent '{self.current_agent_key}'"
 
         # 2. Chạy Workflow
-        return self._run_assistant_workflow(client, target_assistant_id, query, config)
+        return self._run_assistant_workflow(client, target_assistant_id, query, config,image_url=image_url)
 
     def _get_assistant_id_by_key(self, config, key):
         """Hàm phụ trợ lấy ID từ config"""
@@ -71,10 +71,14 @@ class HlvChatgptSession(models.Model):
     # =================================================================================
     # 2. CORE WORKFLOW (XỬ LÝ CHUYỂN MÁY)
     # =================================================================================
-    def _run_assistant_workflow(self, client, assistant_id, user_query, config):
-        _logger.info("🚀 Workflow Start | Agent: %s (%s)", self.current_agent_key, assistant_id)
+    def _run_assistant_workflow(self, client, assistant_id, user_query, config, is_recursive=False, image_url=False):
+        """
+        Core Workflow: Quản lý luồng gửi tin, xử lý ảnh, gọi tool và chuyển máy (Handoff)
+        """
+        _logger.info("🚀 Workflow Start | Agent: %s (Recursive: %s | Has Image: %s)", 
+                     self.current_agent_key, is_recursive, bool(image_url))
 
-        # A. Xử lý ID (Clean ID)
+        # A. Xử lý ID
         clean_id = assistant_id.split('&')[0].strip()
 
         # B. Quản lý Thread
@@ -84,19 +88,81 @@ class HlvChatgptSession(models.Model):
             self.openai_thread_id = thread.id
             thread_id = thread.id
         
-        # C. Gửi tin nhắn User
-        client.beta.threads.messages.create(
-            thread_id=thread_id, role="user", content=user_query
-        )
+        # === [QUAN TRỌNG] FIX LỖI 400: HỦY CÁC RUN CŨ ĐANG BỊ TREO ===
+        # Nếu Run cũ chưa xong mà gửi tin mới -> OpenAI sẽ báo lỗi.
+        try:
+            runs = client.beta.threads.runs.list(thread_id=thread_id, limit=1)
+            if runs.data:
+                last_run = runs.data[0]
+                # Nếu trạng thái đang chạy hoặc chờ tool mà bị kẹt
+                if last_run.status in ['queued', 'in_progress', 'requires_action', 'cancelling']:
+                    _logger.warning("⚠️ Phát hiện Active Run (%s) trạng thái '%s'. Đang hủy...", last_run.id, last_run.status)
+                    if last_run.status != 'cancelling':
+                        client.beta.threads.runs.cancel(thread_id=thread_id, run_id=last_run.id)
+                    # Không cần sleep, OpenAI xử lý cancel khá nhanh
+        except Exception as e:
+            _logger.warning("⚠️ Không thể check/cancel run cũ: %s", str(e))
+        # =============================================================
 
-        # D. Chạy Run
+        # C. Gửi tin nhắn User (Xử lý cả TEXT và ẢNH)
+        # Chỉ gửi tin nhắn nếu đây KHÔNG phải là lần gọi đệ quy (do chuyển máy)
+        if not is_recursive:
+            content_payload = []
+            
+            # 1. Thêm Text vào payload (Nếu có)
+            if user_query:
+                content_payload.append({"type": "text", "text": user_query})
+            else:
+                # Nếu User chỉ gửi ảnh mà ko có text -> Thêm text mồi
+                if image_url:
+                    content_payload.append({"type": "text", "text": "Hãy phân tích chi tiết hình ảnh này."})
+
+            # 2. Xử lý ẢNH (Vision)
+            if image_url:
+                try:
+                    _logger.info("⬇️ Downloading image from Zalo: %s", image_url)
+                    # Tải ảnh về RAM (Timeout 10s)
+                    response = requests.get(image_url, timeout=10)
+                    
+                    if response.status_code == 200:
+                        # Convert sang BytesIO để upload
+                        file_bytes = io.BytesIO(response.content)
+                        file_bytes.name = "zalo_upload_img.jpg" # OpenAI cần tên file giả định
+
+                        _logger.info("⬆️ Uploading to OpenAI Storage...")
+                        uploaded_file = client.files.create(
+                            file=file_bytes,
+                            purpose='vision'
+                        )
+                        
+                        # Thêm file_id vào payload tin nhắn
+                        content_payload.append({
+                            "type": "image_file",
+                            "image_file": {"file_id": uploaded_file.id}
+                        })
+                    else:
+                        _logger.error("❌ Download ảnh thất bại: HTTP %s", response.status_code)
+                        content_payload.append({"type": "text", "text": "[Hệ thống: Không tải được ảnh đính kèm]"})
+
+                except Exception as e:
+                     _logger.error("❌ Lỗi xử lý ảnh: %s", str(e))
+                     content_payload.append({"type": "text", "text": "[Hệ thống: Lỗi khi xử lý ảnh]"})
+
+            # 3. Gửi Request tạo tin nhắn (Nếu có nội dung)
+            if content_payload:
+                client.beta.threads.messages.create(
+                    thread_id=thread_id,
+                    role="user",
+                    content=content_payload
+                )
+
+        # D. Chạy Run (Execute Assistant)
         run = client.beta.threads.runs.create_and_poll(
             thread_id=thread_id, assistant_id=clean_id
         )
 
-        # E. Xử lý Tool Call (QUAN TRỌNG: HANDOFF VS FUNCTION)
-        final_response = "..."
-        
+        # E. Xử lý Tool Call (Loop & Handoff)
+        # ====================================
         if run.status == 'requires_action':
             tool_outputs = []
             is_handoff = False
@@ -107,9 +173,10 @@ class HlvChatgptSession(models.Model):
                 call_id = tool.id
                 args = json.loads(tool.function.arguments or '{}')
                 
-                _logger.info("⚡ Tool Call: %s", fname)
+                _logger.info("⚡ Tool Call: %s | Args: %s", fname, str(args))
 
-                # --- LOGIC CHUYỂN MÁY (HANDOFF) ---
+                # --- NHÓM 1: LOGIC CHUYỂN MÁY (HANDOFF) ---
+                output_str = ""
                 if fname == "handoff_to_stock":
                     is_handoff = True
                     next_agent_key = 'stock'
@@ -122,57 +189,67 @@ class HlvChatgptSession(models.Model):
                     
                 elif fname == "handoff_to_router":
                     is_handoff = True
-                    next_agent_key = 'router' # Quay về Router
-                    output_str = "Quay về Tổng đài."
+                    next_agent_key = 'router'
+                    output_str = "Back to router."
 
-                # --- LOGIC NGHIỆP VỤ (STOCK) ---
+                # --- NHÓM 2: LOGIC NGHIỆP VỤ (STOCK/MISA) ---
                 elif fname == "search_product_stock":
                     output_str = self._execute_search_product_stock(args.get('keyword'))
                     
                 elif fname == "search_product_misa":
-                    # Gọi hàm Search
                     output_str = self._execute_search_misa(args)
                 
                 elif fname == "create_product_misa":
-                    # Gọi hàm Create
                     output_str = self._execute_create_misa(args)
-                
                 
                 else:
                     output_str = json.dumps({"error": "Unknown function"})
-                    
-            
 
+                # Thêm vào danh sách trả về cho OpenAI
                 tool_outputs.append({"tool_call_id": call_id, "output": output_str})
 
-            # Submit output lên OpenAI
+            # Submit output lên OpenAI để nó chạy tiếp
             if tool_outputs:
                 client.beta.threads.runs.submit_tool_outputs_and_poll(
                     thread_id=thread_id, run_id=run.id, tool_outputs=tool_outputs
                 )
 
-            # --- NẾU LÀ HANDOFF: GỌI ĐỆ QUY SANG CON KHÁC NGAY ---
+            # --- LOGIC ĐỆ QUY KHI CHUYỂN MÁY ---
+            # Nếu Router quyết định chuyển máy, ta gọi lại hàm này ngay lập tức với Agent mới
             if is_handoff:
                 _logger.info("🔀 Switching Agent: %s -> %s", self.current_agent_key, next_agent_key)
                 
-                # 1. Cập nhật trạng thái phiên chat
+                # 1. Cập nhật trạng thái
                 self.current_agent_key = next_agent_key
                 
                 # 2. Lấy ID con mới
                 new_assistant_id = self._get_assistant_id_by_key(config, next_agent_key)
                 
-                # 3. Kỹ thuật: Inject Context (Nhét câu hỏi vào mồm User để con mới biết làm gì)
-                return self._run_assistant_workflow(client, new_assistant_id, user_query, config)
+                # 3. GỌI ĐỆ QUY (QUAN TRỌNG: is_recursive=True để không gửi lại tin nhắn User)
+                # Ta vẫn truyền image_url đi phòng trường hợp Agent sau cũng cần tham khảo ảnh (dù ảnh đã up rồi)
+                return self._run_assistant_workflow(client, new_assistant_id, user_query, config, is_recursive=True, image_url=image_url)
 
-        # F. Lấy kết quả cuối cùng (Nếu không phải handoff)
-        messages = client.beta.threads.messages.list(thread_id=thread_id, limit=1)
-        if messages.data and messages.data[0].content:
-            final_response = messages.data[0].content[0].text.value
-            final_response = re.sub(r'【.*?】', '', final_response)
-            
+        # F. Lấy kết quả cuối cùng (Final Response)
+        # =========================================
+        # FIX LỖI NHẠI LỜI: Chỉ lấy tin nhắn có role='assistant'
+        messages = client.beta.threads.messages.list(thread_id=thread_id, limit=5)
+        
+        final_response = ""
+        if messages.data:
+            for msg in messages.data:
+                if msg.role == 'assistant' and msg.content:
+                    final_response = msg.content[0].text.value
+                    break
+        
+        # Nếu không tìm thấy tin Assistant (Do lỗi hoặc run fail)
+        if not final_response:
+            _logger.warning("⚠️ Run hoàn tất nhưng không thấy tin nhắn Assistant.")
+            return "Hệ thống đang xử lý yêu cầu của bạn, vui lòng đợi trong giây lát."
+
+        # Clean response (Bỏ các ký tự rác của OpenAI như 【source】)
+        final_response = re.sub(r'【.*?】', '', final_response)
+        
         return final_response
-    
-    
     
     # CÁC HÀM THỰC THI LOGIC (IMPLEMENTATION)
     # =================================================================================
@@ -262,7 +339,7 @@ class HlvChatgptSession(models.Model):
     # 4. ZALO INTEGRATION & UI ACTIONS (Hàm bạn bị thiếu nằm ở đây)
     # =================================================================================
     @api.model
-    def process_zalo_message(self, zalo_user_id, message_content, zalo_msg_id=False):
+    def process_zalo_message(self, zalo_user_id, message_content, zalo_msg_id=False,image_url=False):
         """
         Hàm này được Zalo Webhook gọi. 
         Nó tự tìm session cũ để tiếp tục chat hoặc tạo mới.
@@ -278,17 +355,20 @@ class HlvChatgptSession(models.Model):
                 'zalo_user_id': zalo_user_id,
                 'state': 'active'
             })
-
+        display_content = message_content
+        if image_url:
+            display_content = f"{message_content} \n[Link ảnh: {image_url}]"
         # B. Lưu User Msg
         self.env['hlv.chatgpt.message'].sudo().create({
             'session_id': session.id,
             'role': 'user',
-            'content': message_content,
+            'content': display_content,
             'zalo_msg_id': zalo_msg_id
         })
 
         # C. Gọi AI (Dùng logic Multi-Agent đã viết ở trên)
-        ai_reply = session._call_openai_api(message_content)
+        # ai_reply = session._call_openai_api(message_content)
+        ai_reply = session._call_openai_api(message_content, image_url=image_url) # <--- TRUYỀN VÀO ĐÂY
 
         # D. Lưu AI Msg
         self.env['hlv.chatgpt.message'].sudo().create({
