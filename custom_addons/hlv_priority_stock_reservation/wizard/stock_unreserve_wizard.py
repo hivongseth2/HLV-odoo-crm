@@ -16,31 +16,42 @@ class StockUnreserveWizard(models.TransientModel):
         if not selected_lines:
             return
 
-        picking_to_reassign = self.picking_id
+        receiver_picking = self.picking_id
+        details_for_receiver = []
 
         for line in selected_lines:
             move = line.move_id
+            victim_picking = line.picking_id
             qty_to_unreserve = line.unreserve_qty
             
             if qty_to_unreserve > line.reserved_qty:
                 raise UserError(_("Số lượng hủy dự trữ không được lớn hơn số lượng đang giữ."))
 
             try:
-                # Ghi log vào đơn bị hủy
-                move.picking_id.message_post(body=_(
-                    "Người dùng đã thủ công hủy dự trữ %s %s của sản phẩm '%s' để nhường cho đơn hàng %s."
-                ) % (qty_to_unreserve, line.uom_id.name, move.product_id.display_name, picking_to_reassign.name))
+                # 1. Ghi log vào đơn bị rút hàng (Đơn nạn nhân)
+                victim_picking.message_post(body=_(
+                    "Hệ thống đã rút %s %s của sản phẩm '%s' để nhường cho đơn hàng <a href='#' data-oe-model='stock.picking' data-oe-id='%s'>%s</a>."
+                ) % (qty_to_unreserve, line.uom_id.name, move.product_id.display_name, receiver_picking.id, receiver_picking.name))
                 
-                # Thực hiện hủy dự trữ một phần (hoặc toàn bộ)
-                # Odoo 17/18: _do_unreserve() không hỗ trợ số lượng, ta phải can thiệp vào move lines
+                # Lưu thông tin để ghi log vào đơn nhận hàng
+                details_for_receiver.append(
+                    _("• %s %s sản phẩm '%s' từ đơn hàng <a href='#' data-oe-model='stock.picking' data-oe-id='%s'>%s</a>") 
+                    % (qty_to_unreserve, line.uom_id.name, move.product_id.display_name, victim_picking.id, victim_picking.name)
+                )
+
+                # 2. Thực hiện hủy dự trữ một phần
                 self._partial_unreserve(move, qty_to_unreserve)
-            except Exception as e:
+            except Exception:
                 continue
 
-        # Sau khi hủy, thực hiện dự trữ lại cho đơn hiện tại
-        if picking_to_reassign:
-            # bypass wizard khi gọi lại action_assign để tránh vòng lặp
-            picking_to_reassign.with_context(skip_unreserve_wizard=True).action_assign()
+        # 3. Ghi log tổng hợp vào đơn nhận hàng (Đơn hiện tại)
+        if details_for_receiver:
+            msg = _("Đã lấy hàng dự trữ từ các đơn khác:<br/>%s") % ("<br/>".join(details_for_receiver))
+            receiver_picking.message_post(body=msg)
+
+        # 4. Sau khi hủy, thực hiện dự trữ lại cho đơn hiện tại
+        if receiver_picking:
+            receiver_picking.with_context(skip_unreserve_wizard=True).action_assign()
             
         return {'type': 'ir.actions.client', 'tag': 'reload'}
 
@@ -49,6 +60,7 @@ class StockUnreserveWizard(models.TransientModel):
         Duyệt qua các move line để hủy dự trữ một phần.
         """
         remaining_qty = qty_to_unreserve
+        # Sắp xếp move lines theo số lượng hoặc ID để ổn định
         for ml in move.move_line_ids:
             if remaining_qty <= 0:
                 break
@@ -58,15 +70,12 @@ class StockUnreserveWizard(models.TransientModel):
                 continue
             
             if res_qty <= remaining_qty:
-                # Nếu line này ít hơn hoặc bằng số cần hủy -> xóa hoặc set qty = 0
                 ml.quantity = 0
                 remaining_qty -= res_qty
             else:
-                # Nếu line này nhiều hơn số cần hủy -> trừ bớt
                 ml.quantity = res_qty - remaining_qty
                 remaining_qty = 0
         
-        # Cập nhật lại trạng thái của move nếu cần
         move._recompute_state()
 
 class StockUnreserveWizardLine(models.TransientModel):
