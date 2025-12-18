@@ -176,7 +176,7 @@
 
         <t t-if="pw_ok">
           <section>
-            <div class="container mt-3 mb-6">
+            <div class="container-fluid mt-3 mb-6" style="max-width: 1550px;">
               <!-- Navigation Tabs -->
               <ul class="nav nav-pills mb-4 justify-content-center" style="border-bottom: 2px solid #e9ecef; padding-bottom: 20px;">
                    <li class="nav-item mx-1">
@@ -221,7 +221,7 @@
               <t t-if="rows">
                 <div class="card shadow-sm border-0 bg-transparent">
                     <div class="table-responsive" style="overflow-x: auto;">
-                      <table class="table table-hover align-middle mb-0" id="inv-table" style="border-collapse: separate; border-spacing: 0;">
+                      <table class="table table-sm table-hover align-middle mb-0" id="inv-table" style="border-collapse: separate; border-spacing: 0;">
                         <thead class="bg-light">
                           <tr>
                             <th style="width:40px;"></th>
