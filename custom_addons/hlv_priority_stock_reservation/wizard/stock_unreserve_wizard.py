@@ -55,7 +55,7 @@ class StockUnreserveWizard(models.TransientModel):
         if receiver_picking:
             receiver_picking.with_context(skip_unreserve_wizard=True).action_assign()
             
-        return {'type': 'ir.actions.client', 'tag': 'reload'}
+        return {'type': 'ir.actions.act_window_close'}
 
     def _partial_unreserve(self, move, qty_to_unreserve):
         """
@@ -86,9 +86,11 @@ class StockUnreserveWizardLine(models.TransientModel):
 
     wizard_id = fields.Many2one('stock.unreserve.wizard', string='Wizard')
     picking_id = fields.Many2one('stock.picking', string='Đơn hàng đang giữ', readonly=True)
+    origin = fields.Char(string='Nguồn/Đơn báo giá', readonly=True)
     move_id = fields.Many2one('stock.move', string='Dòng giữ hàng', readonly=True)
     product_id = fields.Many2one('product.product', string='Sản phẩm', readonly=True)
     reserved_qty = fields.Float(string='Số lượng đang giữ', readonly=True)
-    unreserve_qty = fields.Float(string='SL muốn lấy', default=0.0)
+    demand_qty = fields.Float(string='Nhu cầu', readonly=True)
+    unreserve_qty = fields.Float(string='Số lượng rút', default=0.0)
     uom_id = fields.Many2one('uom.uom', string='Đơn vị', readonly=True)
     deadline_date = fields.Date(string='Hạn giao hàng', readonly=True)

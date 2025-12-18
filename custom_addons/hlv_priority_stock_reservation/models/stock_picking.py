@@ -48,6 +48,7 @@ class StockPicking(models.Model):
             
         return res
 
+
     def _get_potential_unreserve_candidates(self, picking, moves_needing_stock):
         """
         Lấy danh sách các move đang dự trữ hàng mà đơn hiện tại đang cần.
@@ -88,9 +89,11 @@ class StockPicking(models.Model):
                 
                 victim_data.append({
                     'picking_id': cand.picking_id.id,
+                    'origin': cand.picking_id.origin,
                     'move_id': cand.id,
                     'product_id': product.id,
                     'reserved_qty': cand_reserved,
+                    'demand_qty': cand.product_uom_qty,
                     'uom_id': product.uom_id.id,
                     'deadline_date': getattr(cand.picking_id, 'x_studio_hn_giao_hng', False),
                 })
