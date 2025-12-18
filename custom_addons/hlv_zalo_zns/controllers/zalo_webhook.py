@@ -122,7 +122,7 @@ class ZaloSheetWebhook(http.Controller):
             # Lấy thông tin tin nhắn và msg_id để check trùng
             message_obj = data.get('message', {})
             msg_id = message_obj.get('msg_id')
-            message_content = message_obj.get('text', '').strip()
+            # message_content = message_obj.get('text', '').strip()
             
             _logger.info("Zalo OA Event: %s | User: %s | MsgID: %s", event_name, user_id, msg_id)
 
@@ -138,69 +138,74 @@ class ZaloSheetWebhook(http.Controller):
                     _logger.info("🚫 BỎ QUA TIN NHẮN TRÙNG LẶP (MsgID: %s)", msg_id)
                     # Trả về 200 OK ngay để Zalo biết đã xử lý xong, không gửi lại nữa
                     return Response("OK", status=200)
-            # ==========================================
-
+                
+            # =================================================
+            message_content = ""
+            image_url = False
             # 5. Xử lý tin nhắn text
             if event_name == 'user_send_text':
-                
-                # --- CASE A: Tra cứu ID ---
-                if message_content.lower() in ['id', 'uid', 'check id']:
-                    if config:
-                        # Gửi tin nhắn trả lời ngay
-                        config.send_notification_message(user_id, f"Mã User ID của bạn là:\n{user_id}")
-                
-                # --- CASE B: CHAT VỚI CHATGPT ---
-                # Điều kiện: Có config Zalo + Có config ChatGPT active + Nội dung không rỗng
-                # --- CASE B: CHAT VỚI CHATGPT (Đã sửa Multi-thread) ---
-                elif config and request.env['hlv.chatgpt.config'].sudo().search_count([('active', '=', True)]) > 0 and message_content:
-                    
-                    _logger.info("🔄 Đã nhận tin nhắn từ %s. Đang chuyển vào luồng xử lý ngầm...", user_id)
+                message_content = message_obj.get('text', '').strip()
 
-                    # --- CHUẨN BỊ DỮ LIỆU CHO LUỒNG CON ---
-                    # Vì luồng con không truy cập được request.env hiện tại, ta phải lấy tên DB để kết nối lại
-                    db_name = request.db
-                    
-                    # Hàm chạy ngầm (Background Task)
-                    def run_ai_background():
-                        # Tạo kết nối DB mới riêng cho luồng này
-                        db_registry = registry(db_name)
-                        with db_registry.cursor() as new_cr:
-                            # Tạo môi trường (Environment) với quyền Superuser (Admin) để tránh lỗi quyền
-                            env = api.Environment(new_cr, SUPERUSER_ID, {})
+            # Trường hợp B: Tin nhắn Ảnh (MỚI THÊM)
+            elif event_name == 'user_send_image':
+                attachments = message_obj.get('attachments', [])
+                if attachments:
+                    payload = attachments[0].get('payload', {})
+                    image_url = payload.get('url') # Link ảnh
+                    # Lấy mô tả ảnh (nếu user có nhập caption) hoặc gán mặc định
+                    message_content = payload.get('description') or "Hãy phân tích hình ảnh này."
+                    _logger.info("📸 User gửi ảnh: %s", image_url)
+            
+            # =============================================
+
+            # === 6. XỬ LÝ LOGIC ===
+            
+            # --- CASE A: Tra cứu ID (Chỉ check nếu là text thuần) ---
+            if event_name == 'user_send_text' and message_content.lower() in ['id', 'uid', 'check id']:
+                if config:
+                    config.send_notification_message(user_id, f"Mã User ID của bạn là:\n{user_id}")
+            
+            # --- CASE B: CHAT VỚI CHATGPT ---
+            # Điều kiện: Có config, và (Có nội dung HOẶC Có ảnh)
+            elif config and request.env['hlv.chatgpt.config'].sudo().search_count([('active', '=', True)]) > 0 and (message_content or image_url):
+                
+                _logger.info("🔄 Đã nhận tin/ảnh từ %s. Đang chuyển vào luồng xử lý ngầm...", user_id)
+
+                # --- CHUẨN BỊ DỮ LIỆU CHO LUỒNG CON ---
+                db_name = request.db
+                
+                # Hàm chạy ngầm (Background Task)
+                def run_ai_background():
+                    # Kết nối lại DB
+                    db_registry = registry(db_name)
+                    with db_registry.cursor() as new_cr:
+                        env = api.Environment(new_cr, SUPERUSER_ID, {})
+                        
+                        try:
+                            ChatSession = env['hlv.chatgpt.session']
+                            ConfigModel = env['hlv.zalo.stock.notification']
+                            thread_config = ConfigModel.search([('active', '=', True)], limit=1)
                             
-                            try:
-                                # Lấy lại các Model trong môi trường mới
-                                ChatSession = env['hlv.chatgpt.session']
-                                ConfigModel = env['hlv.zalo.stock.notification']
+                            # 1. Gọi AI xử lý (TRUYỀN THÊM image_url)
+                            ai_reply = ChatSession.process_zalo_message(
+                                user_id, 
+                                message_content, 
+                                zalo_msg_id=msg_id,
+                                image_url=image_url  # <--- Quan trọng: Truyền link ảnh vào đây
+                            )
+                            
+                            # 2. Gửi kết quả về Zalo
+                            if ai_reply and thread_config:
+                                thread_config.send_notification_message(user_id, ai_reply)
+                                _logger.info("✅ Threading: Đã gửi tin nhắn AI xong cho %s", user_id)
                                 
-                                # Tìm lại config trong môi trường mới
-                                thread_config = ConfigModel.search([('active', '=', True)], limit=1)
-                                
-                                _logger.info("✅ nội dung %s", message_content)
+                        except Exception as e:
+                            _logger.exception("❌ Lỗi trong luồng AI Background: %s", e)
 
-                                
-                                # 1. Gọi AI xử lý (Mất thời gian bao lâu cũng được)
-                                ai_reply = ChatSession.process_zalo_message(
-                                    user_id, 
-                                    message_content, 
-                                    zalo_msg_id=msg_id
-                                )
-                                
-                                # 2. Gửi kết quả về Zalo
-                                if ai_reply and thread_config:
-                                    thread_config.send_notification_message(user_id, ai_reply)
-                                    _logger.info("✅ Threading: Đã gửi tin nhắn AI xong cho %s", user_id)
-                                    
-                            except Exception as e:
-                                _logger.exception("❌ Lỗi trong luồng AI Background: %s", e)
-                                # new_cr.rollback() # Odoo tự rollback nếu lỗi, nhưng có thể thêm cho chắc
-
-                    # --- KÍCH HOẠT LUỒNG CHẠY NGAY ---
-                    t = threading.Thread(target=run_ai_background)
-                    t.start()
-                    
-                    # Code chính tiếp tục chạy xuống dưới để return 200 OK ngay lập tức
-
+                # --- KÍCH HOẠT LUỒNG CHẠY NGAY ---
+                t = threading.Thread(target=run_ai_background)
+                t.start()
+            
             return Response("OK", status=200)
 
         except Exception as e:
