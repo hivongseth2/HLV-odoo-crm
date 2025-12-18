@@ -667,6 +667,7 @@ class SaleApiImportWizard(models.TransientModel):
         existing = None
         if contact_name:
              # Ưu tiên tìm theo tên contact - tìm cả 'delivery' và 'contact' để migrate
+             _logger.info("🔎 Search delivery by NAME: '%s' (parent=%s)", contact_name, parent_partner.id)
              existing = Partner.search([
                 ('parent_id', '=', parent_partner.id),
                 ('type', 'in', ['delivery', 'contact']),
@@ -674,11 +675,15 @@ class SaleApiImportWizard(models.TransientModel):
              ], limit=1)
         elif addr_str:
              # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name - tìm cả 'delivery' và 'contact'
+             _logger.info("🔎 Search delivery by ADDR: '%s' (parent=%s)", addr_str, parent_partner.id)
              existing = Partner.search([
                 ('parent_id', '=', parent_partner.id),
                 ('type', 'in', ['delivery', 'contact']),
                 ('street', '=', addr_str),
              ], limit=1)
+        
+        if existing:
+            _logger.info("✅ Found existing delivery contact: %s (id=%s)", existing.name, existing.id)
 
         if existing:
             # Cập nhật thông tin (Force update để đảm bảo đồng bộ)
