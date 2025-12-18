@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from markupsafe import Markup
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
@@ -28,15 +29,16 @@ class StockUnreserveWizard(models.TransientModel):
                 raise UserError(_("Số lượng hủy dự trữ không được lớn hơn số lượng đang giữ."))
 
             try:
+                qty_fmt = "%g" % qty_to_unreserve
                 # 1. Ghi log vào đơn bị rút hàng (Đơn nạn nhân)
-                victim_picking.message_post(body=_(
-                    "Hệ thống đã rút %s %s của sản phẩm '%s' để nhường cho đơn hàng <a href='#' data-oe-model='stock.picking' data-oe-id='%s'>%s</a>."
-                ) % (qty_to_unreserve, line.uom_id.name, move.product_id.display_name, receiver_picking.id, receiver_picking.name))
+                victim_picking.message_post(body=Markup(_(
+                    "Hệ thống đã rút %s %s của sản phẩm <b>%s</b> để nhường cho đơn hàng <a href='#' data-oe-model='stock.picking' data-oe-id='%s'>%s</a>."
+                )) % (qty_fmt, line.uom_id.name, move.product_id.display_name, receiver_picking.id, receiver_picking.name))
                 
                 # Lưu thông tin để ghi log vào đơn nhận hàng
                 details_for_receiver.append(
-                    _("• %s %s sản phẩm '%s' từ đơn hàng <a href='#' data-oe-model='stock.picking' data-oe-id='%s'>%s</a>") 
-                    % (qty_to_unreserve, line.uom_id.name, move.product_id.display_name, victim_picking.id, victim_picking.name)
+                    Markup(_("• %s %s <b>%s</b> từ đơn hàng <a href='#' data-oe-model='stock.picking' data-oe-id='%s'>%s</a>")) 
+                    % (qty_fmt, line.uom_id.name, move.product_id.display_name, victim_picking.id, victim_picking.name)
                 )
 
                 # 2. Thực hiện hủy dự trữ một phần
@@ -46,7 +48,7 @@ class StockUnreserveWizard(models.TransientModel):
 
         # 3. Ghi log tổng hợp vào đơn nhận hàng (Đơn hiện tại)
         if details_for_receiver:
-            msg = _("Đã lấy hàng dự trữ từ các đơn khác:<br/>%s") % ("<br/>".join(details_for_receiver))
+            msg = Markup(_("Đã lấy hàng dự trữ từ các đơn khác:<br/>%s")) % (Markup("<br/>").join(details_for_receiver))
             receiver_picking.message_post(body=msg)
 
         # 4. Sau khi hủy, thực hiện dự trữ lại cho đơn hiện tại
