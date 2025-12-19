@@ -39,17 +39,19 @@ class MisaProductExporter:
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
         return headers
     
-    def fetch_all_products(self, page_size=500, max_pages=100):
+    def fetch_all_products(self, page_size=100, max_pages=200):
         """
         Lấy tất cả sản phẩm từ MISA CRM.
         
         Args:
-            page_size: Số sản phẩm mỗi trang
+            page_size: Số sản phẩm mỗi trang (giảm xuống 100 để tránh timeout)
             max_pages: Số trang tối đa để tránh loop vô hạn
             
         Returns:
             list: Danh sách sản phẩm
         """
+        import uuid
+        
         token = self._get_token()
         if not token:
             raise Exception("Không lấy được Token MISA")
@@ -63,9 +65,10 @@ class MisaProductExporter:
         while page <= max_pages:
             _logger.info(f"📥 Đang lấy trang {page}...")
             
+            # Payload theo format của search_product_by_name đang hoạt động
             payload = {
-                "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcixBY3RpdmUsUHJvZHVjdFByb3BlcnRpZXNJRCxQcm9kdWN0UHJvcGVydGllc0lEVGV4dA==",
-                "Sorts": [{"FieldName": "ProductCode", "SortType": 0}],
+                "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",
+                "Sorts": [],
                 "Start": (page - 1) * page_size,
                 "Page": page,
                 "PageSize": page_size,
@@ -74,13 +77,18 @@ class MisaProductExporter:
                 "LayoutCode": "Product",
                 "DefaultTotal": False,
                 "IsMappingData": False,
+                "MappingValueObject": {},
                 "IsApproved": False,
+                "CustomPagingData": {},
                 "IsUsedELTS": True,
+                "ListGmailPage": [],
+                "ListFacebookPage": {},
                 "IsListPaging": True,
                 "IsGetCache": True,
                 "IsCheckInactive": False,
                 "IsConverted": False,
-                "SessionID": f"export-{page}",
+                "SessionID": str(uuid.uuid4()),
+                "LayoutCodeCheckPermission": "Product",
                 "AISearchKeyword": ""
             }
             
