@@ -74,10 +74,10 @@ class HlvChatgptSession(models.Model):
     # =================================================================================
     def _run_assistant_workflow(self, client, assistant_id, user_query, config, is_recursive=False, image_url=False):
         """
-        Core Workflow: Quản lý luồng gửi tin, xử lý ảnh, gọi tool và chuyển máy (Handoff)
+        Core Workflow: Quản lý luồng gửi tin, xử lý ảnh, gọi tool (Loop) và chuyển máy (Handoff)
         """
         _logger.info("🚀 Workflow Start | Agent: %s (Recursive: %s | Has Image: %s)", 
-                     self.current_agent_key, is_recursive, bool(image_url))
+                      self.current_agent_key, is_recursive, bool(image_url))
 
         # A. Xử lý ID
         clean_id = assistant_id.split('&')[0].strip()
@@ -89,82 +89,78 @@ class HlvChatgptSession(models.Model):
             self.openai_thread_id = thread.id
             thread_id = thread.id
         
-        # === [QUAN TRỌNG] FIX LỖI 400: HỦY CÁC RUN CŨ ĐANG BỊ TREO ===
-        # Nếu Run cũ chưa xong mà gửi tin mới -> OpenAI sẽ báo lỗi.
+        # === FIX LỖI 400: HỦY CÁC RUN CŨ ĐANG BỊ TREO ===
         try:
             runs = client.beta.threads.runs.list(thread_id=thread_id, limit=1)
             if runs.data:
                 last_run = runs.data[0]
-                # Nếu trạng thái đang chạy hoặc chờ tool mà bị kẹt
                 if last_run.status in ['queued', 'in_progress', 'requires_action', 'cancelling']:
-                    _logger.warning("⚠️ Phát hiện Active Run (%s) trạng thái '%s'. Đang hủy...", last_run.id, last_run.status)
+                    _logger.warning("⚠️ Run cũ (%s) đang treo (%s). Đang hủy...", last_run.id, last_run.status)
                     if last_run.status != 'cancelling':
                         client.beta.threads.runs.cancel(thread_id=thread_id, run_id=last_run.id)
-                    # Không cần sleep, OpenAI xử lý cancel khá nhanh
         except Exception as e:
             _logger.warning("⚠️ Không thể check/cancel run cũ: %s", str(e))
-        # =============================================================
 
-        # C. Gửi tin nhắn User (Xử lý cả TEXT và ẢNH)
-        # Chỉ gửi tin nhắn nếu đây KHÔNG phải là lần gọi đệ quy (do chuyển máy)
+        # C. Gửi tin nhắn User (Chỉ gửi nếu KHÔNG phải đệ quy)
         if not is_recursive:
             content_payload = []
             
-            # 1. Thêm Text vào payload (Nếu có)
+            # 1. Text
             if user_query:
                 content_payload.append({"type": "text", "text": user_query})
-            else:
-                # Nếu User chỉ gửi ảnh mà ko có text -> Thêm text mồi
-                if image_url:
-                    content_payload.append({"type": "text", "text": "Hãy phân tích chi tiết hình ảnh này."})
+            elif image_url:
+                content_payload.append({"type": "text", "text": "Hãy phân tích hình ảnh này."})
 
-            # 2. Xử lý ẢNH (Vision)
+            # 2. Ảnh (Vision)
             if image_url:
                 try:
-                    _logger.info("⬇️ Downloading image from Zalo: %s", image_url)
-                    # Tải ảnh về RAM (Timeout 10s)
+                    _logger.info("⬇️ Downloading image: %s", image_url)
                     response = requests.get(image_url, timeout=10)
-                    
                     if response.status_code == 200:
-                        # Convert sang BytesIO để upload
                         file_bytes = io.BytesIO(response.content)
-                        file_bytes.name = "zalo_upload_img.jpg" # OpenAI cần tên file giả định
-
-                        _logger.info("⬆️ Uploading to OpenAI Storage...")
-                        uploaded_file = client.files.create(
-                            file=file_bytes,
-                            purpose='vision'
-                        )
-                        
-                        # Thêm file_id vào payload tin nhắn
+                        file_bytes.name = "zalo_upload_img.jpg"
+                        uploaded_file = client.files.create(file=file_bytes, purpose='vision')
                         content_payload.append({
                             "type": "image_file",
                             "image_file": {"file_id": uploaded_file.id}
                         })
                     else:
-                        _logger.error("❌ Download ảnh thất bại: HTTP %s", response.status_code)
-                        content_payload.append({"type": "text", "text": "[Hệ thống: Không tải được ảnh đính kèm]"})
-
+                        content_payload.append({"type": "text", "text": "[Hệ thống: Lỗi tải ảnh]"})
                 except Exception as e:
-                     _logger.error("❌ Lỗi xử lý ảnh: %s", str(e))
-                     content_payload.append({"type": "text", "text": "[Hệ thống: Lỗi khi xử lý ảnh]"})
+                     _logger.error("❌ Vision Error: %s", str(e))
+                     content_payload.append({"type": "text", "text": "[Hệ thống: Lỗi xử lý ảnh]"})
 
-            # 3. Gửi Request tạo tin nhắn (Nếu có nội dung)
+            # 3. Gửi Message
             if content_payload:
                 client.beta.threads.messages.create(
-                    thread_id=thread_id,
-                    role="user",
-                    content=content_payload
+                    thread_id=thread_id, role="user", content=content_payload
                 )
 
-        # D. Chạy Run (Execute Assistant)
+        # D. Chạy Run (Execute)
         run = client.beta.threads.runs.create_and_poll(
             thread_id=thread_id, assistant_id=clean_id
         )
 
-        # E. Xử lý Tool Call (Loop & Handoff)
-        # ====================================
-        if run.status == 'requires_action':
+        # ==============================================================================
+        # E. XỬ LÝ TOOL CALL (LOOP & HANDOFF) + [CHỐNG LOOP VÔ HẠN]
+        # ==============================================================================
+        
+        loop_count = 0        # Biến đếm số lần lặp
+        MAX_LOOPS = 5         # Giới hạn an toàn (Circuit Breaker)
+
+        # Dùng WHILE để xử lý đa bước
+        while run.status == 'requires_action':
+            
+            # --- 1. KIỂM TRA LOOP AN TOÀN ---
+            loop_count += 1
+            if loop_count > MAX_LOOPS:
+                _logger.error("⛔ INFINITE LOOP DETECTED: Đã gọi tool %s lần liên tiếp. Hủy Run!", loop_count)
+                client.beta.threads.runs.cancel(thread_id=thread_id, run_id=run.id)
+                return "Hệ thống đang quá tải xử lý (Lặp vô hạn). Vui lòng thử lại câu hỏi khác."
+            
+            _logger.info("🔄 Tool Loop #%s | Processing...", loop_count)
+            # --------------------------------
+
             tool_outputs = []
             is_handoff = False
             next_agent_key = 'router'
@@ -176,85 +172,79 @@ class HlvChatgptSession(models.Model):
                 
                 _logger.info("⚡ Tool Call: %s | Args: %s", fname, str(args))
 
-                # --- NHÓM 1: LOGIC CHUYỂN MÁY (HANDOFF) ---
                 output_str = ""
+                
+                # --- NHÓM 1: HANDOFF ---
                 if fname == "handoff_to_stock":
                     is_handoff = True
                     next_agent_key = 'stock'
                     output_str = "Handoff initiated." 
-                
                 elif fname == "handoff_to_naming":
                     is_handoff = True
                     next_agent_key = 'naming'
                     output_str = "Handoff initiated."
-                    
                 elif fname == "handoff_to_router":
                     is_handoff = True
                     next_agent_key = 'router'
                     output_str = "Back to router."
 
-                # --- NHÓM 2: LOGIC NGHIỆP VỤ (STOCK/MISA) ---
+                # --- NHÓM 2: LOGIC NGHIỆP VỤ ---
                 elif fname == "search_product_stock":
                     output_str = self._execute_search_product_stock(args.get('keyword'))
-                    
                 elif fname == "search_product_misa":
                     output_str = self._execute_search_misa(args)
-                
                 elif fname == "create_product_misa":
                     output_str = self._execute_create_misa(args)
-                
                 else:
-                    output_str = json.dumps({"error": "Unknown function"})
+                    output_str = json.dumps({"error": f"Function {fname} not found"})
 
-                # Thêm vào danh sách trả về cho OpenAI
                 tool_outputs.append({"tool_call_id": call_id, "output": output_str})
 
-            # Submit output lên OpenAI để nó chạy tiếp
+            # --- SUBMIT & POLL LẠI ---
             if tool_outputs:
-                client.beta.threads.runs.submit_tool_outputs_and_poll(
+                # Cập nhật biến 'run' để vòng while kiểm tra tiếp
+                run = client.beta.threads.runs.submit_tool_outputs_and_poll(
                     thread_id=thread_id, run_id=run.id, tool_outputs=tool_outputs
                 )
+            else:
+                break
 
-            # --- LOGIC ĐỆ QUY KHI CHUYỂN MÁY ---
-            # Nếu Router quyết định chuyển máy, ta gọi lại hàm này ngay lập tức với Agent mới
+            # --- LOGIC ĐỆ QUY (HANDOFF) ---
             if is_handoff:
                 _logger.info("🔀 Switching Agent: %s -> %s", self.current_agent_key, next_agent_key)
-                
-                # 1. Cập nhật trạng thái
                 self.current_agent_key = next_agent_key
-                
-                # 2. Lấy ID con mới
                 new_assistant_id = self._get_assistant_id_by_key(config, next_agent_key)
                 
-                # 3. GỌI ĐỆ QUY (QUAN TRỌNG: is_recursive=True để không gửi lại tin nhắn User)
-                # Ta vẫn truyền image_url đi phòng trường hợp Agent sau cũng cần tham khảo ảnh (dù ảnh đã up rồi)
+                # Gọi đệ quy và RETURN luôn (Kết thúc hàm hiện tại)
                 return self._run_assistant_workflow(client, new_assistant_id, user_query, config, is_recursive=True, image_url=image_url)
 
         # F. Lấy kết quả cuối cùng (Final Response)
         # =========================================
-        # FIX LỖI NHẠI LỜI: Chỉ lấy tin nhắn có role='assistant'
-        messages = client.beta.threads.messages.list(thread_id=thread_id, limit=5)
+        
+        # Kiểm tra trạng thái Run sau khi thoát vòng lặp
+        if run.status != 'completed':
+            _logger.error("⚠️ Run Failed/Expired. Status: %s. Error: %s", run.status, run.last_error)
+            return "Xin lỗi, đã xảy ra lỗi trong quá trình xử lý (Status: {}).".format(run.status)
+
+        # Lấy tin nhắn mới nhất
+        messages = client.beta.threads.messages.list(thread_id=thread_id, limit=1)
         
         final_response = ""
         if messages.data:
-            for msg in messages.data:
-                if msg.role == 'assistant' and msg.content:
-                    final_response = msg.content[0].text.value
-                    break
-        
-        # Nếu không tìm thấy tin Assistant (Do lỗi hoặc run fail)
-        if not final_response:
-            _logger.warning("⚠️ Run hoàn tất nhưng không thấy tin nhắn Assistant.")
-            return "Hệ thống đang xử lý yêu cầu của bạn, vui lòng đợi trong giây lát."
+            msg = messages.data[0]
+            if msg.role == 'assistant' and msg.content:
+                for content_block in msg.content:
+                    if content_block.type == 'text':
+                        final_response += content_block.text.value
 
-        # Clean response (Bỏ các ký tự rác của OpenAI như 【source】)
+        if not final_response:
+            return "Hệ thống đã xử lý xong nhưng không có phản hồi."
+
+        # Clean response
         final_response = re.sub(r'【.*?】', '', final_response)
         
         return final_response
     
-    # CÁC HÀM THỰC THI LOGIC (IMPLEMENTATION)
-    # =================================================================================
-    # 3. STOCK LOGIC (Hàm Search V9)
     # =================================================================================
     def _execute_search_product_stock(self, keyword):
         """V12: Massive Search - Trả về 200 kết quả để AI tự lọc"""
