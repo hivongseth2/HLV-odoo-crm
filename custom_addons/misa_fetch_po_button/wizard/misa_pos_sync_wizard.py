@@ -4,7 +4,7 @@ Wizard đồng bộ sản phẩm từ MISA CRM vào POS Odoo
 
 Chức năng:
 1. Lấy tất cả sản phẩm từ MISA
-2. Tự động tạo danh mục POS từ category MISA (nếu chưa có) 
+2. Tự động tạo danh mục POS từ category MISA (giữ cấu trúc phân cấp)
 3. Tìm sản phẩm trong Odoo theo code, nếu đã bật available_in_pos thì gán vào danh mục POS
 """
 from odoo import models, fields, api
@@ -30,6 +30,84 @@ class MisaPosProductSyncWizard(models.TransientModel):
         ('done', 'Hoàn thành')
     ], default='draft')
 
+    def _create_pos_categories_with_hierarchy(self, misa_categories, logs):
+        """
+        Tạo danh mục POS với cấu trúc phân cấp đúng.
+        
+        Args:
+            misa_categories: List danh mục từ MISA với thông tin parent
+            logs: List để ghi log
+            
+        Returns:
+            dict: Map {category_name_lower: pos.category record}
+        """
+        pos_categ_model = self.env['pos.category'].sudo()
+        categories_created = 0
+        
+        # Build map: name -> category info
+        cat_info_map = {}
+        for cat in misa_categories:
+            name = (cat.get("name") or "").strip()
+            parent = (cat.get("parent") or "").strip()
+            if name:
+                cat_info_map[name.lower()] = {
+                    "name": name,
+                    "parent": parent,
+                    "id": cat.get("id")
+                }
+        
+        # Map để lưu pos.category đã tạo: name_lower -> record
+        created_map = {}
+        
+        # Lấy tất cả danh mục POS hiện có
+        existing_cats = pos_categ_model.search([])
+        for cat in existing_cats:
+            created_map[cat.name.lower().strip()] = cat
+        
+        def get_or_create_category(name):
+            """Đệ quy tạo category và parent của nó"""
+            name_lower = name.lower().strip()
+            
+            # Đã có trong map -> trả về
+            if name_lower in created_map:
+                return created_map[name_lower]
+            
+            # Lấy thông tin từ MISA
+            info = cat_info_map.get(name_lower, {"name": name, "parent": ""})
+            parent_name = info.get("parent", "").strip()
+            
+            # Tìm hoặc tạo parent trước
+            parent_id = False
+            if parent_name:
+                parent_cat = get_or_create_category(parent_name)
+                if parent_cat:
+                    parent_id = parent_cat.id
+            
+            # Tạo category mới
+            new_cat = pos_categ_model.create({
+                'name': info.get("name", name),
+                'parent_id': parent_id
+            })
+            created_map[name_lower] = new_cat
+            
+            nonlocal categories_created
+            categories_created += 1
+            
+            if parent_name:
+                logs.append(f"   ➕ Tạo: {info.get('name')} (cha: {parent_name})")
+            else:
+                logs.append(f"   ➕ Tạo: {info.get('name')} (gốc)")
+            
+            return new_cat
+        
+        # Tạo tất cả categories
+        for cat in misa_categories:
+            name = (cat.get("name") or "").strip()
+            if name:
+                get_or_create_category(name)
+        
+        return created_map, categories_created
+
     def action_sync(self):
         """Thực hiện đồng bộ"""
         self.ensure_one()
@@ -45,6 +123,11 @@ class MisaPosProductSyncWizard(models.TransientModel):
             
             exporter = MisaProductExporter(self.env)
             
+            # Lấy danh mục từ MISA (cấu trúc cây)
+            logs.append("\n📥 Đang lấy danh mục từ MISA CRM...")
+            misa_categories = exporter.fetch_all_categories()
+            logs.append(f"✅ Tìm thấy {len(misa_categories)} danh mục trong MISA")
+            
             # Lấy sản phẩm từ MISA
             logs.append("\n📥 Đang lấy sản phẩm từ MISA CRM...")
             misa_products = exporter.fetch_all_products()
@@ -56,31 +139,22 @@ class MisaPosProductSyncWizard(models.TransientModel):
             products_skipped_not_in_pos = 0
             products_not_found = 0
             
-            # === BƯỚC 1: TẠO DANH MỤC POS ===
+            # === BƯỚC 1: TẠO DANH MỤC POS (GIỮ CẤU TRÚC PHÂN CẤP) ===
+            cat_map = {}
             if self.sync_mode in ('category_only', 'full'):
-                logs.append("\n📁 BƯỚC 1: TẠO DANH MỤC POS")
+                logs.append("\n📁 BƯỚC 1: TẠO DANH MỤC POS (CÓ PHÂN CẤP)")
                 logs.append("-" * 30)
                 
-                # Lấy tất cả category duy nhất từ sản phẩm MISA
-                misa_categories = set()
-                for p in misa_products:
-                    cat_name = (p.get("ProductCategoryIDText") or "").strip()
-                    if cat_name:
-                        misa_categories.add(cat_name)
-                
-                logs.append(f"   Tìm thấy {len(misa_categories)} danh mục trong MISA")
-                
-                # Tạo danh mục POS nếu chưa có
-                pos_categ_model = self.env['pos.category'].sudo()
-                
-                for cat_name in misa_categories:
-                    existing = pos_categ_model.search([('name', '=ilike', cat_name)], limit=1)
-                    if not existing:
-                        pos_categ_model.create({'name': cat_name})
-                        categories_created += 1
-                        logs.append(f"   ➕ Tạo mới: {cat_name}")
+                cat_map, categories_created = self._create_pos_categories_with_hierarchy(
+                    misa_categories, logs
+                )
                 
                 logs.append(f"\n   ✅ Đã tạo {categories_created} danh mục POS mới")
+            else:
+                # Chỉ build map từ existing categories
+                pos_categ_model = self.env['pos.category'].sudo()
+                all_pos_cats = pos_categ_model.search([])
+                cat_map = {c.name.lower().strip(): c for c in all_pos_cats}
             
             # === BƯỚC 2: GÁN SẢN PHẨM VÀO DANH MỤC ===
             if self.sync_mode in ('product_only', 'full'):
@@ -89,11 +163,6 @@ class MisaPosProductSyncWizard(models.TransientModel):
                 logs.append("   (Chỉ xử lý sản phẩm đã bật 'Sẵn sàng trong POS')")
                 
                 product_model = self.env['product.template'].sudo()
-                pos_categ_model = self.env['pos.category'].sudo()
-                
-                # Build map category name -> pos.category record
-                all_pos_cats = pos_categ_model.search([])
-                cat_map = {c.name.lower().strip(): c for c in all_pos_cats}
                 
                 for p in misa_products:
                     code = (p.get("ProductCode") or "").strip()
