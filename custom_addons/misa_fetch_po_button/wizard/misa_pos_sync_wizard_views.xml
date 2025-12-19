@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Form view cho wizard -->
+    <record id="view_misa_pos_sync_wizard_form" model="ir.ui.view">
+        <field name="name">misa.pos.product.sync.wizard.form</field>
+        <field name="model">misa.pos.product.sync.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Đồng bộ sản phẩm MISA → POS">
+                <sheet>
+                    <div class="alert alert-info" role="alert" invisible="state == 'done'">
+                        <strong>Lưu ý:</strong> Wizard này chỉ gán danh mục POS cho các sản phẩm đã được đánh dấu "Sẵn sàng trong POS" trong Odoo.
+                    </div>
+                    
+                    <group invisible="state == 'done'">
+                        <field name="state" invisible="1"/>
+                        <field name="sync_mode" widget="radio"/>
+                    </group>
+                    
+                    <group invisible="state != 'done'">
+                        <field name="log_text" widget="text" readonly="1" nolabel="1"
+                               style="font-family: monospace; white-space: pre-wrap; min-height: 400px;"/>
+                    </group>
+                </sheet>
+                
+                <footer>
+                    <button name="action_sync" string="🚀 Bắt đầu đồng bộ" 
+                            type="object" class="btn-primary"
+                            invisible="state == 'done'"/>
+                    <button name="action_reset" string="↩️ Làm lại" 
+                            type="object" class="btn-secondary"
+                            invisible="state != 'done'"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Menu action -->
+    <record id="action_misa_pos_sync_wizard" model="ir.actions.act_window">
+        <field name="name">Đồng bộ MISA → POS</field>
+        <field name="res_model">misa.pos.product.sync.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Menu item trong Point of Sale -->
+    <menuitem id="menu_misa_pos_sync"
+              name="Đồng bộ sản phẩm MISA → POS"
+              parent="point_of_sale.menu_point_config_product"
+              action="action_misa_pos_sync_wizard"
+              sequence="99"/>
+
+</odoo>

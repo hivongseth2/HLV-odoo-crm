@@ -5,3 +5,4 @@ access_misa_transfer_fetch_user,misa.transfer.fetch,model_misa_transfer_fetch,ba
 access_misa_return_fetch_user,misa.return.fetch,model_misa_return_fetch,base.group_user,1,1,1,1
 access_sale_api_import_wizard,sale.api.import.wizard,model_sale_api_import_wizard,base.group_user,1,1,1,1
 access_login_misa,login.misa,model_login_misa,base.group_user,1,1,1,1
+access_misa_pos_product_sync_wizard,misa.pos.product.sync.wizard,model_misa_pos_product_sync_wizard,point_of_sale.group_pos_manager,1,1,1,1
