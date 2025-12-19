@@ -647,40 +647,62 @@ class SaleApiImportWizard(models.TransientModel):
         st = State.search([('name', 'ilike', name), ('country_id', '=', country.id)], limit=1)
         return st or False
 
-    def _get_or_create_delivery_contact(self, parent_partner, addr_str, phone=None, province_text=None, contact_name=None):
+    def _get_or_create_delivery_contact(self, parent_partner, addr_str, phone=None, province_text=None, contact_name=None, is_e_account=False):
         """
-        Tạo/nhặt contact con kiểu 'contact' dưới parent_partner.
-        Dùng type='contact' thay vì 'delivery' để hiển thị tên contact thay vì tên công ty cha.
-        Logic:
-          - Nếu có contact_name: Tìm theo (parent_id, name=contact_name) - tìm cả 'delivery' và 'contact'
-            -> Nếu thấy: UPDATE lại type='contact', name, street, phone, city... theo dữ liệu mới nhất.
-            -> Nếu không thấy: TẠO MỚI với name=contact_name, type='contact'
-          - Nếu không có contact_name: Tìm theo (parent_id, street=addr_str) - tìm cả 'delivery' và 'contact'
-            -> Nếu thấy: UPDATE type='contact' nếu cần, update các field thiếu.
-            -> Nếu không thấy: TẠO MỚI với name=parent_partner.name, type='contact'
-          - Auto-migrate: Tự động chuyển contact cũ từ type='delivery' sang 'contact' để fix hiển thị
+        Tạo/nhặt contact con dưới parent_partner.
+        
+        Logic cho e_accounts (is_e_account=True):
+          - LUÔN tìm theo địa chỉ (addr_str) trước, vì mỗi đơn là một người mua khác nhau
+          - Nếu không tìm thấy địa chỉ khớp → TẠO MỚI liên hệ với địa chỉ đó
+          - KHÔNG tìm theo tên để tránh cập nhật liên hệ cũ
+          - Dùng type='delivery' để hiển thị icon xe tải
+          
+        Logic cho khách hàng thường:
+          - Nếu có contact_name: Tìm theo (parent_id, name=contact_name)
+            -> Nếu thấy: UPDATE theo dữ liệu mới nhất.
+            -> Nếu không thấy: TẠO MỚI với name=contact_name
+          - Nếu không có contact_name: Tìm theo (parent_id, street=addr_str)
+            -> Nếu thấy: UPDATE các field thiếu.
+            -> Nếu không thấy: TẠO MỚI với name=parent_partner.name
+          - Dùng type='contact' để hiển thị tên contact thay vì tên công ty cha
         """
         Partner = self.env['res.partner']
         country = self._vn_country()
         state = self._vn_state_by_name(province_text) if province_text else False
 
         existing = None
-        if contact_name:
-             # Ưu tiên tìm theo tên contact - tìm cả 'delivery' và 'contact' để migrate
-             _logger.info("🔎 Search delivery by NAME: '%s' (parent=%s)", contact_name, parent_partner.id)
-             existing = Partner.search([
-                ('parent_id', '=', parent_partner.id),
-                ('type', 'in', ['delivery', 'contact']),
-                ('name', '=', contact_name)
-             ], limit=1)
-        elif addr_str:
-             # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name - tìm cả 'delivery' và 'contact'
-             _logger.info("🔎 Search delivery by ADDR: '%s' (parent=%s)", addr_str, parent_partner.id)
-             existing = Partner.search([
-                ('parent_id', '=', parent_partner.id),
-                ('type', 'in', ['delivery', 'contact']),
-                ('street', '=', addr_str),
-             ], limit=1)
+        
+        # ===== LOGIC ĐẶC BIỆT CHO E_ACCOUNTS =====
+        # Với e_accounts, mỗi đơn là một người mua khác nhau, nên LUÔN tìm theo địa chỉ
+        if is_e_account:
+            if addr_str:
+                _logger.info("🔎 [E-ACCOUNT] Search delivery by ADDR: '%s' (parent=%s)", addr_str, parent_partner.id)
+                existing = Partner.search([
+                    ('parent_id', '=', parent_partner.id),
+                    ('type', 'in', ['delivery', 'contact']),
+                    ('street', '=', addr_str),
+                ], limit=1)
+            # Nếu không tìm thấy theo địa chỉ → sẽ tạo mới (không tìm theo tên)
+            if not existing:
+                _logger.info("🆕 [E-ACCOUNT] No existing contact with addr='%s' → will create new", addr_str)
+        else:
+            # ===== LOGIC CHO KHÁCH HÀNG THƯỜNG =====
+            if contact_name:
+                 # Ưu tiên tìm theo tên contact - tìm cả 'delivery' và 'contact' để migrate
+                 _logger.info("🔎 Search delivery by NAME: '%s' (parent=%s)", contact_name, parent_partner.id)
+                 existing = Partner.search([
+                    ('parent_id', '=', parent_partner.id),
+                    ('type', 'in', ['delivery', 'contact']),
+                    ('name', '=', contact_name)
+                 ], limit=1)
+            elif addr_str:
+                 # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name - tìm cả 'delivery' và 'contact'
+                 _logger.info("🔎 Search delivery by ADDR: '%s' (parent=%s)", addr_str, parent_partner.id)
+                 existing = Partner.search([
+                    ('parent_id', '=', parent_partner.id),
+                    ('type', 'in', ['delivery', 'contact']),
+                    ('street', '=', addr_str),
+                 ], limit=1)
         
         if existing:
             _logger.info("✅ Found existing delivery contact: %s (id=%s)", existing.name, existing.id)
@@ -688,10 +710,6 @@ class SaleApiImportWizard(models.TransientModel):
         if existing:
             # Cập nhật thông tin (Force update để đảm bảo đồng bộ)
             vals_upd = {}
-
-            # MIGRATE: Nếu contact cũ có type='delivery', chuyển sang 'contact' để hiển thị đúng tên
-            if existing.type == 'delivery':
-                vals_upd['type'] = 'contact'
 
             # Luôn cập nhật tên nếu có contact_name và khác tên hiện tại
             if contact_name and existing.name != contact_name:
@@ -714,18 +732,21 @@ class SaleApiImportWizard(models.TransientModel):
                 existing.write(vals_upd)
             return existing
 
-        # Tạo mới contact với tên chính xác
+        # Tạo mới contact
+        # Với e_accounts: dùng type='delivery' để hiển thị icon xe tải
+        # Với khách thường: dùng type='contact' để hiển thị tên contact
+        contact_type = 'delivery' if is_e_account else 'contact'
         vals = {
             'name': contact_name or parent_partner.name,
-            'type': 'contact',
+            'type': contact_type,
             'parent_id': parent_partner.id,
             'street': addr_str or '',
             'city': province_text or False,
             'phone': phone or False,
             'country_id': country.id if country else False,
             'state_id': state.id if state else False,
-            # có thể bổ sung email, mobile... nếu cần
         }
+        _logger.info("🆕 Creating new delivery contact (type=%s) with vals: %s", contact_type, vals)
         return Partner.create(vals)
 
     def action_import_from_api(self):
@@ -992,15 +1013,21 @@ class SaleApiImportWizard(models.TransientModel):
                 except Exception as e:
                     _logger.warning("Không thể cập nhật đối tác từ MISA (AccountID=%s): %s", account_id, e)
 
-                    # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
-
+                # ===== TẠO/GÁN ĐỊA CHỈ GIAO HÀNG (contact delivery) =====
+                _logger.info("📍 [%s] Tạo delivery contact với addr_str='%s', is_e_account=%s", 
+                            order_ref_base, 
+                            shipping_address_str or order.get("ShippingAddress") or order.get("BillingAddress"),
+                            customer_name in e_accounts)
                 delivery_contact = self._get_or_create_delivery_contact(
                     parent_partner=partner,
                     addr_str=shipping_address_str or order.get("ShippingAddress") or order.get("BillingAddress") or order_ref_base,
                     phone=phone_text,
                     province_text=province_text,
-                    contact_name=owner_date.get('shipping_contact')
+                    contact_name=owner_date.get('shipping_contact'),
+                    is_e_account=(customer_name in e_accounts)
                 )
+                _logger.info("📍 [%s] Delivery contact created/found: id=%s, name='%s', street='%s'",
+                            order_ref_base, delivery_contact.id, delivery_contact.name, delivery_contact.street)
 
                 distinct_stocks = [s for s in lines_by_stock.keys() if s in stock_mapping]
                 if not distinct_stocks:
@@ -1082,6 +1109,8 @@ class SaleApiImportWizard(models.TransientModel):
                         sale_vals['x_studio_htgh'] = owner_date['htgh']
 
                     sale_order = self.env['sale.order'].create(sale_vals)
+                    _logger.info("✅ [%s] Created SO id=%s with partner_shipping_id=%s (delivery_contact.id=%s)",
+                                order_ref, sale_order.id, sale_order.partner_shipping_id.id, delivery_contact.id)
                     
                     # ===== BUILD MAP: COMBO CHILD -> PARENT CODE (HYBRID) =====
                     combo_parent_map = {}  # {misa_line_id: parent_code} - DÙNG LINE ID
