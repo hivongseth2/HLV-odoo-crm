@@ -1185,39 +1185,105 @@ class MisaApiUtils(models.AbstractModel):
         headers = misa_config.get_crm_header(token)
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/Grid"
+        # Sử dụng API g1 thay vì g2
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
         
         filters = []
         
         if name:
             filters.append({
-                "Group": None, "Addition": 1, "InputType": 1, "IsFromFormula": True,
-                "Operator": 6, "Property": "ProductName", "Text": name.strip(), "Value": name.strip()
+                "Value": name.strip(),
+                "IsDefaultFilter": False,
+                "IsCustomField": False,
+                "IsRelatedField": False,
+                "ModuleRelated": "",
+                "FromFilterCustom": False,
+                "ValueDisplayText": "",
+                "isValueDateNumber": False,
+                "IsSearchModule": False,
+                "ConfigDisplayRelatedField": "",
+                "ConfigSubDisplayRelatedField": "",
+                "ConfigSearchField": [],
+                "ConfigUrlCbx": "",
+                "FilterObjects": [],
+                "dataOperator": [],
+                "IsProductCategory": False,
+                "SelectedDataList": [],
+                "IsCustomTypeDecimalDigits": False,
+                "IsFromFormula": False,
+                "Operator": 1,
+                "Addition": 1,
+                "Property": "ProductName",
+                "InputType": 1,
+                "FieldType": 0,
+                "FieldName": "ProductName",
+                "OperatorBeforeDetectChanges": 1,
+                "InputTypeOrigin": 1,
+                "DisplayField": "Tên hàng hóa",
+                "DisplayOperator": "Chứa",
+                "DisplayValue": name.strip(),
+                "ValueOrigin": name.strip()
             })
         
         if code:
             filters.append({
-                "Group": None, "Addition": 1, "InputType": 1, "IsFromFormula": True,
-                "Operator": 7, "Property": "ProductCode", "Text": code.strip(), "Value": code.strip()
+                "Value": code.strip(),
+                "IsDefaultFilter": False,
+                "IsCustomField": False,
+                "IsRelatedField": False,
+                "ModuleRelated": "",
+                "FromFilterCustom": False,
+                "ValueDisplayText": "",
+                "isValueDateNumber": False,
+                "IsSearchModule": False,
+                "ConfigDisplayRelatedField": "",
+                "ConfigSubDisplayRelatedField": "",
+                "ConfigSearchField": [],
+                "ConfigUrlCbx": "",
+                "FilterObjects": [],
+                "dataOperator": [],
+                "IsProductCategory": False,
+                "SelectedDataList": [],
+                "IsCustomTypeDecimalDigits": False,
+                "IsFromFormula": False,
+                "Operator": 1,
+                "Addition": 1,
+                "Property": "ProductCode",
+                "InputType": 1,
+                "FieldType": 0,
+                "FieldName": "ProductCode",
+                "OperatorBeforeDetectChanges": 1,
+                "InputTypeOrigin": 1,
+                "DisplayField": "Mã hàng hóa",
+                "DisplayOperator": "Chứa",
+                "DisplayValue": code.strip(),
+                "ValueOrigin": code.strip()
             })
         
-        if len(filters) == 1:
-            formula = "( 1 )"
-        else:
-            formula = "( " + " AND ".join(str(i+1) for i in range(len(filters))) + " )"
-        
         payload = {
-            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",
-            "Sorts": [], "Start": 0, "Page": 1, "PageSize": limit,
-            "Filters": filters, "Formula": formula,
-            "LayoutCode": "Product", "DefaultTotal": False,
-            "IsMappingData": False, "MappingValueObject": {},
-            "IsApproved": False, "CustomPagingData": {},
-            "IsUsedELTS": True, "ListGmailPage": [], "ListFacebookPage": {},
-            "IsListPaging": True, "IsGetCache": True,
-            "IsCheckInactive": False, "IsConverted": False,
+            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LERlZmF1bHRTdG9ja0lELERlZmF1bHRTdG9ja0lEVGV4dCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",
+            "Sorts": [{"SortBy": "ModifiedDate", "Type": 0, "SortDirection": 1}],
+            "Start": 0,
+            "Page": 1,
+            "PageSize": limit,
+            "Filters": filters,
+            "Formula": "",
+            "LayoutCode": "Product",
+            "DefaultTotal": True,
+            "IsMappingData": False,
+            "MappingValueObject": {},
+            "IsApproved": False,
+            "CustomPagingData": {},
+            "IsUsedELTS": True,
+            "ListGmailPage": [],
+            "ListFacebookPage": {},
+            "IsListPaging": True,
+            "IsGetCache": True,
+            "IsCheckInactive": False,
+            "IsConverted": False,
             "SessionID": str(uuid.uuid4()),
-            "LayoutCodeCheckPermission": "Product", "AISearchKeyword": ""
+            "LayoutCodeCheckPermission": "Product",
+            "AISearchKeyword": ""
         }
 
         _logger.info(f"🔎 [MISA SEARCH] Tìm kiếm sản phẩm với tên: '{name}'")
