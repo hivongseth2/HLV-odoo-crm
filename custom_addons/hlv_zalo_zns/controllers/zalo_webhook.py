@@ -163,7 +163,7 @@ class ZaloSheetWebhook(http.Controller):
                     payload = attachments[0].get('payload', {})
                     image_url = payload.get('url') # Link ảnh
                     # Lấy mô tả ảnh (nếu user có nhập caption) hoặc gán mặc định
-                    message_content = payload.get('description') or "Hãy phân tích hình ảnh này."
+                    message_content = payload.get('text') or "Hãy phân tích hình ảnh này."
                     _logger.info("📸 User gửi ảnh: %s", image_url)
                     _logger.info(
                         "🧾 IMAGE PAYLOAD:\n%s",
