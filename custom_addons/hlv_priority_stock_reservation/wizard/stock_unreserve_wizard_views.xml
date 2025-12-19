@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_stock_unreserve_wizard_form" model="ir.ui.view">
+        <field name="name">stock.unreserve.wizard.form</field>
+        <field name="model">stock.unreserve.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Hủy dự trữ để nhường hàng">
+                <p class="text-danger fw-bold">
+                    ⚠️ Chú ý: Đơn hàng hiện tại (<field name="picking_id" readonly="1" class="oe_inline"/>) vẫn còn thiếu hàng sau khi đã dự trữ hết hàng trống trong kho.
+                </p>
+                <p class="text-muted">
+                    Vui lòng nhập <b>số lượng muốn lấy</b> từ các đơn hàng dưới đây để ưu tiên cho đơn này.
+                </p>
+                <field name="line_ids">
+                    <list editable="bottom" create="false" delete="false">
+                        <field name="picking_id"/>
+                        <field name="origin" string="Số đơn báo giá"/>
+                        <field name="product_id"/>
+                        <field name="demand_qty" string="Nhu cầu"/>
+                        <field name="reserved_qty" string="Đang giữ"/>
+                        <field name="unreserve_qty" string="Số lượng rút" class="text-primary fw-bold"/>
+                        <field name="uom_id" string="Đơn vị"/>
+                        <field name="deadline_date" string="Hạn giao"/>
+                    </list>
+                </field>
+                <footer>
+                    <button name="action_confirm" string="Xác nhận lấy hàng và dự trữ lại" type="object" class="btn-primary"/>
+                    <button string="Bỏ qua" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

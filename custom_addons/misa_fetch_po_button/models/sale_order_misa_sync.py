@@ -331,12 +331,29 @@ class SaleOrder(models.Model):
             vals_upd['x_studio_htgh'] = owner_date['htgh']
         # Gán lại địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
         try:
+            # Danh sách e_accounts để xác định khách hàng TMĐT
+            e_accounts = {
+                "TIKTOK HOÀNG LONG VŨ",
+                "SHOPEE TRANG MILWAUKEE",
+                "SHOPEE TRANG TBCN HLV",
+                "SHOPEE TRANG DEWALT STANLEY",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE STANLEY",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+                "TOOL DEWALT",
+            }
             delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
                 addr_str=shipping_addr or '',
                 phone=data.get("Phone"),
                 province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
-                contact_name=shipping_contact_name.strip() if shipping_contact_name else None
+                contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
+                is_e_account=(partner_name in e_accounts)
             )
             vals_upd['partner_shipping_id'] = delivery_contact.id
             vals_upd['partner_invoice_id'] = delivery_contact.id
@@ -937,12 +954,29 @@ class SaleOrder(models.Model):
 
         # Địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
         try:
+            # Danh sách e_accounts để xác định khách hàng TMĐT
+            e_accounts = {
+                "TIKTOK HOÀNG LONG VŨ",
+                "SHOPEE TRANG MILWAUKEE",
+                "SHOPEE TRANG TBCN HLV",
+                "SHOPEE TRANG DEWALT STANLEY",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE STANLEY",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+                "TOOL DEWALT",
+            }
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
                 addr_str=shipping_addr,
                 phone=data.get("Phone"),
                 province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
-                contact_name=shipping_contact_name.strip() if shipping_contact_name else None
+                contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
+                is_e_account=(partner_name in e_accounts)
             )
             shipping_id = delivery_contact.id
         except Exception as e:
