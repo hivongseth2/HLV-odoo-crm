@@ -199,3 +199,95 @@ class MisaController(http.Controller):
                 "status": "error",
                 "message": str(e)
             }
+
+    @http.route('/api/misa/product/export', type='json', auth='user', methods=['POST'], csrf=False)
+    def api_export_products_misa(self, **kwargs):
+        """
+        API xuất tất cả sản phẩm từ MISA CRM ra file Excel.
+        
+        Body mẫu (JSON):
+        {
+            "jsonrpc": "2.0",
+            "params": {}
+        }
+        
+        Response:
+        {
+            "status": "success",
+            "message": "Xuất thành công N sản phẩm",
+            "data": {
+                "file_base64": "...",
+                "file_name": "misa_products_20231219.xlsx",
+                "total_products": N,
+                "total_categories": M
+            }
+        }
+        """
+        try:
+            from odoo.addons.misa_fetch_po_button.utils.misa_product_export import MisaProductExporter
+            from datetime import datetime
+            import base64
+            
+            exporter = MisaProductExporter(request.env)
+            
+            # Lấy dữ liệu
+            products = exporter.fetch_all_products()
+            categories = exporter.fetch_all_categories()
+            
+            # Xuất Excel
+            excel_content = exporter.export_all_products_to_excel()
+            
+            file_name = f"misa_products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            return {
+                "status": "success",
+                "message": f"Xuất thành công {len(products)} sản phẩm và {len(categories)} danh mục",
+                "data": {
+                    "file_base64": base64.b64encode(excel_content).decode('utf-8'),
+                    "file_name": file_name,
+                    "total_products": len(products),
+                    "total_categories": len(categories)
+                }
+            }
+            
+        except Exception as e:
+            _logger.exception("API MISA Export Error")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+
+    @http.route('/api/misa/product/export/download', type='http', auth='user', methods=['GET'], csrf=False)
+    def api_download_products_misa(self, **kwargs):
+        """
+        API tải trực tiếp file Excel sản phẩm MISA.
+        
+        URL: /api/misa/product/export/download
+        Method: GET
+        
+        Response: File Excel download
+        """
+        try:
+            from odoo.addons.misa_fetch_po_button.utils.misa_product_export import MisaProductExporter
+            from datetime import datetime
+            
+            exporter = MisaProductExporter(request.env)
+            excel_content = exporter.export_all_products_to_excel()
+            
+            file_name = f"misa_products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            
+            return request.make_response(
+                excel_content,
+                headers=[
+                    ('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+                    ('Content-Disposition', f'attachment; filename="{file_name}"'),
+                ]
+            )
+            
+        except Exception as e:
+            _logger.exception("API MISA Export Download Error")
+            return request.make_response(
+                f"Error: {str(e)}",
+                headers=[('Content-Type', 'text/plain')],
+                status=500
+            )
