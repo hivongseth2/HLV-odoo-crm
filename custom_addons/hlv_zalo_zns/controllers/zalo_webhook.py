@@ -145,10 +145,20 @@ class ZaloSheetWebhook(http.Controller):
             # 5. Xử lý tin nhắn text
             if event_name == 'user_send_text':
                 message_content = message_obj.get('text', '').strip()
+                logging.info("user send text message : %s", message_content)
 
             # Trường hợp B: Tin nhắn Ảnh (MỚI THÊM)
             elif event_name == 'user_send_image':
                 attachments = message_obj.get('attachments', [])
+                _logger.info(
+                        "📸 FULL message_obj (IMAGE):\n%s",
+                        json.dumps(message_obj, ensure_ascii=False, indent=2)
+                    )
+                _logger.info(
+                        "📎 ATTACHMENTS RAW:\n%s",
+                        json.dumps(attachments, ensure_ascii=False, indent=2)
+                    )
+
                 if attachments:
                     payload = attachments[0].get('payload', {})
                     image_url = payload.get('url') # Link ảnh
