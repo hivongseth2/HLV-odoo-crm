@@ -109,7 +109,7 @@ class HlvChatgptSession(models.Model):
             if user_query:
                 content_payload.append({"type": "text", "text": user_query})
             elif image_url:
-                content_payload.append({"type": "text", "text": "Hãy phân tích hình ảnh này."})
+                content_payload.append({"type": "text", "text": user_query})
 
             # 2. Ảnh (Vision)
             if image_url:
