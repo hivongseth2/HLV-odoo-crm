@@ -790,7 +790,9 @@ class SaleApiImportWizard(models.TransientModel):
             "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
             "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE HLV",
             "TOOL DEWALT",
-            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY"
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE",
+            "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE DEWALT",
         }
 
     
