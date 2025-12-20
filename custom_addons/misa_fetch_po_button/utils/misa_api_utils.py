@@ -1530,11 +1530,9 @@ class MisaApiUtils(models.AbstractModel):
         if generated_code:
             shipping_route_code = generated_code
         else:
-            # Fallback: Sanitize code - MISA không chấp nhận "/" trong mã
-            # VD: "TSN/OUT/02659" -> "TVC-TSN-OUT-02659"
-            sanitized_code = code.replace("/", "-").replace("\\", "-")
-            shipping_route_code = f"TVC-{sanitized_code}"
-            _logger.info(f"⚠️ [MISA] GenerateNumber failed, using sanitized code: {shipping_route_code}")
+            # Fallback: Dùng code gốc trực tiếp (mã phiếu OUT)
+            shipping_route_code = code
+            _logger.info(f"⚠️ [MISA] GenerateNumber failed, using original code: {shipping_route_code}")
         
         # 2. API endpoint (KHÔNG có /Save ở cuối!)
         url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute"
@@ -1776,16 +1774,19 @@ class MisaApiUtils(models.AbstractModel):
 
         headers = misa_config.get_crm_header(token)
         
-        # API endpoint để cập nhật SaleOrder
-        url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/Save"
+        # API endpoint (KHÔNG có /Save)
+        url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder"
         
         payload = {
             "ID": int(misa_sale_order_id),
             "ShippingRouteID": int(shipping_route_id),
             "MISAEntityState": 2,  # 2 = Update (cập nhật)
+            "LayoutCode": "SaleOrder",
+            "ActiveLayoutCode": "SaleOrder",
         }
         
         _logger.info(f"🔄 [MISA] Updating Sale Order {misa_sale_order_id} with ShippingRouteID={shipping_route_id}")
+        _logger.debug(f"📤 [MISA] Payload: {json.dumps(payload, ensure_ascii=False)}")
         
         session = self._get_retry_session()
         try:
