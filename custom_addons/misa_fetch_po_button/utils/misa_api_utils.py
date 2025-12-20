@@ -1474,18 +1474,49 @@ class MisaApiUtils(models.AbstractModel):
     # =========================================================================
     # 5. API CREATE SHIPPING ROUTE (TUYẾN VẬN CHUYỂN)
     # =========================================================================
-    def create_shipping_route_misa(self, code, name, owner_id=None):
+    def _generate_shipping_route_code(self, headers):
+        """
+        Gọi API GenerateNumber để lấy mã ShippingRouteCode tự động từ MISA.
+        
+        Returns:
+            str: Mã tuyến vận chuyển (e.g., "TVC0000002")
+        """
+        url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute/GenerateNumber/ShippingRoute/ShippingRouteCode/142"
+        
+        session = self._get_retry_session()
+        try:
+            res = session.get(url, headers=headers, timeout=30)
+            res.raise_for_status()
+            data = res.json()
+            
+            _logger.info(f"📥 [MISA] GenerateNumber Response: {data}")
+            
+            if data.get('Success') and data.get('Data'):
+                generated_code = data.get('Data')
+                _logger.info(f"✅ [MISA] Generated ShippingRouteCode: {generated_code}")
+                return generated_code
+            
+            _logger.warning(f"⚠️ [MISA] GenerateNumber failed: {data}")
+            return None
+            
+        except Exception as e:
+            _logger.error(f"❌ [MISA] GenerateNumber error: {e}")
+            return None
+
+    def create_shipping_route_misa(self, code, name, owner_id=59):
         """
         Tạo tuyến vận chuyển mới trên MISA CRM.
         
         Args:
-            code (str): Mã tuyến (thường dùng picking name)
+            code (str): Mã tuyến backup (sẽ dùng nếu GenerateNumber fail)
             name (str): Tên tuyến (thường dùng SO name)
-            owner_id (int, optional): MISA User ID. Nếu None, không gửi field này.
+            owner_id (int): MISA User ID (default 59)
             
         Returns:
             int/str: MISA ID của tuyến vừa tạo
         """
+        from datetime import datetime
+        
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
@@ -1493,24 +1524,35 @@ class MisaApiUtils(models.AbstractModel):
 
         headers = misa_config.get_crm_header(token)
         
-        # API endpoint để tạo ShippingRoute
+        # 1. Gọi GenerateNumber để lấy mã ShippingRouteCode hợp lệ
+        generated_code = self._generate_shipping_route_code(headers)
+        shipping_route_code = generated_code if generated_code else code
+        
+        # 2. API endpoint để tạo ShippingRoute
         url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute/Save"
         
+        # 3. Build payload theo đúng format FormDataQuickAdd
+        current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000+07:00")
+        
         payload = {
-            "ShippingRouteCode": code,
+            "ShippingRouteCode": shipping_route_code,
             "ShippingRouteName": name,
-            "StatusID": 3,  # 3 = Đã hoàn thành (vì picking đã done)
+            "StatusID": "3",  # 3 = Đã hoàn thành (string format)
             "StatusIDText": "Đã hoàn thành",
+            "OwnerID": owner_id,
+            "OwnerIDText": "",  
+            "WarehouseEmployeeID": owner_id,
+            "WarehouseEmployeeIDText": "",
+            "StartDate": current_date,
+            "EndDate": current_date,
+            "FormLayoutID": 142,
+            "FormLayoutIDText": "Mẫu tiêu chuẩn",
             "MISAEntityState": 1,  # 1 = Insert (tạo mới)
             "Active": True,
-            "FormLayoutID": 142,  # Mẫu tiêu chuẩn
         }
         
-        # Chỉ thêm OwnerID nếu được truyền vào
-        if owner_id:
-            payload["OwnerID"] = owner_id
-        
-        _logger.info(f"🚀 [MISA] Creating Shipping Route: {code} - {name}")
+        _logger.info(f"🚀 [MISA] Creating Shipping Route: Code={shipping_route_code}, Name={name}")
+        _logger.info(f"📤 [MISA] Payload: {json.dumps(payload, ensure_ascii=False)}")
         
         session = self._get_retry_session()
         try:
@@ -1547,6 +1589,7 @@ class MisaApiUtils(models.AbstractModel):
         except Exception as e:
             _logger.error(f"❌ [MISA] Failed to create shipping route: {e}")
             raise e
+
 
     def update_sale_order_shipping_route(self, misa_sale_order_id, shipping_route_id):
         """
