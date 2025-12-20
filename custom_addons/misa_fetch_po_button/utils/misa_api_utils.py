@@ -1526,7 +1526,15 @@ class MisaApiUtils(models.AbstractModel):
         
         # 1. Gọi GenerateNumber để lấy mã ShippingRouteCode hợp lệ
         generated_code = self._generate_shipping_route_code(headers)
-        shipping_route_code = generated_code if generated_code else code
+        
+        if generated_code:
+            shipping_route_code = generated_code
+        else:
+            # Fallback: Sanitize code - MISA không chấp nhận "/" trong mã
+            # VD: "TSN/OUT/02659" -> "TVC-TSN-OUT-02659"
+            sanitized_code = code.replace("/", "-").replace("\\", "-")
+            shipping_route_code = f"TVC-{sanitized_code}"
+            _logger.info(f"⚠️ [MISA] GenerateNumber failed, using sanitized code: {shipping_route_code}")
         
         # 2. API endpoint để tạo ShippingRoute
         url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute/Save"
