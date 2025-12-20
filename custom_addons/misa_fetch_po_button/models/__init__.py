@@ -7,3 +7,4 @@ from . import login_misa
 from . import sale_order_misa_sync
 from . import sale_order_misa_id
 from . import product_misa_sync
+from . import stock_picking_crm_delivery

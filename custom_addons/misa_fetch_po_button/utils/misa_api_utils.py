@@ -1471,4 +1471,133 @@ class MisaApiUtils(models.AbstractModel):
         _logger.info(f"✅ [MISA PURCHASE VOUCHER SEARCH] Tổng tìm thấy {len(all_results)} chứng từ cho {len(search_terms)} keywords")
         return all_results
 
+    # =========================================================================
+    # 5. API CREATE SHIPPING ROUTE (TUYẾN VẬN CHUYỂN)
+    # =========================================================================
+    def create_shipping_route_misa(self, code, name, owner_id=None):
+        """
+        Tạo tuyến vận chuyển mới trên MISA CRM.
+        
+        Args:
+            code (str): Mã tuyến (thường dùng picking name)
+            name (str): Tên tuyến (thường dùng SO name)
+            owner_id (int, optional): MISA User ID. Nếu None, không gửi field này.
+            
+        Returns:
+            int/str: MISA ID của tuyến vừa tạo
+        """
+        misa_config = self.env['misa.config']
+        token = self._fetch_login_crm_token()
+        if not token:
+            raise Exception("Lỗi Token MISA")
+
+        headers = misa_config.get_crm_header(token)
+        
+        # API endpoint để tạo ShippingRoute
+        url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute/Save"
+        
+        payload = {
+            "ShippingRouteCode": code,
+            "ShippingRouteName": name,
+            "StatusID": 3,  # 3 = Đã hoàn thành (vì picking đã done)
+            "StatusIDText": "Đã hoàn thành",
+            "MISAEntityState": 1,  # 1 = Insert (tạo mới)
+            "Active": True,
+            "FormLayoutID": 142,  # Mẫu tiêu chuẩn
+        }
+        
+        # Chỉ thêm OwnerID nếu được truyền vào
+        if owner_id:
+            payload["OwnerID"] = owner_id
+        
+        _logger.info(f"🚀 [MISA] Creating Shipping Route: {code} - {name}")
+        
+        session = self._get_retry_session()
+        try:
+            res = session.post(url, headers=headers, json=payload, timeout=30)
+            res.raise_for_status()
+            data = res.json()
+            
+            _logger.info(f"📥 [MISA] Shipping Route Response: {data}")
+
+            if data.get('Success') and data.get('Data'):
+                res_data = data.get('Data')
+                
+                # Parse ID từ response
+                if isinstance(res_data, dict):
+                    found_id = res_data.get('ID') or res_data.get('ShippingRouteID')
+                    if found_id:
+                        _logger.info(f"✅ [MISA] Shipping Route created: ID={found_id}")
+                        return found_id
+                    
+                    _logger.warning(f"⚠️ [MISA] Response Data (Dict) but no ID found: {res_data}")
+                    raise Exception(f"MISA Response missing ID: {json.dumps(res_data, ensure_ascii=False)}")
+
+                # Nếu Data là primitive (int/str), return trực tiếp
+                if isinstance(res_data, (int, str)):
+                    _logger.info(f"✅ [MISA] Shipping Route created: ID={res_data}")
+                    return res_data
+            
+            # Xử lý lỗi
+            error_msg = data.get('UserMessage') or data.get('ValidateInfo')
+            if not error_msg:
+                error_msg = json.dumps(data, ensure_ascii=False)
+            raise Exception(f"MISA Create Shipping Route Failed: {error_msg}")
+            
+        except Exception as e:
+            _logger.error(f"❌ [MISA] Failed to create shipping route: {e}")
+            raise e
+
+    def update_sale_order_shipping_route(self, misa_sale_order_id, shipping_route_id):
+        """
+        Cập nhật ShippingRouteID vào Sale Order trên MISA CRM.
+        
+        Args:
+            misa_sale_order_id (int/str): MISA Sale Order ID
+            shipping_route_id (int/str): MISA Shipping Route ID vừa tạo
+            
+        Returns:
+            bool: True nếu thành công
+        """
+        misa_config = self.env['misa.config']
+        token = self._fetch_login_crm_token()
+        if not token:
+            raise Exception("Lỗi Token MISA")
+
+        headers = misa_config.get_crm_header(token)
+        
+        # API endpoint để cập nhật SaleOrder
+        url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/Save"
+        
+        payload = {
+            "ID": int(misa_sale_order_id),
+            "ShippingRouteID": int(shipping_route_id),
+            "MISAEntityState": 2,  # 2 = Update (cập nhật)
+        }
+        
+        _logger.info(f"🔄 [MISA] Updating Sale Order {misa_sale_order_id} with ShippingRouteID={shipping_route_id}")
+        
+        session = self._get_retry_session()
+        try:
+            res = session.post(url, headers=headers, json=payload, timeout=30)
+            res.raise_for_status()
+            data = res.json()
+            
+            _logger.info(f"📥 [MISA] Update Sale Order Response: {data}")
+
+            if data.get('Success'):
+                _logger.info(f"✅ [MISA] Sale Order {misa_sale_order_id} updated with ShippingRouteID={shipping_route_id}")
+                return True
+            
+            # Xử lý lỗi
+            error_msg = data.get('UserMessage') or data.get('ValidateInfo')
+            if not error_msg:
+                error_msg = json.dumps(data, ensure_ascii=False)
+            _logger.error(f"❌ [MISA] Update Sale Order Failed: {error_msg}")
+            return False
+            
+        except Exception as e:
+            _logger.error(f"❌ [MISA] Failed to update sale order shipping route: {e}")
+            return False
+
 
