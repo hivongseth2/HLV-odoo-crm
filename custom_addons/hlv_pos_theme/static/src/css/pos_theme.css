@@ -1,32 +1,145 @@
-/* Clean up POS Category Buttons */
+/* SIDEBAR LAYOUT IMPLEMENTATION */
 
-/* Override the random background colors calculation with a clean white/gray style */
-.pos-content .product-screen .products-widget .category-list .category-button {
-    background-color: #f8f9fa !important;
-    /* Light gray background */
-    color: #333333 !important;
-    /* Dark gray text */
-    border: 1px solid #dee2e6 !important;
-    /* Subtle border */
-    box-shadow: none !important;
-    /* Remove default shadows if any */
-    border-radius: 4px !important;
-    /* Slight rounded corners */
-    font-weight: 500 !important;
-    text-transform: uppercase;
-    transition: all 0.2s ease;
+/* Root Container - Flex Row */
+.pos-content .product-screen .products-widget.hlv-sidebar-layout {
+    display: flex !important;
+    flex-direction: row !important;
+    height: 100% !important;
+    width: 100% !important;
 }
 
-/* Hover state */
-.pos-content .product-screen .products-widget .category-list .category-button:hover {
-    background-color: #e9ecef !important;
-    border-color: #ced4da !important;
-}
-
-/* Active/Selected Category (if applicable class exists, usually requires inspection, assume standard active-like classes or handling via JS)
-   But simplified: Odoo POS typically highlights the breadcrumb or changes view.
-   We will ensure the simple buttons look good.
+/* LEFT SIDEBAR: Categories */
+/* 
+   We assume the category list is directly inside or part of the control panel.
+   In Odoo 17+, categories might be in `ProductsWidgetControlPanel`.
+   We need to target the container that HOLDS the categories.
+   Usually: `.products-widget-control-panel` or `.category-list` 
+   
+   If they are separate DOM elements, we used `order` property in flexbox to rearrange them 
+   if they are siblings. 
 */
+
+.pos-content .product-screen .products-widget .products-widget-control-panel {
+    /* If the control panel contains both search and categories, we might need to split them inside.
+       But assuming we can just make the CATEGORY LIST float left. */
+    display: flex;
+    flex-direction: column;
+    /* Force vertical stacking if possible */
+}
+
+/* 
+   CRITICAL: The standard Odoo structure makes it hard to split Search (Top) and Category (Sidebar) 
+   if they are in the same parent.
+   
+   Let's try to target the SPECIFIC `.category-list` class and enforce it as a sidebar
+   ONLY IF it is a direct child of products-widget or we can force it out of flow.
+   
+   Standard Odoo:
+   <div class="products-widget">
+      <div class="products-widget-control-panel">...categories + search...</div>
+      <div class="product-list-container">...products...</div>
+   </div>
+   
+   WE WILL HACK THE LAYOUT:
+   1. Make `.products-widget` a Grid or Flex.
+   2. Absolute position the Sidebar? Or standard Flex.
+*/
+
+/* 
+   Reset previous simple tweaks 
+*/
+
+/* HACK: Make the Control Panel (which holds categories) the SIDEBAR 
+   BUT this will also put the Search bar in the sidebar, which is actually distinct/good! 
+   Sidebar = Search + Categories.
+   Main Content = Products.
+*/
+.pos-content .product-screen .products-widget.hlv-sidebar-layout .products-widget-control-panel {
+    width: 250px !important;
+    min-width: 250px !important;
+    height: 100% !important;
+    background: #f0f2f5 !important;
+    border-right: 1px solid #ddd !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 10px !important;
+    overflow-y: auto !important;
+    box-sizing: border-box !important;
+}
+
+/* The Product List Container takes the remaining space */
+.pos-content .product-screen .products-widget.hlv-sidebar-layout .product-list-container {
+    flex: 1 !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+    padding: 10px !important;
+    background: #fff !important;
+}
+
+
+/* NOW, Style the contents of the Sidebar (Control Panel) */
+
+/* 1. Search Bar at top of sidebar */
+.pos-content .product-screen .products-widget .search-box {
+    width: 100% !important;
+    margin-bottom: 20px !important;
+}
+
+/* 2. Category List: Vertical Stack */
+.pos-content .product-screen .products-widget .category-list {
+    display: flex !important;
+    flex-direction: column !important;
+    /* Vertical list */
+    gap: 8px !important;
+    padding: 0 !important;
+    width: 100% !important;
+}
+
+/* 3. Category Items: Row Style */
+.pos-content .product-screen .products-widget .category-list .category-button {
+    width: 100% !important;
+    max-width: none !important;
+    flex: 0 0 auto !important;
+    /* Do not grow/shrink randomly */
+    min-height: 50px !important;
+    /* Smaller balanced height */
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-start !important;
+    /* Left align text */
+    padding: 10px 15px !important;
+    margin: 0 !important;
+
+    background-color: #ffffff !important;
+    border: 1px solid transparent !important;
+    /* Transparent border unless active */
+    border-radius: 6px !important;
+    box-shadow: none !important;
+
+    font-size: 14px !important;
+    text-transform: none !important;
+    /* Normal case */
+    text-align: left !important;
+}
+
+/* Hover for sidebar items */
+.pos-content .product-screen .products-widget .category-list .category-button:hover {
+    background-color: #e2e6ea !important;
+}
+
+/* Active State styling */
+.pos-content .product-screen .products-widget .category-list .category-button.active {
+    background-color: #007bff !important;
+    /* Primary Brand Color */
+    color: white !important;
+    font-weight: bold !important;
+}
+
+/* Breadcrumbs (if present) - Make them stack or look like headers */
+.pos-content .product-screen .products-widget .breadcrumbs {
+    margin-bottom: 10px;
+}
 
 /* Improve the category simplified view if in breadcrumb-like mode */
 .pos-content .product-screen .products-widget .category-simple-button {

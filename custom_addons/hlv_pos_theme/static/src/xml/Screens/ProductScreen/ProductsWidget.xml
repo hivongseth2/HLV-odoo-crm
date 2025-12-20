@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="hlv_pos_theme.ProductsWidget" t-inherit="point_of_sale.ProductsWidget" t-inherit-mode="extension" owl="1">
+        <!-- 
+            Strategy: 
+            Replace the default structure to wrap everything in a 2-column container.
+            We unfortunately can't drastically re-arrange WITHOUT replacing the main logic often,
+            BUT Odoo 16/17/18 tries to be modular.
+            
+            By default ProductsWidget has:
+            <div class="products-widget ...">
+               <ProductsWidgetControlPanel ... />
+               <div class="product-list-container ...">
+                   ...
+               </div>
+            </div>
+
+            ProductsWidgetControlPanel is where Categories usually live (breadcrumbs/selector).
+            OR in older versions it was separate.
+            
+            Let's target the root div and try to enforce a split via CSS mainly, 
+            but if we can separate the "search" from "categories", that is better.
+            
+            Actually, the safest sidebar approach in recent Odoo is manipulating CSS Grid/Flex on the main container
+            AND moving the "Category List" logic.
+            
+            However, since I don't know the EXACT internal template of standard Odoo 18 without reading it, 
+            I will try a CSS-Heavy approach first where we force the Category container to be left aligned, 
+            or I inject a specific sidebar container if possible.
+            
+            Wait, standard Odoo puts categories INSIDE the Product List area sometimes or above it.
+            
+            Let's try to RE-ORGANIZE the top level structure.
+        -->
+        
+        <!-- 
+             Investigating Odoo 18, `ProductsWidget` usually separates `ProductsWidgetControlPanel` (search + cats) 
+             and `ProductList`.
+             
+             We will HIDE the default category display in ControlPanel (via CSS or inheritance removal)
+             and INSERT a new Sidebar component or just re-style the existing list if it's rendered there.
+             
+             Refining plan: 
+             If we simply float the category-list to the left and the products to the right, we can achieve this.
+             
+             Let's wrap the contents in a flex container.
+        -->
+        
+        <xpath expr="//div[hasclass('products-widget')]" position="attributes">
+            <attribute name="class">products-widget hlv-sidebar-layout</attribute>
+        </xpath>
+
+    </t>
+
+</templates>
