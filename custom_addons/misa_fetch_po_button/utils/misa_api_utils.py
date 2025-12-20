@@ -1536,31 +1536,190 @@ class MisaApiUtils(models.AbstractModel):
             shipping_route_code = f"TVC-{sanitized_code}"
             _logger.info(f"⚠️ [MISA] GenerateNumber failed, using sanitized code: {shipping_route_code}")
         
-        # 2. API endpoint để tạo ShippingRoute
-        url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute/Save"
+        # 2. API endpoint (KHÔNG có /Save ở cuối!)
+        url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute"
         
-        # 3. Build payload theo đúng format FormDataQuickAdd
-        current_date = datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000+07:00")
+        # 3. Build payload theo đúng format capture từ MISA browser
+        # StartDate format: UTC với Z suffix
+        current_date_utc = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
         
         payload = {
             "ShippingRouteCode": shipping_route_code,
             "ShippingRouteName": name,
-            "StatusID": "3",  # 3 = Đã hoàn thành (string format)
-            "StatusIDText": "Đã hoàn thành",
+            "StatusID": "3",  # 3 = Đã hoàn thành
             "OwnerID": owner_id,
-            "OwnerIDText": "",  
+            "StartDate": current_date_utc,
             "WarehouseEmployeeID": owner_id,
-            "WarehouseEmployeeIDText": "",
-            "StartDate": current_date,
-            "EndDate": current_date,
+            "EndDate": None,
+            "MISAEntityState": 1,  # 1 = Insert (tạo mới)
             "FormLayoutID": 142,
             "FormLayoutIDText": "Mẫu tiêu chuẩn",
-            "MISAEntityState": 1,  # 1 = Insert (tạo mới)
-            "Active": True,
+            "LayoutCode": "ShippingRoute",
+            "ActiveLayoutCode": "ShippingRoute",
+            "Fields": [
+                {
+                    "ID": 11409,
+                    "FieldName": "ShippingRouteCode",
+                    "DisplayText": "Mã tuyến",
+                    "Value": shipping_route_code,
+                    "TypeControl": 10,
+                    "MaxLength": 100,
+                    "DecimalLength": 2,
+                    "IsRequired": True,
+                    "IsNotZero": False,
+                    "IsUnique": True,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "ID": 11411,
+                    "FieldName": "OwnerID",
+                    "DisplayText": "Người thực hiện",
+                    "Value": owner_id,
+                    "TypeControl": 5,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "FieldName": "OwnerIDText",
+                    "DisplayText": "Người thực hiện",
+                    "Value": "",
+                    "TypeControl": 1,
+                    "MaxLength": 255
+                },
+                {
+                    "ID": 11413,
+                    "FieldName": "StartDate",
+                    "DisplayText": "Ngày bắt đầu",
+                    "Value": current_date_utc,
+                    "TypeControl": 7,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "ID": 11415,
+                    "FieldName": "StatusID",
+                    "DisplayText": "Tình trạng",
+                    "Value": "3",
+                    "TypeControl": 5,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "FieldName": "StatusIDText",
+                    "DisplayText": "Tình trạng",
+                    "Value": "Đã hoàn thành",
+                    "TypeControl": 1,
+                    "MaxLength": 255
+                },
+                {
+                    "ID": 11410,
+                    "FieldName": "ShippingRouteName",
+                    "DisplayText": "Tên tuyến",
+                    "Value": name,
+                    "TypeControl": 1,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": True,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "ID": 11412,
+                    "FieldName": "WarehouseEmployeeID",
+                    "DisplayText": "Nhân viên kho",
+                    "Value": owner_id,
+                    "TypeControl": 5,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "FieldName": "WarehouseEmployeeIDText",
+                    "DisplayText": "Nhân viên kho",
+                    "Value": "",
+                    "TypeControl": 1,
+                    "MaxLength": 255
+                },
+                {
+                    "ID": 11414,
+                    "FieldName": "EndDate",
+                    "DisplayText": "Ngày kết thúc",
+                    "Value": None,
+                    "TypeControl": 7,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "FieldName": "FormLayoutID",
+                    "Value": 142,
+                    "TypeControl": 14
+                },
+                {
+                    "FieldName": "FormLayoutIDText",
+                    "Value": "Mẫu tiêu chuẩn",
+                    "TypeControl": 1
+                },
+                {
+                    "FieldName": "PersonInChargeID",
+                    "TypeControl": 9
+                },
+                {
+                    "FieldName": "PersonInChargeIDText",
+                    "TypeControl": 1
+                }
+            ]
         }
         
         _logger.info(f"🚀 [MISA] Creating Shipping Route: Code={shipping_route_code}, Name={name}")
-        _logger.info(f"📤 [MISA] Payload: {json.dumps(payload, ensure_ascii=False)}")
+        _logger.debug(f"📤 [MISA] Payload: {json.dumps(payload, ensure_ascii=False)}")
         
         session = self._get_retry_session()
         try:
