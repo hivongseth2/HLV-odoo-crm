@@ -1,0 +1,44 @@
+/* Clean up POS Category Buttons */
+
+/* Override the random background colors calculation with a clean white/gray style */
+.pos-content .product-screen .products-widget .category-list .category-button {
+    background-color: #f8f9fa !important;
+    /* Light gray background */
+    color: #333333 !important;
+    /* Dark gray text */
+    border: 1px solid #dee2e6 !important;
+    /* Subtle border */
+    box-shadow: none !important;
+    /* Remove default shadows if any */
+    border-radius: 4px !important;
+    /* Slight rounded corners */
+    font-weight: 500 !important;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+}
+
+/* Hover state */
+.pos-content .product-screen .products-widget .category-list .category-button:hover {
+    background-color: #e9ecef !important;
+    border-color: #ced4da !important;
+}
+
+/* Active/Selected Category (if applicable class exists, usually requires inspection, assume standard active-like classes or handling via JS)
+   But simplified: Odoo POS typically highlights the breadcrumb or changes view.
+   We will ensure the simple buttons look good.
+*/
+
+/* Improve the category simplified view if in breadcrumb-like mode */
+.pos-content .product-screen .products-widget .category-simple-button {
+    background-color: #f8f9fa !important;
+    color: #333 !important;
+    border: 1px solid #dee2e6 !important;
+}
+
+/* Optional: Clean up Product Cards as well to match */
+/*
+.pos-content .product-screen .product-list .product {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #eee;
+}
+*/
