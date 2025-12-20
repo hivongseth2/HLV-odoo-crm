@@ -89,8 +89,8 @@ class StockPickingCrmDelivery(models.Model):
             # ShippingRouteCode = picking.name, ShippingRouteName = sale_order.name
             shipping_route_id = MisaApiUtils.create_shipping_route_misa(
                 code=self.name,
-                name=sale_order.name,
-                owner_id=None  # Để MISA tự xác định hoặc dùng default
+                name=sale_order.name
+                # owner_id uses default value (59)
             )
             
             if not shipping_route_id:
