@@ -328,6 +328,9 @@ class SaleOrder(models.Model):
             vals_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_upd['x_studio_htgh'] = owner_date['htgh']
+        # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
+        if owner_date.get('is_crm_delivery'):
+            vals_upd['x_studio_crm_elivery'] = True
         # Gán lại địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
         try:
             # Danh sách e_accounts để xác định khách hàng TMĐT
@@ -1013,6 +1016,9 @@ class SaleOrder(models.Model):
             vals_create['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_create['x_studio_htgh'] = owner_date['htgh']
+        # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
+        if owner_date.get('is_crm_delivery'):
+            vals_create['x_studio_crm_elivery'] = True
 
         new_so = env['sale.order'].create(vals_create)
 
@@ -1501,6 +1507,9 @@ class SaleOrder(models.Model):
             vals_header_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_header_upd['x_studio_htgh'] = owner_date['htgh']
+        # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
+        if owner_date.get('is_crm_delivery'):
+            vals_header_upd['x_studio_crm_elivery'] = True
         if vals_header_upd:
             self.write(vals_header_upd)
             _logger.info("✅ Đã cập nhật misa_saler_code/order_date/httt/htgh/misa_delivery cho SO %s", self.name)

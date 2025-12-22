@@ -1109,6 +1109,9 @@ class SaleApiImportWizard(models.TransientModel):
                         sale_vals['x_studio_httt'] = owner_date['httt']
                     if owner_date.get('htgh'):
                         sale_vals['x_studio_htgh'] = owner_date['htgh']
+                    # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
+                    if owner_date.get('is_crm_delivery'):
+                        sale_vals['x_studio_crm_elivery'] = True
 
                     sale_order = self.env['sale.order'].create(sale_vals)
                     _logger.info("✅ [%s] Created SO id=%s with partner_shipping_id=%s (delivery_contact.id=%s)",
@@ -1456,6 +1459,9 @@ class SaleApiImportWizard(models.TransientModel):
                             sale_vals['x_studio_misa_order_date'] = owner_date['sale_order_date']
                         if owner_date.get('misa_delivery'):
                             sale_vals['x_studio_misa_delivery'] = owner_date['misa_delivery']
+                        # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
+                        if owner_date.get('is_crm_delivery'):
+                            sale_vals['x_studio_crm_elivery'] = True
 
                         sale_order = self.env['sale.order'].create(sale_vals)
 

@@ -441,6 +441,11 @@ class MisaApiUtils(models.AbstractModel):
         # Lấy hình thức thanh toán và hình thức giao hàng
         httt = (cd.get("CustomField15") or "").strip() or None  # Hình thức thanh toán
         htgh = (cd.get("CustomField16") or "").strip() or None  # Hình thức giao hàng
+        
+        # Lấy DeliveryPartnerID để xác định "Tự vận chuyển"
+        delivery_partner_id = cd.get("DeliveryPartnerID")
+        # Nếu DeliveryPartnerID = 3000 (Tự vận chuyển) thì set flag is_crm_delivery = True
+        is_crm_delivery = (delivery_partner_id == 3000 or delivery_partner_id == "3000")
 
         # Trả về kết quả dạng dict
         return {
@@ -451,7 +456,8 @@ class MisaApiUtils(models.AbstractModel):
             "other_sys_order_code": other_sys_order_code,
             "delivery_order_number": delivery_order_number,
             "httt": httt,
-            "htgh": htgh
+            "htgh": htgh,
+            "is_crm_delivery": is_crm_delivery,  # True nếu DeliveryPartnerID = 3000
         }
     
 
