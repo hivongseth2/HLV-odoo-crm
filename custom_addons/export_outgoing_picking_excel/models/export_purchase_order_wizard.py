@@ -297,7 +297,7 @@ class PurchaseExportWizard(models.TransientModel):
             'so_khe_uoc_di_vay': '',
             'so_khe_uoc_cho_vay': '',
             'cp_khong_hop_ly': 'Không',
-            'misa_sync': getattr(purchase, 'x_studio_misa_sync', False) if purchase else False,
+            'misa_sync': getattr(picking, 'x_studio_misa_sav', False) if picking else False,
         }
 
     def _create_excel_workbook(self, data_rows):
