@@ -14,31 +14,31 @@
         
         /* Sticky Header for Desktop */
         @media (min-width: 769px) {
-            .table-responsive {
-                overflow: visible !important;
-            }
-            #inv-table thead th {
-                position: sticky;
-                top: 72px; /* Offset for Odoo Website Header */
-                background-color: #f8f9fa;
-                z-index: 1020;
-                white-space: nowrap;
-                padding: 10px 4px;
-                font-size: 0.85rem;
-                border-bottom: 2px solid #dee2e6;
-            }
-            #inv-table td {
-                padding: 8px 4px;
-                font-size: 0.9rem;
-            }
             #inv-table {
                 border-collapse: separate;
                 border-spacing: 0;
             }
-            /* Adjust specific column widths if needed to prevent overflow */
-            #inv-table th:nth-child(1), #inv-table td:nth-child(1) { width: 30px !important; }
-            #inv-table th:nth-child(2), #inv-table td:nth-child(2) { width: 60px !important; }
-            #inv-table th:nth-child(14), #inv-table td:nth-child(14) { width: 40px !important; }
+            #inv-table thead th {
+                position: sticky;
+                top: 0; /* Fallback */
+                top: var(--top-navbar-height, 0px);
+                background-color: #f8f9fa;
+                z-index: 1000;
+                white-space: nowrap;
+                padding: 12px 6px;
+                font-size: 0.9rem;
+                box-shadow: inset 0 -1px 0 #dee2e6;
+            }
+            .table-responsive {
+                overflow: visible !important;
+            }
+            #inv-table td {
+                padding: 10px 6px;
+                font-size: 0.9rem;
+            }
+            /* Reset specific column widths to auto to prevent weird shifts */
+            #inv-table th, #inv-table td { width: auto !important; }
+            #inv-table th:first-child, #inv-table td:first-child { width: 40px !important; }
         }
 
         @media (max-width: 768px) {
