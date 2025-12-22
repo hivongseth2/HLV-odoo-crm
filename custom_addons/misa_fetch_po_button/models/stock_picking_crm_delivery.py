@@ -110,7 +110,8 @@ class StockPickingCrmDelivery(models.Model):
         try:
             success = MisaApiUtils.update_sale_order_shipping_route(
                 misa_sale_order_id=misa_sale_order_id,
-                shipping_route_id=shipping_route_id
+                shipping_route_id=shipping_route_id,
+                shipping_route_name=sale_order.name  # Tên tuyến = mã đơn hàng
             )
             
             if success:

@@ -1757,13 +1757,15 @@ class MisaApiUtils(models.AbstractModel):
             raise e
 
 
-    def update_sale_order_shipping_route(self, misa_sale_order_id, shipping_route_id):
+    def update_sale_order_shipping_route(self, misa_sale_order_id, shipping_route_id, shipping_route_name=""):
         """
         Cập nhật ShippingRouteID vào Sale Order trên MISA CRM.
+        Sử dụng API /Delivery/SaveDelivery
         
         Args:
             misa_sale_order_id (int/str): MISA Sale Order ID
             shipping_route_id (int/str): MISA Shipping Route ID vừa tạo
+            shipping_route_name (str): Tên tuyến vận chuyển (để hiển thị)
             
         Returns:
             bool: True nếu thành công
@@ -1775,15 +1777,19 @@ class MisaApiUtils(models.AbstractModel):
 
         headers = misa_config.get_crm_header(token)
         
-        # API endpoint
-        url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder"
+        # API endpoint đúng - /Delivery/SaveDelivery
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Delivery/SaveDelivery"
         
         payload = {
-            "ID": int(misa_sale_order_id),
-            "ShippingRouteID": int(shipping_route_id),
-            "MISAEntityState": 2,  # 2 = Update (cập nhật)
-            "LayoutCode": "SaleOrder",
-            "ActiveLayoutCode": "SaleOrder",
+            "ID": str(misa_sale_order_id),
+            "ShippingRouteID": str(shipping_route_id),
+            "ShippingRouteIDText": shipping_route_name,
+            "WarehouseUserID": None,
+            "WarehouseUserIDText": None,
+            "DeliveryUserID": None,
+            "DeliveryUserIDText": None,
+            "EstimatedDeliveryDate": None,
+            "Description": ""
         }
         
         _logger.info(f"🔄 [MISA] Updating Sale Order {misa_sale_order_id} with ShippingRouteID={shipping_route_id}")
@@ -1795,7 +1801,7 @@ class MisaApiUtils(models.AbstractModel):
             res.raise_for_status()
             data = res.json()
             
-            _logger.info(f"📥 [MISA] Update Sale Order Response: {data}")
+            _logger.info(f"📥 [MISA] SaveDelivery Response: {data}")
 
             if data.get('Success'):
                 _logger.info(f"✅ [MISA] Sale Order {misa_sale_order_id} updated with ShippingRouteID={shipping_route_id}")
@@ -1805,11 +1811,11 @@ class MisaApiUtils(models.AbstractModel):
             error_msg = data.get('UserMessage') or data.get('ValidateInfo')
             if not error_msg:
                 error_msg = json.dumps(data, ensure_ascii=False)
-            _logger.error(f"❌ [MISA] Update Sale Order Failed: {error_msg}")
+            _logger.error(f"❌ [MISA] SaveDelivery Failed: {error_msg}")
             return False
             
         except Exception as e:
-            _logger.error(f"❌ [MISA] Failed to update sale order shipping route: {e}")
+            _logger.error(f"❌ [MISA] Failed to save delivery: {e}")
             return False
 
 
