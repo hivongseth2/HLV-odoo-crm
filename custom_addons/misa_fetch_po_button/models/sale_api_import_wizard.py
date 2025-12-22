@@ -1113,6 +1113,11 @@ class SaleApiImportWizard(models.TransientModel):
                     if owner_date.get('is_crm_delivery'):
                         sale_vals['x_studio_crm_elivery'] = True
 
+                    # Ánh xạ địa chỉ sang tags (Tuyến)
+                    tag_ids = misa_utils.map_address_to_tag_ids(self.env, delivery_contact.street or shipping_address_str)
+                    if tag_ids:
+                        sale_vals['tag_ids'] = tag_ids
+
                     sale_order = self.env['sale.order'].create(sale_vals)
                     _logger.info("✅ [%s] Created SO id=%s with partner_shipping_id=%s (delivery_contact.id=%s)",
                                 order_ref, sale_order.id, sale_order.partner_shipping_id.id, delivery_contact.id)
@@ -1462,6 +1467,11 @@ class SaleApiImportWizard(models.TransientModel):
                         # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
                         if owner_date.get('is_crm_delivery'):
                             sale_vals['x_studio_crm_elivery'] = True
+
+                        # Ánh xạ địa chỉ sang tags (Tuyến)
+                        tag_ids = misa_utils.map_address_to_tag_ids(self.env, delivery_contact.street or shipping_address_str)
+                        if tag_ids:
+                            sale_vals['tag_ids'] = tag_ids
 
                         sale_order = self.env['sale.order'].create(sale_vals)
 

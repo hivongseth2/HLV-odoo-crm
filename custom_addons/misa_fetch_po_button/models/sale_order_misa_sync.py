@@ -544,6 +544,12 @@ class SaleOrder(models.Model):
             else:
                 SaleLine.create(vals)
 
+        # Ánh xạ địa chỉ sang tags (Tuyến)
+        if shipping_addr:
+             misa_utils = self.env['misa.api.utils']
+             t_ids = misa_utils.map_address_to_tag_ids(self.env, shipping_addr)
+             if t_ids:
+                 self.write({'tag_ids': t_ids})
 
         # 5) Confirm nếu còn nháp
         if self.state in ('draft', 'sent'):
@@ -1019,6 +1025,12 @@ class SaleOrder(models.Model):
         # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
         if owner_date.get('is_crm_delivery'):
             vals_create['x_studio_crm_elivery'] = True
+
+        # Ánh xạ địa chỉ sang tags (Tuyến)
+        misa_utils = env['misa.api.utils']
+        tag_ids = misa_utils.map_address_to_tag_ids(env, shipping_addr)
+        if tag_ids:
+            vals_create['tag_ids'] = tag_ids
 
         new_so = env['sale.order'].create(vals_create)
 
