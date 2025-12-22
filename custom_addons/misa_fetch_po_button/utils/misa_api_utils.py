@@ -1483,9 +1483,10 @@ class MisaApiUtils(models.AbstractModel):
         """
         url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute/GenerateNumber/ShippingRoute/ShippingRouteCode/142"
         
-        session = self._get_retry_session()
+        # Dùng session thường - KHÔNG retry vì sẽ dùng fallback nếu fail
+        session = requests.Session()
         try:
-            res = session.get(url, headers=headers, timeout=30)
+            res = session.get(url, headers=headers, timeout=2)  # Giảm timeout xuống 2s
             res.raise_for_status()
             data = res.json()
             
@@ -1500,7 +1501,7 @@ class MisaApiUtils(models.AbstractModel):
             return None
             
         except Exception as e:
-            _logger.error(f"❌ [MISA] GenerateNumber error: {e}")
+            _logger.warning(f"⚠️ [MISA] GenerateNumber error (using fallback): {e}")
             return None
 
     def create_shipping_route_misa(self, code, name, owner_id=59):
@@ -1534,7 +1535,7 @@ class MisaApiUtils(models.AbstractModel):
             shipping_route_code = code
             _logger.info(f"⚠️ [MISA] GenerateNumber failed, using original code: {shipping_route_code}")
         
-        # 2. API endpoint (KHÔNG có /Save ở cuối!)
+        # 2. API endpoint
         url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute"
         
         # 3. Build payload theo đúng format capture từ MISA browser
@@ -1774,7 +1775,7 @@ class MisaApiUtils(models.AbstractModel):
 
         headers = misa_config.get_crm_header(token)
         
-        # API endpoint (KHÔNG có /Save)
+        # API endpoint
         url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder"
         
         payload = {
