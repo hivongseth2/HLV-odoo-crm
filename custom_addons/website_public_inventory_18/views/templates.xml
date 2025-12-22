@@ -14,11 +14,14 @@
         
         /* Sticky Header for Desktop */
         @media (min-width: 769px) {
+            .table-responsive {
+                overflow: visible !important;
+            }
             #inv-table thead th {
                 position: sticky;
-                top: 0;
+                top: 72px; /* Offset for Odoo Website Header */
                 background-color: #f8f9fa;
-                z-index: 100;
+                z-index: 1020;
                 white-space: nowrap;
                 padding: 10px 4px;
                 font-size: 0.85rem;
