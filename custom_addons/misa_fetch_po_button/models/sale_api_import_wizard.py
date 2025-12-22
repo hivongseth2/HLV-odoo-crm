@@ -771,6 +771,9 @@ class SaleApiImportWizard(models.TransientModel):
             "BENCAM": "KBC/Tồn kho",
             "HIENDUC": "KHD/Tồn kho",
             "HCM_SHOWROOM": "TSNSR/Stock",
+            "HLV":"TSN/Stock",
+            "BẾN CAM": "KBC/Tồn kho",
+            "BẾNCAM": "KBC/Tồn kho",
         }
 
         e_accounts = {

@@ -773,6 +773,9 @@ class SaleOrder(models.Model):
             "BENCAM": "KBC/Tồn kho",
             "HIENDUC": "KHD/Tồn kho",
             "HCM_SHOWROOM": "TSNSR/Stock",
+            "HLV":"TSN/Stock",
+             "BẾN CAM": "KBC/Tồn kho",
+             "BẾNCAM": "KBC/Tồn kho"
         }
 
         old_wh = None
@@ -780,9 +783,10 @@ class SaleOrder(models.Model):
         zns = False
 
 
-        # Tìm dòng đầu tiên có StockIDText hợp lệ
+        # Tìm dòng đầu tiên có StockIDText (CustomField2) hợp lệ
         for l in (lines or []):
-            sid = (l.get("StockIDText") or "").strip()
+            sid = (l.get("CustomField2") or "").strip()
+            _logger.info("🏭 Lấy warehouse từ dòng MISA: %s", sid)
             if sid:
                 stock_id = sid
                 break
@@ -973,6 +977,10 @@ class SaleOrder(models.Model):
                 "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
                 "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
                 "TOOL DEWALT",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE HLV",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE DEWALT",
             }
             delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
                 parent_partner=partner,
