@@ -37,6 +37,12 @@
                 box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); /* Tạo đường kẻ đổ bóng thay cho border-bottom bị mất khi dùng sticky */
                 border-bottom: 2px solid #dee2e6;
             }
+            .detail-row thead th {
+              position: sticky;
+              top: 100px; /* Phải lớn hơn giá trị 'top' của header chính */
+              z-index: 1010; /* Nhỏ hơn z-index của header chính */
+              background-color: #ffffff;
+          }
 
             /* Nếu website Odoo của bạn có thanh navbar cố định phía trên (thường cao 56px-70px)
               Hãy điều chỉnh top bằng đúng chiều cao đó để không bị che mất header bảng */
