@@ -31,7 +31,7 @@
             #inv-table thead th {
                 position: -webkit-sticky; /* Hỗ trợ Safari */
                 position: sticky;
-                top: 0; /* Mặc định lên sát mép trên */
+                top: 56; /* Mặc định lên sát mép trên */
                 background-color: #f8f9fa !important; /* Phải có nền để không bị lộ chữ bên dưới khi cuộn */
                 z-index: 1020; /* Nằm trên các nội dung khác */
                 box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); /* Tạo đường kẻ đổ bóng thay cho border-bottom bị mất khi dùng sticky */
