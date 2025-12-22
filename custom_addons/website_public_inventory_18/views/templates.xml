@@ -13,54 +13,38 @@
         #search-suggestions { border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); border: 1px solid rgba(0,0,0,.05); max-height: 60vh; }
         
         /* Sticky Header for Desktop */
+       /* Sticky Header for Desktop */
         @media (min-width: 769px) {
-            /* Override Odoo's default wrapper behaviors */
-            #wrap {
+            /* 1. Quan trọng: Phải ép các thẻ cha không được để overflow: hidden hoặc auto */
+            #wrap, 
+            .container,
+            .card,
+            .table-responsive {
                 overflow: visible !important;
             }
-            
-            .table-container {
-                overflow-x: auto;
-                max-width: 100%;
-                position: relative;
-            }
-            
+
+            /* 2. Thiết lập cho bảng */
             #inv-table {
-                border-collapse: separate;
+                border-collapse: separate; /* Bắt buộc để dùng sticky */
                 border-spacing: 0;
-                width: 100%;
             }
-            
+
+            /* 3. Thiết lập cho dòng header */
             #inv-table thead th {
+                position: -webkit-sticky; /* Hỗ trợ Safari */
                 position: sticky;
-                top: 56px; /* Odoo navbar height, adjust if needed */
-                background-color: #f8f9fa;
-                z-index: 999;
-                white-space: nowrap;
-                padding: 12px 6px;
-                font-size: 0.9rem;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                top: 0; /* Mặc định lên sát mép trên */
+                background-color: #f8f9fa !important; /* Phải có nền để không bị lộ chữ bên dưới khi cuộn */
+                z-index: 1020; /* Nằm trên các nội dung khác */
+                box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); /* Tạo đường kẻ đổ bóng thay cho border-bottom bị mất khi dùng sticky */
                 border-bottom: 2px solid #dee2e6;
             }
-            
-            /* Fallback if no navbar */
-            body.o_no_header #inv-table thead th {
-                top: 0;
+
+            /* Nếu website Odoo của bạn có thanh navbar cố định phía trên (thường cao 56px-70px)
+              Hãy điều chỉnh top bằng đúng chiều cao đó để không bị che mất header bảng */
+            .o_header_standard + #wrap #inv-table thead th {
+                top: 56px; 
             }
-            
-            #inv-table td {
-                padding: 10px 6px;
-                font-size: 0.9rem;
-                background-color: #fff;
-            }
-            
-            #inv-table tbody tr {
-                background-color: #fff;
-            }
-            
-            /* Reset specific column widths to auto to prevent weird shifts */
-            #inv-table th, #inv-table td { width: auto !important; }
-            #inv-table th:first-child, #inv-table td:first-child { width: 40px !important; }
         }
         @media (max-width: 768px) {
             .mb-6 { margin-bottom: 2rem !important; }
