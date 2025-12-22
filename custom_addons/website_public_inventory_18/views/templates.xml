@@ -12,6 +12,32 @@
         .search-input-field { border: none; outline: none; flex-grow: 1; min-width: 120px; font-size: 16px; padding: 0; margin: 0; background: transparent; color: #212529; }
         #search-suggestions { border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); border: 1px solid rgba(0,0,0,.05); max-height: 60vh; }
         
+        /* Sticky Header for Desktop */
+        @media (min-width: 769px) {
+            #inv-table thead th {
+                position: sticky;
+                top: 0;
+                background-color: #f8f9fa;
+                z-index: 100;
+                white-space: nowrap;
+                padding: 10px 4px;
+                font-size: 0.85rem;
+                border-bottom: 2px solid #dee2e6;
+            }
+            #inv-table td {
+                padding: 8px 4px;
+                font-size: 0.9rem;
+            }
+            #inv-table {
+                border-collapse: separate;
+                border-spacing: 0;
+            }
+            /* Adjust specific column widths if needed to prevent overflow */
+            #inv-table th:nth-child(1), #inv-table td:nth-child(1) { width: 30px !important; }
+            #inv-table th:nth-child(2), #inv-table td:nth-child(2) { width: 60px !important; }
+            #inv-table th:nth-child(14), #inv-table td:nth-child(14) { width: 40px !important; }
+        }
+
         @media (max-width: 768px) {
             .mb-6 { margin-bottom: 2rem !important; }
             #search-form .col-md-5, #search-form .col-md-2, #search-form .col-md-3 { margin-bottom: 10px; }
@@ -209,12 +235,12 @@
 
               <t t-if="rows">
                 <div class="card shadow-sm border-0 bg-transparent">
-                    <div class="table-responsive" style="overflow-x: visible;">
-                      <table class="table table-hover align-middle mb-0" id="inv-table" style="border-collapse: separate; border-spacing: 0;">
+                    <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
+                      <table class="table table-hover align-middle mb-0" id="inv-table">
                         <thead class="bg-light">
                           <tr>
-                            <th style="width:40px;"></th>
-                            <th style="width:70px;">Ảnh</th>
+                            <th></th>
+                            <th>Ảnh</th>
                             <th>Mã</th>
                             <th>Tên sản phẩm</th>
                             <th>Barcode</th>
@@ -226,7 +252,7 @@
                             <th class="text-end">Giá niêm yết</th>
                             <th class="text-end">Giá thương mại</th>
                             <th class="text-end">Giá bán</th>
-                            <th style="width:50px;"></th>
+                            <th></th>
                           </tr>
                         </thead>
                         <tbody>
