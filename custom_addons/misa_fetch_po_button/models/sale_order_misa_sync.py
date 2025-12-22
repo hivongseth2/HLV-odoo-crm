@@ -768,6 +768,7 @@ class SaleOrder(models.Model):
             "HLV":"TSN/Stock",
              "BẾN CAM": "KBC/Tồn kho",
              "BẾNCAM": "KBC/Tồn kho",
+             "": "TSN/Stock",
         }
 
         old_wh = None
