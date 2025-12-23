@@ -5,9 +5,9 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { ensureJQuery } from '@web/core/ensure_jquery';
 import { ListController } from "@web/views/list/list_controller";
-import { listView } from "@web/views/list/list_view";
 import { rpc } from "@web/core/network/rpc";
 import { user } from "@web/core/user";
+import { listView } from "@web/views/list/list_view";
 
 export class Stock3DController extends ListController {
     setup() {
@@ -28,6 +28,7 @@ export class Stock3DController extends ListController {
         var wh_id;
         let selectedObject = null;
         let anchorObject = null; 
+        let meshMap = {}; 
         
         let floorWidth = 2000;
         let floorDepth = 2000;
@@ -35,7 +36,7 @@ export class Stock3DController extends ListController {
 
         const pointer = new THREE.Vector2();
 
-        // Fetch Warehouse
+        // Load Warehouse
         await rpc('/3Dstock/warehouse', { 'company_id': user.context.allowed_company_ids[0] })
             .then(res => { wh_data = res; });
         
@@ -47,134 +48,137 @@ export class Stock3DController extends ListController {
 
         // --- UI CONSTRUCTION ---
         
-        // 1. Dropdown Warehouse
+        // 1. Selector
+        const whSelectorDiv = document.createElement("div");
+        whSelectorDiv.classList.add("warehouse-selector-container");
         var select = document.createElement("select");
-        select.classList.add("customselect");
         wh_data.forEach(w => {
             var opt = document.createElement("option");
             opt.value = w[0]; opt.text = w[1];
             select.appendChild(opt);
         });
+        select.classList.add("customselect");
 
-        // 2. Close Button
-        var closeDiv = document.createElement("button");
-        closeDiv.classList.add("closeBtn");
-        closeDiv.innerHTML = "&times;";
-        closeDiv.style.zIndex = "1001";
-        closeDiv.title = "Thoát";
-        closeDiv.onclick = () => window.location.reload();
+        var closeBtn = document.createElement("button");
+        closeBtn.classList.add("closeBtn");
+        closeBtn.innerHTML = "&times;";
+        closeBtn.title = "Thoát";
+        closeBtn.onclick = () => window.location.reload();
+        
+        whSelectorDiv.append(select);
+        whSelectorDiv.append(closeBtn);
 
-        // 3. Search Bar
+        // 2. Search Bar
         const searchDiv = document.createElement("div");
         searchDiv.classList.add("search-container");
         searchDiv.innerHTML = `
-            <i class="fa fa-search" style="color:#666;"></i>
-            <input type="text" id="product_search_inp" placeholder="Tìm sản phẩm..." style="border:none; outline:none; margin-left:5px;">
-            <button id="btn_do_search" class="btn btn-sm btn-primary" style="border-radius:50%; width:30px; height:30px; padding:0;"><i class="fa fa-arrow-right"></i></button>
+            <div class="search-box">
+                <i class="fa fa-map-marker" style="color:#dc3545"></i>
+                <input type="text" id="loc_search_inp" placeholder="Tìm vị trí..." list="loc_datalist">
+                <datalist id="loc_datalist"></datalist>
+                <button id="btn_search_loc"><i class="fa fa-arrow-right"></i></button>
+            </div>
+            <div class="search-box">
+                <i class="fa fa-cube" style="color:#0d6efd"></i>
+                <input type="text" id="product_search_inp" placeholder="Tìm sản phẩm...">
+                <button id="btn_search_prod"><i class="fa fa-arrow-right"></i></button>
+            </div>
         `;
 
-        // 4. Legend
-        var colorDiv = document.createElement("div");
-        colorDiv.classList.add("rectangle");
-        const addLegend = (cls, txt) => {
-            let d = document.createElement("div"); d.className = cls; colorDiv.appendChild(d);
-            let t = document.createElement("div"); t.className = "squareText" + cls.replace(/\D/g,''); 
-            if(cls === 'square4') t.className = "squareText4";
-            t.innerText = txt; colorDiv.appendChild(t);
-        };
-        addLegend("square1", "Quá tải");
-        addLegend("square2", "Sắp đầy");
-        addLegend("square3", "Còn trống");
-        addLegend("square4", "Không có hàng");
+        // 3. Legend
+        const legendDiv = document.createElement("div");
+        legendDiv.classList.add("legend-container");
+        legendDiv.innerHTML = `
+            <div class="legend-item"><div class="color-box bg-red"></div>Quá tải (>100%)</div>
+            <div class="legend-item"><div class="color-box bg-yellow"></div>Sắp đầy (>50%)</div>
+            <div class="legend-item"><div class="color-box bg-green"></div>Còn trống</div>
+            <div class="legend-item"><div class="color-box bg-gray"></div>Không có hàng</div>
+        `;
 
-        // 5. Sidebar
+        // 4. Sidebar
         const sidebarDiv = document.createElement("div");
         sidebarDiv.classList.add("location-sidebar");
         sidebarDiv.innerHTML = `
-            <div style="padding-bottom:10px; border-bottom:1px solid #ddd; margin-bottom:10px;">
-                <h6 style="font-weight:bold; font-size:13px; text-align:center;">Cấu hình Sàn (m)</h6>
-                <div style="display:flex; gap:5px; justify-content:center;">
-                    <input type="number" id="floor_w_cfg" value="500" placeholder="R" style="width:50px; font-size:12px;">
-                    <span style="align-self:center;">x</span>
-                    <input type="number" id="floor_d_cfg" value="500" placeholder="D" style="width:50px; font-size:12px;">
-                    <button id="btn_update_floor" class="btn btn-xs btn-secondary" style="font-size:10px;">Vẽ</button>
+            <div class="sidebar-header">
+                <h6>Cấu hình Sàn (m)</h6>
+                <div class="floor-config">
+                    <input type="number" id="floor_w_cfg" value="500"> <span>x</span>
+                    <input type="number" id="floor_d_cfg" value="500">
+                    <button id="btn_update_floor">Vẽ</button>
                 </div>
             </div>
-            <h6 style="text-align:center; font-weight:bold; font-size:13px; margin-bottom:5px;">Chưa Setup</h6>
+            <div class="sidebar-header" style="border:none; padding-bottom:0; margin-bottom:5px;">
+                <h6>Chưa Setup</h6>
+            </div>
         `;
         const sidebarList = document.createElement("div");
-        sidebarList.style.maxHeight = "55vh"; sidebarList.style.overflowY = "auto";
+        sidebarList.classList.add("sidebar-content");
         sidebarDiv.appendChild(sidebarList);
 
-        // 6. SELECTION PANEL (Cập nhật Dropdown Anchor & Parent)
+        // 5. Selection Panel
         const panelDiv = document.createElement("div");
         panelDiv.classList.add("selection-panel");
-        panelDiv.style.width = "350px"; 
         panelDiv.innerHTML = `
             <h5>
-                <span id="panel_loc_name" style="color:#007bff; font-weight:bold;">Tên Vị Trí</span>
-                <button class="btn-close-panel" id="btn_close_panel" style="cursor:pointer; float:right;">&times;</button>
+                <span id="panel_loc_name">Tên Vị Trí</span>
+                <button class="btn-close-panel" id="btn_close_panel">&times;</button>
             </h5>
             
-            <div class="edit-section" style="background:#f0f8ff; border:1px solid #cce5ff; padding:5px; margin-bottom:10px; border-radius:4px;">
-                <h6 style="font-size:12px; font-weight:bold; color:#004085; margin-bottom:5px;">
-                    <i class="fa fa-crosshairs"></i> Căn chỉnh vị trí
-                </h6>
-                <div style="font-size:11px; margin-bottom:5px; display:flex; gap:5px; align-items:center;">
-                    <span style="white-space:nowrap;">Chọn Gốc:</span>
-                    <select id="anchor_select" style="width:100%; border:1px solid #ddd; font-size:11px;">
-                        <option value="">-- Chọn vị trí làm mốc --</option>
+            <div class="panel-section">
+                <h6>Căn chỉnh vị trí</h6>
+                <div style="display:flex; gap:5px; margin-bottom:8px;">
+                    <select id="anchor_select" style="width:100%; border:1px solid #ced4da; padding:2px; font-size:11px; border-radius:3px;">
+                        <option value="">-- Chọn mốc --</option>
                     </select>
                 </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:3px;">
-                    <button class="btn btn-light btn-sm btn-align" data-dir="left" title="Xếp sang Trái"><i class="fa fa-arrow-left"></i> Trái</button>
-                    <button class="btn btn-light btn-sm btn-align" data-dir="top" title="Chồng lên trên"><i class="fa fa-arrow-up"></i> Trên</button>
-                    <button class="btn btn-light btn-sm btn-align" data-dir="right" title="Xếp sang Phải"><i class="fa fa-arrow-right"></i> Phải</button>
-                    
-                    <button class="btn btn-light btn-sm btn-align" data-dir="front" title="Xếp ra Trước"><i class="fa fa-arrow-down"></i> Trước</button>
-                    <button class="btn btn-light btn-sm btn-align" data-dir="bottom" title="Đặt xuống Dưới"><i class="fa fa-arrow-down"></i> Dưới</button>
-                    <button class="btn btn-light btn-sm btn-align" data-dir="back" title="Xếp ra Sau"><i class="fa fa-arrow-up"></i> Sau</button>
+                <div class="control-grid">
+                    <button class="btn-align" data-dir="left"><i class="fa fa-arrow-left"></i> Trái</button>
+                    <button class="btn-align" data-dir="top"><i class="fa fa-arrow-up"></i> Trên</button>
+                    <button class="btn-align" data-dir="right"><i class="fa fa-arrow-right"></i> Phải</button>
+                    <button class="btn-align" data-dir="front"><i class="fa fa-arrow-down"></i> Trước</button>
+                    <button class="btn-align" data-dir="bottom"><i class="fa fa-arrow-down"></i> Dưới</button>
+                    <button class="btn-align" data-dir="back"><i class="fa fa-arrow-up"></i> Sau</button>
                 </div>
             </div>
 
-            <div class="edit-section">
-                <h6 style="font-size:12px; font-weight:bold; background:#eee; padding:3px;">Thông tin chung</h6>
-                <div class="input-group" style="margin-bottom:5px;">
-                    <label style="width:80px;">Thuộc Kệ (Cha)</label>
-                    <select id="inp_parent_id" style="flex:1; font-size:11px; border:1px solid #ddd;">
-                        <option value="0">-- Không có (Là gốc) --</option>
-                    </select>
+            <div class="panel-section">
+                <h6>Thông số (Mét & Pixel)</h6>
+                <div id="parent_info_div" style="font-size:11px; color:#666; margin-bottom:5px; display:none;">
+                    Thuộc: <b id="lbl_parent_name" style="color:#333;"></b>
                 </div>
-                <div style="display:flex; gap:5px; margin-top:5px;">
-                   <div class="input-group"><label>D</label><input type="number" id="inp_l" step="0.1" style="width:40px"></div>
-                   <div class="input-group"><label>R</label><input type="number" id="inp_w" step="0.1" style="width:40px"></div>
-                   <div class="input-group"><label>C</label><input type="number" id="inp_h" step="0.1" style="width:40px"></div>
-                   <div class="input-group"><label>Cap</label><input type="number" id="inp_cap" style="width:40px"></div>
-                </div>
-                <div style="display:flex; gap:5px; margin-top:5px;">
-                   <div class="input-group"><label>X</label><input type="number" id="inp_pos_x" step="1" style="width:45px"></div>
-                   <div class="input-group"><label>Y</label><input type="number" id="inp_pos_y" step="1" style="width:45px"></div>
-                   <div class="input-group"><label>Z</label><input type="number" id="inp_pos_z" step="1" style="width:45px"></div>
-                </div>
-                <button class="btn btn-primary btn-sm w-100" id="btn_save_changes" style="margin-top:5px;">Lưu Cài Đặt</button>
-            </div>
 
-            <div class="picking-list" style="margin-top:10px; border-top:1px solid #eee;">
-                <h6 style="font-size:12px; font-weight:bold; margin-top:5px;">Sản phẩm & Hoạt động</h6>
-                <div id="product_table_container" style="max-height:80px; overflow-y:auto; margin-bottom:5px;">
-                    <table style="width:100%;">
-                        <thead><tr><th style="text-align:left;">SP</th><th style="text-align:right;">SL</th></tr></thead>
-                        <tbody id="product_list_body"></tbody>
-                    </table>
+                <div class="input-row">
+                   <div class="input-group"><label>D</label><input type="number" id="inp_l" step="0.1"></div>
+                   <div class="input-group"><label>R</label><input type="number" id="inp_w" step="0.1"></div>
+                   <div class="input-group"><label>C</label><input type="number" id="inp_h" step="0.1"></div>
+                   <div class="input-group"><label>Cap</label><input type="number" id="inp_cap"></div>
                 </div>
-                <div id="picking_list_container" style="max-height:80px; overflow-y:auto; border-top:1px dashed #eee;"></div>
+                <div class="input-row">
+                   <div class="input-group"><label>X</label><input type="number" id="inp_pos_x" step="1"></div>
+                   <div class="input-group"><label>Y</label><input type="number" id="inp_pos_y" step="1"></div>
+                   <div class="input-group"><label>Z</label><input type="number" id="inp_pos_z" step="1"></div>
+                </div>
+            </div>
+            
+            <button class="btn-save" id="btn_save_changes">Lưu Cài Đặt</button>
+
+            <div class="panel-section" style="padding:0; overflow:hidden;">
+                <h6 style="padding:10px 10px 0;">Sản phẩm & Hoạt động</h6>
+                <div class="list-container">
+                    <div id="product_table_container">
+                        <table>
+                            <thead><tr><th>SP</th><th style="text-align:right;">SL</th></tr></thead>
+                            <tbody id="product_list_body"></tbody>
+                        </table>
+                    </div>
+                    <div id="product_empty_msg" class="empty-msg">(Trống)</div>
+                </div>
+                <div class="list-container" style="border-top:1px dashed #eee;">
+                    <div id="picking_list_container"></div>
+                    <div id="picking_empty_msg" class="empty-msg">(Không có phiếu)</div>
+                </div>
             </div>
         `;
-
-        // 7. KEYBOARD HELP
-        const helpDiv = document.createElement("div");
-        helpDiv.style = "position:absolute; bottom:10px; left:220px; font-size:11px; color:#666; background:rgba(255,255,255,0.7); padding:5px; border-radius:4px;";
-        helpDiv.innerHTML = "<b>Di chuyển:</b> W/A/S/D hoặc Mũi tên";
 
         start();
 
@@ -189,70 +193,66 @@ export class Stock3DController extends ListController {
 
             // Scene Init
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xe0e0e0);
+            scene.background = new THREE.Color(0xf4f6f9);
             clock = new THREE.Clock();
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 10000);
-            camera.position.set(0, 500, 800); 
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 50000); 
+            camera.position.set(0, 800, 1200); 
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight / 1.164);
             renderer.setPixelRatio(window.devicePixelRatio);
 
-            // DOM Insertion
+            const content = $(self.rootRef.el).find('.o_content');
             $(self.rootRef.el).find('.o_list_renderer').addClass('d-none');
             $(self.rootRef.el).find('canvas').remove();
             
-            const content = $(self.rootRef.el).find('.o_content');
             content.append(renderer.domElement);
-            content.append(select);
-            content.append(colorDiv);
-            content.append(closeDiv);
+            content.append(whSelectorDiv);
+            content.append(legendDiv);
             content.append(searchDiv);
             content.append(sidebarDiv);
             content.append(panelDiv);
-            content.append(helpDiv); // Thêm hướng dẫn phím
 
             // Events Listeners UI
             document.querySelector(".customselect")?.addEventListener("change", warehouseChange);
             document.querySelector("#btn_close_panel").addEventListener("click", deselectObject);
             document.querySelector("#btn_update_floor").addEventListener("click", updateFloorSize);
             
-            // Search Logic
-            const btnSearch = document.getElementById("btn_do_search");
-            const inpSearch = document.getElementById("product_search_inp");
-            btnSearch.addEventListener("click", () => searchProduct(inpSearch.value));
-            inpSearch.addEventListener("keyup", (e) => { if (e.key === 'Enter') searchProduct(inpSearch.value); });
+            // Search
+            const btnSearchLoc = document.getElementById("btn_search_loc");
+            const inpSearchLoc = document.getElementById("loc_search_inp");
+            btnSearchLoc.addEventListener("click", () => searchLocation(inpSearchLoc.value));
+            inpSearchLoc.addEventListener("keyup", (e) => { if (e.key === 'Enter') searchLocation(inpSearchLoc.value); });
 
-            // --- ALIGNMENT LOGIC (LIST DROPDOWN) ---
-            // Khi chọn Anchor từ dropdown
+            const btnSearchProd = document.getElementById("btn_search_prod");
+            const inpSearchProd = document.getElementById("product_search_inp");
+            btnSearchProd.addEventListener("click", () => searchProduct(inpSearchProd.value));
+            inpSearchProd.addEventListener("keyup", (e) => { if (e.key === 'Enter') searchProduct(inpSearchProd.value); });
+
             document.getElementById("anchor_select").addEventListener("change", (e) => {
                 const anchorCode = e.target.value;
-                if (!anchorCode) {
-                    anchorObject = null;
-                    return;
-                }
-                // Tìm object trong scene
-                const found = group.children.find(c => c.name === anchorCode && c.type === "Mesh");
-                if (found) {
-                    anchorObject = found;
-                    // Visual feedback: Highlight anchor (optional)
+                if (!anchorCode) { anchorObject = null; return; }
+                if (meshMap[e.target.selectedOptions[0].getAttribute('data-id')]) {
+                    anchorObject = meshMap[e.target.selectedOptions[0].getAttribute('data-id')];
                 }
             });
 
-            // Các nút Align
+            // Align
             document.querySelectorAll(".btn-align").forEach(btn => {
                 btn.addEventListener("click", async () => {
-                    if (!selectedObject) { alert("Chưa chọn vị trí cần xếp!"); return; }
-                    if (!anchorObject) { alert("Chưa chọn vị trí Gốc (trong dropdown)!"); return; }
+                    if (!selectedObject || !anchorObject) { alert("Chọn Gốc & Đối tượng!"); return; }
                     if (selectedObject === anchorObject) return;
-
                     alignObject(selectedObject, anchorObject, btn.dataset.dir);
+                    
+                    if (selectedObject.parent && selectedObject.parent.type === "Mesh") {
+                        constrainMovement(selectedObject, selectedObject.parent);
+                    }
                     await saveLocationPosition(selectedObject);
                     transformControl.attach(selectedObject);
                 });
             });
 
-            // --- SAVE LOGIC (BAO GỒM PARENT) ---
+            // --- SAVE LOGIC ---
             document.querySelector("#btn_save_changes").addEventListener("click", async () => {
                 if (!selectedObject) return;
                 const locId = selectedObject.userData.loc_id;
@@ -265,126 +265,132 @@ export class Stock3DController extends ListController {
                 const py = parseFloat(document.getElementById('inp_pos_y').value) || 0;
                 const pz = parseFloat(document.getElementById('inp_pos_z').value) || 0;
                 
-                // Lấy Parent ID từ dropdown
-                const parentId = parseInt(document.getElementById('inp_parent_id').value) || false;
-
                 const payload = {
                     'length': l, 'width': w, 'height': h, 'max_capacity': cap,
                     'pos_x': px, 'pos_y': py, 'pos_z': pz
                 };
-                
-                // Nếu người dùng đổi Parent, cần update location_id
-                if (parentId !== selectedObject.userData.parent_id) {
-                    payload['location_id'] = parentId;
-                }
 
                 await rpc('/web/dataset/call_kw', {
                     model: 'stock.location', method: 'write',
                     args: [[locId], payload], kwargs: {},
                 });
                 
-                // Update Visuals
-                selectedObject.position.set(px, py, pz);
-                selectedObject.userData.parent_id = parentId; // Update memory
-                
-                // Nếu được gán làm con, kiểm tra xem có cần update object cha thành wireframe không
-                if (parentId) {
-                    const parentMesh = group.children.find(c => c.userData.loc_id === parentId);
-                    if (parentMesh) updateParentVisual(parentMesh);
+                const worldVec = new THREE.Vector3(px, py, pz);
+                if (selectedObject.parent && selectedObject.parent.type === "Mesh") {
+                    selectedObject.parent.worldToLocal(worldVec);
+                    selectedObject.position.copy(worldVec);
+                    constrainMovement(selectedObject, selectedObject.parent); 
+                } else {
+                    selectedObject.position.set(px, py, pz);
                 }
 
                 updateMeshDimensions(selectedObject, l, w, h);
+                selectedObject.updateMatrixWorld(true);
                 transformControl.attach(selectedObject);
+
+                if (selectedObject.children.length > 0) {
+                    selectedObject.children.forEach(child => {
+                        if (child.type === "Mesh" && child.userData.loc_id) {
+                            saveLocationPosition(child);
+                        }
+                    });
+                }
                 alert("Đã lưu!");
             });
 
-            // ThreeJS Controls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; controls.dampingFactor = 0.1;
+
             transformControl = new THREE.TransformControls(camera, renderer.domElement);
+            
+            transformControl.addEventListener('change', function(event) {
+                if (transformControl.dragging && transformControl.object) {
+                    const obj = transformControl.object;
+                    if (obj.parent && obj.parent.type === "Mesh") {
+                        constrainMovement(obj, obj.parent);
+                    }
+                    const worldPos = new THREE.Vector3();
+                    obj.getWorldPosition(worldPos);
+                    document.getElementById('inp_pos_x').value = Math.round(worldPos.x);
+                    document.getElementById('inp_pos_y').value = Math.round(worldPos.y);
+                    document.getElementById('inp_pos_z').value = Math.round(worldPos.z);
+                }
+            });
+
             transformControl.addEventListener('dragging-changed', function (event) {
                 controls.enabled = !event.value;
                 if (!event.value && transformControl.object) {
+                    saveLocationPosition(transformControl.object);
                     const obj = transformControl.object;
-                    document.getElementById('inp_pos_x').value = Math.round(obj.position.x);
-                    document.getElementById('inp_pos_y').value = Math.round(obj.position.y);
-                    document.getElementById('inp_pos_z').value = Math.round(obj.position.z);
-                    saveLocationPosition(obj);
+                    if (obj.children.length > 0) {
+                        obj.children.forEach(child => {
+                            if (child.type === "Mesh" && child.userData.loc_id) {
+                                saveLocationPosition(child);
+                            }
+                        });
+                    }
                 }
             });
             scene.add(transformControl);
 
-            // --- KEYBOARD NAVIGATION (WASD) ---
             window.addEventListener('keydown', (e) => {
-                // Nếu đang gõ trong ô input thì không di chuyển camera
                 if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
-
-                const moveSpeed = 20; // Tốc độ di chuyển
-                const angle = controls.getAzimuthalAngle(); // Góc xoay hiện tại của camera
-
-                // Tính toán hướng di chuyển dựa trên góc nhìn
-                const xDir = Math.sin(angle) * moveSpeed;
-                const zDir = Math.cos(angle) * moveSpeed;
+                const moveSpeed = 30; 
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward); forward.y = 0; forward.normalize();
+                const right = new THREE.Vector3();
+                right.crossVectors(forward, camera.up).normalize();
 
                 switch(e.key.toLowerCase()) {
-                    case 'w': // Tiến
-                    case 'arrowup':
-                        camera.position.x -= xDir; camera.position.z -= zDir;
-                        controls.target.x -= xDir; controls.target.z -= zDir;
-                        break;
-                    case 's': // Lùi
-                    case 'arrowdown':
-                        camera.position.x += xDir; camera.position.z += zDir;
-                        controls.target.x += xDir; controls.target.z += zDir;
-                        break;
-                    case 'a': // Trái
-                    case 'arrowleft':
-                        camera.position.x -= zDir; camera.position.z += xDir;
-                        controls.target.x -= zDir; controls.target.z += xDir;
-                        break;
-                    case 'd': // Phải
-                    case 'arrowright':
-                        camera.position.x += zDir; camera.position.z -= xDir;
-                        controls.target.x += zDir; controls.target.z -= xDir;
-                        break;
+                    case 'w': case 'arrowup': camera.position.addScaledVector(forward, moveSpeed); controls.target.addScaledVector(forward, moveSpeed); break;
+                    case 's': case 'arrowdown': camera.position.addScaledVector(forward, -moveSpeed); controls.target.addScaledVector(forward, -moveSpeed); break;
+                    case 'a': case 'arrowleft': camera.position.addScaledVector(right, -moveSpeed); controls.target.addScaledVector(right, -moveSpeed); break;
+                    case 'd': case 'arrowright': camera.position.addScaledVector(right, moveSpeed); controls.target.addScaledVector(right, moveSpeed); break;
                 }
-                controls.update(); // Cập nhật OrbitControls
+                controls.update(); 
             });
 
-            // Floor
             createFloor(floorWidth, floorDepth);
 
-            // Init Objects
+            // --- INIT OBJECTS ---
             group = new THREE.Group();
-            
-            // Collect Parent IDs
-            const parentIds = new Set();
-            for (let val of Object.values(data)) {
-                // val[7] là parent_id
-                if (val[7]) parentIds.add(val[7]); 
-            }
+            meshMap = {};
 
-            // Populate Anchor Dropdown & Parent Dropdown List (Dùng chung 1 list data)
             const anchorSel = document.getElementById("anchor_select");
-            const parentSel = document.getElementById("inp_parent_id");
-            
-            for (let [key, value] of Object.entries(data)) {
-                // Add to Selects
-                let opt1 = document.createElement("option"); opt1.value = key; opt1.text = key;
-                anchorSel.appendChild(opt1);
-                
-                // Parent select dùng ID thay vì Code
-                let opt2 = document.createElement("option"); opt2.value = value[6]; opt2.text = key; 
-                parentSel.appendChild(opt2);
+            anchorSel.innerHTML = '<option value="">-- Chọn mốc --</option>';
+            const locDatalist = document.getElementById("loc_datalist");
+            locDatalist.innerHTML = "";
 
+            for (let [key, value] of Object.entries(data)) {
                 const hasPos = (value[0] !== 0 || value[1] !== 0 || value[2] !== 0);
+                
+                let optList = document.createElement("option"); optList.value = key; locDatalist.appendChild(optList);
+
                 if (hasPos) {
-                    const isParent = parentIds.has(value[6]);
-                    await create3DBox(key, value, isParent);
+                    const mesh = await create3DBox(key, value);
+                    meshMap[value[6]] = mesh; 
+                    group.add(mesh); 
+                    
+                    let opt1 = document.createElement("option"); 
+                    opt1.value = key; opt1.text = key; 
+                    opt1.setAttribute('data-id', value[6]); 
+                    anchorSel.appendChild(opt1);
+
                 } else {
                     createSidebarItem(key, value);
                 }
             }
             scene.add(group);
+
+            // Attach Parent/Child
+            for (let id in meshMap) {
+                const mesh = meshMap[id];
+                const pid = mesh.userData.parent_id;
+                if (pid && meshMap[pid]) {
+                    updateParentVisual(meshMap[pid]);
+                    meshMap[pid].attach(mesh);
+                }
+            }
             
             raycaster = new THREE.Raycaster();
             animate();
@@ -395,106 +401,122 @@ export class Stock3DController extends ListController {
             canvas.addEventListener('click', onCanvasClick);
         }
 
-        // --- ALIGNMENT LOGIC ---
+        // --- SEARCH LOCATION ---
+        function searchLocation(name) {
+            if(!name) return;
+            let found = null;
+            scene.traverse(obj => {
+                if(obj.type === 'Mesh' && obj.name === name && obj.userData.loc_id) {
+                    found = obj;
+                }
+            });
+            if (found) {
+                selectObject(found);
+                const worldPos = new THREE.Vector3();
+                found.getWorldPosition(worldPos);
+                controls.target.copy(worldPos);
+                camera.position.set(worldPos.x + 200, worldPos.y + 200, worldPos.z + 200);
+                controls.update();
+            } else {
+                alert("Không tìm thấy: " + name);
+            }
+        }
+
+        function constrainMovement(child, parent) {
+            const pGeo = parent.geometry.parameters;
+            const cGeo = child.geometry.parameters;
+            const minX = -(pGeo.width / 2) + (cGeo.width / 2);
+            const maxX = (pGeo.width / 2) - (cGeo.width / 2);
+            const minZ = -(pGeo.depth / 2) + (cGeo.depth / 2);
+            const maxZ = (pGeo.depth / 2) - (cGeo.depth / 2);
+            const minY = 0; 
+            const maxY = pGeo.height - cGeo.height;
+
+            if (minX <= maxX) child.position.x = Math.max(minX, Math.min(maxX, child.position.x)); else child.position.x = 0;
+            if (minZ <= maxZ) child.position.z = Math.max(minZ, Math.min(maxZ, child.position.z)); else child.position.z = 0;
+            if (minY <= maxY) child.position.y = Math.max(minY, Math.min(maxY, child.position.y)); else child.position.y = 0;
+        }
+
         function alignObject(target, anchor, direction) {
             const boxT = new THREE.Box3().setFromObject(target);
             const boxA = new THREE.Box3().setFromObject(anchor);
             const sizeT = new THREE.Vector3(); boxT.getSize(sizeT);
             const sizeA = new THREE.Vector3(); boxA.getSize(sizeA);
             const centerA = new THREE.Vector3(); boxA.getCenter(centerA);
-            
             const newPos = centerA.clone();
             const margin = 2; 
-
             switch(direction) {
-                case 'right': 
-                    newPos.x = centerA.x + (sizeA.x/2) + (sizeT.x/2) + margin; 
-                    newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); 
-                    newPos.z = centerA.z; break;
-                case 'left': 
-                    newPos.x = centerA.x - (sizeA.x/2) - (sizeT.x/2) - margin; 
-                    newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2);
-                    newPos.z = centerA.z; break;
-                case 'top': 
-                    newPos.y = centerA.y + (sizeA.y/2) + (sizeT.y/2); 
-                    newPos.x = centerA.x; newPos.z = centerA.z; break;
-                case 'bottom': 
-                    newPos.y = centerA.y - (sizeA.y/2) - (sizeT.y/2); 
-                    newPos.x = centerA.x; newPos.z = centerA.z; break;
-                case 'front': 
-                    newPos.z = centerA.z + (sizeA.z/2) + (sizeT.z/2) + margin; 
-                    newPos.x = centerA.x; 
-                    newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
-                case 'back': 
-                    newPos.z = centerA.z - (sizeA.z/2) - (sizeT.z/2) - margin; 
-                    newPos.x = centerA.x; 
-                    newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
+                case 'right': newPos.x = centerA.x + (sizeA.x/2) + (sizeT.x/2) + margin; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); newPos.z = centerA.z; break;
+                case 'left': newPos.x = centerA.x - (sizeA.x/2) - (sizeT.x/2) - margin; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); newPos.z = centerA.z; break;
+                case 'top': newPos.y = centerA.y + (sizeA.y/2) + (sizeT.y/2); newPos.x = centerA.x; newPos.z = centerA.z; break;
+                case 'bottom': newPos.y = centerA.y - (sizeA.y/2) - (sizeT.y/2); newPos.x = centerA.x; newPos.z = centerA.z; break;
+                case 'front': newPos.z = centerA.z + (sizeA.z/2) + (sizeT.z/2) + margin; newPos.x = centerA.x; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
+                case 'back': newPos.z = centerA.z - (sizeA.z/2) - (sizeT.z/2) - margin; newPos.x = centerA.x; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
+            }
+            if (target.parent && target.parent.type === 'Mesh') {
+                target.parent.worldToLocal(newPos);
             }
             target.position.copy(newPos);
         }
 
-        // --- SEARCH ---
-        async function searchProduct(keyword) {
-            if (!keyword) {
-                group.children.forEach(mesh => {
-                    if (mesh.userData.color) {
-                        mesh.material.color.set(mesh.userData.color);
-                        mesh.material.opacity = mesh.userData.is_parent ? 0.1 : (mesh.userData.color === 0x8c8c8c ? 0.5 : 0.8);
-                    }
-                });
-                return;
-            }
-            const locCodes = await rpc('/3Dstock/search_product', { keyword: keyword, wh_id: wh_id });
-            if (locCodes.length === 0) { alert("Không thấy!"); return; }
-
-            let first = null;
-            group.children.forEach(mesh => {
-                if (locCodes.includes(mesh.name)) {
-                    mesh.material.color.set(0xff00ff); 
-                    mesh.material.opacity = 1;
-                    if (!first) first = mesh;
-                } else {
-                    if (mesh.userData.color) {
-                         mesh.material.color.set(0xeeeeee);
-                         mesh.material.opacity = 0.1;
-                    }
+        async function create3DBox(key, value) {
+            const l = value[3] > 0 ? value[3] : 50;
+            const w = value[4] > 0 ? value[4] : 50;
+            const h = value[5] > 0 ? value[5] : 50;
+            const geo = new THREE.BoxGeometry(l, h, w);
+            geo.translate(0, h/2, 0); 
+            
+            let col = 0x8c8c8c; let op = 0.5;
+            await rpc('/3Dstock/data/quantity', { 'loc_code': key }).then(q => {
+                if (q[0] > 0) { 
+                   if (q[1] > 100) { col = 0xcc0000; op = 0.8; }
+                   else if (q[1] > 50) { col = 0xe6b800; op = 0.8; }
+                   else if (q[1] > 0) { col = 0x00802b; op = 0.8; } 
+                   else { col = 0x8c8c8c; op = 0.5; }
+                } else { 
+                   if(q[1] == -1) { col = 0x00802b; op = 0.8; } 
+                   else { col = 0x8c8c8c; op = 0.5; }
                 }
             });
-            if(first) {
-                // Bay camera tới đó
-                controls.target.copy(first.position);
-                controls.update();
-            }
-        }
 
-        // --- FLOOR ---
-        function createFloor(w, d) {
-            const visualW = w * 3.779 * 2; 
-            const visualD = d * 3.779 * 2;
-            if (baseMesh) scene.remove(baseMesh);
-            if (dragPlane) scene.remove(dragPlane);
+            const mat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op });
+            const mesh = new THREE.Mesh(geo, mat);
+            const edges = new THREE.EdgesGeometry(geo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x404040 }));
+            mesh.add(line);
             
-            const geometry = new THREE.PlaneGeometry(visualW, visualD);
-            const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, depthWrite: false });
-            baseMesh = new THREE.Mesh(geometry, material);
-            baseMesh.rotation.x = -Math.PI / 2;
-            baseMesh.position.y = -0.5;
-            scene.add(baseMesh);
-
-            const planeGeo = new THREE.PlaneGeometry(10000, 10000); 
-            const planeMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
-            dragPlane = new THREE.Mesh(planeGeo, planeMat);
-            dragPlane.rotation.x = -Math.PI / 2;
-            scene.add(dragPlane);
+            mesh.position.set(value[0], value[1], value[2]);
+            mesh.name = key;
+            mesh.userData = { color: col, loc_id: value[6], parent_id: value[7] };
+            
+            const loader = new THREE.FontLoader();
+            loader.load('https://threejs.org/examples/fonts/droid/droid_sans_bold.typeface.json', function(font) {
+                const textMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+                let baseSize = Math.min(l, w) / 2.5; 
+                const shapes = font.generateShapes(key, baseSize);
+                const tGeo = new THREE.ShapeGeometry(shapes);
+                tGeo.computeBoundingBox();
+                const xMid = - 0.5 * ( tGeo.boundingBox.max.x - tGeo.boundingBox.min.x );
+                tGeo.translate( xMid, 0, 0 );
+                const tW = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
+                const maxW = (w > l ? w : l) * 0.9;
+                if (tW > maxW) { const s = maxW/tW; tGeo.scale(s,s,1); }
+                const tMesh = new THREE.Mesh(tGeo, textMat);
+                tMesh.position.y = h + 2; 
+                tMesh.rotation.x = -Math.PI / 2;
+                if (w > l) tMesh.rotation.z = Math.PI / 2;
+                mesh.add(tMesh);
+            });
+            return mesh;
         }
 
-        function updateFloorSize() {
-            const w = parseFloat(document.getElementById('floor_w_cfg').value) || 500;
-            const d = parseFloat(document.getElementById('floor_d_cfg').value) || 500;
-            createFloor(w, d);
+        function updateParentVisual(mesh) {
+            mesh.material.wireframe = true;
+            mesh.material.color.set(0x000000);
+            mesh.material.opacity = 0.1;
+            mesh.userData.is_parent = true;
         }
 
-        // --- CLICK & SELECT ---
         async function onCanvasClick(event) {
             if (transformControl.dragging) return;
             pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -503,15 +525,13 @@ export class Stock3DController extends ListController {
             const intersects = raycaster.intersectObjects(group.children, true); 
 
             if (intersects.length > 0) {
-                let target = intersects.find(r => r.object.type === 'Mesh' && r.object.userData.loc_id);
-                if (!target) {
-                    let childHit = intersects.find(r => r.object.parent && r.object.parent.userData.loc_id);
-                    if (childHit) target = { object: childHit.object.parent };
-                }
-                if (target) selectObject(target.object);
+                const hits = intersects.filter(i => i.object.type === 'Mesh' && i.object.userData.loc_id);
+                let finalTarget = hits.find(h => !h.object.userData.is_parent);
+                if (!finalTarget && hits.length > 0) finalTarget = hits[0];
+                if (finalTarget) selectObject(finalTarget.object);
             } else {
-                const gizmoIntersects = raycaster.intersectObjects(transformControl.children, true);
-                if (gizmoIntersects.length === 0) deselectObject();
+                const gGizmo = raycaster.intersectObjects(transformControl.children, true);
+                if (gGizmo.length === 0) deselectObject();
             }
         }
 
@@ -522,9 +542,11 @@ export class Stock3DController extends ListController {
             panelDiv.style.display = "block";
             
             document.getElementById("panel_loc_name").innerText = mesh.name;
-            document.getElementById('inp_pos_x').value = Math.round(mesh.position.x);
-            document.getElementById('inp_pos_y').value = Math.round(mesh.position.y);
-            document.getElementById('inp_pos_z').value = Math.round(mesh.position.z);
+            const worldPos = new THREE.Vector3();
+            mesh.getWorldPosition(worldPos);
+            document.getElementById('inp_pos_x').value = Math.round(worldPos.x);
+            document.getElementById('inp_pos_y').value = Math.round(worldPos.y);
+            document.getElementById('inp_pos_z').value = Math.round(worldPos.z);
 
             const locId = mesh.userData.loc_id;
             const res = await rpc('/web/dataset/call_kw', {
@@ -537,35 +559,56 @@ export class Stock3DController extends ListController {
                 document.getElementById('inp_w').value = info.width;
                 document.getElementById('inp_h').value = info.height;
                 document.getElementById('inp_cap').value = info.max_capacity;
-                // Set Parent Dropdown (Array [id, name])
-                document.getElementById('inp_parent_id').value = info.location_id ? info.location_id[0] : 0;
+                
+                // Defensive check to avoid crash
+                const pInfo = document.getElementById("parent_info_div");
+                if (pInfo) {
+                    if(info.location_id) {
+                        pInfo.style.display = "block";
+                        const lblParent = document.getElementById("lbl_parent_name");
+                        if(lblParent) lblParent.innerText = info.location_id[1];
+                    } else {
+                        pInfo.style.display = "none";
+                    }
+                }
             }
 
-            // Products
             const tbody = document.getElementById('product_list_body');
-            tbody.innerHTML = "<tr><td colspan='2' style='text-align:center;'>...</td></tr>";
+            const pEmpty = document.getElementById('product_empty_msg');
+            tbody.innerHTML = "";
+            pEmpty.style.display = "block"; pEmpty.innerText = "Đang tải...";
+            
             await rpc('/3Dstock/data/product', { 'loc_code': mesh.name }).then(prodData => {
                 tbody.innerHTML = "";
                 const list = prodData.product_list || [];
-                list.forEach(p => {
-                    const tr = document.createElement("tr");
-                    tr.innerHTML = `<td>${p[0]}</td><td style="text-align:right; font-weight:bold;">${p[1]}</td>`;
-                    tbody.appendChild(tr);
-                });
+                if (list.length === 0) {
+                    pEmpty.style.display = "block"; pEmpty.innerText = "(Trống)";
+                } else {
+                    pEmpty.style.display = "none";
+                    list.forEach(p => {
+                        const tr = document.createElement("tr");
+                        tr.innerHTML = `<td>${p[0]}</td><td style="text-align:right;">${p[1]}</td>`;
+                        tbody.appendChild(tr);
+                    });
+                }
             });
 
-            // Pickings
             const pickDiv = document.getElementById("picking_list_container");
-            pickDiv.innerHTML = "<div style='text-align:center;'>...</div>";
+            const pkEmpty = document.getElementById("picking_empty_msg");
+            pickDiv.innerHTML = "";
+            pkEmpty.style.display = "block"; pkEmpty.innerText = "Đang tải...";
+            
             await rpc('/3Dstock/data/pickings', { 'loc_code': mesh.name }).then(picks => {
                 pickDiv.innerHTML = "";
-                if (picks.length === 0) pickDiv.innerHTML = "<div style='text-align:center; color:#999; font-size:11px;'>(Trống)</div>";
-                else {
+                if (picks.length === 0) {
+                    pkEmpty.style.display = "block"; pkEmpty.innerText = "(Không có phiếu)";
+                } else {
+                    pkEmpty.style.display = "none";
                     picks.forEach(p => {
                         let cl = p.type==="Nhập hàng"?"#28a745":p.type==="Xuất hàng"?"#dc3545":"#ffc107";
                         const div = document.createElement("div");
-                        div.style.borderBottom = "1px solid #eee"; div.style.padding = "5px";
-                        div.innerHTML = `<div style="font-weight:bold; display:flex; justify-content:space-between;"><span>${p.name}</span><span style="color:${cl}; font-size:10px;">${p.type}</span></div><div style="font-size:10px; color:#666;">${p.origin||''} - ${p.state}</div>`;
+                        div.style.borderBottom = "1px solid #f1f3f5"; div.style.padding = "4px 0";
+                        div.innerHTML = `<div style="font-weight:600; display:flex; justify-content:space-between; font-size:11px;"><span>${p.name}</span><span style="color:${cl};">${p.type}</span></div><div style="font-size:10px; color:#999;">${p.origin||''} - ${p.state}</div>`;
                         pickDiv.appendChild(div);
                     });
                 }
@@ -580,13 +623,11 @@ export class Stock3DController extends ListController {
 
         function createSidebarItem(code, val) {
             const item = document.createElement("div");
-            item.classList.add("location-item");
-            item.innerText = code;
-            item.draggable = true;
+            item.classList.add("location-item"); item.innerText = code; item.draggable = true;
             item.addEventListener("dragstart", (e) => {
                 const dragData = JSON.stringify({
                     id: val[6], code: code,
-                    l: val[3] > 0 ? val[3] : 50, w: val[4] > 0 ? val[4] : 50, h: val[5] > 0 ? val[5] : 50
+                    l: val[3]>0?val[3]:50, w: val[4]>0?val[4]:50, h: val[5]>0?val[5]:50
                 });
                 e.dataTransfer.setData("text/plain", dragData);
             });
@@ -595,157 +636,132 @@ export class Stock3DController extends ListController {
 
         async function onDropLocation(e) {
             e.preventDefault();
-            const rawData = e.dataTransfer.getData("text/plain");
-            if (!rawData) return;
-            const itemData = JSON.parse(rawData);
-
+            const raw = e.dataTransfer.getData("text/plain"); if (!raw) return;
+            const item = JSON.parse(raw);
             const mouse = new THREE.Vector2();
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
             const intersects = raycaster.intersectObject(dragPlane);
-
             if (intersects.length > 0) {
-                const point = intersects[0].point;
-                // Default: not parent
-                const newMesh = await create3DBox(itemData.code, [point.x, 0, point.z, itemData.l, itemData.w, itemData.h, itemData.id, false], false);
+                const p = intersects[0].point;
+                const mesh = await create3DBox(item.code, [p.x, 0, p.z, item.l, item.w, item.h, item.id, false]);
+                meshMap[item.id] = mesh; group.add(mesh);
                 
-                Array.from(sidebarList.children).forEach(child => {
-                    if (child.innerText === itemData.code) sidebarList.removeChild(child);
-                });
+                let opt1 = document.createElement("option"); 
+                opt1.value = item.code; opt1.text = item.code; 
+                opt1.setAttribute('data-id', item.id); 
+                document.getElementById("anchor_select").appendChild(opt1);
+                
+                let opt2 = document.createElement("option"); 
+                opt2.value = item.code; 
+                document.getElementById("loc_datalist").appendChild(opt2);
 
-                await rpc('/web/dataset/call_kw', {
-                    model: 'stock.location', method: 'write',
-                    args: [[itemData.id], {
-                        'pos_x': point.x, 'pos_y': 0, 'pos_z': point.z,
-                        'length': itemData.l / (3.779 * 2), 'width': itemData.w / (3.779 * 2), 'height': itemData.h / (3.779 * 2),
-                    }], kwargs: {},
-                });
-                selectObject(newMesh);
+                Array.from(sidebarList.children).forEach(child => { if (child.innerText === item.code) sidebarList.removeChild(child); });
+                await saveLocationPosition(mesh);
+                selectObject(mesh);
             }
-        }
-
-        // --- CREATE 3D BOX (PARENT/CHILD) ---
-        async function create3DBox(key, value, isParent) {
-            const l = value[3] > 0 ? value[3] : 50;
-            const w = value[4] > 0 ? value[4] : 50;
-            const h = value[5] > 0 ? value[5] : 50;
-            
-            const geo = new THREE.BoxGeometry(l, h, w);
-            geo.translate(0, h/2, 0);
-            
-            let col = 0x8c8c8c; let op = 0.5;
-            let material;
-
-            if (isParent) {
-                // CHA: Wireframe
-                material = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, transparent:true, opacity: 0.1 });
-            } else {
-                // CON: Solid
-                await rpc('/3Dstock/data/quantity', { 'loc_code': key }).then(q => {
-                    if (q[0] > 0) { 
-                       if (q[1] > 100) { col = 0xcc0000; op = 0.8; }
-                       else if (q[1] > 50) { col = 0xe6b800; op = 0.8; }
-                       else if (q[1] > 0) { col = 0x00802b; op = 0.8; } 
-                       else { col = 0x8c8c8c; op = 0.5; }
-                    } else { 
-                       if(q[1] == -1) { col = 0x00802b; op = 0.8; } 
-                       else { col = 0x8c8c8c; op = 0.5; }
-                    }
-                });
-                material = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op });
-            }
-
-            const mesh = new THREE.Mesh(geo, material);
-            const edges = new THREE.EdgesGeometry(geo);
-            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x404040 }));
-            
-            mesh.position.set(value[0], value[1], value[2]);
-            line.position.set(0,0,0); 
-            
-            mesh.name = key;
-            mesh.userData = { color: col, loc_id: value[6], is_parent: isParent, parent_id: value[7] };
-            mesh.add(line); 
-            
-            // Text Label
-            const loader = new THREE.FontLoader();
-            loader.load('https://threejs.org/examples/fonts/droid/droid_sans_bold.typeface.json', function(font) {
-                const textMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
-                let textScale = isParent ? 2.5 : 3.0;
-                let baseSize = Math.min(l, w) / textScale; 
-                const shapes = font.generateShapes(key, baseSize);
-                const tGeo = new THREE.ShapeGeometry(shapes);
-                
-                tGeo.computeBoundingBox();
-                const xMid = - 0.5 * ( tGeo.boundingBox.max.x - tGeo.boundingBox.min.x );
-                tGeo.translate( xMid, 0, 0 );
-                
-                let containerSize = (w > l) ? w : l;
-                const textWidth = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
-                const maxAllowed = containerSize * 0.9;
-                if (textWidth > maxAllowed) {
-                    const scaleFactor = maxAllowed / textWidth;
-                    tGeo.scale(scaleFactor, scaleFactor, 1);
-                }
-
-                const textMesh = new THREE.Mesh(tGeo, textMat);
-                textMesh.position.y = h + 2; 
-                textMesh.rotation.x = -Math.PI / 2;
-                if (w > l) textMesh.rotation.z = Math.PI / 2;
-                
-                mesh.add(textMesh);
-            });
-
-            group.add(mesh);
-            return mesh;
-        }
-
-        // --- UPDATE VISUAL WHEN BECOME PARENT ---
-        function updateParentVisual(mesh) {
-            // Chuyển sang Wireframe
-            mesh.material.wireframe = true;
-            mesh.material.color.set(0x000000);
-            mesh.material.opacity = 0.1;
-            mesh.userData.is_parent = true;
-        }
-
-        function updateMeshDimensions(mesh, l, w, h) {
-            const pxL = l * 3.779 * 2;
-            const pxW = w * 3.779 * 2;
-            const pxH = h * 3.779 * 2;
-            const newGeo = new THREE.BoxGeometry(pxL, pxH, pxW);
-            newGeo.translate(0, pxH/2, 0);
-            mesh.geometry.dispose();
-            mesh.geometry = newGeo;
-            
-            const oldLine = mesh.children.find(c => c.type === 'LineSegments');
-            if(oldLine) mesh.remove(oldLine);
-            const edges = new THREE.EdgesGeometry(newGeo);
-            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x404040 }));
-            mesh.add(line);
-            
-            // Re-render Text... (Giữ logic cũ)
-            // ...
         }
 
         async function saveLocationPosition(obj) {
             if (!obj.userData.loc_id) return;
+            const worldPos = new THREE.Vector3();
+            obj.getWorldPosition(worldPos);
             await rpc('/web/dataset/call_kw', {
                 model: 'stock.location', method: 'write',
-                args: [[obj.userData.loc_id], {
-                    'pos_x': obj.position.x, 'pos_y': obj.position.y, 'pos_z': obj.position.z,
-                }], kwargs: {},
+                args: [[obj.userData.loc_id], { 'pos_x': worldPos.x, 'pos_y': worldPos.y, 'pos_z': worldPos.z }], kwargs: {}
+            });
+        }
+
+        function updateMeshDimensions(mesh, l, w, h) {
+            const pxL = l * 3.779 * 2; const pxW = w * 3.779 * 2; const pxH = h * 3.779 * 2;
+            const geo = new THREE.BoxGeometry(pxL, pxH, pxW); geo.translate(0, pxH/2, 0);
+            mesh.geometry.dispose(); mesh.geometry = geo;
+            const line = mesh.children.find(c => c.type === 'LineSegments');
+            if(line) { line.geometry.dispose(); line.geometry = new THREE.EdgesGeometry(geo); }
+            const oldText = mesh.children.find(c => c.type === 'Mesh' && c !== line); 
+            if (oldText) mesh.remove(oldText);
+            const loader = new THREE.FontLoader();
+            loader.load('https://threejs.org/examples/fonts/droid/droid_sans_bold.typeface.json', function(font) {
+                const textMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+                let baseSize = Math.min(pxL, pxW) / 2.5;
+                const shapes = font.generateShapes(mesh.name, baseSize);
+                const tGeo = new THREE.ShapeGeometry(shapes);
+                tGeo.computeBoundingBox();
+                const xMid = - 0.5 * ( tGeo.boundingBox.max.x - tGeo.boundingBox.min.x );
+                tGeo.translate( xMid, 0, 0 );
+                const textWidth = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
+                const maxAllowed = (pxW > pxL ? pxW : pxL) * 0.9;
+                if (textWidth > maxAllowed) {
+                    const scaleFactor = maxAllowed / textWidth;
+                    tGeo.scale(scaleFactor, scaleFactor, 1);
+                }
+                const textMesh = new THREE.Mesh(tGeo, textMat);
+                textMesh.position.y = pxH + 2; tMesh.rotation.x = -Math.PI / 2;
+                if (pxW > pxL) textMesh.rotation.z = Math.PI / 2;
+                mesh.add(textMesh);
             });
         }
 
         function warehouseChange() {
-            wh_id = document.querySelector(".customselect").value;
-            start();
+            wh_id = document.querySelector(".customselect").value; start();
+        }
+
+        function createFloor(w, d) {
+            const visualW = w * 3.779 * 2; const visualD = d * 3.779 * 2;
+            if (baseMesh) scene.remove(baseMesh); if (dragPlane) scene.remove(dragPlane);
+            if (window.gridHelper) scene.remove(window.gridHelper);
+
+            // Plane
+            const geo = new THREE.PlaneGeometry(visualW, visualD);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xf0f0f0, side: THREE.DoubleSide, depthWrite: false });
+            baseMesh = new THREE.Mesh(geo, mat); baseMesh.rotation.x = -Math.PI / 2; baseMesh.position.y = -0.5; scene.add(baseMesh);
+            
+            // Grid (Mờ hơn)
+            const grid = new THREE.GridHelper(Math.max(visualW, visualD), 20, 0xcccccc, 0xe5e5e5);
+            grid.position.y = 0;
+            scene.add(grid);
+            window.gridHelper = grid;
+
+            const pGeo = new THREE.PlaneGeometry(50000, 50000); 
+            dragPlane = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({visible:false})); 
+            dragPlane.rotation.x = -Math.PI / 2; scene.add(dragPlane);
+        }
+
+        function updateFloorSize() {
+            const w = parseFloat(document.getElementById('floor_w_cfg').value) || 500;
+            const d = parseFloat(document.getElementById('floor_d_cfg').value) || 500;
+            createFloor(w, d);
+        }
+
+        async function searchProduct(keyword) {
+            if (!keyword) {
+                scene.traverse(obj => {
+                    if (obj.userData.loc_id) {
+                       obj.material.color.set(obj.userData.color);
+                       obj.material.opacity = obj.userData.is_parent ? 0.2 : (obj.userData.color===0x8c8c8c?0.5:0.8);
+                    }
+                });
+                return;
+            }
+            const locCodes = await rpc('/3Dstock/search_product', { keyword: keyword, wh_id: wh_id });
+            if (locCodes.length === 0) { alert("Không thấy!"); return; }
+            let first = null;
+            scene.traverse(obj => {
+                if (obj.userData.loc_id) {
+                    if (locCodes.includes(obj.name)) {
+                        obj.material.color.set(0xff00ff); obj.material.opacity = 1;
+                        if (!first) first = obj;
+                    } else {
+                        obj.material.color.set(0xeeeeee); obj.material.opacity = 0.1;
+                    }
+                }
+            });
+            if(first) { controls.target.copy(first.position); controls.update(); }
         }
 
         function animate() {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
+            requestAnimationFrame(animate); renderer.render(scene, camera); controls.update();
         }
     }
 }
