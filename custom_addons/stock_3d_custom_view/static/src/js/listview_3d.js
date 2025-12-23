@@ -8,6 +8,10 @@ import { ListController } from "@web/views/list/list_controller";
 import { rpc } from "@web/core/network/rpc";
 import { user } from "@web/core/user";
 
+import { listView } from "@web/views/list/list_view";
+
+
+
 export class Stock3DController extends ListController {
     setup() {
         super.setup();
