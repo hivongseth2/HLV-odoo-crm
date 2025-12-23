@@ -609,6 +609,11 @@ class SaleApiImportWizard(models.TransientModel):
                 # MISA không có thuế → Clear thuế
                 vals_line['tax_id'] = [(5, 0, 0)]
             
+            # ===== PRODUCTION STATUS FROM MISA =====
+            production_status_text = misa_line.get("ProductionStatusIDText") or ""
+            if production_status_text:
+                vals_line['x_studio_product_status'] = production_status_text
+            
             # ===== TẠO DÒNG MỚI =====
             try:
                 self.env['sale.order.line'].create(vals_line)
@@ -1317,7 +1322,12 @@ class SaleApiImportWizard(models.TransientModel):
                             vals_line['x_studio_is_combo_child'] = False
                             vals_line['x_studio_combo_parent_code'] = False
                         
-                        allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
+                        # ===== PRODUCTION STATUS FROM MISA =====
+                        production_status_text = line.get("ProductionStatusIDText") or ""
+                        if production_status_text:
+                            vals_line['x_studio_product_status'] = production_status_text
+                        
+                        allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code','x_studio_product_status'}
                         safe_vals_line = {k: v for k, v in vals_line.items() if k in allowed_fields}
                         self.env['sale.order.line'].create(safe_vals_line)
 
@@ -1591,7 +1601,12 @@ class SaleApiImportWizard(models.TransientModel):
                                 line_vals['x_studio_is_combo_child'] = False
                                 line_vals['x_studio_combo_parent_code'] = False
                             
-                            allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code'}
+                            # ===== PRODUCTION STATUS FROM MISA =====
+                            production_status_text = line.get("ProductionStatusIDText") or ""
+                            if production_status_text:
+                                line_vals['x_studio_product_status'] = production_status_text
+                            
+                            allowed_fields = {'order_id','product_id','name','product_uom_qty','price_unit','discount','note','product_uom','tax_id','x_studio_is_combo_child','x_studio_combo_parent_code','x_studio_product_status'}
                             safe_line_vals = {k: v for k, v in line_vals.items() if k in allowed_fields}
                             self.env['sale.order.line'].create(safe_line_vals)
 
