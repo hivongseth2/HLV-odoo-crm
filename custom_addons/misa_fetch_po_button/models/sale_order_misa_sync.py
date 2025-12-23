@@ -12,6 +12,8 @@ class SaleOrder(models.Model):
     misa_id = fields.Char(string="MISA ID")                  # ví dụ: "27264"
     misa_form_layout_id = fields.Integer(default=37)         # theo payload mẫu của bạn
     misa_form_type = fields.Integer(default=4)               # theo URL mẫu: .../SaleOrder/37/4
+    
+    
 
     def _misa_headers(self):
         """Tạo headers CRM MISA (dựa vào utils/config của bạn)."""
@@ -160,405 +162,6 @@ class SaleOrder(models.Model):
 
 
     # ---------------- core sync ----------------
-
-    def action_sync_from_misa(self):
-        """Nút bấm trong form SO: đồng bộ lại dữ liệu từ MISA."""
-        self.ensure_one()
-        odoo_utils = self.env['odoo.utils']
-
-        # 1) Lấy header từ FormDataNew
-        data = self._misa_fetch_order()
-        # Một số key phổ biến cần dùng (tùy chỉnh theo thực tế):
-        # OtherSysOrderCode, DeliveryOrderNumber, SaleOrderNo, ListOrderNumber, AccountIDText, BookDate, DeliveryDate, BillingAddress, v.v.
-        partner_name = data.get("AccountIDText") or data.get("BillingAccountIDText")
-        order_no     = data.get("MISAOrderNo") or data.get("ListOrderNumber") or data.get("SaleOrderNo")
-        # Ưu tiên lấy OtherSysOrderCode, fallback về DeliveryOrderNumber
-        raw_delivery_no = data.get("DeliveryOrderNumber")
-        other_sys_code = data.get("OtherSysOrderCode")
-        if raw_delivery_no and str(raw_delivery_no).startswith("VN"):
-             delivery_no = other_sys_code
-        else:
-             delivery_no = raw_delivery_no or order_no
-        # delivery_no  = data.get("DeliveryOrderNumber") or order_no
-        # delivery_no  = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
-        book_date    = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
-        shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress")  # Ưu tiên ShippingAddress
-        revenue_status_id = data.get("RevenueStatusID")
-        revenue_status_text = data.get("RevenueStatusIDText")
-
-        if revenue_status_id == 4 or (revenue_status_text or "").strip().lower() == "từ chối ghi".lower():
-            _logger.info("🚫 SO %s có trạng thái 'Từ chối ghi' trên MISA -> Force cancel", self.name)
-
-            # 1) Hủy picking mở (delivery)
-            for picking in (self.picking_ids or []):
-                if picking.state in ('waiting', 'confirmed', 'assigned'):
-                    try:
-                        picking.sudo().action_cancel()
-                    except Exception as e:
-                        _logger.warning("Không thể cancel picking %s: %s", picking.name, e)
-
-                elif picking.state in ('draft',):
-                    try:
-                        picking.sudo().unlink()
-                    except Exception as e:
-                        _logger.warning("Không thể xóa picking draft %s: %s", picking.name, e)
-
-            # 2) Hủy invoice chưa đăng
-            for inv in (self.invoice_ids or []):
-                try:
-                    if getattr(inv, 'state', None) in ('draft', 'cancel'):
-                        if hasattr(inv, 'button_cancel'):
-                            inv.sudo().button_cancel()
-                        elif hasattr(inv, 'action_cancel'):
-                            inv.sudo().action_cancel()
-                    elif getattr(inv, 'state', None) == 'posted':
-                        # Không tự ý hủy invoice đã post
-                        raise UserError(_("Đơn có hóa đơn đã ghi sổ (%s). Hãy hủy/ghi bút toán trước khi hủy đơn.") % inv.name)
-                except Exception as e:
-                    _logger.warning("Không thể hủy invoice %s: %s", getattr(inv, 'name', 'n/a'), e)
-                    # Nếu muốn nghiêm ngặt thì raise ở đây
-
-            # 3) Hủy SO (mạnh tay nếu cần)
-            try:
-                if self.state not in ('cancel', 'done'):
-                    try:
-                        self.sudo().action_cancel()
-                    except Exception as e1:
-                        _logger.warning("action_cancel thất bại: %s -> fallback _action_cancel + write(cancel)", e1)
-                        if hasattr(self.order_line, '_action_cancel'):
-                            self.order_line.sudo()._action_cancel()
-                        self.sudo().write({'state': 'cancel'})
-
-                # Đến đây state phải là cancel
-                self.invalidate_recordset()
-                self.refresh()
-
-                if self.state != 'cancel':
-                    # như một lớp an toàn cuối
-                    if hasattr(self.order_line, '_action_cancel'):
-                        self.order_line.sudo()._action_cancel()
-                    self.sudo().write({'state': 'cancel'})
-                    self.invalidate_recordset()
-                    self.refresh()
-
-                if self.state == 'cancel':
-                    self.message_post(body=_("Phiếu bị hủy khi đồng bộ do trạng thái MISA: Từ chối ghi"))
-                    return {
-                        'type': 'ir.actions.client',
-                        'tag': 'display_notification',
-                        'params': {
-                            'title': _("Phiếu đã bị hủy"),
-                            'message': _("Trạng thái MISA: Từ chối ghi"),
-                            'type': 'warning'
-                        }
-                    }
-                else:
-                    raise UserError(_("Không thể đưa phiếu về trạng thái hủy. Vui lòng kiểm tra picking/invoice ràng buộc."))
-
-            except Exception as e:
-                raise UserError(_("Không thể hủy phiếu khi đồng bộ: %s") % e)
-
-        # 2) Lấy misa_order_id để fetch thông tin chi tiết
-        misa_order_id = data.get("ID") or data.get("CustomID") or self.misa_id
-
-        # Fetch OwnerIDText, SaleOrderDate, ShippingContactIDText, httt, htgh từ MISA
-        headers, _crm_token = self._misa_headers()
-        owner_date = {}
-        try:
-            owner_date = self.env['misa.api.utils'].get_saleorder_owner_and_date(misa_order_id, headers) or {}
-        except Exception as _e:
-            _logger.warning("Không lấy được thông tin chi tiết cho SO=%s: %s", misa_order_id, _e)
-
-        # Khách hàng (partner_id) LUÔN lấy từ AccountIDText
-        # Địa chỉ giao hàng/lập hóa đơn lấy từ ShippingContactIDText
-        shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
-
-        # Lấy lines từ DataSubPaging
-        lines = self._misa_fetch_lines(misa_order_id)
-
-        # 3) Upsert header
-        partner = odoo_utils._get_or_create_partner(partner_name or _("Khách hàng MISA"))
-
-        # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
-        partner_vals = {}
-        billing_addr = data.get("BillingAddress")
-        partner_phone = data.get("Phone")
-        partner_province = data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText")
-
-        if billing_addr and partner.street != billing_addr:
-            partner_vals['street'] = billing_addr
-        if partner_phone and partner.phone != partner_phone:
-            partner_vals['phone'] = partner_phone
-        if partner_province and partner.city != partner_province:
-            partner_vals['city'] = partner_province
-            # Cập nhật state_id nếu cần
-            try:
-                state = self.env['sale.api.import.wizard']._vn_state_by_name(partner_province)
-                if state and partner.state_id != state:
-                    partner_vals['state_id'] = state.id
-            except Exception:
-                pass
-
-        # Đảm bảo country là Việt Nam
-        try:
-            vn_country = self.env['sale.api.import.wizard']._vn_country()
-            if vn_country and partner.country_id != vn_country:
-                partner_vals['country_id'] = vn_country.id
-        except Exception:
-            pass
-
-        if partner_vals:
-            partner.write(partner_vals)
-            _logger.info("Cập nhật thông tin partner %s: %s", partner.name, partner_vals.keys())
-
-        vals_upd = {
-            'partner_id': partner.id,
-            'origin': order_no or (self.origin or self.name),
-        }
-        if book_date:
-            try:
-                vals_upd['date_order'] = dtparse(book_date).replace(tzinfo=None)
-            except Exception:
-                pass
-        # Sync x_studio_misa_saler_code, x_studio_misa_order_date, httt, htgh
-        if owner_date.get('owner_code'):
-            vals_upd['x_studio_misa_saler_code'] = owner_date['owner_code']
-        if owner_date.get('sale_order_date'):
-            vals_upd['x_studio_misa_order_date'] = owner_date['sale_order_date']
-        if owner_date.get('httt'):
-            vals_upd['x_studio_httt'] = owner_date['httt']
-        if owner_date.get('htgh'):
-            vals_upd['x_studio_htgh'] = owner_date['htgh']
-        # Gán lại địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
-        try:
-            # Danh sách e_accounts để xác định khách hàng TMĐT
-            e_accounts = {
-                "TIKTOK HOÀNG LONG VŨ",
-                "SHOPEE TRANG MILWAUKEE",
-                "SHOPEE TRANG TBCN HLV",
-                "SHOPEE TRANG DEWALT STANLEY",
-                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE STANLEY",
-                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE",
-                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
-                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK",
-                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
-                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
-                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
-                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
-                "TOOL DEWALT",
-            }
-            delivery_contact = self.env['sale.api.import.wizard']._get_or_create_delivery_contact(
-                parent_partner=partner,
-                addr_str=shipping_addr or '',
-                phone=data.get("Phone"),
-                province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
-                contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
-                is_e_account=(partner_name in e_accounts)
-            )
-            vals_upd['partner_shipping_id'] = delivery_contact.id
-            vals_upd['partner_invoice_id'] = delivery_contact.id
-        except Exception as e:
-            _logger.warning("Không set được delivery contact: %s", e)
-
-        self.write(vals_upd)
-
-        # ===== 4) ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA (TRƯỚC KHI UPSERT LINES) =====
-        _logger.info("🔄 Đồng bộ tên sản phẩm từ MISA cho SO %s...", self.name)
-        synced_count = 0
-        for ln in (lines or []):
-            # Bỏ qua combo child
-            if ln.get("IsChildProduct"):
-                continue
-            
-            product_code = (ln.get("ProductIDText") or "").strip()
-            product_name = ln.get("Description") or product_code
-            
-            if product_code and product_name:
-                result = odoo_utils._sync_product_name_from_misa(product_code, product_name)
-                if result:
-                    synced_count += 1
-        
-        if synced_count > 0:
-            _logger.info("✅ Đã đồng bộ tên cho %d sản phẩm từ MISA", synced_count)
-
-        # ===== 5) Upsert lines theo product_code =====
-        SaleLine    = self.env['sale.order.line']
-        misa_utils  = self.env['misa.api.utils']
-        odoo_utils  = self.env['odoo.utils']
-
-        # Map các dòng hiện có trên SO theo default_code để upsert
-        lines_by_code = {}
-        for sol in self.order_line:
-            code = (sol.product_id and sol.product_id.default_code) or ''
-            if code:
-                lines_by_code[code] = sol
-
-        seen_codes = set()
-
-        def _flt(x, dv=0.0):
-            try:
-                return float(x or 0.0)
-            except Exception:
-                return dv
-
-        # 4.0) TIỀN XỬ LÝ: Nhóm các dòng CON theo CHA (khớp bằng cả ID/CODE để an toàn)
-        children_by_parent = {}
-        for ch in (lines or []):
-            if not ch.get("IsChildProduct"):
-                continue
-            p_id   = ch.get("ParentProductID") or ch.get("ParentProductId")
-            p_code = (ch.get("ParentProductIDText") or "").strip()
-            keyset = {str(p_id or "").strip(), p_code}
-            key = "|".join(sorted([k for k in keyset if k]))
-            if key:
-                children_by_parent.setdefault(key, []).append(ch)
-
-        # 4.1) XỬ LÝ TỪNG DÒNG MISA
-        for ln in (lines or []):
-            # BỎ QUA dòng con -> giống wizard (SO chỉ có 1 dòng CHA)
-            if ln.get("IsChildProduct"):
-                continue
-
-            product_code = (ln.get("ProductIDText") or "").strip()
-            if not product_code:
-                continue
-
-            description   = ln.get("Description") or product_code
-            qty           = _flt(ln.get("Amount"), 0.0)
-            price_unit    = _flt(ln.get("Price"), 0.0)
-            discount_pct  = _flt(ln.get("DiscountPercent"), 0.0)
-            uom_name      = (ln.get("UnitIDText") or "Cái").strip()
-            note_text     = (ln.get("DescriptionProduct") or ln.get("Note") or "")
-            misa_pid      = ln.get("ProductID") or ln.get("ProductId")
-            
-            x_studio_product_status = (ln.get("CustomField4") or "").strip()
-
-            # 4.1.a) NHÁNH COMBO CHA (giống wizard: chỉ tạo 1 dòng cha, children đổ vào Combo Items)
-            if ln.get("IsSetProduct"):
-                # Gom children của CHA hiện tại (khớp theo cả ID và CODE)
-                parent_keys = {str(misa_pid or "").strip(), product_code}
-                ckey = "|".join(sorted([k for k in parent_keys if k]))
-                children_for_parent = list(children_by_parent.get(ckey, []))
-
-                # Lấy headers nếu chưa có
-                headers, _crm_token = self._misa_headers()
-
-                # Tạo/lấy sản phẩm combo + ĐỔ Combo Items đúng schema combo.product
-                combo_product = misa_utils.get_or_create_combo_product(
-                    combo_data=ln,
-                    children_data=children_for_parent,   # có thể rỗng -> util tự fetch bằng headers
-                    env=self.env,
-                    sale_headers=headers,                # BẮT BUỘC để util gọi API lấy con khi DataSubPaging không trả
-                )
-
-                # Fallback nếu util lỗi: vẫn đảm bảo có product để không vỡ flow
-                product = combo_product or odoo_utils._get_or_create_product(
-                    code=product_code,
-                    name=description,
-                    unit_name=uom_name,
-                    cost=price_unit,
-                    product_type="consu",
-                    purchase_ok=True,
-                    sale_ok=True,
-                )
-
-                # Quy đổi về UoM chuẩn theo conversion của MISA (giữ helper cũ)
-                qty_base, price_base, use_default = self._convert_qty_price_to_default_uom(
-                    product=product,
-                    misa_uom_text=uom_name,
-                    qty=qty,
-                    price=price_unit,
-                    misa_product_id=misa_pid,
-                    headers=headers,
-                )
-
-                vals = {
-                    'order_id': self.id,
-                    'product_id': product.id,
-                    'name': description,
-                    'product_uom_qty': qty_base,
-                    'price_unit': price_base,
-                    'discount': discount_pct,
-                    'note': note_text,
-                    'x_studio_product_status': x_studio_product_status,
-                }
-                if not use_default and product.uom_id:
-                    vals['product_uom'] = product.uom_id.id
-
-                tax_ids = self._tax_ids_from_misa_line(ln)
-                if tax_ids:
-                    vals['tax_id'] = [(6, 0, tax_ids)]
-                else:
-                    # MISA không có thuế → Clear thuế
-                    vals['tax_id'] = [(5, 0, 0)]
-
-                # Upsert theo product_code
-                seen_codes.add(product_code)
-                if product_code in lines_by_code:
-                    lines_by_code[product_code].write(vals)
-                else:
-                    SaleLine.create(vals)
-                continue  # ✅ xong nhánh combo cha
-
-            # 4.1.b) NHÁNH DÒNG THƯỜNG (GIỮ NGUYÊN LOGIC CŨ)
-            product = odoo_utils._get_or_create_product(
-                code=product_code,
-                name=description,
-                unit_name=uom_name,
-                cost=price_unit,
-                product_type="consu",
-                purchase_ok=True,
-                sale_ok=True,
-            )
-
-            qty_base, price_base, use_default = self._convert_qty_price_to_default_uom(
-                product=product,
-                misa_uom_text=uom_name,
-                qty=qty,
-                price=price_unit,
-                misa_product_id=misa_pid,
-                headers=headers,
-            )
-
-            vals = {
-                'order_id': self.id,
-                'product_id': product.id,
-                'name': description,
-                'product_uom_qty': qty_base,
-                'price_unit': price_base,
-                'discount': discount_pct,
-                'note': note_text,
-                "x_studio_product_status": x_studio_product_status,
-            }
-            if not use_default and product.uom_id:
-                vals['product_uom'] = product.uom_id.id
-
-            tax_ids = self._tax_ids_from_misa_line(ln)
-            if tax_ids:
-                vals['tax_id'] = [(6, 0, tax_ids)]
-            else:
-                # MISA không có thuế → Clear thuế
-                vals['tax_id'] = [(5, 0, 0)]
-
-            seen_codes.add(product_code)
-            if product_code in lines_by_code:
-                lines_by_code[product_code].write(vals)
-            else:
-                SaleLine.create(vals)
-
-
-        # 5) Confirm nếu còn nháp
-        if self.state in ('draft', 'sent'):
-            self.action_confirm()
-
-        # 6) Đảm bảo 1 picking + đặt tên theo MISA
-        self._ensure_single_picking(desired_name=(delivery_no or order_no or self.name))
-
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {'title': _("Đồng bộ thành công"), 'message': self.name, 'type': 'success'}
-        }
 
     def _ensure_single_picking(self, desired_name=None):
         """Đảm bảo chỉ còn 1 picking chưa done; đặt tên theo desired_name (unique)."""
@@ -1864,6 +1467,38 @@ class SaleOrder(models.Model):
                 }
             }
 
+    def _auto_apply_misa_tags(self):
+        """
+        Duyệt qua các order trong self, lấy địa chỉ và gọi
+        misa.api.utils để tìm tag phù hợp, sau đó write vào đơn hàng.
+        """
+        # Khởi tạo model utils
+        misa_utils = self.env['misa.api.utils']
+        
+        for order in self:
+            # Lấy địa chỉ giao hàng hoặc địa chỉ xuất hóa đơn
+            addr = order.partner_shipping_id.street or order.partner_id.street
+            
+            if addr:
+                # Gọi hàm map bên model utils (theo code mẫu bạn cung cấp)
+                # Lưu ý: map_address_to_tag_ids trả về dạng [(6, 0, [ids])]
+                tag_ids = misa_utils.map_address_to_tag_ids(self.env, addr)
+                
+                if tag_ids:
+                    order.write({'tag_ids': tag_ids})
+    # api gắn tag@api.model
+    def create(self, vals):
+        # Gọi super để tạo đơn hàng như bình thường
+        record = super(SaleOrder, self).create(vals)
+        
+        # --- CHÈN LOGIC GẮN TAG Ở ĐÂY ---
+        # Tự động gắn tag ngay sau khi tạo xong
+        # Lưu ý: Hàm này sẽ chạy cho cả tạo tay và tạo qua API cơ bản
+        if not record.tag_ids:
+            record._auto_apply_misa_tags()
+        # --------------------------------
+            
+        return record
 # =====================API
     @api.model
     def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True):
@@ -1907,14 +1542,20 @@ class SaleOrder(models.Model):
         }
         if warehouse_id:
             vals['warehouse_id'] = int(warehouse_id)
+            
         so_boot = self.create(vals)
         # Gọi lại resync cứng trên record bootstrap (hàm của bạn sẽ tự huỷ & tạo mới theo MISA)
         action = so_boot.sudo().action_resync_from_misa_hard()
         res_id = action.get('res_id') if isinstance(action, dict) else so_boot.id
         so_new = self.browse(res_id)
+        
+        if so_new:
+            so_new._auto_apply_misa_tags()
         return {
             'ok': True,
             'res_id': so_new.id,
             'name': so_new.name,
             'detail': 'created_then_resynced',
         }
+
+
