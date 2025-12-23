@@ -1283,11 +1283,15 @@ class SaleOrder(models.Model):
 
         # ===== 9) Confirm & đặt tên picking theo MISA =====
         if new_so.state in ('draft', 'sent'):
+            env.flush_all()
             new_so.action_confirm()
         if new_so.picking_ids:
             picking = new_so.picking_ids[0]
             desired = delivery_no or order_no
-            exists = env['stock.picking'].search([('name', '=', desired), ('id', '!=', picking.id)], limit=1)
+            exists = env['stock.picking'].sudo().with_context(active_test=False).search([
+                ('name', '=', desired), 
+                ('id', '!=', picking.id)
+            ], limit=1)
             picking.name = f"{desired}-{picking.id}" if exists else desired
 
         # Toast + log
