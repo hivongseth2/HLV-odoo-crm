@@ -28,7 +28,7 @@ export class Stock3DController extends ListController {
         var wh_id;
         let selectedObject = null;
         let anchorObject = null; 
-        let meshMap = {}; // Map lưu trữ object theo ID để truy xuất nhanh
+        let meshMap = {}; 
         
         let floorWidth = 2000;
         let floorDepth = 2000;
@@ -36,7 +36,7 @@ export class Stock3DController extends ListController {
 
         const pointer = new THREE.Vector2();
 
-        // Fetch Warehouse Data
+        // Load Warehouse
         await rpc('/3Dstock/warehouse', { 'company_id': user.context.allowed_company_ids[0] })
             .then(res => { wh_data = res; });
         
@@ -47,7 +47,7 @@ export class Stock3DController extends ListController {
         wh_id = wh_data[0][0];
 
         // --- UI CONSTRUCTION ---
-        // 1. Dropdown Warehouse
+        
         var select = document.createElement("select");
         select.classList.add("customselect");
         wh_data.forEach(w => {
@@ -56,24 +56,32 @@ export class Stock3DController extends ListController {
             select.appendChild(opt);
         });
 
-        // 2. Close Button
         var closeDiv = document.createElement("button");
         closeDiv.classList.add("closeBtn");
         closeDiv.innerHTML = "&times;";
         closeDiv.style.zIndex = "1001";
-        closeDiv.title = "Thoát";
         closeDiv.onclick = () => window.location.reload();
 
-        // 3. Search Bar
+        // THANH TÌM KIẾM (Location & Product)
         const searchDiv = document.createElement("div");
         searchDiv.classList.add("search-container");
+        // Style lại chút cho rộng hơn để chứa 2 ô tìm kiếm
+        searchDiv.style.width = "auto";
+        searchDiv.style.gap = "10px";
         searchDiv.innerHTML = `
-            <i class="fa fa-search" style="color:#666;"></i>
-            <input type="text" id="product_search_inp" placeholder="Tìm sản phẩm..." style="border:none; outline:none; margin-left:5px;">
-            <button id="btn_do_search" class="btn btn-sm btn-primary" style="border-radius:50%; width:30px; height:30px; padding:0;"><i class="fa fa-arrow-right"></i></button>
+            <div style="display:flex; align-items:center; background:#f1f1f1; padding:2px 8px; border-radius:15px;">
+                <i class="fa fa-map-marker" style="color:#d9534f;"></i>
+                <input type="text" id="loc_search_inp" placeholder="Tìm vị trí..." list="loc_datalist" style="border:none; outline:none; background:transparent; margin-left:5px; width:150px; font-size:13px;">
+                <datalist id="loc_datalist"></datalist>
+                <button id="btn_search_loc" class="btn btn-sm btn-danger" style="border-radius:50%; width:24px; height:24px; padding:0; line-height:24px;"><i class="fa fa-arrow-right"></i></button>
+            </div>
+            <div style="display:flex; align-items:center; background:#f1f1f1; padding:2px 8px; border-radius:15px;">
+                <i class="fa fa-cube" style="color:#007bff;"></i>
+                <input type="text" id="product_search_inp" placeholder="Tìm sản phẩm..." style="border:none; outline:none; background:transparent; margin-left:5px; width:150px; font-size:13px;">
+                <button id="btn_search_prod" class="btn btn-sm btn-primary" style="border-radius:50%; width:24px; height:24px; padding:0; line-height:24px;"><i class="fa fa-arrow-right"></i></button>
+            </div>
         `;
 
-        // 4. Legend Colors
         var colorDiv = document.createElement("div");
         colorDiv.classList.add("rectangle");
         const addLegend = (cls, txt) => {
@@ -87,7 +95,6 @@ export class Stock3DController extends ListController {
         addLegend("square3", "Còn trống");
         addLegend("square4", "Không có hàng");
 
-        // 5. Sidebar (Drag Source + Floor Config)
         const sidebarDiv = document.createElement("div");
         sidebarDiv.classList.add("location-sidebar");
         sidebarDiv.innerHTML = `
@@ -106,7 +113,6 @@ export class Stock3DController extends ListController {
         sidebarList.style.maxHeight = "55vh"; sidebarList.style.overflowY = "auto";
         sidebarDiv.appendChild(sidebarList);
 
-        // 6. SELECTION PANEL (Thông tin + Tool)
         const panelDiv = document.createElement("div");
         panelDiv.classList.add("selection-panel");
         panelDiv.style.width = "350px"; 
@@ -130,7 +136,6 @@ export class Stock3DController extends ListController {
                     <button class="btn btn-light btn-sm btn-align" data-dir="left" title="Xếp sang Trái"><i class="fa fa-arrow-left"></i> Trái</button>
                     <button class="btn btn-light btn-sm btn-align" data-dir="top" title="Chồng lên trên"><i class="fa fa-arrow-up"></i> Trên</button>
                     <button class="btn btn-light btn-sm btn-align" data-dir="right" title="Xếp sang Phải"><i class="fa fa-arrow-right"></i> Phải</button>
-                    
                     <button class="btn btn-light btn-sm btn-align" data-dir="front" title="Xếp ra Trước"><i class="fa fa-arrow-down"></i> Trước</button>
                     <button class="btn btn-light btn-sm btn-align" data-dir="bottom" title="Đặt xuống Dưới"><i class="fa fa-arrow-down"></i> Dưới</button>
                     <button class="btn btn-light btn-sm btn-align" data-dir="back" title="Xếp ra Sau"><i class="fa fa-arrow-up"></i> Sau</button>
@@ -139,12 +144,11 @@ export class Stock3DController extends ListController {
 
             <div class="edit-section">
                 <h6 style="font-size:12px; font-weight:bold; background:#eee; padding:3px;">Thông tin chung</h6>
-                <div class="input-group" style="margin-bottom:5px;">
-                    <label style="width:80px;">Thuộc Kệ (Cha)</label>
-                    <select id="inp_parent_id" style="flex:1; font-size:11px; border:1px solid #ddd;">
-                        <option value="0">-- Không có (Là gốc) --</option>
-                    </select>
+                
+                <div id="parent_info_div" style="margin-bottom:5px; font-size:12px; display:none;">
+                    Thuộc Kệ: <b id="lbl_parent_name"></b>
                 </div>
+
                 <div style="display:flex; gap:5px; margin-top:5px;">
                    <div class="input-group"><label>D</label><input type="number" id="inp_l" step="0.1" style="width:40px"></div>
                    <div class="input-group"><label>R</label><input type="number" id="inp_w" step="0.1" style="width:40px"></div>
@@ -171,7 +175,6 @@ export class Stock3DController extends ListController {
             </div>
         `;
 
-        // 7. Hướng dẫn phím
         const helpDiv = document.createElement("div");
         helpDiv.style = "position:absolute; bottom:10px; left:220px; font-size:11px; color:#666; background:rgba(255,255,255,0.8); padding:5px; border-radius:4px; z-index:1000;";
         helpDiv.innerHTML = "<i class='fa fa-keyboard-o'></i> <b>Di chuyển:</b> W/A/S/D hoặc Mũi tên";
@@ -179,17 +182,13 @@ export class Stock3DController extends ListController {
         start();
 
         async function start() {
-            // Load data
             await rpc('/3Dstock/data', { 
                 'company_id': user.context.allowed_company_ids[0], 
                 'wh_id': wh_id 
             }).then(res => { data = res; });
 
             sidebarList.innerHTML = "";
-
-            // Scene Init
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xe0e0e0);
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0xe0e0e0);
             clock = new THREE.Clock();
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 50000); 
             camera.position.set(0, 500, 800); 
@@ -208,31 +207,31 @@ export class Stock3DController extends ListController {
             document.querySelector("#btn_close_panel").addEventListener("click", deselectObject);
             document.querySelector("#btn_update_floor").addEventListener("click", updateFloorSize);
             
-            // Search Logic
-            const btnSearch = document.getElementById("btn_do_search");
-            const inpSearch = document.getElementById("product_search_inp");
-            btnSearch.addEventListener("click", () => searchProduct(inpSearch.value));
-            inpSearch.addEventListener("keyup", (e) => { if (e.key === 'Enter') searchProduct(inpSearch.value); });
+            // --- SEARCH LOGIC (SẢN PHẨM) ---
+            const btnSearchProd = document.getElementById("btn_search_prod");
+            const inpSearchProd = document.getElementById("product_search_inp");
+            btnSearchProd.addEventListener("click", () => searchProduct(inpSearchProd.value));
+            inpSearchProd.addEventListener("keyup", (e) => { if (e.key === 'Enter') searchProduct(inpSearchProd.value); });
 
-            // Alignment Dropdown
+            // --- SEARCH LOGIC (VỊ TRÍ - NEW) ---
+            const btnSearchLoc = document.getElementById("btn_search_loc");
+            const inpSearchLoc = document.getElementById("loc_search_inp");
+            btnSearchLoc.addEventListener("click", () => searchLocation(inpSearchLoc.value));
+            inpSearchLoc.addEventListener("keyup", (e) => { if (e.key === 'Enter') searchLocation(inpSearchLoc.value); });
+
+            // Anchor Logic
             document.getElementById("anchor_select").addEventListener("change", (e) => {
                 const anchorCode = e.target.value;
                 if (!anchorCode) { anchorObject = null; return; }
-                const found = group.children.find(c => c.name === anchorCode); // Tìm trong group gốc (nếu chưa attach)
-                if(!found) {
-                    // Nếu đã attach vào cha, tìm trong meshMap
-                    const selectedOpt = e.target.selectedOptions[0];
-                    const id = selectedOpt.getAttribute('data-id');
-                    anchorObject = meshMap[id];
-                } else {
-                    anchorObject = found;
+                if (meshMap[e.target.selectedOptions[0].getAttribute('data-id')]) {
+                    anchorObject = meshMap[e.target.selectedOptions[0].getAttribute('data-id')];
                 }
             });
 
             // Align Buttons
             document.querySelectorAll(".btn-align").forEach(btn => {
                 btn.addEventListener("click", async () => {
-                    if (!selectedObject || !anchorObject) { alert("Chọn vị trí Gốc & Đối tượng!"); return; }
+                    if (!selectedObject || !anchorObject) { alert("Chọn Gốc & Đối tượng!"); return; }
                     if (selectedObject === anchorObject) return;
                     alignObject(selectedObject, anchorObject, btn.dataset.dir);
                     
@@ -244,7 +243,7 @@ export class Stock3DController extends ListController {
                 });
             });
 
-            // --- SAVE LOGIC ---
+            // --- SAVE LOGIC (Fix: Move Parent -> Update Children DB) ---
             document.querySelector("#btn_save_changes").addEventListener("click", async () => {
                 if (!selectedObject) return;
                 const locId = selectedObject.userData.loc_id;
@@ -258,59 +257,51 @@ export class Stock3DController extends ListController {
                 const py = parseFloat(document.getElementById('inp_pos_y').value) || 0;
                 const pz = parseFloat(document.getElementById('inp_pos_z').value) || 0;
                 
-                const parentId = parseInt(document.getElementById('inp_parent_id').value) || false;
-
+                // Chỉ lưu thông số kích thước và vị trí, KHÔNG update parent_id ở đây
                 const payload = {
                     'length': l, 'width': w, 'height': h, 'max_capacity': cap,
                     'pos_x': px, 'pos_y': py, 'pos_z': pz
                 };
-                if (parentId !== selectedObject.userData.parent_id) payload['location_id'] = parentId;
 
                 await rpc('/web/dataset/call_kw', {
                     model: 'stock.location', method: 'write',
                     args: [[locId], payload], kwargs: {},
                 });
                 
-                // Update Memory
-                selectedObject.userData.parent_id = parentId;
-                updateMeshDimensions(selectedObject, l, w, h);
-
-                // Re-parenting Visual
-                if (parentId) {
-                    const newParent = meshMap[parentId];
-                    if (newParent) {
-                        newParent.attach(selectedObject);
-                        updateParentVisual(newParent);
-                        constrainMovement(selectedObject, newParent);
-                    }
-                } else {
-                    scene.attach(selectedObject); 
-                    group.add(selectedObject); 
-                }
-                
-                // Update Position visual based on World Pos input
-                // Lưu ý: attach() của ThreeJS đã tự tính lại local transform
-                // Nhưng nếu người dùng nhập số tay vào ô input (World Pos), ta cần set lại World Pos
+                // Update Visual Parent
+                // Lưu ý: Nếu nhập tay tọa độ (World Pos), ta cần set lại Position cho Mesh
+                // ThreeJS cần set Local Pos nếu đã có Parent.
                 const worldVec = new THREE.Vector3(px, py, pz);
-                
                 if (selectedObject.parent && selectedObject.parent.type === "Mesh") {
                     selectedObject.parent.worldToLocal(worldVec);
                     selectedObject.position.copy(worldVec);
+                    constrainMovement(selectedObject, selectedObject.parent); // Snap if out of bounds
                 } else {
                     selectedObject.position.set(px, py, pz);
                 }
 
+                updateMeshDimensions(selectedObject, l, w, h);
                 transformControl.attach(selectedObject);
+
+                // --- QUAN TRỌNG: NẾU OBJECT LÀ CHA, CẦN UPDATE LẠI VỊ TRÍ CÁC CON TRONG DB ---
+                // Vì khi cha di chuyển (thay đổi px, py, pz), con đi theo visual, nhưng tọa độ World của con thay đổi.
+                // Ta cần loop qua con và lưu lại.
+                if (selectedObject.userData.is_parent && selectedObject.children.length > 0) {
+                    selectedObject.children.forEach(child => {
+                        if (child.type === "Mesh" && child.userData.loc_id) {
+                            saveLocationPosition(child);
+                        }
+                    });
+                }
+
                 alert("Đã lưu!");
             });
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true; 
-            controls.dampingFactor = 0.1;
+            controls.enableDamping = true; controls.dampingFactor = 0.1;
 
             transformControl = new THREE.TransformControls(camera, renderer.domElement);
             
-            // Drag Constraint
             transformControl.addEventListener('change', function(event) {
                 if (transformControl.dragging && transformControl.object) {
                     const obj = transformControl.object;
@@ -329,7 +320,7 @@ export class Stock3DController extends ListController {
                 controls.enabled = !event.value;
                 if (!event.value && transformControl.object) {
                     saveLocationPosition(transformControl.object);
-                    // Save children if parent moved
+                    // Drag Cha -> Save Con
                     const obj = transformControl.object;
                     if (obj.children.length > 0) {
                         obj.children.forEach(child => {
@@ -342,7 +333,7 @@ export class Stock3DController extends ListController {
             });
             scene.add(transformControl);
 
-            // WASD Navigation
+            // WASD
             window.addEventListener('keydown', (e) => {
                 if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
                 const moveSpeed = 30; 
@@ -366,13 +357,30 @@ export class Stock3DController extends ListController {
             group = new THREE.Group();
             meshMap = {};
 
+            const anchorSel = document.getElementById("anchor_select");
+            anchorSel.innerHTML = '<option value="">-- Chọn vị trí làm mốc --</option>';
+            // Datalist cho search location
+            const locDatalist = document.getElementById("loc_datalist");
+            locDatalist.innerHTML = "";
+
             // 1. Create Meshes
             for (let [key, value] of Object.entries(data)) {
                 const hasPos = (value[0] !== 0 || value[1] !== 0 || value[2] !== 0);
+                
+                // Add to datalist search
+                let optList = document.createElement("option"); optList.value = key; locDatalist.appendChild(optList);
+
                 if (hasPos) {
                     const mesh = await create3DBox(key, value);
                     meshMap[value[6]] = mesh; 
                     group.add(mesh); 
+                    
+                    // Add to anchor dropdown
+                    let opt1 = document.createElement("option"); 
+                    opt1.value = key; opt1.text = key; 
+                    opt1.setAttribute('data-id', value[6]); 
+                    anchorSel.appendChild(opt1);
+
                 } else {
                     createSidebarItem(key, value);
                 }
@@ -388,23 +396,6 @@ export class Stock3DController extends ListController {
                     meshMap[pid].attach(mesh);
                 }
             }
-
-            // Populate Dropdowns
-            const anchorSel = document.getElementById("anchor_select");
-            const parentSel = document.getElementById("inp_parent_id");
-            anchorSel.innerHTML = '<option value="">-- Chọn vị trí làm mốc --</option>';
-            parentSel.innerHTML = '<option value="0">-- Không có (Là gốc) --</option>';
-
-            for (let [key, value] of Object.entries(data)) {
-                let opt1 = document.createElement("option"); 
-                opt1.value = key; opt1.text = key; 
-                opt1.setAttribute('data-id', value[6]); 
-                anchorSel.appendChild(opt1);
-                
-                let opt2 = document.createElement("option"); 
-                opt2.value = value[6]; opt2.text = key; 
-                parentSel.appendChild(opt2);
-            }
             
             raycaster = new THREE.Raycaster();
             animate();
@@ -415,12 +406,34 @@ export class Stock3DController extends ListController {
             canvas.addEventListener('click', onCanvasClick);
         }
 
-        // --- CORE FUNCTIONS ---
+        // --- NEW: SEARCH LOCATION ---
+        function searchLocation(name) {
+            if(!name) return;
+            // Tìm mesh theo tên (tìm trong group children hoặc traverse vì có thể nằm trong cha)
+            let found = null;
+            scene.traverse(obj => {
+                if(obj.type === 'Mesh' && obj.name === name && obj.userData.loc_id) {
+                    found = obj;
+                }
+            });
+
+            if (found) {
+                selectObject(found);
+                // Bay camera tới
+                const worldPos = new THREE.Vector3();
+                found.getWorldPosition(worldPos);
+                controls.target.copy(worldPos);
+                // Dời camera ra xa chút để nhìn thấy
+                camera.position.set(worldPos.x + 200, worldPos.y + 200, worldPos.z + 200);
+                controls.update();
+            } else {
+                alert("Không tìm thấy vị trí đã setup có tên: " + name);
+            }
+        }
 
         function constrainMovement(child, parent) {
             const pGeo = parent.geometry.parameters;
             const cGeo = child.geometry.parameters;
-            // Local boundaries relative to parent center
             const minX = -(pGeo.width / 2) + (cGeo.width / 2);
             const maxX = (pGeo.width / 2) - (cGeo.width / 2);
             const minZ = -(pGeo.depth / 2) + (cGeo.depth / 2);
@@ -464,7 +477,6 @@ export class Stock3DController extends ListController {
             const l = value[3] > 0 ? value[3] : 50;
             const w = value[4] > 0 ? value[4] : 50;
             const h = value[5] > 0 ? value[5] : 50;
-            
             const geo = new THREE.BoxGeometry(l, h, w);
             geo.translate(0, h/2, 0); 
             
@@ -496,6 +508,8 @@ export class Stock3DController extends ListController {
             const loader = new THREE.FontLoader();
             loader.load('https://threejs.org/examples/fonts/droid/droid_sans_bold.typeface.json', function(font) {
                 const textMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+                // const isP = !!value[7]; // Không dùng logic này vì con cũng có thể là cha của thằng khác
+                // Ở đây ta cứ tạo text bình thường, scale sau
                 let baseSize = Math.min(l, w) / 2.5; 
                 const shapes = font.generateShapes(key, baseSize);
                 const tGeo = new THREE.ShapeGeometry(shapes);
@@ -529,12 +543,10 @@ export class Stock3DController extends ListController {
             const intersects = raycaster.intersectObjects(group.children, true); 
 
             if (intersects.length > 0) {
-                // Ưu tiên chọn CON (Solid)
                 const hits = intersects.filter(i => i.object.type === 'Mesh' && i.object.userData.loc_id);
+                // Ưu tiên chọn con (không phải parent)
                 let finalTarget = hits.find(h => !h.object.userData.is_parent);
-                // Nếu ko có con (chỉ click trúng vỏ cha), chọn Cha
                 if (!finalTarget && hits.length > 0) finalTarget = hits[0];
-                
                 if (finalTarget) selectObject(finalTarget.object);
             } else {
                 const gGizmo = raycaster.intersectObjects(transformControl.children, true);
@@ -566,7 +578,15 @@ export class Stock3DController extends ListController {
                 document.getElementById('inp_w').value = info.width;
                 document.getElementById('inp_h').value = info.height;
                 document.getElementById('inp_cap').value = info.max_capacity;
-                document.getElementById('inp_parent_id').value = info.location_id ? info.location_id[0] : 0;
+                
+                // Hiển thị tên cha (Readonly)
+                const pInfo = document.getElementById("parent_info_div");
+                if(info.location_id) {
+                    pInfo.style.display = "block";
+                    document.getElementById("lbl_parent_name").innerText = info.location_id[1];
+                } else {
+                    pInfo.style.display = "none";
+                }
             }
 
             const tbody = document.getElementById('product_list_body');
@@ -630,6 +650,11 @@ export class Stock3DController extends ListController {
                 const p = intersects[0].point;
                 const mesh = await create3DBox(item.code, [p.x, 0, p.z, item.l, item.w, item.h, item.id, false]);
                 meshMap[item.id] = mesh; group.add(mesh);
+                
+                // Add to anchor list
+                let opt = document.createElement("option"); opt.value = item.code; opt.text = item.code; opt.setAttribute('data-id', item.id);
+                document.getElementById("anchor_select").appendChild(opt);
+                
                 Array.from(sidebarList.children).forEach(child => { if (child.innerText === item.code) sidebarList.removeChild(child); });
                 await saveLocationPosition(mesh);
                 selectObject(mesh);
@@ -699,7 +724,7 @@ export class Stock3DController extends ListController {
                 scene.traverse(obj => {
                     if (obj.userData.loc_id) {
                        obj.material.color.set(obj.userData.color);
-                       obj.material.opacity = obj.userData.is_parent ? 0.2 : (obj.userData.color===0x8c8c8c?0.5:0.8);
+                       obj.material.opacity = obj.userData.is_parent ? 0.1 : (obj.userData.color===0x8c8c8c?0.5:0.8);
                     }
                 });
                 return;
