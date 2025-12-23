@@ -30,10 +30,9 @@ export class Stock3DController extends ListController {
         let anchorObject = null; 
         let meshMap = {}; 
         
-        // Config Floor
         let floorWidth = 2000;
         let floorDepth = 2000;
-        let baseMesh, dragPlane, gridHelper;
+        let baseMesh, dragPlane;
 
         const pointer = new THREE.Vector2();
 
@@ -49,167 +48,177 @@ export class Stock3DController extends ListController {
 
         // --- UI CONSTRUCTION ---
         
+        // 1. Selector
+        const whSelectorDiv = document.createElement("div");
+        whSelectorDiv.classList.add("warehouse-selector-container");
         var select = document.createElement("select");
-        select.classList.add("customselect");
         wh_data.forEach(w => {
             var opt = document.createElement("option");
             opt.value = w[0]; opt.text = w[1];
             select.appendChild(opt);
         });
+        select.classList.add("customselect");
 
-        var closeDiv = document.createElement("button");
-        closeDiv.classList.add("closeBtn");
-        closeDiv.innerHTML = "&times;";
-        closeDiv.style.zIndex = "1001";
-        closeDiv.onclick = () => window.location.reload();
+        var closeBtn = document.createElement("button");
+        closeBtn.classList.add("closeBtn");
+        closeBtn.innerHTML = "&times;";
+        closeBtn.title = "Thoát";
+        closeBtn.onclick = () => window.location.reload();
+        
+        whSelectorDiv.append(select);
+        whSelectorDiv.append(closeBtn);
 
+        // 2. Search Bar
         const searchDiv = document.createElement("div");
         searchDiv.classList.add("search-container");
-        searchDiv.style.width = "auto";
-        searchDiv.style.gap = "10px";
         searchDiv.innerHTML = `
-            <div style="display:flex; align-items:center; background:#f1f1f1; padding:2px 8px; border-radius:15px;">
-                <i class="fa fa-map-marker" style="color:#d9534f;"></i>
-                <input type="text" id="loc_search_inp" placeholder="Tìm vị trí..." list="loc_datalist" style="border:none; outline:none; background:transparent; margin-left:5px; width:150px; font-size:13px;">
+            <div class="search-box">
+                <i class="fa fa-map-marker" style="color:#dc3545"></i>
+                <input type="text" id="loc_search_inp" placeholder="Tìm vị trí..." list="loc_datalist">
                 <datalist id="loc_datalist"></datalist>
-                <button id="btn_search_loc" class="btn btn-sm btn-danger" style="border-radius:50%; width:24px; height:24px; padding:0; line-height:24px;"><i class="fa fa-arrow-right"></i></button>
+                <button id="btn_search_loc"><i class="fa fa-arrow-right"></i></button>
             </div>
-            <div style="display:flex; align-items:center; background:#f1f1f1; padding:2px 8px; border-radius:15px;">
-                <i class="fa fa-cube" style="color:#007bff;"></i>
-                <input type="text" id="product_search_inp" placeholder="Tìm sản phẩm..." style="border:none; outline:none; background:transparent; margin-left:5px; width:150px; font-size:13px;">
-                <button id="btn_search_prod" class="btn btn-sm btn-primary" style="border-radius:50%; width:24px; height:24px; padding:0; line-height:24px;"><i class="fa fa-arrow-right"></i></button>
+            <div class="search-box">
+                <i class="fa fa-cube" style="color:#0d6efd"></i>
+                <input type="text" id="product_search_inp" placeholder="Tìm sản phẩm...">
+                <button id="btn_search_prod"><i class="fa fa-arrow-right"></i></button>
             </div>
         `;
 
-        var colorDiv = document.createElement("div");
-        colorDiv.classList.add("rectangle");
-        const addLegend = (cls, txt) => {
-            let d = document.createElement("div"); d.className = cls; colorDiv.appendChild(d);
-            let t = document.createElement("div"); t.className = "squareText" + cls.replace(/\D/g,''); 
-            if(cls === 'square4') t.className = "squareText4";
-            t.innerText = txt; colorDiv.appendChild(t);
-        };
-        addLegend("square1", "Quá tải");
-        addLegend("square2", "Sắp đầy");
-        addLegend("square3", "Còn trống");
-        addLegend("square4", "Không có hàng");
+        // 3. Legend
+        const legendDiv = document.createElement("div");
+        legendDiv.classList.add("legend-container");
+        legendDiv.innerHTML = `
+            <div class="legend-item"><div class="color-box bg-red"></div>Quá tải (>100%)</div>
+            <div class="legend-item"><div class="color-box bg-yellow"></div>Sắp đầy (>50%)</div>
+            <div class="legend-item"><div class="color-box bg-green"></div>Còn trống</div>
+            <div class="legend-item"><div class="color-box bg-gray"></div>Không có hàng</div>
+        `;
 
+        // 4. Sidebar
         const sidebarDiv = document.createElement("div");
         sidebarDiv.classList.add("location-sidebar");
         sidebarDiv.innerHTML = `
-            <div style="padding-bottom:10px; border-bottom:1px solid #ddd; margin-bottom:10px;">
-                <h6 style="font-weight:bold; font-size:13px; text-align:center;">Cấu hình Sàn (m)</h6>
-                <div style="display:flex; gap:5px; justify-content:center;">
-                    <input type="number" id="floor_w_cfg" value="500" placeholder="R" style="width:50px; font-size:12px;">
-                    <span style="align-self:center;">x</span>
-                    <input type="number" id="floor_d_cfg" value="500" placeholder="D" style="width:50px; font-size:12px;">
-                    <button id="btn_update_floor" class="btn btn-xs btn-secondary" style="font-size:10px;">Vẽ</button>
+            <div class="sidebar-header">
+                <h6>Cấu hình Sàn (m)</h6>
+                <div class="floor-config">
+                    <input type="number" id="floor_w_cfg" value="500"> <span>x</span>
+                    <input type="number" id="floor_d_cfg" value="500">
+                    <button id="btn_update_floor">Vẽ</button>
                 </div>
             </div>
-            <h6 style="text-align:center; font-weight:bold; font-size:13px; margin-bottom:5px;">Chưa Setup</h6>
+            <div class="sidebar-header" style="border:none; padding-bottom:0; margin-bottom:5px;">
+                <h6>Chưa Setup</h6>
+            </div>
         `;
         const sidebarList = document.createElement("div");
-        sidebarList.style.maxHeight = "55vh"; sidebarList.style.overflowY = "auto";
+        sidebarList.classList.add("sidebar-content");
         sidebarDiv.appendChild(sidebarList);
 
+        // 5. Selection Panel
         const panelDiv = document.createElement("div");
         panelDiv.classList.add("selection-panel");
-        panelDiv.style.width = "350px"; 
         panelDiv.innerHTML = `
             <h5>
-                <span id="panel_loc_name" style="color:#007bff; font-weight:bold;">Tên Vị Trí</span>
-                <button class="btn-close-panel" id="btn_close_panel" style="cursor:pointer; float:right;">&times;</button>
+                <span id="panel_loc_name">Tên Vị Trí</span>
+                <button class="btn-close-panel" id="btn_close_panel">&times;</button>
             </h5>
             
-            <div class="edit-section" style="background:#f0f8ff; border:1px solid #cce5ff; padding:5px; margin-bottom:10px; border-radius:4px;">
-                <h6 style="font-size:12px; font-weight:bold; color:#004085; margin-bottom:5px;">
-                    <i class="fa fa-crosshairs"></i> Căn chỉnh vị trí
-                </h6>
-                <div style="font-size:11px; margin-bottom:5px; display:flex; gap:5px; align-items:center;">
-                    <span style="white-space:nowrap;">Chọn Gốc:</span>
-                    <select id="anchor_select" style="width:100%; border:1px solid #ddd; font-size:11px;">
-                        <option value="">-- Chọn vị trí làm mốc --</option>
+            <div class="panel-section">
+                <h6>Căn chỉnh vị trí</h6>
+                <div style="display:flex; gap:5px; margin-bottom:8px;">
+                    <select id="anchor_select" style="width:100%; border:1px solid #ced4da; padding:2px; font-size:11px; border-radius:3px;">
+                        <option value="">-- Chọn mốc --</option>
                     </select>
                 </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:3px;">
-                    <button class="btn btn-light btn-sm btn-align" data-dir="left" title="Xếp sang Trái"><i class="fa fa-arrow-left"></i> Trái</button>
-                    <button class="btn btn-light btn-sm btn-align" data-dir="top" title="Chồng lên trên"><i class="fa fa-arrow-up"></i> Trên</button>
-                    <button class="btn btn-light btn-sm btn-align" data-dir="right" title="Xếp sang Phải"><i class="fa fa-arrow-right"></i> Phải</button>
-                    <button class="btn btn-light btn-sm btn-align" data-dir="front" title="Xếp ra Trước"><i class="fa fa-arrow-down"></i> Trước</button>
-                    <button class="btn btn-light btn-sm btn-align" data-dir="bottom" title="Đặt xuống Dưới"><i class="fa fa-arrow-down"></i> Dưới</button>
-                    <button class="btn btn-light btn-sm btn-align" data-dir="back" title="Xếp ra Sau"><i class="fa fa-arrow-up"></i> Sau</button>
+                <div class="control-grid">
+                    <button class="btn-align" data-dir="left"><i class="fa fa-arrow-left"></i> Trái</button>
+                    <button class="btn-align" data-dir="top"><i class="fa fa-arrow-up"></i> Trên</button>
+                    <button class="btn-align" data-dir="right"><i class="fa fa-arrow-right"></i> Phải</button>
+                    <button class="btn-align" data-dir="front"><i class="fa fa-arrow-down"></i> Trước</button>
+                    <button class="btn-align" data-dir="bottom"><i class="fa fa-arrow-down"></i> Dưới</button>
+                    <button class="btn-align" data-dir="back"><i class="fa fa-arrow-up"></i> Sau</button>
                 </div>
             </div>
 
-            <div class="edit-section">
-                <h6 style="font-size:12px; font-weight:bold; background:#eee; padding:3px;">Thông tin chung</h6>
-                
-                <div id="parent_info_div" style="margin-bottom:5px; font-size:12px; display:none;">
-                    Thuộc Kệ: <b id="lbl_parent_name"></b>
+            <div class="panel-section">
+                <h6>Thông số (Mét & Pixel)</h6>
+                <div id="parent_info_div" style="font-size:11px; color:#666; margin-bottom:5px; display:none;">
+                    Thuộc: <b id="lbl_parent_name" style="color:#333;"></b>
                 </div>
 
-                <div style="display:flex; gap:5px; margin-top:5px;">
-                   <div class="input-group"><label>D</label><input type="number" id="inp_l" step="0.1" style="width:40px"></div>
-                   <div class="input-group"><label>R</label><input type="number" id="inp_w" step="0.1" style="width:40px"></div>
-                   <div class="input-group"><label>C</label><input type="number" id="inp_h" step="0.1" style="width:40px"></div>
-                   <div class="input-group"><label>Cap</label><input type="number" id="inp_cap" style="width:40px"></div>
+                <div class="input-row">
+                   <div class="input-group"><label>D</label><input type="number" id="inp_l" step="0.1"></div>
+                   <div class="input-group"><label>R</label><input type="number" id="inp_w" step="0.1"></div>
+                   <div class="input-group"><label>C</label><input type="number" id="inp_h" step="0.1"></div>
+                   <div class="input-group"><label>Cap</label><input type="number" id="inp_cap"></div>
                 </div>
-                <div style="display:flex; gap:5px; margin-top:5px;">
-                   <div class="input-group"><label>X</label><input type="number" id="inp_pos_x" step="1" style="width:45px"></div>
-                   <div class="input-group"><label>Y</label><input type="number" id="inp_pos_y" step="1" style="width:45px"></div>
-                   <div class="input-group"><label>Z</label><input type="number" id="inp_pos_z" step="1" style="width:45px"></div>
+                <div class="input-row">
+                   <div class="input-group"><label>X</label><input type="number" id="inp_pos_x" step="1"></div>
+                   <div class="input-group"><label>Y</label><input type="number" id="inp_pos_y" step="1"></div>
+                   <div class="input-group"><label>Z</label><input type="number" id="inp_pos_z" step="1"></div>
                 </div>
-                <button class="btn btn-primary btn-sm w-100" id="btn_save_changes" style="margin-top:5px;">Lưu Cài Đặt</button>
             </div>
+            
+            <button class="btn-save" id="btn_save_changes">Lưu Cài Đặt</button>
 
-            <div class="picking-list" style="margin-top:10px; border-top:1px solid #eee;">
-                <h6 style="font-size:12px; font-weight:bold; margin-top:5px;">Sản phẩm & Hoạt động</h6>
-                <div id="product_table_container" style="max-height:80px; overflow-y:auto; margin-bottom:5px;">
-                    <table style="width:100%;">
-                        <thead><tr><th style="text-align:left;">SP</th><th style="text-align:right;">SL</th></tr></thead>
-                        <tbody id="product_list_body"></tbody>
-                    </table>
+            <div class="panel-section" style="padding:0; overflow:hidden;">
+                <h6 style="padding:10px 10px 0;">Sản phẩm & Hoạt động</h6>
+                <div class="list-container">
+                    <div id="product_table_container">
+                        <table>
+                            <thead><tr><th>SP</th><th style="text-align:right;">SL</th></tr></thead>
+                            <tbody id="product_list_body"></tbody>
+                        </table>
+                    </div>
+                    <div id="product_empty_msg" class="empty-msg">(Trống)</div>
                 </div>
-                <div id="picking_list_container" style="max-height:80px; overflow-y:auto; border-top:1px dashed #eee;"></div>
+                <div class="list-container" style="border-top:1px dashed #eee;">
+                    <div id="picking_list_container"></div>
+                    <div id="picking_empty_msg" class="empty-msg">(Không có phiếu)</div>
+                </div>
             </div>
         `;
-
-        const helpDiv = document.createElement("div");
-        helpDiv.style = "position:absolute; bottom:10px; left:220px; font-size:11px; color:#666; background:rgba(255,255,255,0.8); padding:5px; border-radius:4px; z-index:1000;";
-        helpDiv.innerHTML = "<i class='fa fa-keyboard-o'></i> <b>Di chuyển:</b> W/A/S/D hoặc Mũi tên";
 
         start();
 
         async function start() {
+            // Load data
             await rpc('/3Dstock/data', { 
                 'company_id': user.context.allowed_company_ids[0], 
                 'wh_id': wh_id 
             }).then(res => { data = res; });
 
             sidebarList.innerHTML = "";
-            scene = new THREE.Scene(); 
-            scene.background = new THREE.Color(0xe0e0e0);
-            // Thêm sương mù nhẹ để tạo chiều sâu (Optional)
-            // scene.fog = new THREE.Fog(0xe0e0e0, 2000, 10000);
 
+            // Scene Init
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf4f6f9);
             clock = new THREE.Clock();
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 50000); 
             camera.position.set(0, 800, 1200); 
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight / 1.164);
             renderer.setPixelRatio(window.devicePixelRatio);
 
             const content = $(self.rootRef.el).find('.o_content');
             $(self.rootRef.el).find('.o_list_renderer').addClass('d-none');
             $(self.rootRef.el).find('canvas').remove();
-            content.append(renderer.domElement).append(select).append(colorDiv).append(closeDiv).append(searchDiv).append(sidebarDiv).append(panelDiv).append(helpDiv);
+            
+            content.append(renderer.domElement);
+            content.append(whSelectorDiv);
+            content.append(legendDiv);
+            content.append(searchDiv);
+            content.append(sidebarDiv);
+            content.append(panelDiv);
 
-            // Listeners
+            // Events Listeners UI
             document.querySelector(".customselect")?.addEventListener("change", warehouseChange);
             document.querySelector("#btn_close_panel").addEventListener("click", deselectObject);
             document.querySelector("#btn_update_floor").addEventListener("click", updateFloorSize);
             
+            // Search
             const btnSearchLoc = document.getElementById("btn_search_loc");
             const inpSearchLoc = document.getElementById("loc_search_inp");
             btnSearchLoc.addEventListener("click", () => searchLocation(inpSearchLoc.value));
@@ -243,7 +252,7 @@ export class Stock3DController extends ListController {
                 });
             });
 
-            // --- SAVE ---
+            // --- SAVE LOGIC ---
             document.querySelector("#btn_save_changes").addEventListener("click", async () => {
                 if (!selectedObject) return;
                 const locId = selectedObject.userData.loc_id;
@@ -256,16 +265,16 @@ export class Stock3DController extends ListController {
                 const py = parseFloat(document.getElementById('inp_pos_y').value) || 0;
                 const pz = parseFloat(document.getElementById('inp_pos_z').value) || 0;
                 
-                // Lưu vào DB
+                const payload = {
+                    'length': l, 'width': w, 'height': h, 'max_capacity': cap,
+                    'pos_x': px, 'pos_y': py, 'pos_z': pz
+                };
+
                 await rpc('/web/dataset/call_kw', {
                     model: 'stock.location', method: 'write',
-                    args: [[locId], {
-                        'length': l, 'width': w, 'height': h, 'max_capacity': cap,
-                        'pos_x': px, 'pos_y': py, 'pos_z': pz
-                    }], kwargs: {},
+                    args: [[locId], payload], kwargs: {},
                 });
                 
-                // Update Visual
                 const worldVec = new THREE.Vector3(px, py, pz);
                 if (selectedObject.parent && selectedObject.parent.type === "Mesh") {
                     selectedObject.parent.worldToLocal(worldVec);
@@ -279,7 +288,6 @@ export class Stock3DController extends ListController {
                 selectedObject.updateMatrixWorld(true);
                 transformControl.attach(selectedObject);
 
-                // Update Con nếu là Cha
                 if (selectedObject.children.length > 0) {
                     selectedObject.children.forEach(child => {
                         if (child.type === "Mesh" && child.userData.loc_id) {
@@ -295,22 +303,12 @@ export class Stock3DController extends ListController {
 
             transformControl = new THREE.TransformControls(camera, renderer.domElement);
             
-            // Xử lý kéo thả (Có Constraint + Chặn Y < 0)
             transformControl.addEventListener('change', function(event) {
                 if (transformControl.dragging && transformControl.object) {
                     const obj = transformControl.object;
-                    
-                    // 1. Ràng buộc Cha/Con
                     if (obj.parent && obj.parent.type === "Mesh") {
                         constrainMovement(obj, obj.parent);
-                    } else {
-                        // 2. Ràng buộc Mặt Đất (Nếu không có cha)
-                        // Đảm bảo không chui xuống đất. Y min = height/2
-                        const halfH = obj.geometry.parameters.height / 2;
-                        if (obj.position.y < halfH) obj.position.y = halfH;
                     }
-
-                    // Update Input
                     const worldPos = new THREE.Vector3();
                     obj.getWorldPosition(worldPos);
                     document.getElementById('inp_pos_x').value = Math.round(worldPos.x);
@@ -335,7 +333,6 @@ export class Stock3DController extends ListController {
             });
             scene.add(transformControl);
 
-            // WASD
             window.addEventListener('keydown', (e) => {
                 if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
                 const moveSpeed = 30; 
@@ -364,7 +361,6 @@ export class Stock3DController extends ListController {
             const locDatalist = document.getElementById("loc_datalist");
             locDatalist.innerHTML = "";
 
-            // 1. Create Meshes
             for (let [key, value] of Object.entries(data)) {
                 const hasPos = (value[0] !== 0 || value[1] !== 0 || value[2] !== 0);
                 
@@ -386,7 +382,7 @@ export class Stock3DController extends ListController {
             }
             scene.add(group);
 
-            // 2. Attach Parent/Child
+            // Attach Parent/Child
             for (let id in meshMap) {
                 const mesh = meshMap[id];
                 const pid = mesh.userData.parent_id;
@@ -405,7 +401,7 @@ export class Stock3DController extends ListController {
             canvas.addEventListener('click', onCanvasClick);
         }
 
-        // --- SEARCH ---
+        // --- SEARCH LOCATION ---
         function searchLocation(name) {
             if(!name) return;
             let found = null;
@@ -427,7 +423,6 @@ export class Stock3DController extends ListController {
         }
 
         function constrainMovement(child, parent) {
-            // Ràng buộc con nằm trong cha
             const pGeo = parent.geometry.parameters;
             const cGeo = child.geometry.parameters;
             const minX = -(pGeo.width / 2) + (cGeo.width / 2);
@@ -565,12 +560,16 @@ export class Stock3DController extends ListController {
                 document.getElementById('inp_h').value = info.height;
                 document.getElementById('inp_cap').value = info.max_capacity;
                 
+                // Defensive check to avoid crash
                 const pInfo = document.getElementById("parent_info_div");
-                if(info.location_id) {
-                    pInfo.style.display = "block";
-                    document.getElementById("lbl_parent_name").innerText = info.location_id[1];
-                } else {
-                    pInfo.style.display = "none";
+                if (pInfo) {
+                    if(info.location_id) {
+                        pInfo.style.display = "block";
+                        const lblParent = document.getElementById("lbl_parent_name");
+                        if(lblParent) lblParent.innerText = info.location_id[1];
+                    } else {
+                        pInfo.style.display = "none";
+                    }
                 }
             }
 
@@ -691,13 +690,16 @@ export class Stock3DController extends ListController {
                 tGeo.computeBoundingBox();
                 const xMid = - 0.5 * ( tGeo.boundingBox.max.x - tGeo.boundingBox.min.x );
                 tGeo.translate( xMid, 0, 0 );
-                const tW = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
-                const maxW = (pxW > pxL ? pxW : pxL) * 0.9;
-                if (tW > maxW) { const s = maxW/tW; tGeo.scale(s,s,1); }
-                const tMesh = new THREE.Mesh(tGeo, textMat);
-                tMesh.position.y = pxH + 2; tMesh.rotation.x = -Math.PI / 2;
-                if (pxW > pxL) tMesh.rotation.z = Math.PI / 2;
-                mesh.add(tMesh);
+                const textWidth = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
+                const maxAllowed = (pxW > pxL ? pxW : pxL) * 0.9;
+                if (textWidth > maxAllowed) {
+                    const scaleFactor = maxAllowed / textWidth;
+                    tGeo.scale(scaleFactor, scaleFactor, 1);
+                }
+                const textMesh = new THREE.Mesh(tGeo, textMat);
+                textMesh.position.y = pxH + 2; tMesh.rotation.x = -Math.PI / 2;
+                if (pxW > pxL) textMesh.rotation.z = Math.PI / 2;
+                mesh.add(textMesh);
             });
         }
 
@@ -710,13 +712,13 @@ export class Stock3DController extends ListController {
             if (baseMesh) scene.remove(baseMesh); if (dragPlane) scene.remove(dragPlane);
             if (window.gridHelper) scene.remove(window.gridHelper);
 
-            // Plane (Ground)
+            // Plane
             const geo = new THREE.PlaneGeometry(visualW, visualD);
             const mat = new THREE.MeshBasicMaterial({ color: 0xf0f0f0, side: THREE.DoubleSide, depthWrite: false });
             baseMesh = new THREE.Mesh(geo, mat); baseMesh.rotation.x = -Math.PI / 2; baseMesh.position.y = -0.5; scene.add(baseMesh);
             
-            // Grid Helper (Lưới)
-            const grid = new THREE.GridHelper(Math.max(visualW, visualD), 20, 0x888888, 0xcccccc);
+            // Grid (Mờ hơn)
+            const grid = new THREE.GridHelper(Math.max(visualW, visualD), 20, 0xcccccc, 0xe5e5e5);
             grid.position.y = 0;
             scene.add(grid);
             window.gridHelper = grid;
