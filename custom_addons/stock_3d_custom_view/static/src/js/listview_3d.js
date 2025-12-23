@@ -13,7 +13,7 @@ import { rpc } from "@web/core/network/rpc";
 import { user } from "@web/core/user";
 import { Dialog } from "@web/core/dialog/dialog";
 
-// Dialog hiển thị danh sách sản phẩm
+// Component Dialog hiển thị danh sách sản phẩm
 export class CustomDialog extends Component {
     static components = { Dialog };
     static template = 'stock_3d_custom_view.ViewLocationData';
@@ -21,14 +21,19 @@ export class CustomDialog extends Component {
 }
 
 export class Stock3DController extends ListController {
-    super() { super.setup(); }
+    // --- SỬA LỖI: Thêm hàm setup để khai báo service dialog ---
+    setup() {
+        super.setup();
+        this.dialog = useService("dialog"); // Khởi tạo service dialog
+        this.orm = useService("orm");
+    }
 
     async open3DView(ev) {
         var self = this;
         await ensureJQuery();
         
         // --- VARIABLES ---
-        var wh_data, data, loc_quant;
+        var wh_data, data;
         let controls, renderer, clock, scene, camera, raycaster;
         let transformControl; // Biến kéo thả
         var group;
@@ -47,6 +52,11 @@ export class Stock3DController extends ListController {
         // Fetch Warehouse Data
         await rpc('/3Dstock/warehouse', { 'company_id': user.context.allowed_company_ids[0] })
             .then(res => { wh_data = res; });
+        
+        if (!wh_data || wh_data.length === 0) {
+            console.error("No warehouse found!");
+            return;
+        }
         wh_id = wh_data[0][0];
 
         // --- UI CONSTRUCTION ---
@@ -70,7 +80,6 @@ export class Stock3DController extends ListController {
         // 3. Legend (Color box)
         var colorDiv = document.createElement("div");
         colorDiv.classList.add("rectangle");
-        // (Giữ nguyên code tạo màu của bạn để ngắn gọn)
         const addLegend = (cls, txt) => {
             let d = document.createElement("div"); d.className = cls; colorDiv.appendChild(d);
             let t = document.createElement("div"); t.className = "squareText" + cls.replace(/\D/g,''); 
@@ -195,13 +204,14 @@ export class Stock3DController extends ListController {
                 
                 // Vẽ lại khối 3D với kích thước mới mà không cần reload
                 updateMeshDimensions(selectedObject, l, w, h);
-                alert("Đã lưu thông tin!");
+                // alert("Đã lưu thông tin!"); // Optional
             });
 
             // Logic nút "Xem Tồn Kho"
             document.querySelector("#btn_view_products").addEventListener("click", async () => {
                 if (!selectedObject) return;
                 const products = await rpc('/3Dstock/data/product', { 'loc_code': selectedObject.name });
+                // --- SỬA LỖI: self.dialog giờ đã tồn tại nhờ hàm setup() ---
                 self.dialog.add(CustomDialog, { data: products });
             });
 
@@ -246,7 +256,7 @@ export class Stock3DController extends ListController {
             canvas.addEventListener("dragover", (e) => e.preventDefault());
             canvas.addEventListener("drop", onDropLocation);
             
-            // CLICK LISTENER (QUAN TRỌNG NHẤT)
+            // CLICK LISTENER (One-Click Selection)
             canvas.addEventListener('click', onCanvasClick);
         }
 
@@ -261,7 +271,7 @@ export class Stock3DController extends ListController {
             raycaster.setFromCamera(pointer, camera);
             
             // Bắn tia vào các khối hộp
-            const intersects = raycaster.intersectObjects(group.children, true); // true để check cả children (lines, text)
+            const intersects = raycaster.intersectObjects(group.children, true); 
 
             if (intersects.length > 0) {
                 // Tìm object chính (Mesh)
@@ -282,7 +292,7 @@ export class Stock3DController extends ListController {
 
         // --- HÀM CHỌN ĐỐI TƯỢNG ---
         async function selectObject(mesh) {
-            if (selectedObject === mesh) return; // Đã chọn rồi thì thôi
+            if (selectedObject === mesh) return; 
             
             selectedObject = mesh;
             
@@ -295,7 +305,6 @@ export class Stock3DController extends ListController {
             // 3. Điền thông tin vào Panel
             document.getElementById("panel_loc_name").innerText = mesh.name;
             
-            // Tính toán màu sắc/trạng thái (Logic tái sử dụng)
             let statusText = "Trống";
             if (mesh.userData.color === 0xcc0000) statusText = "Quá tải";
             else if (mesh.userData.color === 0xe6b800) statusText = "Sắp đầy";
@@ -303,8 +312,7 @@ export class Stock3DController extends ListController {
             document.getElementById("panel_status").innerText = statusText;
             document.getElementById("panel_status").style.color = '#' + mesh.userData.color.toString(16);
 
-            // 4. Lấy dữ liệu chi tiết (Length, Width...) từ Server (để lấy số thực, không phải pixel)
-            // Ta cần call 'read' để lấy dữ liệu chuẩn
+            // 4. Lấy dữ liệu chi tiết
             const locId = mesh.userData.loc_id;
             const res = await rpc('/web/dataset/call_kw', {
                 model: 'stock.location',
@@ -328,7 +336,7 @@ export class Stock3DController extends ListController {
             panelDiv.style.display = "none";
         }
 
-        // --- CÁC HÀM PHỤ TRỢ (SIDEBAR, DROP, DRAW, SAVE) ---
+        // --- CÁC HÀM PHỤ TRỢ ---
 
         function createSidebarItem(code, val) {
             const item = document.createElement("div");
@@ -399,7 +407,7 @@ export class Stock3DController extends ListController {
             
             const edges = new THREE.EdgesGeometry(geo);
             
-            // Lấy màu (giản lược logic call RPC quantity để code ngắn)
+            // Lấy màu
             let col = 0x8c8c8c; let op = 0.5;
             await rpc('/3Dstock/data/quantity', { 'loc_code': key }).then(q => {
                 if (q[0] > 0) {
@@ -419,12 +427,7 @@ export class Stock3DController extends ListController {
             mesh.name = key;
             mesh.userData = { color: col, loc_id: value[6] };
             
-            // Gán line vào mesh để khi move mesh thì line đi theo (cần xử lý update matrix)
-            // Hoặc đơn giản là add cả 2 vào group, nhưng để transformControl hoạt động tốt với cả 2 thì nên add line làm child của mesh
-            // Tuy nhiên do logic cũ bạn add rời, ta cứ add rời nhưng khi drag phải update line.
-            // Cách tốt nhất: Add Line làm child của Mesh
             mesh.add(line); 
-            // Reset position của line vì nó relative với mesh
             line.position.set(0,0,0);
             
             // Text Label
@@ -436,18 +439,17 @@ export class Stock3DController extends ListController {
                 tGeo.translate(0, h/2 + 2, 0);
                 const text = new THREE.Mesh(tGeo, textMat);
                 
-                // Xoay text theo cạnh dài
                 if (w > l) { 
                      text.rotation.y = Math.PI / 2;
-                     text.position.z = l/2 + tSize; // Offset chút
+                     text.position.z = l/2 + tSize; 
                 } else {
                      text.position.x = -w/2 - tSize;
                 }
-                mesh.add(text); // Add text vào mesh luôn để đi theo khi kéo
+                mesh.add(text); 
             });
 
             group.add(mesh);
-            return mesh; // Return để auto-select
+            return mesh;
         }
 
         // Hàm cập nhật kích thước Mesh sau khi sửa số
@@ -457,13 +459,11 @@ export class Stock3DController extends ListController {
             const pxW = w * 3.779 * 2;
             const pxH = h * 3.779 * 2;
             
-            // Update Geometry
             const newGeo = new THREE.BoxGeometry(pxL, pxH, pxW);
             newGeo.translate(0, pxH/2, 0);
             mesh.geometry.dispose();
             mesh.geometry = newGeo;
             
-            // Update Line Helper (Child đầu tiên thường là LineSegments)
             const line = mesh.children.find(c => c.type === 'LineSegments');
             if(line) {
                 line.geometry.dispose();
@@ -484,7 +484,8 @@ export class Stock3DController extends ListController {
         }
 
         function warehouseChange() {
-            wh_id = document.querySelector(".customselect").value;
+            var selectedBox = document.querySelector(".customselect");
+            wh_id = selectedBox.value;
             start();
         }
 
