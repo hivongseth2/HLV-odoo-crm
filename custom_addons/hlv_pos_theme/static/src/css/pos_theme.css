@@ -1,125 +1,107 @@
-/* HLV POS SIDEBAR LAYOUT */
+/* HLV POS THEME - SIDEBAR LAYOUT (CSS GRID) */
 
-/* 1. FORCE FLEX LAYOUT ON MAIN WIDGET */
-.pos-content .product-screen .products-widget {
-    display: flex !important;
-    flex-direction: row !important;
-    /* Row = Left Sidebar + Right Content */
+/* 1. MAIN LAYOUT - GRID SYSTEM */
+/* We target the class we added via XML: .hlv-sidebar-layout */
+.pos-content .product-screen .products-widget.hlv-sidebar-layout,
+.products-widget.hlv-sidebar-layout {
+    display: grid !important;
+    /* Column 1: Sidebar (260px), Column 2: Content */
+    grid-template-columns: 260px 1fr !important;
+    /* Row 1: Header (Auto), Row 2: List */
+    grid-template-rows: auto 1fr !important;
     height: 100% !important;
     width: 100% !important;
     background-color: #f2f4f7 !important;
     gap: 0 !important;
 }
 
-/* 2. TRANSFORM CONTROL PANEL INTO SIDEBAR */
-/* This container holds Search + Categories. By making it narrow and full height,
-   it becomes the sidebar. */
-.pos-content .product-screen .products-widget .products-widget-control-panel {
-    flex: 0 0 280px !important;
-    /* Fixed width sidebar */
-    width: 280px !important;
-    min-width: 280px !important;
-    height: 100% !important;
+/* 2. CONTROL PANEL "UNWRAP" */
+/* This separates Categories (child) from Search (child) so we can place them */
+.hlv-sidebar-layout .products-widget-control-panel {
+    display: contents !important;
+}
+
+/* 3. PLACE CATEGORIES IN LEFT SIDEBAR */
+/* Target any container that looks like a category list inside Control Panel */
+.hlv-sidebar-layout .products-widget-control-panel .categories,
+.hlv-sidebar-layout .products-widget-control-panel .category-list,
+.hlv-sidebar-layout .category-list {
+    grid-column: 1 !important;
+    grid-row: 1 / span 2 !important;
+    /* Full height sidebar */
 
     display: flex !important;
     flex-direction: column !important;
-    /* Stack vertical */
+    justify-content: flex-start !important;
 
     background-color: #ffffff !important;
     border-right: 1px solid #e0e0e0 !important;
-    overflow-y: auto !important;
-    /* Scroll sidebar independently */
     padding: 10px !important;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.03) !important;
+    overflow-y: auto !important;
     z-index: 100 !important;
 }
 
-/* 3. MAIN CONTENT (PRODUCTS) TAKES REMAINING SPACE */
-.pos-content .product-screen .products-widget .product-list-container {
-    flex: 1 !important;
-    /* Take all remaining width */
-    height: 100% !important;
+/* 4. PLACE SEARCH BAR AT TOP RIGHT */
+.hlv-sidebar-layout .products-widget-control-panel .search-box-container,
+.hlv-sidebar-layout .products-widget-control-panel .search-box,
+.hlv-sidebar-layout .search-box {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    padding: 10px 20px !important;
+    background: #fff !important;
+}
+
+/* 5. PLACE PRODUCT LIST AT BOTTOM RIGHT */
+.hlv-sidebar-layout .product-list-container {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+
     overflow-y: auto !important;
     padding: 20px !important;
     background-color: #f2f4f7 !important;
 }
 
-/* 4. CLEAN UP SIDEBAR ELEMENTS */
-
-/* Search Box at Top of Sidebar */
-.pos-content .product-screen .products-widget .search-box-container,
-.pos-content .product-screen .products-widget .search-box {
-    width: 100% !important;
-    margin-bottom: 15px !important;
-    order: -1 !important;
-    /* Ensure search is at top */
-}
-
-/* Category Container */
-.products-widget-control-panel .categories {
-    display: flex !important;
-    flex-direction: column !important;
-    /* Vertical Stack */
-    gap: 6px !important;
-}
-
-/* 5. UNIFORM CATEGORY BUTTONS (LIST STYLE) */
-.pos-content .product-screen .category-button {
+/* 6. CATEGORY BUTTON STYLING (Left Aligned & Clean) */
+.category-button.hlv-clean-category,
+.hlv-sidebar-layout .category-button {
     width: 100% !important;
     max-width: none !important;
     min-height: 48px !important;
-    margin: 0 !important;
+    margin: 4px 0 !important;
     padding: 0 16px !important;
 
     display: flex !important;
     align-items: center !important;
     justify-content: flex-start !important;
-    /* LEFT ALIGNED */
+    /* Left Align */
     text-align: left !important;
 
     background-color: #fff !important;
     color: #4b5563 !important;
-    /* Dark Grey */
     border: 1px solid #edf2f7 !important;
     border-radius: 8px !important;
     font-weight: 500 !important;
-    font-size: 14px !important;
     box-shadow: none !important;
     transition: all 0.2s !important;
 }
 
-/* Specific text alignment fixes */
-.pos-content .product-screen .category-button .category-name {
+/* Force text alignment inside button */
+.category-button.hlv-clean-category span,
+.category-button.hlv-clean-category div {
     text-align: left !important;
-    flex: 1 !important;
-    white-space: normal !important;
-    line-height: 1.4 !important;
+    width: 100% !important;
 }
 
-/* Hover State */
-.pos-content .product-screen .category-button:hover {
+/* Hover & Active States */
+.category-button.hlv-clean-category:hover {
     background-color: #f8fafc !important;
-    border-color: #cbd5e1 !important;
-    color: #1e293b !important;
-    transform: translateX(2px);
+    transform: translateX(4px);
 }
 
-/* Active State */
-.pos-content .product-screen .category-button.active,
 .category-button.hlv-clean-category.active {
     background-color: #eff6ff !important;
-    /* Very Light Blue */
     color: #2563eb !important;
-    /* Primary Blue */
     border-color: #bfdbfe !important;
     font-weight: 600 !important;
     border-left: 4px solid #2563eb !important;
-    /* Indicator */
-}
-
-/* Subcategory breadcrumbs - make them vertical too if list view */
-.pos-content .product-screen .breadcrumbs {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    margin-bottom: 10px !important;
 }
