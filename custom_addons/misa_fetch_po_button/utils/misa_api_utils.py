@@ -786,41 +786,30 @@ class MisaApiUtils(models.AbstractModel):
 
     def map_address_to_tag_ids(self, env, addr_str):
         """
-        Ánh xạ địa chỉ sang tag_ids (Tuyến).
+        Ánh xạ địa chỉ sang tag_ids (Tuyến) dựa trên cấu hình Keywords trong crm.tag.
         """
         if not addr_str:
             return []
         
         addr_lower = addr_str.lower()
         
-        # Mapping từ keyword sang tên Tag
-        # Dựa trên yêu cầu của người dùng:
-        # "địa chỉ có chữ long thành thì gắn tag Tuyến KCN Long Thành, KCN Tam Phước"
-        mapping = {
-            "Tuyến Nhơn Trạch": ["nhơn trạch", "nhon trach"],
-            "Tuyến KCN Long Thành, KCN Tam Phước": ["long thành", "long thanh", "tam phước", "tam phuoc"],
-            "Tuyến Bình Sơn": ["bình sơn", "binh son"],
-            "Tuyến Gò Dầu - Mỹ Xuân-Phú Mỹ-Vũng Tàu": ["gò dầu", "go dau", "mỹ xuân", "my xuan", "phú mỹ", "phu my", "vũng tàu", "vung tau"],
-            "Tuyến Bình Dương": ["bình dương", "binh duong"],
-            "Tuyến Hồ Chí Minh": ["hồ chí minh", "ho chi minh", "hcm", "tphcm", "tp.hcm"],
-            "Tuyến Long An": ["long an"],
-        }
+        # 1. Lấy tất cả các tag có cấu hình keywords
+        tags_with_keywords = env['crm.tag'].search([('misa_keywords', '!=', False)])
         
-        found_tag_names = []
-        for tag_name, keywords in mapping.items():
+        matching_tags = env['crm.tag']
+        
+        for tag in tags_with_keywords:
+            # Tách từ khóa theo dấu phẩy, loại bỏ khoảng trắng thừa
+            keywords = [k.strip().lower() for k in tag.misa_keywords.split(',') if k.strip()]
+            
+            # Kiểm tra xem có từ khóa nào khớp với địa chỉ không
             if any(kw in addr_lower for kw in keywords):
-                found_tag_names.append(tag_name)
-        
-        if not found_tag_names:
-            return []
-        
-        # Tìm tag trong Odoo (crm.tag)
-        tags = env['crm.tag'].search([('name', 'in', found_tag_names)])
-        if not tags:
-            _logger.warning("⚠️ Không tìm thấy tags: %s trong hệ thống", found_tag_names)
+                matching_tags |= tag
+                
+        if not matching_tags:
             return []
             
-        return [(6, 0, tags.ids)]
+        return [(6, 0, matching_tags.ids)]
 
 
 

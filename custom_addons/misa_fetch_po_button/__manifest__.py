@@ -14,6 +14,7 @@
         'views/misa_return_button_view.xml',
         'views/sale_order_misa_sync.xml',
         'views/product_view.xml',
+        'views/crm_tag_views.xml',
         'wizard/misa_pos_sync_wizard_views.xml',
     ],
     'python': [

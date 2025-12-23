@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="crm_tag_view_form_inherit_misa" model="ir.ui.view">
+        <field name="name">crm.tag.form.inherit.misa</field>
+        <field name="model">crm.tag</field>
+        <field name="inherit_id" ref="crm.crm_tag_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group" position="after">
+                <group string="MISA Sync Configuration">
+                    <field name="misa_keywords" placeholder="Ví dụ: long thành, tam phước (phân cách dấu phẩy)"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>
