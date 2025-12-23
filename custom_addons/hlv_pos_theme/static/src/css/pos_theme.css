@@ -1,5 +1,17 @@
 /* SIDEBAR LAYOUT IMPLEMENTATION */
 
+/* Clean category button styles - applied after JS removes inline styles */
+.category-button.hlv-clean-category {
+    background-color: #f8f9fa !important;
+    color: #212529 !important;
+    border: 1px solid #dee2e6 !important;
+    border-radius: 6px !important;
+}
+
+.category-button.hlv-clean-category:hover {
+    background-color: #e9ecef !important;
+}
+
 /* Root Container - Flex Row */
 .pos-content .product-screen .products-widget.hlv-sidebar-layout {
     display: flex !important;
