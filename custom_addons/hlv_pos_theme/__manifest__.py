@@ -14,8 +14,8 @@
     'data': [],
     'assets': {
         'point_of_sale._assets_pos': [
+            'hlv_pos_theme/static/src/js/category_button_patch.js',
             'hlv_pos_theme/static/src/css/pos_theme.css',
-            'hlv_pos_theme/static/src/xml/Screens/ProductScreen/ProductsWidget.xml',
         ],
     },
     'installable': True,
