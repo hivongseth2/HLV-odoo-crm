@@ -12,4 +12,15 @@
             </xpath>
         </field>
     </record>
+
+    <record id="crm_tag_view_tree_inherit_misa" model="ir.ui.view">
+        <field name="name">crm.tag.tree.inherit.misa</field>
+        <field name="model">crm.tag</field>
+        <field name="inherit_id" ref="sales_team.sales_team_crm_tag_view_tree"/>
+        <field name="arch" type="xml">
+            <field name="name" position="after">
+                <field name="misa_keywords" optional="show"/>
+            </field>
+        </field>
+    </record>
 </odoo>
