@@ -1,169 +1,61 @@
-/* SIDEBAR LAYOUT IMPLEMENTATION */
+/* HLV POS THEME - Clean Category Styling */
 
-/* Clean category button styles - applied after JS removes inline styles */
+/* 
+ * UNIVERSAL CATEGORY BUTTON OVERRIDE
+ * Uses high specificity selectors to override Odoo defaults
+ */
+
+/* Target ALL category buttons with maximum specificity */
+.pos .pos-content .product-screen .category-button,
+.pos .pos-content .product-screen .category-button.hlv-clean-category,
+.pos-content .product-screen .category-button,
+.product-screen .category-button,
 .category-button.hlv-clean-category {
-    background-color: #f8f9fa !important;
-    color: #212529 !important;
-    border: 1px solid #dee2e6 !important;
-    border-radius: 6px !important;
-}
-
-.category-button.hlv-clean-category:hover {
-    background-color: #e9ecef !important;
-}
-
-/* Root Container - Flex Row */
-.pos-content .product-screen .products-widget.hlv-sidebar-layout {
-    display: flex !important;
-    flex-direction: row !important;
-    height: 100% !important;
-    width: 100% !important;
-}
-
-/* LEFT SIDEBAR: Categories */
-/* 
-   We assume the category list is directly inside or part of the control panel.
-   In Odoo 17+, categories might be in `ProductsWidgetControlPanel`.
-   We need to target the container that HOLDS the categories.
-   Usually: `.products-widget-control-panel` or `.category-list` 
-   
-   If they are separate DOM elements, we used `order` property in flexbox to rearrange them 
-   if they are siblings. 
-*/
-
-.pos-content .product-screen .products-widget .products-widget-control-panel {
-    /* If the control panel contains both search and categories, we might need to split them inside.
-       But assuming we can just make the CATEGORY LIST float left. */
-    display: flex;
-    flex-direction: column;
-    /* Force vertical stacking if possible */
-}
-
-/* 
-   CRITICAL: The standard Odoo structure makes it hard to split Search (Top) and Category (Sidebar) 
-   if they are in the same parent.
-   
-   Let's try to target the SPECIFIC `.category-list` class and enforce it as a sidebar
-   ONLY IF it is a direct child of products-widget or we can force it out of flow.
-   
-   Standard Odoo:
-   <div class="products-widget">
-      <div class="products-widget-control-panel">...categories + search...</div>
-      <div class="product-list-container">...products...</div>
-   </div>
-   
-   WE WILL HACK THE LAYOUT:
-   1. Make `.products-widget` a Grid or Flex.
-   2. Absolute position the Sidebar? Or standard Flex.
-*/
-
-/* 
-   Reset previous simple tweaks 
-*/
-
-/* HACK: Make the Control Panel (which holds categories) the SIDEBAR 
-   BUT this will also put the Search bar in the sidebar, which is actually distinct/good! 
-   Sidebar = Search + Categories.
-   Main Content = Products.
-*/
-.pos-content .product-screen .products-widget.hlv-sidebar-layout .products-widget-control-panel {
-    width: 250px !important;
-    min-width: 250px !important;
-    height: 100% !important;
-    background: #f0f2f5 !important;
-    border-right: 1px solid #ddd !important;
-    display: flex !important;
-    flex-direction: column !important;
-    padding: 10px !important;
-    overflow-y: auto !important;
-    box-sizing: border-box !important;
-}
-
-/* The Product List Container takes the remaining space */
-.pos-content .product-screen .products-widget.hlv-sidebar-layout .product-list-container {
-    flex: 1 !important;
-    height: 100% !important;
-    overflow-y: auto !important;
-    padding: 10px !important;
-    background: #fff !important;
-}
-
-
-/* NOW, Style the contents of the Sidebar (Control Panel) */
-
-/* 1. Search Bar at top of sidebar */
-.pos-content .product-screen .products-widget .search-box {
-    width: 100% !important;
-    margin-bottom: 20px !important;
-}
-
-/* 2. Category List: Vertical Stack */
-.pos-content .product-screen .products-widget .category-list {
-    display: flex !important;
-    flex-direction: column !important;
-    /* Vertical list */
-    gap: 8px !important;
-    padding: 0 !important;
-    width: 100% !important;
-}
-
-/* 3. Category Items: Row Style */
-.pos-content .product-screen .products-widget .category-list .category-button {
-    width: 100% !important;
-    max-width: none !important;
-    flex: 0 0 auto !important;
-    /* Do not grow/shrink randomly */
-    min-height: 50px !important;
-    /* Smaller balanced height */
-
-    display: flex;
-    align-items: center;
-    justify-content: flex-start !important;
-    /* Left align text */
-    padding: 10px 15px !important;
-    margin: 0 !important;
-
     background-color: #ffffff !important;
-    border: 1px solid transparent !important;
-    /* Transparent border unless active */
-    border-radius: 6px !important;
-    box-shadow: none !important;
-
-    font-size: 14px !important;
+    background: #ffffff !important;
+    color: #333333 !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    font-weight: 500 !important;
     text-transform: none !important;
-    /* Normal case */
-    text-align: left !important;
+    padding: 12px 16px !important;
+    margin: 4px !important;
+    transition: all 0.15s ease !important;
 }
 
-/* Hover for sidebar items */
-.pos-content .product-screen .products-widget .category-list .category-button:hover {
-    background-color: #e2e6ea !important;
+/* Hover state */
+.pos .pos-content .product-screen .category-button:hover,
+.pos-content .product-screen .category-button:hover,
+.product-screen .category-button:hover,
+.category-button.hlv-clean-category:hover {
+    background-color: #f0f0f0 !important;
+    background: #f0f0f0 !important;
+    border-color: #ccc !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
 }
 
-/* Active State styling */
-.pos-content .product-screen .products-widget .category-list .category-button.active {
+/* Active/Selected state */
+.pos .pos-content .product-screen .category-button.active,
+.pos-content .product-screen .category-button.active,
+.product-screen .category-button.active {
     background-color: #007bff !important;
-    /* Primary Brand Color */
-    color: white !important;
-    font-weight: bold !important;
+    background: #007bff !important;
+    color: #ffffff !important;
+    border-color: #0056b3 !important;
 }
 
-/* Breadcrumbs (if present) - Make them stack or look like headers */
-.pos-content .product-screen .products-widget .breadcrumbs {
-    margin-bottom: 10px;
+/* Category container - improve spacing */
+.product-screen .category-list,
+.products-widget .category-list {
+    gap: 8px !important;
+    padding: 8px !important;
 }
 
-/* Improve the category simplified view if in breadcrumb-like mode */
-.pos-content .product-screen .products-widget .category-simple-button {
-    background-color: #f8f9fa !important;
-    color: #333 !important;
-    border: 1px solid #dee2e6 !important;
+/* Make category text more readable */
+.category-button .category-button-content,
+.category-button span {
+    font-size: 13px !important;
+    line-height: 1.3 !important;
 }
-
-/* Optional: Clean up Product Cards as well to match */
-/*
-.pos-content .product-screen .product-list .product {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    border: 1px solid #eee;
-}
-*/
