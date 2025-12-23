@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_misa_tag_update_wizard_form" model="ir.ui.view">
+        <field name="name">misa.tag.update.wizard.form</field>
+        <field name="model">misa.tag.update.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cập nhật Tag MISA từ Địa chỉ">
+                <group>
+                    <group>
+                        <field name="from_date"/>
+                    </group>
+                    <group>
+                        <field name="to_date"/>
+                    </group>
+                </group>
+                <footer>
+                    <button name="action_update_tags" string="Cập nhật" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_misa_tag_update_wizard" model="ir.actions.act_window">
+        <field name="name">Cập nhật Tag MISA hàng loạt</field>
+        <field name="res_model">misa.tag.update.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_misa_tag_update_wizard"
+              name="Cập nhật Tag MISA hàng loạt"
+              parent="sale.menu_sale_config"
+              action="action_misa_tag_update_wizard"
+              sequence="50"/>
+</odoo>
