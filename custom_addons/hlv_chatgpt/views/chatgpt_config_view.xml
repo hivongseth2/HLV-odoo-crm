@@ -14,10 +14,8 @@
                             <field name="active"/>
                             <field name="api_key" password="True"/>
                         </group>
-                        <group string="Cấu hình Assistant (Prompt IDs)">
-                            <field name="router_id" placeholder="asst_uniuQQRkpIYltBXGbCFFtore"/>
-                            <field name="stock_id" placeholder="asst_5iZ1U3pGzUOMvRs14iHBQAK0"/>
-                            <field name="naming_id" placeholder="asst_EnBglJacCItJt8xTqD8TTu1P"/>
+                        <group string="Cấu hình Assistant">
+                            <field name="product_manager_id" placeholder="asst_..."/>
                         </group>
                     </group>
                 </sheet>
