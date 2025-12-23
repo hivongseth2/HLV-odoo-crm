@@ -913,8 +913,7 @@ class SaleOrder(models.Model):
             _logger.warning("⚠️ Không thể xóa SO cũ (unlink) nhưng đã đổi tên: %s", e)
 
         # ===== 8) TẠO LẠI TỪ MISA =====
-        # Lúc này vals_create['name'] = order_no sẽ không bao giờ bị Duplicate nữa
-        new_so = env['sale.order'].create(vals_create)
+   
 
         # ===== 8) TẠO LẠI TỪ MISA =====
         # Fetch OwnerIDText, SaleOrderDate, ShippingContactIDText, httt, htgh từ MISA
