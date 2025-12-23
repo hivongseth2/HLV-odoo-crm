@@ -59,6 +59,18 @@ class WordPressConfig(models.Model):
         help='Số ngày giữ lại sync logs'
     )
 
+    batch_size = fields.Integer(
+        string='Số lượng/Batch',
+        default=50,
+        help='Số lượng sản phẩm cập nhật trong 1 request (Max 100)'
+    )
+
+    sync_delay = fields.Float(
+        string='Delay (giây)',
+        default=1.0,
+        help='Thời gian chờ giữa các lần gửi batch để tránh bị chặn'
+    )
+
     last_sync_date = fields.Datetime(
         string='Đồng bộ lần cuối',
         readonly=True

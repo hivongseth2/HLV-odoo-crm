@@ -3,6 +3,8 @@ from odoo import models, fields, api
 from odoo.exceptions import UserError
 from .wordpress_api import PriceSyncService
 import logging
+import time
+import math
 
 _logger = logging.getLogger(__name__)
 
@@ -20,6 +22,7 @@ class WordPressPriceSyncWizard(models.TransientModel):
     sync_mode = fields.Selection([
         ('single', 'Một sản phẩm'),
         ('all', 'Tất cả sản phẩm'),
+        ('retry', 'Thử lại các lỗi thất bại'),
     ], string='Chế độ', default='single', required=True)
 
     product_id = fields.Many2one(
@@ -84,7 +87,10 @@ class WordPressPriceSyncWizard(models.TransientModel):
 
         if self.sync_mode == 'single':
             return self._sync_single()
+        elif self.sync_mode == 'retry':
+            return self._sync_retry()
         else:
+            # All
             return self._sync_all()
 
     def _sync_single(self):
@@ -107,51 +113,124 @@ class WordPressPriceSyncWizard(models.TransientModel):
         else:
             return self._notify('Thất bại', result['message'], 'danger')
 
-    def _sync_all(self):
-        """Đồng bộ tất cả sản phẩm có SKU"""
-        products = self.env['product.template'].search([
-            ('active', '=', True),
-            ('default_code', '!=', False),
-            ('default_code', '!=', '')
+    def _sync_retry(self):
+        """Thử lại các sản phẩm bị lỗi trong 24h qua"""
+        from datetime import datetime, timedelta
+        
+        # Tìm các log lỗi gần đây
+        cutoff = datetime.now() - timedelta(hours=24)
+        failed_logs = self.env['product.sync.log'].search([
+            ('status', '=', 'failed'),
+            ('sync_date', '>=', cutoff)
         ])
+        
+        if not failed_logs:
+            return self._notify('Không có lỗi', 'Không tìm thấy sản phẩm lỗi nào trong 24h qua', 'success')
+            
+        # Lấy danh sách sản phẩm
+        products = failed_logs.mapped('product_id')
+        
+        if not products:
+             return self._notify('Không có sản phẩm', 'Các log lỗi không liên kết với sản phẩm nào', 'warning')
+             
+        _logger.info(f"Retrying sync for {len(products)} failed products")
+        return self._sync_all(products=products)
 
+    def _sync_all(self, products=None):
+        """
+        Đồng bộ tất cả hoặc một danh sách sản phẩm theo batch
+        """
+        if not products:
+            products = self.env['product.template'].search([
+                ('active', '=', True),
+                ('default_code', '!=', False),
+                ('default_code', '!=', '')
+            ])
+        
         if not products:
             return self._notify('Không có sản phẩm', 'Không tìm thấy sản phẩm nào có SKU', 'warning')
 
-        service = PriceSyncService(self.env, self.wordpress_config_id)
+        config = self.wordpress_config_id
+        service = PriceSyncService(self.env, config)
+        
+        # 1. Fetch map first (optimized)
+        _logger.info("Fetching SKU map for batch sync...")
+        product_map = service.api.get_all_products_map()
+        
+        total_products = len(products)
+        batch_size = config.batch_size or 50
+        if batch_size > 100: batch_size = 100 # API limit
+        
+        delay = config.sync_delay or 1.0
+        
+        batches = math.ceil(total_products / batch_size)
+        
+        success_count = 0
+        failed_count = 0
+        skipped_count = 0
+        
+        _logger.info(f"Starting batch sync: {total_products} products, {batches} batches, size {batch_size}")
+        
+        for i in range(batches):
+            start = i * batch_size
+            end = start + batch_size
+            product_batch = products[start:end]
+            
+            _logger.info(f"Processing batch {i+1}/{batches}")
+            
+            # Process batch
+            batch_results = service.sync_products_batch(product_batch, product_map)
+            
+            # Analyze results
+            for result in batch_results.values():
+                p_id_temp = next((pid for pid, res in batch_results.items() if res == result), None)
+                product_obj = self.env['product.template'].browse(p_id_temp) if p_id_temp else None
 
-        success = 0
-        failed = 0
-        skipped = 0
+                if result['success']:
+                    success_count += 1
+                    status = 'success'
+                elif 'không có sku' in result['message'].lower():
+                    skipped_count += 1
+                    status = 'skipped'
+                else:
+                    failed_count += 1
+                    status = 'failed'
+                
+                # Log & Note
+                if product_obj:
+                    self._create_log(product_obj, result, 'auto', status=status)
+                    # Note: Only create note if failed, or maybe every time? 
+                    # To avoid spamming chatter during bulk sync, maybe only log failures or just create log table entry
+                    # Current logic: logs everything. Let's keep it but maybe optimize?
+                    # For now, keep existing behavior:
+                    if status != 'skipped':
+                         self._post_sync_note(product_obj, result)
 
-        for product in products:
-            result = service.sync_product(product)
-
-            if result['success']:
-                success += 1
-                self._create_log(product, result, 'manual')
-                self._post_sync_note(product, result)
-            elif 'không hợp lệ' in result['message'].lower() or 'không có sku' in result['message'].lower():
-                skipped += 1
-            else:
-                failed += 1
-                self._create_log(product, result, 'manual')
-                self._post_sync_note(product, result)
+            # Delay
+            if i < batches - 1:
+                time.sleep(delay)
 
         # Update last sync date
-        self.wordpress_config_id.last_sync_date = fields.Datetime.now()
-
-        message = f'Thành công: {success}, Thất bại: {failed}, Bỏ qua: {skipped}'
-        _logger.info(f"Bulk sync completed: {message}")
-
-        return self._notify('Hoàn tất đồng bộ', message, 'success')
+        config.last_sync_date = fields.Datetime.now()
+        
+        message = f'Tổng: {total_products}. Thành công: {success_count}, Thất bại: {failed_count}, Bỏ qua: {skipped_count}'
+        
+        if failed_count > 0:
+            msg_type = 'warning'
+        else:
+            msg_type = 'success'
+            
+        _logger.info(f"Batch sync completed: {message}")
+        return self._notify('Hoàn tất đồng bộ', message, msg_type)
 
     # ===========================================
     # HELPER METHODS
     # ===========================================
-    def _create_log(self, product, result, sync_type):
+    def _create_log(self, product, result, sync_type, status=None):
         """Tạo log đồng bộ"""
-        status = 'success' if result['success'] else 'failed'
+        if not status:
+            status = 'success' if result['success'] else 'failed'
+            
         self.env['product.sync.log'].create_log(
             product=product,
             status=status,

@@ -14,6 +14,7 @@ _logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 10
 MAX_RETRIES = 3
 RETRY_DELAY = 1  # seconds
+BATCH_SIZE_LIMIT = 100
 
 
 class WooCommerceAPI:
@@ -67,13 +68,13 @@ class WooCommerceAPI:
     def update_product(self, product_id, data, is_variation=False, parent_id=None):
         """
         Cập nhật product trên WooCommerce
-
+        
         Args:
             product_id: WooCommerce product ID
             data: Dict data cần update (e.g., {'regular_price': '100000'})
             is_variation: True nếu là variation
             parent_id: Parent product ID nếu là variation
-
+            
         Returns:
             dict: Response data nếu thành công, None nếu thất bại
         """
@@ -83,6 +84,52 @@ class WooCommerceAPI:
             path = f"/products/{product_id}"
 
         return self._put(path, data)
+
+    def get_all_products_map(self):
+        """
+        Lấy tất cả sản phẩm từ WooCommerce để tạo map SKU -> ID
+        
+        Returns:
+            dict: {sku: {'id': id, 'type': type, 'parent_id': parent_id}}
+        """
+        product_map = {}
+        page = 1
+        
+        while True:
+            # Chỉ lấy các field cần thiết để tối ưu
+            url = f"{self.base_url}/products?page={page}&per_page=100&fields=id,sku,type,parent_id"
+            products = self._get(url)
+            
+            if not products:
+                break
+                
+            for p in products:
+                if p.get('sku'):
+                    product_map[p['sku']] = {
+                        'id': p['id'],
+                        'type': p.get('type', 'simple'),
+                        'parent_id': p.get('parent_id', 0)
+                    }
+            
+            page += 1
+            # Simple rate limiting check inside loop if needed, 
+            # though paginated GET is usually safe.
+            
+        return product_map
+
+    def update_products_batch(self, update_data):
+        """
+        Cập nhật hàng loạt sản phẩm (Batch API)
+        
+        Args:
+            update_data: List các dict update item
+            
+        Returns:
+            dict: Response data
+        """
+        # Batch API expects: { 'update': [ { 'id': 123, ... }, ... ] }
+        payload = {'update': update_data}
+        return self._post("/products/batch", payload)
 
     # ===========================================
     # CACHE METHODS
@@ -180,6 +227,35 @@ class WooCommerceAPI:
                     time.sleep(RETRY_DELAY * (attempt + 1))
 
         _logger.error(f"PUT {path} failed after {retries} attempts")
+        _logger.error(f"PUT {path} failed after {retries} attempts")
+        return None
+
+    def _post(self, path, data, retries=MAX_RETRIES):
+        """
+        POST request (cho Batch API)
+        """
+        url = f"{self.base_url}{path}"
+        
+        for attempt in range(retries):
+            try:
+                response = requests.post(
+                    url, 
+                    json=data, 
+                    auth=self.auth, 
+                    timeout=30 # Batch requests might take longer
+                )
+                
+                if response.status_code in (200, 201):
+                    return response.json()
+                    
+                _logger.warning(f"POST {path} attempt {attempt+1}: {response.status_code}")
+                if attempt < retries - 1:
+                    time.sleep(RETRY_DELAY * (attempt + 1))
+            except Exception as e:
+                _logger.error(f"POST {path} error: {e}")
+                if attempt < retries - 1:
+                    time.sleep(RETRY_DELAY * (attempt + 1))
+                    
         return None
 
 
@@ -296,3 +372,110 @@ class PriceSyncService:
             result['message'] = 'Không thể cập nhật lên WordPress'
 
         return result
+
+    def sync_products_batch(self, products, product_map=None):
+        """
+        Đồng bộ danh sách sản phẩm theo batch
+        """
+        # 1. Prepare map if not provided
+        if product_map is None:
+            _logger.info("Fetching all products from WooCommerce to build map...")
+            product_map = self.api.get_all_products_map()
+            _logger.info(f"Fetched {len(product_map)} products from WooCommerce")
+            
+        batch_data = []
+        product_by_sku = {}
+        
+        results = {} # {product_id: result_dict}
+
+        # 2. Build batch payload
+        for product in products:
+            sku = product.default_code
+            if not sku:
+                results[product.id] = {
+                    'success': False, 
+                    'message': 'Không có SKU',
+                    'sku': '',
+                    'wc_product_id': ''
+                }
+                continue
+                
+            wc_info = product_map.get(sku)
+            if not wc_info:
+                results[product.id] = {
+                    'success': False, 
+                    'message': f'Không tìm thấy SKU {sku} trên WordPress',
+                    'sku': sku,
+                    'wc_product_id': ''
+                }
+                continue
+                
+            # Get prices
+            regular_price = getattr(product, 'x_studio_ga_web', 0.0) or 0.0
+            sale_price = getattr(product, 'x_studio_gi_bn_thng_mi', 0.0) or 0.0
+            
+            # Prepare item payload
+            item_data = {
+                'id': wc_info['id'],
+                'regular_price': str(regular_price)
+            }
+            
+            if sale_price > 0 and sale_price < regular_price:
+                item_data['sale_price'] = str(sale_price)
+            else:
+                item_data['sale_price'] = ''
+                
+            batch_data.append(item_data)
+            product_by_sku[sku] = product
+            
+            # Init result entry
+            results[product.id] = {
+                'success': False, # Will update later
+                'message': 'Lỗi không xác định',
+                'sku': sku,
+                'wc_product_id': str(wc_info['id']),
+                'regular_price': regular_price,
+                'sale_price': sale_price
+            }
+
+        # 3. Send Batch Request if data exists
+        if batch_data:
+            response = self.api.update_products_batch(batch_data)
+            
+            if response and 'update' in response:
+                # Parse response for individual status
+                # Batch API returns list of updated objects or errors
+                # But typically returns the updated objects in 'update' list
+                # We need to map back to our products. 
+                # The response objects contain 'id' and 'sku'
+                
+                updated_items = {str(item.get('id')): item for item in response['update']}
+                
+                for product in products:
+                    if product.id in results and results[product.id]['wc_product_id']:
+                        wc_id = results[product.id]['wc_product_id']
+                        
+                        if wc_id in updated_items:
+                            # Check if item itself has error (rare in successful batch 200)
+                            # Or if it's just the updated object
+                            item_resp = updated_items[wc_id]
+                            if 'error' in item_resp:
+                                results[product.id]['success'] = False
+                                results[product.id]['message'] = str(item_resp['error'])
+                            else:
+                                results[product.id]['success'] = True
+                                results[product.id]['message'] = 'Cập nhật thành công (Batch)'
+                                # Purge cache (optional, might spam if done here. 
+                                # Better to use bulk purge if available or skip for speed)
+                        else:
+                            # Item in payload but not in response?
+                            # Could be an error that caused it to be dropped
+                            pass
+            else:
+                # Whole batch failed
+                error_msg = 'Batch request failed'
+                for pid in results:
+                    if results[pid]['wc_product_id']: 
+                        results[pid]['message'] = error_msg
+
+        return results
