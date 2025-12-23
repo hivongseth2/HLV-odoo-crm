@@ -430,6 +430,8 @@ class SaleOrder(models.Model):
             uom_name      = (ln.get("UnitIDText") or "Cái").strip()
             note_text     = (ln.get("DescriptionProduct") or ln.get("Note") or "")
             misa_pid      = ln.get("ProductID") or ln.get("ProductId")
+            
+            x_studio_product_status = (ln.get("CustomField4") or "").strip()
 
             # 4.1.a) NHÁNH COMBO CHA (giống wizard: chỉ tạo 1 dòng cha, children đổ vào Combo Items)
             if ln.get("IsSetProduct"):
@@ -478,6 +480,7 @@ class SaleOrder(models.Model):
                     'price_unit': price_base,
                     'discount': discount_pct,
                     'note': note_text,
+                    'x_studio_product_status': x_studio_product_status,
                 }
                 if not use_default and product.uom_id:
                     vals['product_uom'] = product.uom_id.id
@@ -525,6 +528,7 @@ class SaleOrder(models.Model):
                 'price_unit': price_base,
                 'discount': discount_pct,
                 'note': note_text,
+                "x_studio_product_status": x_studio_product_status,
             }
             if not use_default and product.uom_id:
                 vals['product_uom'] = product.uom_id.id
@@ -1181,7 +1185,8 @@ class SaleOrder(models.Model):
             note_text    = (ln.get("DescriptionProduct")
                 or ln.get("Note")
                 or "")
-
+            
+            tth = (ln.get("CustomField4") or "").strip()
             # Xác định loại dòng (để gán Studio fields)
             is_combo_child = ln.get("IsChildProduct")
 
@@ -1218,6 +1223,7 @@ class SaleOrder(models.Model):
                 'price_unit': price_for_odoo,
                 'discount': discount_pct,
                 'note': note_text,
+                'x_studio_product_status': tth
             }
             # Nếu có convert, ép UoM line về UoM mặc định của product
             if not use_default_uom and product.uom_id:
@@ -1327,6 +1333,8 @@ class SaleOrder(models.Model):
             note_text  = (ln.get("DescriptionProduct")
               or ln.get("Note")
               or "")
+            x_studio_product_status = (ln.get("CustomField4") or "").strip()
+
 
             # Lấy / tạo product đúng theo mã
             product = odoo_utils._get_or_create_product(
@@ -1337,6 +1345,7 @@ class SaleOrder(models.Model):
                 product_type="consu",
                 purchase_ok=True,
                 sale_ok=True,
+                x_studio_product_status=x_studio_product_status
             )
 
             # Convert về UoM mặc định của product
