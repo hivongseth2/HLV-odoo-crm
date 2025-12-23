@@ -899,7 +899,22 @@ class SaleOrder(models.Model):
                 inv.unlink()
 
         # ===== 7) XÓA SALE ORDER =====
-        self.sudo().unlink()
+        try:
+            old_name = self.name
+            # Đổi tên đơn cũ để không trùng lặp nếu unlink thất bại
+            self.sudo().write({'name': f"{old_name}_DEL_{self.id}"})
+            _logger.info("🔄 Đã đổi tên SO cũ thành %s để tránh trùng lặp", self.name)
+            
+            # Sau đó mới thực hiện xóa
+            self.sudo().unlink()
+            _logger.info("✅ Đã xóa SO cũ thành công")
+        except Exception as e:
+            # Nếu không xóa được (do ràng buộc database), ít nhất tên đã được đổi
+            _logger.warning("⚠️ Không thể xóa SO cũ (unlink) nhưng đã đổi tên: %s", e)
+
+        # ===== 8) TẠO LẠI TỪ MISA =====
+        # Lúc này vals_create['name'] = order_no sẽ không bao giờ bị Duplicate nữa
+        new_so = env['sale.order'].create(vals_create)
 
         # ===== 8) TẠO LẠI TỪ MISA =====
         # Fetch OwnerIDText, SaleOrderDate, ShippingContactIDText, httt, htgh từ MISA
