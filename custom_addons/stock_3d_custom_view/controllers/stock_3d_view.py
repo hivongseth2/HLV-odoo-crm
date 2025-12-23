@@ -80,7 +80,7 @@ class Stock3DView(http.Controller):
                             loc.unique_code: [
                                 loc.pos_x, loc.pos_y, loc.pos_z,
                                 length, width, height, 
-                                loc.id # ID rất quan trọng để lưu lại
+                                loc.id, loc.location_id.id if loc.location_id else False # ID rất quan trọng để lưu lại
                             ]
                         })
         return location_dict
@@ -172,5 +172,62 @@ class Stock3DView(http.Controller):
                 height = int(loc.height * 3.779 * 2)
                 location_dict.update(
                     {loc.unique_code: [loc.pos_x, loc.pos_y, loc.pos_z,
-                                       length, width, height, loc.id]})
+                                       length, width, height, loc.id,loc.location_id.id if loc.location_id else False]})
         return location_dict
+
+
+    @http.route('/3Dstock/data/pickings', type='json', auth='public')
+    def get_location_pickings(self, loc_code):
+        """
+        Lấy danh sách các phiếu kho (Stock Picking) liên quan đến vị trí này.
+        Chỉ lấy các phiếu đang xử lý (chưa Done/Cancel).
+        """
+        # Tìm các stock.move đang ở trạng thái 'assigned', 'confirmed', 'partially_available'
+        # Mà có location_id (nguồn) HOẶC location_dest_id (đích) là vị trí này
+        domain = [
+            '|', ('location_id.unique_code', '=', loc_code),
+                 ('location_dest_id.unique_code', '=', loc_code),
+            ('state', 'not in', ['draft', 'done', 'cancel'])
+        ]
+        moves = request.env['stock.move'].sudo().search(domain)
+        
+        # Group by Picking để tránh trùng lặp
+        pickings = moves.mapped('picking_id')
+        
+        picking_list = []
+        for p in pickings:
+            # Xác định loại phiếu (Nhập/Xuất/Nội bộ)
+            p_type = "Khác"
+            if p.picking_type_code == 'incoming': p_type = "Nhập hàng"
+            elif p.picking_type_code == 'outgoing': p_type = "Xuất hàng"
+            elif p.picking_type_code == 'internal': p_type = "Nội bộ"
+
+            picking_list.append({
+                'name': p.name,
+                'type': p_type,
+                'origin': p.origin or '',
+                'state': p.state,
+                'date': p.scheduled_date
+            })
+            
+        return picking_list
+
+    @http.route('/3Dstock/search_product', type='json', auth='public')
+    def search_product_location(self, keyword, wh_id):
+        """
+        Tìm kiếm sản phẩm, trả về danh sách các Location Code đang chứa sản phẩm đó.
+        """
+        if not keyword:
+            return []
+            
+        # Tìm Quant trong kho hiện tại có tên sản phẩm chứa từ khóa
+        domain = [
+            ('product_id.display_name', 'ilike', keyword),
+            ('location_id.warehouse_id', '=', int(wh_id)),
+            ('quantity', '>', 0) # Chỉ tìm nơi còn hàng
+        ]
+        quants = request.env['stock.quant'].sudo().search(domain)
+        
+        # Lấy danh sách mã vị trí (unique)
+        location_codes = list(set(quants.mapped('location_id.unique_code')))
+        return location_codes
