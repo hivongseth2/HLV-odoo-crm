@@ -82,7 +82,6 @@ export class Stock3DController extends ListController {
         const sidebarDiv = document.createElement("div");
         sidebarDiv.classList.add("location-sidebar");
         
-        // Header Sidebar
         sidebarDiv.innerHTML = `
             <div style="padding-bottom:10px; border-bottom:1px solid #ddd; margin-bottom:10px;">
                 <h6 style="font-weight:bold; font-size:13px; text-align:center;">Cấu hình Sàn (m)</h6>
@@ -101,7 +100,7 @@ export class Stock3DController extends ListController {
         sidebarList.style.overflowY = "auto";
         sidebarDiv.appendChild(sidebarList);
 
-        // 5. SELECTION PANEL (Thông tin chi tiết)
+        // 5. SELECTION PANEL
         const panelDiv = document.createElement("div");
         panelDiv.classList.add("selection-panel");
         panelDiv.innerHTML = `
@@ -157,7 +156,7 @@ export class Stock3DController extends ListController {
             scene.background = new THREE.Color(0xe0e0e0);
             clock = new THREE.Clock();
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.5, 10000);
-            camera.position.set(0, 500, 800); // Camera cao hơn chút
+            camera.position.set(0, 500, 800);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight / 1.164);
@@ -207,7 +206,7 @@ export class Stock3DController extends ListController {
                 selectedObject.position.set(px, py, pz);
                 updateMeshDimensions(selectedObject, l, w, h);
                 transformControl.attach(selectedObject);
-                alert("Đã lưu thành công!");
+                // alert("Đã lưu thành công!");
             });
 
             // THREE JS CONTROLS
@@ -251,16 +250,13 @@ export class Stock3DController extends ListController {
 
         // --- CÁC HÀM XỬ LÝ SÀN (FLOOR) ---
         function createFloor(w, d) {
-            // Quy đổi m -> pixel (3.779 * 2) hoặc dùng đơn vị riêng. 
-            // Ở đây giả sử Input là Mét, ta nhân hệ số visual
             const visualW = w * 3.779 * 2; 
             const visualD = d * 3.779 * 2;
 
-            // Xóa sàn cũ nếu có
             if (baseMesh) scene.remove(baseMesh);
             if (dragPlane) scene.remove(dragPlane);
 
-            // Sàn hiển thị (Grid)
+            // Sàn hiển thị (TRẮNG TRƠN - KHÔNG LƯỚI)
             const geometry = new THREE.PlaneGeometry(visualW, visualD);
             const material = new THREE.MeshBasicMaterial({ 
                 color: 0xffffff, side: THREE.DoubleSide, 
@@ -268,17 +264,10 @@ export class Stock3DController extends ListController {
             });
             baseMesh = new THREE.Mesh(geometry, material);
             baseMesh.rotation.x = -Math.PI / 2;
-            baseMesh.position.y = -0.5; // Hạ thấp 1 chút để tránh z-fighting
-            
-            // Grid Helper
-            const gridHelper = new THREE.GridHelper(Math.max(visualW, visualD), 20);
-            gridHelper.position.y = 0;
-            baseMesh.add(gridHelper);
-            
+            baseMesh.position.y = -0.5;
             scene.add(baseMesh);
 
-            // Sàn vô hình (để bắt sự kiện Drop và Raycast)
-            // Kích thước vô hình phải rất lớn để drop chỗ nào cũng ăn
+            // Sàn vô hình (để bắt sự kiện Drop)
             const planeGeo = new THREE.PlaneGeometry(10000, 10000); 
             const planeMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
             dragPlane = new THREE.Mesh(planeGeo, planeMat);
@@ -301,9 +290,7 @@ export class Stock3DController extends ListController {
             const intersects = raycaster.intersectObjects(group.children, true); 
 
             if (intersects.length > 0) {
-                // Tìm object cha là Mesh có userData
                 let target = intersects.find(r => r.object.type === 'Mesh' && r.object.userData.loc_id);
-                // Nếu click vào text hoặc line, tìm parent
                 if (!target) {
                     let childHit = intersects.find(r => r.object.parent && r.object.parent.userData.loc_id);
                     if (childHit) target = { object: childHit.object.parent };
@@ -424,7 +411,7 @@ export class Stock3DController extends ListController {
             }
         }
 
-        // --- 3D BOX CREATION (WITH AUTO-FIT TEXT) ---
+        // --- 3D BOX CREATION (WITH COLOR FIX) ---
         async function create3DBox(key, value) {
             const l = value[3] > 0 ? value[3] : 50;
             const w = value[4] > 0 ? value[4] : 50;
@@ -435,70 +422,63 @@ export class Stock3DController extends ListController {
             
             const edges = new THREE.EdgesGeometry(geo);
             
-            let col = 0x8c8c8c; let op = 0.5;
+            let col = 0x8c8c8c; // Mặc định là Xám (Không có hàng)
+            let op = 0.5;
+
             await rpc('/3Dstock/data/quantity', { 'loc_code': key }).then(q => {
-                if (q[0] > 0) {
-                   if (q[1] > 100) col = 0xcc0000;
-                   else if (q[1] > 50) col = 0xe6b800;
-                   else col = 0x00802b;
-                   op = 0.8;
-                } else if(q[1] == -1) { col = 0x00802b; op = 0.8; }
+                // q = [capacity, load_percentage]
+                // Fix Logic Màu:
+                if (q[0] > 0) { // Có setup Capacity
+                   if (q[1] > 100) { col = 0xcc0000; op = 0.8; } // Quá tải
+                   else if (q[1] > 50) { col = 0xe6b800; op = 0.8; } // Sắp đầy
+                   else if (q[1] > 0) { col = 0x00802b; op = 0.8; } // Có hàng (Xanh lá)
+                   else { col = 0x8c8c8c; op = 0.5; } // Load = 0% -> Xám
+                } else { // Không có Capacity
+                   if(q[1] == -1) { col = 0x00802b; op = 0.8; } // Có hàng
+                   else { col = 0x8c8c8c; op = 0.5; } // Không hàng
+                }
             });
 
             const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op }));
             const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x404040 }));
             
             mesh.position.set(value[0], value[1], value[2]);
-            line.position.set(0,0,0); // Relative to parent
+            line.position.set(0,0,0); 
             
             mesh.name = key;
             mesh.userData = { color: col, loc_id: value[6] };
             mesh.add(line); 
             
-            // --- XỬ LÝ TEXT TỰ ĐỘNG CO GIÃN ---
+            // --- TEXT AUTO-FIT ---
             const loader = new THREE.FontLoader();
             loader.load('https://threejs.org/examples/fonts/droid/droid_sans_bold.typeface.json', function(font) {
                 const textMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
                 
-                // Xác định chiều dài cạnh mà text sẽ nằm lên
-                // Nếu width > length thì text xoay 90 độ, nên cạnh chứa text là length (l)
-                // Nếu length > width thì text nằm ngang, cạnh chứa text là length (l)
-                // Logic hiển thị của bạn:
-                // if (w > l) -> rotation Y = 90 -> Text nằm dọc theo cạnh W (chiều sâu).
-                // else -> Text nằm dọc theo cạnh L (chiều ngang).
-                
                 let containerSize = (w > l) ? w : l;
-                
-                // Tạo text size cơ bản
                 let baseSize = Math.min(l, w) / 2.5; 
                 
                 const shapes = font.generateShapes(key, baseSize);
                 const tGeo = new THREE.ShapeGeometry(shapes);
                 
-                // 1. Canh giữa text (Center)
+                // Canh giữa text
                 tGeo.computeBoundingBox();
                 const xMid = - 0.5 * ( tGeo.boundingBox.max.x - tGeo.boundingBox.min.x );
                 tGeo.translate( xMid, 0, 0 );
                 
-                // 2. Tính toán độ dài thực của Text
+                // Scale text nếu bị tràn
                 const textWidth = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
-                
-                // 3. Scale down nếu Text dài hơn Container (trừ margin 10%)
                 const maxAllowed = containerSize * 0.9;
                 if (textWidth > maxAllowed) {
                     const scaleFactor = maxAllowed / textWidth;
                     tGeo.scale(scaleFactor, scaleFactor, 1);
                 }
 
-                // 4. Đặt vị trí Text (Ở giữa mặt trên khối hộp)
                 const textMesh = new THREE.Mesh(tGeo, textMat);
-                // Đưa lên mặt trên
                 textMesh.position.y = h + 2; 
-                textMesh.rotation.x = -Math.PI / 2; // Nằm ngửa lên trời cho dễ đọc từ trên xuống
+                textMesh.rotation.x = -Math.PI / 2;
 
-                // Xoay theo chiều dài hộp
                 if (w > l) {
-                    textMesh.rotation.z = Math.PI / 2; // Xoay dọc
+                    textMesh.rotation.z = Math.PI / 2;
                 }
                 
                 mesh.add(textMesh);
@@ -525,11 +505,10 @@ export class Stock3DController extends ListController {
             const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x404040 }));
             mesh.add(line);
             
-            // Xóa text cũ, tạo lại text mới (để scale lại cho đúng kích thước mới)
-            const oldText = mesh.children.find(c => c.type === 'Mesh' && c !== line); // Tìm text mesh (không phải line)
+            // Re-render Text
+            const oldText = mesh.children.find(c => c.type === 'Mesh' && c !== line); 
             if (oldText) mesh.remove(oldText);
             
-            // Re-generate text (Gọi lại logic tạo text giống create3DBox)
             const loader = new THREE.FontLoader();
             loader.load('https://threejs.org/examples/fonts/droid/droid_sans_bold.typeface.json', function(font) {
                 const textMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
