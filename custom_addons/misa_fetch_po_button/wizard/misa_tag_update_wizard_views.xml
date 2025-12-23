@@ -22,14 +22,14 @@
     </record>
 
     <record id="action_misa_tag_update_wizard" model="ir.actions.act_window">
-        <field name="name">Cập nhật Tag MISA hàng loạt</field>
+        <field name="name">Cập nhật thẻ</field>
         <field name="res_model">misa.tag.update.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
     </record>
 
     <menuitem id="menu_misa_tag_update_wizard"
-              name="Cập nhật Tag MISA hàng loạt"
+              name="Cập nhật thẻ"
               parent="sale.menu_sale_config"
               action="action_misa_tag_update_wizard"
               sequence="50"/>
