@@ -261,3 +261,74 @@ right: 7px;
         gap: 10px;
     }
 }
+
+
+.search-container {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1005;
+    background: rgba(255,255,255,0.9);
+    padding: 8px;
+    border-radius: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: flex;
+    gap: 5px;
+    align-items: center;
+
+    input {
+        border: none;
+        outline: none;
+        background: transparent;
+        padding: 5px 10px;
+        width: 300px;
+        font-size: 14px;
+    }
+
+    button {
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        
+        &:hover { background: #0056b3; }
+    }
+}
+
+/* Style cho bảng Picking trong Panel */
+.picking-list {
+    margin-top: 15px;
+    border-top: 1px solid #eee;
+    padding-top: 10px;
+
+    .picking-item {
+        background: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        padding: 8px;
+        margin-bottom: 5px;
+        border-radius: 4px;
+        font-size: 12px;
+
+        .p-head {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            color: #333;
+        }
+        .p-info {
+            color: #666;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+        .tag-in { color: #28a745; }
+        .tag-out { color: #dc3545; }
+        .tag-int { color: #ffc107; }
+    }
+}
