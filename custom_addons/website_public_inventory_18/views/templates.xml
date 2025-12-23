@@ -29,20 +29,19 @@
 
             /* 3. Thiết lập cho dòng header */
             #inv-table thead th {
-                position: -webkit-sticky; /* Hỗ trợ Safari */
-                position: sticky;
-                top: 0; /* Mặc định lên sát mép trên */
-                background-color: #f8f9fa !important; /* Phải có nền để không bị lộ chữ bên dưới khi cuộn */
-                z-index: 1020; /* Nằm trên các nội dung khác */
-                box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); /* Tạo đường kẻ đổ bóng thay cho border-bottom bị mất khi dùng sticky */
-                border-bottom: 2px solid #dee2e6;
-            }
+                  position: -webkit-sticky;
+                  position: sticky;
+                  top: 0; /* Nếu có navbar Odoo thì để 56px, nếu không thì để 0 */
+                  background-color: #f8f9fa !important;
+                  z-index: 1020; /* Ưu tiên cao nhất */
+                  box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
+                  border-bottom: 2px solid #dee2e6;
+              }
             .detail-row thead th {
-              position: sticky;
-              top: 100px; /* Phải lớn hơn giá trị 'top' của header chính */
-              z-index: 1010; /* Nhỏ hơn z-index của header chính */
-              background-color: #ffffff;
-          }
+                position: static !important; /* Trả về hiển thị bình thường, không dính nữa */
+                background-color: #ffffff;
+                z-index: 1;
+            }
 
             /* Nếu website Odoo của bạn có thanh navbar cố định phía trên (thường cao 56px-70px)
               Hãy điều chỉnh top bằng đúng chiều cao đó để không bị che mất header bảng */
@@ -268,8 +267,8 @@
                             <th>Sản phẩm</th>
                             <th>Barcode</th>
                             <th>ĐVT</th>
-                            <th class="text-end">Dự báo</th>
-                            <th class="text-end fw-bold">Thực tế</th>
+                            <th class="text-end" style="width:80px">Dự báo</th>
+                            <th class="text-end fw-bold" style="width:80px">Thực tế</th>
                             <th class="text-end">Giá Web</th>
                             <th class="text-end">Giá TMDT</th>
                             <th class="text-end">Niêm yết</th>
