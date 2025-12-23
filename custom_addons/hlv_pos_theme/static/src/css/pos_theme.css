@@ -1,61 +1,134 @@
-/* HLV POS THEME - Clean Category Styling */
+/* HLV POS THEME - SIDEBAR LAYOUT (CSS GRID) */
 
-/* 
- * UNIVERSAL CATEGORY BUTTON OVERRIDE
- * Uses high specificity selectors to override Odoo defaults
- */
+/* 1. MAIN LAYOUT - GRID SYSTEM */
+/* Force the main widget to be a grid container */
+.pos-content .product-screen .products-widget {
+    display: grid !important;
+    /* Column 1: Fixed Sidebar (260px), Column 2: Content (Flexible) */
+    grid-template-columns: 260px 1fr !important;
+    /* Row 1: Header/Search (Auto), Row 2: Product List (Flexible) */
+    grid-template-rows: auto 1fr !important;
+    height: 100% !important;
+    width: 100% !important;
+    background-color: #f0f2f5 !important;
+    gap: 0 !important;
+}
 
-/* Target ALL category buttons with maximum specificity */
-.pos .pos-content .product-screen .category-button,
-.pos .pos-content .product-screen .category-button.hlv-clean-category,
-.pos-content .product-screen .category-button,
-.product-screen .category-button,
-.category-button.hlv-clean-category {
+/* 2. CONTROL PANEL "UNWRAP" MAGIC */
+/* This is crucial: By using display: contents, the children of the control panel
+   (Categories and Search) become direct children of the Main Grid, allowing use to place them. */
+.pos-content .product-screen .products-widget .products-widget-control-panel {
+    display: contents !important;
+}
+
+/* 3. PLACE CATEGORIES IN LEFT SIDEBAR */
+/* We target multiple potential selectors for compatibility */
+.pos-content .product-screen .products-widget .products-widget-control-panel>.categories,
+.pos-content .product-screen .products-widget .products-widget-control-panel>.category-list,
+.pos-content .product-screen .products-widget .category-list {
+    grid-column: 1 !important;
+    grid-row: 1 / span 2 !important;
+    /* Occupy full height of Left Column */
+
+    display: flex !important;
+    flex-direction: column !important;
+    /* Stack vertically like a menu */
+    justify-content: flex-start !important;
+
     background-color: #ffffff !important;
-    background: #ffffff !important;
-    color: #333333 !important;
-    border: 1px solid #e0e0e0 !important;
+    border-right: 1px solid #e0e0e0 !important;
+    padding: 10px !important;
+    overflow-y: auto !important;
+    height: 100% !important;
+    z-index: 10 !important;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.02) !important;
+}
+
+/* 4. PLACE SEARCH BAR AT TOP RIGHT */
+.pos-content .product-screen .products-widget .products-widget-control-panel>.search-box-container,
+.pos-content .product-screen .products-widget .products-widget-control-panel>.portal-search-bar-container,
+.pos-content .product-screen .products-widget .search-box {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+
+    margin: 10px !important;
+    padding: 10px !important;
+    background: #fff !important;
     border-radius: 8px !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 5. PLACE PRODUCT LIST AT BOTTOM RIGHT */
+.pos-content .product-screen .products-widget .product-list-container {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+
+    overflow-y: auto !important;
+    padding: 10px 20px !important;
+    background-color: #f0f2f5 !important;
+}
+
+/* 6. CATEGORY BUTTON STYLING (Left Aligned & Clean) */
+/* Reset any inline styles again via specificity just in case */
+.pos-content .product-screen .category-button,
+.category-button.hlv-clean-category {
+    width: 100% !important;
+    /* Full width */
+    max-width: none !important;
+    height: auto !important;
+    min-height: 45px !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    /* Left Align Content */
+    text-align: left !important;
+
+    margin: 4px 0 !important;
+    padding: 10px 15px !important;
+
+    background-color: #ffffff !important;
+    color: #333333 !important;
+    border: 1px solid transparent !important;
+    /* Cleaner look */
+    border-radius: 6px !important;
+
+    font-size: 14px !important;
     font-weight: 500 !important;
     text-transform: none !important;
-    padding: 12px 16px !important;
-    margin: 4px !important;
-    transition: all 0.15s ease !important;
+    transition: all 0.2s ease !important;
 }
 
-/* Hover state */
-.pos .pos-content .product-screen .category-button:hover,
-.pos-content .product-screen .category-button:hover,
-.product-screen .category-button:hover,
-.category-button.hlv-clean-category:hover {
-    background-color: #f0f0f0 !important;
-    background: #f0f0f0 !important;
-    border-color: #ccc !important;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12) !important;
+/* Ensure text inside button is left aligned */
+.pos-content .product-screen .category-button span,
+.pos-content .product-screen .category-button div {
+    text-align: left !important;
+    width: 100% !important;
+    white-space: normal !important;
+    /* Allow wrapping */
 }
 
-/* Active/Selected state */
-.pos .pos-content .product-screen .category-button.active,
+/* Hover Effect */
+.pos-content .product-screen .category-button:hover {
+    background-color: #f8f9fa !important;
+    border-color: #dbe0e6 !important;
+    color: #000 !important;
+    transform: translateX(4px);
+    /* Move slightly right on hover */
+}
+
+/* Active State */
 .pos-content .product-screen .category-button.active,
-.product-screen .category-button.active {
-    background-color: #007bff !important;
-    background: #007bff !important;
-    color: #ffffff !important;
-    border-color: #0056b3 !important;
+.category-button.hlv-clean-category.active {
+    background-color: #e7f1ff !important;
+    /* Light Blue Background */
+    color: #007bff !important;
+    /* Blue Text */
+    border-left: 4px solid #007bff !important;
+    /* Blue indicator on left */
+    font-weight: 600 !important;
+    border-radius: 4px !important;
 }
 
-/* Category container - improve spacing */
-.product-screen .category-list,
-.products-widget .category-list {
-    gap: 8px !important;
-    padding: 8px !important;
-}
-
-/* Make category text more readable */
-.category-button .category-button-content,
-.category-button span {
-    font-size: 13px !important;
-    line-height: 1.3 !important;
-}
+/* Hide Breadcrumbs if they clutter (Optional) */
+/* .pos-content .product-screen .breadcrumbs { display: none !important; } */

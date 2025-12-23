@@ -1276,7 +1276,7 @@ class SaleOrder(models.Model):
                 vals_line['x_studio_combo_parent_code'] = False
             
             # ===== PRODUCTION STATUS FROM MISA =====
-            production_status_text = ln.get("ProductionStatusIDText") or ""
+            production_status_text = ln.get("CustomField4") or ""
             if production_status_text:
                 vals_line['x_studio_product_status'] = production_status_text
                 
