@@ -1345,7 +1345,6 @@ class SaleOrder(models.Model):
                 product_type="consu",
                 purchase_ok=True,
                 sale_ok=True,
-                x_studio_product_status=x_studio_product_status
             )
 
             # Convert về UoM mặc định của product
