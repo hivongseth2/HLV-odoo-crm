@@ -1790,6 +1790,49 @@ class SaleOrder(models.Model):
             }
         }
 
+
+    def action_update_tag_single(self):
+        """Action to update tags based on address for a single order."""
+        self.ensure_one()
+        misa_utils = self.env['misa.api.utils']
+        addr = self.partner_shipping_id.street or self.partner_id.street
+        if addr:
+            tag_ids = misa_utils.map_address_to_tag_ids(self.env, addr)
+            if tag_ids:
+                self.write({'tag_ids': tag_ids})
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _("Cập nhật thành công"),
+                        'message': _("Đã cập nhật Tag cho đơn hàng."),
+                        'type': 'success',
+                        'sticky': False,
+                    }
+                }
+            else:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _("Không tìm thấy"),
+                        'message': _("Không tìm thấy Tag phù hợp cho địa chỉ này."),
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+        else:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': _("Lỗi"),
+                    'message': _("Đơn hàng không có địa chỉ giao hàng."),
+                    'type': 'danger',
+                    'sticky': False,
+                }
+            }
+
 # =====================API
     @api.model
     def api_resync_by_misa(self, misa_order_id, warehouse_id=None, create_when_missing=True):

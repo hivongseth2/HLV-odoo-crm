@@ -776,6 +776,32 @@ class MisaApiUtils(models.AbstractModel):
         _logger.info("FormDataNew(Account) OK id=%s tax=%s acc=%s", result["id"], result["taxcode"], result["account_number"])
         return result
 
+    def map_address_to_tag_ids(self, env, addr_str):
+        """
+        Ánh xạ địa chỉ sang tag_ids (Tuyến) dựa trên cấu hình Keywords trong crm.tag.
+        """
+        if not addr_str:
+            return []
+        
+        addr_lower = addr_str.lower()
+        
+        # 1. Lấy tất cả các tag có cấu hình keywords
+        tags_with_keywords = env['crm.tag'].search([('misa_keywords', '!=', False)])
+        
+        matching_tags = env['crm.tag']
+        
+        for tag in tags_with_keywords:
+            # Tách từ khóa theo dấu phẩy, loại bỏ khoảng trắng thừa
+            keywords = [k.strip().lower() for k in tag.misa_keywords.split(',') if k.strip()]
+            
+            # Kiểm tra xem có từ khóa nào khớp với địa chỉ không
+            if any(kw in addr_lower for kw in keywords):
+                matching_tags |= tag
+                
+        if not matching_tags:
+            return []
+            
+        return [(6, 0, matching_tags.ids)]
 
     # =========================================================================
     # CREATE AND SEARCH PRODUCT APIs
