@@ -1,6 +1,6 @@
 {
     'name': 'HLV POS Theme',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.0.1',
     'category': 'Point of Sale',
     'summary': 'Professional Sidebar Layout for Odoo 18 POS',
     'description': """
