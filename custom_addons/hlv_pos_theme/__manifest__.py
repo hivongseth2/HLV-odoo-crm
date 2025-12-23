@@ -2,14 +2,14 @@
     'name': 'HLV POS Theme',
     'version': '18.0.1.0.0',
     'category': 'Point of Sale',
-    'summary': 'Clean and minimalist theme for Odoo POS',
+    'summary': 'Professional Sidebar Layout for Odoo 18 POS',
     'description': """
-        This module customizes the POS interface to replace the default colorful categories 
-        with a cleaner, more professional look, implementing a Sidebar layout for categories.
+        Transforms the POS interface:
+        1. Vertical Sidebar for Categories (Left Side).
+        2. Clean, consistent Left-Aligned styling.
+        3. Removes color clutter.
     """,
     'author': 'HLV',
-    'website': '',
-    'license': 'LGPL-3',
     'depends': ['point_of_sale'],
     'data': [],
     'assets': {
@@ -20,5 +20,4 @@
     },
     'installable': True,
     'auto_install': False,
-    'application': False,
 }
