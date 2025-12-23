@@ -66,17 +66,23 @@ class Stock3DView(http.Controller):
         for loc in locations:
             for wh in warehouse:
                 if loc.warehouse_id.id == warehouse.id:
-                    if loc.id not in (
-                            wh.lot_stock_id.id, wh.wh_input_stock_loc_id.id,
-                            wh.wh_qc_stock_loc_id.id,
-                            wh.wh_pack_stock_loc_id.id, wh.wh_output_stock_loc_id.id):
+                    # Loại bỏ các location hệ thống (Input/Output/Packing/QC...)
+                    if loc.id not in (wh.lot_stock_id.id, wh.wh_input_stock_loc_id.id, ...):
+                        
+                        # Logic cũ: lấy kích thước thật
                         length = int(loc.length * 3.779 * 2)
                         width = int(loc.width * 3.779 * 2)
                         height = int(loc.height * 3.779 * 2)
-                        location_dict.update(
-                            {loc.unique_code: [loc.pos_x, loc.pos_y, loc.pos_z,
-                                               length, width, height]})
-
+                        
+                        # Logic MỚI: Nếu chưa setup kích thước, trả về 0 nhưng vẫn gửi data đi
+                        # Frontend sẽ kiểm tra nếu = 0 thì đưa vào Sidebar
+                        location_dict.update({
+                            loc.unique_code: [
+                                loc.pos_x, loc.pos_y, loc.pos_z,
+                                length, width, height, 
+                                loc.id # ID rất quan trọng để lưu lại
+                            ]
+                        })
         return location_dict
 
     @http.route('/3Dstock/data/quantity', type='json', auth='public')
