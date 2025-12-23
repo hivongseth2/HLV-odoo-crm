@@ -6,6 +6,7 @@ class MisaTagUpdateWizard(models.TransientModel):
 
     from_date = fields.Date(string="Từ ngày", required=True, default=fields.Date.context_today)
     to_date = fields.Date(string="Đến ngày", required=True, default=fields.Date.context_today)
+    skip_if_tagged = fields.Boolean(string="Bỏ qua đơn đã có thẻ", default=True, help="Nếu chọn, sẽ không cập nhật lại các đơn hàng đã có thẻ.")
 
     def action_update_tags(self):
         self.ensure_one()
@@ -14,13 +15,17 @@ class MisaTagUpdateWizard(models.TransientModel):
         orders = self.env['sale.order'].search([
             ('date_order', '>=', self.from_date),
             ('date_order', '<=', self.to_date),
-            ('state', '!=', 'cancel'), # Có thể update cả đơn cancel nếu cần? Thường là không.
+            ('state', '!=', 'cancel'), 
         ])
 
         count = 0
         misa_utils = self.env['misa.api.utils']
         
         for order in orders:
+            # Check skip logic
+            if self.skip_if_tagged and order.tag_ids:
+                continue
+
             # Lấy địa chỉ giao hàng. 
             # Ưu tiên partner_shipping_id.street, hoặc fallback khác nếu cần.
             # Trong logic sync cũ: shipping_address_str or order.get("ShippingAddress")

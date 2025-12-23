@@ -12,6 +12,11 @@
                   class="btn-danger"
                   help="Chỉ chạy khi không có phiếu giao done và không có hoá đơn posted."
                   invisible="misa_id == False"/>
+          <button name="action_update_tag_single"
+                  type="object"
+                  string="Cập nhật Thẻ"
+                  class="btn-secondary"
+                  invisible="state not in ('draft', 'sent', 'sale')"/>
         </xpath>
       </field>
     </record>
