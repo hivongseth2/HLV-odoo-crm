@@ -1253,6 +1253,11 @@ class SaleOrder(models.Model):
                 # Dòng thường hoặc combo parent
                 vals_line['x_studio_is_combo_child'] = False
                 vals_line['x_studio_combo_parent_code'] = False
+            
+            # ===== PRODUCTION STATUS FROM MISA =====
+            production_status_text = ln.get("ProductionStatusIDText") or ""
+            if production_status_text:
+                vals_line['x_studio_product_status'] = production_status_text
                 
             env['sale.order.line'].create(vals_line)
 
