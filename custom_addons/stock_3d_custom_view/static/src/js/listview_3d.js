@@ -71,17 +71,19 @@ export class Stock3DController extends ListController {
         // 2. Search Bar
         const searchDiv = document.createElement("div");
         searchDiv.classList.add("search-container");
+        searchDiv.style.width = "auto";
+        searchDiv.style.gap = "10px";
         searchDiv.innerHTML = `
-            <div class="search-box">
-                <i class="fa fa-map-marker" style="color:#dc3545"></i>
-                <input type="text" id="loc_search_inp" placeholder="Tìm vị trí..." list="loc_datalist">
+            <div style="display:flex; align-items:center; background:#f1f1f1; padding:2px 8px; border-radius:15px;">
+                <i class="fa fa-map-marker" style="color:#d9534f;"></i>
+                <input type="text" id="loc_search_inp" placeholder="Tìm vị trí..." list="loc_datalist" style="border:none; outline:none; background:transparent; margin-left:5px; width:150px; font-size:13px;">
                 <datalist id="loc_datalist"></datalist>
-                <button id="btn_search_loc"><i class="fa fa-arrow-right"></i></button>
+                <button id="btn_search_loc" class="btn btn-sm btn-danger" style="border-radius:50%; width:24px; height:24px; padding:0; line-height:24px;"><i class="fa fa-arrow-right"></i></button>
             </div>
-            <div class="search-box">
-                <i class="fa fa-cube" style="color:#0d6efd"></i>
-                <input type="text" id="product_search_inp" placeholder="Tìm sản phẩm...">
-                <button id="btn_search_prod"><i class="fa fa-arrow-right"></i></button>
+            <div style="display:flex; align-items:center; background:#f1f1f1; padding:2px 8px; border-radius:15px;">
+                <i class="fa fa-cube" style="color:#007bff;"></i>
+                <input type="text" id="product_search_inp" placeholder="Tìm sản phẩm..." style="border:none; outline:none; background:transparent; margin-left:5px; width:150px; font-size:13px;">
+                <button id="btn_search_prod" class="btn btn-sm btn-primary" style="border-radius:50%; width:24px; height:24px; padding:0; line-height:24px;"><i class="fa fa-arrow-right"></i></button>
             </div>
         `;
 
@@ -118,6 +120,7 @@ export class Stock3DController extends ListController {
         // 5. Selection Panel
         const panelDiv = document.createElement("div");
         panelDiv.classList.add("selection-panel");
+        panelDiv.style.width = "350px"; 
         panelDiv.innerHTML = `
             <h5>
                 <span id="panel_loc_name">Tên Vị Trí</span>
@@ -144,7 +147,7 @@ export class Stock3DController extends ListController {
             <div class="panel-section">
                 <h6>Thông số (Mét & Pixel)</h6>
                 <div id="parent_info_div" style="font-size:11px; color:#666; margin-bottom:5px; display:none;">
-                    Thuộc: <b id="lbl_parent_name" style="color:#333;"></b>
+                    Thuộc Kệ: <b id="lbl_parent_name" style="color:#333;"></b>
                 </div>
 
                 <div class="input-row">
@@ -183,7 +186,6 @@ export class Stock3DController extends ListController {
         start();
 
         async function start() {
-            // Load data
             await rpc('/3Dstock/data', { 
                 'company_id': user.context.allowed_company_ids[0], 
                 'wh_id': wh_id 
@@ -191,7 +193,6 @@ export class Stock3DController extends ListController {
 
             sidebarList.innerHTML = "";
 
-            // Scene Init
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf4f6f9);
             clock = new THREE.Clock();
@@ -221,25 +222,25 @@ export class Stock3DController extends ListController {
             // Search
             const btnSearchLoc = document.getElementById("btn_search_loc");
             const inpSearchLoc = document.getElementById("loc_search_inp");
-            btnSearchLoc.addEventListener("click", () => searchLocation(inpSearchLoc.value));
-            inpSearchLoc.addEventListener("keyup", (e) => { if (e.key === 'Enter') searchLocation(inpSearchLoc.value); });
+            btnSearchLoc.onclick = () => searchLocation(inpSearchLoc.value);
+            inpSearchLoc.onkeyup = (e) => { if (e.key === 'Enter') searchLocation(inpSearchLoc.value); };
 
             const btnSearchProd = document.getElementById("btn_search_prod");
             const inpSearchProd = document.getElementById("product_search_inp");
-            btnSearchProd.addEventListener("click", () => searchProduct(inpSearchProd.value));
-            inpSearchProd.addEventListener("keyup", (e) => { if (e.key === 'Enter') searchProduct(inpSearchProd.value); });
+            btnSearchProd.onclick = () => searchProduct(inpSearchProd.value);
+            inpSearchProd.onkeyup = (e) => { if (e.key === 'Enter') searchProduct(inpSearchProd.value); };
 
-            document.getElementById("anchor_select").addEventListener("change", (e) => {
+            // Anchor
+            document.getElementById("anchor_select").onchange = (e) => {
                 const anchorCode = e.target.value;
                 if (!anchorCode) { anchorObject = null; return; }
-                if (meshMap[e.target.selectedOptions[0].getAttribute('data-id')]) {
-                    anchorObject = meshMap[e.target.selectedOptions[0].getAttribute('data-id')];
-                }
-            });
+                const id = e.target.selectedOptions[0].getAttribute('data-id');
+                if (meshMap[id]) anchorObject = meshMap[id];
+            };
 
             // Align
             document.querySelectorAll(".btn-align").forEach(btn => {
-                btn.addEventListener("click", async () => {
+                btn.onclick = async () => {
                     if (!selectedObject || !anchorObject) { alert("Chọn Gốc & Đối tượng!"); return; }
                     if (selectedObject === anchorObject) return;
                     alignObject(selectedObject, anchorObject, btn.dataset.dir);
@@ -249,11 +250,11 @@ export class Stock3DController extends ListController {
                     }
                     await saveLocationPosition(selectedObject);
                     transformControl.attach(selectedObject);
-                });
+                };
             });
 
-            // --- SAVE LOGIC ---
-            document.querySelector("#btn_save_changes").addEventListener("click", async () => {
+            // --- SAVE LOGIC (SỬA LỖI MẤT VỊ TRÍ CON) ---
+            document.getElementById("btn_save_changes").onclick = async () => {
                 if (!selectedObject) return;
                 const locId = selectedObject.userData.loc_id;
                 
@@ -261,6 +262,7 @@ export class Stock3DController extends ListController {
                 const w = parseFloat(document.getElementById('inp_w').value) || 0;
                 const h = parseFloat(document.getElementById('inp_h').value) || 0;
                 const cap = parseInt(document.getElementById('inp_cap').value) || 0;
+                
                 const px = parseFloat(document.getElementById('inp_pos_x').value) || 0;
                 const py = parseFloat(document.getElementById('inp_pos_y').value) || 0;
                 const pz = parseFloat(document.getElementById('inp_pos_z').value) || 0;
@@ -270,17 +272,26 @@ export class Stock3DController extends ListController {
                     'pos_x': px, 'pos_y': py, 'pos_z': pz
                 };
 
+                // 1. Lưu DB
                 await rpc('/web/dataset/call_kw', {
                     model: 'stock.location', method: 'write',
                     args: [[locId], payload], kwargs: {},
                 });
                 
+                // 2. Cập nhật Visual
                 const worldVec = new THREE.Vector3(px, py, pz);
+                
+                // Nếu vật thể là CON
                 if (selectedObject.parent && selectedObject.parent.type === "Mesh") {
-                    selectedObject.parent.worldToLocal(worldVec);
-                    selectedObject.position.copy(worldVec);
+                    // Update matrix cha trước để đảm bảo tính toán đúng
+                    selectedObject.parent.updateMatrixWorld(true);
+                    // Chuyển đổi tọa độ thế giới (Input) -> Tọa độ cục bộ (Local)
+                    const localVec = selectedObject.parent.worldToLocal(worldVec.clone());
+                    selectedObject.position.copy(localVec);
+                    
                     constrainMovement(selectedObject, selectedObject.parent); 
                 } else {
+                    // Nếu là vật thể độc lập
                     selectedObject.position.set(px, py, pz);
                 }
 
@@ -288,27 +299,47 @@ export class Stock3DController extends ListController {
                 selectedObject.updateMatrixWorld(true);
                 transformControl.attach(selectedObject);
 
+                // 3. Update Con (Nếu là Cha)
                 if (selectedObject.children.length > 0) {
                     selectedObject.children.forEach(child => {
                         if (child.type === "Mesh" && child.userData.loc_id) {
+                            child.updateMatrixWorld(true);
                             saveLocationPosition(child);
                         }
                     });
                 }
-                alert("Đã lưu!");
-            });
+                
+                alert("Đã lưu thành công!");
+            };
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true; controls.dampingFactor = 0.1;
 
             transformControl = new THREE.TransformControls(camera, renderer.domElement);
             
+            // Xử lý kéo thả (Có Constraint + Chống âm đất)
             transformControl.addEventListener('change', function(event) {
                 if (transformControl.dragging && transformControl.object) {
                     const obj = transformControl.object;
+                    
+                    // 1. Ràng buộc Cha/Con
                     if (obj.parent && obj.parent.type === "Mesh") {
                         constrainMovement(obj, obj.parent);
+                    } else {
+                        // 2. CHỐNG ÂM ĐẤT (Nếu ở ngoài)
+                        // Đảm bảo đáy vật thể (y - h/2) >= 0 => y >= h/2
+                        // Lưu ý: Geometry đã translate(0, h/2, 0), nên tâm hình học là ở đáy.
+                        // Tuy nhiên transformControl điều khiển vị trí của Mesh (gốc tọa độ Mesh).
+                        // Gốc Mesh ở đáy (do ta translate geometry) -> Y >= 0.
+                        // Nhưng nếu ta chưa translate geometry (pivot ở giữa) -> Y >= H/2.
+                        
+                        // Ở hàm create3DBox, ta dùng geo.translate(0, h/2, 0). Nghĩa là:
+                        // Tọa độ (0,0,0) của Mesh chính là đáy của hộp.
+                        // Vậy chỉ cần obj.position.y >= 0 là được.
+                        if (obj.position.y < 0) obj.position.y = 0;
                     }
+
+                    // Update Input
                     const worldPos = new THREE.Vector3();
                     obj.getWorldPosition(worldPos);
                     document.getElementById('inp_pos_x').value = Math.round(worldPos.x);
@@ -375,7 +406,6 @@ export class Stock3DController extends ListController {
                     opt1.value = key; opt1.text = key; 
                     opt1.setAttribute('data-id', value[6]); 
                     anchorSel.appendChild(opt1);
-
                 } else {
                     createSidebarItem(key, value);
                 }
@@ -401,7 +431,7 @@ export class Stock3DController extends ListController {
             canvas.addEventListener('click', onCanvasClick);
         }
 
-        // --- SEARCH LOCATION ---
+        // --- CORE FUNCTIONS ---
         function searchLocation(name) {
             if(!name) return;
             let found = null;
@@ -429,6 +459,7 @@ export class Stock3DController extends ListController {
             const maxX = (pGeo.width / 2) - (cGeo.width / 2);
             const minZ = -(pGeo.depth / 2) + (cGeo.depth / 2);
             const maxZ = (pGeo.depth / 2) - (cGeo.depth / 2);
+            // Y: Con phải nằm trên đáy cha.
             const minY = 0; 
             const maxY = pGeo.height - cGeo.height;
 
@@ -501,11 +532,11 @@ export class Stock3DController extends ListController {
                 const tW = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
                 const maxW = (w > l ? w : l) * 0.9;
                 if (tW > maxW) { const s = maxW/tW; tGeo.scale(s,s,1); }
-                const tMesh = new THREE.Mesh(tGeo, textMat);
-                tMesh.position.y = h + 2; 
-                tMesh.rotation.x = -Math.PI / 2;
-                if (w > l) tMesh.rotation.z = Math.PI / 2;
-                mesh.add(tMesh);
+                const textMesh = new THREE.Mesh(tGeo, textMat); // Fix variable name
+                textMesh.position.y = h + 2; 
+                textMesh.rotation.x = -Math.PI / 2;
+                if (w > l) textMesh.rotation.z = Math.PI / 2;
+                mesh.add(textMesh);
             });
             return mesh;
         }
@@ -560,7 +591,6 @@ export class Stock3DController extends ListController {
                 document.getElementById('inp_h').value = info.height;
                 document.getElementById('inp_cap').value = info.max_capacity;
                 
-                // Defensive check to avoid crash
                 const pInfo = document.getElementById("parent_info_div");
                 if (pInfo) {
                     if(info.location_id) {
@@ -696,8 +726,8 @@ export class Stock3DController extends ListController {
                     const scaleFactor = maxAllowed / textWidth;
                     tGeo.scale(scaleFactor, scaleFactor, 1);
                 }
-                const textMesh = new THREE.Mesh(tGeo, textMat);
-                textMesh.position.y = pxH + 2; tMesh.rotation.x = -Math.PI / 2;
+                const textMesh = new THREE.Mesh(tGeo, textMat); // Fix: use textMesh here
+                textMesh.position.y = pxH + 2; textMesh.rotation.x = -Math.PI / 2;
                 if (pxW > pxL) textMesh.rotation.z = Math.PI / 2;
                 mesh.add(textMesh);
             });
@@ -712,13 +742,13 @@ export class Stock3DController extends ListController {
             if (baseMesh) scene.remove(baseMesh); if (dragPlane) scene.remove(dragPlane);
             if (window.gridHelper) scene.remove(window.gridHelper);
 
-            // Plane
+            // Plane (Ground) - Màu trắng sáng hơn
             const geo = new THREE.PlaneGeometry(visualW, visualD);
-            const mat = new THREE.MeshBasicMaterial({ color: 0xf0f0f0, side: THREE.DoubleSide, depthWrite: false });
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, depthWrite: false });
             baseMesh = new THREE.Mesh(geo, mat); baseMesh.rotation.x = -Math.PI / 2; baseMesh.position.y = -0.5; scene.add(baseMesh);
             
-            // Grid (Mờ hơn)
-            const grid = new THREE.GridHelper(Math.max(visualW, visualD), 20, 0xcccccc, 0xe5e5e5);
+            // Grid Helper (Lưới đậm hơn 1 chút để rõ)
+            const grid = new THREE.GridHelper(Math.max(visualW, visualD), 20, 0xaaaaaa, 0xdddddd);
             grid.position.y = 0;
             scene.add(grid);
             window.gridHelper = grid;
