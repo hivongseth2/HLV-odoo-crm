@@ -80,7 +80,7 @@ class Stock3DView(http.Controller):
                             loc.unique_code: [
                                 loc.pos_x, loc.pos_y, loc.pos_z,
                                 length, width, height, 
-                                loc.id # ID rất quan trọng để lưu lại
+                                loc.id, loc.location_id.id if loc.location_id else False # ID rất quan trọng để lưu lại
                             ]
                         })
         return location_dict
@@ -172,7 +172,7 @@ class Stock3DView(http.Controller):
                 height = int(loc.height * 3.779 * 2)
                 location_dict.update(
                     {loc.unique_code: [loc.pos_x, loc.pos_y, loc.pos_z,
-                                       length, width, height, loc.id]})
+                                       length, width, height, loc.id,loc.location_id.id if loc.location_id else False]})
         return location_dict
 
 
