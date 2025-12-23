@@ -5,9 +5,12 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { ensureJQuery } from '@web/core/ensure_jquery';
 import { ListController } from "@web/views/list/list_controller";
-import { listView } from "@web/views/list/list_view";
 import { rpc } from "@web/core/network/rpc";
 import { user } from "@web/core/user";
+
+
+import { listView } from "@web/views/list/list_view";
+
 
 export class Stock3DController extends ListController {
     setup() {
@@ -106,7 +109,7 @@ export class Stock3DController extends ListController {
         sidebarList.style.maxHeight = "55vh"; sidebarList.style.overflowY = "auto";
         sidebarDiv.appendChild(sidebarList);
 
-        // 6. SELECTION PANEL (Cập nhật Dropdown Anchor & Parent)
+        // 6. SELECTION PANEL
         const panelDiv = document.createElement("div");
         panelDiv.classList.add("selection-panel");
         panelDiv.style.width = "350px"; 
@@ -171,10 +174,10 @@ export class Stock3DController extends ListController {
             </div>
         `;
 
-        // 7. KEYBOARD HELP
+        // 7. Hướng dẫn phím
         const helpDiv = document.createElement("div");
-        helpDiv.style = "position:absolute; bottom:10px; left:220px; font-size:11px; color:#666; background:rgba(255,255,255,0.7); padding:5px; border-radius:4px;";
-        helpDiv.innerHTML = "<b>Di chuyển:</b> W/A/S/D hoặc Mũi tên";
+        helpDiv.style = "position:absolute; bottom:10px; left:220px; font-size:11px; color:#666; background:rgba(255,255,255,0.8); padding:5px; border-radius:4px; z-index:1000;";
+        helpDiv.innerHTML = "<i class='fa fa-keyboard-o'></i> <b>Di chuyển:</b> W/A/S/D hoặc Mũi tên";
 
         start();
 
@@ -203,14 +206,7 @@ export class Stock3DController extends ListController {
             $(self.rootRef.el).find('canvas').remove();
             
             const content = $(self.rootRef.el).find('.o_content');
-            content.append(renderer.domElement);
-            content.append(select);
-            content.append(colorDiv);
-            content.append(closeDiv);
-            content.append(searchDiv);
-            content.append(sidebarDiv);
-            content.append(panelDiv);
-            content.append(helpDiv); // Thêm hướng dẫn phím
+            content.append(renderer.domElement).append(select).append(colorDiv).append(closeDiv).append(searchDiv).append(sidebarDiv).append(panelDiv).append(helpDiv);
 
             // Events Listeners UI
             document.querySelector(".customselect")?.addEventListener("change", warehouseChange);
@@ -223,23 +219,15 @@ export class Stock3DController extends ListController {
             btnSearch.addEventListener("click", () => searchProduct(inpSearch.value));
             inpSearch.addEventListener("keyup", (e) => { if (e.key === 'Enter') searchProduct(inpSearch.value); });
 
-            // --- ALIGNMENT LOGIC (LIST DROPDOWN) ---
-            // Khi chọn Anchor từ dropdown
+            // Alignment Dropdown Logic
             document.getElementById("anchor_select").addEventListener("change", (e) => {
                 const anchorCode = e.target.value;
-                if (!anchorCode) {
-                    anchorObject = null;
-                    return;
-                }
-                // Tìm object trong scene
+                if (!anchorCode) { anchorObject = null; return; }
                 const found = group.children.find(c => c.name === anchorCode && c.type === "Mesh");
-                if (found) {
-                    anchorObject = found;
-                    // Visual feedback: Highlight anchor (optional)
-                }
+                if (found) anchorObject = found;
             });
 
-            // Các nút Align
+            // Align Buttons
             document.querySelectorAll(".btn-align").forEach(btn => {
                 btn.addEventListener("click", async () => {
                     if (!selectedObject) { alert("Chưa chọn vị trí cần xếp!"); return; }
@@ -247,12 +235,19 @@ export class Stock3DController extends ListController {
                     if (selectedObject === anchorObject) return;
 
                     alignObject(selectedObject, anchorObject, btn.dataset.dir);
+                    
+                    // Nếu là con, kiểm tra boundary sau khi align
+                    if (selectedObject.userData.parent_id) {
+                        const parentMesh = group.children.find(c => c.userData.loc_id === selectedObject.userData.parent_id);
+                        if (parentMesh) constrainMovement(selectedObject, parentMesh);
+                    }
+
                     await saveLocationPosition(selectedObject);
                     transformControl.attach(selectedObject);
                 });
             });
 
-            // --- SAVE LOGIC (BAO GỒM PARENT) ---
+            // Save Changes Logic
             document.querySelector("#btn_save_changes").addEventListener("click", async () => {
                 if (!selectedObject) return;
                 const locId = selectedObject.userData.loc_id;
@@ -265,32 +260,31 @@ export class Stock3DController extends ListController {
                 const py = parseFloat(document.getElementById('inp_pos_y').value) || 0;
                 const pz = parseFloat(document.getElementById('inp_pos_z').value) || 0;
                 
-                // Lấy Parent ID từ dropdown
                 const parentId = parseInt(document.getElementById('inp_parent_id').value) || false;
 
                 const payload = {
                     'length': l, 'width': w, 'height': h, 'max_capacity': cap,
                     'pos_x': px, 'pos_y': py, 'pos_z': pz
                 };
-                
-                // Nếu người dùng đổi Parent, cần update location_id
-                if (parentId !== selectedObject.userData.parent_id) {
-                    payload['location_id'] = parentId;
-                }
+                if (parentId !== selectedObject.userData.parent_id) payload['location_id'] = parentId;
 
                 await rpc('/web/dataset/call_kw', {
                     model: 'stock.location', method: 'write',
                     args: [[locId], payload], kwargs: {},
                 });
                 
-                // Update Visuals
                 selectedObject.position.set(px, py, pz);
-                selectedObject.userData.parent_id = parentId; // Update memory
+                selectedObject.userData.parent_id = parentId;
                 
-                // Nếu được gán làm con, kiểm tra xem có cần update object cha thành wireframe không
                 if (parentId) {
                     const parentMesh = group.children.find(c => c.userData.loc_id === parentId);
-                    if (parentMesh) updateParentVisual(parentMesh);
+                    if (parentMesh) {
+                        updateParentVisual(parentMesh);
+                        constrainMovement(selectedObject, parentMesh); // Snap vào trong nếu đang ở ngoài
+                    }
+                } else {
+                    // Nếu bỏ làm con, update visual lại thành solid (nếu nó ko phải cha của ai khác)
+                    // (Logic này có thể mở rộng, ở đây ta cứ giữ nguyên)
                 }
 
                 updateMeshDimensions(selectedObject, l, w, h);
@@ -300,54 +294,70 @@ export class Stock3DController extends ListController {
 
             // ThreeJS Controls
             controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; // Mượt mà hơn
+            controls.dampingFactor = 0.05;
+
             transformControl = new THREE.TransformControls(camera, renderer.domElement);
-            transformControl.addEventListener('dragging-changed', function (event) {
-                controls.enabled = !event.value;
-                if (!event.value && transformControl.object) {
+            
+            // Xử lý kéo thả (Có Constraint Cha/Con)
+            transformControl.addEventListener('change', function(event) {
+                // Logic giới hạn di chuyển trong thời gian thực (Real-time Constraint)
+                if (transformControl.dragging && transformControl.object) {
                     const obj = transformControl.object;
+                    if (obj.userData.parent_id) {
+                        const parentMesh = group.children.find(c => c.userData.loc_id === obj.userData.parent_id);
+                        if (parentMesh) {
+                            constrainMovement(obj, parentMesh);
+                        }
+                    }
+                    // Update input GUI
                     document.getElementById('inp_pos_x').value = Math.round(obj.position.x);
                     document.getElementById('inp_pos_y').value = Math.round(obj.position.y);
                     document.getElementById('inp_pos_z').value = Math.round(obj.position.z);
-                    saveLocationPosition(obj);
+                }
+            });
+
+            transformControl.addEventListener('dragging-changed', function (event) {
+                controls.enabled = !event.value;
+                if (!event.value && transformControl.object) {
+                    saveLocationPosition(transformControl.object);
                 }
             });
             scene.add(transformControl);
 
             // --- KEYBOARD NAVIGATION (WASD) ---
             window.addEventListener('keydown', (e) => {
-                // Nếu đang gõ trong ô input thì không di chuyển camera
                 if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
 
-                const moveSpeed = 20; // Tốc độ di chuyển
-                const angle = controls.getAzimuthalAngle(); // Góc xoay hiện tại của camera
+                const moveSpeed = 30; 
+                // Lấy hướng nhìn của camera (chỉ trên mặt phẳng XZ)
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward);
+                forward.y = 0;
+                forward.normalize();
 
-                // Tính toán hướng di chuyển dựa trên góc nhìn
-                const xDir = Math.sin(angle) * moveSpeed;
-                const zDir = Math.cos(angle) * moveSpeed;
+                const right = new THREE.Vector3();
+                right.crossVectors(forward, camera.up).normalize();
 
                 switch(e.key.toLowerCase()) {
-                    case 'w': // Tiến
-                    case 'arrowup':
-                        camera.position.x -= xDir; camera.position.z -= zDir;
-                        controls.target.x -= xDir; controls.target.z -= zDir;
+                    case 'w': case 'arrowup':
+                        camera.position.addScaledVector(forward, moveSpeed);
+                        controls.target.addScaledVector(forward, moveSpeed);
                         break;
-                    case 's': // Lùi
-                    case 'arrowdown':
-                        camera.position.x += xDir; camera.position.z += zDir;
-                        controls.target.x += xDir; controls.target.z += zDir;
+                    case 's': case 'arrowdown':
+                        camera.position.addScaledVector(forward, -moveSpeed);
+                        controls.target.addScaledVector(forward, -moveSpeed);
                         break;
-                    case 'a': // Trái
-                    case 'arrowleft':
-                        camera.position.x -= zDir; camera.position.z += xDir;
-                        controls.target.x -= zDir; controls.target.z += xDir;
+                    case 'a': case 'arrowleft':
+                        camera.position.addScaledVector(right, -moveSpeed);
+                        controls.target.addScaledVector(right, -moveSpeed);
                         break;
-                    case 'd': // Phải
-                    case 'arrowright':
-                        camera.position.x += zDir; camera.position.z -= xDir;
-                        controls.target.x += zDir; controls.target.z -= xDir;
+                    case 'd': case 'arrowright':
+                        camera.position.addScaledVector(right, moveSpeed);
+                        controls.target.addScaledVector(right, moveSpeed);
                         break;
                 }
-                controls.update(); // Cập nhật OrbitControls
+                controls.update(); 
             });
 
             // Floor
@@ -355,26 +365,18 @@ export class Stock3DController extends ListController {
 
             // Init Objects
             group = new THREE.Group();
-            
-            // Collect Parent IDs
             const parentIds = new Set();
             for (let val of Object.values(data)) {
-                // val[7] là parent_id
-                if (val[7]) parentIds.add(val[7]); 
+                if (val[7]) parentIds.add(val[7]); // val[7] = parent_id
             }
 
-            // Populate Anchor Dropdown & Parent Dropdown List (Dùng chung 1 list data)
+            // Populate Dropdowns
             const anchorSel = document.getElementById("anchor_select");
             const parentSel = document.getElementById("inp_parent_id");
             
             for (let [key, value] of Object.entries(data)) {
-                // Add to Selects
-                let opt1 = document.createElement("option"); opt1.value = key; opt1.text = key;
-                anchorSel.appendChild(opt1);
-                
-                // Parent select dùng ID thay vì Code
-                let opt2 = document.createElement("option"); opt2.value = value[6]; opt2.text = key; 
-                parentSel.appendChild(opt2);
+                let opt1 = document.createElement("option"); opt1.value = key; opt1.text = key; anchorSel.appendChild(opt1);
+                let opt2 = document.createElement("option"); opt2.value = value[6]; opt2.text = key; parentSel.appendChild(opt2);
 
                 const hasPos = (value[0] !== 0 || value[1] !== 0 || value[2] !== 0);
                 if (hasPos) {
@@ -395,7 +397,34 @@ export class Stock3DController extends ListController {
             canvas.addEventListener('click', onCanvasClick);
         }
 
-        // --- ALIGNMENT LOGIC ---
+        // --- HÀM RÀNG BUỘC DI CHUYỂN (CON TRONG CHA) ---
+        function constrainMovement(child, parent) {
+            // Lấy Box của Cha
+            const pBox = new THREE.Box3().setFromObject(parent);
+            // Lấy kích thước của Con
+            const cBox = new THREE.Box3().setFromObject(child);
+            const cSize = new THREE.Vector3();
+            cBox.getSize(cSize);
+
+            // Tính toán biên giới an toàn (Cha - 1/2 kích thước Con)
+            // Lưu ý: Pivot point thường ở giữa, nên ta tính khoảng cách từ tâm
+            const minX = pBox.min.x + cSize.x / 2;
+            const maxX = pBox.max.x - cSize.x / 2;
+            const minY = pBox.min.y + cSize.y / 2;
+            const maxY = pBox.max.y - cSize.y / 2;
+            const minZ = pBox.min.z + cSize.z / 2;
+            const maxZ = pBox.max.z - cSize.z / 2;
+
+            // Clamp (Kẹp) vị trí của con lại
+            if (minX <= maxX) child.position.x = Math.max(minX, Math.min(maxX, child.position.x));
+            else child.position.x = parent.position.x; // Nếu con to hơn cha thì đặt giữa
+
+            if (minY <= maxY) child.position.y = Math.max(minY, Math.min(maxY, child.position.y));
+            
+            if (minZ <= maxZ) child.position.z = Math.max(minZ, Math.min(maxZ, child.position.z));
+            else child.position.z = parent.position.z;
+        }
+
         function alignObject(target, anchor, direction) {
             const boxT = new THREE.Box3().setFromObject(target);
             const boxA = new THREE.Box3().setFromObject(anchor);
@@ -407,33 +436,16 @@ export class Stock3DController extends ListController {
             const margin = 2; 
 
             switch(direction) {
-                case 'right': 
-                    newPos.x = centerA.x + (sizeA.x/2) + (sizeT.x/2) + margin; 
-                    newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); 
-                    newPos.z = centerA.z; break;
-                case 'left': 
-                    newPos.x = centerA.x - (sizeA.x/2) - (sizeT.x/2) - margin; 
-                    newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2);
-                    newPos.z = centerA.z; break;
-                case 'top': 
-                    newPos.y = centerA.y + (sizeA.y/2) + (sizeT.y/2); 
-                    newPos.x = centerA.x; newPos.z = centerA.z; break;
-                case 'bottom': 
-                    newPos.y = centerA.y - (sizeA.y/2) - (sizeT.y/2); 
-                    newPos.x = centerA.x; newPos.z = centerA.z; break;
-                case 'front': 
-                    newPos.z = centerA.z + (sizeA.z/2) + (sizeT.z/2) + margin; 
-                    newPos.x = centerA.x; 
-                    newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
-                case 'back': 
-                    newPos.z = centerA.z - (sizeA.z/2) - (sizeT.z/2) - margin; 
-                    newPos.x = centerA.x; 
-                    newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
+                case 'right': newPos.x = centerA.x + (sizeA.x/2) + (sizeT.x/2) + margin; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); newPos.z = centerA.z; break;
+                case 'left': newPos.x = centerA.x - (sizeA.x/2) - (sizeT.x/2) - margin; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); newPos.z = centerA.z; break;
+                case 'top': newPos.y = centerA.y + (sizeA.y/2) + (sizeT.y/2); newPos.x = centerA.x; newPos.z = centerA.z; break;
+                case 'bottom': newPos.y = centerA.y - (sizeA.y/2) - (sizeT.y/2); newPos.x = centerA.x; newPos.z = centerA.z; break;
+                case 'front': newPos.z = centerA.z + (sizeA.z/2) + (sizeT.z/2) + margin; newPos.x = centerA.x; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
+                case 'back': newPos.z = centerA.z - (sizeA.z/2) - (sizeT.z/2) - margin; newPos.x = centerA.x; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
             }
             target.position.copy(newPos);
         }
 
-        // --- SEARCH ---
         async function searchProduct(keyword) {
             if (!keyword) {
                 group.children.forEach(mesh => {
@@ -460,14 +472,9 @@ export class Stock3DController extends ListController {
                     }
                 }
             });
-            if(first) {
-                // Bay camera tới đó
-                controls.target.copy(first.position);
-                controls.update();
-            }
+            if(first) { controls.target.copy(first.position); controls.update(); }
         }
 
-        // --- FLOOR ---
         function createFloor(w, d) {
             const visualW = w * 3.779 * 2; 
             const visualD = d * 3.779 * 2;
@@ -494,21 +501,40 @@ export class Stock3DController extends ListController {
             createFloor(w, d);
         }
 
-        // --- CLICK & SELECT ---
+        // --- XỬ LÝ CLICK THÔNG MINH (XUYÊN THẤU CHA) ---
         async function onCanvasClick(event) {
             if (transformControl.dragging) return;
             pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
             pointer.y = -(event.clientY / (window.innerHeight)) * 2 + 1 + 0.13;
             raycaster.setFromCamera(pointer, camera);
+            
+            // Lấy tất cả các va chạm
             const intersects = raycaster.intersectObjects(group.children, true); 
 
             if (intersects.length > 0) {
-                let target = intersects.find(r => r.object.type === 'Mesh' && r.object.userData.loc_id);
-                if (!target) {
-                    let childHit = intersects.find(r => r.object.parent && r.object.parent.userData.loc_id);
-                    if (childHit) target = { object: childHit.object.parent };
+                let finalTarget = null;
+
+                // Lọc ra các Mesh (bỏ qua text, line nếu cần)
+                const hitMeshes = intersects.filter(i => i.object.type === 'Mesh' && i.object.userData.loc_id);
+
+                if (hitMeshes.length > 0) {
+                    // Logic: Ưu tiên chọn CON (solid) hơn CHA (wireframe)
+                    // Duyệt qua danh sách va chạm từ gần đến xa
+                    for (let hit of hitMeshes) {
+                        const obj = hit.object;
+                        // Nếu obj KHÔNG phải là Parent (tức là solid), chọn ngay
+                        if (!obj.userData.is_parent) {
+                            finalTarget = obj;
+                            break; 
+                        }
+                    }
+                    // Nếu không tìm thấy con nào (chỉ click trúng Cha), thì chọn Cha
+                    if (!finalTarget) {
+                        finalTarget = hitMeshes[0].object;
+                    }
                 }
-                if (target) selectObject(target.object);
+
+                if (finalTarget) selectObject(finalTarget);
             } else {
                 const gizmoIntersects = raycaster.intersectObjects(transformControl.children, true);
                 if (gizmoIntersects.length === 0) deselectObject();
@@ -537,7 +563,6 @@ export class Stock3DController extends ListController {
                 document.getElementById('inp_w').value = info.width;
                 document.getElementById('inp_h').value = info.height;
                 document.getElementById('inp_cap').value = info.max_capacity;
-                // Set Parent Dropdown (Array [id, name])
                 document.getElementById('inp_parent_id').value = info.location_id ? info.location_id[0] : 0;
             }
 
@@ -607,7 +632,6 @@ export class Stock3DController extends ListController {
 
             if (intersects.length > 0) {
                 const point = intersects[0].point;
-                // Default: not parent
                 const newMesh = await create3DBox(itemData.code, [point.x, 0, point.z, itemData.l, itemData.w, itemData.h, itemData.id, false], false);
                 
                 Array.from(sidebarList.children).forEach(child => {
@@ -625,7 +649,6 @@ export class Stock3DController extends ListController {
             }
         }
 
-        // --- CREATE 3D BOX (PARENT/CHILD) ---
         async function create3DBox(key, value, isParent) {
             const l = value[3] > 0 ? value[3] : 50;
             const w = value[4] > 0 ? value[4] : 50;
@@ -638,10 +661,8 @@ export class Stock3DController extends ListController {
             let material;
 
             if (isParent) {
-                // CHA: Wireframe
                 material = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true, transparent:true, opacity: 0.1 });
             } else {
-                // CON: Solid
                 await rpc('/3Dstock/data/quantity', { 'loc_code': key }).then(q => {
                     if (q[0] > 0) { 
                        if (q[1] > 100) { col = 0xcc0000; op = 0.8; }
@@ -700,9 +721,7 @@ export class Stock3DController extends ListController {
             return mesh;
         }
 
-        // --- UPDATE VISUAL WHEN BECOME PARENT ---
         function updateParentVisual(mesh) {
-            // Chuyển sang Wireframe
             mesh.material.wireframe = true;
             mesh.material.color.set(0x000000);
             mesh.material.opacity = 0.1;
@@ -724,8 +743,33 @@ export class Stock3DController extends ListController {
             const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x404040 }));
             mesh.add(line);
             
-            // Re-render Text... (Giữ logic cũ)
-            // ...
+            const oldText = mesh.children.find(c => c.type === 'Mesh' && c !== line); 
+            if (oldText) mesh.remove(oldText);
+            
+            const loader = new THREE.FontLoader();
+            loader.load('https://threejs.org/examples/fonts/droid/droid_sans_bold.typeface.json', function(font) {
+                const textMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+                let textScale = mesh.userData.is_parent ? 2.5 : 3.0;
+                let baseSize = Math.min(pxL, pxW) / textScale;
+                const shapes = font.generateShapes(mesh.name, baseSize);
+                const tGeo = new THREE.ShapeGeometry(shapes);
+                tGeo.computeBoundingBox();
+                const xMid = - 0.5 * ( tGeo.boundingBox.max.x - tGeo.boundingBox.min.x );
+                tGeo.translate( xMid, 0, 0 );
+                
+                const textWidth = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
+                const maxAllowed = (pxW > pxL ? pxW : pxL) * 0.9;
+                if (textWidth > maxAllowed) {
+                    const scaleFactor = maxAllowed / textWidth;
+                    tGeo.scale(scaleFactor, scaleFactor, 1);
+                }
+
+                const textMesh = new THREE.Mesh(tGeo, textMat);
+                textMesh.position.y = pxH + 2;
+                textMesh.rotation.x = -Math.PI / 2;
+                if (pxW > pxL) textMesh.rotation.z = Math.PI / 2;
+                mesh.add(textMesh);
+            });
         }
 
         async function saveLocationPosition(obj) {
@@ -746,6 +790,7 @@ export class Stock3DController extends ListController {
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
+            controls.update(); // Important for damping
         }
     }
 }
