@@ -96,3 +96,30 @@ class StockQuant(models.Model):
             "warehouse_prefix": wh_prefix,
             "base_location": (base_loc.complete_name if base_loc else None),
         }
+
+    @api.model
+    def get_alternative_locations(self, product_id, current_location_id=None):
+        """
+        Tìm các vị trí nội bộ khác đang có hàng (quantity > 0).
+        Trả về chuỗi text gợi ý.
+        """
+        domain = [
+            ('product_id', '=', product_id),
+            ('location_id.usage', '=', 'internal'),
+            ('quantity', '>', 0)
+        ]
+        # Trừ vị trí hiện tại đang hết hàng ra (nếu có truyền vào)
+        if current_location_id:
+            domain.append(('location_id', '!=', current_location_id))
+
+        # Lấy Top 5 vị trí có nhiều hàng nhất
+        quants = self.search(domain, order='quantity desc', limit=5)
+        
+        if not quants:
+            return False
+
+        suggestions = []
+        for q in quants:
+            suggestions.append("- %s: %.2f" % (q.location_id.display_name, q.quantity))
+        
+        return "\n".join(suggestions)
