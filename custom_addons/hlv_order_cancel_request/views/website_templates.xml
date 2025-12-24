@@ -61,14 +61,7 @@
                     <datalist id="salesperson_list">
                         <!-- Populated by JS -->
                     </datalist>
-                </div>
-
-                <div class="mb-3">
-                    <label for="salesperson_zalo_uid" class="form-label">Zalo UID của bạn <span class="text-muted">(để nhận thông báo)</span></label>
-                    <input type="text" class="form-control" id="salesperson_zalo_uid" name="salesperson_zalo_uid" 
-                           t-att-value="values.get('salesperson_zalo_uid')" 
-                           placeholder="Nhập Zalo UID của bạn..."/>
-                    <small class="text-muted">Nhập Zalo User ID để nhận thông báo khi yêu cầu được xử lý xong.</small>
+                    <small class="text-muted">Mã sale phải khớp với cấu hình trong hệ thống Zalo để nhận thông báo kết quả.</small>
                 </div>
 
                 <div class="mb-3">
@@ -137,9 +130,7 @@
                 <p class="text-muted mb-4">
                     Mã yêu cầu: <strong class="text-dark"><t t-esc="cancel_req.name if cancel_req else 'N/A'"/></strong><br/>
                     Thông báo đã được gửi đến Kế toán và Thủ kho.<br/>
-                    <t t-if="cancel_req and cancel_req.salesperson_zalo_uid">
-                        Bạn sẽ nhận thông báo qua Zalo khi yêu cầu được xử lý xong.
-                    </t>
+                    Bạn sẽ nhận thông báo qua Zalo khi yêu cầu được xử lý xong.
                 </p>
                 <a href="/cancel-request/form" class="btn btn-outline-primary">Tạo yêu cầu mới</a>
             </div>

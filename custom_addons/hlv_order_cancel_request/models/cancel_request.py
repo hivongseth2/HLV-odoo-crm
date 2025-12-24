@@ -8,7 +8,6 @@ class SaleOrderCancelRequest(models.Model):
 
     name = fields.Char(string='Mã Yêu Cầu', required=True, copy=False, readonly=True, index=True, default=lambda self: _('Mới'))
     salesperson_name = fields.Char(string='Mã Sale', required=True, tracking=True)
-    salesperson_zalo_uid = fields.Char(string='Zalo UID Sale', tracking=True, help="Zalo User ID của Sale để nhận thông báo kết quả")
     order_reference = fields.Char(string='Mã Đơn Hàng', required=True, tracking=True, help="Mã đơn hàng được nhập bởi Sale, ví dụ: SO12345")
     
     order_id = fields.Many2one('sale.order', string='Đơn Bán Hàng', compute='_compute_order_id', store=True, readonly=False)
@@ -90,10 +89,20 @@ class SaleOrderCancelRequest(models.Model):
         return []
 
     def _get_sale_recipients(self):
-        """Get Sale's Zalo UID from the request record itself."""
-        if self.salesperson_zalo_uid:
-            return [u.strip() for u in self.salesperson_zalo_uid.split(',') if u.strip()]
-        return []
+        """
+        Get Sale's Zalo UID from saler_mapping_text in ZNS config.
+        Uses salesperson_name (mã sale) to lookup the Zalo UID.
+        """
+        if not self.salesperson_name:
+            return []
+        
+        zalo_config = self.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
+        if not zalo_config:
+            return []
+        
+        # Use the saler_mapping_text lookup method from ZNS module
+        user_ids = zalo_config.get_saler_user_ids_from_mapping(self.salesperson_name)
+        return user_ids
 
     def _get_backend_url(self):
         """Get backend URL for this request."""

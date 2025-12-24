@@ -52,7 +52,6 @@ class CancelRequestController(http.Controller):
                     
                     req = CancelRequest.create({
                         'salesperson_name': salesperson_name,
-                        'salesperson_zalo_uid': kwargs.get('salesperson_zalo_uid'),
                         'order_reference': order_reference,
                         'reason': reason,
                         'type': req_type or 'cancel',
