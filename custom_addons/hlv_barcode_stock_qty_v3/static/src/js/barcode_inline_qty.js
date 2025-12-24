@@ -5,7 +5,7 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { user } from "@web/core/user";
 
-
+console.log("🔥🔥🔥 HLV: FILE JS ĐÃ ĐƯỢC LOAD THÀNH CÔNG !!! 🔥🔥🔥");
 
 // -------------------------------------------------------------------------
 // PHẦN 1: LOGIC HIỂN THỊ TRÊN DOM (Giữ nguyên logic visual cũ của bạn)

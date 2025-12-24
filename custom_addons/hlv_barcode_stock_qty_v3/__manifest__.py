@@ -4,13 +4,14 @@
     'depends': ['stock', 'stock_barcode'],
     'data': [],
     'assets': {
-        # ----------------------------------------------------------
-        # ⚠️ BẮT BUỘC PHẢI LÀ 'stock_barcode.assets' ⚠️
-        # Nếu để 'web.assets_backend' thì vào màn hình quét sẽ không chạy!
-        # ----------------------------------------------------------
-        'stock_barcode.assets': [
-            'hlv_barcode_stock_qty_v3/static/src/css/inline.css',
+        # Load cả 2 nơi để chắc chắn nó được gọi
+        'web.assets_backend': [
             'hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js',
+            'hlv_barcode_stock_qty_v3/static/src/css/inline.css',
+        ],
+        'stock_barcode.assets': [
+            'hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js',
+            'hlv_barcode_stock_qty_v3/static/src/css/inline.css',
         ],
     },
     'installable': True,
