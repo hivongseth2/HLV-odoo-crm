@@ -1132,14 +1132,14 @@ class MisaApiUtils(models.AbstractModel):
             "UnitPrice": price_val,
             "UnitPriceFixed": price_val,
             "PurchasedPrice": 0,
-            
             "MISAEntityState": 1,
             "Active": True, "Inactive": False, "IsPublic": False, 
             "FormLayoutID": 45, "FormLayoutIDText": "Mẫu tiêu chuẩn",
             "IsFollowSerialNumber": False,
             "IsUseTax": False, "PriceAfterTax": False,
             "Fields": [], "FieldsCustom": [], 
-            
+            "DefaultStockID": "29", 
+            "DefaultStockIDText": "HLV",
             "DataCustom": {
                 "CustomField13": None,
                 "CustomField13Text": "",

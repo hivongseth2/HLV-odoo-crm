@@ -3,17 +3,18 @@ from odoo import models, fields, api
 
 class HlvChatgptConfig(models.Model):
     _name = 'hlv.chatgpt.config'
-    _description = 'Cấu hình Multi-Agent'
+    _description = 'Cấu hình Single Agent'
     
     active = fields.Boolean(default=True)
-
     name = fields.Char(string='Tên cấu hình', default='Cấu hình Chính')
     api_key = fields.Char(string='OpenAI API Key', required=True)
     
-    # --- 3 CON AGENT ---
-    router_id = fields.Char(string='Router ID (Tổng đài)', required=True, help="ID asst_...")
-    stock_id = fields.Char(string='Stock ID (Kho)', required=True, help="ID asst_...")
-    naming_id = fields.Char(string='Naming ID (Đặt tên)', required=True, help="ID asst_...")
+    # Chỉ giữ 1 con duy nhất
+    product_manager_id = fields.Char(
+        string='Product Manager ID', 
+        required=True, 
+        help="ID của Assistant (đã cấu hình File Search và Function Calling trên OpenAI)"
+    )
 
     @api.model
     def get_config(self):
