@@ -19,6 +19,7 @@ class ProductImportWizard(models.TransientModel):
         ('combo', 'Import sản phẩm Combo'),
         ('price_bosch', 'Đồng bộ Bảng giá Bosch'),
         ('price_milwaukee', 'Đồng bộ Bảng giá Milwaukee'),
+        ('price_skf', 'Đồng bộ Bảng giá SKF'),
     ], string="Loại Import", default='product', required=True)
 
     update_existing = fields.Boolean(
@@ -215,6 +216,8 @@ class ProductImportWizard(models.TransientModel):
             return self._import_price_bosch()
         elif self.import_type == 'price_milwaukee':
             return self._import_price_milwaukee()
+        elif self.import_type == 'price_skf':
+            return self._import_price_skf()
 
     # -------- Import Sản phẩm --------
     def _import_product(self):
@@ -982,6 +985,145 @@ class ProductImportWizard(models.TransientModel):
             'tag': 'display_notification',
             'params': {
                 'title': 'Kết quả Đồng bộ Giá Milwaukee',
+                'message': msg,
+                'type': 'success' if not errors else 'warning',
+                'sticky': True,
+            }
+        }
+
+    # -------- Đồng bộ Bảng giá SKF --------
+    def _import_price_skf(self):
+        """
+        Đồng bộ giá từ file SKF.
+        
+        Logic:
+        - Sheet 1 (mặc định)
+        - Cột A (Index 0): SKU (Mã hàng hóa)
+        - Cột G (Index 6): Giá thương mại -> x_studio_gi_bn_thng_mi
+        - Cột I (Index 8): Giá bán lẻ (Giá Web) -> x_studio_ga_web
+        """
+        import os
+        
+        # Đọc file
+        try:
+             # Đọc dữ liệu từ dòng đầu tiên để lấy header hoặc skip header thủ công
+             # Theo phân tích, Row 4 là header, Row 5 là data.
+             # header=None để dùng index cho chính xác
+             df = self._read_excel(self.file, sheet_name=0, dtype=None)
+        except Exception as e:
+            _logger.error("Lỗi đọc file SKF: %s", e)
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {'title': 'Lỗi', 'message': f'Lỗi đọc file: {e}', 'type': 'danger', 'sticky': True}
+            }
+
+        ProductTemplate = self.env['product.template'].sudo()
+        ProductProduct = self.env['product.product'].sudo()
+        
+        updated = 0
+        skipped_no_sku = 0
+        skipped_not_found = 0
+        failed_skus = []
+        errors = []
+        
+        # Mapping indices
+        idx_sku = 0       # A
+        idx_comm = 6      # G
+        idx_web = 8       # I
+        
+        total_rows = len(df)
+        _logger.info("🚀 BẮT ĐẦU ĐỒNG BỘ GIÁ SKF (Tổng %d dòng)", total_rows)
+        
+        processed_count = 0
+        
+        # Start iterating. Chúng ta cần xác định dòng dữ liệu bắt đầu.
+        # Thường check cột SKU có dữ liệu hợp lệ không.
+        
+        for index, row in df.iterrows():
+            try:
+                # Check bounds
+                if len(row) <= idx_web:
+                    continue
+                
+                val_sku = row.iloc[idx_sku]
+                sku = self._clean_string(val_sku)
+                
+                # Bỏ qua nếu không phải SKU hợp lệ (header, empty, title...)
+                # File SKF có tiêu đề ở dòng 0, 1, 2, 3. Dòng 4 là header cột. Dòng 5 là data.
+                # Chuỗi "Mã hàng hóa" -> skip
+                if not sku or sku.lower() == 'nan' or 'mã hàng' in sku.lower():
+                    # skipped_no_sku += 1 # Không tính là skip nếu là header
+                    continue
+                
+                # Tìm sản phẩm
+                product = ProductTemplate.search([('default_code', '=', sku)], limit=1)
+                
+                if not product:
+                    variant = ProductProduct.search([('default_code', '=', sku)], limit=1)
+                    if variant:
+                        product = variant.product_tmpl_id
+                
+                if not product:
+                    # Check archived
+                    archived = ProductTemplate.with_context(active_test=False).search(
+                        [('default_code', '=', sku), ('active', '=', False)], limit=1)
+                    if not archived:
+                         skipped_not_found += 1
+                         failed_skus.append(sku)
+                    continue
+
+                # Prices
+                def get_price(val):
+                    if pd.isna(val): return 0.0
+                    try:
+                         # Xử lý string có dấu phẩy hoặc chấm nếu cần, nhưng pandas thường đọc số ok
+                        return float(val)
+                    except:
+                        return 0.0
+                
+                price_comm = get_price(row.iloc[idx_comm])
+                price_web = get_price(row.iloc[idx_web])
+                
+                vals = {}
+                if price_comm > 0: vals['x_studio_gi_bn_thng_mi'] = price_comm
+                if price_web > 0: vals['x_studio_ga_web'] = price_web
+                
+                if vals:
+                    product.write(vals)
+                    updated += 1
+            
+            except Exception as e:
+                errors.append(f"Row {index}: {str(e)}")
+                
+            processed_count += 1
+            if processed_count % 100 == 0:
+                 _logger.info(f"Processed {processed_count}/{total_rows} rows...")
+        
+        msg_lines = [
+            "Hoàn tất Đồng bộ Bảng giá SKF.",
+            f"- Sản phẩm cập nhật: {updated}",
+#             f"- Bỏ qua (không có SKU): {skipped_no_sku}",
+            f"- Bỏ qua (không tìm thấy SP): {skipped_not_found}",
+        ]
+        
+        if failed_skus:
+            msg_lines.append(f"- Danh sách SKU không tìm thấy ({len(failed_skus)}):")
+            msg_lines.append(", ".join(failed_skus))
+
+        if errors:
+            msg_lines.append(f"- Lỗi khác: {len(errors)}")
+            for err in errors[:10]:
+                msg_lines.append(f"  • {err}")
+
+        msg = "\n".join(msg_lines)
+        _logger.info(msg)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Kết quả Đồng bộ Giá SKF',
                 'message': msg,
                 'type': 'success' if not errors else 'warning',
                 'sticky': True,
