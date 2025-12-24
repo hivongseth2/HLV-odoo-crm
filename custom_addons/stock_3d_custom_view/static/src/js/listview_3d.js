@@ -695,6 +695,26 @@ export class Stock3DController extends ListController {
                 else { pkEmpty.style.display = "none"; picks.forEach(p => { let cl = p.type==="Nhập hàng"?"#28a745":p.type==="Xuất hàng"?"#dc3545":"#ffc107"; const div = document.createElement("div"); div.style.borderBottom = "1px solid #f1f3f5"; div.style.padding = "4px 0"; div.innerHTML = `<div style="font-weight:600; display:flex; justify-content:space-between; font-size:11px;"><span>${p.name}</span><span style="color:${cl};">${p.type}</span></div><div style="font-size:10px; color:#999;">${p.origin||''} - ${p.state}</div>`; pickDiv.appendChild(div); }); }
             });
         }
+
+
+
+        async function onCanvasClick(event) {
+            if (transformControl.dragging) return;
+            pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(event.clientY / (window.innerHeight)) * 2 + 1 + 0.13;
+            raycaster.setFromCamera(pointer, camera);
+            const intersects = raycaster.intersectObjects(group.children, true); 
+
+            if (intersects.length > 0) {
+                const hits = intersects.filter(i => i.object.type === 'Mesh' && i.object.userData.loc_id);
+                let finalTarget = hits.find(h => !h.object.userData.is_parent);
+                if (!finalTarget && hits.length > 0) finalTarget = hits[0];
+                if (finalTarget) selectObject(finalTarget.object);
+            } else {
+                const gGizmo = raycaster.intersectObjects(transformControl.children, true);
+                if (gGizmo.length === 0) deselectObject();
+            }
+        }
         function deselectObject() {
             selectedObject = null; transformControl.detach(); panelDiv.style.display = "none";
         }
