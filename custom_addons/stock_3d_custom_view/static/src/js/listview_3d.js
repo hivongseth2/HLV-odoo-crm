@@ -494,6 +494,7 @@ export class Stock3DController extends ListController {
             const l = value[3] > 0 ? value[3] : 50;
             const w = value[4] > 0 ? value[4] : 50;
             const h = value[5] > 0 ? value[5] : 50;
+            
             const geo = new THREE.BoxGeometry(l, h, w);
             geo.translate(0, h/2, 0); 
             
@@ -522,25 +523,51 @@ export class Stock3DController extends ListController {
             
             const loader = new THREE.FontLoader();
             loader.load('https://threejs.org/examples/fonts/droid/droid_sans_bold.typeface.json', function(font) {
-                const textMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
-                let baseSize = Math.min(l, w) / 2.5; 
+                const textMat = new THREE.MeshBasicMaterial({ color: 0x000000 }); // Text màu đen
+                
+                // Kích thước text dựa trên cạnh nhỏ nhất để không bị tràn
+                let baseSize = Math.min(l, w, h) / 2.0; 
+                
                 const shapes = font.generateShapes(key, baseSize);
                 const tGeo = new THREE.ShapeGeometry(shapes);
+                
+                // Canh giữa text
                 tGeo.computeBoundingBox();
                 const xMid = - 0.5 * ( tGeo.boundingBox.max.x - tGeo.boundingBox.min.x );
-                tGeo.translate( xMid, 0, 0 );
+                const yMid = - 0.5 * ( tGeo.boundingBox.max.y - tGeo.boundingBox.min.y );
+                tGeo.translate( xMid, yMid, 0 );
+                
+                // Scale text nếu quá dài
                 const tW = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
-                const maxW = (w > l ? w : l) * 0.9;
-                if (tW > maxW) { const s = maxW/tW; tGeo.scale(s,s,1); }
-                const textMesh = new THREE.Mesh(tGeo, textMat); // Fix variable name
-                textMesh.position.y = h + 2; 
-                textMesh.rotation.x = -Math.PI / 2;
-                if (w > l) textMesh.rotation.z = Math.PI / 2;
+                // Xác định cạnh sẽ chứa text (nếu w > l thì text nằm trên cạnh w)
+                let containerW = (w > l) ? w : l;
+                if (tW > containerW * 0.9) { 
+                    const s = (containerW * 0.9) / tW; 
+                    tGeo.scale(s,s,1); 
+                }
+
+                const textMesh = new THREE.Mesh(tGeo, textMat);
+                
+                // --- ĐỊNH VỊ TEXT Ở MẶT TRƯỚC ---
+                textMesh.position.y = h / 2; // Nằm giữa chiều cao
+                
+                if (w > l) {
+                    // Nếu vật thể dài theo trục Z (Rộng > Dài), đặt text ở mặt bên (trục X)
+                    // Xoay 90 độ quanh trục Y để text hướng ra ngoài
+                    textMesh.rotation.y = Math.PI / 2;
+                    textMesh.position.x = l / 2 + 1; // Đẩy ra khỏi mặt bên 1 chút
+                    textMesh.position.z = 0;
+                } else {
+                    // Nếu vật thể dài theo trục X (Dài > Rộng), đặt text ở mặt trước (trục Z)
+                    textMesh.rotation.y = 0;
+                    textMesh.position.z = w / 2 + 1; // Đẩy ra khỏi mặt trước 1 chút
+                    textMesh.position.x = 0;
+                }
+
                 mesh.add(textMesh);
             });
             return mesh;
         }
-
         function updateParentVisual(mesh) {
             mesh.material.wireframe = true;
             mesh.material.color.set(0x000000);
@@ -707,32 +734,46 @@ export class Stock3DController extends ListController {
             const pxL = l * 3.779 * 2; const pxW = w * 3.779 * 2; const pxH = h * 3.779 * 2;
             const geo = new THREE.BoxGeometry(pxL, pxH, pxW); geo.translate(0, pxH/2, 0);
             mesh.geometry.dispose(); mesh.geometry = geo;
+            
             const line = mesh.children.find(c => c.type === 'LineSegments');
             if(line) { line.geometry.dispose(); line.geometry = new THREE.EdgesGeometry(geo); }
-            const oldText = mesh.children.find(c => c.type === 'Mesh' && c !== line); 
+            
+            // Xóa text cũ
+            const oldText = mesh.children.find(c => c.type === 'Mesh' && c !== line && !c.userData.loc_id); 
             if (oldText) mesh.remove(oldText);
+            
+            // Tạo text mới (Logic giống hệt create3DBox)
             const loader = new THREE.FontLoader();
             loader.load('https://threejs.org/examples/fonts/droid/droid_sans_bold.typeface.json', function(font) {
-                const textMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
-                let baseSize = Math.min(pxL, pxW) / 2.5;
+                const textMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                let baseSize = Math.min(pxL, pxW, pxH) / 2.0;
                 const shapes = font.generateShapes(mesh.name, baseSize);
                 const tGeo = new THREE.ShapeGeometry(shapes);
                 tGeo.computeBoundingBox();
                 const xMid = - 0.5 * ( tGeo.boundingBox.max.x - tGeo.boundingBox.min.x );
-                tGeo.translate( xMid, 0, 0 );
-                const textWidth = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
-                const maxAllowed = (pxW > pxL ? pxW : pxL) * 0.9;
-                if (textWidth > maxAllowed) {
-                    const scaleFactor = maxAllowed / textWidth;
-                    tGeo.scale(scaleFactor, scaleFactor, 1);
+                const yMid = - 0.5 * ( tGeo.boundingBox.max.y - tGeo.boundingBox.min.y );
+                tGeo.translate( xMid, yMid, 0 );
+                
+                const tW = tGeo.boundingBox.max.x - tGeo.boundingBox.min.x;
+                let containerW = (pxW > pxL) ? pxW : pxL;
+                if (tW > containerW * 0.9) { const s = (containerW * 0.9)/tW; tGeo.scale(s,s,1); }
+
+                const textMesh = new THREE.Mesh(tGeo, textMat);
+                textMesh.position.y = pxH / 2; 
+                
+                if (pxW > pxL) {
+                    textMesh.rotation.y = Math.PI / 2;
+                    textMesh.position.x = pxL / 2 + 1;
+                    textMesh.position.z = 0;
+                } else {
+                    textMesh.rotation.y = 0;
+                    textMesh.position.z = pxW / 2 + 1;
+                    textMesh.position.x = 0;
                 }
-                const textMesh = new THREE.Mesh(tGeo, textMat); // Fix: use textMesh here
-                textMesh.position.y = pxH + 2; textMesh.rotation.x = -Math.PI / 2;
-                if (pxW > pxL) textMesh.rotation.z = Math.PI / 2;
+                
                 mesh.add(textMesh);
             });
         }
-
         function warehouseChange() {
             wh_id = document.querySelector(".customselect").value; start();
         }
