@@ -14,11 +14,11 @@
                         </setting>
                     </block>
                     <block title="Zalo Notifications" name="cancel_request_zalo_setting">
-                        <setting string="Kế Toán" help="Zalo User ID của Kế toán nhận thông báo xác nhận cuối cùng.">
-                            <field name="cancel_request_accountant_uid" placeholder="VD: 1234567890123456789"/>
+                        <setting string="Kế Toán" help="Zalo User ID của Kế toán. Nhiều UID ngăn cách bằng dấu phẩy.">
+                            <field name="cancel_request_accountant_uid" placeholder="VD: 123456,789012"/>
                         </setting>
-                        <setting string="Thủ Kho (theo kho)" help="Mapping mã kho với Zalo UID thủ kho. Mỗi dòng: MÃ_KHO:ZALO_UID">
-                            <field name="cancel_request_warehouse_mapping" placeholder="TSN:1234567890123456789&#10;KBC:9876543210987654321"/>
+                        <setting string="Thủ Kho (theo kho)" help="Format: KHO1:UID1,UID2|KHO2:UID3. Dùng | để phân cách các kho.">
+                            <field name="cancel_request_warehouse_mapping" placeholder="VD: TSN:123456|KBC:789012,111222|TSNSR:333444"/>
                         </setting>
                     </block>
                 </app>

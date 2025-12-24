@@ -104,8 +104,8 @@ class SaleOrderCancelRequest(models.Model):
 
     def _parse_warehouse_mapping(self):
         """
-        Parse warehouse mapping text from config.
-        Format: WAREHOUSE_CODE:ZALO_UID1,ZALO_UID2 (one warehouse per line)
+        Parse warehouse mapping from config.
+        Format: KHO1:UID1,UID2|KHO2:UID3|KHO3:UID4
         Returns: dict { 'TSN': ['123456', '789012'], 'KBC': ['999888'] }
         """
         Config = self.env['ir.config_parameter'].sudo()
@@ -114,12 +114,13 @@ class SaleOrderCancelRequest(models.Model):
         mapping = {}
         if not mapping_text:
             return mapping
-            
-        for line in mapping_text.splitlines():
-            line = line.strip()
-            if not line or ':' not in line:
+        
+        # Split by | (pipe) for multiple warehouses
+        for entry in mapping_text.split('|'):
+            entry = entry.strip()
+            if not entry or ':' not in entry:
                 continue
-            parts = line.split(':', 1)
+            parts = entry.split(':', 1)
             code = parts[0].strip().upper()
             uid_text = parts[1].strip()
             if code and uid_text:
@@ -144,19 +145,14 @@ class SaleOrderCancelRequest(models.Model):
         return uids
 
     def _get_accountant_recipients(self):
-        """Get Accountant Zalo UIDs from config. Supports comma or newline separated."""
+        """Get Accountant Zalo UIDs from config. Comma separated."""
         Config = self.env['ir.config_parameter'].sudo()
         accountant_uid = Config.get_param('hlv_order_cancel_request.accountant_zalo_uid', '')
         if not accountant_uid:
             return []
         
-        # Support both comma and newline separated
-        uids = []
-        for line in accountant_uid.replace(',', '\n').splitlines():
-            uid = line.strip()
-            if uid:
-                uids.append(uid)
-        return uids
+        # Split by comma
+        return [u.strip() for u in accountant_uid.split(',') if u.strip()]
 
     def _get_sale_recipients(self):
         """
