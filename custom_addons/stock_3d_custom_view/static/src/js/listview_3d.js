@@ -5,9 +5,9 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { ensureJQuery } from '@web/core/ensure_jquery';
 import { ListController } from "@web/views/list/list_controller";
+import { listView } from "@web/views/list/list_view";
 import { rpc } from "@web/core/network/rpc";
 import { user } from "@web/core/user";
-import { listView } from "@web/views/list/list_view";
 
 export class Stock3DController extends ListController {
     setup() {
@@ -30,8 +30,8 @@ export class Stock3DController extends ListController {
         let anchorObject = null; 
         let meshMap = {}; 
         
-        // State: Mặc định là View Mode (false)
-        let isEditMode = false;
+        // State
+        let isEditMode = false; // Mặc định là chế độ XEM
 
         let floorWidth = 2000;
         let floorDepth = 2000;
@@ -54,7 +54,6 @@ export class Stock3DController extends ListController {
         // 1. Selector & Mode Switch
         const topBarDiv = document.createElement("div");
         topBarDiv.classList.add("warehouse-selector-container");
-        // Style lại chút cho đẹp
         topBarDiv.style.display = "flex";
         topBarDiv.style.gap = "10px";
 
@@ -66,7 +65,6 @@ export class Stock3DController extends ListController {
         });
         select.classList.add("customselect");
 
-        // Nút Chế độ View/Edit
         var modeBtn = document.createElement("button");
         modeBtn.id = "btn_mode_switch";
         modeBtn.className = "btn btn-info btn-sm";
@@ -111,11 +109,11 @@ export class Stock3DController extends ListController {
             <div class="legend-item"><div class="color-box bg-gray"></div>Không có hàng</div>
         `;
 
-        // 4. Sidebar (Ẩn khi ở chế độ Xem)
+        // 4. Sidebar
         const sidebarDiv = document.createElement("div");
         sidebarDiv.classList.add("location-sidebar");
-        sidebarDiv.id = "sidebar_container"; // ID để toggle
-        sidebarDiv.style.display = "none"; // Mặc định ẩn
+        sidebarDiv.id = "sidebar_container";
+        sidebarDiv.style.display = "none";
         sidebarDiv.innerHTML = `
             <div class="sidebar-header">
                 <h6>Cấu hình Sàn (m)</h6>
@@ -245,7 +243,6 @@ export class Stock3DController extends ListController {
                 const tools = document.getElementById("panel_edit_tools");
                 const saveBtn = document.getElementById("btn_save_changes");
                 
-                // Toggle Inputs
                 const inputs = document.querySelectorAll(".selection-panel input");
                 inputs.forEach(inp => inp.disabled = !isEditMode);
 
@@ -264,11 +261,9 @@ export class Stock3DController extends ListController {
                     sidebar.style.display = "none";
                     tools.style.display = "none";
                     saveBtn.style.display = "none";
-                    transformControl.detach(); // Tắt kéo thả
+                    transformControl.detach();
                 }
             }
-            
-            // Bind Event
             document.getElementById("btn_mode_switch").onclick = toggleEditMode;
 
             // Events Listeners UI
@@ -276,7 +271,6 @@ export class Stock3DController extends ListController {
             document.querySelector("#btn_close_panel").addEventListener("click", deselectObject);
             document.querySelector("#btn_update_floor").addEventListener("click", updateFloorSize);
             
-            // Search & Align Events (Giữ nguyên)
             const btnSearchLoc = document.getElementById("btn_search_loc");
             const inpSearchLoc = document.getElementById("loc_search_inp");
             btnSearchLoc.onclick = () => searchLocation(inpSearchLoc.value);
@@ -442,7 +436,59 @@ export class Stock3DController extends ListController {
             canvas.addEventListener('click', onCanvasClick);
         }
 
-        // --- VISIBILITY FIX: TĂNG KHOẢNG CÁCH CHỮ (Offset +5) ---
+        // --- ALL HELPER FUNCTIONS ---
+
+        function searchLocation(name) {
+            if(!name) return;
+            let found = null;
+            scene.traverse(obj => {
+                if(obj.type === 'Mesh' && obj.name === name && obj.userData.loc_id) found = obj;
+            });
+            if (found) {
+                selectObject(found);
+                const worldPos = new THREE.Vector3();
+                found.getWorldPosition(worldPos);
+                controls.target.copy(worldPos);
+                camera.position.set(worldPos.x + 200, worldPos.y + 200, worldPos.z + 200);
+                controls.update();
+            } else { alert("Không tìm thấy: " + name); }
+        }
+
+        function constrainMovement(child, parent) {
+            const pGeo = parent.geometry.parameters;
+            const cGeo = child.geometry.parameters;
+            const minX = -(pGeo.width / 2) + (cGeo.width / 2);
+            const maxX = (pGeo.width / 2) - (cGeo.width / 2);
+            const minZ = -(pGeo.depth / 2) + (cGeo.depth / 2);
+            const maxZ = (pGeo.depth / 2) - (cGeo.depth / 2);
+            const minY = 0; 
+            const maxY = pGeo.height - cGeo.height;
+
+            if (minX <= maxX) child.position.x = Math.max(minX, Math.min(maxX, child.position.x)); else child.position.x = 0;
+            if (minZ <= maxZ) child.position.z = Math.max(minZ, Math.min(maxZ, child.position.z)); else child.position.z = 0;
+            if (minY <= maxY) child.position.y = Math.max(minY, Math.min(maxY, child.position.y)); else child.position.y = 0;
+        }
+
+        function alignObject(target, anchor, direction) {
+            const boxT = new THREE.Box3().setFromObject(target);
+            const boxA = new THREE.Box3().setFromObject(anchor);
+            const sizeT = new THREE.Vector3(); boxT.getSize(sizeT);
+            const sizeA = new THREE.Vector3(); boxA.getSize(sizeA);
+            const centerA = new THREE.Vector3(); boxA.getCenter(centerA);
+            const newPos = centerA.clone();
+            const margin = 2; 
+            switch(direction) {
+                case 'right': newPos.x = centerA.x + (sizeA.x/2) + (sizeT.x/2) + margin; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); newPos.z = centerA.z; break;
+                case 'left': newPos.x = centerA.x - (sizeA.x/2) - (sizeT.x/2) - margin; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); newPos.z = centerA.z; break;
+                case 'top': newPos.y = centerA.y + (sizeA.y/2) + (sizeT.y/2); newPos.x = centerA.x; newPos.z = centerA.z; break;
+                case 'bottom': newPos.y = centerA.y - (sizeA.y/2) - (sizeT.y/2); newPos.x = centerA.x; newPos.z = centerA.z; break;
+                case 'front': newPos.z = centerA.z + (sizeA.z/2) + (sizeT.z/2) + margin; newPos.x = centerA.x; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
+                case 'back': newPos.z = centerA.z - (sizeA.z/2) - (sizeT.z/2) - margin; newPos.x = centerA.x; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
+            }
+            if (target.parent && target.parent.type === 'Mesh') target.parent.worldToLocal(newPos);
+            target.position.copy(newPos);
+        }
+
         async function create3DBox(key, value) {
             const l = value[3] > 0 ? value[3] : 50;
             const w = value[4] > 0 ? value[4] : 50;
@@ -490,16 +536,12 @@ export class Stock3DController extends ListController {
 
                 const textMesh = new THREE.Mesh(tGeo, textMat);
                 textMesh.position.y = h / 2; 
-                
-                // OFFSET +5 ĐỂ CHỮ NỔI HẲN RA NGOÀI
                 if (w > l) {
                     textMesh.rotation.y = Math.PI / 2;
-                    textMesh.position.x = l / 2 + 5; 
-                    textMesh.position.z = 0;
+                    textMesh.position.x = l / 2 + 5; textMesh.position.z = 0;
                 } else {
                     textMesh.rotation.y = 0;
-                    textMesh.position.z = w / 2 + 5; 
-                    textMesh.position.x = 0;
+                    textMesh.position.z = w / 2 + 5; textMesh.position.x = 0;
                 }
                 mesh.add(textMesh);
             });
@@ -534,76 +576,15 @@ export class Stock3DController extends ListController {
 
                 const textMesh = new THREE.Mesh(tGeo, textMat);
                 textMesh.position.y = pxH / 2; 
-                
                 if (pxW > pxL) {
                     textMesh.rotation.y = Math.PI / 2;
-                    textMesh.position.x = pxL / 2 + 5;
-                    textMesh.position.z = 0;
+                    textMesh.position.x = pxL / 2 + 5; textMesh.position.z = 0;
                 } else {
                     textMesh.rotation.y = 0;
-                    textMesh.position.z = pxW / 2 + 5;
-                    textMesh.position.x = 0;
+                    textMesh.position.z = pxW / 2 + 5; textMesh.position.x = 0;
                 }
                 mesh.add(textMesh);
             });
-        }
-
-        // --- UTILS ---
-        function searchLocation(name) {
-            if(!name) return;
-            let found = null;
-            scene.traverse(obj => {
-                if(obj.type === 'Mesh' && obj.name === name && obj.userData.loc_id) {
-                    found = obj;
-                }
-            });
-            if (found) {
-                selectObject(found);
-                const worldPos = new THREE.Vector3();
-                found.getWorldPosition(worldPos);
-                controls.target.copy(worldPos);
-                camera.position.set(worldPos.x + 200, worldPos.y + 200, worldPos.z + 200);
-                controls.update();
-            } else {
-                alert("Không tìm thấy: " + name);
-            }
-        }
-
-        function constrainMovement(child, parent) {
-            const pGeo = parent.geometry.parameters;
-            const cGeo = child.geometry.parameters;
-            const minX = -(pGeo.width / 2) + (cGeo.width / 2);
-            const maxX = (pGeo.width / 2) - (cGeo.width / 2);
-            const minZ = -(pGeo.depth / 2) + (cGeo.depth / 2);
-            const maxZ = (pGeo.depth / 2) - (cGeo.depth / 2);
-            const minY = 0; 
-            const maxY = pGeo.height - cGeo.height;
-
-            if (minX <= maxX) child.position.x = Math.max(minX, Math.min(maxX, child.position.x)); else child.position.x = 0;
-            if (minZ <= maxZ) child.position.z = Math.max(minZ, Math.min(maxZ, child.position.z)); else child.position.z = 0;
-            if (minY <= maxY) child.position.y = Math.max(minY, Math.min(maxY, child.position.y)); else child.position.y = 0;
-        }
-
-        function alignObject(target, anchor, direction) {
-            const boxT = new THREE.Box3().setFromObject(target);
-            const boxA = new THREE.Box3().setFromObject(anchor);
-            const sizeT = new THREE.Vector3(); boxT.getSize(sizeT);
-            const sizeA = new THREE.Vector3(); boxA.getSize(sizeA);
-            const centerA = new THREE.Vector3(); boxA.getCenter(centerA);
-            const newPos = centerA.clone();
-            const margin = 2; 
-            switch(direction) {
-                case 'right': newPos.x = centerA.x + (sizeA.x/2) + (sizeT.x/2) + margin; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); newPos.z = centerA.z; break;
-                case 'left': newPos.x = centerA.x - (sizeA.x/2) - (sizeT.x/2) - margin; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); newPos.z = centerA.z; break;
-                case 'top': newPos.y = centerA.y + (sizeA.y/2) + (sizeT.y/2); newPos.x = centerA.x; newPos.z = centerA.z; break;
-                case 'bottom': newPos.y = centerA.y - (sizeA.y/2) - (sizeT.y/2); newPos.x = centerA.x; newPos.z = centerA.z; break;
-                case 'front': newPos.z = centerA.z + (sizeA.z/2) + (sizeT.z/2) + margin; newPos.x = centerA.x; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
-                case 'back': newPos.z = centerA.z - (sizeA.z/2) - (sizeT.z/2) - margin; newPos.x = centerA.x; newPos.y = centerA.y + (sizeT.y/2 - sizeA.y/2); break;
-            }
-            if (target.parent && target.parent.type === 'Mesh') {
-                target.parent.worldToLocal(newPos);
-            }
-            target.position.copy(newPos);
         }
 
         async function saveLocationPosition(obj) {
@@ -656,7 +637,6 @@ export class Stock3DController extends ListController {
             if (selectedObject === mesh) return;
             selectedObject = mesh;
             
-            // Nếu đang ở Edit mode thì mới attach, View mode thì thôi
             if (isEditMode) transformControl.attach(mesh);
             
             panelDiv.style.display = "block";
@@ -664,13 +644,9 @@ export class Stock3DController extends ListController {
             const saveBtn = document.getElementById("btn_save_changes");
             
             if (isEditMode) {
-                panelTools.style.display = "block";
-                saveBtn.style.display = "block";
-                document.querySelectorAll(".selection-panel input").forEach(i => i.disabled = false);
+                panelTools.style.display = "block"; saveBtn.style.display = "block"; document.querySelectorAll(".selection-panel input").forEach(i => i.disabled = false);
             } else {
-                panelTools.style.display = "none";
-                saveBtn.style.display = "none";
-                document.querySelectorAll(".selection-panel input").forEach(i => i.disabled = true);
+                panelTools.style.display = "none"; saveBtn.style.display = "none"; document.querySelectorAll(".selection-panel input").forEach(i => i.disabled = true);
             }
 
             document.getElementById("panel_loc_name").innerText = mesh.name;
@@ -694,8 +670,7 @@ export class Stock3DController extends ListController {
                     const pInfo = document.getElementById("parent_info_div");
                     if (pInfo) {
                         if(info.location_id) {
-                            pInfo.style.display = "block";
-                            document.getElementById("lbl_parent_name").innerText = info.location_id[1];
+                            pInfo.style.display = "block"; document.getElementById("lbl_parent_name").innerText = info.location_id[1];
                         } else {
                             pInfo.style.display = "none";
                         }
@@ -703,8 +678,6 @@ export class Stock3DController extends ListController {
                 }
             });
 
-            // Load products and pickings (Logic cũ)...
-            // (Giữ nguyên phần load list)
             const tbody = document.getElementById('product_list_body');
             const pEmpty = document.getElementById('product_empty_msg');
             tbody.innerHTML = ""; pEmpty.style.display = "block"; pEmpty.innerText = "Đang tải...";
@@ -723,7 +696,40 @@ export class Stock3DController extends ListController {
                 else { pkEmpty.style.display = "none"; picks.forEach(p => { let cl = p.type==="Nhập hàng"?"#28a745":p.type==="Xuất hàng"?"#dc3545":"#ffc107"; const div = document.createElement("div"); div.style.borderBottom = "1px solid #f1f3f5"; div.style.padding = "4px 0"; div.innerHTML = `<div style="font-weight:600; display:flex; justify-content:space-between; font-size:11px;"><span>${p.name}</span><span style="color:${cl};">${p.type}</span></div><div style="font-size:10px; color:#999;">${p.origin||''} - ${p.state}</div>`; pickDiv.appendChild(div); }); }
             });
         }
-
+        function deselectObject() {
+            selectedObject = null; transformControl.detach(); panelDiv.style.display = "none";
+        }
+        function createSidebarItem(code, val) {
+            const item = document.createElement("div");
+            item.classList.add("location-item"); item.innerText = code; item.draggable = true;
+            item.addEventListener("dragstart", (e) => {
+                const dragData = JSON.stringify({
+                    id: val[6], code: code, l: val[3]>0?val[3]:50, w: val[4]>0?val[4]:50, h: val[5]>0?val[5]:50
+                });
+                e.dataTransfer.setData("text/plain", dragData);
+            });
+            sidebarList.appendChild(item);
+        }
+        async function onDropLocation(e) {
+            e.preventDefault();
+            const raw = e.dataTransfer.getData("text/plain"); if (!raw) return;
+            const item = JSON.parse(raw);
+            const mouse = new THREE.Vector2();
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(dragPlane);
+            if (intersects.length > 0) {
+                const p = intersects[0].point;
+                const mesh = await create3DBox(item.code, [p.x, 0, p.z, item.l, item.w, item.h, item.id, false]);
+                meshMap[item.id] = mesh; group.add(mesh);
+                let opt1 = document.createElement("option"); opt1.value = item.code; opt1.text = item.code; opt1.setAttribute('data-id', item.id); document.getElementById("anchor_select").appendChild(opt1);
+                let opt2 = document.createElement("option"); opt2.value = item.code; document.getElementById("loc_datalist").appendChild(opt2);
+                Array.from(sidebarList.children).forEach(child => { if (child.innerText === item.code) sidebarList.removeChild(child); });
+                await saveLocationPosition(mesh);
+                selectObject(mesh);
+            }
+        }
         function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); controls.update(); }
     }
 }
