@@ -5,7 +5,6 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { ensureJQuery } from '@web/core/ensure_jquery';
 import { ListController } from "@web/views/list/list_controller";
-import { listView } from "@web/views/list/list_view";
 import { rpc } from "@web/core/network/rpc";
 import { user } from "@web/core/user";
 
@@ -31,7 +30,7 @@ export class Stock3DController extends ListController {
         let meshMap = {}; 
         
         // State
-        let isEditMode = false; // Mặc định là chế độ XEM
+        let isEditMode = false;
 
         let floorWidth = 2000;
         let floorDepth = 2000;
@@ -436,7 +435,7 @@ export class Stock3DController extends ListController {
             canvas.addEventListener('click', onCanvasClick);
         }
 
-        // --- ALL HELPER FUNCTIONS ---
+        // --- ALL FUNCTIONS DEFINITIONS ---
 
         function searchLocation(name) {
             if(!name) return;
