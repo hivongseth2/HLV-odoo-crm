@@ -318,8 +318,8 @@ class PriceSyncService:
             return result
 
         # Get prices from Odoo
-        regular_price = getattr(product, 'x_studio_ga_web', 0.0) or 0.0
-        sale_price = getattr(product, 'x_studio_gi_bn_thng_mi', 0.0) or 0.0
+        regular_price = getattr(product, 'x_studio_ga_hng_nim_yt', 0.0) or 0.0
+        sale_price = getattr(product, 'x_studio_ga_web', 0.0) or 0.0
 
         result['regular_price'] = regular_price
         result['sale_price'] = sale_price
@@ -345,13 +345,12 @@ class PriceSyncService:
         # Prepare price payload
         payload = {'regular_price': str(regular_price)}
 
-        # Sale price sync disabled per request
-        # # Sale price: phải > 0 và < regular_price
-        # has_valid_sale = sale_price > 0 and sale_price < regular_price
-        # if has_valid_sale:
-        #     payload['sale_price'] = str(sale_price)
-        # else:
-        #     payload['sale_price'] = ''  # Clear sale price on WordPress
+        # Sale price: phải > 0 và < regular_price
+        has_valid_sale = sale_price > 0 and sale_price < regular_price
+        if has_valid_sale:
+            payload['sale_price'] = str(sale_price)
+        else:
+            payload['sale_price'] = ''  # Clear sale price on WordPress
 
         # Update product on WordPress
         response = self.api.update_product(
@@ -363,8 +362,7 @@ class PriceSyncService:
 
         if response:
             result['success'] = True
-            # result['message'] = f'Regular: {regular_price:,.0f}, Sale: {sale_price:,.0f}' if has_valid_sale else f'Regular: {regular_price:,.0f}'
-            result['message'] = f'Regular: {regular_price:,.0f}'
+            result['message'] = f'Regular: {regular_price:,.0f}, Sale: {sale_price:,.0f}' if has_valid_sale else f'Regular: {regular_price:,.0f}'
 
             # Purge cache
             self.api.purge_cache(self.config.cache_purge_url, sku)
@@ -413,8 +411,8 @@ class PriceSyncService:
                 continue
                 
             # Get prices
-            regular_price = getattr(product, 'x_studio_ga_web', 0.0) or 0.0
-            sale_price = getattr(product, 'x_studio_gi_bn_thng_mi', 0.0) or 0.0
+            regular_price = getattr(product, 'x_studio_ga_hng_nim_yt', 0.0) or 0.0
+            sale_price = getattr(product, 'x_studio_ga_web', 0.0) or 0.0
             
             # Prepare item payload
             item_data = {
@@ -422,11 +420,10 @@ class PriceSyncService:
                 'regular_price': str(regular_price)
             }
             
-            # Sale price sync disabled per request
-            # if sale_price > 0 and sale_price < regular_price:
-            #     item_data['sale_price'] = str(sale_price)
-            # else:
-            #     item_data['sale_price'] = ''
+            if sale_price > 0 and sale_price < regular_price:
+                item_data['sale_price'] = str(sale_price)
+            else:
+                item_data['sale_price'] = ''
                 
             batch_data.append(item_data)
             product_by_sku[sku] = product
