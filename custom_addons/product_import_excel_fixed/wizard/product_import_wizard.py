@@ -18,6 +18,7 @@ class ProductImportWizard(models.TransientModel):
         ('product', 'Import sản phẩm'),
         ('combo', 'Import sản phẩm Combo'),
         ('price_bosch', 'Đồng bộ Bảng giá Bosch'),
+        ('price_milwaukee', 'Đồng bộ Bảng giá Milwaukee'),
     ], string="Loại Import", default='product', required=True)
 
     update_existing = fields.Boolean(
@@ -212,6 +213,8 @@ class ProductImportWizard(models.TransientModel):
             return self._import_combo()
         elif self.import_type == 'price_bosch':
             return self._import_price_bosch()
+        elif self.import_type == 'price_milwaukee':
+            return self._import_price_milwaukee()
 
     # -------- Import Sản phẩm --------
     def _import_product(self):
@@ -817,6 +820,167 @@ class ProductImportWizard(models.TransientModel):
             'tag': 'display_notification',
             'params': {
                 'title': 'Kết quả Đồng bộ Giá',
+                'message': msg,
+                'type': 'success' if not errors else 'warning',
+                'sticky': True,
+            }
+        }
+
+    # -------- Đồng bộ Bảng giá Milwaukee --------
+    def _import_price_milwaukee(self):
+        """
+        Đồng bộ giá từ file Milwaukee 2025.
+        
+        Logic:
+        - Sheet chúa "Bảng giá áp dụng"
+        - Cột P (Index 15): SKU (Mã SP tham chiếu)
+        - Cột F (Index 5): Giá vốn -> standard_price
+        - Cột G (Index 6): Giá thương mại -> x_studio_gi_bn_thng_mi
+        - Cột H (Index 7): Giá Web -> x_studio_ga_web
+        - Cột I (Index 8): Giá niêm yết -> x_studio_ga_hng_nim_yt
+        - Cột J (Index 9): Giá Shopee -> x_studio_gia_san_tmdt
+        """
+        import openpyxl
+        
+        # 1. Tìm sheet và đọc dữ liệu
+        try:
+            # Dùng openpyxl để load trực tiếp kiểm tra tên sheet
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx', mode='wb') as tmp:
+                tmp.write(base64.b64decode(self.file))
+                tmp_path = tmp.name
+            
+            wb = openpyxl.load_workbook(tmp_path, read_only=True, data_only=True)
+            target_sheet_name = None
+            for sheet in wb.sheetnames:
+                if "bảng giá áp dụng" in sheet.lower():
+                    target_sheet_name = sheet
+                    break
+            
+            if not target_sheet_name:
+                raise ValueError("Không tìm thấy sheet 'Bảng giá áp dụng...'")
+            
+            # Đọc sheet đó bằng pandas
+            # Header=1 (row 2) based on analysis
+            df = pd.read_excel(tmp_path, sheet_name=target_sheet_name, header=1)
+            
+            wb.close()
+            os.unlink(tmp_path)
+            
+        except Exception as e:
+            _logger.error("Lỗi đọc file Milwaukee: %s", e)
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {'title': 'Lỗi', 'message': f'Lỗi đọc file: {e}', 'type': 'danger', 'sticky': True}
+            }
+
+        ProductTemplate = self.env['product.template'].sudo()
+        ProductProduct = self.env['product.product'].sudo()
+        
+        updated = 0
+        skipped_no_sku = 0
+        skipped_not_found = 0
+        failed_skus = []
+        errors = []
+        
+        idx_sku = 15      # P
+        idx_cost = 5      # F
+        idx_comm = 6      # G
+        idx_web = 7       # H
+        idx_list = 8      # I
+        idx_shopee = 9    # J
+        
+        total_rows = len(df)
+        _logger.info("🚀 BẮT ĐẦU ĐỒNG BỘ GIÁ MILWAUKEE (Tổng %d dòng)", total_rows)
+        
+        processed_count = 0
+        
+        for index, row in df.iterrows():
+            try:
+                # Check index bounds
+                if len(row) <= idx_sku:
+                    continue
+                    
+                val_sku = row.iloc[idx_sku]
+                sku = self._clean_string(val_sku)
+                
+                if not sku:
+                    skipped_no_sku += 1
+                    continue
+                
+                # Tìm sản phẩm
+                product = ProductTemplate.search([('default_code', '=', sku)], limit=1)
+                
+                if not product:
+                    variant = ProductProduct.search([('default_code', '=', sku)], limit=1)
+                    if variant:
+                        product = variant.product_tmpl_id
+                
+                if not product:
+                    # Check archived
+                    archived = ProductTemplate.with_context(active_test=False).search(
+                        [('default_code', '=', sku), ('active', '=', False)], limit=1)
+                    if not archived:
+                         skipped_not_found += 1
+                         failed_skus.append(sku)
+                    continue
+
+                # Helper extract price
+                def get_price(val):
+                    if pd.isna(val): return 0.0
+                    try:
+                        return float(val)
+                    except:
+                        return 0.0
+                
+                cost = get_price(row.iloc[idx_cost])
+                price_comm = get_price(row.iloc[idx_comm])
+                price_web = get_price(row.iloc[idx_web])
+                price_list = get_price(row.iloc[idx_list])
+                price_shopee = get_price(row.iloc[idx_shopee])
+                
+                vals = {}
+                if cost > 0: vals['standard_price'] = cost
+                if price_comm > 0: vals['x_studio_gi_bn_thng_mi'] = price_comm
+                if price_web > 0: vals['x_studio_ga_web'] = price_web
+                if price_list > 0: vals['x_studio_ga_hng_nim_yt'] = price_list
+                if price_shopee > 0: vals['x_studio_gia_san_tmdt'] = price_shopee
+                
+                if vals:
+                    product.write(vals)
+                    updated += 1
+            
+            except Exception as e:
+                errors.append(f"Row {index}: {str(e)}")
+                
+            processed_count += 1
+            if processed_count % 100 == 0:
+                 _logger.info(f"Processed {processed_count}/{total_rows} rows...")
+
+        msg_lines = [
+            "Hoàn tất Đồng bộ Bảng giá Milwaukee.",
+            f"- Sản phẩm cập nhật: {updated}",
+            f"- Bỏ qua (không có SKU): {skipped_no_sku}",
+            f"- Bỏ qua (không tìm thấy SP): {skipped_not_found}",
+        ]
+        
+        if failed_skus:
+            msg_lines.append(f"- Danh sách SKU không tìm thấy ({len(failed_skus)}):")
+            msg_lines.append(", ".join(failed_skus))
+
+        if errors:
+            msg_lines.append(f"- Lỗi khác: {len(errors)}")
+            for err in errors[:10]:
+                msg_lines.append(f"  • {err}")
+
+        msg = "\n".join(msg_lines)
+        _logger.info(msg)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Kết quả Đồng bộ Giá Milwaukee',
                 'message': msg,
                 'type': 'success' if not errors else 'warning',
                 'sticky': True,
