@@ -117,95 +117,105 @@ function setupObserver(orm) {
     }
 }
 
-
-// -------------------------------------------------------------------------
-// PHẦN 2: PATCH BARCODE MODEL (QUAN TRỌNG NHẤT)
-// -------------------------------------------------------------------------
-// Đây là nơi ta chặn việc quét mã nếu hết hàng hoặc đủ số lượng
 patch(BarcodeModel.prototype, {
     
-    // Hook vào lúc khởi tạo để chắc chắn patch đã ăn
     setup() {
         super.setup(...arguments);
-        console.log("✅ [HLV] BarcodeModel đã được khởi tạo!");
+        console.log("✅ [HLV] BarcodeModel setup xong.");
     },
 
     async processBarcode(barcode) {
         console.log("🚀 [HLV] >>> ĐANG QUÉT MÃ:", barcode);
 
-        // 1. Logic gốc: Bỏ qua lệnh hệ thống
         if (!barcode || barcode.startsWith("O-CMD")) {
             return super.processBarcode(...arguments);
         }
 
-        // 2. CHECK CLIENT: ĐỦ SỐ LƯỢNG CHƯA?
-        try {
-            const product = await this._identifyProduct(barcode);
-            if (product) {
-                // Odoo 18: Lấy lines từ state
-                const lines = this.currentState.lines || [];
-                const line = lines.find(l => l.product_id.id === product.id);
-
-                if (line) {
-                    // qty_done: đã làm, product_uom_qty: nhu cầu
-                    // Lưu ý: convert sang float để so sánh
-                    const done = parseFloat(line.qty_done || 0);
-                    const demand = parseFloat(line.product_uom_qty || 0);
-
-                    console.log(`[HLV] Check: Done=${done} / Demand=${demand}`);
-
-                    if (demand > 0 && done >= demand) {
-                        const msg = `⚠️ Dư hàng! Đã quét đủ ${done}/${demand} ${line.product_uom_id.name || ''}`;
-                        this.notification.add(msg, { type: "danger", sticky: false });
-                        this._beep("error");
-                        console.warn("[HLV] BLOCK: Đã đủ số lượng");
-                        return; // ⛔ STOP NGAY
-                    }
-                }
+        // ---------------------------------------------------------
+        // 1. TÌM DÒNG KHỚP VỚI BARCODE (LOGIC MỚI - KHÔNG DÙNG CACHE)
+        // ---------------------------------------------------------
+        // Thay vì tìm trong cache (dễ lỗi), ta tìm trực tiếp trong danh sách dòng đang hiển thị
+        let matchedLine = null;
+        
+        // Odoo 18: Danh sách dòng nằm trong this.currentState.lines
+        const lines = this.currentState.lines || [];
+        
+        for (const line of lines) {
+            const product = line.product_id || {};
+            // So sánh Barcode hoặc Default Code (Internal Reference)
+            if (product.barcode === barcode || product.default_code === barcode) {
+                matchedLine = line;
+                break; // Tìm thấy dòng đầu tiên khớp thì dừng
             }
-        } catch (err) {
-            console.error("[HLV] Lỗi check client:", err);
         }
 
-        // 3. CHECK SERVER: TỒN KHO CÒN KHÔNG?
-        try {
-            // Lấy tên phiếu để tìm prefix kho (VD: "WH/PICK/001")
-            const recordName = this.record ? this.record.display_name : "";
-            let whPrefix = null;
-            if (recordName) {
-                const m = recordName.match(/\b(TSN|KBC|KHD)\b/i);
-                if (m) whPrefix = m[1].toUpperCase();
+        // ---------------------------------------------------------
+        // 2. CHECK CLIENT: ĐỦ SỐ LƯỢNG CHƯA?
+        // ---------------------------------------------------------
+        if (matchedLine) {
+            const done = parseFloat(matchedLine.qty_done || 0);
+            const demand = parseFloat(matchedLine.product_uom_qty || 0);
+            const productName = matchedLine.product_id.display_name;
+
+            console.log(`[HLV] Line Found: ${productName} | Done: ${done} / Demand: ${demand}`);
+
+            if (demand > 0 && done >= demand) {
+                const msg = `⚠️ SẢN PHẨM ĐÃ ĐỦ SỐ LƯỢNG!\n📦 ${productName}\n✅ Đã quét: ${done}/${demand}`;
+                this.notification.add(msg, { type: "danger", sticky: false });
+                this._beep("error");
+                console.warn("[HLV] BLOCK: Đã đủ số lượng");
+                return; // ⛔ CHẶN
             }
+        } else {
+            console.log("[HLV] Không tìm thấy dòng nào trong phiếu khớp với mã này (có thể là sp mới).");
+        }
 
-            console.log("[HLV] Check Server với prefix:", whPrefix);
+        // ---------------------------------------------------------
+        // 3. TÌM PREFIX KHO (CẢI TIẾN)
+        // ---------------------------------------------------------
+        let whPrefix = null;
 
-            // Gọi RPC
+        // Ưu tiên 1: Lấy từ Source Location (Vị trí nguồn) của phiếu
+        // this.record.location_id là object {id, display_name}
+        if (this.record && this.record.location_id) {
+            const locName = this.record.location_id.display_name || ""; // VD: "KBC/Tồn kho"
+            const m = locName.match(/\b(TSN|KBC|KHD)\b/i);
+            if (m) whPrefix = m[1].toUpperCase();
+        }
+
+        // Ưu tiên 2: Nếu không có, mới tìm trong tên phiếu
+        if (!whPrefix && this.record && this.record.display_name) {
+            const m = this.record.display_name.match(/\b(TSN|KBC|KHD)\b/i);
+            if (m) whPrefix = m[1].toUpperCase();
+        }
+
+        console.log("[HLV] Check Server với prefix:", whPrefix);
+
+        // ---------------------------------------------------------
+        // 4. CHECK SERVER: TỒN KHO THỰC TẾ
+        // ---------------------------------------------------------
+        try {
+            // Gọi RPC check
             const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix]);
             
+            console.log("[HLV] Kết quả RPC:", result);
+
             if (result && result.allow === false) {
-                this.notification.add(result.message, { type: "danger", sticky: true, title: "HẾT HÀNG" });
+                this.notification.add(result.message, { type: "danger", sticky: true, title: "HẾT HÀNG / LỖI KHO" });
                 this._beep("error");
-                console.warn("[HLV] BLOCK: Server báo hết hàng");
-                
-                // ⚠️ QUAN TRỌNG: Return luôn để không chạy logic gốc
-                return; 
+                console.warn("[HLV] BLOCK: Server chặn");
+                return; // ⛔ CHẶN
             }
 
         } catch (e) {
-            console.error("[HLV] Lỗi check server:", e);
+            console.error("[HLV] Lỗi RPC Check:", e);
+            // Lỗi mạng thì cho qua để không chặn người dùng
         }
 
-        // 4. Nếu không bị chặn, gọi logic gốc
+        // 5. PASS -> GỌI ODOO GỐC
         console.log("✅ [HLV] OK -> Pass cho Odoo xử lý");
         return super.processBarcode(...arguments);
     },
-
-    async _identifyProduct(barcode) {
-        // Fallback hàm tìm product nếu cần
-        let product = Object.values(this.cache.products).find(p => p.barcode === barcode);
-        if (!product) {
-            product = Object.values(this.cache.products).find(p => p.default_code === barcode);
-        }
-        return product;
-    }
+    
+    // Xóa hàm _identifyProduct bị lỗi đi, không cần dùng nữa vì ta loop qua lines rồi
 });
