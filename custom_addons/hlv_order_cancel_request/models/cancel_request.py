@@ -61,101 +61,90 @@ class SaleOrderCancelRequest(models.Model):
     def _expand_states(self, states, domain, order):
         return [key for key, val in type(self).state.selection]
 
-    def _send_zalo_notification_on_submit(self):
-        """
-        Send Zalo notification to Accountant and Warehouse when a request is submitted.
-        """
-        # Get recipients from config
+    def _get_warehouse_recipients(self):
+        """Get Warehouse Zalo UIDs from config."""
+        Config = self.env['ir.config_parameter'].sudo()
+        warehouse_uid = Config.get_param('hlv_order_cancel_request.warehouse_zalo_uid')
+        if warehouse_uid:
+            return [u.strip() for u in warehouse_uid.split(',') if u.strip()]
+        return []
+
+    def _get_accountant_recipients(self):
+        """Get Accountant Zalo UIDs from config."""
         Config = self.env['ir.config_parameter'].sudo()
         accountant_uid = Config.get_param('hlv_order_cancel_request.accountant_zalo_uid')
-        warehouse_uid = Config.get_param('hlv_order_cancel_request.warehouse_zalo_uid')
-        
-        recipients = []
-        if accountant_uid: recipients.append(accountant_uid)
-        if warehouse_uid: recipients.append(warehouse_uid)
-        
+        if accountant_uid:
+            return [u.strip() for u in accountant_uid.split(',') if u.strip()]
+        return []
+
+    def _get_backend_url(self):
+        """Get backend URL for this request."""
+        action_id = self.env.ref('hlv_order_cancel_request.action_sale_order_cancel_request').id
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        return f"{base_url}/odoo/action-{action_id}/{self.id}"
+
+    def _get_type_label(self):
+        """Get human-readable type label (Hủy Đơn / Chỉnh Sửa)."""
+        return dict(self._fields['type'].selection).get(self.type, self.type)
+
+    def _send_zalo_to_recipients(self, recipients, message):
+        """Send Zalo notification to specific recipients."""
         if not recipients:
             return
 
-        action_id = self.env.ref('hlv_order_cancel_request.action_sale_order_cancel_request').id
-        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        backend_url = f"{base_url}/odoo/action-{action_id}/{self.id}"
-
-        type_label = dict(self._fields['type'].selection).get(self.type, self.type).upper()
-
-        # Build message
-        msg = f"🔔 XÁC NHẬN YÊU CẦU {type_label} ĐƠN HÀNG\n"
-        msg += f"• Sale: {self.salesperson_name}\n"
-        msg += f"• Mã Đơn: {self.order_reference}\n"
-        if self.order_id:
-             msg += f"• Đơn Odoo: {self.order_id.name}\n"
-        msg += f"• Lý do: {self.reason}\n"
-        msg += f"• ID Yêu cầu: {self.name}\n"
-        msg += f"👉 Xem chi tiết: {backend_url}"
-
-        # Send via hlv_zalo_zns config
-        # We need an active Zalo config to send messages
         zalo_config = self.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
         if not zalo_config:
-            # Fallback or log warning if no zalo config found
             return
 
         for uid in recipients:
-             # Clean up UID if comma separated
-             uids = [u.strip() for u in uid.split(',') if u.strip()]
-             for u in uids:
-                 try:
-                     zalo_config.send_notification_message(u, msg)
-                 except Exception as e:
-                     # Log error but don't stop flow
-                     pass
+            try:
+                zalo_config.send_notification_message(uid, message)
+            except Exception:
+                pass
+
+    def _send_zalo_notification_on_submit(self):
+        """
+        Send Zalo notification when request is submitted.
+        Recipients: Accountant (to process) + Warehouse (to pause packing)
+        """
+        self.ensure_one()
+        type_label = self._get_type_label().upper()
+        
+        # Message for Accountant - to process the request
+        msg_accountant = f"🔔 YÊU CẦU {type_label}\n"
+        msg_accountant += f"• Sale: {self.salesperson_name}\n"
+        msg_accountant += f"• Mã Đơn: {self.order_reference}\n"
+        if self.order_id:
+            msg_accountant += f"• Đơn Odoo: {self.order_id.name}\n"
+        msg_accountant += f"• Lý do: {self.reason}\n"
+        msg_accountant += f"• Mã YC: {self.name}\n"
+        msg_accountant += f"👉 {self._get_backend_url()}"
+        
+        # Message for Warehouse - to pause packing
+        msg_warehouse = f"⏸️ TẠM DỪNG ĐÓNG GÓI - YÊU CẦU {type_label}\n"
+        msg_warehouse += f"• Mã Đơn: {self.order_reference}\n"
+        if self.order_id:
+            msg_warehouse += f"• Đơn Odoo: {self.order_id.name}\n"
+        msg_warehouse += f"• Lý do: {self.reason}"
+        
+        self._send_zalo_to_recipients(self._get_accountant_recipients(), msg_accountant)
+        self._send_zalo_to_recipients(self._get_warehouse_recipients(), msg_warehouse)
 
     def _send_zalo_notification_on_done(self):
         """
-        Send Zalo notification to Accountant and Warehouse when a request is done/processed.
+        Send Zalo notification when request is completed.
+        Recipients: Only Warehouse (Accountant already knows - they clicked the button)
         """
-        # Get recipients from config
-        Config = self.env['ir.config_parameter'].sudo()
-        accountant_uid = Config.get_param('hlv_order_cancel_request.accountant_zalo_uid')
-        warehouse_uid = Config.get_param('hlv_order_cancel_request.warehouse_zalo_uid')
+        self.ensure_one()
         
-        recipients = []
-        if accountant_uid: recipients.append(accountant_uid)
-        if warehouse_uid: recipients.append(warehouse_uid)
+        # Message for Warehouse - confirmation to proceed with action
+        if self.type == 'cancel':
+            msg = f"🚫 ĐƠN ĐÃ HỦY - NGỪNG ĐÓNG GÓI\n"
+        else:
+            msg = f"✏️ ĐƠN ĐÃ CHỈNH SỬA - TIẾP TỤC ĐÓNG GÓI\n"
         
-        if not recipients:
-            return
-
-        # Build message
-        action_id = self.env.ref('hlv_order_cancel_request.action_sale_order_cancel_request').id
-        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        backend_url = f"{base_url}/odoo/action-{action_id}/{self.id}"
-
-        type_label = dict(self._fields['type'].selection).get(self.type, self.type).upper()
-
-        # Build message
-        msg = f"✅ ĐƠN HÀNG ĐÃ HỦY TRÊN MISA\n"
-        msg += f"• Sale: {self.salesperson_name}\n"
         msg += f"• Mã Đơn: {self.order_reference}\n"
         if self.order_id:
-             msg += f"• Đơn Odoo: {self.order_id.name}\n"
-        msg += f"• Lý do: {self.reason}\n"
-        msg += f"• ID Yêu cầu: {self.name}\n"
-        msg += f"👉 Xem chi tiết: {backend_url}"
-
-        # Send via hlv_zalo_zns config
-        # We need an active Zalo config to send messages
-        zalo_config = self.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
-        if not zalo_config:
-            # Fallback or log warning if no zalo config found
-            return
-
-        for uid in recipients:
-             # Clean up UID if comma separated
-             uids = [u.strip() for u in uid.split(',') if u.strip()]
-             for u in uids:
-                 try:
-                     zalo_config.send_notification_message(u, msg)
-                 except Exception as e:
-                     # Log error but don't stop flow
-                     pass
+            msg += f"• Đơn Odoo: {self.order_id.name}"
+        
+        self._send_zalo_to_recipients(self._get_warehouse_recipients(), msg)
