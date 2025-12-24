@@ -841,6 +841,7 @@ class ProductImportWizard(models.TransientModel):
         - Cột J (Index 9): Giá Shopee -> x_studio_gia_san_tmdt
         """
         import openpyxl
+        import os
         
         # 1. Tìm sheet và đọc dữ liệu
         try:
