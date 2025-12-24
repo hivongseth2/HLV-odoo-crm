@@ -267,6 +267,6 @@ class SaleOrderCancelRequest(models.Model):
         if self.order_id:
             msg += f"• Đơn Odoo: {self.order_id.name}\n"
         msg += f"• Mã YC: {self.name}\n"
-        msg += "Kho và Kế toán đã xử lý xong."
+        msg += "Kho và Kế toán đã xử lý xong. Có thể tiến hành xóa/sửa đơn hàng."
         
         self._send_zalo_to_recipients(self._get_sale_recipients(), msg)
