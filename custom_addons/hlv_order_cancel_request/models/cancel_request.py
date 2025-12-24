@@ -46,19 +46,22 @@ class SaleOrderCancelRequest(models.Model):
             else:
                 rec.order_id = False
 
-    @api.depends('order_id', 'order_id.picking_ids')
+    @api.depends('order_id')
     def _compute_warehouse_id(self):
         """Get warehouse from the first outgoing picking of the sale order."""
+        StockPicking = self.env['stock.picking'].sudo()
         for rec in self:
-            if rec.order_id and rec.order_id.picking_ids:
-                # Get first outgoing picking
-                outgoing_picking = rec.order_id.picking_ids.filtered(
-                    lambda p: p.picking_type_code == 'outgoing'
-                )[:1]
-                if outgoing_picking:
-                    rec.warehouse_id = outgoing_picking.picking_type_id.warehouse_id
+            if rec.order_id:
+                # Search for pickings related to this sale order
+                pickings = StockPicking.search([
+                    ('origin', '=', rec.order_id.name),
+                    ('picking_type_code', '=', 'outgoing')
+                ], limit=1)
+                if pickings:
+                    rec.warehouse_id = pickings.picking_type_id.warehouse_id
                 else:
-                    rec.warehouse_id = False
+                    # Fallback: try to get warehouse from sale order directly
+                    rec.warehouse_id = rec.order_id.warehouse_id if hasattr(rec.order_id, 'warehouse_id') else False
             else:
                 rec.warehouse_id = False
 
