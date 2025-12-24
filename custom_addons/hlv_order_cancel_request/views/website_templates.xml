@@ -61,7 +61,6 @@
                     <datalist id="salesperson_list">
                         <!-- Populated by JS -->
                     </datalist>
-                    <small class="text-muted">Mã sale phải khớp với cấu hình trong hệ thống Zalo để nhận thông báo kết quả.</small>
                 </div>
 
                 <div class="mb-3">
