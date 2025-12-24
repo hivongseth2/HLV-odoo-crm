@@ -123,3 +123,72 @@ class StockQuant(models.Model):
             suggestions.append("- %s: %.2f" % (q.location_id.display_name, q.quantity))
         
         return "\n".join(suggestions)
+    
+    
+    
+    @api.model
+    def check_barcode_availability(self, barcode, wh_prefix=None):
+        """
+        API được gọi từ JS khi người dùng nhấn Enter.
+        Kiểm tra xem barcode này có tồn kho tại kho (theo prefix) hay không.
+        Trả về: dict { 'allow': Bool, 'message': String }
+        """
+        if not barcode:
+            return {'allow': True} # Không có barcode thì cứ để Odoo xử lý lỗi
+
+        # 1. Tìm sản phẩm từ barcode (hoặc default_code)
+        Product = self.env["product.product"]
+        # Tìm theo barcode chuẩn trước
+        product = Product.search([("barcode", "=", barcode)], limit=1)
+        if not product:
+            # Fallback: tìm theo default_code (Internal Reference)
+            product = Product.search([("default_code", "=", barcode)], limit=1)
+        
+        if not product:
+            # Nếu không tìm thấy sản phẩm, cho phép pass để Odoo báo lỗi "Unknown product" chuẩn
+            return {'allow': True}
+
+        # 2. Xác định vị trí nguồn dựa trên prefix (TSN/KBC/KHD...)
+        # Logic này tái sử dụng logic _get_base_location_by_prefix của bạn
+        base_loc = self._get_base_location_by_prefix(wh_prefix)
+
+        # Nếu không xác định được kho (base_loc), ta có thể chọn chặn hoặc thả.
+        # Ở đây chọn thả (allow) để tránh chặn nhầm nếu đang ở màn hình không xác định.
+        if not base_loc:
+             return {'allow': True}
+
+        # 3. Kiểm tra tồn kho (Quantity On Hand) tại vị trí đó
+        # Dùng sudo() để đảm bảo user kho thấy được số liệu
+        quants = self.sudo().search([
+            ("product_id", "=", product.id),
+            ("location_id", "child_of", base_loc.id),
+            ("quantity", ">", 0) # Chỉ lấy dòng dương
+        ])
+        
+        total_qty = sum(quants.mapped("quantity"))
+
+        if total_qty > 0:
+            return {'allow': True}
+
+        # 4. HẾT HÀNG -> Tìm gợi ý ở các kho nội bộ KHÁC
+        # Loại trừ kho hiện tại
+        alt_quants = self.sudo().search([
+            ("product_id", "=", product.id),
+            ("location_id.usage", "=", "internal"),
+            ("quantity", ">", 0),
+            ("location_id", "not child_of", base_loc.id) # Loại trừ kho hiện tại
+        ], order="quantity desc", limit=5)
+
+        msg = "⛔ HẾT HÀNG TẠI %s!\nSản phẩm: %s" % (wh_prefix or base_loc.display_name, product.display_name)
+        
+        if alt_quants:
+            msg += "\n\n💡 Gợi ý vị trí có hàng:"
+            for q in alt_quants:
+                msg += "\n   • %s: %s %s" % (q.location_id.display_name, q.quantity, q.product_uom_id.name)
+        else:
+            msg += "\n\n⚠️ Không tìm thấy hàng ở bất kỳ kho nào khác!"
+
+        return {
+            'allow': False,
+            'message': msg
+        }
