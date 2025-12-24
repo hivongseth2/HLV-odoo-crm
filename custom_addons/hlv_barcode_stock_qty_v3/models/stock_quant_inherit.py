@@ -125,62 +125,65 @@ class StockQuant(models.Model):
         return "\n".join(suggestions)
     
     
-    
     @api.model
     def check_barcode_availability(self, barcode, wh_prefix=None):
-        """
-        API được gọi từ JS khi người dùng nhấn Enter.
-        Kiểm tra xem barcode này có tồn kho tại kho (theo prefix) hay không.
-        Trả về: dict { 'allow': Bool, 'message': String }
-        """
         if not barcode:
-            return {'allow': True} # Không có barcode thì cứ để Odoo xử lý lỗi
-
-        # 1. Tìm sản phẩm từ barcode (hoặc default_code)
-        Product = self.env["product.product"]
-        # Tìm theo barcode chuẩn trước
-        product = Product.search([("barcode", "=", barcode)], limit=1)
-        if not product:
-            # Fallback: tìm theo default_code (Internal Reference)
-            product = Product.search([("default_code", "=", barcode)], limit=1)
-        
-        if not product:
-            # Nếu không tìm thấy sản phẩm, cho phép pass để Odoo báo lỗi "Unknown product" chuẩn
             return {'allow': True}
 
-        # 2. Xác định vị trí nguồn dựa trên prefix (TSN/KBC/KHD...)
-        # Logic này tái sử dụng logic _get_base_location_by_prefix của bạn
+        # 1. Tìm sản phẩm
+        Product = self.env["product.product"]
+        product = Product.search([("barcode", "=", barcode)], limit=1)
+        if not product:
+            product = Product.search([("default_code", "=", barcode)], limit=1)
+        
+        # Nếu quét mã không phải sản phẩm (VD mã lệnh), cho qua để Odoo xử lý
+        if not product:
+            return {'allow': True} 
+
+        # 2. Xác định kho
+        # --- LOGIC CŨ ---
+        # base_loc = self._get_base_location_by_prefix(wh_prefix)
+        # if not base_loc: return {'allow': True}
+        
+        # --- LOGIC MỚI (CHẶT CHẼ HƠN) ---
         base_loc = self._get_base_location_by_prefix(wh_prefix)
-
-        # Nếu không xác định được kho (base_loc), ta có thể chọn chặn hoặc thả.
-        # Ở đây chọn thả (allow) để tránh chặn nhầm nếu đang ở màn hình không xác định.
+        
+        # Nếu có prefix nhưng không tìm ra kho -> Chặn và báo lỗi cấu hình
+        if wh_prefix and not base_loc:
+             return {
+                'allow': False,
+                'message': f"❌ Lỗi hệ thống: Không tìm thấy kho với mã '{wh_prefix}'"
+             }
+        
+        # Nếu hoàn toàn không có prefix (JS không gửi lên được)
+        # Tùy bạn chọn: Chặn luôn hoặc Cho qua.
+        # Ở đây mình thử CHẶN để bạn debug xem JS có gửi đúng không.
         if not base_loc:
-             return {'allow': True}
+             return {
+                'allow': True, # Tạm thời cho qua, nhưng print log
+                'message': "Warning: Không xác định được kho hiện tại."
+             }
 
-        # 3. Kiểm tra tồn kho (Quantity On Hand) tại vị trí đó
-        # Dùng sudo() để đảm bảo user kho thấy được số liệu
+        # 3. Check tồn kho (Giữ nguyên logic cũ)
         quants = self.sudo().search([
             ("product_id", "=", product.id),
             ("location_id", "child_of", base_loc.id),
-            ("quantity", ">", 0) # Chỉ lấy dòng dương
+            ("quantity", ">", 0)
         ])
-        
         total_qty = sum(quants.mapped("quantity"))
 
         if total_qty > 0:
             return {'allow': True}
 
-        # 4. HẾT HÀNG -> Tìm gợi ý ở các kho nội bộ KHÁC
-        # Loại trừ kho hiện tại
+        # 4. Hết hàng -> Tạo thông báo gợi ý
         alt_quants = self.sudo().search([
             ("product_id", "=", product.id),
             ("location_id.usage", "=", "internal"),
             ("quantity", ">", 0),
-            ("location_id", "not child_of", base_loc.id) # Loại trừ kho hiện tại
+            ("location_id", "not child_of", base_loc.id)
         ], order="quantity desc", limit=5)
 
-        msg = "⛔ HẾT HÀNG TẠI %s!\nSản phẩm: %s" % (wh_prefix or base_loc.display_name, product.display_name)
-        
+        msg = "⛔ HẾT HÀNG TẠI %s!\nSản phẩm: %s" % (base_loc.display_name, product.display_name)
         if alt_quants:
             msg += "\n\n💡 Gợi ý vị trí có hàng:"
             for q in alt_quants:
@@ -188,7 +191,4 @@ class StockQuant(models.Model):
         else:
             msg += "\n\n⚠️ Không tìm thấy hàng ở bất kỳ kho nào khác!"
 
-        return {
-            'allow': False,
-            'message': msg
-        }
+        return {'allow': False, 'message': msg}
