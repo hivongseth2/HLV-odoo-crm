@@ -9,9 +9,9 @@
             '/hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js',
             '/hlv_barcode_stock_qty_v3/static/src/css/inline.css',
         ],
-        'web.assets_backend': [
-            '/hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js',
-            '/hlv_barcode_stock_qty_v3/static/src/css/inline.css',
+        'stock_barcode.assets': [
+            'hlv_barcode_stock_qty_v3/static/src/css/inline.css',
+            'hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js',
         ],
     },
     'installable': True,

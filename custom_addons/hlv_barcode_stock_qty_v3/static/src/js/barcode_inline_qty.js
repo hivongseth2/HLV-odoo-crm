@@ -1,9 +1,11 @@
 /** @odoo-module **/
 
-import { BarcodeModel } from "@stock_barcode/models/barcode_model";
+import BarcodeModel from "@stock_barcode/models/barcode_model"; 
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 import { user } from "@web/core/user";
+
+
 
 // -------------------------------------------------------------------------
 // PHẦN 1: LOGIC HIỂN THỊ TRÊN DOM (Giữ nguyên logic visual cũ của bạn)
