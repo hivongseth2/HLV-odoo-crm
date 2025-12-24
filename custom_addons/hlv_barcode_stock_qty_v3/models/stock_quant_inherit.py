@@ -126,69 +126,74 @@ class StockQuant(models.Model):
     
     
     @api.model
-    def check_barcode_availability(self, barcode, wh_prefix=None):
+    def check_barcode_availability(self, barcode, wh_prefix=None, location_id=None):
+        """
+        Check tồn kho.
+        - Ưu tiên check tại location_id cụ thể (nếu JS gửi lên).
+        - Nếu không có location_id, check theo wh_prefix (toàn kho).
+        """
         if not barcode:
             return {'allow': True}
 
-        # 1. Tìm sản phẩm
+        # 1. Tìm Product
         Product = self.env["product.product"]
         product = Product.search([("barcode", "=", barcode)], limit=1)
         if not product:
             product = Product.search([("default_code", "=", barcode)], limit=1)
         
-        # Nếu quét mã không phải sản phẩm (VD mã lệnh), cho qua để Odoo xử lý
+        # Nếu quét mã lạ (không phải sp), cho qua
         if not product:
-            return {'allow': True} 
+            return {'allow': True}
 
-        # 2. Xác định kho
-        # --- LOGIC CŨ ---
-        # base_loc = self._get_base_location_by_prefix(wh_prefix)
-        # if not base_loc: return {'allow': True}
-        
-        # --- LOGIC MỚI (CHẶT CHẼ HƠN) ---
-        base_loc = self._get_base_location_by_prefix(wh_prefix)
-        
-        # Nếu có prefix nhưng không tìm ra kho -> Chặn và báo lỗi cấu hình
-        if wh_prefix and not base_loc:
-             return {
-                'allow': False,
-                'message': f"❌ Lỗi hệ thống: Không tìm thấy kho với mã '{wh_prefix}'"
-             }
-        
-        # Nếu hoàn toàn không có prefix (JS không gửi lên được)
-        # Tùy bạn chọn: Chặn luôn hoặc Cho qua.
-        # Ở đây mình thử CHẶN để bạn debug xem JS có gửi đúng không.
-        if not base_loc:
-             return {
-                'allow': True, # Tạm thời cho qua, nhưng print log
-                'message': "Warning: Không xác định được kho hiện tại."
-             }
+        # 2. XÁC ĐỊNH PHẠM VI CHECK (Scope)
+        domain = [("product_id", "=", product.id), ("quantity", ">", 0)]
+        scope_name = ""
 
-        # 3. Check tồn kho (Giữ nguyên logic cũ)
-        quants = self.sudo().search([
-            ("product_id", "=", product.id),
-            ("location_id", "child_of", base_loc.id),
-            ("quantity", ">", 0)
-        ])
+        # Ưu tiên 1: Check chính xác tại vị trí nguồn (VD: Tủ 3)
+        if location_id:
+            loc = self.env['stock.location'].browse(location_id)
+            if loc.usage == 'internal':
+                domain.append(("location_id", "child_of", location_id))
+                scope_name = loc.display_name
+        
+        # Ưu tiên 2: Check theo Prefix Kho (VD: KBC)
+        if not scope_name and wh_prefix:
+            base_loc = self._get_base_location_by_prefix(wh_prefix)
+            if base_loc:
+                domain.append(("location_id", "child_of", base_loc.id))
+                scope_name = base_loc.display_name
+        
+        # LỖI: Nếu không xác định được phạm vi nào -> CHẶN LUÔN
+        if not scope_name:
+            return {
+                'allow': False, # <--- ĐỔI TỪ TRUE SANG FALSE
+                'message': "❌ LỖI: Không xác định được kho/vị trí hiện tại.\nJS gửi lên: Prefix=%s, LocID=%s" % (wh_prefix, location_id)
+            }
+
+        # 3. CHECK TỒN KHO
+        quants = self.sudo().search(domain)
         total_qty = sum(quants.mapped("quantity"))
 
         if total_qty > 0:
             return {'allow': True}
 
-        # 4. Hết hàng -> Tạo thông báo gợi ý
+        # 4. HẾT HÀNG -> GỢI Ý
+        msg = "⛔ KHÔNG CÓ HÀNG TẠI: %s\n📦 SP: %s" % (scope_name, product.display_name)
+        
+        # Tìm gợi ý ở chỗ khác (Toàn hệ thống nội bộ)
         alt_quants = self.sudo().search([
             ("product_id", "=", product.id),
             ("location_id.usage", "=", "internal"),
             ("quantity", ">", 0),
-            ("location_id", "not child_of", base_loc.id)
         ], order="quantity desc", limit=5)
 
-        msg = "⛔ HẾT HÀNG TẠI %s!\nSản phẩm: %s" % (base_loc.display_name, product.display_name)
         if alt_quants:
-            msg += "\n\n💡 Gợi ý vị trí có hàng:"
+            msg += "\n\n💡 Có thể lấy tại:"
             for q in alt_quants:
-                msg += "\n   • %s: %s %s" % (q.location_id.display_name, q.quantity, q.product_uom_id.name)
+                # Bỏ qua vị trí vừa check bị fail
+                if scope_name in q.location_id.display_name: continue
+                msg += "\n   • %s: %s" % (q.location_id.display_name, q.quantity)
         else:
-            msg += "\n\n⚠️ Không tìm thấy hàng ở bất kỳ kho nào khác!"
+            msg += "\n\n⚠️ Hết sạch hàng trên toàn hệ thống!"
 
         return {'allow': False, 'message': msg}

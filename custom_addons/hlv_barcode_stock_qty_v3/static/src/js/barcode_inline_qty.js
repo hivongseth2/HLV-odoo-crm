@@ -135,87 +135,84 @@ patch(BarcodeModel.prototype, {
         // 1. TÌM DÒNG KHỚP VỚI BARCODE (LOGIC MỚI - KHÔNG DÙNG CACHE)
         // ---------------------------------------------------------
         // Thay vì tìm trong cache (dễ lỗi), ta tìm trực tiếp trong danh sách dòng đang hiển thị
-        let matchedLine = null;
         
         // Odoo 18: Danh sách dòng nằm trong this.currentState.lines
-        const lines = this.currentState.lines || [];
-        
-        for (const line of lines) {
-            const product = line.product_id || {};
-            // So sánh Barcode hoặc Default Code (Internal Reference)
-            if (product.barcode === barcode || product.default_code === barcode) {
-                matchedLine = line;
-                break; // Tìm thấy dòng đầu tiên khớp thì dừng
-            }
-        }
-
-        // ---------------------------------------------------------
-        // 2. CHECK CLIENT: ĐỦ SỐ LƯỢNG CHƯA?
-        // ---------------------------------------------------------
+       const lines = this.currentState.lines || [];
+        const matchedLine = lines.find(l => (l.product_id.barcode === barcode || l.product_id.default_code === barcode));
         if (matchedLine) {
             const done = parseFloat(matchedLine.qty_done || 0);
             const demand = parseFloat(matchedLine.product_uom_qty || 0);
-            const productName = matchedLine.product_id.display_name;
-
-            console.log(`[HLV] Line Found: ${productName} | Done: ${done} / Demand: ${demand}`);
-
             if (demand > 0 && done >= demand) {
-                const msg = `⚠️ SẢN PHẨM ĐÃ ĐỦ SỐ LƯỢNG!\n📦 ${productName}\n✅ Đã quét: ${done}/${demand}`;
-                this.notification.add(msg, { type: "danger", sticky: false });
+                this.notification.add(`⚠️ Đã đủ số lượng (${done}/${demand})`, { type: "danger" });
                 this._beep("error");
-                console.warn("[HLV] BLOCK: Đã đủ số lượng");
-                return; // ⛔ CHẶN
+                return;
             }
-        } else {
-            console.log("[HLV] Không tìm thấy dòng nào trong phiếu khớp với mã này (có thể là sp mới).");
         }
 
-        // ---------------------------------------------------------
-        // 3. TÌM PREFIX KHO (CẢI TIẾN)
-        // ---------------------------------------------------------
+        // 2. LẤY THÔNG TIN VỊ TRÍ (QUAN TRỌNG)
         let whPrefix = null;
+        let sourceLocId = null;
 
-        // Ưu tiên 1: Lấy từ Source Location (Vị trí nguồn) của phiếu
-        // this.record.location_id là object {id, display_name}
+        // A. Thử lấy ID vị trí nguồn (Source Location) từ Picking
         if (this.record && this.record.location_id) {
-            const locName = this.record.location_id.display_name || ""; // VD: "KBC/Tồn kho"
+            sourceLocId = this.record.location_id.id;
+            // Tiện thể lấy luôn prefix từ tên vị trí nguồn
+            const locName = this.record.location_id.display_name || ""; // "KBC/Tồn kho/TỦ 3"
             const m = locName.match(/\b(TSN|KBC|KHD)\b/i);
             if (m) whPrefix = m[1].toUpperCase();
         }
 
-        // Ưu tiên 2: Nếu không có, mới tìm trong tên phiếu
-        if (!whPrefix && this.record && this.record.display_name) {
-            const m = this.record.display_name.match(/\b(TSN|KBC|KHD)\b/i);
-            if (m) whPrefix = m[1].toUpperCase();
+        // B. Nếu chưa có prefix, quét vét cạn mọi nơi trên giao diện
+        if (!whPrefix) {
+            const candidates = [
+                this.record?.display_name, // Tên phiếu
+                document.querySelector(".o_breadcrumb")?.innerText, // Breadcrumb
+                document.querySelector(".o_barcode_header")?.innerText, // Header
+                document.body.innerText // Toàn trang (Fallback cuối cùng)
+            ];
+            for (const txt of candidates) {
+                if (txt) {
+                    const m = txt.match(/\b(TSN|KBC|KHD)\b/i);
+                    if (m) {
+                        whPrefix = m[1].toUpperCase();
+                        break;
+                    }
+                }
+            }
         }
 
-        console.log("[HLV] Check Server với prefix:", whPrefix);
+        // Nếu vẫn null thì gán tạm giá trị để server biết mà log lỗi (không để null)
+        if (!whPrefix) whPrefix = "UNKNOWN";
 
-        // ---------------------------------------------------------
-        // 4. CHECK SERVER: TỒN KHO THỰC TẾ
-        // ---------------------------------------------------------
+        console.log(`[HLV] Check Server: Prefix=${whPrefix}, LocID=${sourceLocId}`);
+
+        // 3. GỌI SERVER CHECK
         try {
-            // Gọi RPC check
-            const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix]);
+            // Truyền thêm tham số thứ 3 là sourceLocId
+            const result = await this.orm.call(
+                "stock.quant", 
+                "check_barcode_availability", 
+                [barcode, whPrefix, sourceLocId]
+            );
             
-            console.log("[HLV] Kết quả RPC:", result);
-
             if (result && result.allow === false) {
-                this.notification.add(result.message, { type: "danger", sticky: true, title: "HẾT HÀNG / LỖI KHO" });
+                // CHẶN + BÁO LỖI
+                this.notification.add(result.message, { type: "danger", sticky: true, title: "CẢNH BÁO KHO" });
                 this._beep("error");
-                console.warn("[HLV] BLOCK: Server chặn");
-                return; // ⛔ CHẶN
+                
+                // Dùng alert để chắc chắn user phải bấm OK mới quét tiếp được
+                // alert(result.message); 
+                
+                return; // ⛔ STOP
             }
 
         } catch (e) {
-            console.error("[HLV] Lỗi RPC Check:", e);
-            // Lỗi mạng thì cho qua để không chặn người dùng
+            console.error("[HLV] RPC Error:", e);
+            // Nếu lỗi server (500), chặn luôn cho an toàn?
+            this.notification.add("Lỗi kết nối Server khi check tồn kho!", { type: "danger" });
+            return; 
         }
 
-        // 5. PASS -> GỌI ODOO GỐC
-        console.log("✅ [HLV] OK -> Pass cho Odoo xử lý");
         return super.processBarcode(...arguments);
-    },
-    
-    // Xóa hàm _identifyProduct bị lỗi đi, không cần dùng nữa vì ta loop qua lines rồi
+    }
 });
