@@ -639,6 +639,7 @@ class ProductImportWizard(models.TransientModel):
         skipped_not_found = 0
         skipped_archived = 0
         errors = []
+        failed_skus = []
         
         # Mapping columns by index (0-based)
         # C=2, E=4, H=7, I=8, J=9, L=11, R=17
@@ -735,9 +736,7 @@ class ProductImportWizard(models.TransientModel):
                 # Final check
                 if not product:
                     skipped_not_found += 1
-                    # Log chi tiết 10 sản phẩm đầu tiên không tìm thấy để debug
-                    if len(errors) < 10:
-                        errors.append(f"Không tìm thấy SKU (cả Active/Archived): {sku}")
+                    failed_skus.append(sku)
                     continue
                 
                 # Extract Prices
@@ -801,9 +800,13 @@ class ProductImportWizard(models.TransientModel):
             f"- Bỏ qua (không tìm thấy SP): {skipped_not_found}",
         ]
         
+        if failed_skus:
+            msg_lines.append(f"- Danh sách SKU không tìm thấy ({len(failed_skus)}):")
+            msg_lines.append(", ".join(failed_skus))
+
         if errors:
-            msg_lines.append(f"- Lỗi: {len(errors)}")
-            for err in errors[:5]:
+            msg_lines.append(f"- Lỗi khác: {len(errors)}")
+            for err in errors:
                 msg_lines.append(f"  • {err}")
 
         msg = "\n".join(msg_lines)
