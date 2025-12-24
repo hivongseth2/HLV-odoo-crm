@@ -8,8 +8,9 @@
     """,
     'category': 'Sales',
     'author': 'Antigravity',
-    'depends': ['sale', 'website', 'hlv_zalo_zns'],
+    'depends': ['sale', 'stock', 'website', 'hlv_zalo_zns'],
     'data': [
+        'security/security_groups.xml',
         'security/ir.model.access.csv',
         'data/ir_sequence_data.xml',
         'views/cancel_request_view.xml',

@@ -4,13 +4,14 @@
         <field name="name">sale.order.cancel.request.tree</field>
         <field name="model">sale.order.cancel.request</field>
         <field name="arch" type="xml">
-            <list string="Yêu cầu Hủy Đơn" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'" decoration-warning="state in ('submitted', 'accountant_confirmed')" create="0">
+            <list string="Yêu cầu Hủy Đơn" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'" decoration-warning="state in ('submitted', 'warehouse_confirmed')" create="0">
                 <field name="name"/>
                 <field name="create_date" string="Ngày Yêu Cầu"/>
                 <field name="salesperson_name"/>
                 <field name="order_reference"/>
+                <field name="warehouse_id"/>
                 <field name="type"/>
-                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-warning="state == 'submitted'" decoration-primary="state == 'accountant_confirmed'" decoration-success="state == 'done'" decoration-danger="state == 'rejected'"/>
+                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-warning="state == 'submitted'" decoration-primary="state == 'warehouse_confirmed'" decoration-success="state == 'done'" decoration-danger="state == 'rejected'"/>
             </list>
         </field>
     </record>
@@ -22,11 +23,17 @@
             <form string="Yêu cầu Hủy Đơn" create="0">
                 <header>
                     <button name="action_submit" string="Gửi Yêu Cầu" type="object" class="oe_highlight" invisible="state != 'draft'"/>
-                    <button name="action_accountant_confirm" string="Kế Toán Xác Nhận" type="object" class="oe_highlight" invisible="state != 'submitted'"/>
-                    <button name="action_warehouse_confirm" string="Kho Xác Nhận" type="object" class="oe_highlight" invisible="state != 'accountant_confirmed'"/>
-                    <button name="action_reject" string="Từ Chối" type="object" invisible="state not in ('draft', 'submitted', 'accountant_confirmed')"/>
+                    <!-- Warehouse confirms first -->
+                    <button name="action_warehouse_confirm" string="Kho Xác Nhận" type="object" class="oe_highlight" 
+                            invisible="state != 'submitted'" 
+                            groups="hlv_order_cancel_request.group_cancel_request_warehouse"/>
+                    <!-- Accountant confirms after warehouse -->
+                    <button name="action_accountant_confirm" string="Kế Toán Xác Nhận" type="object" class="oe_highlight" 
+                            invisible="state != 'warehouse_confirmed'" 
+                            groups="hlv_order_cancel_request.group_cancel_request_accountant"/>
+                    <button name="action_reject" string="Từ Chối" type="object" invisible="state not in ('draft', 'submitted', 'warehouse_confirmed')"/>
                     <button name="action_draft" string="Về Nháp" type="object" invisible="state == 'draft'"/>
-                    <field name="state" widget="statusbar" statusbar_visible="draft,submitted,accountant_confirmed,done"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,submitted,warehouse_confirmed,done"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -45,6 +52,7 @@
                         <group string="Thông tin Đơn hàng">
                             <field name="order_reference" readonly="state != 'draft'"/>
                             <field name="order_id" readonly="1"/>
+                            <field name="warehouse_id" readonly="1"/>
                         </group>
                     </group>
                     <separator string="Lý do / Nội dung"/>
@@ -63,14 +71,16 @@
                 <field name="name"/>
                 <field name="salesperson_name"/>
                 <field name="order_reference"/>
+                <field name="warehouse_id"/>
                 <filter string="Nháp" name="draft" domain="[('state', '=', 'draft')]"/>
                 <filter string="Đã Gửi" name="submitted" domain="[('state', '=', 'submitted')]"/>
-                <filter string="KT Đã Xác Nhận" name="accountant_confirmed" domain="[('state', '=', 'accountant_confirmed')]"/>
+                <filter string="Kho Đã XN" name="warehouse_confirmed" domain="[('state', '=', 'warehouse_confirmed')]"/>
                 <filter string="Hoàn Thành" name="done" domain="[('state', '=', 'done')]"/>
                 <separator/>
                 <group expand="0" string="Nhóm Theo">
                     <filter string="Trạng Thái" name="group_by_state" context="{'group_by': 'state'}"/>
                     <filter string="Loại" name="group_by_type" context="{'group_by': 'type'}"/>
+                    <filter string="Kho" name="group_by_warehouse" context="{'group_by': 'warehouse_id'}"/>
                 </group>
             </search>
         </field>

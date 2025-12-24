@@ -1,4 +1,5 @@
 from odoo import models, fields, api, _
+from odoo.exceptions import UserError
 
 class SaleOrderCancelRequest(models.Model):
     _name = 'sale.order.cancel.request'
@@ -11,6 +12,7 @@ class SaleOrderCancelRequest(models.Model):
     order_reference = fields.Char(string='Mã Đơn Hàng', required=True, tracking=True, help="Mã đơn hàng được nhập bởi Sale, ví dụ: SO12345")
     
     order_id = fields.Many2one('sale.order', string='Đơn Bán Hàng', compute='_compute_order_id', store=True, readonly=False)
+    warehouse_id = fields.Many2one('stock.warehouse', string='Kho', compute='_compute_warehouse_id', store=True)
     
     type = fields.Selection([
         ('cancel', 'Hủy Đơn'),
@@ -19,10 +21,11 @@ class SaleOrderCancelRequest(models.Model):
     
     reason = fields.Text(string='Lý do', required=True, tracking=True)
     
+    # NEW: Kho xác nhận trước, sau đó Kế toán
     state = fields.Selection([
         ('draft', 'Nháp'),
         ('submitted', 'Đã Gửi'),
-        ('accountant_confirmed', 'KT Đã Xác Nhận'),
+        ('warehouse_confirmed', 'Kho Đã XN'),
         ('done', 'Hoàn Thành'),
         ('rejected', 'Đã Từ Chối')
     ], string='Trạng Thái', default='draft', tracking=True, group_expand='_expand_states')
@@ -43,23 +46,47 @@ class SaleOrderCancelRequest(models.Model):
             else:
                 rec.order_id = False
 
+    @api.depends('order_id', 'order_id.picking_ids')
+    def _compute_warehouse_id(self):
+        """Get warehouse from the first outgoing picking of the sale order."""
+        for rec in self:
+            if rec.order_id and rec.order_id.picking_ids:
+                # Get first outgoing picking
+                outgoing_picking = rec.order_id.picking_ids.filtered(
+                    lambda p: p.picking_type_code == 'outgoing'
+                )[:1]
+                if outgoing_picking:
+                    rec.warehouse_id = outgoing_picking.picking_type_id.warehouse_id
+                else:
+                    rec.warehouse_id = False
+            else:
+                rec.warehouse_id = False
+
+    # ============ Actions ============
+
     def action_submit(self):
         """Sale submits the request."""
         self.ensure_one()
         self.state = 'submitted'
         self._send_zalo_notification_on_submit()
 
-    def action_accountant_confirm(self):
-        """Accountant confirms they have processed the request in external system."""
-        self.ensure_one()
-        self.state = 'accountant_confirmed'
-        self._send_zalo_notification_on_accountant_confirm()
-
     def action_warehouse_confirm(self):
         """Warehouse confirms they have handled the goods (stopped packing or updated)."""
         self.ensure_one()
-        self.state = 'done'
+        # Check permission
+        if not self.env.user.has_group('hlv_order_cancel_request.group_cancel_request_warehouse'):
+            raise UserError(_("Bạn không có quyền xác nhận bước Kho. Chỉ Thủ Kho mới có thể thực hiện."))
+        self.state = 'warehouse_confirmed'
         self._send_zalo_notification_on_warehouse_confirm()
+
+    def action_accountant_confirm(self):
+        """Accountant confirms they have processed the request in external system."""
+        self.ensure_one()
+        # Check permission
+        if not self.env.user.has_group('hlv_order_cancel_request.group_cancel_request_accountant'):
+            raise UserError(_("Bạn không có quyền xác nhận bước Kế Toán. Chỉ Kế Toán mới có thể thực hiện."))
+        self.state = 'done'
+        self._send_zalo_notification_on_accountant_confirm()
 
     def action_reject(self):
         self.state = 'rejected'
@@ -72,21 +99,61 @@ class SaleOrderCancelRequest(models.Model):
 
     # ============ Zalo Notification Helpers ============
 
-    def _get_warehouse_recipients(self):
-        """Get Warehouse Zalo UIDs from config."""
+    def _parse_warehouse_mapping(self):
+        """
+        Parse warehouse mapping text from config.
+        Format: WAREHOUSE_CODE:ZALO_UID1,ZALO_UID2 (one warehouse per line)
+        Returns: dict { 'TSN': ['123456', '789012'], 'KBC': ['999888'] }
+        """
         Config = self.env['ir.config_parameter'].sudo()
-        warehouse_uid = Config.get_param('hlv_order_cancel_request.warehouse_zalo_uid')
-        if warehouse_uid:
-            return [u.strip() for u in warehouse_uid.split(',') if u.strip()]
-        return []
+        mapping_text = Config.get_param('hlv_order_cancel_request.warehouse_zalo_mapping', '')
+        
+        mapping = {}
+        if not mapping_text:
+            return mapping
+            
+        for line in mapping_text.splitlines():
+            line = line.strip()
+            if not line or ':' not in line:
+                continue
+            parts = line.split(':', 1)
+            code = parts[0].strip().upper()
+            uid_text = parts[1].strip()
+            if code and uid_text:
+                # Support multiple UIDs separated by comma
+                uids = [u.strip() for u in uid_text.split(',') if u.strip()]
+                if uids:
+                    mapping[code] = uids
+        return mapping
+
+    def _get_warehouse_recipients(self):
+        """
+        Get Warehouse Zalo UIDs based on the order's warehouse.
+        Looks up from warehouse mapping in config. Supports multiple UIDs per warehouse.
+        """
+        if not self.warehouse_id:
+            return []
+        
+        mapping = self._parse_warehouse_mapping()
+        warehouse_code = self.warehouse_id.code or ''
+        
+        uids = mapping.get(warehouse_code.upper(), [])
+        return uids
 
     def _get_accountant_recipients(self):
-        """Get Accountant Zalo UIDs from config."""
+        """Get Accountant Zalo UIDs from config. Supports comma or newline separated."""
         Config = self.env['ir.config_parameter'].sudo()
-        accountant_uid = Config.get_param('hlv_order_cancel_request.accountant_zalo_uid')
-        if accountant_uid:
-            return [u.strip() for u in accountant_uid.split(',') if u.strip()]
-        return []
+        accountant_uid = Config.get_param('hlv_order_cancel_request.accountant_zalo_uid', '')
+        if not accountant_uid:
+            return []
+        
+        # Support both comma and newline separated
+        uids = []
+        for line in accountant_uid.replace(',', '\n').splitlines():
+            uid = line.strip()
+            if uid:
+                uids.append(uid)
+        return uids
 
     def _get_sale_recipients(self):
         """
@@ -100,7 +167,6 @@ class SaleOrderCancelRequest(models.Model):
         if not zalo_config:
             return []
         
-        # Use the saler_mapping_text lookup method from ZNS module
         user_ids = zalo_config.get_saler_user_ids_from_mapping(self.salesperson_name)
         return user_ids
 
@@ -134,45 +200,49 @@ class SaleOrderCancelRequest(models.Model):
     def _send_zalo_notification_on_submit(self):
         """
         Step 1: Sale submits request.
-        Recipients: Accountant (to process in external system) + Warehouse (to pause packing)
+        Recipients: Warehouse (specific to order's warehouse) + Accountant
         """
         self.ensure_one()
         type_label = self._get_type_label().upper()
-        
-        # Message for Accountant - to process the request
-        msg_accountant = f"🔔 YÊU CẦU {type_label}\n"
-        msg_accountant += f"• Sale: {self.salesperson_name}\n"
-        msg_accountant += f"• Mã Đơn: {self.order_reference}\n"
-        if self.order_id:
-            msg_accountant += f"• Đơn Odoo: {self.order_id.name}\n"
-        msg_accountant += f"• Lý do: {self.reason}\n"
-        msg_accountant += f"• Mã YC: {self.name}\n"
-        msg_accountant += f"👉 {self._get_backend_url()}"
+        warehouse_name = self.warehouse_id.name if self.warehouse_id else 'N/A'
         
         # Message for Warehouse - to pause packing
         msg_warehouse = f"⏸️ TẠM DỪNG ĐÓNG GÓI - YÊU CẦU {type_label}\n"
         msg_warehouse += f"• Mã Đơn: {self.order_reference}\n"
         if self.order_id:
             msg_warehouse += f"• Đơn Odoo: {self.order_id.name}\n"
-        msg_warehouse += f"• Lý do: {self.reason}"
+        msg_warehouse += f"• Kho: {warehouse_name}\n"
+        msg_warehouse += f"• Lý do: {self.reason}\n"
+        msg_warehouse += f"• Mã YC: {self.name}\n"
+        msg_warehouse += f"👉 {self._get_backend_url()}"
         
-        self._send_zalo_to_recipients(self._get_accountant_recipients(), msg_accountant)
+        # Message for Accountant - notification only (they confirm later)
+        msg_accountant = f"🔔 YÊU CẦU {type_label} MỚI\n"
+        msg_accountant += f"• Sale: {self.salesperson_name}\n"
+        msg_accountant += f"• Mã Đơn: {self.order_reference}\n"
+        if self.order_id:
+            msg_accountant += f"• Đơn Odoo: {self.order_id.name}\n"
+        msg_accountant += f"• Kho: {warehouse_name}\n"
+        msg_accountant += f"• Lý do: {self.reason}\n"
+        msg_accountant += f"Chờ Kho xác nhận trước."
+        
         self._send_zalo_to_recipients(self._get_warehouse_recipients(), msg_warehouse)
+        self._send_zalo_to_recipients(self._get_accountant_recipients(), msg_accountant)
 
-    def _send_zalo_notification_on_accountant_confirm(self):
+    def _send_zalo_notification_on_warehouse_confirm(self):
         """
-        Step 2: Accountant confirms they processed in external system.
-        Recipients: Only Warehouse (to inform them to confirm after handling goods)
+        Step 2: Warehouse confirms they handled the goods.
+        Recipients: Accountant (to process in external system and confirm)
         """
         self.ensure_one()
         type_label = self._get_type_label().upper()
         
         if self.type == 'cancel':
-            msg = f"📋 KẾ TOÁN ĐÃ XÁC NHẬN HỦY ĐƠN\n"
-            msg += f"Vui lòng xác nhận đã ngừng đóng gói.\n"
+            msg = f"📋 KHO ĐÃ XÁC NHẬN DỪNG ĐÓNG GÓI\n"
+            msg += f"Vui lòng hủy đơn trên hệ thống kế toán và xác nhận.\n"
         else:
-            msg = f"📋 KẾ TOÁN ĐÃ XÁC NHẬN CHỈNH SỬA\n"
-            msg += f"Vui lòng kiểm tra và xác nhận.\n"
+            msg = f"📋 KHO ĐÃ XÁC NHẬN KIỂM TRA XONG\n"
+            msg += f"Vui lòng chỉnh sửa trên hệ thống kế toán và xác nhận.\n"
         
         msg += f"• Mã Đơn: {self.order_reference}\n"
         if self.order_id:
@@ -180,12 +250,12 @@ class SaleOrderCancelRequest(models.Model):
         msg += f"• Mã YC: {self.name}\n"
         msg += f"👉 {self._get_backend_url()}"
         
-        self._send_zalo_to_recipients(self._get_warehouse_recipients(), msg)
+        self._send_zalo_to_recipients(self._get_accountant_recipients(), msg)
 
-    def _send_zalo_notification_on_warehouse_confirm(self):
+    def _send_zalo_notification_on_accountant_confirm(self):
         """
-        Step 3: Warehouse confirms they handled the goods.
-        Recipients: Only the Sale who created the request (to notify completion)
+        Step 3: Accountant confirms they processed in external system.
+        Recipients: Sale who created the request
         """
         self.ensure_one()
         
@@ -198,6 +268,6 @@ class SaleOrderCancelRequest(models.Model):
         if self.order_id:
             msg += f"• Đơn Odoo: {self.order_id.name}\n"
         msg += f"• Mã YC: {self.name}\n"
-        msg += "Kế toán và Kho đã xử lý xong."
+        msg += "Kho và Kế toán đã xử lý xong."
         
         self._send_zalo_to_recipients(self._get_sale_recipients(), msg)
