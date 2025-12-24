@@ -1057,20 +1057,40 @@ class ProductImportWizard(models.TransientModel):
                     continue
                 
                 # Tìm sản phẩm
+                # Ưu tiên tìm chính xác
                 product = ProductTemplate.search([('default_code', '=', sku)], limit=1)
                 
+                # Nếu không thấy, thử tìm case-insensitive
+                if not product:
+                    product = ProductTemplate.search([('default_code', '=ilike', sku)], limit=1)
+                
+                # Nếu không thấy, tìm variant
                 if not product:
                     variant = ProductProduct.search([('default_code', '=', sku)], limit=1)
+                    if not variant:
+                        variant = ProductProduct.search([('default_code', '=ilike', sku)], limit=1)
+                    
                     if variant:
                         product = variant.product_tmpl_id
                 
                 if not product:
-                    # Check archived
+                    # Check archived (exact & ilike)
+                    domain_archived = [('active', '=', False)]
+                    # Try exact first
                     archived = ProductTemplate.with_context(active_test=False).search(
-                        [('default_code', '=', sku), ('active', '=', False)], limit=1)
+                        [('default_code', '=', sku)] + domain_archived, limit=1)
+                    if not archived:
+                         archived = ProductTemplate.with_context(active_test=False).search(
+                            [('default_code', '=ilike', sku)] + domain_archived, limit=1)
+                            
                     if not archived:
                          skipped_not_found += 1
                          failed_skus.append(sku)
+                         # Log warning for debugging
+                         # _logger.warning("SKF Import: SKU not found '%s' (cleaned)", sku)
+                    else:
+                        # Found but archived
+                        pass
                     continue
 
                 # Prices
