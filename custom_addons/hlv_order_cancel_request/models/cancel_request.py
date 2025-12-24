@@ -7,7 +7,8 @@ class SaleOrderCancelRequest(models.Model):
     _order = 'create_date desc'
 
     name = fields.Char(string='Mã Yêu Cầu', required=True, copy=False, readonly=True, index=True, default=lambda self: _('Mới'))
-    salesperson_name = fields.Char(string='Tên Sale / Mã Sale', required=True, tracking=True)
+    salesperson_name = fields.Char(string='Mã Sale', required=True, tracking=True)
+    salesperson_zalo_uid = fields.Char(string='Zalo UID Sale', tracking=True, help="Zalo User ID của Sale để nhận thông báo kết quả")
     order_reference = fields.Char(string='Mã Đơn Hàng', required=True, tracking=True, help="Mã đơn hàng được nhập bởi Sale, ví dụ: SO12345")
     
     order_id = fields.Many2one('sale.order', string='Đơn Bán Hàng', compute='_compute_order_id', store=True, readonly=False)
@@ -22,6 +23,7 @@ class SaleOrderCancelRequest(models.Model):
     state = fields.Selection([
         ('draft', 'Nháp'),
         ('submitted', 'Đã Gửi'),
+        ('accountant_confirmed', 'KT Đã Xác Nhận'),
         ('done', 'Hoàn Thành'),
         ('rejected', 'Đã Từ Chối')
     ], string='Trạng Thái', default='draft', tracking=True, group_expand='_expand_states')
@@ -37,20 +39,28 @@ class SaleOrderCancelRequest(models.Model):
     def _compute_order_id(self):
         for rec in self:
             if rec.order_reference:
-                # Try to find exact match
                 order = self.env['sale.order'].search([('name', '=', rec.order_reference)], limit=1)
                 rec.order_id = order.id if order else False
             else:
                 rec.order_id = False
 
     def action_submit(self):
+        """Sale submits the request."""
         self.ensure_one()
         self.state = 'submitted'
         self._send_zalo_notification_on_submit()
 
-    def action_done(self):
+    def action_accountant_confirm(self):
+        """Accountant confirms they have processed the request in external system."""
+        self.ensure_one()
+        self.state = 'accountant_confirmed'
+        self._send_zalo_notification_on_accountant_confirm()
+
+    def action_warehouse_confirm(self):
+        """Warehouse confirms they have handled the goods (stopped packing or updated)."""
+        self.ensure_one()
         self.state = 'done'
-        self._send_zalo_notification_on_done()
+        self._send_zalo_notification_on_warehouse_confirm()
 
     def action_reject(self):
         self.state = 'rejected'
@@ -60,6 +70,8 @@ class SaleOrderCancelRequest(models.Model):
 
     def _expand_states(self, states, domain, order):
         return [key for key, val in type(self).state.selection]
+
+    # ============ Zalo Notification Helpers ============
 
     def _get_warehouse_recipients(self):
         """Get Warehouse Zalo UIDs from config."""
@@ -75,6 +87,12 @@ class SaleOrderCancelRequest(models.Model):
         accountant_uid = Config.get_param('hlv_order_cancel_request.accountant_zalo_uid')
         if accountant_uid:
             return [u.strip() for u in accountant_uid.split(',') if u.strip()]
+        return []
+
+    def _get_sale_recipients(self):
+        """Get Sale's Zalo UID from the request record itself."""
+        if self.salesperson_zalo_uid:
+            return [u.strip() for u in self.salesperson_zalo_uid.split(',') if u.strip()]
         return []
 
     def _get_backend_url(self):
@@ -102,10 +120,12 @@ class SaleOrderCancelRequest(models.Model):
             except Exception:
                 pass
 
+    # ============ Notification Methods ============
+
     def _send_zalo_notification_on_submit(self):
         """
-        Send Zalo notification when request is submitted.
-        Recipients: Accountant (to process) + Warehouse (to pause packing)
+        Step 1: Sale submits request.
+        Recipients: Accountant (to process in external system) + Warehouse (to pause packing)
         """
         self.ensure_one()
         type_label = self._get_type_label().upper()
@@ -130,21 +150,45 @@ class SaleOrderCancelRequest(models.Model):
         self._send_zalo_to_recipients(self._get_accountant_recipients(), msg_accountant)
         self._send_zalo_to_recipients(self._get_warehouse_recipients(), msg_warehouse)
 
-    def _send_zalo_notification_on_done(self):
+    def _send_zalo_notification_on_accountant_confirm(self):
         """
-        Send Zalo notification when request is completed.
-        Recipients: Only Warehouse (Accountant already knows - they clicked the button)
+        Step 2: Accountant confirms they processed in external system.
+        Recipients: Only Warehouse (to inform them to confirm after handling goods)
         """
         self.ensure_one()
+        type_label = self._get_type_label().upper()
         
-        # Message for Warehouse - confirmation to proceed with action
         if self.type == 'cancel':
-            msg = f"🚫 ĐƠN ĐÃ HỦY - NGỪNG ĐÓNG GÓI\n"
+            msg = f"📋 KẾ TOÁN ĐÃ XÁC NHẬN HỦY ĐƠN\n"
+            msg += f"Vui lòng xác nhận đã ngừng đóng gói.\n"
         else:
-            msg = f"✏️ ĐƠN ĐÃ CHỈNH SỬA - TIẾP TỤC ĐÓNG GÓI\n"
+            msg = f"📋 KẾ TOÁN ĐÃ XÁC NHẬN CHỈNH SỬA\n"
+            msg += f"Vui lòng kiểm tra và xác nhận.\n"
         
         msg += f"• Mã Đơn: {self.order_reference}\n"
         if self.order_id:
-            msg += f"• Đơn Odoo: {self.order_id.name}"
+            msg += f"• Đơn Odoo: {self.order_id.name}\n"
+        msg += f"• Mã YC: {self.name}\n"
+        msg += f"👉 {self._get_backend_url()}"
         
         self._send_zalo_to_recipients(self._get_warehouse_recipients(), msg)
+
+    def _send_zalo_notification_on_warehouse_confirm(self):
+        """
+        Step 3: Warehouse confirms they handled the goods.
+        Recipients: Only the Sale who created the request (to notify completion)
+        """
+        self.ensure_one()
+        
+        if self.type == 'cancel':
+            msg = f"✅ YÊU CẦU HỦY ĐƠN ĐÃ HOÀN TẤT\n"
+        else:
+            msg = f"✅ YÊU CẦU CHỈNH SỬA ĐÃ HOÀN TẤT\n"
+        
+        msg += f"• Mã Đơn: {self.order_reference}\n"
+        if self.order_id:
+            msg += f"• Đơn Odoo: {self.order_id.name}\n"
+        msg += f"• Mã YC: {self.name}\n"
+        msg += "Kế toán và Kho đã xử lý xong."
+        
+        self._send_zalo_to_recipients(self._get_sale_recipients(), msg)

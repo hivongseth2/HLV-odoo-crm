@@ -4,13 +4,13 @@
         <field name="name">sale.order.cancel.request.tree</field>
         <field name="model">sale.order.cancel.request</field>
         <field name="arch" type="xml">
-            <list string="Yêu cầu Hủy Đơn" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'" create="0">
+            <list string="Yêu cầu Hủy Đơn" decoration-info="state == 'draft'" decoration-muted="state == 'done'" decoration-danger="state == 'rejected'" decoration-warning="state in ('submitted', 'accountant_confirmed')" create="0">
                 <field name="name"/>
                 <field name="create_date" string="Ngày Yêu Cầu"/>
                 <field name="salesperson_name"/>
                 <field name="order_reference"/>
                 <field name="type"/>
-                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-warning="state == 'submitted'" decoration-success="state == 'done'" decoration-danger="state == 'rejected'"/>
+                <field name="state" widget="badge" decoration-info="state == 'draft'" decoration-warning="state == 'submitted'" decoration-primary="state == 'accountant_confirmed'" decoration-success="state == 'done'" decoration-danger="state == 'rejected'"/>
             </list>
         </field>
     </record>
@@ -22,10 +22,11 @@
             <form string="Yêu cầu Hủy Đơn" create="0">
                 <header>
                     <button name="action_submit" string="Gửi Yêu Cầu" type="object" class="oe_highlight" invisible="state != 'draft'"/>
-                    <button name="action_done" string="Đã Xử Lý" type="object" class="oe_highlight" invisible="state != 'submitted'"/>
-                    <button name="action_reject" string="Từ Chối" type="object" invisible="state not in ('draft', 'submitted')"/>
+                    <button name="action_accountant_confirm" string="Kế Toán Xác Nhận" type="object" class="oe_highlight" invisible="state != 'submitted'"/>
+                    <button name="action_warehouse_confirm" string="Kho Xác Nhận" type="object" class="oe_highlight" invisible="state != 'accountant_confirmed'"/>
+                    <button name="action_reject" string="Từ Chối" type="object" invisible="state not in ('draft', 'submitted', 'accountant_confirmed')"/>
                     <button name="action_draft" string="Về Nháp" type="object" invisible="state == 'draft'"/>
-                    <field name="state" widget="statusbar" statusbar_visible="draft,submitted,done"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,submitted,accountant_confirmed,done"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
@@ -37,6 +38,7 @@
                     <group>
                         <group string="Thông tin Yêu cầu">
                             <field name="salesperson_name" readonly="state != 'draft'"/>
+                            <field name="salesperson_zalo_uid" readonly="state != 'draft'" placeholder="Nhập Zalo UID để nhận thông báo"/>
                             <field name="type" readonly="state != 'draft'"/>
                             <field name="create_date" string="Ngày tạo" readonly="1"/>
                             <field name="state" invisible="1"/>
@@ -64,6 +66,9 @@
                 <field name="order_reference"/>
                 <filter string="Nháp" name="draft" domain="[('state', '=', 'draft')]"/>
                 <filter string="Đã Gửi" name="submitted" domain="[('state', '=', 'submitted')]"/>
+                <filter string="KT Đã Xác Nhận" name="accountant_confirmed" domain="[('state', '=', 'accountant_confirmed')]"/>
+                <filter string="Hoàn Thành" name="done" domain="[('state', '=', 'done')]"/>
+                <separator/>
                 <group expand="0" string="Nhóm Theo">
                     <filter string="Trạng Thái" name="group_by_state" context="{'group_by': 'state'}"/>
                     <filter string="Loại" name="group_by_type" context="{'group_by': 'type'}"/>
