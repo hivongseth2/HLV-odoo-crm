@@ -8,17 +8,12 @@
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
                 <app data-string="Cancellation Requests" string="Cancellation Requests" name="hlv_order_cancel_request">
-                    <block title="Website Configuration" name="cancel_request_website_setting">
-                        <setting string="Website Access" help="Set the password for the public cancellation request page.">
-                            <field name="cancel_request_password" password="True"/>
-                        </setting>
-                    </block>
                     <block title="Zalo Notifications" name="cancel_request_zalo_setting">
-                        <setting string="Recipients" help="Configure Zalo User IDs for notifications.">
-                            <group>
-                                <field name="cancel_request_accountant_uid"/>
-                                <field name="cancel_request_warehouse_uid"/>
-                            </group>
+                        <setting string="Thủ Kho (theo kho)" help="Format: KHO1:UID1,UID2|KHO2:UID3. Dùng | để phân cách các kho.">
+                            <field name="cancel_request_warehouse_mapping" placeholder="VD: TSN:123456|KBC:789012,111222|TSNSR:333444"/>
+                        </setting>
+                        <setting string="Kế Toán (theo kho)" help="Format: KHO1:UID1,UID2|KHO2:UID3. Dùng | để phân cách các kho.">
+                            <field name="cancel_request_accountant_mapping" placeholder="VD: TSN:123456|KBC:789012,111222|TSNSR:333444"/>
                         </setting>
                     </block>
                 </app>
