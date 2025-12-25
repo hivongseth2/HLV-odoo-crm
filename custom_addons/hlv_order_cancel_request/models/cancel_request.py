@@ -21,12 +21,12 @@ class SaleOrderCancelRequest(models.Model):
     
     reason = fields.Text(string='Lý do', required=True, tracking=True)
     
-    # Flow: YCHD → Kho XN → Hoàn Thành (Kế toán Xác Nhận → done)
+    # Flow: YCHD → Kho XN → Kế Toán XN
     state = fields.Selection([
         ('draft', 'Nháp'),
         ('submitted', 'YCHD'),
         ('warehouse_confirmed', 'Kho XN'),
-        ('done', 'Hoàn Thành'),
+        ('done', 'Kế Toán XN'),
         ('rejected', 'Đã Từ Chối')
     ], string='Trạng Thái', default='draft', tracking=True, group_expand='_expand_states')
 

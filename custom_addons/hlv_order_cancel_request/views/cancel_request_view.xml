@@ -75,7 +75,7 @@
                 <filter string="Nháp" name="draft" domain="[('state', '=', 'draft')]"/>
                 <filter string="YCHD" name="submitted" domain="[('state', '=', 'submitted')]"/>
                 <filter string="Kho XN" name="warehouse_confirmed" domain="[('state', '=', 'warehouse_confirmed')]"/>
-                <filter string="Hoàn Thành" name="done" domain="[('state', '=', 'done')]"/>
+                <filter string="Kế Toán XN" name="done" domain="[('state', '=', 'done')]"/>
                 <separator/>
                 <group expand="0" string="Nhóm Theo">
                     <filter string="Trạng Thái" name="group_by_state" context="{'group_by': 'state'}"/>
