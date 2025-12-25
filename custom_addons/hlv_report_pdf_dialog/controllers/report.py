@@ -110,7 +110,7 @@ class ReportDialogController(ReportController):
             try:
                 ids_list = [int(i) for i in docids.split(",")]
                 recs = request.env[report.model].browse(ids_list)
-                recs.check_access_rule("read")
+                recs.check_access("read")
             except Exception:
                 return request.not_found()
 
