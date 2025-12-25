@@ -1,21 +1,19 @@
 /** @odoo-module **/
 
-import  BarcodeModel  from "@stock_barcode/models/barcode_model"; 
+import BarcodeModel  from "@stock_barcode/models/barcode_model"; 
 import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 
 // =============================================================================
-// HELPER: UI & SOUND
+// HELPER: UI & SOUND & NOTIFICATION
 // =============================================================================
 
 function playErrorSound(env) {
     try {
-        // Cách 1: Dùng Sound Service chuẩn của Odoo 18
         if (env && env.services && env.services.sound) {
             env.services.sound.play('error');
             return;
         }
-        // Cách 2: Fallback HTML5 Audio
         const audio = new Audio('/custom_barcode_scan_redirect/static/src/sound/error.mp3');
         audio.play().catch(() => {});
     } catch (e) {}
@@ -30,13 +28,9 @@ function showNotification(env, message, type = 'danger') {
                 title: type === 'danger' ? "CẢNH BÁO" : "Thông báo" 
             });
         } else {
-            // Fallback nếu không tìm thấy service
             alert(message);
         }
-    } catch (e) {
-        console.error(e);
-        alert(message);
-    }
+    } catch (e) { console.error(e); }
 }
 
 function insertInline(lineEl, text) {
@@ -127,64 +121,42 @@ function setupObserver(orm) {
 }
 
 // =============================================================================
-// MAIN LOGIC: PATCH BARCODE MODEL (FIX ERROR NOTIFICATION)
+// MAIN LOGIC: PATCH BARCODE MODEL (AUTO SAVE)
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("✅ [HLV] Barcode v2.0 - Fix Notification Ready!");
+        console.log("✅ [HLV] Barcode v2.1 - Auto Save Ready!");
         setTimeout(() => setupObserver(this.orm), 1000);
     },
 
     async processBarcode(barcode) {
-        console.log("🚀 [HLV] ĐANG QUÉT:", barcode);
+        // --- 1. CÁC BƯỚC CHECK (GIỮ NGUYÊN) ---
+        if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
-        if (!barcode || barcode.startsWith("O-CMD")) {
-            return super.processBarcode(...arguments);
-        }
-
-        // 1. NHẬN DIỆN SẢN PHẨM (SAFE)
         const product = await this._identifyProductSafe(barcode);
-        
-        if (!product) {
-            console.log("ℹ️ [HLV] Không phải sản phẩm -> Cho qua.");
-            return super.processBarcode(...arguments);
-        }
+        if (!product) return super.processBarcode(...arguments);
 
-        // 2. CHECK CLIENT: ĐỦ SỐ LƯỢNG CHƯA?
+        // Check Limit
         const lines = this.currentState.lines || [];
         const matchedLine = lines.find(l => l.product_id.id === product.id);
-
         if (matchedLine) {
             const done = parseFloat(matchedLine.qty_done || 0);
             const demand = parseFloat(matchedLine.product_uom_qty || 0);
             if (demand > 0 && done >= demand) {
-                const msg = `⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n(${done}/${demand})`;
-                // SỬA LỖI: Dùng showNotification helper thay vì this.notification.add
-                showNotification(this.env, msg, 'danger');
+                showNotification(this.env, `⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n(${done}/${demand})`, 'danger');
                 playErrorSound(this.env);
                 return;
             }
         }
 
-        // 3. LẤY LOCATION ID CHÍNH XÁC (TỦ 3)
+        // Check Stock
         let sourceLocId = null;
         let whPrefix = null;
-
-        // Ưu tiên: Lấy từ this.location (Header - Vị trí đang scan)
-        if (this.location) {
-            sourceLocId = this.location.id;
-            console.log("📍 [HLV] Lấy từ this.location (Header):", sourceLocId);
-        } 
+        if (this.location) sourceLocId = this.location.id;
+        if (!sourceLocId && this.record && this.record.location_id) sourceLocId = typeof(this.record.location_id) === 'object' ? this.record.location_id[0] : this.record.location_id;
         
-        // Fallback: Lấy từ Picking gốc
-        if (!sourceLocId && this.record && this.record.location_id) {
-             sourceLocId = typeof(this.record.location_id) === 'object' ? this.record.location_id[0] : this.record.location_id;
-             console.log("📍 [HLV] Lấy từ Picking (Gốc):", sourceLocId);
-        }
-
-        // Lấy Prefix
         if (this.location && this.location.display_name) {
             const m = this.location.display_name.match(/\b(TSN|KBC|KHD)\b/i);
             if (m) whPrefix = m[1].toUpperCase();
@@ -193,28 +165,31 @@ patch(BarcodeModel.prototype, {
              if (m) whPrefix = m[1].toUpperCase();
         }
 
-        console.log(`🔎 [HLV] Check Stock Server: Barcode=${barcode}, Prefix=${whPrefix}, LocID=${sourceLocId}`);
-
-        // 4. GỌI SERVER CHECK
         try {
             const result = await this.orm.call(
-                "stock.quant", 
-                "check_barcode_availability", 
-                [barcode, whPrefix, sourceLocId] 
+                "stock.quant", "check_barcode_availability", [barcode, whPrefix, sourceLocId] 
             );
-            
             if (result && result.allow === false) {
-                // SỬA LỖI: Dùng showNotification helper
                 showNotification(this.env, result.message, 'danger');
                 playErrorSound(this.env);
-                return; // ⛔ CHẶN
+                return; 
             }
-        } catch (e) {
-            console.error("[HLV] RPC Error:", e);
-        }
+        } catch (e) { console.error("[HLV] RPC Error:", e); }
 
-        // 5. PASS
-        return super.processBarcode(...arguments);
+        // --- 2. GỌI LOGIC GỐC ĐỂ CẬP NHẬT UI ---
+        // Lưu ý: Phải dùng await để chờ nó xong việc cập nhật số lượng trên RAM
+        await super.processBarcode(...arguments);
+
+        // --- 3. [MỚI] TỰ ĐỘNG LƯU VÀO DB ---
+        try {
+            console.log("💾 [HLV] Auto Saving...");
+            await this.save(); 
+            // Nếu dùng Odoo 17/18, hàm save() của model sẽ trigger việc ghi xuống backend
+            showNotification(this.env, "Đã lưu!", "success");
+        } catch (err) {
+            console.warn("[HLV] Auto Save Failed:", err);
+            // Không chặn lỗi này để tránh treo màn hình, chỉ log ra thôi
+        }
     },
 
     async _identifyProductSafe(barcode) {
