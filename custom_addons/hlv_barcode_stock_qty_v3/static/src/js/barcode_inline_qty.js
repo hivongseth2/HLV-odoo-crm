@@ -4,7 +4,7 @@ import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// 1. HELPER FUNCTIONS
+// HELPER FUNCTIONS
 // =============================================================================
 
 function extractId(field) {
@@ -17,54 +17,49 @@ function extractId(field) {
 function getLineDemand(line) {
     if (line.reserved_uom_qty > 0) return line.reserved_uom_qty;
     if (line.product_uom_qty > 0) return line.product_uom_qty;
-    // Fallback cho các bản Odoo 17/18
     if (line.quantity_product_uom > 0) return line.quantity_product_uom;
     return 0;
 }
 
-// THANH TRẠNG THÁI & NÚT KÍCH HOẠT BẢO VỆ
-function updateSaveStatusUI(status) {
-    let el = document.getElementById('hlv-status-bar');
-    if (!el) {
-        el = document.createElement('div');
-        el.id = 'hlv-status-bar';
-        el.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 40px; z-index: 9999999; text-align: center; color: white; font-weight: bold; line-height: 40px; font-size: 16px; font-family: system-ui; cursor: pointer; display: flex; justify-content: center; align-items: center;";
-        document.body.appendChild(el);
-        
-        // Sự kiện click để kích hoạt quyền chặn F5
-        el.addEventListener('click', () => {
-             window.hasUserInteracted = true;
-             el.innerHTML = "🛡️ ĐÃ KÍCH HOẠT BẢO VỆ F5";
-             el.style.backgroundColor = "#17a2b8";
-             setTimeout(() => { el.style.display = 'none'; }, 2000);
-        });
-        
-        // Mặc định hiện nhắc nhở
-        el.style.backgroundColor = "#fd7e14"; // Màu cam
-        el.innerHTML = "⚠️ BẤM VÀO ĐÂY ĐỂ BẬT CHẶN F5";
-    }
-    
-    // Cập nhật trạng thái khi lưu
-    if (status === 'saving') {
-        el.style.display = 'flex';
-        el.style.backgroundColor = '#dc3545'; // ĐỎ
-        el.innerText = "⏳ ĐANG LƯU DỮ LIỆU... TUYỆT ĐỐI KHÔNG F5!";
-    } else if (status === 'success') {
-        el.style.display = 'flex';
-        el.style.backgroundColor = '#28a745'; // XANH
-        el.innerText = "✅ ĐÃ LƯU XONG";
-        setTimeout(() => { el.style.display = 'none'; }, 1000);
-    }
-}
-
 function safePlaySound(env, type = 'error') {
     try {
-        if (env && env.services && env.services.sound) {
+        if (env.services.sound) {
             env.services.sound.play(type);
         } else {
             new Audio('/web/static/src/audio/error.mp3').play().catch(() => {});
         }
     } catch (e) {}
+}
+
+// UI: MÀN HÌNH CHỜ (BLOCK UI)
+function toggleBusyScreen(busy) {
+    let el = document.getElementById('hlv-busy-screen');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'hlv-busy-screen';
+        el.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 9999999; display: none; justify-content: center; align-items: center; color: white; font-size: 20px; font-weight: bold; flex-direction: column;";
+        el.innerHTML = '<div>⏳ ĐANG LƯU... VUI LÒNG ĐỢI...</div><div style="font-size:14px; margin-top:10px">Không quét tiếp cho đến khi thông báo này tắt</div>';
+        document.body.appendChild(el);
+    }
+    el.style.display = busy ? 'flex' : 'none';
+}
+
+// UI: NÚT KÍCH HOẠT CHẶN F5
+function showF5Activator() {
+    let el = document.getElementById('hlv-f5-lock');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'hlv-f5-lock';
+        el.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 30px; background: #fd7e14; color: white; text-align: center; line-height: 30px; z-index: 999999; cursor: pointer; font-weight: bold;";
+        el.innerText = "⚠️ BẤM VÀO ĐÂY ĐỂ BẬT CHẾ ĐỘ CHẶN F5";
+        
+        el.onclick = () => {
+            el.style.backgroundColor = "#28a745";
+            el.innerText = "🛡️ ĐÃ BẬT BẢO VỆ F5";
+            setTimeout(() => { el.style.display = 'none'; }, 2000);
+        };
+        document.body.appendChild(el);
+    }
 }
 
 async function renderInlineStock(lineEl, orm) {
@@ -104,32 +99,26 @@ async function renderInlineStock(lineEl, orm) {
 }
 
 // =============================================================================
-// 2. MAIN LOGIC (FIX SAVE & F5)
+// MAIN LOGIC
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V16: STATE MUTATION FIX + F5 CLICK TRIGGER");
+        console.log("🚀 [HLV] V17: LOCK PROCESSING + ALWAYS BLOCK F5");
         
-        this.isSavingData = false;
-        
-        // Tạo cờ tương tác global
-        window.hasUserInteracted = false;
-        
-        // Listener click để kích hoạt bảo vệ
-        document.addEventListener('click', () => { window.hasUserInteracted = true; });
+        this.isProcessing = false; // Cờ khóa xử lý (Tránh bắn 2 phát dồn dập)
 
-        // CHẶN F5 CỨNG
+        // 1. LUÔN LUÔN CHẶN F5 (Vĩnh viễn)
         window.onbeforeunload = (e) => {
-            // Chỉ hiện thông báo nếu đang lưu
-            if (this.isSavingData) {
-                e = e || window.event;
-                const msg = "DỮ LIỆU ĐANG ĐƯỢC LƯU! F5 SẼ MẤT DỮ LIỆU!";
-                if (e) e.returnValue = msg;
-                return msg;
-            }
+            e = e || window.event;
+            const msg = "DỮ LIỆU CÓ THỂ BỊ MẤT! BẠN CÓ CHẮC MUỐN TẢI LẠI?";
+            if (e) e.returnValue = msg;
+            return msg;
         };
+
+        // 2. Hiện nút kích hoạt
+        setTimeout(showF5Activator, 1000);
 
         const observer = new MutationObserver(() => {
             document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
@@ -140,30 +129,28 @@ patch(BarcodeModel.prototype, {
                 clearInterval(wait);
             }
         }, 1000);
-        
-        // Khởi tạo thanh trạng thái ngay
-        setTimeout(() => updateSaveStatusUI('init'), 1000);
-    },
-
-    _setSaving(state) {
-        this.isSavingData = state;
-        updateSaveStatusUI(state ? 'saving' : (state === false ? 'success' : 'idle'));
     },
 
     async processBarcode(barcode) {
+        // 0. NẾU ĐANG XỬ LÝ CÁI CŨ -> CHẶN CÁI MỚI NGAY
+        if (this.isProcessing) {
+            console.warn("🚫 [HLV] Ignored scan because previous one is saving...");
+            safePlaySound(this.env, 'error'); // Bíp lỗi để biết là chưa nhận
+            return; 
+        }
+
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
-        // BẬT CỜ BẢO VỆ
-        this._setSaving(true);
+        // BẬT KHÓA (Hiện màn hình chờ)
+        this.isProcessing = true;
+        toggleBusyScreen(true);
 
         try {
-            // 1. NHẬN DIỆN
+            // --- NHẬN DIỆN ---
             const product = await this._identifyProductSafe(barcode);
             
-            // 2. LẤY VỊ TRÍ
-            let currentLoc = this.location; 
+            let currentLoc = this.location;
             let currentLocId = currentLoc ? currentLoc.id : null;
-            
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
             let locName = (currentLoc?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
@@ -184,84 +171,77 @@ patch(BarcodeModel.prototype, {
                 });
                 if (!candidateLine && productLines.length > 0) candidateLine = productLines[productLines.length - 1];
 
-                // 🛑 CHECK LIMIT
+                // 🛑 CHECK 1: LIMIT
                 const isUnplanned = (totalDemand === 0);
                 if (isUnplanned) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ SẢN PHẨM KHÔNG CÓ TRONG PHIẾU!\n\nSP: ${product.display_name}`);
-                    this._setSaving(null);
+                    alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSP: ${product.display_name}`);
+                    // MỞ KHÓA
+                    this.isProcessing = false; toggleBusyScreen(false);
                     return;
                 }
                 if (totalDone >= totalDemand) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSP: ${product.display_name}\nTiến độ: ${totalDone}/${totalDemand}`);
-                    this._setSaving(null);
+                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSP: ${product.display_name}`);
+                    // MỞ KHÓA
+                    this.isProcessing = false; toggleBusyScreen(false);
                     return;
                 }
 
-                // 🌍 CHECK LOCATION
+                // 🌍 CHECK 2: SERVER
                 try {
                     const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
                     if (result && result.allow === false) {
                         safePlaySound(this.env, 'error');
                         alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
-                        this._setSaving(null);
+                        // MỞ KHÓA
+                        this.isProcessing = false; toggleBusyScreen(false);
                         return;
                     }
                 } catch (e) {
-                    alert("Lỗi kết nối kiểm tra vị trí!");
-                    this._setSaving(null);
+                    alert("Lỗi kết nối Server!");
+                    this.isProcessing = false; toggleBusyScreen(false);
                     return;
                 }
 
-                // 🚀 CHECK 3: SMART MOVE & SAFE SAVE (FIX MẤT DATA)
+                // 🚀 CHECK 3: SMART MOVE & SAVE
                 if (candidateLine && currentLocId) {
                     const lineLocId = extractId(candidateLine.location_id);
-                    
                     if (lineLocId !== currentLocId) {
-                        console.log(`✅ [HLV] Smart Move (RAM Mutation): ${lineLocId} -> ${currentLocId}`);
+                        console.log(`✅ [HLV] Smart Move: ${lineLocId} -> ${currentLocId}`);
                         
-                        try {
-                            // 1. SỬA TRỰC TIẾP VÀO RAM CỦA ODOO
-                            // Việc này giống như bạn thao tác tay trên màn hình
-                            candidateLine.location_id = currentLoc; 
-                            candidateLine.qty_done = (candidateLine.qty_done || 0) + 1;
-                            
-                            // 2. UPDATE UI
-                            this.trigger('update'); 
+                        // Update RAM
+                        candidateLine.location_id = currentLoc; 
+                        candidateLine.qty_done = (candidateLine.qty_done || 0) + 1;
+                        this.trigger('update');
 
-                            // 3. GỌI SAVE CỦA ODOO
-                            // Hàm này sẽ gom TOÀN BỘ thay đổi (cả dòng này và các dòng quét trước đó) gửi đi 1 lần.
-                            // Không dùng orm.write riêng lẻ nữa!
-                            await this.save(); 
-                            
-                            this._setSaving(false); 
-                            return; // Chặn super
-                        } catch (e) {
-                            console.error("Save Error:", e);
-                            alert("Lỗi lưu dữ liệu: " + e.message);
-                            this._setSaving(null);
-                        }
+                        // Update DB (Await kỹ càng)
+                        await this.save();
+                        
+                        console.log("✅ Save Complete");
+                        // MỞ KHÓA
+                        this.isProcessing = false; toggleBusyScreen(false);
+                        return; // CHẶN SUPER
                     }
                 }
             }
 
             // =============================================================
-            // FALLBACK NORMAL SCAN
+            // FALLBACK NORMAL
             // =============================================================
             await super.processBarcode(...arguments);
-
-            // Auto Save (Đảm bảo các dòng quét thường cũng được lưu ngay)
-            try {
-                 await this.save();
-                 this._setSaving(false);
-            } catch(e) {
-                 this._setSaving(null);
-            }
+            
+            // Auto Save
+            await this.save();
 
         } catch (err) {
             console.error(err);
-            this._setSaving(null);
+            alert("Lỗi hệ thống: " + err.message);
+        } finally {
+            // LUÔN LUÔN MỞ KHÓA DÙ CÓ LỖI HAY KHÔNG
+            // Để tránh treo máy
+            this.isProcessing = false;
+            toggleBusyScreen(false);
         }
     },
 
