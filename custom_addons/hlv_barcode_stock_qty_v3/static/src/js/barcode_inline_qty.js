@@ -20,20 +20,21 @@ function getLineDemand(line) {
     return 0;
 }
 
+function safeNotify(env, message, type = 'warning') {
+    try {
+        if (env && env.services && env.services.notification) {
+            // Sticky = true nếu là danger để bắt người dùng phải tắt
+            env.services.notification.add(message, { type: type, sticky: type === 'danger' });
+        }
+    } catch (e) {}
+}
+
 function safePlaySound(env, type = 'error') {
     try {
         if (env && env.services && env.services.sound) {
             env.services.sound.play(type);
         } else {
             new Audio('/web/static/src/audio/error.mp3').play().catch(() => {});
-        }
-    } catch (e) {}
-}
-
-function safeNotify(env, message, type = 'warning') {
-    try {
-        if (env && env.services && env.services.notification) {
-            env.services.notification.add(message, { type: type, sticky: type === 'danger' });
         }
     } catch (e) {}
 }
@@ -81,8 +82,14 @@ async function renderInlineStock(lineEl, orm) {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V9: DIRECT WRITE & NO CONFLICT SAVE");
+        console.log("🚀 [HLV] V10: ANTI-F5 PROTECTION ENABLED");
         
+        this.isSaving = false; // Cờ đánh dấu đang lưu
+
+        // 1. Gắn sự kiện chặn F5/Reload
+        window.addEventListener("beforeunload", this._onBeforeUnload.bind(this));
+
+        // 2. Observer vẽ Inline Stock
         const observer = new MutationObserver(() => {
             document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
         });
@@ -94,22 +101,27 @@ patch(BarcodeModel.prototype, {
         }, 1000);
     },
 
+    // Hàm xử lý khi người dùng cố F5 hoặc tắt tab
+    _onBeforeUnload(ev) {
+        // Nếu đang trong quá trình lưu (isSaving = true)
+        if (this.isSaving) {
+            ev.preventDefault();
+            ev.returnValue = 'Dữ liệu đang được lưu. Bạn có chắc muốn rời đi không?';
+            return ev.returnValue;
+        }
+    },
+
     async processBarcode(barcode) {
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
-        // 1. NHẬN DIỆN SẢN PHẨM
         const product = await this._identifyProductSafe(barcode);
         
-        // 2. XÁC ĐỊNH VỊ TRÍ
         let currentLocId = this.location ? this.location.id : null;
-        
-        // Params check server
         let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
         let locName = (this.location?.display_name || this.record?.display_name || "");
         let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
         if (product && this.currentState.lines) {
-            // Lấy các dòng của sản phẩm này
             const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
             
             let totalDone = 0;
@@ -121,18 +133,13 @@ patch(BarcodeModel.prototype, {
                 const r = parseFloat(getLineDemand(l));
                 totalDone += d;
                 totalDemand += r;
-                // Ưu tiên lấy dòng chưa xong để update
                 if (d < r) candidateLine = l;
             });
-
-            // Nếu không có dòng nào chưa xong, lấy dòng cuối cùng để xử lý (cho trường hợp full)
+            // Nếu không có candidate (đã đủ hết), lấy dòng cuối cùng để xử lý fallback
             if (!candidateLine && productLines.length > 0) candidateLine = productLines[productLines.length - 1];
 
-            // -------------------------------------------------------------
             // 🛑 CHECK 1: LIMIT
-            // -------------------------------------------------------------
-            const isUnplanned = (totalDemand === 0);
-            if (isUnplanned) {
+            if (totalDemand === 0) {
                 safePlaySound(this.env, 'error');
                 alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSản phẩm: ${product.display_name}`);
                 return;
@@ -143,9 +150,7 @@ patch(BarcodeModel.prototype, {
                 return;
             }
 
-            // -------------------------------------------------------------
             // 🌍 CHECK 2: SERVER LOCATION
-            // -------------------------------------------------------------
             try {
                 const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
                 if (result && result.allow === false) {
@@ -159,70 +164,61 @@ patch(BarcodeModel.prototype, {
                 return;
             }
 
-            // -------------------------------------------------------------
-            // 🚀 CHECK 3: SMART MOVE & UPDATE (LOGIC V9)
-            // -------------------------------------------------------------
+            // 🚀 CHECK 3: SMART MOVE & UPDATE
             if (candidateLine && currentLocId) {
                 const lineLocId = extractId(candidateLine.location_id);
-                const isRealLine = (candidateLine.id && typeof candidateLine.id === 'number');
-
-                // Trường hợp 1: Cần chuyển kho (Vị trí dòng KHÁC vị trí đang đứng)
+                // Nếu khác vị trí -> Thực hiện chuyển kho
                 if (lineLocId !== currentLocId) {
-                    console.log(`✅ [HLV] Smart Move: ${lineLocId} -> ${currentLocId}`);
+                    console.log(`✅ [HLV] Smart Move Triggered`);
                     
                     try {
-                        // Cập nhật số liệu trên RAM
+                        this.isSaving = true; // 🔴 BẬT CỜ CHẶN F5
+                        safeNotify(this.env, "💾 Đang đồng bộ dữ liệu... ĐỪNG F5!", 'warning');
+
+                        // 1. Update RAM (Để UI mượt)
                         candidateLine.qty_done += 1;
-                        if (this.location) candidateLine.location_id = this.location; // Đổi tên hiển thị
-
-                        // A. Nếu dòng ĐÃ CÓ ID THẬT -> Dùng Write -> KHÔNG GỌI SAVE
-                        if (isRealLine) {
-                            await this.orm.write("stock.move.line", [candidateLine.id], { 
-                                "location_id": currentLocId, 
-                                "qty_done": candidateLine.qty_done 
-                            });
-                            console.log("💾 Saved via Write (No Conflict)");
-                        } 
-                        // B. Nếu dòng MỚI (Ảo) -> Buộc phải Save để tạo ID
-                        else {
-                            await this.save();
-                            console.log("💾 Saved via Full Save (New Line)");
-                        }
-
-                        // Vẽ lại màn hình ngay lập tức
+                        if (this.location) candidateLine.location_id = this.location;
                         this.trigger('update'); 
+
+                        // 2. Lưu xuống DB (Dùng Save để đảm bảo cấu trúc Picking được cập nhật)
+                        await this.save();
                         
-                        return; // CHẶN SUPER ĐỂ KHÔNG TÁCH DÒNG
+                        safeNotify(this.env, "✅ Đã lưu thành công!", 'success');
+                        this.isSaving = false; // 🟢 TẮT CỜ CHẶN F5
+                        
+                        return; // Done
                     } catch (e) {
+                        this.isSaving = false;
                         console.error("Smart Move Error:", e);
+                        alert("Lỗi khi lưu dữ liệu: " + e.message);
                     }
                 }
             }
         }
 
         // =================================================================
-        // ✅ FALLBACK: CÁC TRƯỜNG HỢP KHÁC
+        // FALLBACK NORMAL SCAN
         // =================================================================
         await super.processBarcode(...arguments);
 
-        // Auto Save thông minh (Không xung đột)
+        // Auto Save cho trường hợp thường
         try {
+             this.isSaving = true; // 🔴 BẬT CỜ
              const updatedProduct = await this._identifyProductSafe(barcode);
              if (updatedProduct && this.currentState.lines) {
                  const line = this.currentState.lines.find(l => extractId(l.product_id) === updatedProduct.id && l.qty_done <= getLineDemand(l));
-                 
                  if (line) {
-                     // Nếu là dòng thật: Write DB -> Không gọi Save
                      if (line.id && typeof line.id === 'number') {
                          await this.orm.write("stock.move.line", [line.id], { "qty_done": line.qty_done });
-                     } 
-                     // Nếu là dòng ảo: Gọi Save
-                     else {
+                     } else {
                          await this.save();
                      }
                  }
              }
-        } catch(e) {}
+             this.isSaving = false; // 🟢 TẮT CỜ
+        } catch(e) {
+            this.isSaving = false;
+        }
     },
 
     async _identifyProductSafe(barcode) {
