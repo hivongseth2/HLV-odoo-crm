@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import  BarcodeModel  from "@stock_barcode/models/barcode_model";
+import { BarcodeModel } from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
@@ -15,7 +15,6 @@ function extractId(field) {
 }
 
 function getLineDemand(line) {
-    // Odoo 18 Logic
     if (line.reserved_uom_qty > 0) return line.reserved_uom_qty;
     if (line.product_uom_qty > 0) return line.product_uom_qty;
     if (line.quantity_product_uom > 0) return line.quantity_product_uom;
@@ -32,7 +31,7 @@ function safePlaySound(env, type = 'error') {
     } catch (e) {}
 }
 
-// MÀN HÌNH KHÓA (BLOCKING UI) - BẮT BUỘC ĐỂ KHÔNG MẤT DỮ LIỆU
+// BLOCKING UI
 function toggleBlockingScreen(show) {
     let el = document.getElementById('hlv-blocking-screen');
     if (!el) {
@@ -41,8 +40,8 @@ function toggleBlockingScreen(show) {
         el.style.cssText = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 99999999; display: none; justify-content: center; align-items: center; flex-direction: column; color: white; font-family: system-ui;";
         el.innerHTML = `
             <div style="font-size: 40px; margin-bottom: 20px;">⏳</div>
-            <div style="font-size: 24px; font-weight: bold;">ĐANG LƯU DỮ LIỆU...</div>
-            <div style="font-size: 16px; margin-top: 10px; color: #ffc107;">Vui lòng đợi lưu xong mới quét tiếp!</div>
+            <div style="font-size: 24px; font-weight: bold;">ĐANG LƯU...</div>
+            <div style="font-size: 16px; margin-top: 10px; color: yellow;">Vui lòng đợi thông báo này tắt hẳn!</div>
         `;
         document.body.appendChild(el);
     }
@@ -50,17 +49,16 @@ function toggleBlockingScreen(show) {
 }
 
 async function renderInlineStock(lineEl, orm) {
+    // (Giữ nguyên logic vẽ inline stock để không làm rối log)
     let defaultCode = lineEl.dataset.barcode;
     if (!defaultCode) {
         const codeEl = lineEl.querySelector(".o_product_code") || lineEl.querySelector(".o_product_ref");
         if (codeEl) defaultCode = codeEl.textContent.trim();
     }
     if (!defaultCode || lineEl.querySelector(".hlv-inline-stock")) return;
-
     try {
         const domain = [['product_id.default_code', '=', defaultCode], ['location_id.usage', '=', 'internal']];
         const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
-        
         let textDisplay = "0";
         if (quants && quants.length > 0) {
             const stockMap = {};
@@ -73,7 +71,6 @@ async function renderInlineStock(lineEl, orm) {
             });
             textDisplay = Object.keys(stockMap).map(k => `${k}: ${stockMap[k]}`).join(" | ");
         }
-
         const qtyContainer = lineEl.querySelector('div[name="quantity"]') || lineEl.querySelector('.o_barcode_scanner_qty')?.parentElement;
         if (qtyContainer) {
             let badge = document.createElement("div"); 
@@ -86,18 +83,15 @@ async function renderInlineStock(lineEl, orm) {
 }
 
 // =============================================================================
-// MAIN LOGIC (V19 - STRICT LOCK)
+// MAIN LOGIC (V20 - DEBUGGER)
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V19: STRICT LOCK & QUEUE");
-        
-        this.isLocked = false; // Biến khóa hệ thống
+        console.log("🚀 [HLV] V20: DEBUG MODE ENABLED");
+        this.isLocked = false;
 
-        // 1. CHẶN F5 MẶC ĐỊNH
-        // Lưu ý: Người dùng CẦN click chuột vào trang web ít nhất 1 lần thì trình duyệt mới cho phép hiện popup.
         window.addEventListener('beforeunload', (e) => {
             e.preventDefault();
             e.returnValue = 'DỮ LIỆU CÓ THỂ BỊ MẤT. ĐỪNG F5!';
@@ -116,34 +110,41 @@ patch(BarcodeModel.prototype, {
     },
 
     async processBarcode(barcode) {
-        // 0. KIỂM TRA KHÓA (QUAN TRỌNG NHẤT)
-        // Nếu đang lưu cái trước -> Chặn đứng cái sau -> Kêu Bíp lỗi
         if (this.isLocked) {
-            console.warn("🚫 System Locked. Waiting for previous save...");
+            console.warn("🚫 [HLV] SKIPPED: System is locked saving previous item.");
             safePlaySound(this.env, 'error'); 
             return; 
         }
 
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
-        // BẬT KHÓA & HIỆN MÀN HÌNH CHỜ
+        console.group(`⚡ [HLV] SCAN START: ${barcode}`);
         this.isLocked = true;
         toggleBlockingScreen(true);
 
         try {
-            // 1. NHẬN DIỆN
+            // 1. LOG STATE BEFORE
+            console.log("📊 State Before Scan:", {
+                lines_count: this.currentState.lines.length,
+                location: this.location
+            });
+
             const product = await this._identifyProductSafe(barcode);
-            
-            // 2. LẤY VỊ TRÍ
-            let currentLoc = this.location; // Object vị trí hiện tại
+            console.log("📦 Identified Product:", product ? product.display_name : "NULL");
+
+            // Info Vị trí
+            let currentLoc = this.location;
             let currentLocId = currentLoc ? currentLoc.id : null;
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
             let locName = (currentLoc?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
+            console.log("📍 Location Info:", { currentLocId, checkLocId, whPrefix });
+
             if (product && this.currentState.lines) {
                 const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
-                
+                console.log("🔎 Found Lines for Product:", JSON.parse(JSON.stringify(productLines))); // Deep copy log
+
                 let totalDone = 0;
                 let totalDemand = 0;
                 let candidateLine = null;
@@ -155,67 +156,85 @@ patch(BarcodeModel.prototype, {
                     totalDemand += r;
                     if (d < r) candidateLine = l;
                 });
+                
+                // Fallback line cuối
                 if (!candidateLine && productLines.length > 0) candidateLine = productLines[productLines.length - 1];
 
-                // 🛑 CHECK 1: LIMIT
-                const isUnplanned = (totalDemand === 0);
-                if (isUnplanned) {
+                console.log("🧮 Stats:", { totalDone, totalDemand });
+                console.log("🎯 Candidate Line:", candidateLine ? JSON.parse(JSON.stringify(candidateLine)) : "NONE");
+
+                // --- CHECKS ---
+                if (totalDemand === 0) {
+                    console.error("⛔ BLOCK: Unplanned");
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSP: ${product.display_name}`);
-                    return; // Sẽ nhảy xuống finally để mở khóa
+                    alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!`);
+                    return;
                 }
                 if (totalDone >= totalDemand) {
+                    console.error("⛔ BLOCK: Over Limit");
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSP: ${product.display_name}`);
+                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!`);
                     return;
                 }
 
-                // 🌍 CHECK 2: SERVER LOCATION
+                // Check Server
+                console.log("📡 Calling check_barcode_availability...");
                 try {
                     const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
+                    console.log("📩 Server Result:", result);
                     if (result && result.allow === false) {
                         safePlaySound(this.env, 'error');
-                        alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
+                        alert(`⛔ SAI VỊ TRÍ!\n${result.message}`);
                         return;
                     }
                 } catch (e) {
-                    alert("Lỗi kết nối kiểm tra vị trí!");
+                    console.error("❌ Network Error:", e);
+                    alert("Lỗi mạng!");
                     return;
                 }
 
-                // 🚀 CHECK 3: SMART MOVE
+                // --- ACTION ---
                 if (candidateLine && currentLocId) {
                     const lineLocId = extractId(candidateLine.location_id);
-                    
                     if (lineLocId !== currentLocId) {
-                        console.log(`✅ [HLV] Smart Move: ${lineLocId} -> ${currentLocId}`);
-                        
-                        // Sửa RAM
+                        console.log(`✅ [HLV] SMART MOVE DETECTED`);
+                        console.log(`   From: ${lineLocId} -> To: ${currentLocId}`);
+                        console.log(`   Old Qty: ${candidateLine.qty_done}`);
+
+                        // MUTATE RAM
                         candidateLine.location_id = currentLoc;
                         candidateLine.qty_done = (candidateLine.qty_done || 0) + 1;
-                        this.trigger('update'); // Vẽ lại ngay
-
-                        // GỌI SAVE VÀ CHỜ (BLOCK USER UNTIL DONE)
-                        await this.save();
                         
-                        console.log("✅ Saved Successfully");
-                        return; // Done
+                        console.log(`   New Qty (RAM): ${candidateLine.qty_done}`);
+                        
+                        this.trigger('update');
+
+                        console.log("💾 Calling SAVE()...");
+                        await this.save();
+                        console.log("✅ SAVE FINISHED.");
+                        
+                        // LOG STATE AFTER SAVE
+                        const lineAfter = this.currentState.lines.find(l => l.id === candidateLine.id);
+                        console.log("📊 Line State After Save:", JSON.parse(JSON.stringify(lineAfter)));
+
+                        return;
                     }
                 }
             }
 
-            // =============================================================
             // FALLBACK
-            // =============================================================
+            console.log("⚠️ Fallback to super.processBarcode");
             await super.processBarcode(...arguments);
+            console.log("💾 Auto Saving (Fallback)...");
             await this.save();
+            console.log("✅ Auto Save Finished");
 
         } catch (err) {
-            console.error(err);
-            alert("Lỗi hệ thống: " + err.message);
+            console.error("❌ CRASH:", err);
+            alert("Lỗi: " + err.message);
         } finally {
-            // MỞ KHÓA SAU KHI XONG TẤT CẢ (Hoặc bị lỗi)
-            // Lúc này bạn mới được quét cái tiếp theo
+            console.log("🔓 Unlocking UI");
+            console.groupEnd();
             this.isLocked = false;
             toggleBlockingScreen(false);
         }
