@@ -4,7 +4,7 @@ import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// HELPER: CÁC HÀM HỖ TRỢ
+// HELPER: CÁC HÀM HỖ TRỢ AN TOÀN
 // =============================================================================
 
 function safeNotify(env, message, type = 'warning') {
@@ -31,6 +31,7 @@ async function renderInlineStock(lineEl, orm) {
         const codeEl = lineEl.querySelector(".o_product_code") || lineEl.querySelector(".o_product_ref");
         if (codeEl) defaultCode = codeEl.textContent.trim();
     }
+    // Tránh vẽ lại nhiều lần
     if (!defaultCode || lineEl.querySelector(".hlv-inline-stock")) return;
 
     try {
@@ -68,7 +69,7 @@ async function renderInlineStock(lineEl, orm) {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] Barcode Security: ACTIVE");
+        console.log("🚀 [HLV] FINAL LOGIC: SUM CHECK + SECURITY");
         
         const observer = new MutationObserver(() => {
             document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
@@ -88,37 +89,48 @@ patch(BarcodeModel.prototype, {
         const product = await this._identifyProductSafe(barcode);
 
         // =================================================================
-        // ⛔ BƯỚC 1: CHẶN QUÉT DƯ (HARD BLOCK)
+        // ⛔ BƯỚC 1: CHECK SỐ LƯỢNG (TÍNH TỔNG CỘNG DỒN)
         // =================================================================
-        // Logic: Tìm dòng sản phẩm đó -> Check Đã làm (Done) vs Nhu cầu (Demand)
         if (product && this.currentState.lines) {
-            const line = this.currentState.lines.find(l => l.product_id.id === product.id);
+            // Lọc ra TẤT CẢ các dòng của sản phẩm này (để tránh trường hợp tìm nhầm dòng Demand=0)
+            const productLines = this.currentState.lines.filter(l => l.product_id.id === product.id);
             
-            if (line) {
-                const done = parseFloat(line.qty_done || 0);
-                const demand = parseFloat(line.product_uom_qty || 0);
+            let totalDone = 0;
+            let totalDemand = 0;
 
-                // DEBUG LOG: Để bạn F12 kiểm tra
-                console.log(`🔍 Check Limit: ${product.display_name} | Done: ${done} | Demand: ${demand}`);
+            productLines.forEach(l => {
+                totalDone += parseFloat(l.qty_done || 0);
+                totalDemand += parseFloat(l.product_uom_qty || 0); // Có thể là reserved_uom_qty tùy phiên bản, nhưng product_uom_qty thường là demand
+            });
 
-                // Nếu có yêu cầu (Demand > 0) VÀ Đã làm xong (Done >= Demand)
-                if (demand > 0 && done >= demand) {
-                    console.error("⛔ BLOCKED: FULL QUANTITY");
-                    
-                    // 1. Âm thanh lỗi
-                    safePlaySound(this.env, 'error');
-                    
-                    // 2. Alert Cứng (Bắt buộc click OK mới tắt)
-                    alert(`⚠️ DỪNG LẠI!\n\nSản phẩm: ${product.display_name}\nĐã đủ số lượng: ${done}/${demand}\n\nKhông được phép quét thêm!`);
-                    
-                    // 3. Return ngay lập tức (Chặn đứng mọi thứ)
-                    return; 
+            console.log(`🔍 [HLV] Check SUM: ${product.display_name} | TotalDone: ${totalDone} | TotalDemand: ${totalDemand}`);
+
+            // LOGIC CHẶN CỨNG:
+            // 1. Nếu Tổng Demand > 0 VÀ Tổng Done >= Tổng Demand => Dư -> CHẶN
+            // 2. Nếu Tổng Demand == 0 (Hàng không có trong phiếu) => CHẶN LUÔN (Nếu muốn cấm quét hàng ngoài luồng)
+            
+            const isFull = (totalDemand > 0 && totalDone >= totalDemand);
+            const isUnplanned = (totalDemand === 0); // Không có nhu cầu
+
+            if (isFull || isUnplanned) {
+                console.error("⛔ BLOCKED: FULL QUANTITY OR UNPLANNED");
+                
+                safePlaySound(this.env, 'error');
+                
+                let msg = "";
+                if (isUnplanned) {
+                    msg = `⚠️ SẢN PHẨM KHÔNG CÓ TRONG PHIẾU!\n\nSP: ${product.display_name}\nDemand: 0\n\nKhông được phép quét hàng ngoài kế hoạch.`;
+                } else {
+                    msg = `⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSP: ${product.display_name}\nTiến độ: ${totalDone}/${totalDemand}\n\nKhông được phép quét thêm!`;
                 }
+
+                alert(msg);
+                return; // Return ngay lập tức
             }
         }
 
         // =================================================================
-        // 🌍 BƯỚC 2: CHECK SERVER (VỊ TRÍ CÓ HÀNG KHÔNG?)
+        // 🌍 BƯỚC 2: CHECK SERVER (VỊ TRÍ)
         // =================================================================
         let sourceLocId = this.location ? this.location.id : (this.record.location_id ? (Array.isArray(this.record.location_id) ? this.record.location_id[0] : this.record.location_id) : null);
         let locName = (this.location?.display_name || this.record?.display_name || "");
@@ -127,27 +139,21 @@ patch(BarcodeModel.prototype, {
         try {
             const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, sourceLocId]);
             
-            // NẾU BỊ CHẶN (Allow = False)
             if (result && result.allow === false) {
                 safePlaySound(this.env, 'error');
-                
-                // Alert Cứng cho lỗi vị trí luôn
                 alert(`⛔ LỖI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
-                
-                return; // CHẶN
+                return; 
             }
             if (result && result.message) safeNotify(this.env, result.message, 'warning');
 
         } catch (e) {
-            // Nếu lỗi server check, chặn luôn cho an toàn
-            alert("Lỗi kiểm tra tồn kho: " + e.message);
+            alert("Lỗi kiểm tra tồn kho (Server Check): " + e.message);
             return; 
         }
 
         // =================================================================
-        // ✅ BƯỚC 3: ODOO XỬ LÝ (TĂNG SỐ LƯỢNG)
+        // ✅ BƯỚC 3: ODOO LOGIC (TĂNG SỐ LƯỢNG)
         // =================================================================
-        // Chỉ chạy xuống đây nếu Bước 1 & 2 đều qua cửa
         await super.processBarcode(...arguments);
 
         // =================================================================
@@ -155,11 +161,16 @@ patch(BarcodeModel.prototype, {
         // =================================================================
         try {
             if (product && this.currentState.lines) {
-                const line = this.currentState.lines.find(l => l.product_id.id === product.id);
-                if (line) {
-                    if (line.id && typeof line.id === 'number') {
+                // Tìm lại dòng vừa được update (thường là dòng chưa done)
+                const line = this.currentState.lines.find(l => l.product_id.id === product.id && (l.qty_done <= l.product_uom_qty || l.product_uom_qty === 0));
+                
+                // Fallback: Nếu không tìm thấy dòng cụ thể, lấy dòng đầu tiên của sản phẩm
+                const targetLine = line || this.currentState.lines.find(l => l.product_id.id === product.id);
+
+                if (targetLine) {
+                    if (targetLine.id && typeof targetLine.id === 'number') {
                         // Line cũ -> Write (Nhanh)
-                        await this.orm.write("stock.move.line", [line.id], { "qty_done": line.qty_done });
+                        await this.orm.write("stock.move.line", [targetLine.id], { "qty_done": targetLine.qty_done });
                     } else {
                         // Line mới -> Save tổng (Chậm hơn chút)
                         await this.save();
