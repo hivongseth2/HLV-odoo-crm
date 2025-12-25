@@ -10,34 +10,13 @@ class OdooUtils(models.AbstractModel):
 
     def _get_or_create_partner(self, name):
         """Tìm hoặc tạo mới đối tác (partner) dựa trên tên."""
-        if not name:
-            return False
-        original_name = name
         name = name.strip()
-        
-        # Log input cẩn thận để check ký tự lạ
-        _logger.info("🔍 _get_or_create_partner: Input='%s' (len=%d)", name, len(name))
-        
         partner = self.env["res.partner"].search([("name", "=", name)], limit=1)
-        
-        # Nếu không tìm thấy, thử search ilike để xem có phải do case/space ảo không
         if not partner:
-            check_ilike = self.env["res.partner"].search([("name", "ilike", name)], limit=1)
-            if check_ilike:
-                _logger.warning("⚠️ Không tìm thấy '=' nhưng thấy 'ilike' cho '%s' -> Có thể do case sensitive hoặc dấu đặc biệt? Found id=%s", name, check_ilike.id)
-        
-        if not partner:
-            # Check kỹ hơn trong DB xem có thằng nào tên giống hệt mà không bắt được không
-            # Có thể log hex để xem ký tự ẩn
-            partner = self.env["res.partner"].create({
-                "name": name, 
-                "supplier_rank": 1,
-                "customer_rank": 1
-            })
-            _logger.info("✅ Tạo liên hệ mới: '%s' (id=%s). Hex: %s", name, partner.id, name.encode('utf-8').hex())
+            partner = self.env["res.partner"].create({"name": name, "supplier_rank": 1})
+            _logger.info("Tạo liên hệ mới: %s", name)
         else:
-            _logger.info("♻️ Dùng liên hệ có sẵn: '%s' (id=%s)", name, partner.id)
-            
+            _logger.info("Dùng liên hệ có sẵn: %s", name)
         return partner
 
     def _get_or_create_uom(self, name):
