@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from email.utils import encode_rfc2231
+from urllib.parse import quote
 from typing import Any, List
 
 from werkzeug import urls
@@ -124,7 +124,7 @@ class ReportDialogController(ReportController):
                 ("Content-Length", len(pdf)),
                 (
                     "Content-Disposition",
-                    f"inline; filename*={encode_rfc2231(report_name, 'utf-8')}.pdf",
+                    f"inline; filename=\"{quote(report_name, safe='')}.pdf\"",
                 ),
             ],
         )

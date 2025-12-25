@@ -44,19 +44,29 @@ registry.category("ir.actions.report handlers").add(
                 width: "0", height: "0", border: "0"
             });
 
-            // cleanup chỉ lo gỡ iframe + listeners (KHÔNG tắt loading)
+            // cleanup chỉ lo gỡ iframe + listeners
             let cleanupTimer;
+            let safetyTimeout;
             let cleaned = false;
             const MAX_WAIT_MS = 120000; // 2 phút - rộng rãi
+            const SAFETY_TIMEOUT_MS = 30000; // 30 giây safety timeout
             const listeners = [];
 
             const cleanupFrameOnly = () => {
                 if (cleaned) return;
                 cleaned = true;
                 clearTimeout(cleanupTimer);
+                clearTimeout(safetyTimeout);
                 listeners.forEach(({ target, type, fn }) => target.removeEventListener(type, fn));
                 iframe.remove();
             };
+
+            // Safety timeout: đảm bảo unblock UI sau 30 giây nếu có lỗi
+            safetyTimeout = setTimeout(() => {
+                console.warn("PDF loading safety timeout reached");
+                ui.unblock();
+                cleanupFrameOnly();
+            }, SAFETY_TIMEOUT_MS);
 
             iframe.onload = () => {
                 try {
@@ -99,6 +109,13 @@ registry.category("ir.actions.report handlers").add(
                     cleanupFrameOnly();
                     notification.add("Không thể tự động in: " + (e.message || e), { type: "warning" });
                 }
+            };
+
+            // Thêm onerror handler để bắt lỗi load
+            iframe.onerror = (e) => {
+                ui.unblock();
+                cleanupFrameOnly();
+                notification.add("Không thể tải PDF: " + (e.message || e), { type: "danger" });
             };
 
             iframe.src = url; // tải trực tiếp PDF (không fetch + blob)
