@@ -5,8 +5,40 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 
 // =============================================================================
-// HELPER: UI & NOTIFICATION
+// HELPER: UI & SOUND
 // =============================================================================
+
+function playErrorSound(env) {
+    try {
+        // Cách 1: Dùng Sound Service chuẩn của Odoo 18
+        if (env && env.services && env.services.sound) {
+            env.services.sound.play('error');
+            return;
+        }
+        // Cách 2: Fallback HTML5 Audio
+        const audio = new Audio('/web/static/src/sounds/error.mp3');
+        audio.play().catch(() => {});
+    } catch (e) {}
+}
+
+function showNotification(env, message, type = 'danger') {
+    try {
+        if (env && env.services && env.services.notification) {
+            env.services.notification.add(message, { 
+                type: type, 
+                sticky: type === 'danger', 
+                title: type === 'danger' ? "CẢNH BÁO" : "Thông báo" 
+            });
+        } else {
+            // Fallback nếu không tìm thấy service
+            alert(message);
+        }
+    } catch (e) {
+        console.error(e);
+        alert(message);
+    }
+}
+
 function insertInline(lineEl, text) {
     const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty");
     if (!qtyEl) return;
@@ -95,13 +127,13 @@ function setupObserver(orm) {
 }
 
 // =============================================================================
-// MAIN LOGIC: PATCH BARCODE MODEL
+// MAIN LOGIC: PATCH BARCODE MODEL (FIX ERROR NOTIFICATION)
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("✅ [HLV] Barcode v1.9 - Fix Location ID Ready!");
+        console.log("✅ [HLV] Barcode v2.0 - Fix Notification Ready!");
         setTimeout(() => setupObserver(this.orm), 1000);
     },
 
@@ -112,10 +144,9 @@ patch(BarcodeModel.prototype, {
             return super.processBarcode(...arguments);
         }
 
-        // 1. NHẬN DIỆN SẢN PHẨM
+        // 1. NHẬN DIỆN SẢN PHẨM (SAFE)
         const product = await this._identifyProductSafe(barcode);
         
-        // Nếu không phải sản phẩm (VD quét mã TỦ 3), cho qua để Odoo đổi vị trí
         if (!product) {
             console.log("ℹ️ [HLV] Không phải sản phẩm -> Cho qua.");
             return super.processBarcode(...arguments);
@@ -130,8 +161,9 @@ patch(BarcodeModel.prototype, {
             const demand = parseFloat(matchedLine.product_uom_qty || 0);
             if (demand > 0 && done >= demand) {
                 const msg = `⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n(${done}/${demand})`;
-                this.notification.add(msg, { type: "danger", sticky: false });
-                this._beep("error");
+                // SỬA LỖI: Dùng showNotification helper thay vì this.notification.add
+                showNotification(this.env, msg, 'danger');
+                playErrorSound(this.env);
                 return;
             }
         }
@@ -140,20 +172,19 @@ patch(BarcodeModel.prototype, {
         let sourceLocId = null;
         let whPrefix = null;
 
-        // --- FIX QUAN TRỌNG: Ưu tiên lấy vị trí đang Active trên Header ---
-        // Trong Odoo 18, khi quét vị trí, nó cập nhật vào this.location
+        // Ưu tiên: Lấy từ this.location (Header - Vị trí đang scan)
         if (this.location) {
             sourceLocId = this.location.id;
             console.log("📍 [HLV] Lấy từ this.location (Header):", sourceLocId);
         } 
         
-        // Nếu không có header active, mới lấy từ Picking gốc
+        // Fallback: Lấy từ Picking gốc
         if (!sourceLocId && this.record && this.record.location_id) {
              sourceLocId = typeof(this.record.location_id) === 'object' ? this.record.location_id[0] : this.record.location_id;
              console.log("📍 [HLV] Lấy từ Picking (Gốc):", sourceLocId);
         }
 
-        // Lấy Prefix từ tên vị trí
+        // Lấy Prefix
         if (this.location && this.location.display_name) {
             const m = this.location.display_name.match(/\b(TSN|KBC|KHD)\b/i);
             if (m) whPrefix = m[1].toUpperCase();
@@ -173,8 +204,9 @@ patch(BarcodeModel.prototype, {
             );
             
             if (result && result.allow === false) {
-                this.notification.add(result.message, { type: "danger", sticky: true, title: "LỖI KHO" });
-                this._beep("error");
+                // SỬA LỖI: Dùng showNotification helper
+                showNotification(this.env, result.message, 'danger');
+                playErrorSound(this.env);
                 return; // ⛔ CHẶN
             }
         } catch (e) {
