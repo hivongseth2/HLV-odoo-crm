@@ -1,7 +1,7 @@
 {
     'name': 'MISA PO Fetch Button',
     'version': '1.0',
-    'depends': ['base', 'stock', 'purchase', 'sale', 'point_of_sale', 'sales_team'],
+    'depends': ['base', 'stock', 'purchase', 'sale', 'sales_team'],
     'author': 'Luan',
     'category': 'Purchases',
     'description': 'Fetch PO from MISA and create in Odoo',
@@ -19,10 +19,8 @@
         'wizard/misa_tag_update_wizard_views.xml',
     ],
     'python': [
-        'models/sale_api_import_wizard.py',
+        'models/sale_api_import_wizard.py',  # Thêm file này
     ],
     'installable': True,
     'auto_install': False,
 }
-
-

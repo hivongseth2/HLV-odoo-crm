@@ -778,7 +778,6 @@ class SaleApiImportWizard(models.TransientModel):
             "HCM_SHOWROOM": "TSNSR/Stock",
             "HLV":"TSN/Stock",
             "BẾN CAM": "KBC/Tồn kho",
-            "BẾNCAM": "KBC/Tồn kho",
         }
 
         e_accounts = {
@@ -831,10 +830,10 @@ class SaleApiImportWizard(models.TransientModel):
                 zns = bool(order.get("CustomField23", False))
 
                 # Bỏ qua đơn đã giao (DeliveryStatusID=2)
-                # delivery_status = order.get("DeliveryStatusID", "0")
-                # if delivery_status is not None and str(delivery_status).strip() == "2":
-                #     _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
-                #     continue
+                delivery_status = order.get("DeliveryStatusID", "0")
+                if delivery_status is not None and str(delivery_status).strip() == "2":
+                    _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
+                    continue
                 
                 # Nếu là 'Từ chối ghi' → hủy các SO hiện có trùng tên rồi bỏ qua import
                 if revenue_status_id == 4 or status == "từ chối ghi":
@@ -842,7 +841,7 @@ class SaleApiImportWizard(models.TransientModel):
                     # if found:
                     #     for so in found:
                     #         self._force_cancel_sale_order(so, revenue_status_id, status)
-                    continue
+                    continue              
 
 
 
@@ -854,10 +853,11 @@ class SaleApiImportWizard(models.TransientModel):
 
                 # --- Lấy chi tiết dòng hàng ---
                 order_id = order.get("ID")
-                misa_id_str = str(order_id) if order_id else False  # ### NEW
+                misa_id_str = str(order_id) if order_id else False  
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
                 
-                
+                if customer_name not in e_accounts :
+                    continue
                 if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
                     continue
 
@@ -893,12 +893,9 @@ class SaleApiImportWizard(models.TransientModel):
                 if customer_name in e_accounts and not pick_code:
                     continue
 
-                _logger.info("checking e_accounts for %s", customer_name)
                 if customer_name in e_accounts:
-                    _logger.info("✅ Customer '%s' is in e_accounts -> base_pick_name = pick_code (%s)", customer_name, pick_code)
                     base_pick_name = pick_code
                 else:
-                    _logger.info("ℹ️ Customer '%s' NOT in e_accounts -> base_pick_name = SaleOrderNo (%s)", customer_name, order.get('SaleOrderNo'))
                     base_pick_name = order.get('SaleOrderNo')
                 # tỉnh/thành để map state/city
                 province_text = (
@@ -1602,7 +1599,7 @@ class SaleApiImportWizard(models.TransientModel):
                                 line_vals['x_studio_combo_parent_code'] = False
                             
                             # ===== PRODUCTION STATUS FROM MISA =====
-                            production_status_text = line.get("ProductionStatusIDText") or ""
+                            production_status_text = line.get("CustomField4") or ""
                             if production_status_text:
                                 line_vals['x_studio_product_status'] = production_status_text
                             

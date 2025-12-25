@@ -555,6 +555,8 @@ class MisaPOSync(models.TransientModel):
         custom_field2 = misa_po.get("custom_field2", "")  # điều khoản giao hàng
         receive_date_str = misa_po.get("receive_date") or refdate_str
         planned_naive_utc = _to_naive_utc(receive_date_str)
+        custom_field1 = misa_po.get("custom_field1", "")  # điều khoản giao hàng
+        receive_address = misa_po.get("receive_address", "")  # địa chỉ nhận hàng
 
         # Chuyển refdate sang date (chỉ lấy ngày)
         misa_date = False
@@ -567,7 +569,7 @@ class MisaPOSync(models.TransientModel):
         partner = odoo_utils._get_or_create_partner(supplier_name)
 
         detail_payload = {
-            "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
+            "columns": [2157, 1355, 2161, 4670, 1127,5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
             "filter": [
                 {
                     "property": 3993,
@@ -599,13 +601,19 @@ class MisaPOSync(models.TransientModel):
         if not lines:
             raise models.UserError(f"⚠️ Đơn {refno} không có chi tiết sản phẩm")
 
-        stock_code = lines[0].get("stock_code", "").strip().replace(" ", "").upper()
+        # stock_code = lines[0].get("stock_code", "").strip().replace(" ", "").upper()
+        stock_code = lines[0].get("custom_field5", "").strip().replace(" ", "").upper()
+
+        
         
         stock_mapping = {
                 "HCM": "TSN/Stock",
                 "BENCAM": "KBC/Tồn kho",
                 "HIENDUC": "KHD/Tồn kho",
-                "HCM_SHOWROOM": "TSNSR/Stock"
+                "HCM_SHOWROOM": "TSNSR/Stock",
+                "HLV":"HLV/Stock",
+                "BẾN CAM": "KBC/Tồn kho",
+                 "BẾNCAM": "KBC/Tồn kho",
             }
 
         if stock_code not in stock_mapping:
@@ -653,10 +661,12 @@ class MisaPOSync(models.TransientModel):
                 'partner_ref': refno,
                 'x_studio_misa_date': misa_date,
                 'x_studio_delivery_term': custom_field2 or False,
+                "x_studio_iu_kin_thanh_ton": custom_field1 or False,
+                'x_studio_ddgh': receive_address or False,
+                
+                
+                
             })
-            
-            # ===
-            
             
             po_rec = odoo_po
             total_lines = len(lines)
@@ -673,6 +683,8 @@ class MisaPOSync(models.TransientModel):
                 "partner_ref": refno,
                 "x_studio_misa_date": misa_date,
                 "x_studio_delivery_term": custom_field2 or False,
+                "x_studio_iu_kin_thanh_ton": custom_field1 or False,
+                'x_studio_ddgh': receive_address or False,
             }
             po_rec = self.env["purchase.order"].create(po_vals)
             total_lines = len(lines)
@@ -768,11 +780,8 @@ class MisaPOSync(models.TransientModel):
 
         misa_po = self._search_po_in_misa(po_code, headers)
         odoo_po = self.env["purchase.order"].search([
-            '|',
-            ('name', '=', po_code),
-            ('partner_ref', '=', po_code)
-        ], limit=1)
-
+                ('name', '=', po_code)
+            ], limit=1)
         # ===== CASE 1: Không có trong MISA =====
         if not misa_po:
             if odoo_po:
@@ -833,9 +842,7 @@ class MisaPOSync(models.TransientModel):
                 )
                 
                 after_po = odoo_po or self.env["purchase.order"].search([
-                    '|',
-                    ('name', '=', po_code),
-                    ('partner_ref', '=', po_code)
+                    ('name', '=', po_code)
                 ], limit=1)
                 
                 return {
@@ -843,8 +850,7 @@ class MisaPOSync(models.TransientModel):
                     'action': 'updated' if existed else 'created',
                     'res_id': after_po.id if after_po else None,
                     'name': after_po.name if after_po else po_code,
-                    'detail': f'Đã {"cập nhật" if existed else "tạo mới"} đơn {po_code} từ MISA'
-                }
+                    'detail': f'Đã {"cập nhật" if existed else "tạo mới"} đơn {po_code} từ MISA'}
             except Exception as e:
                 _logger.exception("❌ Lỗi upsert PO %s: %s", po_code, e)
                 return {
@@ -883,9 +889,7 @@ class PurchaseOrder(models.Model):
         
         
         
-
-
-
+        
 class PurchaseOrder(models.Model):
     _inherit = 'purchase.order'
 

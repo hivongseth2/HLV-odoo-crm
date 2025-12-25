@@ -87,6 +87,9 @@ class MisaApiPurchaseOrder(http.Controller):
 
         try:
             env_admin = request.env(user=admin_user)
+            
+            # check đơn 
+
 
             result = env_admin["purchase.order"].api_sync_po_by_code(
                 po_code=po_code,

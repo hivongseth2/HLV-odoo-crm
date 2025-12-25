@@ -5,8 +5,7 @@ import re
 from dateutil import parser as dtparser
 from requests.utils import dict_from_cookiejar
 from http.cookiejar import Cookie
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+
 _logger = logging.getLogger(__name__)
 import json
 
@@ -456,8 +455,7 @@ class MisaApiUtils(models.AbstractModel):
             "other_sys_order_code": other_sys_order_code,
             "delivery_order_number": delivery_order_number,
             "httt": httt,
-            "htgh": htgh,
-            "is_crm_delivery": is_crm_delivery,  # True nếu DeliveryPartnerID = 3000
+            "htgh": htgh
         }
     
 
@@ -831,11 +829,12 @@ class MisaApiUtils(models.AbstractModel):
         return self._process_create_product(product)
 
     # =========================================================================
-    # 2. LOGIC XỬ LÝ CHÍNH (PRIVATE)
+    # CREATE AND SEARCH PRODUCT APIs
     # =========================================================================
+
     def _process_create_product(self, product):
         misa_config = self.env['misa.config']
-        token = self._fetch_login_crm_token() # Hàm này giữ nguyên từ code gốc của bạn
+        token = self._fetch_login_crm_token()
         if not token:
             raise Exception("Không lấy được Token đăng nhập MISA")
 
@@ -878,6 +877,8 @@ class MisaApiUtils(models.AbstractModel):
             "ProductCode": code,
             "ProductName": product.name,
             "ProductCategoryID": cat_id,
+            "DefaultStockID": "29", 
+            "DefaultStockIDText": "HLV",
             "ProductCategoryIDText": odoo_cat_name if cat_id != 23 else "Hàng hóa",
             "UsageUnitID": unit_id, 
             "UsageUnitIDText": unit_text,
@@ -926,7 +927,7 @@ class MisaApiUtils(models.AbstractModel):
             raise e
 
     # =========================================================================
-    # 3. CÁC HÀM TÌM KIẾM THÔNG MINH (HELPER)
+    # HELPER FUNCTIONS
     # =========================================================================
 
     def _find_tax_id_smart(self, headers, odoo_amount, odoo_name):
@@ -998,18 +999,12 @@ class MisaApiUtils(models.AbstractModel):
         clean_name = str(name).strip().lower()
         session = self._get_retry_session()
 
-        # =====================================================================
-        # CÁCH 1: TREE API (Nhanh, lấy cấu trúc cây)
-        # =====================================================================
+        # CÁCH 1: TREE API
         try:
-            # Clean header cho GET request
             get_headers = headers.copy()
             for k in ['content-length', 'Content-Length', 'content-type', 'Content-Type']:
                 get_headers.pop(k, None)
             
-            # API Tree Generic
-            # User sample: .../tree/69551/false (69551=Product ID)
-            # Since we are creating, use 0 or dummy ID.
             url_tree = "https://amisapp.misa.vn/crm/g1/api/business/ProductCategory/tree/0/false"
             
             _logger.info(f"🔎 [MISA] Start Tree Search for: '{clean_name}'")
@@ -1017,17 +1012,13 @@ class MisaApiUtils(models.AbstractModel):
             
             if res.ok and res.json().get("Success"):
                 raw_data = res.json().get("Data")
-                # Data trả về là String JSON -> cần parse
                 nodes = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
                 
                 if isinstance(nodes, list):
-                    # Hàm đệ quy tìm kiếm
                     def recursive_search(n_list):
                         for node in n_list:
-                            # So sánh tên
                             if str(node.get("ProductCategoryName") or "").strip().lower() == clean_name:
                                 return node.get("ID")
-                            # Tìm trong con
                             childs = node.get("Children")
                             if childs and isinstance(childs, list):
                                 found = recursive_search(childs)
@@ -1036,23 +1027,14 @@ class MisaApiUtils(models.AbstractModel):
                     
                     found_id = recursive_search(nodes)
                     if found_id:
-                        _logger.info(f"✅ [Tree] Found Category ID: {found_id}")
                         return found_id
-                    _logger.info("   → Not found in Tree.")
-            else:
-                 _logger.warning(f"⚠️ [Tree] API Failed: {res.text}")
-
         except Exception as e:
             _logger.warning(f"⚠️ [Tree] Exception: {e}")
 
-        # =====================================================================
-        # CÁCH 2: GRID PAGINATION (Fallback - Chậm nhưng chắc)
-        # =====================================================================
-        _logger.info(f"Values fallback to Grid Pagination for: '{clean_name}'")
-        
+        # CÁCH 2: GRID PAGINATION
         url_grid = "https://amisapp.misa.vn/crm/g2/api/business/ProductCategory/grid"
         page = 1
-        page_size = 200 # An toàn, tránh 500 error
+        page_size = 200
         max_loop = 50 
 
         while page <= max_loop:
@@ -1066,7 +1048,6 @@ class MisaApiUtils(models.AbstractModel):
             
             try:
                 res = session.post(url_grid, headers=headers, json=payload, timeout=20)
-                
                 if not res.ok or not res.json().get("Success"):
                      break
                 
@@ -1078,13 +1059,11 @@ class MisaApiUtils(models.AbstractModel):
                     c_name = str(item.get("ProductCategoryName") or "").strip().lower()
                     if c_name == clean_name:
                          cat_id = item.get("ProductCategoryID")
-                         _logger.info(f"✅ [Grid] Found at Page {page}: {cat_id}")
                          return cat_id or item.get("ID")
                 
                 if len(items) < page_size:
                     break
                 page += 1
-                
             except:
                 break
         
@@ -1092,6 +1071,11 @@ class MisaApiUtils(models.AbstractModel):
 
     def _get_retry_session(self):
         """Tạo session có cơ chế thử lại khi lỗi mạng"""
+        # Import cục bộ để tránh lỗi 'unresolved' ở đầu file nếu IDE chưa cấu hình đúng
+        import requests
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        
         session = requests.Session()
         retry = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
         adapter = HTTPAdapter(max_retries=retry)
@@ -1116,15 +1100,22 @@ class MisaApiUtils(models.AbstractModel):
         except: pass
         return None
     
-    
-    
-    # -------------------------------------------------------------------------
-    # API XỬ LÝ DỮ LIỆU THÔ (RAW DATA) - Dùng cho Controller gọi vào
-    # -------------------------------------------------------------------------
+    # create product
+    def create_product_misa(self, product_id):
+        """
+        Hàm public để tạo sản phẩm.
+        Input: ID của sản phẩm (Integer)
+        Output: MISA ID (String)
+        """
+        product = self.env['product.template'].browse(product_id)
+        if not product.exists():
+            raise Exception(f"Không tìm thấy sản phẩm có ID {product_id} trong Odoo")
+        return self._process_create_product(product)
+
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
-    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods"):
+    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods",cat_id=None):
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
@@ -1133,10 +1124,11 @@ class MisaApiUtils(models.AbstractModel):
         headers = misa_config.get_crm_header(token)
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
-        # --- 1. XỬ LÝ ID (Giữ nguyên logic tìm kiếm vì nó đã hoạt động tốt) ---
-        cat_id = self._get_category_id_by_name(headers, category_name)
-        if not cat_id:
-             cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
+        # --- 1. XỬ LÝ ID ---
+        # cat_id = self._get_category_id_by_name(headers, category_name)
+        cat_id = cat_id
+        # if not cat_id:
+        #      cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
 
         unit_id, unit_text = self._find_dictionary_item(headers, "UsageUnitID", unit_name)
         if not unit_id:
@@ -1148,7 +1140,7 @@ class MisaApiUtils(models.AbstractModel):
         prop_id = 2 if is_service else 1
         prop_text = "Dịch vụ" if is_service else "Hàng hóa"
 
-        # --- 2. PAYLOAD (ĐIỀU CHỈNH THEO MẪU FETCH THÀNH CÔNG) ---
+        # --- 2. PAYLOAD ---
         price_val = float(price)
         
         payload = {
@@ -1165,26 +1157,23 @@ class MisaApiUtils(models.AbstractModel):
             "UnitPrice": price_val,
             "UnitPriceFixed": price_val,
             "PurchasedPrice": 0,
-            
-            # Các trường mặc định theo mẫu
             "MISAEntityState": 1,
             "Active": True, "Inactive": False, "IsPublic": False, 
             "FormLayoutID": 45, "FormLayoutIDText": "Mẫu tiêu chuẩn",
             "IsFollowSerialNumber": False,
             "IsUseTax": False, "PriceAfterTax": False,
             "Fields": [], "FieldsCustom": [], 
-            
-            # --- KHU VỰC QUAN TRỌNG: DATACUSTOM ---
+            "DefaultStockID": "29", 
+            "DefaultStockIDText": "HLV",
             "DataCustom": {
-                "CustomField13": None,       # Theo mẫu: null
-                "CustomField13Text": "",     # Theo mẫu: rỗng
+                "CustomField13": None,
+                "CustomField13Text": "",
                 "CustomField14": None,
-                "CustomField15": None,       # Theo mẫu: null
-                "CustomField16": int(price_val), # Theo mẫu: 33333 -> Map giá vào đây
+                "CustomField15": None,
+                "CustomField16": int(price_val), 
                 "Avatar": ""
             },
             
-            # --- CẤU TRÚC BẢNG (Giữ nguyên vì đã chuẩn) ---
             "CustomTables": [
                 {
                     "DataFields": [], "Summary": {}, "Data": [], "OldData": [], "SummaryFields": [],
@@ -1199,7 +1188,6 @@ class MisaApiUtils(models.AbstractModel):
                     "ParentIDKey": "ProductID", "TableName": "product_detail_serial_type", "IsProductChange": True
                 }
             ],
-            # Các cờ bổ sung từ mẫu thành công
             "IsProductChange": False,
             "IsMultiCurrency": False,
             "FormModeState": 1,
@@ -1235,25 +1223,6 @@ class MisaApiUtils(models.AbstractModel):
     # API SEARCH PRODUCT BY NAME
     # =========================================================================
     def search_product_by_name(self, name=None, code=None, limit=20):
-        """
-        Tìm kiếm sản phẩm trong MISA CRM theo tên và/hoặc mã sản phẩm.
-        
-        Args:
-            name (str, optional): Tên sản phẩm cần tìm (tìm kiếm gần đúng - contains)
-            code (str, optional): Mã sản phẩm cần tìm (tìm kiếm gần đúng - contains)
-            limit (int): Số lượng kết quả tối đa (mặc định 20)
-            
-        Returns:
-            list: Danh sách sản phẩm tìm thấy, mỗi item chứa các trường:
-                - ProductID: ID của sản phẩm trong MISA
-                - ProductCode: Mã sản phẩm
-                - ProductName: Tên sản phẩm
-                - UnitPrice: Giá bán
-                - UsageUnitIDText: Đơn vị tính
-                - ProductCategoryIDText: Nhóm hàng
-                - TaxIDText: Thuế
-                - Active: Trạng thái hoạt động
-        """
         import uuid
         
         if not name and not code:
@@ -1267,57 +1236,91 @@ class MisaApiUtils(models.AbstractModel):
         headers = misa_config.get_crm_header(token)
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
-        # API endpoint cho tìm kiếm sản phẩm (chữ hoa Grid)
-        url = "https://amisapp.misa.vn/crm/g2/api/business/Product/Grid"
+        # Sử dụng API g1 thay vì g2
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Product/Grid"
         
-        # Xây dựng filters linh hoạt dựa vào params được truyền
-        # Operator = 7 là "Contains" (chứa) trong MISA
-        # Operator = 1 là "Equals" (bằng)
         filters = []
-        filter_idx = 1
         
         if name:
             filters.append({
-                "Group": None,
+                "Value": name.strip(),
+                "IsDefaultFilter": False,
+                "IsCustomField": False,
+                "IsRelatedField": False,
+                "ModuleRelated": "",
+                "FromFilterCustom": False,
+                "ValueDisplayText": "",
+                "isValueDateNumber": False,
+                "IsSearchModule": False,
+                "ConfigDisplayRelatedField": "",
+                "ConfigSubDisplayRelatedField": "",
+                "ConfigSearchField": [],
+                "ConfigUrlCbx": "",
+                "FilterObjects": [],
+                "dataOperator": [],
+                "IsProductCategory": False,
+                "SelectedDataList": [],
+                "IsCustomTypeDecimalDigits": False,
+                "IsFromFormula": False,
+                "Operator": 1,
                 "Addition": 1,
-                "InputType": 1,
-                "IsFromFormula": True,
-                "Operator": 7,  # 7 = Contains
                 "Property": "ProductName",
-                "Text": name.strip(),
-                "Value": name.strip()
+                "InputType": 1,
+                "FieldType": 0,
+                "FieldName": "ProductName",
+                "OperatorBeforeDetectChanges": 1,
+                "InputTypeOrigin": 1,
+                "DisplayField": "Tên hàng hóa",
+                "DisplayOperator": "Chứa",
+                "DisplayValue": name.strip(),
+                "ValueOrigin": name.strip()
             })
-            filter_idx += 1
         
         if code:
             filters.append({
-                "Group": None,
-                "Addition": 1,  # 1 = AND
-                "InputType": 1,
-                "IsFromFormula": True,
-                "Operator": 7,  # 7 = Contains
+                "Value": code.strip(),
+                "IsDefaultFilter": False,
+                "IsCustomField": False,
+                "IsRelatedField": False,
+                "ModuleRelated": "",
+                "FromFilterCustom": False,
+                "ValueDisplayText": "",
+                "isValueDateNumber": False,
+                "IsSearchModule": False,
+                "ConfigDisplayRelatedField": "",
+                "ConfigSubDisplayRelatedField": "",
+                "ConfigSearchField": [],
+                "ConfigUrlCbx": "",
+                "FilterObjects": [],
+                "dataOperator": [],
+                "IsProductCategory": False,
+                "SelectedDataList": [],
+                "IsCustomTypeDecimalDigits": False,
+                "IsFromFormula": False,
+                "Operator": 1,
+                "Addition": 1,
                 "Property": "ProductCode",
-                "Text": code.strip(),
-                "Value": code.strip()
+                "InputType": 1,
+                "FieldType": 0,
+                "FieldName": "ProductCode",
+                "OperatorBeforeDetectChanges": 1,
+                "InputTypeOrigin": 1,
+                "DisplayField": "Mã hàng hóa",
+                "DisplayOperator": "Chứa",
+                "DisplayValue": code.strip(),
+                "ValueOrigin": code.strip()
             })
         
-        # Xây dựng Formula dựa trên số lượng filters
-        if len(filters) == 1:
-            formula = "( 1 )"
-        else:
-            # AND giữa các điều kiện: ( 1 AND 2 )
-            formula = "( " + " AND ".join(str(i+1) for i in range(len(filters))) + " )"
-        
         payload = {
-            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",
-            "Sorts": [],
+            "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LERlZmF1bHRTdG9ja0lELERlZmF1bHRTdG9ja0lEVGV4dCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",
+            "Sorts": [{"SortBy": "ModifiedDate", "Type": 0, "SortDirection": 1}],
             "Start": 0,
             "Page": 1,
             "PageSize": limit,
             "Filters": filters,
-            "Formula": formula,
+            "Formula": "",
             "LayoutCode": "Product",
-            "DefaultTotal": False,
+            "DefaultTotal": True,
             "IsMappingData": False,
             "MappingValueObject": {},
             "IsApproved": False,
@@ -1339,22 +1342,18 @@ class MisaApiUtils(models.AbstractModel):
         session = self._get_retry_session()
         try:
             res = session.post(url, headers=headers, json=payload, timeout=30)
-            _logger.info(f"📥 [MISA RESPONSE] Status: {res.status_code}")
-            _logger.info(f"📥 [MISA RESPONSE] Body: {res.text[:500]}")  # Log 500 ký tự đầu
+            
+            _logger.info(f"📥 [MISA RESPONSE] Staus: {res.status_code} | Body: {res.text}")
+
             
             res_json = res.json()
             
             if not res_json.get("Success"):
-                err_msg = res_json.get("UserMessage") or res_json.get("Message") or res_json.get("ErrorMessage") or f"Response: {res.text[:200]}"
-                _logger.error(f"❌ MISA Search Failed: {err_msg}")
+                err_msg = res_json.get("UserMessage") or f"Response: {res.text[:200]}"
                 raise Exception(f"MISA Search Failed: {err_msg}")
             
             products = res_json.get("Data", []) or []
-            total = res_json.get("Total", 0)
             
-            _logger.info(f"✅ [MISA SEARCH] Tìm thấy {len(products)}/{total} sản phẩm")
-            
-            # Format lại kết quả để dễ sử dụng
             result = []
             for p in products:
                 result.append({
@@ -1368,14 +1367,10 @@ class MisaApiUtils(models.AbstractModel):
                     "tax": p.get("TaxIDText"),
                     "type": p.get("ProductPropertiesIDText"),
                     "active": p.get("Active", True),
-                    "raw_data": p  # Giữ lại data gốc nếu cần
                 })
             
             return result
 
-        except requests.exceptions.RequestException as e:
-            _logger.exception(f"❌ Request error: {e}")
-            raise Exception(f"Lỗi kết nối MISA: {e}")
         except Exception as e:
             _logger.exception(f"❌ Search error: {e}")
             raise e
@@ -1392,7 +1387,9 @@ class MisaApiUtils(models.AbstractModel):
             "IsExchangeProduct": None, "ExchangePoint": 0,
             "TotalAmountBasedUPriceAndDATax": False, "AmountBasedOnPriceAfterTax": False
         }
-
+    # =========================================================================
+    # API SEARCH PURCHASE VOUCHER (CHỨNG TỪ NHẬP KHO MUA HÀNG)
+    # =========================================================================
     # =========================================================================
     # API SEARCH PURCHASE VOUCHER (CHỨNG TỪ NHẬP KHO MUA HÀNG)
     # =========================================================================
