@@ -2,13 +2,6 @@ from odoo import models, fields, api
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
-
-    # Website password
-    cancel_request_password = fields.Char(
-        string='Mật khẩu trang web', 
-        config_parameter='hlv_order_cancel_request.website_password', 
-        help="Mật khẩu truy cập cho trang yêu cầu hủy đơn."
-    )
     
     # Warehouse Zalo UIDs - format: KHO1:UID1,UID2|KHO2:UID3
     cancel_request_warehouse_mapping = fields.Char(
