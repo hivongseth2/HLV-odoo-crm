@@ -1,12 +1,40 @@
 /** @odoo-module **/
 
-import BarcodeModel from "@stock_barcode/models/barcode_model";
+import BarcodeModel from "@stock_barcode/models/barcode_model"; 
 import { patch } from "@web/core/utils/patch";
-import { _t } from "@web/core/l10n/translation";
 
 // =============================================================================
-// PHẦN 1: HELPER HIỂN THỊ TỒN KHO INLINE (TSN: 3 | KBC: 4)
+// HELPER: UI & AN TOÀN (SAFE MODE)
 // =============================================================================
+
+// Hàm phát âm thanh an toàn (không cần env)
+function playErrorSound(env) {
+    try {
+        if (env && env.services && env.services.sound) {
+            env.services.sound.play('error');
+            return;
+        }
+        // Fallback: Dùng HTML5 Audio nếu không có env
+        const audio = new Audio('/custom_barcode_scan_redirect/static/src/sound/error.mp3');
+        audio.play().catch(() => {});
+    } catch (e) {}
+}
+
+// Hàm thông báo an toàn (Kiểm tra kỹ env trước khi gọi)
+function showNotification(env, message, type = 'danger') {
+    try {
+        if (env && env.services && env.services.notification) {
+            env.services.notification.add(message, { 
+                type: type, 
+                sticky: type === 'danger', 
+                title: type === 'danger' ? "CẢNH BÁO" : "Thông báo" 
+            });
+        } else {
+            // Nếu không có env (lỗi undefined), dùng console log hoặc alert nhẹ
+            console.warn("[HLV Notification]", message);
+        }
+    } catch (e) { console.error(e); }
+}
 
 function insertInline(lineEl, text) {
     const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty");
@@ -25,24 +53,16 @@ function insertInline(lineEl, text) {
     badge.textContent = `📦 ${text}`;
 }
 
-// Hàm mới: Cộng gộp số lượng theo từ khóa kho (TSN, KBC...)
 function formatStockResult(quants) {
     if (!quants || quants.length === 0) return "Hết hàng";
-    
     const stockMap = {};
-
     quants.forEach(q => {
-        // q.location_id = [id, "WH/Stock/TSN/Kệ 1"]
         const locName = q.location_id ? q.location_id[1] : ""; 
-        // Tìm từ khóa kho trong tên vị trí
         const match = locName.match(/\b(TSN|KBC|KHD)\b/i);
         const key = match ? match[1].toUpperCase() : "KHÁC"; 
-        
         if (!stockMap[key]) stockMap[key] = 0;
         stockMap[key] += q.quantity;
     });
-
-    // Tạo chuỗi: "TSN: 3 | KBC: 4"
     return Object.keys(stockMap).map(k => `${k}: ${stockMap[k]}`).join(" | ");
 }
 
@@ -50,7 +70,6 @@ async function annotateLine(lineEl, orm) {
     if (lineEl.__hlv_done__) return;
     lineEl.__hlv_done__ = true;
     
-    // Lấy Product Code từ giao diện
     let defaultCode = lineEl.querySelector(".o_product_ref")?.textContent?.trim() || "";
     if (!defaultCode || defaultCode.includes("\n")) {
          const m = (lineEl.innerText || "").match(/^[A-Z0-9._-]+/);
@@ -59,19 +78,10 @@ async function annotateLine(lineEl, orm) {
     if (!defaultCode) return;
 
     try {
-        // Dùng hàm search_read chuẩn của Odoo (Không cần sửa Python)
-        // Lấy tất cả hàng ở các vị trí nội bộ
-        const domain = [
-            ['product_id.default_code', '=', defaultCode],
-            ['location_id.usage', '=', 'internal'] 
-        ];
-        
+        const domain = [['product_id.default_code', '=', defaultCode],['location_id.usage', '=', 'internal']];
         const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
-        
-        // Format và hiển thị
         const textDisplay = formatStockResult(quants);
         insertInline(lineEl, textDisplay);
-
         checkAndHighlightOverflow(lineEl);
     } catch(e) { console.error(e); }
 }
@@ -87,7 +97,7 @@ function checkAndHighlightOverflow(lineEl) {
         const demand = parseFloat(match[2]) || 0;
 
         if (demand > 0 && qtyDone >= demand) {
-            qtyEl.style.color = "#d9534f"; // Đỏ cảnh báo
+            qtyEl.style.color = "#d9534f";
             qtyEl.style.fontWeight = "bold";
             if (!qtyEl.parentElement.querySelector(".hlv-warning-icon")) {
                 const icon = document.createElement("span");
@@ -125,7 +135,7 @@ function setupObserver(orm) {
 }
 
 // =============================================================================
-// PHẦN 2: LOGIC BARCODE (CHECK & SAVE)
+// MAIN LOGIC
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
@@ -139,7 +149,7 @@ patch(BarcodeModel.prototype, {
 
         const product = await this._identifyProductSafe(barcode);
         
-        // --- 1. LOGIC CHECK LIMIT (Giữ nguyên của bạn) ---
+        // --- 1. CHECK SỐ LƯỢNG (Dùng hàm safe showNotification) ---
         if (product) {
             const lines = this.currentState.lines || [];
             const matchedLine = lines.find(l => l.product_id.id === product.id);
@@ -147,14 +157,14 @@ patch(BarcodeModel.prototype, {
                 const done = parseFloat(matchedLine.qty_done || 0);
                 const demand = parseFloat(matchedLine.product_uom_qty || 0);
                 if (demand > 0 && done >= demand) {
-                    this.env.services.notification.add(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n(${done}/${demand})`, { type: 'danger' });
-                    this._playErrorSound();
-                    return;
+                    showNotification(this.env, `⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n(${done}/${demand})`, 'danger');
+                    playErrorSound(this.env);
+                    return; 
                 }
             }
         }
 
-        // --- 2. LOGIC CHECK TỒN KHO (Giữ nguyên của bạn) ---
+        // --- 2. CHECK VỊ TRÍ (Giữ logic cũ) ---
         let sourceLocId = null;
         let whPrefix = null;
         if (this.location) sourceLocId = this.location.id;
@@ -169,27 +179,40 @@ patch(BarcodeModel.prototype, {
         }
 
         try {
-            // Vẫn gọi hàm python check cũ vì bạn bảo nó đang đúng
             const result = await this.orm.call(
                 "stock.quant", "check_barcode_availability", [barcode, whPrefix, sourceLocId] 
             );
             if (result && result.allow === false) {
-                this.env.services.notification.add(result.message, { type: 'danger' });
-                this._playErrorSound();
+                // SỬA LỖI Ở ĐÂY: Dùng showNotification thay vì gọi trực tiếp this.env
+                showNotification(this.env, result.message, 'danger');
+                playErrorSound(this.env);
                 return; 
             }
-        } catch (e) { console.error("[HLV] Check Error:", e); }
+        } catch (e) { 
+            console.warn("[HLV] Check Availability Skipped:", e); 
+        }
 
-        // --- 3. CẬP NHẬT GIAO DIỆN ---
+        // --- 3. GỌI LOGIC GỐC ---
         await super.processBarcode(...arguments);
 
-        // --- 4. TỰ ĐỘNG LƯU (Quan trọng để fix F5) ---
+        // --- 4. AUTO SAVE (SAFE MODE) ---
         try {
             console.log("💾 Auto Saving...");
+            // Mẹo: Tạm thời mute notification nếu env tồn tại
+            let originalNotify = null;
+            if (this.env && this.env.services && this.env.services.notification) {
+                originalNotify = this.env.services.notification.add;
+                this.env.services.notification.add = () => {}; 
+            }
+
             await this.save(); 
-            // Đã bỏ dòng showNotification("Đã lưu") theo yêu cầu
+
+            // Trả lại hàm notification cũ
+            if (originalNotify && this.env && this.env.services && this.env.services.notification) {
+                this.env.services.notification.add = originalNotify;
+            }
         } catch (err) {
-            console.warn("Save Error:", err);
+            console.warn("[HLV] Save warning:", err);
         }
     },
 
@@ -205,16 +228,5 @@ patch(BarcodeModel.prototype, {
              if (line) product = line.product_id;
         }
         return product;
-    },
-
-    _playErrorSound() {
-        try {
-            if (this.env.services.sound) {
-                this.env.services.sound.play('error');
-            } else {
-                const audio = new Audio('/custom_barcode_scan_redirect/static/src/sound/error.mp3');
-                audio.play().catch(() => {});
-            }
-        } catch(e) {}
     }
 });
