@@ -4,29 +4,25 @@ import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// PHẦN 1: HELPER - LƯU DỮ LIỆU & HIỂN THỊ
+// HELPER: LƯU DB & HIỂN THỊ
 // =============================================================================
 
 /**
- * Hàm lưu cứng (Hard Save) dùng phương thức write chuẩn của ORM
- * Thay vì web_save (dễ lỗi), ta dùng write (an toàn, nhanh)
+ * Hàm ghi đè dữ liệu xuống DB (Bỏ qua web_save để tránh lỗi 500)
  */
 async function forceSaveLine(orm, line) {
-    // 1. Kiểm tra ID: Nếu là ID ảo (VD: "virtual_123") thì chưa có trong DB -> Không write được
+    // Chỉ write được nếu dòng đó đã có ID thật trong DB
     if (!line || !line.id || typeof line.id !== 'number') {
-        // console.log("⚠️ Line mới (Virtual ID), cần gọi save() tổng");
-        return false; 
+        return false; // Trả về false để báo hiệu cần dùng save() tổng
     }
-
     try {
-        // 2. Gọi lệnh write update số lượng
-        // console.log(`💾 [HLV] Writing DB Line ID: ${line.id}, Qty: ${line.qty_done}`);
+        // Dùng 'write' nhẹ và nhanh hơn 'web_save'
         await orm.write("stock.move.line", [line.id], { 
             "qty_done": line.qty_done 
         });
         return true;
     } catch (e) {
-        console.error("❌ [HLV] Write Error:", e);
+        console.error("❌ Write Error:", e);
         return false;
     }
 }
@@ -45,67 +41,51 @@ function formatStockResult(quants) {
 }
 
 /**
- * Hàm vẽ lại số tồn kho
+ * Hàm vẽ lại Inline Stock (Chạy mỗi khi DOM thay đổi)
  */
 async function renderInlineStock(lineEl, orm) {
-    // Tìm mã sản phẩm
     const codeEl = lineEl.querySelector(".o_product_code") || lineEl.querySelector(".o_product_ref");
     if (!codeEl) return;
+    
+    // Đánh dấu đã xử lý để tránh gọi API lặp lại cho cùng 1 element
+    if (lineEl.dataset.hlvStockLoaded === "true") return;
+    
     const defaultCode = codeEl.textContent.trim();
     if (!defaultCode) return;
 
-    // Kiểm tra xem đã vẽ chưa? (tránh vẽ chồng lên nhau)
-    const qtyDiv = lineEl.querySelector('.o_barcode_scanner_qty');
-    if (!qtyDiv) return;
-    
-    // Nếu đã có badge rồi thì thôi, trừ khi muốn update số (ở đây ta giữ đơn giản)
-    if (qtyDiv.parentElement.querySelector(".hlv-inline-stock")) return;
+    // Set cờ đang load
+    lineEl.dataset.hlvStockLoaded = "true";
 
     try {
-        // Lấy dữ liệu tồn kho
+        // Lấy số lượng
         const domain = [['product_id.default_code', '=', defaultCode], ['location_id.usage', '=', 'internal']];
         const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
         const textDisplay = formatStockResult(quants);
 
-        // Tạo phần tử hiển thị
-        let badge = document.createElement("div"); 
-        badge.className = "hlv-inline-stock";
-        badge.style.cssText = `
-            font-size: 11px;
-            color: #004085;
-            background-color: #cce5ff;
-            padding: 2px 6px;
-            border-radius: 4px;
-            margin-top: 5px;
-            font-weight: bold;
-            display: inline-block;
-            white-space: nowrap;
-        `;
-        badge.textContent = `📦 ${textDisplay}`;
-        
-        // Chèn vào sau phần hiển thị số lượng
-        if (qtyDiv.parentElement) {
+        // Tìm vị trí chèn (Sau số lượng)
+        const qtyDiv = lineEl.querySelector('.o_barcode_scanner_qty');
+        if (qtyDiv && !qtyDiv.parentElement.querySelector(".hlv-inline-stock")) {
+            let badge = document.createElement("div"); 
+            badge.className = "hlv-inline-stock";
+            badge.style.cssText = `font-size: 11px; color: #004085; background-color: #cce5ff; padding: 2px 6px; border-radius: 4px; margin-top: 5px; font-weight: bold; width: fit-content;`;
+            badge.textContent = `📦 ${textDisplay}`;
             qtyDiv.parentElement.appendChild(badge);
         }
-
-        // Check overflow (Đỏ nếu đủ hàng)
+        
+        // Check đỏ nếu đủ hàng
         checkOverflow(lineEl);
-
-    } catch(e) { console.error(e); }
+    } catch(e) { 
+        lineEl.dataset.hlvStockLoaded = "false"; // Retry nếu lỗi
+    }
 }
 
 function checkOverflow(lineEl) {
     const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty");
     if (!qtyEl) return;
-    
-    const qtyText = qtyEl.innerText || "";
-    // Parse "1/5"
-    const parts = qtyText.split("/");
+    const parts = (qtyEl.innerText || "").split("/");
     if (parts.length < 2) return;
-    
     const done = parseFloat(parts[0]);
     const demand = parseFloat(parts[1]);
-
     if (demand > 0 && done >= demand) {
         qtyEl.style.color = "#d9534f";
         qtyEl.style.fontWeight = "bold";
@@ -113,25 +93,20 @@ function checkOverflow(lineEl) {
 }
 
 // =============================================================================
-// PHẦN 2: PATCH BARCODE MODEL
+// LOGIC CHÍNH
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("✅ [HLV] Barcode Logic: Active (Write Method)");
         this._startObserver();
     },
 
     _startObserver() {
-        // Observer này sẽ chạy liên tục mỗi khi giao diện thay đổi
-        // Để đảm bảo "Inline Stock" luôn hiện kể cả khi Odoo render lại dòng đó
-        const observer = new MutationObserver((mutations) => {
-            const lines = document.querySelectorAll(".o_barcode_line");
-            lines.forEach(line => renderInlineStock(line, this.orm));
+        // Observer để render Inline Stock bất chấp Odoo render lại
+        const observer = new MutationObserver(() => {
+            document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
         });
-
-        // Đợi DOM load xong
         const wait = setInterval(() => {
             if (document.body) {
                 observer.observe(document.body, { childList: true, subtree: true });
@@ -141,47 +116,74 @@ patch(BarcodeModel.prototype, {
     },
 
     async processBarcode(barcode) {
-        // 1. Logic gốc (Để Odoo xử lý logic cộng trừ số lượng trên RAM)
+        // 0. Bỏ qua lệnh hệ thống
+        if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
+
+        // 1. Xác định Product & Context Check
+        const product = await this._identifyProductSafe(barcode);
+        
+        let sourceLocId = this.location ? this.location.id : (this.record.location_id ? (Array.isArray(this.record.location_id) ? this.record.location_id[0] : this.record.location_id) : null);
+        let locName = (this.location?.display_name || this.record?.display_name || "");
+        let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
+
+        // =================================================================
+        // BƯỚC 1: CHECK VỊ TRÍ (QUAN TRỌNG NHẤT)
+        // =================================================================
+        try {
+            // Gọi Python: check_barcode_availability
+            const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, sourceLocId]);
+            
+            // Nếu Python trả về allow: False => CHẶN TUYỆT ĐỐI
+            if (result && result.allow === false) {
+                if (this.env.services.notification) {
+                    // Hiển thị thông báo "Không có hàng..."
+                    this.env.services.notification.add(result.message || "Vị trí không hợp lệ!", { type: 'danger' });
+                }
+                if (this.env.services.sound) this.env.services.sound.play('error');
+                
+                return; // <--- DỪNG TẠI ĐÂY (Không chạy super, không Write DB)
+            }
+            
+            // Nếu có cảnh báo nhẹ (allow: true nhưng vẫn muốn nhắc)
+            if (result && result.message) {
+                this.env.services.notification.add(result.message, { type: 'warning' });
+            }
+
+        } catch (e) {
+            console.warn("⚠️ Skip Check due to Error:", e);
+            // Nếu lỗi mạng/server thì tùy bạn: Cho qua hay chặn? Ở đây tôi cho qua để không treo app.
+        }
+
+        // =================================================================
+        // BƯỚC 2: CẬP NHẬT GIAO DIỆN (RAM)
+        // =================================================================
+        // Chỉ chạy xuống đây nếu Bước 1 đã OK
         await super.processBarcode(...arguments);
 
-        // 2. Logic Check Tồn Kho (Server Side) & Cảnh báo
-        // (Bạn nói phần check ok rồi nên tôi để nó chạy ngầm, quan trọng là phần Save dưới đây)
-        
-        // 3. AUTO SAVE (FIX LỖI RPC ERROR)
+        // =================================================================
+        // BƯỚC 3: AUTO SAVE / WRITE (DB)
+        // =================================================================
         try {
-            // Tìm sản phẩm vừa quét
-            const product = await this._identifyProductSafe(barcode);
-            if (product) {
-                // Tìm dòng (line) tương ứng trong Picking hiện tại
-                const line = this.currentState.lines.find(l => l.product_id.id === product.id);
+            // Lấy lại line vừa được update
+            const updatedProduct = await this._identifyProductSafe(barcode);
+            if (updatedProduct && this.currentState.lines) {
+                const line = this.currentState.lines.find(l => l.product_id.id === updatedProduct.id);
                 
                 if (line) {
-                    // CÁCH 1: Nếu dòng này ĐÃ CÓ trong database (ID là số) -> Gọi write update thẳng
+                    // Thử Write trực tiếp (Nhanh)
                     const success = await forceSaveLine(this.orm, line);
                     
-                    // CÁCH 2: Nếu dòng này MỚI TINH (ID là chuỗi ảo) hoặc Cách 1 thất bại
                     if (!success) {
-                        // console.log("🔄 Line mới, gọi Save tổng...");
-                        await this.save(); // Gọi hàm save chuẩn của Odoo (lưu cả phiếu)
+                        // Nếu Write thất bại (do line mới chưa có ID), gọi Save tổng
+                        // console.log("💾 Saving Picking (New Line)...");
+                        await this.save();
                     } else {
-                        // console.log("✅ Đã lưu nhanh (Write)");
-                    }
-                    
-                    // Nếu đã đủ số lượng -> Cảnh báo âm thanh
-                    const done = parseFloat(line.qty_done || 0);
-                    const demand = parseFloat(line.product_uom_qty || 0);
-                    if (demand > 0 && done >= demand) {
-                         if (this.env.services.sound) this.env.services.sound.play('error');
-                         if (this.env.services.notification) {
-                            this.env.services.notification.add(`⚠️ Đã đủ số lượng (${done}/${demand})`, { type: 'danger' });
-                         }
+                        // console.log("✅ Auto Write Success");
                     }
                 }
             }
         } catch (err) {
-            console.error("❌ [HLV] Auto Save Failed:", err);
-            // Fallback cuối cùng: Cố gắng save lần nữa bằng phương thức chuẩn
-            try { await this.save(); } catch(e) {}
+            console.error("❌ Auto Save Failed:", err);
         }
     },
 
