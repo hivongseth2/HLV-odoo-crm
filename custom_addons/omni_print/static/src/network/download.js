@@ -24,75 +24,91 @@ export function sendToPrinter({ file, reportName, reportTitle, docNames }, proxy
 
 
 download._download = async function (options) {
-    if (!options.url || options.url !== "/report/download") {
+    try {
+        if (!options.url || options.url !== "/report/download") {
+            return _download.apply(this, arguments)
+        }
+
+        const [_, reportType] = JSON.parse(options.data.data)
+        if (reportType !== "qweb-pdf" && reportType !== "qweb-text") {
+            return _download.apply(this, arguments)
+        }
+
+        const formData = new FormData(options.form || undefined)
+        if (!options.form) {
+            Object.entries(options.data).forEach(([key, value]) => formData.append(key, value))
+        }
+        formData.append("token", "dummy-because-api-expects-one")
+        if (window.odoo && window.odoo.csrf_token) {
+            formData.append("csrf_token", window.odoo.csrf_token)
+        }
+
+        return fetch(options.form ? options.form.action : options.url, {
+            method: options.form ? options.form.method : "POST",
+            body: formData,
+        }).then((response) => {
+            return handleResponse(response, reportType)
+        }).catch((error) => {
+            console.error('omni_print download error, falling back to original:', error)
+            return _download.apply(this, arguments)
+        })
+    } catch (error) {
+        console.error('omni_print parse error, falling back to original:', error)
         return _download.apply(this, arguments)
     }
-
-    const [_, reportType] = JSON.parse(options.data.data)
-    if (reportType !== "qweb-pdf" && reportType !== "qweb-text") {
-        return _download.apply(this, arguments)
-    }
-
-    const formData = new FormData(options.form || undefined)
-    if (!options.form) {
-        Object.entries(options.data).forEach(([key, value]) => formData.append(key, value))
-    }
-    formData.append("token", "dummy-because-api-expects-one")
-    if (window.odoo && window.odoo.csrf_token) {
-        formData.append("csrf_token", window.odoo.csrf_token)
-    }
-
-    return fetch(options.form ? options.form.action : options.url, {
-        method: options.form ? options.form.method : "POST",
-        body: formData,
-    }).then((response) => {
-        handleResponse(response, reportType)
-    }).catch((error) => {
-        Promise.reject(new ConnectionLostError())
-    })
 }
 
 function handleResponse(response, reportType) {
-    if (!response.ok) {
-        return response.text().then((text) => parseError(text, response.status))
-    }
+    try {
+        if (!response.ok) {
+            return response.text().then((text) => parseError(text, response.status))
+        }
 
-    const filename = parseContentDisposition(response.headers.get("Content-Disposition"))
-    return response
-        .blob()
-        .then(async (blob) => {
-            const mimetype = blob.type
-            if (mimetype === "text/html" || !filename) {
-                return Promise.reject(new Error("Invalid MIME type or filename missing."))
-            }
+        const filename = parseContentDisposition(response.headers.get("Content-Disposition"))
+        return response
+            .blob()
+            .then(async (blob) => {
+                const mimetype = blob.type
+                if (mimetype === "text/html" || !filename) {
+                    return Promise.reject(new Error("Invalid MIME type or filename missing."))
+                }
 
-            function getDecodedHeader(key) {
-                return response.headers.get(key) && decodeURIComponent(response.headers.get(key))
-            }
-
-            const printData = {
-                file: blob,
-                filename,
-                reportName: getDecodedHeader("X-Report-Name") || "",
-                reportTitle: getDecodedHeader("X-Report-Title") || "",
-                docNames: getDecodedHeader("X-Report-Docnames") || removeExtension(filename) || ""
-            };
-
-            const format = reportType === "qweb-pdf" ? "pdf" : "zpl"
-            const proxyUrl = `http://127.0.0.1:32276/print/${format}`
-            return sendToPrinter(printData, proxyUrl)
-                .then(async (uploadResponse) => {
-                    if (uploadResponse && !uploadResponse.ok) {
-                        return uploadResponse.text().then((text) => Promise.reject(new Error(text)));
+                function getDecodedHeader(key) {
+                    try {
+                        return response.headers.get(key) && decodeURIComponent(response.headers.get(key))
+                    } catch (e) {
+                        console.warn('Failed to decode header:', key, e)
+                        return response.headers.get(key) || ""
                     }
-                    return Promise.resolve()
-                }).then(() => Promise.resolve(filename))
-                .catch((error) => {
-                    console.log('print error = ', error);
-                    downloadFile(blob, filename, mimetype);
-                    return Promise.resolve(filename);
-                });
-        });
+                }
+
+                const printData = {
+                    file: blob,
+                    filename,
+                    reportName: getDecodedHeader("X-Report-Name") || "",
+                    reportTitle: getDecodedHeader("X-Report-Title") || "",
+                    docNames: getDecodedHeader("X-Report-Docnames") || removeExtension(filename) || ""
+                };
+
+                const format = reportType === "qweb-pdf" ? "pdf" : "zpl"
+                const proxyUrl = `http://127.0.0.1:32276/print/${format}`
+                return sendToPrinter(printData, proxyUrl)
+                    .then(async (uploadResponse) => {
+                        if (uploadResponse && !uploadResponse.ok) {
+                            return uploadResponse.text().then((text) => Promise.reject(new Error(text)));
+                        }
+                        return Promise.resolve()
+                    }).then(() => Promise.resolve(filename))
+                    .catch((error) => {
+                        console.log('print error = ', error);
+                        downloadFile(blob, filename, mimetype);
+                        return Promise.resolve(filename);
+                    });
+            });
+    } catch (error) {
+        console.error('handleResponse error:', error)
+        return Promise.reject(error)
+    }
 }
 
 function parseError(text, status) {
