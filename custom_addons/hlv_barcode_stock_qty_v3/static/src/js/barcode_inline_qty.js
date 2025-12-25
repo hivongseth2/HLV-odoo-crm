@@ -5,7 +5,7 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 
 // =============================================================================
-// PHẦN 1: HIỂN THỊ TỒN KHO (GIỮ NGUYÊN)
+// PHẦN 1: HIỂN THỊ TỒN KHO (UI) - GIỮ NGUYÊN
 // =============================================================================
 function insertInline(lineEl, text) {
     const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty");
@@ -95,34 +95,33 @@ function setupObserver(orm) {
 }
 
 // =============================================================================
-// PHẦN 2: PATCH BARCODE MODEL - CHẶN QUÉT (ĐÃ FIX LOCID)
+// PHẦN 2: PATCH BARCODE MODEL - FIX LỖI CRASH & LOCID
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("✅ [HLV] Barcode Interceptor v1.7 Ready!");
+        console.log("✅ [HLV] Barcode v1.8 - Fix Crash Ready!");
         setTimeout(() => setupObserver(this.orm), 1000);
     },
 
     async processBarcode(barcode) {
         console.log("🚀 [HLV] ĐANG QUÉT:", barcode);
 
-        // 1. Nếu là lệnh hệ thống, cho qua
         if (!barcode || barcode.startsWith("O-CMD")) {
             return super.processBarcode(...arguments);
         }
 
-        // 2. QUAN TRỌNG: Kiểm tra xem barcode này có phải SẢN PHẨM không?
-        // Nếu là barcode Vị Trí (KBC-TU3), ta phải CHO QUA để Odoo đổi vị trí nguồn.
-        const product = await this._identifyProduct(barcode);
+        // 1. NHẬN DIỆN SẢN PHẨM (ĐÃ FIX LỖI CRASH)
+        const product = await this._identifyProductSafe(barcode);
         
+        // Nếu không phải sản phẩm (có thể là mã Vị trí/Tủ), bỏ qua để Odoo tự xử lý
         if (!product) {
-            console.log("ℹ️ [HLV] Không phải sản phẩm (có thể là Vị trí/Lệnh/Package). Bỏ qua check stock.");
+            console.log("ℹ️ [HLV] Không phải sản phẩm -> Bỏ qua check stock.");
             return super.processBarcode(...arguments);
         }
 
-        // 3. CHECK CLIENT: ĐỦ SỐ LƯỢNG CHƯA?
+        // 2. CHECK CLIENT: ĐỦ SỐ LƯỢNG CHƯA?
         const lines = this.currentState.lines || [];
         const matchedLine = lines.find(l => l.product_id.id === product.id);
 
@@ -137,29 +136,26 @@ patch(BarcodeModel.prototype, {
             }
         }
 
-        // 4. LẤY SOURCE LOCATION ID (FIXED LOGIC)
+        // 3. LẤY SOURCE LOCATION ID (TỦ 3)
         let sourceLocId = null;
         let whPrefix = null;
 
-        // Ưu tiên A: Lấy từ trạng thái hiện tại (nếu vừa quét vị trí xong)
+        // A. Lấy từ trạng thái hiện tại (nếu vừa quét vị trí xong)
         if (this.currentState && this.currentState.location_id) {
              sourceLocId = typeof(this.currentState.location_id) === 'object' ? this.currentState.location_id[0] : this.currentState.location_id;
-             console.log("📍 [HLV] Lấy LocID từ currentState:", sourceLocId);
         }
 
-        // Ưu tiên B: Lấy từ Picking Record gốc
+        // B. Lấy từ Picking Record gốc (Fallback)
         if (!sourceLocId && this.record && this.record.location_id) {
              sourceLocId = typeof(this.record.location_id) === 'object' ? this.record.location_id[0] : this.record.location_id;
-             console.log("📍 [HLV] Lấy LocID từ record.location_id:", sourceLocId);
         }
-
-        // Ưu tiên C: Lấy từ dòng đầu tiên (Picking thường chung 1 nguồn)
+        
+        // C. Lấy từ dòng đầu tiên (Fallback cuối cùng)
         if (!sourceLocId && lines.length > 0 && lines[0].location_id) {
              sourceLocId = typeof(lines[0].location_id) === 'object' ? lines[0].location_id[0] : lines[0].location_id;
-             console.log("📍 [HLV] Lấy LocID từ dòng đầu tiên:", sourceLocId);
         }
 
-        // Tìm Prefix (KBC/TSN) để hiển thị lỗi cho đẹp (không dùng để check logic chính nữa)
+        // D. Lấy Prefix (KBC/TSN)
         if (this.record && this.record.display_name) {
             const m = this.record.display_name.match(/\b(TSN|KBC|KHD)\b/i);
             if (m) whPrefix = m[1].toUpperCase();
@@ -167,7 +163,7 @@ patch(BarcodeModel.prototype, {
 
         console.log(`🔎 [HLV] Check Stock Server: Barcode=${barcode}, Prefix=${whPrefix}, LocID=${sourceLocId}`);
 
-        // 5. GỌI SERVER
+        // 4. GỌI SERVER CHECK
         try {
             const result = await this.orm.call(
                 "stock.quant", 
@@ -184,20 +180,27 @@ patch(BarcodeModel.prototype, {
             console.error("[HLV] RPC Error:", e);
         }
 
-        // 6. PASS
+        // 5. PASS
         return super.processBarcode(...arguments);
     },
 
-    async _identifyProduct(barcode) {
-        let product = Object.values(this.cache.products).find(p => p.barcode === barcode);
-        if (!product) {
-            product = Object.values(this.cache.products).find(p => p.default_code === barcode);
+    // --- HÀM MỚI: TÌM SẢN PHẨM AN TOÀN (FIX LỖI OBJECT.VALUES UNDEFINED) ---
+    async _identifyProductSafe(barcode) {
+        let product = null;
+
+        // Cách 1: Tìm trong Cache Products (có kiểm tra tồn tại)
+        if (this.cache && this.cache.products) {
+            product = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
         }
-        // Nếu không tìm thấy trong cache, thử tìm trong lines (phòng hờ)
-        if (!product && this.currentState.lines) {
-             const line = this.currentState.lines.find(l => l.product_id.default_code === barcode);
+
+        // Cách 2: Tìm trong dòng hiện tại (Lines) - Phòng trường hợp Cache chưa load
+        if (!product && this.currentState && this.currentState.lines) {
+             const line = this.currentState.lines.find(l => 
+                l.product_id && (l.product_id.barcode === barcode || l.product_id.default_code === barcode)
+             );
              if (line) product = line.product_id;
         }
+        
         return product;
     }
 });
