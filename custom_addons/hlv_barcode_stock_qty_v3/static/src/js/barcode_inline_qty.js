@@ -2,6 +2,7 @@
 
 import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
+import { _t } from "@web/core/l10n/translation";
 
 // =============================================================================
 // PHẦN 1: HELPER HIỂN THỊ TỒN KHO INLINE (TSN: 3 | KBC: 4)
