@@ -1,51 +1,78 @@
 /** @odoo-module **/
 
-import BarcodeModel  from "@stock_barcode/models/barcode_model"; 
+import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
-import { _t } from "@web/core/l10n/translation";
 
 // =============================================================================
-// HELPER: UI & SOUND & NOTIFICATION
+// PHẦN 1: HELPER HIỂN THỊ TỒN KHO INLINE (TSN: 3 | KBC: 4)
 // =============================================================================
-
-function playErrorSound(env) {
-    try {
-        if (env && env.services && env.services.sound) {
-            env.services.sound.play('error');
-            return;
-        }
-        const audio = new Audio('/custom_barcode_scan_redirect/static/src/sound/error.mp3');
-        audio.play().catch(() => {});
-    } catch (e) {}
-}
-
-function showNotification(env, message, type = 'danger') {
-    try {
-        if (env && env.services && env.services.notification) {
-            env.services.notification.add(message, { 
-                type: type, 
-                sticky: type === 'danger', 
-                title: type === 'danger' ? "CẢNH BÁO" : "Thông báo" 
-            });
-        } else {
-            alert(message);
-        }
-    } catch (e) { console.error(e); }
-}
 
 function insertInline(lineEl, text) {
     const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty");
     if (!qtyEl) return;
+    
     let badge = qtyEl.parentElement.querySelector(".hlv-inline-stock");
     if (!badge) {
-        badge = document.createElement("small");
+        badge = document.createElement("span");
         badge.className = "hlv-inline-stock";
-        badge.style.marginLeft = "8px";
-        badge.style.fontSize = "12px";
-        badge.style.color = "#0a7";
+        badge.style.marginLeft = "10px";
+        badge.style.fontSize = "13px";
+        badge.style.color = "#17a2b8"; 
+        badge.style.fontWeight = "bold";
         qtyEl.parentElement.appendChild(badge);
     }
-    badge.textContent = `| ${text}`;
+    badge.textContent = `📦 ${text}`;
+}
+
+// Hàm mới: Cộng gộp số lượng theo từ khóa kho (TSN, KBC...)
+function formatStockResult(quants) {
+    if (!quants || quants.length === 0) return "Hết hàng";
+    
+    const stockMap = {};
+
+    quants.forEach(q => {
+        // q.location_id = [id, "WH/Stock/TSN/Kệ 1"]
+        const locName = q.location_id ? q.location_id[1] : ""; 
+        // Tìm từ khóa kho trong tên vị trí
+        const match = locName.match(/\b(TSN|KBC|KHD)\b/i);
+        const key = match ? match[1].toUpperCase() : "KHÁC"; 
+        
+        if (!stockMap[key]) stockMap[key] = 0;
+        stockMap[key] += q.quantity;
+    });
+
+    // Tạo chuỗi: "TSN: 3 | KBC: 4"
+    return Object.keys(stockMap).map(k => `${k}: ${stockMap[k]}`).join(" | ");
+}
+
+async function annotateLine(lineEl, orm) {
+    if (lineEl.__hlv_done__) return;
+    lineEl.__hlv_done__ = true;
+    
+    // Lấy Product Code từ giao diện
+    let defaultCode = lineEl.querySelector(".o_product_ref")?.textContent?.trim() || "";
+    if (!defaultCode || defaultCode.includes("\n")) {
+         const m = (lineEl.innerText || "").match(/^[A-Z0-9._-]+/);
+         if (m) defaultCode = m[0];
+    }
+    if (!defaultCode) return;
+
+    try {
+        // Dùng hàm search_read chuẩn của Odoo (Không cần sửa Python)
+        // Lấy tất cả hàng ở các vị trí nội bộ
+        const domain = [
+            ['product_id.default_code', '=', defaultCode],
+            ['location_id.usage', '=', 'internal'] 
+        ];
+        
+        const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
+        
+        // Format và hiển thị
+        const textDisplay = formatStockResult(quants);
+        insertInline(lineEl, textDisplay);
+
+        checkAndHighlightOverflow(lineEl);
+    } catch(e) { console.error(e); }
 }
 
 function checkAndHighlightOverflow(lineEl) {
@@ -59,40 +86,16 @@ function checkAndHighlightOverflow(lineEl) {
         const demand = parseFloat(match[2]) || 0;
 
         if (demand > 0 && qtyDone >= demand) {
-            qtyEl.style.color = "#d9534f";
+            qtyEl.style.color = "#d9534f"; // Đỏ cảnh báo
             qtyEl.style.fontWeight = "bold";
             if (!qtyEl.parentElement.querySelector(".hlv-warning-icon")) {
                 const icon = document.createElement("span");
                 icon.className = "hlv-warning-icon";
-                icon.textContent = " ⚠️";
-                icon.style.color = "#d9534f";
+                icon.textContent = " ✅";
                 qtyEl.parentElement.appendChild(icon);
             }
         }
     } catch (e) {}
-}
-
-async function annotateLine(lineEl, orm) {
-    if (lineEl.__hlv_done__) return;
-    lineEl.__hlv_done__ = true;
-    
-    let defaultCode = lineEl.querySelector(".o_product_ref")?.textContent?.trim() || "";
-    if (!defaultCode || defaultCode.includes("\n")) {
-         const m = (lineEl.innerText || "").match(/^[A-Z0-9._-]+/);
-         if (m) defaultCode = m[0];
-    }
-    if (!defaultCode) return;
-
-    const breadcrumb = document.body.innerText;
-    const m = breadcrumb.match(/\b(TSN|KBC|KHD)\b/i);
-    const whPrefix = m ? m[1].toUpperCase() : null;
-
-    try {
-        const result = await orm.call("stock.quant", "get_qty_by_default_code_at_warehouse", [defaultCode, whPrefix]);
-        const labelPrefix = whPrefix || (result.base_location?.split("/")?.[0]) || "tổng";
-        insertInline(lineEl, `tồn (${labelPrefix}): ${result.qty} ${result.uom}`);
-        checkAndHighlightOverflow(lineEl);
-    } catch(e) {}
 }
 
 function setupObserver(orm) {
@@ -121,37 +124,36 @@ function setupObserver(orm) {
 }
 
 // =============================================================================
-// MAIN LOGIC: PATCH BARCODE MODEL (AUTO SAVE)
+// PHẦN 2: LOGIC BARCODE (CHECK & SAVE)
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("✅ [HLV] Barcode v2.1 - Auto Save Ready!");
         setTimeout(() => setupObserver(this.orm), 1000);
     },
 
     async processBarcode(barcode) {
-        // --- 1. CÁC BƯỚC CHECK (GIỮ NGUYÊN) ---
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
         const product = await this._identifyProductSafe(barcode);
-        if (!product) return super.processBarcode(...arguments);
-
-        // Check Limit
-        const lines = this.currentState.lines || [];
-        const matchedLine = lines.find(l => l.product_id.id === product.id);
-        if (matchedLine) {
-            const done = parseFloat(matchedLine.qty_done || 0);
-            const demand = parseFloat(matchedLine.product_uom_qty || 0);
-            if (demand > 0 && done >= demand) {
-                showNotification(this.env, `⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n(${done}/${demand})`, 'danger');
-                playErrorSound(this.env);
-                return;
+        
+        // --- 1. LOGIC CHECK LIMIT (Giữ nguyên của bạn) ---
+        if (product) {
+            const lines = this.currentState.lines || [];
+            const matchedLine = lines.find(l => l.product_id.id === product.id);
+            if (matchedLine) {
+                const done = parseFloat(matchedLine.qty_done || 0);
+                const demand = parseFloat(matchedLine.product_uom_qty || 0);
+                if (demand > 0 && done >= demand) {
+                    this.env.services.notification.add(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n(${done}/${demand})`, { type: 'danger' });
+                    this._playErrorSound();
+                    return;
+                }
             }
         }
 
-        // Check Stock
+        // --- 2. LOGIC CHECK TỒN KHO (Giữ nguyên của bạn) ---
         let sourceLocId = null;
         let whPrefix = null;
         if (this.location) sourceLocId = this.location.id;
@@ -166,29 +168,27 @@ patch(BarcodeModel.prototype, {
         }
 
         try {
+            // Vẫn gọi hàm python check cũ vì bạn bảo nó đang đúng
             const result = await this.orm.call(
                 "stock.quant", "check_barcode_availability", [barcode, whPrefix, sourceLocId] 
             );
             if (result && result.allow === false) {
-                showNotification(this.env, result.message, 'danger');
-                playErrorSound(this.env);
+                this.env.services.notification.add(result.message, { type: 'danger' });
+                this._playErrorSound();
                 return; 
             }
-        } catch (e) { console.error("[HLV] RPC Error:", e); }
+        } catch (e) { console.error("[HLV] Check Error:", e); }
 
-        // --- 2. GỌI LOGIC GỐC ĐỂ CẬP NHẬT UI ---
-        // Lưu ý: Phải dùng await để chờ nó xong việc cập nhật số lượng trên RAM
+        // --- 3. CẬP NHẬT GIAO DIỆN ---
         await super.processBarcode(...arguments);
 
-        // --- 3. [MỚI] TỰ ĐỘNG LƯU VÀO DB ---
+        // --- 4. TỰ ĐỘNG LƯU (Quan trọng để fix F5) ---
         try {
-            console.log("💾 [HLV] Auto Saving...");
+            console.log("💾 Auto Saving...");
             await this.save(); 
-            // Nếu dùng Odoo 17/18, hàm save() của model sẽ trigger việc ghi xuống backend
-            showNotification(this.env, "Đã lưu!", "success");
+            // Đã bỏ dòng showNotification("Đã lưu") theo yêu cầu
         } catch (err) {
-            console.warn("[HLV] Auto Save Failed:", err);
-            // Không chặn lỗi này để tránh treo màn hình, chỉ log ra thôi
+            console.warn("Save Error:", err);
         }
     },
 
@@ -204,5 +204,16 @@ patch(BarcodeModel.prototype, {
              if (line) product = line.product_id;
         }
         return product;
+    },
+
+    _playErrorSound() {
+        try {
+            if (this.env.services.sound) {
+                this.env.services.sound.play('error');
+            } else {
+                const audio = new Audio('/custom_barcode_scan_redirect/static/src/sound/error.mp3');
+                audio.play().catch(() => {});
+            }
+        } catch(e) {}
     }
 });
