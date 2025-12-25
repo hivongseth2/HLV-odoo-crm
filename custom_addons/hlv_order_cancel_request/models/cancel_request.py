@@ -21,12 +21,11 @@ class SaleOrderCancelRequest(models.Model):
     
     reason = fields.Text(string='Lý do', required=True, tracking=True)
     
-    # Flow: YCHD → Kho XN → Kế toán XN → Hoàn Thành
+    # Flow: YCHD → Kho XN → Hoàn Thành (Kế toán Xác Nhận → done)
     state = fields.Selection([
         ('draft', 'Nháp'),
         ('submitted', 'YCHD'),
         ('warehouse_confirmed', 'Kho XN'),
-        ('accountant_confirmed', 'Kế toán XN'),
         ('done', 'Hoàn Thành'),
         ('rejected', 'Đã Từ Chối')
     ], string='Trạng Thái', default='draft', tracking=True, group_expand='_expand_states')
@@ -37,6 +36,13 @@ class SaleOrderCancelRequest(models.Model):
             if vals.get('name', _('Mới')) == _('Mới'):
                 vals['name'] = self.env['ir.sequence'].next_by_code('sale.order.cancel.request') or _('Mới')
         return super(SaleOrderCancelRequest, self).create(vals_list)
+
+    def unlink(self):
+        """Prevent deletion of confirmed or completed requests."""
+        for rec in self:
+            if rec.state in ('warehouse_confirmed', 'done'):
+                raise UserError(_("Không thể xóa yêu cầu đã được xác nhận hoặc hoàn thành. Trạng thái: %s") % dict(self._fields['state'].selection).get(rec.state))
+        return super(SaleOrderCancelRequest, self).unlink()
 
     @api.depends('order_reference')
     def _compute_order_id(self):
@@ -84,18 +90,13 @@ class SaleOrderCancelRequest(models.Model):
         self._send_zalo_notification_on_warehouse_confirm()
 
     def action_accountant_confirm(self):
-        """Accountant confirms they have processed the request in external system."""
+        """Accountant confirms they have processed the request - marks as done."""
         self.ensure_one()
         # Check permission
         if not self.env.user.has_group('hlv_order_cancel_request.group_cancel_request_accountant'):
             raise UserError(_("Bạn không có quyền xác nhận bước Kế Toán. Chỉ Kế Toán mới có thể thực hiện."))
-        self.state = 'accountant_confirmed'
-        self._send_zalo_notification_on_accountant_confirm()
-
-    def action_done(self):
-        """Mark request as completed."""
-        self.ensure_one()
         self.state = 'done'
+        self._send_zalo_notification_on_accountant_confirm()
 
     def action_reject(self):
         self.state = 'rejected'
