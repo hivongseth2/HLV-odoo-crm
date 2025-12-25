@@ -30,25 +30,6 @@ function safePlaySound(env, type = 'error') {
     } catch (e) {}
 }
 
-// Hàm vẽ trạng thái Lưu (Thanh màu trên đầu trang)
-function updateSaveStatusUI(status) {
-    let el = document.getElementById('hlv-save-status');
-    if (!el) {
-        el = document.createElement('div');
-        el.id = 'hlv-save-status';
-        el.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 5px; z-index: 99999; transition: background 0.3s;";
-        document.body.appendChild(el);
-    }
-    
-    if (status === 'saving') {
-        el.style.backgroundColor = '#ff0000'; // ĐỎ: Đang lưu
-        el.style.height = '10px';
-    } else {
-        el.style.backgroundColor = '#00ff00'; // XANH: Xong
-        setTimeout(() => { el.style.height = '0px'; }, 1000);
-    }
-}
-
 async function renderInlineStock(lineEl, orm) {
     let defaultCode = lineEl.dataset.barcode;
     if (!defaultCode) {
@@ -92,21 +73,8 @@ async function renderInlineStock(lineEl, orm) {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V11: PARANOID SAVE GUARD");
+        console.log("🚀 [HLV] V12: CORRECT ODOO UPDATE LOGIC");
         
-        this.isSaving = false; // Cờ theo dõi trạng thái
-
-        // 1. Đăng ký sự kiện chặn F5
-        window.addEventListener("beforeunload", (e) => {
-            if (this.isSaving) {
-                // Hiển thị cảnh báo chuẩn của trình duyệt
-                e.preventDefault();
-                e.returnValue = "Dữ liệu chưa lưu xong! Đừng F5!";
-                return e.returnValue;
-            }
-        });
-
-        // 2. Observer vẽ Inline
         const observer = new MutationObserver(() => {
             document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
         });
@@ -118,124 +86,96 @@ patch(BarcodeModel.prototype, {
         }, 1000);
     },
 
-    // Hàm bật/tắt chế độ bảo vệ
-    _setSavingState(state) {
-        this.isSaving = state;
-        updateSaveStatusUI(state ? 'saving' : 'idle');
-    },
-
     async processBarcode(barcode) {
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
-        // 🔴 BẮT ĐẦU QUÁ TRÌNH XỬ LÝ -> BẬT CỜ BẢO VỆ NGAY
-        this._setSavingState(true);
+        const product = await this._identifyProductSafe(barcode);
+        
+        // Lấy vị trí hiện tại (Tủ 3)
+        let currentLoc = this.location; // Object đầy đủ {id, display_name}
+        let currentLocId = currentLoc ? currentLoc.id : null;
+        
+        let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
+        let locName = (currentLoc?.display_name || this.record?.display_name || "");
+        let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
-        try {
-            // 1. NHẬN DIỆN SẢN PHẨM
-            const product = await this._identifyProductSafe(barcode);
+        if (product && this.currentState.lines) {
+            const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
             
-            // 2. LẤY THÔNG TIN
-            let currentLocId = this.location ? this.location.id : null;
-            let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
-            let locName = (this.location?.display_name || this.record?.display_name || "");
-            let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
+            let totalDone = 0;
+            let totalDemand = 0;
+            let candidateLine = null;
 
-            if (product && this.currentState.lines) {
-                const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
-                
-                let totalDone = 0;
-                let totalDemand = 0;
-                let candidateLine = null;
+            productLines.forEach(l => {
+                const d = parseFloat(l.qty_done || 0);
+                const r = parseFloat(getLineDemand(l));
+                totalDone += d;
+                totalDemand += r;
+                if (d < r) candidateLine = l;
+            });
+            if (!candidateLine && productLines.length > 0) candidateLine = productLines[productLines.length - 1];
 
-                productLines.forEach(l => {
-                    const d = parseFloat(l.qty_done || 0);
-                    const r = parseFloat(getLineDemand(l));
-                    totalDone += d;
-                    totalDemand += r;
-                    if (d < r) candidateLine = l;
-                });
-                if (!candidateLine && productLines.length > 0) candidateLine = productLines[productLines.length - 1];
+            // 🛑 CHECK 1: LIMIT
+            const isUnplanned = (totalDemand === 0);
+            if (isUnplanned) {
+                safePlaySound(this.env, 'error');
+                alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSản phẩm: ${product.display_name}`);
+                return;
+            }
+            if (totalDone >= totalDemand) {
+                safePlaySound(this.env, 'error');
+                alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSản phẩm: ${product.display_name}\nTiến độ: ${totalDone}/${totalDemand}`);
+                return;
+            }
 
-                // --- CHECK 1: LIMIT ---
-                const isUnplanned = (totalDemand === 0);
-                if (isUnplanned) {
+            // 🌍 CHECK 2: SERVER LOCATION
+            try {
+                const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
+                if (result && result.allow === false) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSản phẩm: ${product.display_name}`);
-                    this._setSavingState(false); // 🟢 Tắt cờ vì bị chặn
+                    alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
                     return;
                 }
-                if (totalDone >= totalDemand) {
-                    safePlaySound(this.env, 'error');
-                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSản phẩm: ${product.display_name}\nTiến độ: ${totalDone}/${totalDemand}`);
-                    this._setSavingState(false); // 🟢 Tắt cờ vì bị chặn
-                    return;
-                }
+            } catch (e) {
+                alert("Lỗi kết nối kiểm tra vị trí!");
+                return;
+            }
 
-                // --- CHECK 2: SERVER LOCATION ---
-                try {
-                    const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
-                    if (result && result.allow === false) {
-                        safePlaySound(this.env, 'error');
-                        alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
-                        this._setSavingState(false); // 🟢 Tắt cờ vì bị chặn
-                        return;
-                    }
-                } catch (e) {
-                    alert("Lỗi kết nối kiểm tra vị trí!");
-                    this._setSavingState(false);
-                    return;
-                }
+            // 🚀 CHECK 3: SMART MOVE & UPDATE (LOGIC CHUẨN ODOO)
+            if (candidateLine && currentLocId) {
+                const lineLocId = extractId(candidateLine.location_id);
+                // Nếu khác vị trí -> Thực hiện update
+                if (lineLocId !== currentLocId) {
+                    console.log(`✅ [HLV] Updating Line ${candidateLine.id} to new location via Standard Logic`);
+                    
+                    try {
+                        // SỬ DỤNG HÀM CHUẨN CỦA ODOO: _updateLine
+                        // Hàm này sẽ tự động xử lý việc tăng số lượng và cập nhật vị trí đúng quy trình
+                        await this._updateLine(candidateLine, {
+                            qty_done: (candidateLine.qty_done || 0) + 1,
+                            location_id: currentLoc // Truyền nguyên object location (Tủ 3)
+                        });
 
-                // --- CHECK 3: SMART MOVE ---
-                if (candidateLine && currentLocId) {
-                    const lineLocId = extractId(candidateLine.location_id);
-                    if (lineLocId !== currentLocId) {
-                        try {
-                            // Update RAM
-                            candidateLine.qty_done += 1;
-                            if (this.location) candidateLine.location_id = this.location;
-                            this.trigger('update'); 
-
-                            // Update DB (Full Save để đồng bộ việc chuyển kho)
-                            await this.save();
-                            
-                            this._setSavingState(false); // 🟢 Lưu xong -> Tắt cờ
-                            return; 
-                        } catch (e) {
-                            console.error("Move Error:", e);
-                        }
+                        // Gọi Save tổng để đồng bộ xuống DB
+                        await this.save();
+                        
+                        return; // Done
+                    } catch (e) {
+                        console.error("Standard Update Error:", e);
                     }
                 }
             }
-
-            // =============================================================
-            // FALLBACK NORMAL SCAN
-            // =============================================================
-            await super.processBarcode(...arguments);
-
-            // Auto Save
-            try {
-                 const updatedProduct = await this._identifyProductSafe(barcode);
-                 if (updatedProduct && this.currentState.lines) {
-                     const line = this.currentState.lines.find(l => extractId(l.product_id) === updatedProduct.id && l.qty_done <= getLineDemand(l));
-                     
-                     if (line) {
-                         if (line.id && typeof line.id === 'number') {
-                             await this.orm.write("stock.move.line", [line.id], { "qty_done": line.qty_done });
-                         } else {
-                             await this.save();
-                         }
-                     }
-                 }
-            } catch(e) {}
-
-        } catch (err) {
-            console.error(err);
-        } finally {
-            // 🟢 LUÔN LUÔN TẮT CỜ KHI KẾT THÚC DÙ CÓ LỖI HAY KHÔNG
-            // Để tránh việc bị kẹt trạng thái "Đang lưu" mãi mãi
-            this._setSavingState(false);
         }
+
+        // =================================================================
+        // FALLBACK NORMAL SCAN
+        // =================================================================
+        await super.processBarcode(...arguments);
+
+        // Auto Save
+        try {
+             await this.save();
+        } catch(e) {}
     },
 
     async _identifyProductSafe(barcode) {
