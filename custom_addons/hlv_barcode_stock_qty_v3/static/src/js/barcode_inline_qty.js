@@ -4,19 +4,18 @@ import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// HELPER: LƯU DB & HIỂN THỊ
+// HELPER: CÁC HÀM HỖ TRỢ (LƯU DB & HIỂN THỊ)
 // =============================================================================
 
 /**
- * Hàm ghi đè dữ liệu xuống DB (Bỏ qua web_save để tránh lỗi 500)
+ * Hàm ghi đè dữ liệu xuống DB (Dùng write thay vì web_save để tránh lỗi 500)
  */
 async function forceSaveLine(orm, line) {
-    // Chỉ write được nếu dòng đó đã có ID thật trong DB
+    // Chỉ write được nếu dòng đó đã có ID thật trong DB (ID là số)
     if (!line || !line.id || typeof line.id !== 'number') {
         return false; // Trả về false để báo hiệu cần dùng save() tổng
     }
     try {
-        // Dùng 'write' nhẹ và nhanh hơn 'web_save'
         await orm.write("stock.move.line", [line.id], { 
             "qty_done": line.qty_done 
         });
@@ -41,20 +40,18 @@ function formatStockResult(quants) {
 }
 
 /**
- * Hàm vẽ lại Inline Stock (Chạy mỗi khi DOM thay đổi)
+ * Hàm vẽ lại Inline Stock (Bắt buộc chạy mỗi khi DOM thay đổi)
  */
 async function renderInlineStock(lineEl, orm) {
+    // Tìm phần tử chứa mã sản phẩm
     const codeEl = lineEl.querySelector(".o_product_code") || lineEl.querySelector(".o_product_ref");
     if (!codeEl) return;
     
-    // Đánh dấu đã xử lý để tránh gọi API lặp lại cho cùng 1 element
-    if (lineEl.dataset.hlvStockLoaded === "true") return;
-    
+    // Kiểm tra xem đã vẽ chưa để tránh lặp (Dùng class check)
+    if (lineEl.querySelector(".hlv-inline-stock")) return;
+
     const defaultCode = codeEl.textContent.trim();
     if (!defaultCode) return;
-
-    // Set cờ đang load
-    lineEl.dataset.hlvStockLoaded = "true";
 
     try {
         // Lấy số lượng
@@ -62,20 +59,37 @@ async function renderInlineStock(lineEl, orm) {
         const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
         const textDisplay = formatStockResult(quants);
 
-        // Tìm vị trí chèn (Sau số lượng)
+        // Tìm vị trí chèn: Tìm div chứa số lượng
         const qtyDiv = lineEl.querySelector('.o_barcode_scanner_qty');
-        if (qtyDiv && !qtyDiv.parentElement.querySelector(".hlv-inline-stock")) {
+        
+        if (qtyDiv) {
             let badge = document.createElement("div"); 
             badge.className = "hlv-inline-stock";
-            badge.style.cssText = `font-size: 11px; color: #004085; background-color: #cce5ff; padding: 2px 6px; border-radius: 4px; margin-top: 5px; font-weight: bold; width: fit-content;`;
+            // Style cứng để đảm bảo hiển thị đẹp
+            badge.style.cssText = `
+                font-size: 11px; 
+                color: #004085; 
+                background-color: #cce5ff; 
+                padding: 2px 6px; 
+                border-radius: 4px; 
+                margin-top: 5px; 
+                font-weight: bold; 
+                width: fit-content;
+                display: block;
+                border: 1px solid #b8daff;
+            `;
             badge.textContent = `📦 ${textDisplay}`;
-            qtyDiv.parentElement.appendChild(badge);
+            
+            // Chèn vào ngay sau số lượng
+            if (qtyDiv.parentElement) {
+                qtyDiv.parentElement.appendChild(badge);
+            }
         }
         
         // Check đỏ nếu đủ hàng
         checkOverflow(lineEl);
     } catch(e) { 
-        lineEl.dataset.hlvStockLoaded = "false"; // Retry nếu lỗi
+        console.error("Inline Error:", e);
     }
 }
 
@@ -93,20 +107,24 @@ function checkOverflow(lineEl) {
 }
 
 // =============================================================================
-// LOGIC CHÍNH
+// LOGIC CHÍNH: PATCH BARCODE MODEL
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
+        console.log("✅ [HLV] Security Gate & Auto Save: ACTIVE");
         this._startObserver();
     },
 
     _startObserver() {
-        // Observer để render Inline Stock bất chấp Odoo render lại
+        // Dùng MutationObserver để vẽ lại Inline Stock bất cứ khi nào Odoo vẽ lại màn hình
         const observer = new MutationObserver(() => {
-            document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
+            const lines = document.querySelectorAll(".o_barcode_line");
+            lines.forEach(line => renderInlineStock(line, this.orm));
         });
+        
+        // Đợi Body load xong thì gắn observer
         const wait = setInterval(() => {
             if (document.body) {
                 observer.observe(document.body, { childList: true, subtree: true });
@@ -116,10 +134,10 @@ patch(BarcodeModel.prototype, {
     },
 
     async processBarcode(barcode) {
-        // 0. Bỏ qua lệnh hệ thống
+        // 0. Bỏ qua lệnh hệ thống (O-CMD)
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
-        // 1. Xác định Product & Context Check
+        // 1. Xác định Product & Thông tin kho
         const product = await this._identifyProductSafe(barcode);
         
         let sourceLocId = this.location ? this.location.id : (this.record.location_id ? (Array.isArray(this.record.location_id) ? this.record.location_id[0] : this.record.location_id) : null);
@@ -127,55 +145,63 @@ patch(BarcodeModel.prototype, {
         let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
         // =================================================================
-        // BƯỚC 1: CHECK VỊ TRÍ (QUAN TRỌNG NHẤT)
+        // BƯỚC 1: CHECK VỊ TRÍ (CỔNG AN NINH)
         // =================================================================
+        // Lưu ý: Phải dùng await để code dừng lại chờ server trả lời
         try {
-            // Gọi Python: check_barcode_availability
             const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, sourceLocId]);
             
-            // Nếu Python trả về allow: False => CHẶN TUYỆT ĐỐI
+            // NẾU KHÔNG CÓ HÀNG (allow = false)
             if (result && result.allow === false) {
-                if (this.env.services.notification) {
-                    // Hiển thị thông báo "Không có hàng..."
-                    this.env.services.notification.add(result.message || "Vị trí không hợp lệ!", { type: 'danger' });
-                }
+                // 1. Phát âm thanh lỗi
                 if (this.env.services.sound) this.env.services.sound.play('error');
                 
-                return; // <--- DỪNG TẠI ĐÂY (Không chạy super, không Write DB)
+                // 2. Hiện thông báo chi tiết trả về từ Python
+                if (this.env.services.notification) {
+                    this.env.services.notification.add(result.message || "⛔ Vị trí không hợp lệ!", { 
+                        type: 'danger',
+                        sticky: true // Ghim lại để nhân viên đọc
+                    });
+                }
+
+                // 3. QUAN TRỌNG NHẤT: RETURN NGAY LẬP TỨC
+                // Lệnh này chặn không cho code chạy xuống dòng super.processBarcode bên dưới
+                console.log("⛔ [HLV] Blocked scan due to unavailability.");
+                return; 
             }
             
-            // Nếu có cảnh báo nhẹ (allow: true nhưng vẫn muốn nhắc)
+            // Nếu có cảnh báo nhẹ (allow = true nhưng có message)
             if (result && result.message) {
                 this.env.services.notification.add(result.message, { type: 'warning' });
             }
 
         } catch (e) {
-            console.warn("⚠️ Skip Check due to Error:", e);
-            // Nếu lỗi mạng/server thì tùy bạn: Cho qua hay chặn? Ở đây tôi cho qua để không treo app.
+            console.warn("⚠️ Skip Check due to Error (Network/Server):", e);
+            // Nếu mất mạng, ta có thể chọn chặn hoặc cho qua. Ở đây cho qua để không treo máy.
         }
 
         // =================================================================
-        // BƯỚC 2: CẬP NHẬT GIAO DIỆN (RAM)
+        // BƯỚC 2: CẬP NHẬT GIAO DIỆN (CHỈ CHẠY KHI BƯỚC 1 OK)
         // =================================================================
-        // Chỉ chạy xuống đây nếu Bước 1 đã OK
+        console.log("✅ Check OK -> Processing Scan...");
         await super.processBarcode(...arguments);
 
         // =================================================================
         // BƯỚC 3: AUTO SAVE / WRITE (DB)
         // =================================================================
         try {
-            // Lấy lại line vừa được update
+            // Lấy lại line vừa được update trong RAM
             const updatedProduct = await this._identifyProductSafe(barcode);
             if (updatedProduct && this.currentState.lines) {
                 const line = this.currentState.lines.find(l => l.product_id.id === updatedProduct.id);
                 
                 if (line) {
-                    // Thử Write trực tiếp (Nhanh)
+                    // Thử Write trực tiếp (Nhanh, không load lại trang)
                     const success = await forceSaveLine(this.orm, line);
                     
                     if (!success) {
-                        // Nếu Write thất bại (do line mới chưa có ID), gọi Save tổng
-                        // console.log("💾 Saving Picking (New Line)...");
+                        // Nếu dòng mới chưa có ID thật -> Gọi Save tổng
+                        // console.log("💾 New Line detected -> Full Save...");
                         await this.save();
                     } else {
                         // console.log("✅ Auto Write Success");
