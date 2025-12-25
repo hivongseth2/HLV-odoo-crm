@@ -16,7 +16,7 @@ function playErrorSound(env) {
             return;
         }
         // Cách 2: Fallback HTML5 Audio
-        const audio = new Audio('/web/static/src/sounds/error.mp3');
+        const audio = new Audio('/custom_barcode_scan_redirect/static/src/sound/error.mp3');
         audio.play().catch(() => {});
     } catch (e) {}
 }
