@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import  BarcodeModel  from "@stock_barcode/models/barcode_model";
+import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
@@ -15,6 +15,7 @@ function extractId(field) {
 }
 
 function getLineDemand(line) {
+    // Lấy số lượng yêu cầu (Demand)
     if (line.reserved_uom_qty > 0) return line.reserved_uom_qty;
     if (line.product_uom_qty > 0) return line.product_uom_qty;
     if (line.quantity_product_uom > 0) return line.quantity_product_uom;
@@ -31,203 +32,109 @@ function safePlaySound(env, type = 'error') {
     } catch (e) {}
 }
 
-// UI KHÓA MÀN HÌNH (QUAN TRỌNG ĐỂ CHỐNG QUÉT ĐÚP)
-function toggleBlockingScreen(show) {
-    let el = document.getElementById('hlv-blocking-screen');
+// MÀN HÌNH CHỜ ĐƠN GIẢN (Để tránh quét quá nhanh gây loạn)
+function toggleLoading(show) {
+    let el = document.getElementById('hlv-loading');
     if (!el) {
         el = document.createElement('div');
-        el.id = 'hlv-blocking-screen';
-        el.style.cssText = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 99999999; display: none; justify-content: center; align-items: center; flex-direction: column; color: white; font-family: system-ui;";
-        el.innerHTML = `
-            <div style="font-size: 40px; margin-bottom: 20px;">⏳</div>
-            <div style="font-size: 24px; font-weight: bold;">ĐANG LƯU...</div>
-            <div style="font-size: 16px; margin-top: 10px; color: #ffc107;">Vui lòng đợi lưu xong mới quét tiếp!</div>
-        `;
+        el.id = 'hlv-loading';
+        el.style.cssText = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.3); z-index: 99999; display: none; cursor: wait;";
         document.body.appendChild(el);
     }
-    el.style.display = show ? 'flex' : 'none';
-}
-
-async function renderInlineStock(lineEl, orm) {
-    let defaultCode = lineEl.dataset.barcode;
-    if (!defaultCode) {
-        const codeEl = lineEl.querySelector(".o_product_code") || lineEl.querySelector(".o_product_ref");
-        if (codeEl) defaultCode = codeEl.textContent.trim();
-    }
-    if (!defaultCode || lineEl.querySelector(".hlv-inline-stock")) return;
-
-    try {
-        const domain = [['product_id.default_code', '=', defaultCode], ['location_id.usage', '=', 'internal']];
-        const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
-        let textDisplay = "0";
-        if (quants && quants.length > 0) {
-            const stockMap = {};
-            quants.forEach(q => {
-                const locName = q.location_id ? q.location_id[1] : ""; 
-                const match = locName.match(/\b(TSN|KBC|KHD)\b/i);
-                const key = match ? match[1].toUpperCase() : "KHÁC"; 
-                if (!stockMap[key]) stockMap[key] = 0;
-                stockMap[key] += q.quantity;
-            });
-            textDisplay = Object.keys(stockMap).map(k => `${k}: ${stockMap[k]}`).join(" | ");
-        }
-        const qtyContainer = lineEl.querySelector('div[name="quantity"]') || lineEl.querySelector('.o_barcode_scanner_qty')?.parentElement;
-        if (qtyContainer) {
-            let badge = document.createElement("div"); 
-            badge.className = "hlv-inline-stock";
-            badge.style.cssText = `font-size: 11px; color: #004085; background-color: #cce5ff; padding: 2px 6px; border-radius: 4px; margin-top: 4px; font-weight: bold; width: fit-content; display: block; border: 1px solid #b8daff;`;
-            badge.textContent = `📦 ${textDisplay}`;
-            qtyContainer.appendChild(badge);
-        }
-    } catch(e) {}
+    el.style.display = show ? 'block' : 'none';
 }
 
 // =============================================================================
-// MAIN LOGIC V21 - PRIORITY: LOCAL LINE > SOURCE LINE
+// MAIN LOGIC V23 - GATEKEEPER MODE (CHỈ CHẶN - KHÔNG SỬA)
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V21: LOCATION PRIORITY FIX");
+        console.log("🚀 [HLV] V23: GATEKEEPER MODE (Simple & Strict)");
         
-        this.isLocked = false;
-
-        // CHẶN F5 CỨNG
+        // Vẫn giữ chặn F5 để an toàn (Optional)
         window.addEventListener('beforeunload', (e) => {
             e.preventDefault();
-            e.returnValue = 'DỮ LIỆU CÓ THỂ BỊ MẤT. ĐỪNG F5!';
-            return 'DỮ LIỆU CÓ THỂ BỊ MẤT. ĐỪNG F5!';
+            e.returnValue = 'Dữ liệu chưa lưu xong?';
         });
-
-        const observer = new MutationObserver(() => {
-            document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
-        });
-        const wait = setInterval(() => {
-            if (document.body) {
-                observer.observe(document.body, { childList: true, subtree: true });
-                clearInterval(wait);
-            }
-        }, 1000);
     },
 
     async processBarcode(barcode) {
-        if (this.isLocked) {
-            safePlaySound(this.env, 'error'); 
-            return; 
-        }
-
+        // 1. CHỐNG SPAM (Khóa màn hình khi đang xử lý)
+        if (this._isWorking) return;
+        
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
-        this.isLocked = true;
-        toggleBlockingScreen(true);
+        this._isWorking = true;
+        toggleLoading(true);
 
         try {
-            // 1. NHẬN DIỆN
+            // 2. NHẬN DIỆN SẢN PHẨM (Để kiểm tra)
             const product = await this._identifyProductSafe(barcode);
             
-            // 2. VỊ TRÍ HIỆN TẠI (NƠI ĐỨNG)
-            let currentLoc = this.location;
-            let currentLocId = currentLoc ? currentLoc.id : null;
-            
-            let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
-            let locName = (currentLoc?.display_name || this.record?.display_name || "");
-            let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
-
             if (product && this.currentState.lines) {
+                // Tính toán tổng số lượng hiện tại
                 const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
                 
                 let totalDone = 0;
                 let totalDemand = 0;
-                
-                // PHÂN LOẠI DÒNG:
-                // - localLine: Dòng ĐANG Ở vị trí mình đứng (Tủ 3)
-                // - sourceLine: Dòng ĐANG Ở kho nguồn (Tồn kho) chưa làm xong
-                let localLine = null;
-                let sourceLine = null;
 
                 productLines.forEach(l => {
-                    const d = parseFloat(l.qty_done || 0);
-                    const r = parseFloat(getLineDemand(l));
-                    totalDone += d;
-                    totalDemand += r;
-                    
-                    const lineLocId = extractId(l.location_id);
-                    
-                    // Logic tìm dòng ưu tiên
-                    if (currentLocId && lineLocId === currentLocId) {
-                        // Đã có dòng ở Tủ 3 rồi -> Ưu tiên số 1 (cộng dồn vào đây)
-                        localLine = l;
-                    } else if (d < r) {
-                        // Dòng ở chỗ khác chưa xong -> Ưu tiên số 2 (để chuyển kho)
-                        sourceLine = l;
-                    }
+                    totalDone += parseFloat(l.qty_done || 0);
+                    totalDemand += parseFloat(getLineDemand(l));
                 });
 
-                // 🛑 CHECK LIMIT (TÍNH TỔNG)
+                // 🛑 CHỐT CHẶN 1: QUÉT DƯ (LIMIT)
                 if (totalDemand === 0) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSP: ${product.display_name}`);
-                    return;
+                    alert(`⚠️ SẢN PHẨM KHÔNG CÓ TRONG PHIẾU!\nSP: ${product.display_name}`);
+                    return; // Dừng ngay, không cho Odoo xử lý
                 }
+                
                 if (totalDone >= totalDemand) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSP: ${product.display_name}`);
-                    return;
+                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\nSP: ${product.display_name}\nĐã quét: ${totalDone}/${totalDemand}`);
+                    return; // Dừng ngay
                 }
 
-                // 🌍 CHECK LOCATION
+                // 🌍 CHỐT CHẶN 2: SAI VỊ TRÍ (LOCATION)
+                // Lấy thông tin vị trí hiện tại
+                let currentLoc = this.location;
+                let checkLocId = currentLoc ? currentLoc.id : (this.record.location_id ? extractId(this.record.location_id) : null);
+                let locName = (currentLoc?.display_name || this.record?.display_name || "");
+                let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
+
                 try {
                     const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
                     if (result && result.allow === false) {
                         safePlaySound(this.env, 'error');
-                        alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
-                        return;
+                        alert(`⛔ SAI VỊ TRÍ!\n${result.message || "Không có hàng ở đây!"}`);
+                        return; // Dừng ngay
                     }
                 } catch (e) {
-                    alert("Lỗi mạng!"); return;
-                }
-
-                // 🚀 SMART LOGIC V21 (QUAN TRỌNG)
-                let targetLine = null;
-                
-                // ƯU TIÊN 1: Nếu đã có dòng ở Tủ 3 -> Chọn nó để cộng dồn
-                if (localLine) {
-                    console.log(`✅ [HLV] Found Existing Line at ${currentLocId} (ID: ${localLine.id}) -> Incrementing`);
-                    targetLine = localLine;
-                } 
-                // ƯU TIÊN 2: Nếu chưa có -> Lấy dòng ở nguồn để chuyển qua
-                else if (sourceLine && currentLocId) {
-                    console.log(`✅ [HLV] No local line. Stealing from Source (ID: ${sourceLine.id}) -> Moving`);
-                    targetLine = sourceLine;
-                    // Đổi vị trí ngay
-                    targetLine.location_id = currentLoc;
-                }
-
-                // THỰC HIỆN UPDATE
-                if (targetLine) {
-                    // Update RAM
-                    targetLine.qty_done = (targetLine.qty_done || 0) + 1;
-                    this.trigger('update');
-
-                    // SAVE VÀ CHỜ KẾT QUẢ
-                    await this.save();
-                    
-                    console.log("✅ Save Success");
-                    return; // Xong
+                    console.error("Check Location Error", e);
+                    // Nếu mất mạng thì có thể cho qua hoặc chặn tùy bạn. Ở đây chặn cho an toàn.
+                    alert("Lỗi kết nối kiểm tra vị trí!");
+                    return;
                 }
             }
 
-            // FALLBACK
+            // ✅ NẾU TẤT CẢ OK -> MỞ CỔNG CHO ODOO CHẠY
+            // Gọi hàm gốc của Odoo. Odoo sẽ tự động tìm dòng, cộng số lượng, tách dòng theo logic chuẩn của nó.
             await super.processBarcode(...arguments);
+
+            // 💾 LƯU AN TOÀN
+            // Gọi lệnh save ngay sau khi quét để đảm bảo F5 không mất dữ liệu.
+            // (Không dùng write thủ công nữa)
             await this.save();
 
         } catch (err) {
             console.error(err);
             alert("Lỗi: " + err.message);
         } finally {
-            this.isLocked = false;
-            toggleBlockingScreen(false);
+            this._isWorking = false;
+            toggleLoading(false);
         }
     },
 
