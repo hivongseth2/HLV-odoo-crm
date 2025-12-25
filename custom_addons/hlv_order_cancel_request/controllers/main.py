@@ -44,11 +44,22 @@ class CancelRequestController(http.Controller):
             if not order_reference: error['order_reference'] = 'Bắt buộc'
             if not reason: error['reason'] = 'Bắt buộc'
             
+            # Validate: salesperson must match the order's saler code
+            if not error:
+                SaleOrder = request.env['sale.order'].sudo()
+                order = SaleOrder.search([('name', '=', order_reference)], limit=1)
+                
+                if not order:
+                    error['main'] = f'Không tìm thấy đơn hàng với mã: {order_reference}'
+                elif order.x_studio_misa_saler_code:
+                    # Compare (case-insensitive)
+                    if order.x_studio_misa_saler_code.upper() != salesperson_name.upper():
+                        error['main'] = f'Mã Sale không khớp với đơn hàng. Đơn {order_reference} thuộc về Sale khác.'
+            
             if not error:
                 # Create request
                 try:
                     CancelRequest = request.env['sale.order.cancel.request'].sudo()
-                    # Check duplicate? Maybe not strictly necessary.
                     
                     req = CancelRequest.create({
                         'salesperson_name': salesperson_name,

@@ -21,11 +21,12 @@ class SaleOrderCancelRequest(models.Model):
     
     reason = fields.Text(string='Lý do', required=True, tracking=True)
     
-    # NEW: Kho xác nhận trước, sau đó Kế toán
+    # Flow: YCHD → Kho XN → Kế toán XN → Hoàn Thành
     state = fields.Selection([
         ('draft', 'Nháp'),
-        ('submitted', 'Đã Gửi'),
-        ('warehouse_confirmed', 'Kho Đã XN'),
+        ('submitted', 'YCHD'),
+        ('warehouse_confirmed', 'Kho XN'),
+        ('accountant_confirmed', 'Kế toán XN'),
         ('done', 'Hoàn Thành'),
         ('rejected', 'Đã Từ Chối')
     ], string='Trạng Thái', default='draft', tracking=True, group_expand='_expand_states')
@@ -88,8 +89,13 @@ class SaleOrderCancelRequest(models.Model):
         # Check permission
         if not self.env.user.has_group('hlv_order_cancel_request.group_cancel_request_accountant'):
             raise UserError(_("Bạn không có quyền xác nhận bước Kế Toán. Chỉ Kế Toán mới có thể thực hiện."))
-        self.state = 'done'
+        self.state = 'accountant_confirmed'
         self._send_zalo_notification_on_accountant_confirm()
+
+    def action_done(self):
+        """Mark request as completed."""
+        self.ensure_one()
+        self.state = 'done'
 
     def action_reject(self):
         self.state = 'rejected'
