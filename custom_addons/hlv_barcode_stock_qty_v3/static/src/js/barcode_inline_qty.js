@@ -4,7 +4,7 @@ import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// HELPER: CÁC HÀM HỖ TRỢ
+// HELPER FUNCTIONS
 // =============================================================================
 
 function extractId(field) {
@@ -73,7 +73,7 @@ async function renderInlineStock(lineEl, orm) {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V4: AUTO MOVE LOCATION + STRICT LIMIT");
+        console.log("🚀 [HLV] V5: CHECK LIMIT -> CHECK LOCATION -> SMART ACTION");
         
         const observer = new MutationObserver(() => {
             document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
@@ -92,24 +92,23 @@ patch(BarcodeModel.prototype, {
         // 1. NHẬN DIỆN SẢN PHẨM
         const product = await this._identifyProductSafe(barcode);
         
-        // Xác định vị trí ĐANG QUÉT (Nơi bạn đang đứng)
-        // Nếu bạn vừa quét mã Tủ 3, thì this.location sẽ là Tủ 3
-        let currentLocId = this.location ? this.location.id : null; 
+        // 2. XÁC ĐỊNH VỊ TRÍ ĐANG ĐỨNG (QUAN TRỌNG)
+        // Nếu user quét mã vị trí trước đó, nó nằm trong this.location
+        // Nếu không, lấy vị trí mặc định của phiếu
+        let currentLocId = this.location ? this.location.id : null;
+        
+        // Params để check server
+        let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
+        let locName = (this.location?.display_name || this.record?.display_name || "");
+        let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
-        // =================================================================
-        // ⛔ BƯỚC 1: CHECK LIMIT & SMART LOCATION SWITCH
-        // =================================================================
         if (product && this.currentState.lines) {
-            const productLines = this.currentState.lines.filter(l => {
-                const linePid = extractId(l.product_id);
-                return linePid === product.id;
-            });
+            // Lấy tất cả line của sản phẩm
+            const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
             
             let totalDone = 0;
             let totalDemand = 0;
-            
-            // Tìm dòng tiềm năng để "CƯỚP" (Dòng chưa xong)
-            let candidateLine = null;
+            let candidateLine = null; // Dòng có thể được update
 
             productLines.forEach(l => {
                 const d = parseFloat(l.qty_done || 0);
@@ -117,13 +116,13 @@ patch(BarcodeModel.prototype, {
                 totalDone += d;
                 totalDemand += r;
 
-                // Nếu dòng này chưa xong (Done < Demand), đây là ứng viên để cập nhật
-                if (d < r) {
-                    candidateLine = l;
-                }
+                // Tìm dòng chưa xong để "nhắm" vào nó
+                if (d < r) candidateLine = l;
             });
 
-            // 1.1 CHẶN QUÉT DƯ
+            // =============================================================
+            // 🛑 CHECK 1: KIỂM TRA SỐ LƯỢNG (LIMIT)
+            // =============================================================
             const isUnplanned = (totalDemand === 0);
             if (isUnplanned) {
                 safePlaySound(this.env, 'error');
@@ -136,29 +135,49 @@ patch(BarcodeModel.prototype, {
                 return;
             }
 
-            // 1.2 TỰ ĐỘNG ĐỔI VỊ TRÍ (SMART MOVE)
-            // Nếu tìm thấy dòng chưa xong, VÀ bạn đang đứng ở vị trí khác với vị trí trong phiếu
-            // VÀ vị trí bạn đứng là hợp lệ (đã quét mã vị trí trước đó)
+            // =============================================================
+            // 🌍 CHECK 2: KIỂM TRA VỊ TRÍ VỚI SERVER (BẮT BUỘC)
+            // =============================================================
+            // Phải check xem tại "currentLocId" hoặc "checkLocId" có hàng không đã
+            try {
+                const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
+                
+                if (result && result.allow === false) {
+                    safePlaySound(this.env, 'error');
+                    alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
+                    return; // <--- CHẶN NGAY NẾU SAI VỊ TRÍ
+                }
+            } catch (e) {
+                console.error("Check Error:", e);
+                // Nếu lỗi mạng, có thể alert hoặc cho qua. Ở đây alert cho an toàn.
+                alert("Lỗi kết nối kiểm tra vị trí!");
+                return;
+            }
+
+            // =============================================================
+            // 🚀 SMART ACTION: CHUYỂN DÒNG (NẾU ĐÚNG VỊ TRÍ)
+            // =============================================================
+            // Chỉ chạy xuống đây nếu CHECK 1 và CHECK 2 đã OK.
+            
+            // Nếu ta có 1 dòng chưa xong (candidateLine) 
+            // VÀ ta đang đứng ở một vị trí cụ thể (currentLocId)
+            // VÀ vị trí dòng đó KHÁC vị trí ta đang đứng
             if (candidateLine && currentLocId) {
                 const lineLocId = extractId(candidateLine.location_id);
-                
-                // Nếu vị trí trên dòng KHÁC vị trí hiện tại
+
                 if (lineLocId !== currentLocId) {
-                    console.log(`🔄 [HLV] Auto Moving Line ${candidateLine.id} from ${lineLocId} to ${currentLocId}`);
+                    console.log(`✅ [HLV] Location Check Passed. Moving Line ${candidateLine.id} to ${currentLocId}`);
                     
                     try {
-                        // Cập nhật dòng cũ: Đổi vị trí sang chỗ mới + Tăng số lượng + Lưu luôn
+                        // Thực hiện chuyển kho
                         await this.orm.write("stock.move.line", [candidateLine.id], { 
-                            "location_id": currentLocId, // Đổi sang Tủ 3
-                            "qty_done": candidateLine.qty_done + 1 // Tăng 1
+                            "location_id": currentLocId, 
+                            "qty_done": candidateLine.qty_done + 1 
                         });
-
-                        // Cần reload lại state để giao diện cập nhật dòng 0/4 thành 1/4 (ở vị trí mới)
-                        // Chúng ta gọi save() để Odoo sync lại toàn bộ giao diện cho chuẩn
-                        await this.save(); 
                         
-                        // RETURN LUÔN để không chạy logic mặc định (tránh tạo dòng đỏ mới)
-                        return; 
+                        // Save để reload UI
+                        await this.save(); 
+                        return; // Done
                     } catch (e) {
                         console.error("Move Error:", e);
                     }
@@ -167,32 +186,15 @@ patch(BarcodeModel.prototype, {
         }
 
         // =================================================================
-        // 🌍 BƯỚC 2: CHECK SERVER (VỊ TRÍ)
+        // ✅ FALLBACK: LOGIC MẶC ĐỊNH
         // =================================================================
-        // Logic check hàng có ở đó không (như cũ)
-        let sourceLocId = this.location ? this.location.id : (this.record.location_id ? extractId(this.record.location_id) : null);
-        let locName = (this.location?.display_name || this.record?.display_name || "");
-        let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
-
-        try {
-            const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, sourceLocId]);
-            if (result && result.allow === false) {
-                safePlaySound(this.env, 'error');
-                alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
-                return; 
-            }
-        } catch (e) { console.error(e); }
-
-        // =================================================================
-        // ✅ BƯỚC 3: ODOO XỬ LÝ (NẾU KHÔNG PHẢI TRƯỜNG HỢP ĐỔI KHO)
-        // =================================================================
+        // Nếu không phải trường hợp chuyển kho, hoặc check pass nhưng không cần chuyển
         await super.processBarcode(...arguments);
-        
-        // Auto Save nhẹ cho trường hợp thường
+
+        // Auto Save nhẹ
         try {
              const updatedProduct = await this._identifyProductSafe(barcode);
              if (updatedProduct && this.currentState.lines) {
-                 // Tìm lại line vừa update
                  const line = this.currentState.lines.find(l => extractId(l.product_id) === updatedProduct.id && l.qty_done <= getLineDemand(l));
                  if (line && line.id && typeof line.id === 'number') {
                      await this.orm.write("stock.move.line", [line.id], { "qty_done": line.qty_done });
