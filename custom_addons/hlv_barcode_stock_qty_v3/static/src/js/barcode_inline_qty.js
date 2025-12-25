@@ -4,7 +4,7 @@ import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// HELPER FUNCTIONS
+// HELPER: CÁC HÀM HỖ TRỢ
 // =============================================================================
 
 function extractId(field) {
@@ -15,9 +15,36 @@ function extractId(field) {
 }
 
 function getLineDemand(line) {
+    // Ưu tiên các trường demand của Odoo 18
     if (line.reserved_uom_qty > 0) return line.reserved_uom_qty;
     if (line.product_uom_qty > 0) return line.product_uom_qty;
+    if (line.quantity_product_uom > 0) return line.quantity_product_uom;
     return 0;
+}
+
+// THANH TRẠNG THÁI (VISUAL STATUS BAR)
+function updateSaveStatusUI(status) {
+    let el = document.getElementById('hlv-save-status');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'hlv-save-status';
+        // Style: Nằm trên cùng, font to rõ, z-index cao nhất
+        el.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 0px; z-index: 9999999; transition: all 0.2s; text-align: center; color: white; font-weight: bold; line-height: 30px; font-size: 16px; overflow: hidden; font-family: sans-serif;";
+        document.body.appendChild(el);
+    }
+    
+    if (status === 'saving') {
+        el.style.backgroundColor = '#dc3545'; // ĐỎ ĐẬM
+        el.style.height = '35px';
+        el.innerText = "⏳ ĐANG GHI DATABASE... KHOAN F5!";
+    } else if (status === 'success') {
+        el.style.backgroundColor = '#28a745'; // XANH
+        el.style.height = '35px';
+        el.innerText = "✅ ĐÃ LƯU AN TOÀN!";
+        setTimeout(() => { el.style.height = '0px'; }, 2000);
+    } else {
+        el.style.height = '0px';
+    }
 }
 
 function safePlaySound(env, type = 'error') {
@@ -28,25 +55,6 @@ function safePlaySound(env, type = 'error') {
             new Audio('/web/static/src/audio/error.mp3').play().catch(() => {});
         }
     } catch (e) {}
-}
-
-// Hàm vẽ trạng thái Lưu (Thanh màu trên đầu trang)
-function updateSaveStatusUI(status) {
-    let el = document.getElementById('hlv-save-status');
-    if (!el) {
-        el = document.createElement('div');
-        el.id = 'hlv-save-status';
-        el.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 5px; z-index: 99999; transition: background 0.3s;";
-        document.body.appendChild(el);
-    }
-    
-    if (status === 'saving') {
-        el.style.backgroundColor = '#ff0000'; // ĐỎ: Đang lưu
-        el.style.height = '10px';
-    } else {
-        el.style.backgroundColor = '#00ff00'; // XANH: Xong
-        setTimeout(() => { el.style.height = '0px'; }, 1000);
-    }
 }
 
 async function renderInlineStock(lineEl, orm) {
@@ -86,27 +94,26 @@ async function renderInlineStock(lineEl, orm) {
 }
 
 // =============================================================================
-// MAIN LOGIC
+// MAIN LOGIC (ODOO 18 - HARDCORE SAVE)
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V11: PARANOID SAVE GUARD");
+        console.log("🚀 [HLV] V15: HARDCORE WRITE + F5 BLOCKER");
         
-        this.isSaving = false; // Cờ theo dõi trạng thái
+        this.isSavingData = false;
 
-        // 1. Đăng ký sự kiện chặn F5
-        window.addEventListener("beforeunload", (e) => {
-            if (this.isSaving) {
-                // Hiển thị cảnh báo chuẩn của trình duyệt
-                e.preventDefault();
-                e.returnValue = "Dữ liệu chưa lưu xong! Đừng F5!";
-                return e.returnValue;
+        // 1. CƠ CHẾ CHẶN F5 CỨNG (Browser Native)
+        window.addEventListener('beforeunload', (e) => {
+            // Luôn hiện cảnh báo nếu cờ đang bật
+            if (this.isSavingData) {
+                e.preventDefault(); 
+                e.returnValue = 'DỮ LIỆU CHƯA LƯU XONG! ĐỪNG RỜI ĐI!'; 
+                return 'DỮ LIỆU CHƯA LƯU XONG! ĐỪNG RỜI ĐI!';
             }
         });
 
-        // 2. Observer vẽ Inline
         const observer = new MutationObserver(() => {
             document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
         });
@@ -118,26 +125,28 @@ patch(BarcodeModel.prototype, {
         }, 1000);
     },
 
-    // Hàm bật/tắt chế độ bảo vệ
-    _setSavingState(state) {
-        this.isSaving = state;
-        updateSaveStatusUI(state ? 'saving' : 'idle');
+    // Quản lý trạng thái lưu
+    _setSaving(state) {
+        this.isSavingData = state;
+        updateSaveStatusUI(state ? 'saving' : (state === false ? 'success' : 'idle'));
     },
 
     async processBarcode(barcode) {
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
-        // 🔴 BẮT ĐẦU QUÁ TRÌNH XỬ LÝ -> BẬT CỜ BẢO VỆ NGAY
-        this._setSavingState(true);
+        // BẬT CỜ BẢO VỆ NGAY KHI QUÉT
+        this._setSaving(true);
 
         try {
-            // 1. NHẬN DIỆN SẢN PHẨM
+            // 1. NHẬN DIỆN
             const product = await this._identifyProductSafe(barcode);
             
-            // 2. LẤY THÔNG TIN
-            let currentLocId = this.location ? this.location.id : null;
+            // 2. VỊ TRÍ HIỆN TẠI (TỦ 3)
+            let currentLoc = this.location; 
+            let currentLocId = currentLoc ? currentLoc.id : null;
+            
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
-            let locName = (this.location?.display_name || this.record?.display_name || "");
+            let locName = (currentLoc?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
             if (product && this.currentState.lines) {
@@ -156,53 +165,83 @@ patch(BarcodeModel.prototype, {
                 });
                 if (!candidateLine && productLines.length > 0) candidateLine = productLines[productLines.length - 1];
 
-                // --- CHECK 1: LIMIT ---
+                // 🛑 CHECK 1: LIMIT
                 const isUnplanned = (totalDemand === 0);
                 if (isUnplanned) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSản phẩm: ${product.display_name}`);
-                    this._setSavingState(false); // 🟢 Tắt cờ vì bị chặn
+                    alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSP: ${product.display_name}`);
+                    this._setSaving(null);
                     return;
                 }
                 if (totalDone >= totalDemand) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSản phẩm: ${product.display_name}\nTiến độ: ${totalDone}/${totalDemand}`);
-                    this._setSavingState(false); // 🟢 Tắt cờ vì bị chặn
+                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSP: ${product.display_name}\nTiến độ: ${totalDone}/${totalDemand}`);
+                    this._setSaving(null);
                     return;
                 }
 
-                // --- CHECK 2: SERVER LOCATION ---
+                // 🌍 CHECK 2: SERVER CHECK
                 try {
                     const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
                     if (result && result.allow === false) {
                         safePlaySound(this.env, 'error');
                         alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
-                        this._setSavingState(false); // 🟢 Tắt cờ vì bị chặn
+                        this._setSaving(null);
                         return;
                     }
                 } catch (e) {
                     alert("Lỗi kết nối kiểm tra vị trí!");
-                    this._setSavingState(false);
+                    this._setSaving(null);
                     return;
                 }
 
-                // --- CHECK 3: SMART MOVE ---
+                // 🚀 CHECK 3: SMART MOVE & HARD WRITE
                 if (candidateLine && currentLocId) {
                     const lineLocId = extractId(candidateLine.location_id);
+                    
+                    // Nếu khác vị trí -> Cần chuyển kho
                     if (lineLocId !== currentLocId) {
+                        console.log(`✅ [HLV] Smart Move Triggered: ${lineLocId} -> ${currentLocId}`);
+                        
                         try {
-                            // Update RAM
-                            candidateLine.qty_done += 1;
-                            if (this.location) candidateLine.location_id = this.location;
-                            this.trigger('update'); 
+                            const newQty = (candidateLine.qty_done || 0) + 1;
 
-                            // Update DB (Full Save để đồng bộ việc chuyển kho)
-                            await this.save();
-                            
-                            this._setSavingState(false); // 🟢 Lưu xong -> Tắt cờ
-                            return; 
+                            // CHIẾN THUẬT: WRITE THẲNG XUỐNG DB (NẾU LÀ DÒNG THẬT)
+                            // Nếu candidateLine có ID thật (số nguyên), ta write trực tiếp.
+                            if (candidateLine.id && typeof candidateLine.id === 'number') {
+                                console.log("💾 Writing direct to DB ID:", candidateLine.id);
+                                
+                                // GỌI ORM WRITE - CHỜ CHO BẰNG ĐƯỢC
+                                await this.orm.write("stock.move.line", [candidateLine.id], { 
+                                    "location_id": currentLocId, 
+                                    "qty_done": newQty
+                                });
+
+                                // Write thành công (không lỗi) -> Mới cập nhật UI
+                                candidateLine.qty_done = newQty;
+                                candidateLine.location_id = currentLoc; 
+                                this.trigger('update');
+                                
+                                // Đã write xong rồi, tắt cờ
+                                this._setSaving(false); 
+                                return;
+                            } 
+                            // Nếu là dòng ảo (New Line): Buộc phải Save
+                            else {
+                                console.log("💾 Virtual Line -> Using Full Save");
+                                candidateLine.qty_done = newQty;
+                                candidateLine.location_id = currentLoc;
+                                this.trigger('update');
+                                await this.save();
+                                this._setSaving(false);
+                                return;
+                            }
+
                         } catch (e) {
-                            console.error("Move Error:", e);
+                            console.error("Write Error:", e);
+                            alert("❌ LỖI LƯU DỮ LIỆU: " + e.message + "\n\nF5 SẼ MẤT DỮ LIỆU NÀY!");
+                            this._setSaving(null);
+                            return;
                         }
                     }
                 }
@@ -215,26 +254,15 @@ patch(BarcodeModel.prototype, {
 
             // Auto Save
             try {
-                 const updatedProduct = await this._identifyProductSafe(barcode);
-                 if (updatedProduct && this.currentState.lines) {
-                     const line = this.currentState.lines.find(l => extractId(l.product_id) === updatedProduct.id && l.qty_done <= getLineDemand(l));
-                     
-                     if (line) {
-                         if (line.id && typeof line.id === 'number') {
-                             await this.orm.write("stock.move.line", [line.id], { "qty_done": line.qty_done });
-                         } else {
-                             await this.save();
-                         }
-                     }
-                 }
-            } catch(e) {}
+                 await this.save();
+                 this._setSaving(false);
+            } catch(e) {
+                 this._setSaving(null);
+            }
 
         } catch (err) {
             console.error(err);
-        } finally {
-            // 🟢 LUÔN LUÔN TẮT CỜ KHI KẾT THÚC DÙ CÓ LỖI HAY KHÔNG
-            // Để tránh việc bị kẹt trạng thái "Đang lưu" mãi mãi
-            this._setSavingState(false);
+            this._setSaving(null);
         }
     },
 
