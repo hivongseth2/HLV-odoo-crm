@@ -50,17 +50,39 @@
 
     <template id="cancel_request_form" name="Request Form">
         <t t-call="hlv_order_cancel_request.cancel_request_layout">
+            <style>
+                .saler-dropdown-wrapper { position: relative; }
+                .saler-dropdown {
+                    position: absolute;
+                    top: 100%;
+                    left: 0;
+                    right: 0;
+                    max-height: 200px;
+                    overflow-y: auto;
+                    background: #fff;
+                    border: 1px solid #ced4da;
+                    border-radius: 0.375rem;
+                    z-index: 1000;
+                    display: none;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                }
+                .saler-dropdown.show { display: block; }
+                .saler-dropdown-item {
+                    padding: 8px 12px;
+                    cursor: pointer;
+                }
+                .saler-dropdown-item:hover { background: #f8f9fa; }
+            </style>
+            
             <form method="post" class="mt-2">
                 <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                 
-                <div class="mb-3">
+                <div class="mb-3 saler-dropdown-wrapper">
                     <label for="salesperson_name" class="form-label">Mã Sale <span class="text-danger">*</span></label>
                     <input type="text" class="form-control" id="salesperson_name" name="salesperson_name" 
                            t-att-value="values.get('salesperson_name')" required="required" 
-                           placeholder="Nhập mã sale..." list="salesperson_list" autocomplete="off"/>
-                    <datalist id="salesperson_list">
-                        <!-- Populated by JS -->
-                    </datalist>
+                           placeholder="Click để chọn mã sale..." autocomplete="off"/>
+                    <div id="saler_dropdown" class="saler-dropdown"></div>
                 </div>
 
                 <div class="mb-3">
@@ -99,30 +121,63 @@
             </form>
 
             <script type="text/javascript">
-                // Load all saler codes on focus (click into field)
-                function loadSalerList(term) {
-                    fetch('/cancel-request/autocomplete/saler?term=' + encodeURIComponent(term || ''))
-                        .then(response => response.json())
-                        .then(data => {
-                            var datalist = document.getElementById('salesperson_list');
-                            datalist.innerHTML = '';
-                            data.forEach(item => {
-                                var option = document.createElement('option');
-                                option.value = item;
-                                datalist.appendChild(option);
+                (function() {
+                    var input = document.getElementById('salesperson_name');
+                    var dropdown = document.getElementById('saler_dropdown');
+                    var allItems = [];
+                    
+                    function renderDropdown(items) {
+                        dropdown.innerHTML = '';
+                        items.forEach(function(item) {
+                            var div = document.createElement('div');
+                            div.className = 'saler-dropdown-item';
+                            div.textContent = item;
+                            div.addEventListener('click', function() {
+                                input.value = item;
+                                dropdown.classList.remove('show');
                             });
+                            dropdown.appendChild(div);
                         });
-                }
-                
-                // Load all on focus (click)
-                document.getElementById('salesperson_name').addEventListener('focus', function(e) {
-                    loadSalerList('');
-                });
-                
-                // Filter as user types
-                document.getElementById('salesperson_name').addEventListener('input', function(e) {
-                    loadSalerList(e.target.value);
-                });
+                        if (items.length > 0) {
+                            dropdown.classList.add('show');
+                        } else {
+                            dropdown.classList.remove('show');
+                        }
+                    }
+                    
+                    function loadAndShow() {
+                        fetch('/cancel-request/autocomplete/saler?term=')
+                            .then(function(r) { return r.json(); })
+                            .then(function(data) {
+                                allItems = data;
+                                renderDropdown(data);
+                            });
+                    }
+                    
+                    // Show dropdown on click/focus
+                    input.addEventListener('focus', loadAndShow);
+                    input.addEventListener('click', function() {
+                        if (!dropdown.classList.contains('show')) {
+                            loadAndShow();
+                        }
+                    });
+                    
+                    // Filter on input
+                    input.addEventListener('input', function() {
+                        var val = input.value.toLowerCase();
+                        var filtered = allItems.filter(function(item) {
+                            return item.toLowerCase().indexOf(val) >= 0;
+                        });
+                        renderDropdown(filtered);
+                    });
+                    
+                    // Hide on click outside
+                    document.addEventListener('click', function(e) {
+                        if (!input.contains(e.target) &amp;&amp; !dropdown.contains(e.target)) {
+                            dropdown.classList.remove('show');
+                        }
+                    });
+                })();
             </script>
         </t>
     </template>
