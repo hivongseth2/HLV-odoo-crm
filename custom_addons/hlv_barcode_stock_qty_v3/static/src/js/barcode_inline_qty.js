@@ -24,7 +24,7 @@ function playSound(env, type='error') {
         if (env && env.services && env.services.sound) {
             env.services.sound.play(type);
         } else {
-             new Audio('/web/static/src/audio/error.mp3').play().catch(()=>{});
+             new Audio('/custom_barcode_scan_redirect/static/src/sound/error.mp3').play().catch(()=>{});
         }
     } catch(e) {}
 }
