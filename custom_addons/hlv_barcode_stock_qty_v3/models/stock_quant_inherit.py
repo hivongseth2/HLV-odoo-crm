@@ -96,3 +96,104 @@ class StockQuant(models.Model):
             "warehouse_prefix": wh_prefix,
             "base_location": (base_loc.complete_name if base_loc else None),
         }
+
+    @api.model
+    def get_alternative_locations(self, product_id, current_location_id=None):
+        """
+        Tìm các vị trí nội bộ khác đang có hàng (quantity > 0).
+        Trả về chuỗi text gợi ý.
+        """
+        domain = [
+            ('product_id', '=', product_id),
+            ('location_id.usage', '=', 'internal'),
+            ('quantity', '>', 0)
+        ]
+        # Trừ vị trí hiện tại đang hết hàng ra (nếu có truyền vào)
+        if current_location_id:
+            domain.append(('location_id', '!=', current_location_id))
+
+        # Lấy Top 5 vị trí có nhiều hàng nhất
+        quants = self.search(domain, order='quantity desc', limit=5)
+        
+        if not quants:
+            return False
+
+        suggestions = []
+        for q in quants:
+            suggestions.append("- %s: %.2f" % (q.location_id.display_name, q.quantity))
+        
+        return "\n".join(suggestions)
+    
+    
+    @api.model
+    def check_barcode_availability(self, barcode, wh_prefix=None, location_id=None):
+        """
+        Check tồn kho.
+        - Ưu tiên check tại location_id cụ thể (nếu JS gửi lên).
+        - Nếu không có location_id, check theo wh_prefix (toàn kho).
+        """
+        if not barcode:
+            return {'allow': True}
+
+        # 1. Tìm Product
+        Product = self.env["product.product"]
+        product = Product.search([("barcode", "=", barcode)], limit=1)
+        if not product:
+            product = Product.search([("default_code", "=", barcode)], limit=1)
+        
+        # Nếu quét mã lạ (không phải sp), cho qua
+        if not product:
+            return {'allow': True}
+
+        # 2. XÁC ĐỊNH PHẠM VI CHECK (Scope)
+        domain = [("product_id", "=", product.id), ("quantity", ">", 0)]
+        scope_name = ""
+
+        # Ưu tiên 1: Check chính xác tại vị trí nguồn (VD: Tủ 3)
+        if location_id:
+            loc = self.env['stock.location'].browse(location_id)
+            if loc.usage == 'internal':
+                domain.append(("location_id", "child_of", location_id))
+                scope_name = loc.display_name
+        
+        # Ưu tiên 2: Check theo Prefix Kho (VD: KBC)
+        if not scope_name and wh_prefix:
+            base_loc = self._get_base_location_by_prefix(wh_prefix)
+            if base_loc:
+                domain.append(("location_id", "child_of", base_loc.id))
+                scope_name = base_loc.display_name
+        
+        # LỖI: Nếu không xác định được phạm vi nào -> CHẶN LUÔN
+        if not scope_name:
+            return {
+                'allow': False, # <--- ĐỔI TỪ TRUE SANG FALSE
+                'message': "❌ LỖI: Không xác định được kho/vị trí hiện tại.\nJS gửi lên: Prefix=%s, LocID=%s" % (wh_prefix, location_id)
+            }
+
+        # 3. CHECK TỒN KHO
+        quants = self.sudo().search(domain)
+        total_qty = sum(quants.mapped("quantity"))
+
+        if total_qty > 0:
+            return {'allow': True}
+
+        # 4. HẾT HÀNG -> GỢI Ý
+        msg = "⛔ KHÔNG CÓ HÀNG TẠI: %s\n📦 SP: %s" % (scope_name, product.display_name)
+        
+        # Tìm gợi ý ở chỗ khác (Toàn hệ thống nội bộ)
+        alt_quants = self.sudo().search([
+            ("product_id", "=", product.id),
+            ("location_id.usage", "=", "internal"),
+            ("quantity", ">", 0),
+        ], order="quantity desc", limit=5)
+
+        if alt_quants:
+            msg += "\n\n💡 Có thể lấy tại:"
+            for q in alt_quants:
+                # Bỏ qua vị trí vừa check bị fail
+                if scope_name in q.location_id.display_name: continue
+                msg += "\n   • %s: %s" % (q.location_id.display_name, q.quantity)
+        else:
+            msg += "\n\n⚠️ Hết sạch hàng trên toàn hệ thống!"
+
+        return {'allow': False, 'message': msg}
