@@ -73,7 +73,7 @@ async function renderInlineStock(lineEl, orm) {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V5: CHECK LIMIT -> CHECK LOCATION -> SMART ACTION");
+        console.log("🚀 [HLV] V6: INSTANT UI UPDATE (NO LAG)");
         
         const observer = new MutationObserver(() => {
             document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
@@ -92,41 +92,33 @@ patch(BarcodeModel.prototype, {
         // 1. NHẬN DIỆN SẢN PHẨM
         const product = await this._identifyProductSafe(barcode);
         
-        // 2. XÁC ĐỊNH VỊ TRÍ ĐANG ĐỨNG (QUAN TRỌNG)
-        // Nếu user quét mã vị trí trước đó, nó nằm trong this.location
-        // Nếu không, lấy vị trí mặc định của phiếu
+        // 2. XÁC ĐỊNH VỊ TRÍ ĐANG ĐỨNG
         let currentLocId = this.location ? this.location.id : null;
         
-        // Params để check server
+        // Params check server
         let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
         let locName = (this.location?.display_name || this.record?.display_name || "");
         let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
         if (product && this.currentState.lines) {
-            // Lấy tất cả line của sản phẩm
             const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
             
             let totalDone = 0;
             let totalDemand = 0;
-            let candidateLine = null; // Dòng có thể được update
+            let candidateLine = null;
 
             productLines.forEach(l => {
                 const d = parseFloat(l.qty_done || 0);
                 const r = parseFloat(getLineDemand(l));
                 totalDone += d;
                 totalDemand += r;
-
-                // Tìm dòng chưa xong để "nhắm" vào nó
                 if (d < r) candidateLine = l;
             });
 
-            // =============================================================
-            // 🛑 CHECK 1: KIỂM TRA SỐ LƯỢNG (LIMIT)
-            // =============================================================
-            const isUnplanned = (totalDemand === 0);
-            if (isUnplanned) {
+            // --- CHECK 1: LIMIT ---
+            if (totalDemand === 0) {
                 safePlaySound(this.env, 'error');
-                alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSản phẩm: ${product.display_name}\nKhông có trong phiếu yêu cầu.`);
+                alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSản phẩm: ${product.display_name}`);
                 return;
             }
             if (totalDone >= totalDemand) {
@@ -135,48 +127,49 @@ patch(BarcodeModel.prototype, {
                 return;
             }
 
-            // =============================================================
-            // 🌍 CHECK 2: KIỂM TRA VỊ TRÍ VỚI SERVER (BẮT BUỘC)
-            // =============================================================
-            // Phải check xem tại "currentLocId" hoặc "checkLocId" có hàng không đã
+            // --- CHECK 2: SERVER LOCATION ---
             try {
                 const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
-                
                 if (result && result.allow === false) {
                     safePlaySound(this.env, 'error');
                     alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
-                    return; // <--- CHẶN NGAY NẾU SAI VỊ TRÍ
+                    return;
                 }
             } catch (e) {
-                console.error("Check Error:", e);
-                // Nếu lỗi mạng, có thể alert hoặc cho qua. Ở đây alert cho an toàn.
                 alert("Lỗi kết nối kiểm tra vị trí!");
                 return;
             }
 
-            // =============================================================
-            // 🚀 SMART ACTION: CHUYỂN DÒNG (NẾU ĐÚNG VỊ TRÍ)
-            // =============================================================
-            // Chỉ chạy xuống đây nếu CHECK 1 và CHECK 2 đã OK.
-            
-            // Nếu ta có 1 dòng chưa xong (candidateLine) 
-            // VÀ ta đang đứng ở một vị trí cụ thể (currentLocId)
-            // VÀ vị trí dòng đó KHÁC vị trí ta đang đứng
+            // --- CHECK 3: SMART MOVE (CƯỚP DÒNG) ---
             if (candidateLine && currentLocId) {
                 const lineLocId = extractId(candidateLine.location_id);
 
                 if (lineLocId !== currentLocId) {
-                    console.log(`✅ [HLV] Location Check Passed. Moving Line ${candidateLine.id} to ${currentLocId}`);
+                    console.log(`✅ [HLV] Moving Line ${candidateLine.id} -> Instant UI Update`);
                     
                     try {
-                        // Thực hiện chuyển kho
+                        // 1. Ghi xuống DB (Chạy ngầm)
+                        // Không cần await ở đây để UI phản hồi ngay, nhưng await an toàn hơn
                         await this.orm.write("stock.move.line", [candidateLine.id], { 
                             "location_id": currentLocId, 
                             "qty_done": candidateLine.qty_done + 1 
                         });
-                        
-                        // Save để reload UI
-                        await this.save(); 
+
+                        // 2. CẬP NHẬT GIAO DIỆN NGAY LẬP TỨC (KEY FIX)
+                        // Sửa trực tiếp vào object trong RAM để Odoo vẽ lại ngay, không chờ DB
+                        candidateLine.qty_done += 1;
+                        // Cập nhật object vị trí cho dòng đó (quan trọng để nó đổi tên vị trí trên màn hình)
+                        // this.location là object {id, display_name} chuẩn của Odoo
+                        if (this.location) {
+                            candidateLine.location_id = this.location;
+                        }
+
+                        // 3. Kích hoạt vẽ lại màn hình
+                        this.trigger('update'); 
+
+                        // 4. Gọi save để đồng bộ lại sau (nếu cần)
+                        // await this.save(); // Có thể bỏ nếu thấy chậm, vì orm.write đã lưu rồi
+
                         return; // Done
                     } catch (e) {
                         console.error("Move Error:", e);
@@ -186,9 +179,8 @@ patch(BarcodeModel.prototype, {
         }
 
         // =================================================================
-        // ✅ FALLBACK: LOGIC MẶC ĐỊNH
+        // FALLBACK (LOGIC MẶC ĐỊNH)
         // =================================================================
-        // Nếu không phải trường hợp chuyển kho, hoặc check pass nhưng không cần chuyển
         await super.processBarcode(...arguments);
 
         // Auto Save nhẹ
