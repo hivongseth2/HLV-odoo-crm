@@ -5,7 +5,7 @@ import { patch } from "@web/core/utils/patch";
 import { _t } from "@web/core/l10n/translation";
 
 // =============================================================================
-// PHẦN 1: HIỂN THỊ TỒN KHO (UI) - GIỮ NGUYÊN
+// HELPER: UI & NOTIFICATION
 // =============================================================================
 function insertInline(lineEl, text) {
     const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty");
@@ -95,13 +95,13 @@ function setupObserver(orm) {
 }
 
 // =============================================================================
-// PHẦN 2: PATCH BARCODE MODEL - FIX LỖI CRASH & LOCID
+// MAIN LOGIC: PATCH BARCODE MODEL
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("✅ [HLV] Barcode v1.8 - Fix Crash Ready!");
+        console.log("✅ [HLV] Barcode v1.9 - Fix Location ID Ready!");
         setTimeout(() => setupObserver(this.orm), 1000);
     },
 
@@ -112,12 +112,12 @@ patch(BarcodeModel.prototype, {
             return super.processBarcode(...arguments);
         }
 
-        // 1. NHẬN DIỆN SẢN PHẨM (ĐÃ FIX LỖI CRASH)
+        // 1. NHẬN DIỆN SẢN PHẨM
         const product = await this._identifyProductSafe(barcode);
         
-        // Nếu không phải sản phẩm (có thể là mã Vị trí/Tủ), bỏ qua để Odoo tự xử lý
+        // Nếu không phải sản phẩm (VD quét mã TỦ 3), cho qua để Odoo đổi vị trí
         if (!product) {
-            console.log("ℹ️ [HLV] Không phải sản phẩm -> Bỏ qua check stock.");
+            console.log("ℹ️ [HLV] Không phải sản phẩm -> Cho qua.");
             return super.processBarcode(...arguments);
         }
 
@@ -136,29 +136,30 @@ patch(BarcodeModel.prototype, {
             }
         }
 
-        // 3. LẤY SOURCE LOCATION ID (TỦ 3)
+        // 3. LẤY LOCATION ID CHÍNH XÁC (TỦ 3)
         let sourceLocId = null;
         let whPrefix = null;
 
-        // A. Lấy từ trạng thái hiện tại (nếu vừa quét vị trí xong)
-        if (this.currentState && this.currentState.location_id) {
-             sourceLocId = typeof(this.currentState.location_id) === 'object' ? this.currentState.location_id[0] : this.currentState.location_id;
-        }
-
-        // B. Lấy từ Picking Record gốc (Fallback)
+        // --- FIX QUAN TRỌNG: Ưu tiên lấy vị trí đang Active trên Header ---
+        // Trong Odoo 18, khi quét vị trí, nó cập nhật vào this.location
+        if (this.location) {
+            sourceLocId = this.location.id;
+            console.log("📍 [HLV] Lấy từ this.location (Header):", sourceLocId);
+        } 
+        
+        // Nếu không có header active, mới lấy từ Picking gốc
         if (!sourceLocId && this.record && this.record.location_id) {
              sourceLocId = typeof(this.record.location_id) === 'object' ? this.record.location_id[0] : this.record.location_id;
-        }
-        
-        // C. Lấy từ dòng đầu tiên (Fallback cuối cùng)
-        if (!sourceLocId && lines.length > 0 && lines[0].location_id) {
-             sourceLocId = typeof(lines[0].location_id) === 'object' ? lines[0].location_id[0] : lines[0].location_id;
+             console.log("📍 [HLV] Lấy từ Picking (Gốc):", sourceLocId);
         }
 
-        // D. Lấy Prefix (KBC/TSN)
-        if (this.record && this.record.display_name) {
-            const m = this.record.display_name.match(/\b(TSN|KBC|KHD)\b/i);
+        // Lấy Prefix từ tên vị trí
+        if (this.location && this.location.display_name) {
+            const m = this.location.display_name.match(/\b(TSN|KBC|KHD)\b/i);
             if (m) whPrefix = m[1].toUpperCase();
+        } else if (this.record && this.record.display_name) {
+             const m = this.record.display_name.match(/\b(TSN|KBC|KHD)\b/i);
+             if (m) whPrefix = m[1].toUpperCase();
         }
 
         console.log(`🔎 [HLV] Check Stock Server: Barcode=${barcode}, Prefix=${whPrefix}, LocID=${sourceLocId}`);
@@ -184,23 +185,17 @@ patch(BarcodeModel.prototype, {
         return super.processBarcode(...arguments);
     },
 
-    // --- HÀM MỚI: TÌM SẢN PHẨM AN TOÀN (FIX LỖI OBJECT.VALUES UNDEFINED) ---
     async _identifyProductSafe(barcode) {
         let product = null;
-
-        // Cách 1: Tìm trong Cache Products (có kiểm tra tồn tại)
         if (this.cache && this.cache.products) {
             product = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
         }
-
-        // Cách 2: Tìm trong dòng hiện tại (Lines) - Phòng trường hợp Cache chưa load
         if (!product && this.currentState && this.currentState.lines) {
              const line = this.currentState.lines.find(l => 
                 l.product_id && (l.product_id.barcode === barcode || l.product_id.default_code === barcode)
              );
              if (line) product = line.product_id;
         }
-        
         return product;
     }
 });
