@@ -184,8 +184,6 @@ patch(BarcodeModel.prototype, {
         try {
             console.log("💾 [HLV] Auto Saving...");
             await this.save(); 
-            // Nếu dùng Odoo 17/18, hàm save() của model sẽ trigger việc ghi xuống backend
-            showNotification(this.env, "Đã lưu!", "success");
         } catch (err) {
             console.warn("[HLV] Auto Save Failed:", err);
             // Không chặn lỗi này để tránh treo màn hình, chỉ log ra thôi
