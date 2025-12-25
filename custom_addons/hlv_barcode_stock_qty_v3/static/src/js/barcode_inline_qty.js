@@ -4,10 +4,10 @@ import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// HELPER: CÔNG CỤ HỖ TRỢ (AN TOÀN TUYỆT ĐỐI)
+// HELPER: CÁC CÔNG CỤ AN TOÀN (KHÔNG CRASH)
 // =============================================================================
 
-// Hàm lấy ID an toàn (Xử lý trường hợp ID là mảng [id, name] hoặc số nguyên)
+// 1. Lấy ID an toàn
 function extractId(field) {
     if (!field) return null;
     if (Array.isArray(field)) return field[0];
@@ -15,25 +15,44 @@ function extractId(field) {
     return field;
 }
 
-// Hàm phát âm thanh (Không dùng env để tránh crash)
+// 2. Lấy số lượng Yêu cầu (Demand) thông minh
+// Odoo mỗi bản mỗi khác, hàm này sẽ quét hết các trường có thể chứa số lượng
+function getLineDemand(line) {
+    // Ưu tiên reserved_uom_qty (số đã giữ chỗ)
+    if (line.reserved_uom_qty > 0) return line.reserved_uom_qty;
+    // Tiếp theo là product_uom_qty
+    if (line.product_uom_qty > 0) return line.product_uom_qty;
+    // Các trường hợp lạ khác
+    if (line.qty_reserved > 0) return line.qty_reserved;
+    if (line.demand_qty > 0) return line.demand_qty;
+    return 0;
+}
+
+// 3. Âm thanh an toàn
 function playSystemSound() {
     try {
-        new Audio('/web/static/src/audio/error.mp3').play().catch(() => {});
+        // Thử phát file chuẩn
+        const audio = new Audio('/web/static/src/audio/error.mp3');
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                // Nếu lỗi file, thử dùng beep hệ thống nếu có thể (hoặc bỏ qua)
+                console.warn("Audio play failed, relying on Alert.");
+            });
+        }
     } catch (e) {}
 }
 
-// Hàm vẽ Inline Stock
+// 4. Inline Stock
 async function renderInlineStock(lineEl, orm) {
     let defaultCode = lineEl.dataset.barcode;
     if (!defaultCode) {
         const codeEl = lineEl.querySelector(".o_product_code") || lineEl.querySelector(".o_product_ref");
         if (codeEl) defaultCode = codeEl.textContent.trim();
     }
-    // Tránh vẽ lại
     if (!defaultCode || lineEl.querySelector(".hlv-inline-stock")) return;
 
     try {
-        // console.log("[HLV] Getting stock for:", defaultCode);
         const domain = [['product_id.default_code', '=', defaultCode], ['location_id.usage', '=', 'internal']];
         const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
         
@@ -58,9 +77,7 @@ async function renderInlineStock(lineEl, orm) {
             badge.textContent = `📦 ${textDisplay}`;
             qtyContainer.appendChild(badge);
         }
-    } catch(e) { 
-        // Silent fail for inline
-    }
+    } catch(e) {}
 }
 
 // =============================================================================
@@ -70,7 +87,7 @@ async function renderInlineStock(lineEl, orm) {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] DEBUG MODE ACTIVATED: LOG ALL");
+        console.log("🚀 [HLV] FINAL FIX v3: STARTING...");
         
         const observer = new MutationObserver(() => {
             document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
@@ -84,62 +101,69 @@ patch(BarcodeModel.prototype, {
     },
 
     async processBarcode(barcode) {
-        console.log("\n========================================");
-        console.log("⚡ [HLV] PROCESSING BARCODE:", barcode);
-
+        // --- 0. Bỏ qua lệnh hệ thống ---
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
         // --- 1. NHẬN DIỆN SẢN PHẨM ---
         const product = await this._identifyProductSafe(barcode);
         
         if (!product) {
-            console.log("⚠️ [HLV] Product not found for barcode:", barcode);
-            // Để super xử lý (có thể là lệnh hoặc barcode lạ)
+            // Không nhận diện được thì để mặc định Odoo xử lý
             return super.processBarcode(...arguments);
         }
 
-        console.log("📦 [HLV] Identified Product:", product.display_name, "(ID:", product.id, ")");
-
         // =================================================================
-        // ⛔ BƯỚC 1: TÍNH TỔNG SỐ LƯỢNG (XỬ LÝ ĐA VỊ TRÍ)
+        // ⛔ BƯỚC 1: CHECK LIMIT (TÍNH TỔNG CỘNG DỒN)
         // =================================================================
         if (this.currentState.lines) {
             let totalDone = 0;
             let totalDemand = 0;
-            let lineCount = 0;
+            let foundLines = false;
+            let debugLine = null; // Để log xem object nó chứa cái gì
 
             // Lặp qua TOÀN BỘ dòng để tìm sản phẩm này
             for (const line of this.currentState.lines) {
                 const linePid = extractId(line.product_id);
                 
-                // So sánh ID
                 if (linePid === product.id) {
-                    lineCount++;
-                    // Cộng dồn qty_done và product_uom_qty (nhu cầu)
+                    foundLines = true;
+                    debugLine = line; // Lưu mẫu 1 dòng để soi
+
+                    // Cộng dồn
                     totalDone += parseFloat(line.qty_done || 0);
-                    // Lưu ý: Odoo có thể dùng 'product_uom_qty' hoặc 'reserved_uom_qty'. Thường Barcode dùng product_uom_qty là Demand.
-                    totalDemand += parseFloat(line.product_uom_qty || 0);
+                    // Dùng hàm thông minh để lấy Demand
+                    totalDemand += parseFloat(getLineDemand(line));
                 }
             }
 
-            console.log(`📊 [HLV] STATS: Found ${lineCount} lines.`);
-            console.log(`📊 [HLV] STATS: Total Done: ${totalDone} | Total Demand: ${totalDemand}`);
+            // --- DEBUG QUAN TRỌNG: MỞ F12 NẾU VẪN LỖI ĐỂ XEM ---
+            console.log(`🔍 [HLV] CHECKING: ${product.display_name}`);
+            console.log(`   - Total Done: ${totalDone}`);
+            console.log(`   - Total Demand: ${totalDemand}`);
+            if (debugLine && totalDemand === 0) {
+                console.warn("⚠️ Demand is 0. Inspecting line object keys:", Object.keys(debugLine));
+                console.warn("⚠️ Line Data:", debugLine);
+            }
+            // ----------------------------------------------------
 
             // LOGIC CHẶN:
-            // 1. Unplanned: Không có nhu cầu (Demand = 0)
-            if (totalDemand === 0) {
-                console.error("⛔ [HLV] BLOCK: UNPLANNED (Demand is 0)");
+            const isUnplanned = (totalDemand === 0);
+            // Lưu ý: Chỉ chặn dư nếu demand > 0. 
+            // Nếu bạn muốn cho phép quét hàng ngoài (Unplanned) thì bỏ dòng isUnplanned bên dưới đi.
+            // Nhưng theo yêu cầu là "Cấm quét dư", tức là phải có trong phiếu mới được quét.
+
+            if (isUnplanned) {
+                console.error("⛔ BLOCK: UNPLANNED");
                 playSystemSound();
                 alert(`⚠️ CHẶN NGOÀI KẾ HOẠCH!\n\nSản phẩm: ${product.display_name}\nKhông có trong phiếu yêu cầu (Demand = 0).`);
-                return; // DỪNG
+                return; 
             }
 
-            // 2. Over Limit: Đã làm >= Nhu cầu
             if (totalDone >= totalDemand) {
-                console.error("⛔ [HLV] BLOCK: OVER LIMIT");
+                console.error("⛔ BLOCK: OVER LIMIT");
                 playSystemSound();
-                alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSản phẩm: ${product.display_name}\nTiến độ: ${totalDone}/${totalDemand}\n\nKhông thể quét thêm (Vui lòng kiểm tra các dòng khác nếu có tách dòng).`);
-                return; // DỪNG
+                alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n\nSản phẩm: ${product.display_name}\nTiến độ: ${totalDone}/${totalDemand}\n\nKhông thể quét thêm.`);
+                return; 
             }
         }
 
@@ -150,30 +174,25 @@ patch(BarcodeModel.prototype, {
         let locName = (this.location?.display_name || this.record?.display_name || "");
         let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
-        console.log(`🌐 [HLV] Checking Location Availability... Prefix: ${whPrefix}, LocID: ${sourceLocId}`);
-
         try {
             const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, sourceLocId]);
-            console.log("📩 [HLV] Server Response:", result);
-
+            
             if (result && result.allow === false) {
-                console.error("⛔ [HLV] BLOCK: WRONG LOCATION");
+                console.error("⛔ BLOCK: LOCATION");
                 playSystemSound();
-                // Dùng Alert để không bao giờ bị lỗi 'services undefined'
                 alert(`⛔ SAI VỊ TRÍ!\n\n${result.message || "Không có hàng ở đây!"}`);
-                return; // DỪNG
+                return; // CHẶN
             }
 
         } catch (e) {
-            console.error("❌ [HLV] SERVER CHECK ERROR:", e);
-            alert("Lỗi kết nối kiểm tra tồn kho! Vui lòng thử lại.");
-            return; // Dừng nếu lỗi mạng để an toàn
+            console.error("❌ Check Location Error:", e);
+            alert("Lỗi kết nối kiểm tra vị trí! Vui lòng thử lại.");
+            return; // Dừng nếu lỗi để đảm bảo an toàn
         }
 
         // =================================================================
-        // ✅ BƯỚC 3: ODOO XỬ LÝ (TĂNG SỐ LƯỢNG)
+        // ✅ BƯỚC 3: OK HẾT -> CHO PHÉP ODOO XỬ LÝ
         // =================================================================
-        console.log("✅ [HLV] All Checks Passed -> Incrementing Qty");
         await super.processBarcode(...arguments);
     },
 
@@ -182,12 +201,9 @@ patch(BarcodeModel.prototype, {
         if (this.cache.products) {
             product = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
         }
-        // Fallback: Tìm trong lines nếu cache chưa đầy đủ
+        // Fallback tìm trong lines
         if (!product && this.currentState.lines) {
              const line = this.currentState.lines.find(l => {
-                 const pId = extractId(l.product_id);
-                 // Logic tìm tương đối qua barcode dòng
-                 // Lưu ý: dòng l.product_id trong barcode model thường là Object {id, display_name, barcode...}
                  const pObj = l.product_id; 
                  if (typeof pObj === 'object') {
                      return pObj.barcode === barcode || pObj.default_code === barcode;
