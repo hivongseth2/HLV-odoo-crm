@@ -71,22 +71,21 @@ class CancelRequestController(http.Controller):
         if not request.session.get('cancel_request_authenticated'):
              return json.dumps([])
         
-        domain = [('x_studio_misa_saler_code', 'ilike', term)]
-        # We want distinct codes/names?
-        # Actually x_studio_misa_saler_code is typically a short code. 
-        # But user said "name is x_studio_misa_saler_code" -> so I just suggest from this field.
+        # Build domain - if term is empty, get all; otherwise filter
+        if term:
+            domain = [('x_studio_misa_saler_code', 'ilike', term)]
+        else:
+            domain = [('x_studio_misa_saler_code', '!=', False)]
         
-        # Optimize: select distinct on this field.
-        # But Odoo ORM search_read is easier
-        orders = request.env['sale.order'].sudo().search(domain, limit=20)
+        orders = request.env['sale.order'].sudo().search(domain, limit=100)
         
-        # Use set to distinct
+        # Use set to get distinct codes
         values = set()
         for o in orders:
             if o.x_studio_misa_saler_code:
                 values.add(o.x_studio_misa_saler_code)
                 
-        return json.dumps(list(values))
+        return json.dumps(sorted(list(values)))
 
     @http.route('/cancel-request/success', type='http', auth='public', website=True)
     def success(self, req_id=None, **kwargs):

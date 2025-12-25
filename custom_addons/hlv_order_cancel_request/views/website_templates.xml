@@ -99,11 +99,9 @@
             </form>
 
             <script type="text/javascript">
-                document.getElementById('salesperson_name').addEventListener('input', function(e) {
-                    var val = e.target.value;
-                    if (val.length &lt; 2) return;
-                    
-                    fetch('/cancel-request/autocomplete/saler?term=' + encodeURIComponent(val))
+                // Load all saler codes on focus (click into field)
+                function loadSalerList(term) {
+                    fetch('/cancel-request/autocomplete/saler?term=' + encodeURIComponent(term || ''))
                         .then(response => response.json())
                         .then(data => {
                             var datalist = document.getElementById('salesperson_list');
@@ -114,6 +112,16 @@
                                 datalist.appendChild(option);
                             });
                         });
+                }
+                
+                // Load all on focus (click)
+                document.getElementById('salesperson_name').addEventListener('focus', function(e) {
+                    loadSalerList('');
+                });
+                
+                // Filter as user types
+                document.getElementById('salesperson_name').addEventListener('input', function(e) {
+                    loadSalerList(e.target.value);
                 });
             </script>
         </t>
