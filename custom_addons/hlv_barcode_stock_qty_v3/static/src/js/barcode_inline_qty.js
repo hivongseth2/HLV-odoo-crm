@@ -36,6 +36,7 @@ async function renderInlineStock(lineEl, orm) {
         const codeEl = lineEl.querySelector(".o_product_code") || lineEl.querySelector(".o_product_ref");
         if (codeEl) defaultCode = codeEl.textContent.trim();
     }
+    // Tránh vẽ lại
     if (!defaultCode || lineEl.querySelector(".hlv-inline-stock")) return;
 
     try {
@@ -73,7 +74,7 @@ async function renderInlineStock(lineEl, orm) {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V6: INSTANT UI UPDATE (NO LAG)");
+        console.log("🚀 [HLV] V7: HYBRID SAVE (Fix F5 Lost Data)");
         
         const observer = new MutationObserver(() => {
             document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
@@ -92,10 +93,8 @@ patch(BarcodeModel.prototype, {
         // 1. NHẬN DIỆN SẢN PHẨM
         const product = await this._identifyProductSafe(barcode);
         
-        // 2. XÁC ĐỊNH VỊ TRÍ ĐANG ĐỨNG
+        // 2. XÁC ĐỊNH VỊ TRÍ
         let currentLocId = this.location ? this.location.id : null;
-        
-        // Params check server
         let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
         let locName = (this.location?.display_name || this.record?.display_name || "");
         let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
@@ -145,51 +144,53 @@ patch(BarcodeModel.prototype, {
                 const lineLocId = extractId(candidateLine.location_id);
 
                 if (lineLocId !== currentLocId) {
-                    console.log(`✅ [HLV] Moving Line ${candidateLine.id} -> Instant UI Update`);
+                    console.log(`✅ [HLV] Smart Move Line ${candidateLine.id} -> ${currentLocId}`);
                     
                     try {
-                        // 1. Ghi xuống DB (Chạy ngầm)
-                        // Không cần await ở đây để UI phản hồi ngay, nhưng await an toàn hơn
-                        await this.orm.write("stock.move.line", [candidateLine.id], { 
-                            "location_id": currentLocId, 
-                            "qty_done": candidateLine.qty_done + 1 
-                        });
-
-                        // 2. CẬP NHẬT GIAO DIỆN NGAY LẬP TỨC (KEY FIX)
-                        // Sửa trực tiếp vào object trong RAM để Odoo vẽ lại ngay, không chờ DB
+                        // A. CẬP NHẬT UI NGAY LẬP TỨC (Cho cảm giác mượt)
                         candidateLine.qty_done += 1;
-                        // Cập nhật object vị trí cho dòng đó (quan trọng để nó đổi tên vị trí trên màn hình)
-                        // this.location là object {id, display_name} chuẩn của Odoo
-                        if (this.location) {
-                            candidateLine.location_id = this.location;
-                        }
-
-                        // 3. Kích hoạt vẽ lại màn hình
+                        if (this.location) candidateLine.location_id = this.location;
                         this.trigger('update'); 
 
-                        // 4. Gọi save để đồng bộ lại sau (nếu cần)
-                        // await this.save(); // Có thể bỏ nếu thấy chậm, vì orm.write đã lưu rồi
-
+                        // B. LƯU DỮ LIỆU AN TOÀN (Fix F5 mất dữ liệu)
+                        if (candidateLine.id && typeof candidateLine.id === 'number') {
+                            // ID Thật -> Dùng Write (Nhanh)
+                            await this.orm.write("stock.move.line", [candidateLine.id], { 
+                                "location_id": currentLocId, 
+                                "qty_done": candidateLine.qty_done 
+                            });
+                        } else {
+                            // ID Ảo (Mới) -> Buộc phải dùng Save để tạo ID thật
+                            await this.save();
+                        }
+                        
                         return; // Done
-                    } catch (e) {
-                        console.error("Move Error:", e);
-                    }
+                    } catch (e) { console.error("Move Error:", e); }
                 }
             }
         }
 
         // =================================================================
-        // FALLBACK (LOGIC MẶC ĐỊNH)
+        // FALLBACK (LOGIC MẶC ĐỊNH CHO CÁC TRƯỜNG HỢP KHÁC)
         // =================================================================
         await super.processBarcode(...arguments);
 
-        // Auto Save nhẹ
+        // AUTO SAVE (HYBRID MODE)
         try {
              const updatedProduct = await this._identifyProductSafe(barcode);
              if (updatedProduct && this.currentState.lines) {
                  const line = this.currentState.lines.find(l => extractId(l.product_id) === updatedProduct.id && l.qty_done <= getLineDemand(l));
-                 if (line && line.id && typeof line.id === 'number') {
-                     await this.orm.write("stock.move.line", [line.id], { "qty_done": line.qty_done });
+                 
+                 // Nếu tìm thấy line vừa quét
+                 if (line) {
+                     // Kiểm tra ID để chọn phương án lưu
+                     if (line.id && typeof line.id === 'number') {
+                         // Line cũ -> Write (Siêu nhanh, F5 OK)
+                         await this.orm.write("stock.move.line", [line.id], { "qty_done": line.qty_done });
+                     } else {
+                         // Line mới (chưa có ID) -> Save tổng (Chậm xíu nhưng chắc ăn)
+                         await this.save();
+                     }
                  }
              }
         } catch(e) {}
