@@ -1,26 +1,12 @@
 /** @odoo-module **/
 
-import BarcodeModel from "@stock_barcode/models/barcode_model"; 
+import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// HELPER: UI & AN TOÀN (SAFE MODE)
+// HELPER: UI & HIỂN THỊ
 // =============================================================================
 
-// Hàm phát âm thanh an toàn (không cần env)
-function playErrorSound(env) {
-    try {
-        if (env && env.services && env.services.sound) {
-            env.services.sound.play('error');
-            return;
-        }
-        // Fallback: Dùng HTML5 Audio nếu không có env
-        const audio = new Audio('/custom_barcode_scan_redirect/static/src/sound/error.mp3');
-        audio.play().catch(() => {});
-    } catch (e) {}
-}
-
-// Hàm thông báo an toàn (Kiểm tra kỹ env trước khi gọi)
 function showNotification(env, message, type = 'danger') {
     try {
         if (env && env.services && env.services.notification) {
@@ -29,16 +15,17 @@ function showNotification(env, message, type = 'danger') {
                 sticky: type === 'danger', 
                 title: type === 'danger' ? "CẢNH BÁO" : "Thông báo" 
             });
-        } else {
-            // Nếu không có env (lỗi undefined), dùng console log hoặc alert nhẹ
-            console.warn("[HLV Notification]", message);
         }
     } catch (e) { console.error(e); }
 }
 
 function insertInline(lineEl, text) {
+    // Tìm phần tử hiển thị số lượng để chèn vào sau nó
     const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty");
-    if (!qtyEl) return;
+    if (!qtyEl) {
+        // Fallback: Nếu không tìm thấy class chuẩn, tìm class cha
+        return;
+    }
     
     let badge = qtyEl.parentElement.querySelector(".hlv-inline-stock");
     if (!badge) {
@@ -48,6 +35,7 @@ function insertInline(lineEl, text) {
         badge.style.fontSize = "13px";
         badge.style.color = "#17a2b8"; 
         badge.style.fontWeight = "bold";
+        badge.style.whiteSpace = "nowrap"; // Không xuống dòng
         qtyEl.parentElement.appendChild(badge);
     }
     badge.textContent = `📦 ${text}`;
@@ -70,20 +58,29 @@ async function annotateLine(lineEl, orm) {
     if (lineEl.__hlv_done__) return;
     lineEl.__hlv_done__ = true;
     
+    // Lấy mã sản phẩm
     let defaultCode = lineEl.querySelector(".o_product_ref")?.textContent?.trim() || "";
+    // Fallback nếu không lấy được class chuẩn
     if (!defaultCode || defaultCode.includes("\n")) {
          const m = (lineEl.innerText || "").match(/^[A-Z0-9._-]+/);
          if (m) defaultCode = m[0];
     }
-    if (!defaultCode) return;
+    
+    if (!defaultCode) {
+        // console.log("⚠️ [HLV] Không tìm thấy mã sản phẩm trên dòng:", lineEl);
+        return;
+    }
 
     try {
+        // Gọi search_read
         const domain = [['product_id.default_code', '=', defaultCode],['location_id.usage', '=', 'internal']];
         const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
         const textDisplay = formatStockResult(quants);
         insertInline(lineEl, textDisplay);
+        
+        // Check overflow (số lượng quét > nhu cầu)
         checkAndHighlightOverflow(lineEl);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("[HLV] Lỗi lấy tồn kho:", e); }
 }
 
 function checkAndHighlightOverflow(lineEl) {
@@ -110,6 +107,10 @@ function checkAndHighlightOverflow(lineEl) {
 }
 
 function setupObserver(orm) {
+    // 1. Chạy ngay cho các dòng đã có sẵn khi load trang
+    document.querySelectorAll(".o_barcode_line").forEach(el => annotateLine(el, orm));
+
+    // 2. Lắng nghe sự thay đổi (khi quét mới)
     if (window.__hlv_observer__) return;
     const obs = new MutationObserver((mutations) => {
         mutations.forEach((m) => {
@@ -127,10 +128,10 @@ function setupObserver(orm) {
             }
         });
     });
+    
     if (document.body) {
         obs.observe(document.body, { childList: true, subtree: true, characterData: true });
         window.__hlv_observer__ = obs;
-        document.querySelectorAll(".o_barcode_line").forEach(el => annotateLine(el, orm));
     }
 }
 
@@ -141,7 +142,9 @@ function setupObserver(orm) {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        setTimeout(() => setupObserver(this.orm), 1000);
+        console.log("✅ [HLV] Barcode System Loaded");
+        // Delay 1 chút để DOM render xong mới gắn observer
+        setTimeout(() => setupObserver(this.orm), 1500);
     },
 
     async processBarcode(barcode) {
@@ -149,7 +152,7 @@ patch(BarcodeModel.prototype, {
 
         const product = await this._identifyProductSafe(barcode);
         
-        // --- 1. CHECK SỐ LƯỢNG (Dùng hàm safe showNotification) ---
+        // --- 1. CHECK SỐ LƯỢNG (LIMIT) ---
         if (product) {
             const lines = this.currentState.lines || [];
             const matchedLine = lines.find(l => l.product_id.id === product.id);
@@ -157,14 +160,18 @@ patch(BarcodeModel.prototype, {
                 const done = parseFloat(matchedLine.qty_done || 0);
                 const demand = parseFloat(matchedLine.product_uom_qty || 0);
                 if (demand > 0 && done >= demand) {
+                    // Âm thanh + Notify
+                    if (this.env && this.env.services && this.env.services.sound) {
+                        this.env.services.sound.play('error');
+                    }
                     showNotification(this.env, `⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\n(${done}/${demand})`, 'danger');
-                    playErrorSound(this.env);
                     return; 
                 }
             }
         }
 
-        // --- 2. CHECK VỊ TRÍ (Giữ logic cũ) ---
+        // --- 2. CHECK VỊ TRÍ & HIỂN THỊ THÔNG BÁO TỒN KHO ---
+        // Giữ logic này vì bạn bảo nó work
         let sourceLocId = null;
         let whPrefix = null;
         if (this.location) sourceLocId = this.location.id;
@@ -182,37 +189,35 @@ patch(BarcodeModel.prototype, {
             const result = await this.orm.call(
                 "stock.quant", "check_barcode_availability", [barcode, whPrefix, sourceLocId] 
             );
+            
+            // Nếu Python trả về message (ví dụ: "Không có ở đây nhưng có ở TSN"), ta hiển thị nó
+            if (result && result.message) {
+                 // Hiển thị warning nếu không cho phép, hoặc hiển thị info nếu cho phép nhưng muốn nhắc
+                 const msgType = (result.allow === false) ? 'danger' : 'warning';
+                 showNotification(this.env, result.message, msgType);
+            }
+
             if (result && result.allow === false) {
-                // SỬA LỖI Ở ĐÂY: Dùng showNotification thay vì gọi trực tiếp this.env
-                showNotification(this.env, result.message, 'danger');
-                playErrorSound(this.env);
-                return; 
+                if (this.env.services.sound) this.env.services.sound.play('error');
+                return; // Chặn scan
             }
         } catch (e) { 
-            console.warn("[HLV] Check Availability Skipped:", e); 
+            console.warn("[HLV] Check Availability Error:", e); 
         }
 
-        // --- 3. GỌI LOGIC GỐC ---
+        // --- 3. CẬP NHẬT UI (SUPER) ---
         await super.processBarcode(...arguments);
 
-        // --- 4. AUTO SAVE (SAFE MODE) ---
+        // --- 4. AUTO SAVE (QUAN TRỌNG) ---
         try {
-            console.log("💾 Auto Saving...");
-            // Mẹo: Tạm thời mute notification nếu env tồn tại
-            let originalNotify = null;
-            if (this.env && this.env.services && this.env.services.notification) {
-                originalNotify = this.env.services.notification.add;
-                this.env.services.notification.add = () => {}; 
-            }
-
+            // Không dùng bất kỳ thủ thuật "Silent" nào nữa để đảm bảo tính ổn định
+            console.log("💾 [HLV] Triggering Save...");
             await this.save(); 
-
-            // Trả lại hàm notification cũ
-            if (originalNotify && this.env && this.env.services && this.env.services.notification) {
-                this.env.services.notification.add = originalNotify;
-            }
+            console.log("✅ [HLV] Save Command Sent");
         } catch (err) {
-            console.warn("[HLV] Save warning:", err);
+            console.error("❌ [HLV] Save Failed:", err);
+            // Nếu save thất bại, ít nhất cũng alert để user biết
+            // alert("Lỗi lưu dữ liệu! Vui lòng kiểm tra kết nối.");
         }
     },
 
