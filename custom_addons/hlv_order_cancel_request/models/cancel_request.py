@@ -144,15 +144,47 @@ class SaleOrderCancelRequest(models.Model):
         uids = mapping.get(warehouse_code.upper(), [])
         return uids
 
-    def _get_accountant_recipients(self):
-        """Get Accountant Zalo UIDs from config. Comma separated."""
+    def _parse_accountant_mapping(self):
+        """
+        Parse accountant mapping from config.
+        Format: KHO1:UID1,UID2|KHO2:UID3|KHO3:UID4
+        Returns: dict { 'TSN': ['123456', '789012'], 'KBC': ['999888'] }
+        """
         Config = self.env['ir.config_parameter'].sudo()
-        accountant_uid = Config.get_param('hlv_order_cancel_request.accountant_zalo_uid', '')
-        if not accountant_uid:
+        mapping_text = Config.get_param('hlv_order_cancel_request.accountant_zalo_mapping', '')
+        
+        mapping = {}
+        if not mapping_text:
+            return mapping
+        
+        # Split by | (pipe) for multiple warehouses
+        for entry in mapping_text.split('|'):
+            entry = entry.strip()
+            if not entry or ':' not in entry:
+                continue
+            parts = entry.split(':', 1)
+            code = parts[0].strip().upper()
+            uid_text = parts[1].strip()
+            if code and uid_text:
+                # Support multiple UIDs separated by comma
+                uids = [u.strip() for u in uid_text.split(',') if u.strip()]
+                if uids:
+                    mapping[code] = uids
+        return mapping
+
+    def _get_accountant_recipients(self):
+        """
+        Get Accountant Zalo UIDs based on the order's warehouse.
+        Looks up from accountant mapping in config. Supports multiple UIDs per warehouse.
+        """
+        if not self.warehouse_id:
             return []
         
-        # Split by comma
-        return [u.strip() for u in accountant_uid.split(',') if u.strip()]
+        mapping = self._parse_accountant_mapping()
+        warehouse_code = self.warehouse_id.code or ''
+        
+        uids = mapping.get(warehouse_code.upper(), [])
+        return uids
 
     def _get_sale_recipients(self):
         """
