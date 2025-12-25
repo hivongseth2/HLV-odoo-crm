@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Inherit sale.view_order_tree to make it editable -->
+        <record id="view_order_tree_editable" model="ir.ui.view">
+            <field name="name">sale.order.tree.editable</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_order_tree"/>
+            <field name="priority">99</field>
+            <field name="arch" type="xml">
+                
+                <!-- Add editable and multi_edit attributes to list -->
+                <xpath expr="//list" position="attributes">
+                    <attribute name="editable">bottom</attribute>
+                    <attribute name="multi_edit">1</attribute>
+                </xpath>
+                
+                <!-- Add "View Detail" button at the beginning of each row -->
+                <xpath expr="//field[@name='name']" position="before">
+                    <button name="action_view_order_detail" 
+                            type="object" 
+                            string="" 
+                            icon="fa-external-link" 
+                            title="Mở chi tiết đơn hàng"
+                            class="btn-link"/>
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>
