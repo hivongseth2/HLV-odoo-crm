@@ -91,6 +91,11 @@ class PurchaseOrder(models.Model):
         wh_name = self.picking_type_id.warehouse_id.name if self.picking_type_id else "N/A"
         partner_name = self.partner_id.name if self.partner_id else "N/A"
         
+        # Custom fields
+        payment_term = self.x_studio_iu_kin_thanh_ton or "N/A"
+        delivery_method = self.x_studio_delivery_term or "N/A"
+        delivery_address = self.x_studio_ddgh or "N/A"
+
         msg = (
             f"🆕 *ĐƠN MUA HÀNG MỚI*\n"
             f"--------------------\n"
@@ -98,6 +103,9 @@ class PurchaseOrder(models.Model):
             f"🏭 Kho: {wh_name}\n"
             f"👤 NCC: {partner_name}\n"
             f"📅 Ngày: {self.date_order.strftime('%d/%m/%Y')}\n"
+            f"💳 Điều kiện TT: {payment_term}\n"
+            f"🚚 Giao hàng: {delivery_method}\n"
+            f"📍 Địa điểm giao: {delivery_address}\n"
             f"--------------------\n"
             f"Danh sách hàng:\n"
             f"{lines_info}"
