@@ -88,7 +88,9 @@ patch(ProductScreen.prototype, {
                 // If missing, CREATE IT
                 if (!priceEl) {
                     const productId = card.getAttribute('data-product-id');
-                    if (productId && this.env && this.env.services && this.env.services.pos) {
+
+                    // SAFETY CHECK: Ensure DB exists before accessing
+                    if (productId && this.env && this.env.services && this.env.services.pos && this.env.services.pos.db) {
                         try {
                             const product = this.env.services.pos.db.get_product_by_id(parseInt(productId));
                             if (product) {
@@ -110,6 +112,9 @@ patch(ProductScreen.prototype, {
                         } catch (e) {
                             console.warn("[HLV Theme] Price inject failed: ", e);
                         }
+                    } else if (productId) {
+                        // DB not available (common in Odoo 18 ProductScreen setup)
+                        // We rely on product_card_patch.js to handle this now.
                     }
                 } else {
                     priceEl.classList.add('hlv-price-forced');
