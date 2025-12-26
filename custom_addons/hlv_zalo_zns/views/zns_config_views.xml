@@ -79,7 +79,7 @@
         <field name="name"/>
         <field name="app_id"/>
         <field name="oa_id"/>
-        <!-- <field name="template_id"/> -->
+        <!--  <field name="template_id"/> -->
         <field name="template_id" string="Template mặc định"/>
         <field name="wp_template_id" string="Template WordPress"/>
         <field name="token_expires_at"/>
