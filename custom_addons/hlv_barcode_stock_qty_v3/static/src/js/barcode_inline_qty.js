@@ -99,7 +99,7 @@ function startUiObserver() {
 
 
 // =============================================================================
-// PHẦN 2: VALIDATOR (LOGIC KIỂM TRA MỚI)
+// PHẦN 2: VALIDATOR (FIX LỖI CHECK LẦN ĐẦU + BỎ F5)
 // =============================================================================
 
 function extractId(field) { return field && field.id ? field.id : (Array.isArray(field) ? field[0] : field); }
@@ -121,18 +121,9 @@ function safePlaySound(env, type = 'error') {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V44: URL ACTION CHECK (363)");
-        
+        console.log("🚀 [HLV] V46: FIRST SCAN FIX");
         startUiObserver();
-
-        // CHẶN F5 / TẢI LẠI TRANG
-        window.addEventListener('beforeunload', (e) => {
-            // Kiểm tra xem có dữ liệu chưa lưu không (tùy chọn, ở đây ta chặn luôn cho chắc)
-            e.preventDefault();
-            const message = 'Bạn có chắc muốn tải lại trang? có thể sẽ mất hết dữ liệu scan';
-            e.returnValue = message; // Chuẩn cho Chrome/Edge
-            return message;          // Chuẩn cho trình duyệt cũ
-        });
+        // ĐÃ BỎ CODE CHẶN F5 Ở ĐÂY
     },
 
     async processBarcode(barcode) {
@@ -140,54 +131,54 @@ patch(BarcodeModel.prototype, {
 
         try {
             // ----------------------------------------------------------------
-            // BƯỚC 1: KIỂM TRA URL ĐỂ XÁC ĐỊNH CHẾ ĐỘ "KIỂM KÊ"
+            // 1. NGOẠI LỆ: KIỂM KÊ (Action 364) -> BỎ QUA CHECK
             // ----------------------------------------------------------------
-            // Nếu URL chứa "action-364" -> Đây là Kiểm kê -> BỎ QUA MỌI CHECK
-            const isInventoryAction = window.location.href.includes("action-364");
-
-            if (isInventoryAction) {
-                console.log("🛡️ [HLV] Phát hiện Action 364 (Kiểm kê) -> Allow All.");
-                // Chạy thẳng logic mặc định Odoo, không check gì cả
+            const currentUrl = window.location.href;
+            if (currentUrl.includes("action=364") || currentUrl.includes("action-364")) {
                 await super.processBarcode(...arguments);
-                // Vẽ lại UI
                 setTimeout(() => { document.querySelectorAll(".o_barcode_line").forEach(annotateLine); }, 500);
                 return; 
             }
 
             // ----------------------------------------------------------------
-            // BƯỚC 2: LOGIC CHO CÁC PHIẾU KHÁC (NHẬP/XUẤT/CHUYỂN)
+            // 2. CHUẨN BỊ DỮ LIỆU ĐỂ CHECK
             // ----------------------------------------------------------------
-            
-            // Nhận diện sản phẩm
             const product = await this._identifyProductSafe(barcode);
             
-            // Lấy thông tin vị trí
+            // Lấy vị trí (Quan trọng: Phải lấy được ID vị trí để check tồn kho)
             let currentLoc = this.location;
             let currentLocId = currentLoc ? currentLoc.id : null;
+            // Nếu chưa quét vị trí nguồn, lấy vị trí mặc định của phiếu
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
+            
             let locName = (currentLoc?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
-            if (product && this.currentState.lines) {
+            // Nếu nhận diện được sản phẩm, TIẾN HÀNH CHECK NGAY (Kể cả chưa có dòng)
+            if (product) {
                 
-                // Xác định: Phiếu này là "Có kế hoạch" hay "Tự do"?
-                // Nếu có bất kỳ dòng nào có Demand > 0 -> Là Có kế hoạch.
-                const isPlannedOperation = this.currentState.lines.some(l => getLineDemand(l) > 0);
-
-                const lines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
+                // --- TÍNH TOÁN SỐ LƯỢNG HIỆN TẠI (TRÊN MÀN HÌNH) ---
                 let totalDone = 0;
                 let totalDemand = 0;
                 let qtyAtLoc = 0;
+                
+                // Lấy danh sách dòng hiện có (Có thể rỗng nếu quét lần đầu)
+                const currentLines = this.currentState.lines || [];
+                const productLines = currentLines.filter(l => extractId(l.product_id) === product.id);
+                const isPlannedOperation = currentLines.some(l => getLineDemand(l) > 0);
 
-                lines.forEach(l => {
+                productLines.forEach(l => {
                     const d = parseFloat(l.qty_done || 0);
                     const r = parseFloat(getLineDemand(l));
                     totalDone += d;
                     totalDemand += r;
-                    if (currentLocId && extractId(l.location_id) === currentLocId) qtyAtLoc += d;
+                    // Chỉ cộng dồn nếu dòng đó nằm đúng vị trí đang quét (hoặc vị trí mặc định)
+                    if (checkLocId && extractId(l.location_id) === checkLocId) {
+                        qtyAtLoc += d;
+                    }
                 });
 
-                // A. CHECK KẾ HOẠCH (Chỉ áp dụng cho phiếu có kế hoạch - Receipt/Delivery)
+                // --- CHECK A: KẾ HOẠCH (Chỉ áp dụng cho Phiếu có Demand) ---
                 if (isPlannedOperation) {
                     if (totalDemand === 0) {
                         safePlaySound(this.env, 'error');
@@ -201,10 +192,10 @@ patch(BarcodeModel.prototype, {
                     }
                 }
 
-                // B. CHECK TỒN KHO THỰC TẾ (Áp dụng cho cả Phiếu Tự do & Kế hoạch)
-                // (Trừ khi là Kiểm kê Action 364 đã return ở trên)
+                // --- CHECK B: TỒN KHO (QUAN TRỌNG: Áp dụng cho cả lần quét đầu tiên) ---
                 const orm = this.orm || this.env.services.orm;
                 if (orm) {
+                    // Gọi API check
                     const res = await orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
                     
                     if (res && res.allow === false) {
@@ -213,7 +204,8 @@ patch(BarcodeModel.prototype, {
                         return; 
                     }
 
-                    if (currentLocId && res && res.qty !== undefined) {
+                    // Check số lượng (qtyAtLoc ban đầu = 0, nextQty = 1 -> Vẫn check được)
+                    if (checkLocId && res && res.qty !== undefined) {
                         const nextQty = qtyAtLoc + 1;
                         if (nextQty > res.qty) {
                             safePlaySound(this.env, 'error');
