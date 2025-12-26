@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Inherit sale.view_order_tree to make it editable -->
+        <record id="view_order_tree_editable" model="ir.ui.view">
+            <field name="name">sale.order.tree.editable</field>
+            <field name="model">sale.order</field>
+            <field name="inherit_id" ref="sale.view_order_tree"/>
+            <field name="priority">99</field>
+            <field name="arch" type="xml">
+                
+                <!-- Add editable and multi_edit attributes to list -->
+                <xpath expr="//list" position="attributes">
+                    <attribute name="editable">bottom</attribute>
+                    <attribute name="multi_edit">1</attribute>
+                </xpath>
+                
+                <!-- Replace name field with Many2one self-link for standard navigation -->
+                <xpath expr="//field[@name='name']" position="replace">
+                    <field name="name" column_invisible="True"/>
+                    <field name="sale_order_self_link" 
+                           string="Số báo giá" 
+                           readonly="1" 
+                           widget="many2one" 
+                           decoration-bf="1"
+                           width="150px"/>
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>
