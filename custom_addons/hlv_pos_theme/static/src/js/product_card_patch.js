@@ -11,8 +11,9 @@ patch(ProductCard.prototype, {
         super.setup();
         const updatePrice = () => {
             try {
-                // Check if price exists in DOM to avoid duplicates
-                if (this.__hlv_price_injected) return;
+                // Remove reliance on this.__hlv_price_injected because onPatched runs after DOM updates
+                // and the flag might be stale (true) while the DOM element is gone.
+                // We will rely on checking the DOM for .hlv-price-forced below.
 
                 // Find valid host element (Owl 2 component root)
                 // Use this.imageRef or check internal DOM refs if available, or just queryselector on document if unique ID is known? 
