@@ -4,7 +4,7 @@
     'depends': ['stock', 'stock_barcode',"web"],
     'data': [],
     'assets': {
-        # Load cả 2 nơi để chắc chắn nó được gọi
+        # Load cả 2 nơi để chắc chắn 
         'web.assets_backend': [
             'hlv_barcode_stock_qty_v3/static/src/js/barcode_inline_qty.js',
             'hlv_barcode_stock_qty_v3/static/src/css/inline.css',
