@@ -2,7 +2,7 @@
 
 // 1. SỬA IMPORT (Thêm ngoặc nhọn { } là quan trọng nhất)
 import  BarcodeModel  from "@stock_barcode/models/barcode_model";
-import { LineComponent } from "@stock_barcode/components/line"; // Component vẽ giao diện dòng
+import  LineComponent  from "@stock_barcode/components/line"; // Component vẽ giao diện dòng
 import { patch } from "@web/core/utils/patch";
 import { onMounted, onPatched } from "@odoo/owl"; // Hook của OWL
 
