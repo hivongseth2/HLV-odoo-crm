@@ -1,91 +1,131 @@
 /** @odoo-module **/
 
-// 1. SỬA IMPORT (Thêm ngoặc nhọn { } là quan trọng nhất)
-import { BarcodeModel } from "@stock_barcode/models/barcode_model";
-import { LineComponent } from "@stock_barcode/components/line"; // Component vẽ giao diện dòng
+import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
-import { onMounted, onPatched } from "@odoo/owl"; // Hook của OWL
-
-// Test xem file chạy chưa
-console.log("🔥🔥🔥 V33 LOADED 🔥🔥🔥");
 
 // =============================================================================
-// HELPER: LOGIC VẼ TỒN KHO (UI)
+// PHẦN 1: VẼ GIAO DIỆN (Dùng Mã Tham Chiếu - Default Code)
 // =============================================================================
 
-async function renderStockForLine(component) {
-    // component.el là phần tử HTML của dòng đó
-    const lineEl = component.el;
-    if (!lineEl || lineEl.querySelector(".hlv-inline-stock")) return;
+const RPC_MODEL = "stock.quant";
+const RPC_METHOD = "get_qty_by_default_code_at_warehouse";
 
-    const lineData = component.props.line; // Dữ liệu dòng từ Odoo props
-    const product = lineData.product_id;
+// Hàm gọi API thủ công (Fetch trực tiếp)
+async function callKw(model, method, args = [], kwargs = {}) {
+    const res = await fetch("/web/dataset/call_kw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            jsonrpc: "2.0",
+            method: "call",
+            params: { model, method, args, kwargs },
+            id: Date.now(),
+        }),
+    });
+    const json = await res.json();
+    if (json.error) throw json.error;
+    return json.result;
+}
 
-    if (!product) return;
+function insertInline(lineEl, text) {
+    const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty") || lineEl.querySelector('div[name="quantity"]');
+    if (!qtyEl) return;
+    
+    let parent = qtyEl.parentElement || qtyEl;
+    let badge = parent.querySelector(".hlv-inline-stock");
+    
+    if (!badge) {
+        badge = document.createElement("div");
+        badge.className = "hlv-inline-stock";
+        badge.style.cssText = "font-size: 11px; color: #155724; background-color: #d4edda; padding: 2px 5px; border-radius: 4px; margin-top: 4px; font-weight: bold; width: fit-content; border: 1px solid #c3e6cb;";
+        parent.appendChild(badge);
+    }
+    badge.textContent = `📦 ${text}`;
+}
 
+function detectWarehousePrefix(lineEl) {
+    // 1. Tìm trong dòng
+    const destText = lineEl.querySelector(".o_line_destination_location")?.innerText || "";
+    let prefix = (destText.split("/")[0] || "").trim();
+    if (["TSN", "KBC", "KHD"].includes(prefix)) return prefix;
+
+    // 2. Tìm trong header location
+    const locHeader = document.querySelector(".o_barcode_location_line");
+    if (locHeader && locHeader.dataset.location) {
+        return locHeader.dataset.location.split("/")[0].toUpperCase();
+    }
+    return null;
+}
+
+function getDefaultCode(lineEl) {
+    // LOGIC RIÊNG CHO UI: Lấy Mã nội bộ (Internal Reference) hiển thị trên màn hình
+    // (Thường là thẻ .o_product_code)
+    let txt = lineEl.querySelector(".o_product_ref .o_product_code")?.textContent?.trim()
+           || lineEl.querySelector(".o_product_code")?.textContent?.trim()
+           || "";
+    
+    // Nếu không thấy, mới fallback sang data-barcode (nhưng ưu tiên Mã nội bộ)
+    if (!txt && lineEl.dataset.barcode) return lineEl.dataset.barcode;
+    return txt;
+}
+
+async function annotateLine(lineEl) {
     try {
-        // Gọi API tìm tồn kho
-        const domain = [
-            ['product_id', '=', product.id],
-            ['location_id.usage', '=', 'internal']
-        ];
+        const defaultCode = getDefaultCode(lineEl);
+        // Nếu đã vẽ rồi thì bỏ qua
+        if (!defaultCode || lineEl.classList.contains("hlv-done")) return;
         
-        // Lấy prefix kho từ tên vị trí hiện tại của dòng
-        // VD: KBC/Tồn kho -> KBC
-        let whPrefix = "KHO";
-        const locEl = document.querySelector('.o_barcode_location_line');
-        if (locEl && locEl.dataset.location) {
-            whPrefix = locEl.dataset.location.split('/')[0].toUpperCase();
-        }
+        lineEl.classList.add("hlv-done"); 
 
-        const orm = component.env.model.orm; // Lấy ORM từ môi trường component
-        const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
+        const whPrefix = detectWarehousePrefix(lineEl);
         
-        let totalQty = 0;
-        if (quants && quants.length > 0) {
-            quants.forEach(q => {
-                const locName = q.location_id ? q.location_id[1] : ""; 
-                if (locName.toUpperCase().includes(whPrefix)) {
-                    totalQty += q.quantity;
-                }
-            });
-        }
+        // GỌI API THEO DEFAULT CODE
+        const result = await callKw(
+            RPC_MODEL,
+            RPC_METHOD,
+            [defaultCode, whPrefix],
+            {}
+        );
 
-        // Vẽ Badge
-        const destContainer = lineEl.querySelector('div[name="destination_location"]') || lineEl.querySelector('div[name="quantity"]');
-        if (destContainer) {
-            let badge = document.createElement("span"); 
-            badge.className = "hlv-inline-stock";
-            badge.style.cssText = "display: inline-block; background-color: #17a2b8; color: white; font-weight: bold; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 5px; z-index: 99; border: 1px solid white;";
-            badge.innerHTML = `<i class="fa fa-cubes"></i> ${whPrefix}: ${totalQty}`;
-            destContainer.appendChild(badge);
-        }
-
-    } catch(e) {
-        console.warn("UI Render Error:", e);
+        const labelPrefix = whPrefix || "Tổng";
+        insertInline(lineEl, `${labelPrefix}: ${result.qty} ${result.uom}`);
+    } catch (e) {
+        console.warn("HLV Render Error", e);
+        lineEl.classList.remove("hlv-done");
     }
 }
 
-// =============================================================================
-// PATCH 1: UI OVERRIDE (Can thiệp vào LineComponent)
-// =============================================================================
-// Đây là cách chuẩn để sửa giao diện: Hook vào lúc Component được vẽ (Mounted)
-patch(LineComponent.prototype, {
-    setup() {
-        super.setup();
-        // Khi dòng được vẽ lần đầu
-        onMounted(() => {
-            renderStockForLine(this);
-        });
-        // Khi dòng được cập nhật (ví dụ quét thêm số lượng)
-        onPatched(() => {
-            renderStockForLine(this);
-        });
-    }
-});
+function setupObserver() {
+    console.log("🔥🔥🔥 V37: UI STARTED (Default Code Mode) 🔥🔥🔥");
+    
+    document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
+
+    const obs = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            m.addedNodes.forEach((node) => {
+                if (node instanceof HTMLElement) {
+                    if (node.matches(".o_barcode_line")) annotateLine(node);
+                    node.querySelectorAll?.(".o_barcode_line").forEach(annotateLine);
+                }
+            });
+        }
+    });
+
+    const waitBody = setInterval(() => {
+        if (document.body) {
+            obs.observe(document.body, { childList: true, subtree: true });
+            clearInterval(waitBody);
+            document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
+        }
+    }, 1000);
+}
+
+// CHẠY UI NGAY
+setupObserver();
+
 
 // =============================================================================
-// PATCH 2: LOGIC OVERRIDE (Can thiệp vào BarcodeModel)
+// PHẦN 2: VALIDATE KHI QUÉT (Dùng Barcode)
 // =============================================================================
 
 function extractId(field) {
@@ -115,8 +155,7 @@ function safePlaySound(env, type = 'error') {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V33: LOGIC PATCHED SUCCESSFULLY");
-        
+        console.log("🔥🔥🔥 V37: VALIDATOR STARTED (Barcode Mode) 🔥🔥🔥");
         // Chặn F5
         window.addEventListener('beforeunload', (e) => {
             e.preventDefault();
@@ -128,30 +167,35 @@ patch(BarcodeModel.prototype, {
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
         try {
-            console.log("⚡ Checking barcode:", barcode); // Log để debug
+            // LOGIC CHECK NGHIỆM NGẶT THEO BARCODE
             
-            const product = await this._identifyProductSafe(barcode);
-            let currentLoc = this.location;
-            let currentLocId = currentLoc ? currentLoc.id : null;
-            let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
-            let locName = (currentLoc?.display_name || this.record?.display_name || "");
+            // 1. Nhận diện sản phẩm bằng BARCODE
+            let product = null;
+            if (this.cache.products) product = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
+            
+            // 2. Xác định vị trí đang đứng
+            let currentLocId = this.location ? this.location.id : null;
+            let checkLocId = currentLocId || (this.record.location_id ? (this.record.location_id.id || this.record.location_id[0]) : null);
+            let locName = (this.location?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
+            // 3. Kiểm tra Logic
             if (product && this.currentState.lines) {
-                const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
+                const lines = this.currentState.lines.filter(l => (l.product_id.id || l.product_id[0]) === product.id);
                 let totalDone = 0;
                 let totalDemand = 0;
-                let qtyDoneAtCurrentLoc = 0;
+                let qtyAtLoc = 0;
 
-                productLines.forEach(l => {
+                lines.forEach(l => {
                     const d = parseFloat(l.qty_done || 0);
                     const r = parseFloat(getLineDemand(l));
                     totalDone += d;
                     totalDemand += r;
-                    if (currentLocId && extractId(l.location_id) === currentLocId) qtyDoneAtCurrentLoc += d;
+                    const lLocId = l.location_id ? (l.location_id.id || l.location_id[0]) : null;
+                    if (currentLocId && lLocId === currentLocId) qtyAtLoc += d;
                 });
 
-                // CHECK LIMIT
+                // A. Check Kế hoạch
                 if (totalDemand === 0) {
                     safePlaySound(this.env, 'error');
                     alert(`⚠️ SẢN PHẨM NGOÀI KẾ HOẠCH!\nSP: ${product.display_name}`);
@@ -163,44 +207,40 @@ patch(BarcodeModel.prototype, {
                     return;
                 }
 
-                // CHECK STOCK
-                try {
-                    const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
-                    if (result && result.allow === false) {
+                // B. Check Tồn kho & Vị trí (GỌI API THEO BARCODE)
+                const orm = this.orm || this.env.services.orm;
+                if (orm) {
+                    // Gọi check_barcode_availability (Hàm này trong Python phải xử lý tìm theo barcode)
+                    const res = await orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
+                    
+                    if (res && res.allow === false) {
                         safePlaySound(this.env, 'error');
-                        alert(`⛔ SAI VỊ TRÍ!\n${result.message}`);
+                        alert(`⛔ SAI VỊ TRÍ!\n${res.message}`);
                         return;
                     }
-                    if (currentLocId && result && result.qty !== undefined) {
-                        const nextQty = qtyDoneAtCurrentLoc + 1;
-                        if (nextQty > result.qty) {
+                    
+                    // Check số lượng tồn
+                    if (currentLocId && res && res.qty !== undefined) {
+                        if (qtyAtLoc + 1 > res.qty) {
                             safePlaySound(this.env, 'error');
-                            alert(`⛔ QUÁ TỒN KHO THỰC TẾ!\n📦 Tồn: ${result.qty}\n👉 Bạn muốn lấy: ${nextQty}`);
+                            alert(`⛔ QUÁ TỒN KHO!\n📦 Tồn thực tế: ${res.qty}\n👉 Bạn đang lấy cái thứ: ${qtyAtLoc + 1}`);
                             return;
                         }
                     }
-                } catch (e) { console.warn(e); }
+                }
             }
-
+            
+            // Nếu qua hết các cửa ải -> Odoo xử lý
             await super.processBarcode(...arguments);
+            
+            // Trigger vẽ lại UI sau khi quét xong
+            setTimeout(() => {
+                document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
+            }, 500);
 
-        } catch (err) {
-            console.error(err);
-            alert("Lỗi: " + err.message);
+        } catch (e) {
+            console.error(e);
+            alert("Lỗi: " + e.message);
         }
-    },
-
-    async _identifyProductSafe(barcode) {
-        let product = null;
-        if (this.cache.products) product = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
-        if (!product && this.currentState.lines) {
-             const line = this.currentState.lines.find(l => {
-                 const pObj = l.product_id; 
-                 if (typeof pObj === 'object') return pObj.barcode === barcode || pObj.default_code === barcode;
-                 return false;
-             });
-             if (line) product = line.product_id;
-        }
-        return product;
     }
 });
