@@ -22,10 +22,21 @@ patch(ProductScreen.prototype, {
 
     _cleanCategoryButtonStyles() {
         const cleanup = () => {
-            // 0. ENSURE LAYOUT CLASS (XML replacement)
-            const productsWidget = document.querySelector('.products-widget');
-            if (productsWidget) {
-                productsWidget.classList.add('hlv-sidebar-layout');
+            // 0. ENSURE LAYOUT CLASS (Target Common Parent)
+            const catList = document.querySelector('.category-list') || document.querySelector('.category-button')?.parentElement;
+            const prodList = document.querySelector('.product-list:not(.category-list)') || document.querySelector('article.product')?.parentElement;
+
+            if (catList && prodList) {
+                const commonParent = catList.parentElement;
+                if (commonParent) {
+                    commonParent.classList.add('hlv-sidebar-layout');
+                }
+            } else {
+                // Fallback for older/different structure
+                const productsWidget = document.querySelector('.products-widget');
+                if (productsWidget) {
+                    productsWidget.classList.add('hlv-sidebar-layout');
+                }
             }
 
             // 1. CLEAN CATEGORY BUTTONS
@@ -33,6 +44,14 @@ patch(ProductScreen.prototype, {
             categoryButtons.forEach((btn) => {
                 btn.removeAttribute('style');
                 btn.classList.add('hlv-clean-category');
+
+                // Remove Odoo color classes
+                const classes = [...btn.classList];
+                classes.forEach(cls => {
+                    if (cls.startsWith('o_colorlist_')) {
+                        btn.classList.remove(cls);
+                    }
+                });
 
                 // Clean children
                 const children = btn.querySelectorAll('*');
@@ -46,6 +65,16 @@ patch(ProductScreen.prototype, {
             // 2. CLEAN PRODUCT CARDS & FORCE PRICE
             const productCards = document.querySelectorAll('.product');
             productCards.forEach((card) => {
+                card.classList.add('hlv-product-card'); // Helper class
+
+                // Remove Odoo color classes
+                const classes = [...card.classList];
+                classes.forEach(cls => {
+                    if (cls.startsWith('o_colorlist_')) {
+                        card.classList.remove(cls);
+                    }
+                });
+
                 // CLEAN CARD BG
                 card.style.removeProperty('background-color');
                 card.style.removeProperty('background');
@@ -58,12 +87,10 @@ patch(ProductScreen.prototype, {
                 }
 
                 // FORCE PRICE VISIBILITY
-                // Try multiple common selectors for Odoo POS prices
                 const priceEl = card.querySelector('.price-tag, .product-price, .product-price-tag, span[class*="price"]');
                 if (priceEl) {
                     priceEl.classList.add('hlv-price-forced');
-                    // Force inline styles as a backup against extreme CSS specificity issues
-                    priceEl.style.color = '#dc2626'; // Red
+                    priceEl.style.color = '#dc2626';
                     priceEl.style.fontWeight = 'bold';
                     priceEl.style.fontSize = '16px';
                     priceEl.style.display = 'block';
@@ -78,13 +105,13 @@ patch(ProductScreen.prototype, {
         setTimeout(cleanup, 200);
         setTimeout(cleanup, 500);
         setTimeout(cleanup, 1000);
-        setTimeout(cleanup, 3000); // Late cleaning for slow loaders
+        setTimeout(cleanup, 3000);
 
-        // Also observe mutations if possible
-        const productsWidget = document.querySelector('.products-widget');
-        if (productsWidget) {
+        // Also observe mutations on the main screen if possible
+        const screen = document.querySelector('.product-screen') || document.querySelector('.pos-content');
+        if (screen) {
             const observer = new MutationObserver(cleanup);
-            observer.observe(productsWidget, { childList: true, subtree: true });
+            observer.observe(screen, { childList: true, subtree: true });
         }
     },
 });
