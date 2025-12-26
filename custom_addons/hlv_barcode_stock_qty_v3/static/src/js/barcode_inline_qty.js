@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import  BarcodeModel  from "@stock_barcode/models/barcode_model";
+import { BarcodeModel } from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
@@ -32,13 +32,13 @@ function safePlaySound(env, type = 'error') {
 }
 
 // =============================================================================
-// MAIN LOGIC V25 - DIRECT WRITE (GHI THẲNG DB - KHÔNG CHỜ SUPER)
+// MAIN LOGIC V26 - DIRECT WRITE (GHI THẲNG DB - KHÔNG LAG - KHÔNG MẤT)
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V25: DIRECT WRITE MODE (Fix Lag & Loss)");
+        console.log("🚀 [HLV] V26: DIRECT WRITE (FAST & SAFE)");
         
         // Chặn F5 (Browser Native)
         window.addEventListener('beforeunload', (e) => {
@@ -69,11 +69,9 @@ patch(BarcodeModel.prototype, {
                 let totalDemand = 0;
                 
                 // Logic tìm dòng mục tiêu (Target Line)
-                // Ưu tiên 1: Dòng đang ở đúng vị trí (Tủ 3) -> Cộng dồn
-                // Ưu tiên 2: Dòng ở kho nguồn (chưa làm) -> Lấy để chuyển
                 let targetLine = null;
-                let localLine = null;
-                let sourceLine = null;
+                let localLine = null;  // Dòng đang ở đúng chỗ mình đứng
+                let sourceLine = null; // Dòng ở kho nguồn
 
                 productLines.forEach(l => {
                     const d = parseFloat(l.qty_done || 0);
@@ -106,37 +104,39 @@ patch(BarcodeModel.prototype, {
                         alert(`⛔ SAI VỊ TRÍ!\n${result.message || "Không có hàng ở đây!"}`);
                         return;
                     }
-                } catch (e) { /* Bỏ qua lỗi mạng check, ưu tiên cho quét */ }
+                } catch (e) { /* Bỏ qua lỗi mạng */ }
 
-                // 🚀 XỬ LÝ GHI DỮ LIỆU (QUAN TRỌNG)
+                // 🚀 XỬ LÝ GHI DỮ LIỆU (DIRECT WRITE)
+                // Ưu tiên cộng dồn vào dòng tại chỗ, nếu không thì lấy dòng nguồn chuyển qua
                 if (localLine) targetLine = localLine;
                 else if (sourceLine) targetLine = sourceLine;
 
-                // NẾU TÌM ĐƯỢC DÒNG CÓ ID THẬT (Đã lưu trong DB)
-                // -> Ta dùng ORM WRITE để ghi thẳng +1 vào DB. Nhanh và chắc chắn 100%.
+                // NẾU TÌM ĐƯỢC DÒNG CÓ ID THẬT -> GHI THẲNG DB
                 if (targetLine && targetLine.id && typeof targetLine.id === 'number') {
                     console.log(`✅ [HLV] Direct Write ID: ${targetLine.id}`);
                     
                     const newQty = (targetLine.qty_done || 0) + 1;
+                    const writeVals = { "qty_done": newQty };
                     
-                    // 1. GHI DB (Quan trọng nhất)
-                    await this.orm.write("stock.move.line", [targetLine.id], { 
-                        "qty_done": newQty,
-                        "location_id": currentLocId || extractId(targetLine.location_id) // Cập nhật luôn vị trí nếu cần
-                    });
+                    // Nếu cần đổi vị trí (chỉ khi target là sourceLine)
+                    if (!localLine && currentLocId) {
+                         writeVals["location_id"] = currentLocId;
+                    }
 
-                    // 2. CẬP NHẬT GIAO DIỆN (Để người dùng thấy ngay)
+                    // 1. GHI DB NGAY LẬP TỨC
+                    await this.orm.write("stock.move.line", [targetLine.id], writeVals);
+
+                    // 2. CẬP NHẬT GIAO DIỆN
                     targetLine.qty_done = newQty;
-                    if (currentLoc) targetLine.location_id = currentLoc;
+                    if (writeVals["location_id"]) targetLine.location_id = currentLoc;
                     this.trigger('update');
 
-                    // 3. DONE (Không gọi super, Không gọi save nữa vì đã write rồi)
+                    // 3. DONE (Bỏ qua super để không bị ghi đè)
                     return;
                 }
             }
 
-            // FALLBACK: Nếu là dòng mới tinh (chưa có ID) hoặc không tìm thấy dòng
-            // Thì mới nhờ Odoo xử lý hộ (chấp nhận rủi ro lag nhẹ ở các dòng mới này)
+            // FALLBACK: Chỉ dùng cho trường hợp tạo dòng mới tinh
             await super.processBarcode(...arguments);
             await this.save();
 
