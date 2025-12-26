@@ -4,7 +4,7 @@ import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// PHẦN 1: GIAO DIỆN HIỂN THỊ TỒN KHO (UI RENDERER)
+// PHẦN 1: GIAO DIỆN HIỂN THỊ TỒN KHO (UI RENDERER) - GIỮ NGUYÊN
 // =============================================================================
 
 const RPC_MODEL = "stock.quant";
@@ -99,7 +99,7 @@ function startUiObserver() {
 
 
 // =============================================================================
-// PHẦN 2: VALIDATOR (FIX LỖI CHECK LẦN ĐẦU + BỎ F5)
+// PHẦN 2: VALIDATOR (CÓ FALLBACK TÌM SẢN PHẨM TỪ SERVER)
 // =============================================================================
 
 function extractId(field) { return field && field.id ? field.id : (Array.isArray(field) ? field[0] : field); }
@@ -121,18 +121,23 @@ function safePlaySound(env, type = 'error') {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V46: FIRST SCAN FIX");
+        console.log("🚀 [HLV] V47: SERVER LOOKUP FALLBACK");
         startUiObserver();
-        // ĐÃ BỎ CODE CHẶN F5 Ở ĐÂY
+        
+        // Chặn F5
+        window.onbeforeunload = function (e) {
+            e = e || window.event;
+            const msg = 'Dữ liệu chưa lưu! Bạn có chắc muốn tải lại?';
+            if (e) { e.returnValue = msg; }
+            return msg;
+        };
     },
 
     async processBarcode(barcode) {
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
         try {
-            // ----------------------------------------------------------------
-            // 1. NGOẠI LỆ: KIỂM KÊ (Action 364) -> BỎ QUA CHECK
-            // ----------------------------------------------------------------
+            // 1. SKIP NẾU LÀ KIỂM KÊ (Action 364)
             const currentUrl = window.location.href;
             if (currentUrl.includes("action=364") || currentUrl.includes("action-364")) {
                 await super.processBarcode(...arguments);
@@ -140,45 +145,41 @@ patch(BarcodeModel.prototype, {
                 return; 
             }
 
-            // ----------------------------------------------------------------
-            // 2. CHUẨN BỊ DỮ LIỆU ĐỂ CHECK
-            // ----------------------------------------------------------------
+            // 2. NHẬN DIỆN SẢN PHẨM (Dùng hàm mới mạnh mẽ hơn)
             const product = await this._identifyProductSafe(barcode);
             
-            // Lấy vị trí (Quan trọng: Phải lấy được ID vị trí để check tồn kho)
+            // Lấy vị trí
             let currentLoc = this.location;
             let currentLocId = currentLoc ? currentLoc.id : null;
-            // Nếu chưa quét vị trí nguồn, lấy vị trí mặc định của phiếu
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
-            
             let locName = (currentLoc?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
-            // Nếu nhận diện được sản phẩm, TIẾN HÀNH CHECK NGAY (Kể cả chưa có dòng)
+            // Nếu tìm thấy sản phẩm (dù là từ Cache hay Server)
             if (product) {
+                // Tính toán dữ liệu hiện tại
+                const currentLines = this.currentState.lines || [];
+                // Check xem phiếu này có dòng nào có demand không?
+                const isPlannedOperation = currentLines.some(l => getLineDemand(l) > 0);
                 
-                // --- TÍNH TOÁN SỐ LƯỢNG HIỆN TẠI (TRÊN MÀN HÌNH) ---
+                // Lọc các dòng của sản phẩm này
+                const productLines = currentLines.filter(l => extractId(l.product_id) === product.id);
+                
                 let totalDone = 0;
                 let totalDemand = 0;
                 let qtyAtLoc = 0;
-                
-                // Lấy danh sách dòng hiện có (Có thể rỗng nếu quét lần đầu)
-                const currentLines = this.currentState.lines || [];
-                const productLines = currentLines.filter(l => extractId(l.product_id) === product.id);
-                const isPlannedOperation = currentLines.some(l => getLineDemand(l) > 0);
 
                 productLines.forEach(l => {
                     const d = parseFloat(l.qty_done || 0);
                     const r = parseFloat(getLineDemand(l));
                     totalDone += d;
                     totalDemand += r;
-                    // Chỉ cộng dồn nếu dòng đó nằm đúng vị trí đang quét (hoặc vị trí mặc định)
                     if (checkLocId && extractId(l.location_id) === checkLocId) {
                         qtyAtLoc += d;
                     }
                 });
 
-                // --- CHECK A: KẾ HOẠCH (Chỉ áp dụng cho Phiếu có Demand) ---
+                // A. CHECK KẾ HOẠCH (Chỉ cho phiếu có Demand)
                 if (isPlannedOperation) {
                     if (totalDemand === 0) {
                         safePlaySound(this.env, 'error');
@@ -192,10 +193,9 @@ patch(BarcodeModel.prototype, {
                     }
                 }
 
-                // --- CHECK B: TỒN KHO (QUAN TRỌNG: Áp dụng cho cả lần quét đầu tiên) ---
+                // B. CHECK TỒN KHO (Cho tất cả, kể cả lần quét đầu tiên)
                 const orm = this.orm || this.env.services.orm;
                 if (orm) {
-                    // Gọi API check
                     const res = await orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
                     
                     if (res && res.allow === false) {
@@ -204,8 +204,8 @@ patch(BarcodeModel.prototype, {
                         return; 
                     }
 
-                    // Check số lượng (qtyAtLoc ban đầu = 0, nextQty = 1 -> Vẫn check được)
                     if (checkLocId && res && res.qty !== undefined) {
+                        // nextQty = Số đã quét + 1 (cái đang cầm trên tay)
                         const nextQty = qtyAtLoc + 1;
                         if (nextQty > res.qty) {
                             safePlaySound(this.env, 'error');
@@ -214,6 +214,10 @@ patch(BarcodeModel.prototype, {
                         }
                     }
                 }
+            } else {
+                // Nếu vẫn không tìm thấy sản phẩm (có thể là mã rác, hoặc sản phẩm chưa tạo)
+                console.warn("[HLV] Unknown Product Barcode:", barcode);
+                // Vẫn cho Super chạy để Odoo báo lỗi chuẩn "Barcode not found"
             }
 
             // OK -> Odoo xử lý
@@ -229,17 +233,48 @@ patch(BarcodeModel.prototype, {
         }
     },
 
+    // --- HÀM TÌM SẢN PHẨM NÂNG CAO ---
     async _identifyProductSafe(barcode) {
-        let product = null;
-        if (this.cache.products) product = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
-        if (!product && this.currentState.lines) {
+        // 1. Tìm trong Cache (Nhanh nhất)
+        if (this.cache.products) {
+            const p = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
+            if (p) return p;
+        }
+
+        // 2. Tìm trong Lines (Phòng trường hợp cache chưa có nhưng line đã có)
+        if (this.currentState.lines) {
              const line = this.currentState.lines.find(l => {
                  const pObj = l.product_id; 
                  if (typeof pObj === 'object') return pObj.barcode === barcode || pObj.default_code === barcode;
                  return false;
              });
-             if (line) product = line.product_id;
+             if (line) return line.product_id;
         }
-        return product;
+
+        // 3. FALLBACK: GỌI API TÌM TRÊN SERVER (Quan trọng cho lần quét đầu tiên)
+        try {
+            const orm = this.orm || this.env.services.orm;
+            if (orm) {
+                // Tìm product.product theo barcode hoặc default_code
+                const domain = ['|', ['barcode', '=', barcode], ['default_code', '=', barcode]];
+                const res = await orm.call("product.product", "search_read", [domain, ['id', 'display_name', 'uom_id', 'tracking']], { limit: 1 });
+                
+                if (res && res.length > 0) {
+                    const pData = res[0];
+                    console.log("[HLV] Found product via RPC:", pData.display_name);
+                    // Giả lập object product để logic bên dưới dùng được
+                    return {
+                        id: pData.id,
+                        display_name: pData.display_name,
+                        barcode: barcode, // Giả định barcode đúng
+                        default_code: barcode // Fallback
+                    };
+                }
+            }
+        } catch(e) {
+            console.warn("[HLV] Server Lookup Failed:", e);
+        }
+
+        return null;
     }
 });
