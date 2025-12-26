@@ -99,7 +99,7 @@ function startUiObserver() {
 
 
 // =============================================================================
-// PHẦN 2: VALIDATOR (LOGIC KIỂM TRA & CHẶN F5 MẠNH MẼ)
+// PHẦN 2: VALIDATOR (CÓ FALLBACK TÌM SẢN PHẨM TỪ SERVER)
 // =============================================================================
 
 function extractId(field) { return field && field.id ? field.id : (Array.isArray(field) ? field[0] : field); }
@@ -121,20 +121,14 @@ function safePlaySound(env, type = 'error') {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V45: FIX F5 + ACTION 364");
-        
+        console.log("🚀 [HLV] V47: SERVER LOOKUP FALLBACK");
         startUiObserver();
-
-        // --- CƠ CHẾ CHẶN F5 (HARDCORE) ---
-        // Gán trực tiếp vào window.onbeforeunload để tránh bị ghi đè
+        
+        // Chặn F5
         window.onbeforeunload = function (e) {
             e = e || window.event;
             const msg = 'Dữ liệu chưa lưu! Bạn có chắc muốn tải lại?';
-            
-            // Cho các trình duyệt cũ (IE, Firefox cũ)
             if (e) { e.returnValue = msg; }
-            
-            // Cho Chrome, Safari, Edge hiện đại
             return msg;
         };
     },
@@ -143,50 +137,49 @@ patch(BarcodeModel.prototype, {
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
         try {
-            // ----------------------------------------------------------------
-            // BƯỚC 1: KIỂM TRA URL (Action 364 - Kiểm kê)
-            // ----------------------------------------------------------------
+            // 1. SKIP NẾU LÀ KIỂM KÊ (Action 364)
             const currentUrl = window.location.href;
-            const isInventoryAction = currentUrl.includes("action=364") || currentUrl.includes("action-364");
-
-            if (isInventoryAction) {
-                console.log("🛡️ [HLV] Action 364 (Kiểm kê) -> Allow All.");
+            if (currentUrl.includes("action=364") || currentUrl.includes("action-364")) {
                 await super.processBarcode(...arguments);
                 setTimeout(() => { document.querySelectorAll(".o_barcode_line").forEach(annotateLine); }, 500);
                 return; 
             }
 
-            // ----------------------------------------------------------------
-            // BƯỚC 2: LOGIC CHO CÁC PHIẾU KHÁC
-            // ----------------------------------------------------------------
-            
+            // 2. NHẬN DIỆN SẢN PHẨM (Dùng hàm mới mạnh mẽ hơn)
             const product = await this._identifyProductSafe(barcode);
             
+            // Lấy vị trí
             let currentLoc = this.location;
             let currentLocId = currentLoc ? currentLoc.id : null;
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
             let locName = (currentLoc?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
-            if (product && this.currentState.lines) {
+            // Nếu tìm thấy sản phẩm (dù là từ Cache hay Server)
+            if (product) {
+                // Tính toán dữ liệu hiện tại
+                const currentLines = this.currentState.lines || [];
+                // Check xem phiếu này có dòng nào có demand không?
+                const isPlannedOperation = currentLines.some(l => getLineDemand(l) > 0);
                 
-                // Xác định: Phiếu Kế hoạch (có demand) hay Tự do (không demand)
-                const isPlannedOperation = this.currentState.lines.some(l => getLineDemand(l) > 0);
-
-                const lines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
+                // Lọc các dòng của sản phẩm này
+                const productLines = currentLines.filter(l => extractId(l.product_id) === product.id);
+                
                 let totalDone = 0;
                 let totalDemand = 0;
                 let qtyAtLoc = 0;
 
-                lines.forEach(l => {
+                productLines.forEach(l => {
                     const d = parseFloat(l.qty_done || 0);
                     const r = parseFloat(getLineDemand(l));
                     totalDone += d;
                     totalDemand += r;
-                    if (currentLocId && extractId(l.location_id) === currentLocId) qtyAtLoc += d;
+                    if (checkLocId && extractId(l.location_id) === checkLocId) {
+                        qtyAtLoc += d;
+                    }
                 });
 
-                // A. CHECK KẾ HOẠCH
+                // A. CHECK KẾ HOẠCH (Chỉ cho phiếu có Demand)
                 if (isPlannedOperation) {
                     if (totalDemand === 0) {
                         safePlaySound(this.env, 'error');
@@ -200,7 +193,7 @@ patch(BarcodeModel.prototype, {
                     }
                 }
 
-                // B. CHECK TỒN KHO THỰC TẾ
+                // B. CHECK TỒN KHO (Cho tất cả, kể cả lần quét đầu tiên)
                 const orm = this.orm || this.env.services.orm;
                 if (orm) {
                     const res = await orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
@@ -211,7 +204,8 @@ patch(BarcodeModel.prototype, {
                         return; 
                     }
 
-                    if (currentLocId && res && res.qty !== undefined) {
+                    if (checkLocId && res && res.qty !== undefined) {
+                        // nextQty = Số đã quét + 1 (cái đang cầm trên tay)
                         const nextQty = qtyAtLoc + 1;
                         if (nextQty > res.qty) {
                             safePlaySound(this.env, 'error');
@@ -220,6 +214,10 @@ patch(BarcodeModel.prototype, {
                         }
                     }
                 }
+            } else {
+                // Nếu vẫn không tìm thấy sản phẩm (có thể là mã rác, hoặc sản phẩm chưa tạo)
+                console.warn("[HLV] Unknown Product Barcode:", barcode);
+                // Vẫn cho Super chạy để Odoo báo lỗi chuẩn "Barcode not found"
             }
 
             // OK -> Odoo xử lý
@@ -235,17 +233,48 @@ patch(BarcodeModel.prototype, {
         }
     },
 
+    // --- HÀM TÌM SẢN PHẨM NÂNG CAO ---
     async _identifyProductSafe(barcode) {
-        let product = null;
-        if (this.cache.products) product = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
-        if (!product && this.currentState.lines) {
+        // 1. Tìm trong Cache (Nhanh nhất)
+        if (this.cache.products) {
+            const p = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
+            if (p) return p;
+        }
+
+        // 2. Tìm trong Lines (Phòng trường hợp cache chưa có nhưng line đã có)
+        if (this.currentState.lines) {
              const line = this.currentState.lines.find(l => {
                  const pObj = l.product_id; 
                  if (typeof pObj === 'object') return pObj.barcode === barcode || pObj.default_code === barcode;
                  return false;
              });
-             if (line) product = line.product_id;
+             if (line) return line.product_id;
         }
-        return product;
+
+        // 3. FALLBACK: GỌI API TÌM TRÊN SERVER (Quan trọng cho lần quét đầu tiên)
+        try {
+            const orm = this.orm || this.env.services.orm;
+            if (orm) {
+                // Tìm product.product theo barcode hoặc default_code
+                const domain = ['|', ['barcode', '=', barcode], ['default_code', '=', barcode]];
+                const res = await orm.call("product.product", "search_read", [domain, ['id', 'display_name', 'uom_id', 'tracking']], { limit: 1 });
+                
+                if (res && res.length > 0) {
+                    const pData = res[0];
+                    console.log("[HLV] Found product via RPC:", pData.display_name);
+                    // Giả lập object product để logic bên dưới dùng được
+                    return {
+                        id: pData.id,
+                        display_name: pData.display_name,
+                        barcode: barcode, // Giả định barcode đúng
+                        default_code: barcode // Fallback
+                    };
+                }
+            }
+        } catch(e) {
+            console.warn("[HLV] Server Lookup Failed:", e);
+        }
+
+        return null;
     }
 });
