@@ -10,7 +10,7 @@ import { patch } from "@web/core/utils/patch";
 const RPC_MODEL = "stock.quant";
 const RPC_METHOD = "get_qty_by_default_code_at_warehouse";
 
-// 1. Hàm gọi API thủ công (Fetch trực tiếp để tránh phụ thuộc ORM của model)
+// 1. Hàm gọi API thủ công (Fetch trực tiếp để tránh phụ thu
 async function callKw(model, method, args = [], kwargs = {}) {
     const res = await fetch("/web/dataset/call_kw", {
         method: "POST",
