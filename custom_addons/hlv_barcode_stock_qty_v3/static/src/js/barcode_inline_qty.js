@@ -15,7 +15,6 @@ function extractId(field) {
 }
 
 function getLineDemand(line) {
-    // Lấy Demand chuẩn theo Odoo 18
     if (line.reserved_uom_qty > 0) return line.reserved_uom_qty;
     if (line.product_uom_qty > 0) return line.product_uom_qty;
     if (line.quantity_product_uom > 0) return line.quantity_product_uom;
@@ -33,13 +32,13 @@ function safePlaySound(env, type = 'error') {
 }
 
 // =============================================================================
-// MAIN LOGIC V24 - FIX LAG SAVE & REMOVE LOCK
+// MAIN LOGIC V25 - DIRECT WRITE (GHI THẲNG DB - KHÔNG CHỜ SUPER)
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V24: SYNC FIX + NO LOCK");
+        console.log("🚀 [HLV] V25: DIRECT WRITE MODE (Fix Lag & Loss)");
         
         // Chặn F5 (Browser Native)
         window.addEventListener('beforeunload', (e) => {
@@ -49,22 +48,42 @@ patch(BarcodeModel.prototype, {
     },
 
     async processBarcode(barcode) {
-        // 1. BỎ KHÓA (NO LOCK) -> Giúp quét liên tục không bị miss
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
         try {
-            // 2. KIỂM TRA TRƯỚC (VALIDATION)
+            // 1. NHẬN DIỆN SẢN PHẨM
             const product = await this._identifyProductSafe(barcode);
             
+            // 2. LẤY THÔNG TIN VỊ TRÍ
+            let currentLoc = this.location;
+            let currentLocId = currentLoc ? currentLoc.id : null;
+            let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
+            let locName = (currentLoc?.display_name || this.record?.display_name || "");
+            let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
+
+            // Nếu nhận diện được sản phẩm, ta sẽ tự xử lý (để tránh lag)
             if (product && this.currentState.lines) {
                 const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
                 
                 let totalDone = 0;
                 let totalDemand = 0;
+                
+                // Logic tìm dòng mục tiêu (Target Line)
+                // Ưu tiên 1: Dòng đang ở đúng vị trí (Tủ 3) -> Cộng dồn
+                // Ưu tiên 2: Dòng ở kho nguồn (chưa làm) -> Lấy để chuyển
+                let targetLine = null;
+                let localLine = null;
+                let sourceLine = null;
 
                 productLines.forEach(l => {
-                    totalDone += parseFloat(l.qty_done || 0);
-                    totalDemand += parseFloat(getLineDemand(l));
+                    const d = parseFloat(l.qty_done || 0);
+                    const r = parseFloat(getLineDemand(l));
+                    totalDone += d;
+                    totalDemand += r;
+                    
+                    const lineLocId = extractId(l.location_id);
+                    if (currentLocId && lineLocId === currentLocId) localLine = l;
+                    else if (d < r) sourceLine = l;
                 });
 
                 // 🛑 CHẶN 1: QUÉT DƯ
@@ -73,8 +92,6 @@ patch(BarcodeModel.prototype, {
                     alert(`⚠️ SẢN PHẨM NGOÀI KẾ HOẠCH!\nSP: ${product.display_name}`);
                     return; 
                 }
-                
-                // Lưu ý: So sánh >= vì chuẩn bị quét thêm 1 cái nữa
                 if (totalDone >= totalDemand) {
                     safePlaySound(this.env, 'error');
                     alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\nSP: ${product.display_name}\nĐã quét: ${totalDone}/${totalDemand}`);
@@ -82,11 +99,6 @@ patch(BarcodeModel.prototype, {
                 }
 
                 // 🌍 CHẶN 2: SAI VỊ TRÍ
-                let currentLoc = this.location;
-                let checkLocId = currentLoc ? currentLoc.id : (this.record.location_id ? extractId(this.record.location_id) : null);
-                let locName = (currentLoc?.display_name || this.record?.display_name || "");
-                let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
-
                 try {
                     const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
                     if (result && result.allow === false) {
@@ -94,22 +106,39 @@ patch(BarcodeModel.prototype, {
                         alert(`⛔ SAI VỊ TRÍ!\n${result.message || "Không có hàng ở đây!"}`);
                         return;
                     }
-                } catch (e) {
-                    console.warn("Check location failed, skipping check...");
+                } catch (e) { /* Bỏ qua lỗi mạng check, ưu tiên cho quét */ }
+
+                // 🚀 XỬ LÝ GHI DỮ LIỆU (QUAN TRỌNG)
+                if (localLine) targetLine = localLine;
+                else if (sourceLine) targetLine = sourceLine;
+
+                // NẾU TÌM ĐƯỢC DÒNG CÓ ID THẬT (Đã lưu trong DB)
+                // -> Ta dùng ORM WRITE để ghi thẳng +1 vào DB. Nhanh và chắc chắn 100%.
+                if (targetLine && targetLine.id && typeof targetLine.id === 'number') {
+                    console.log(`✅ [HLV] Direct Write ID: ${targetLine.id}`);
+                    
+                    const newQty = (targetLine.qty_done || 0) + 1;
+                    
+                    // 1. GHI DB (Quan trọng nhất)
+                    await this.orm.write("stock.move.line", [targetLine.id], { 
+                        "qty_done": newQty,
+                        "location_id": currentLocId || extractId(targetLine.location_id) // Cập nhật luôn vị trí nếu cần
+                    });
+
+                    // 2. CẬP NHẬT GIAO DIỆN (Để người dùng thấy ngay)
+                    targetLine.qty_done = newQty;
+                    if (currentLoc) targetLine.location_id = currentLoc;
+                    this.trigger('update');
+
+                    // 3. DONE (Không gọi super, Không gọi save nữa vì đã write rồi)
+                    return;
                 }
             }
 
-            // ✅ 3. GỌI ODOO XỬ LÝ (SUPER)
-            // Để Odoo tự tăng số lượng, tự tách dòng.
+            // FALLBACK: Nếu là dòng mới tinh (chưa có ID) hoặc không tìm thấy dòng
+            // Thì mới nhờ Odoo xử lý hộ (chấp nhận rủi ro lag nhẹ ở các dòng mới này)
             await super.processBarcode(...arguments);
-
-            // 🕒 4. FIX LỖI "SAVE CHẬM 1 NHỊP"
-            // Chờ 50ms để Odoo kịp cập nhật State (RAM) sau khi super chạy xong
-            await new Promise(resolve => setTimeout(resolve, 50));
-
-            // 💾 5. LƯU NGAY
             await this.save();
-            console.log("✅ Save syncd!");
 
         } catch (err) {
             console.error(err);
