@@ -121,6 +121,16 @@
                     <group string="📥 Cấu Hình Phiếu NHẬP KHO">
                         <field name="incoming_recipient_user_id"
                             placeholder="Zalo User ID kế toán xử lý TẤT CẢ phiếu nhập kho" />
+                        
+                        <field name="incoming_warehouse_mapping_text" widget="text"
+                               placeholder="Ví dụ:&#10;TSN:1111111111111111111&#10;KBC:2222222222222222222,3333333333333333333" />
+                        <div class="alert alert-info" role="alert" style="margin-top: 8px;">
+                            <p style="margin: 0;">
+                                Mỗi dòng 1 cấu hình: <code>WAREHOUSE_CODE:ID1,ID2,...</code><br/>
+                                Nếu kho có trong danh sách này, sẽ gửi cho các ID tương ứng thay vì ID chung ở trên.<br/>
+                                Nếu kho KHÔNG có trong danh sách này, sẽ fallback về ID chung.
+                            </p>
+                        </div>
                     </group>
 
                     <!-- NEW: Cấu hình nhắc nhở tương tác định kỳ -->

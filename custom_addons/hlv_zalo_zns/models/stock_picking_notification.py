@@ -856,12 +856,20 @@ class StockPicking(models.Model):
                 _logger.info("Zalo Notification skip: picking %s has unsupported location_id.usage = '%s'", self.name, location_usage)
                 return
 
-            accountant_user_id = config.incoming_recipient_user_id
-            if not accountant_user_id:
-                _logger.warning("Zalo Notification not sent: incoming_recipient_user_id not configured")
-                return
-
-            recipient_user_ids = [accountant_user_id]
+            # 1) Kiểm tra cấu hình riêng theo kho
+            warehouse_code = self.picking_type_id.warehouse_id.code
+            warehouse_recipients = config.get_recipients_for_incoming_warehouse(warehouse_code)
+            
+            if warehouse_recipients:
+                 recipient_user_ids = warehouse_recipients
+                 _logger.debug("Using warehouse-specific recipients for %s: %s", warehouse_code, recipient_user_ids)
+            else:
+                 # 2) Fallback về global config
+                 accountant_user_id = config.incoming_recipient_user_id
+                 if not accountant_user_id:
+                     _logger.warning("Zalo Notification not sent: incoming_recipient_user_id not configured")
+                     return
+                 recipient_user_ids = [accountant_user_id]
 
         else:
             _logger.info("Zalo Notification skip: picking %s has unsupported picking_type_code=%s", self.name, self.picking_type_code)
