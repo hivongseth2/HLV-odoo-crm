@@ -4,7 +4,7 @@ import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
-// PHẦN 1: UI RENDERER (VẼ GIAO DIỆN) - GIỮ NGUYÊN
+// PHẦN 1: GIAO DIỆN HIỂN THỊ TỒN KHO (UI RENDERER)
 // =============================================================================
 
 const RPC_MODEL = "stock.quant";
@@ -100,7 +100,7 @@ function startUiObserver() {
 
 
 // =============================================================================
-// PHẦN 2: LOGIC CHECK (VALIDATOR - CÓ SỬA ĐỔI CHO PHIẾU TỰ DO)
+// PHẦN 2: VALIDATOR (CÓ CHẾ ĐỘ NGOẠI LỆ CHO KIỂM KÊ)
 // =============================================================================
 
 function extractId(field) { return field && field.id ? field.id : (Array.isArray(field) ? field[0] : field); }
@@ -122,7 +122,7 @@ function safePlaySound(env, type = 'error') {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V42: AD-HOC TRANSFER SUPPORT");
+        console.log("🚀 [HLV] V43: INVENTORY MODE SUPPORT");
         
         startUiObserver();
 
@@ -139,18 +139,31 @@ patch(BarcodeModel.prototype, {
             // 1. NHẬN DIỆN SẢN PHẨM
             const product = await this._identifyProductSafe(barcode);
             
-            // 2. LẤY VỊ TRÍ
+            // 2. LẤY THÔNG TIN VỊ TRÍ
             let currentLoc = this.location;
             let currentLocId = currentLoc ? currentLoc.id : null;
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
             let locName = (currentLoc?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
-            // 3. THỰC HIỆN LOGIC
-            if (product && this.currentState.lines) {
-                // A. Kiểm tra xem ĐÂY CÓ PHẢI LÀ PHIẾU CÓ KẾ HOẠCH KHÔNG?
-                // Logic: Nếu TOÀN BỘ phiếu có ít nhất 1 dòng có Demand > 0 => Là phiếu Kế hoạch.
-                //        Nếu tất cả demand đều = 0 => Là phiếu Tự do.
+            // 3. XÁC ĐỊNH LOẠI PHIẾU (QUAN TRỌNG)
+            // Lấy tên loại hoạt động (VD: "Kho Bến Cam: Kiểm kê kho")
+            let pickingTypeName = "";
+            if (this.record.picking_type_id) {
+                pickingTypeName = Array.isArray(this.record.picking_type_id) ? this.record.picking_type_id[1] : (this.record.picking_type_id.display_name || "");
+            }
+            
+            // Nếu tên có chữ "Kiểm", "Inventory", "Adjust" -> Bật chế độ Kiểm kê (Bỏ qua mọi Check)
+            const isInventoryMode = /Kiểm|Inventory|Số lượng|Adjust/i.test(pickingTypeName);
+
+            if (isInventoryMode) {
+                console.log(`🛡️ [HLV] Chế độ Kiểm kê (${pickingTypeName}) -> Bỏ qua Check.`);
+            }
+
+            // 4. THỰC HIỆN LOGIC CHECK (Chỉ chạy nếu KHÔNG PHẢI chế độ Kiểm kê)
+            if (product && this.currentState.lines && !isInventoryMode) {
+                
+                // A. Check xem có phải phiếu tự do không (Ad-hoc)
                 const isPlannedOperation = this.currentState.lines.some(l => getLineDemand(l) > 0);
 
                 const lines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
@@ -166,24 +179,22 @@ patch(BarcodeModel.prototype, {
                     if (currentLocId && extractId(l.location_id) === currentLocId) qtyAtLoc += d;
                 });
 
-                // --- CHECK 1: CHẶN QUÉT NGOÀI KẾ HOẠCH (Chỉ áp dụng cho Phiếu Kế hoạch) ---
+                // --- CHECK 1: CHẶN QUÉT NGOÀI KẾ HOẠCH (Chỉ áp dụng cho Phiếu Kế hoạch thông thường) ---
                 if (isPlannedOperation) {
-                    // Nếu phiếu có kế hoạch mà sản phẩm này không có trong demand -> CHẶN
                     if (totalDemand === 0) {
                         safePlaySound(this.env, 'error');
                         alert(`⚠️ SẢN PHẨM NGOÀI KẾ HOẠCH!\nSP: ${product.display_name}`);
                         return; 
                     }
-                    // Nếu quét quá số lượng -> CHẶN
                     if (totalDone >= totalDemand) {
                         safePlaySound(this.env, 'error');
                         alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\nSP: ${product.display_name}`);
                         return; 
                     }
                 }
-                // Nếu là Phiếu Tự do (isPlannedOperation = false) -> Bỏ qua Check 1, cho phép quét thêm dòng mới.
 
-                // --- CHECK 2: CHECK TỒN KHO & VỊ TRÍ (Luôn luôn kiểm tra để tránh xuất âm) ---
+                // --- CHECK 2: CHECK TỒN KHO THỰC TẾ (Chỉ áp dụng cho Phiếu Xuất/Chuyển thông thường) ---
+                // (Phiếu kiểm kê được phép phát hiện hàng thừa -> Không check cái này)
                 const orm = this.orm || this.env.services.orm;
                 if (orm) {
                     const res = await orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
