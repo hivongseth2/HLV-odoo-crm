@@ -106,7 +106,7 @@ class PurchaseOrder(models.Model):
             f"👤 NCC: {partner_name}\n"
             f"📅 Ngày đặt: {self.date_order.strftime('%d/%m/%Y')}\n"
             f"📅 Ngày về dự kiến: {expected_date}\n"
-            f"💳 Điều kiện TT: {payment_term}\n"
+            f"👤 Số người liên hệ của NCC: {payment_term}\n"
             f"🚚 Giao hàng: {delivery_method}\n"
             f"📍 Địa điểm giao: {delivery_address}\n"
             f"--------------------\n"
