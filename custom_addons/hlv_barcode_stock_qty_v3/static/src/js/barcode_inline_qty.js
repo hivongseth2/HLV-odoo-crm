@@ -3,18 +3,15 @@
 import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
-console.error("🔥🔥🔥 [HLV DEBUG] FILE JS V39 ĐÃ ĐƯỢC NẠP! 🔥🔥🔥");
-
 // =============================================================================
 // PHẦN 1: GIAO DIỆN HIỂN THỊ TỒN KHO (UI RENDERER)
+// (Giữ nguyên phần này vì đã hoạt động tốt)
 // =============================================================================
 
 const RPC_MODEL = "stock.quant";
 const RPC_METHOD = "get_qty_by_default_code_at_warehouse";
 
-// Hàm gọi API thủ công
 async function callKw(model, method, args = [], kwargs = {}) {
-    // console.log(`[HLV DEBUG] Đang gọi API lấy tồn kho cho:`, args);
     const res = await fetch("/web/dataset/call_kw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -32,22 +29,17 @@ async function callKw(model, method, args = [], kwargs = {}) {
 
 function insertInline(lineEl, text) {
     const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty") || lineEl.querySelector('div[name="quantity"]');
-    if (!qtyEl) {
-        // console.warn("[HLV DEBUG] Không tìm thấy chỗ chèn Badge cho dòng:", lineEl);
-        return;
-    }
+    if (!qtyEl) return;
     
     let parent = qtyEl.parentElement || qtyEl;
     let badge = parent.querySelector(".hlv-inline-stock");
-    
     if (!badge) {
         badge = document.createElement("div");
         badge.className = "hlv-inline-stock";
-        badge.style.cssText = "display: block; margin-top: 4px; font-size: 12px; color: #155724; background-color: #d4edda; padding: 2px 6px; border-radius: 4px; width: fit-content; font-weight: bold; border: 1px solid #c3e6cb;";
+        badge.style.cssText = "display: block; margin-top: 4px; font-size: 11px; color: #155724; background-color: #d4edda; padding: 2px 6px; border-radius: 4px; width: fit-content; font-weight: bold; border: 1px solid #c3e6cb;";
         parent.appendChild(badge);
     }
     badge.textContent = `📦 ${text}`;
-    // console.log(`[HLV DEBUG] Đã vẽ Badge: ${text}`);
 }
 
 function getDefaultCode(lineEl) {
@@ -79,30 +71,18 @@ async function annotateLine(lineEl) {
         const defaultCode = getDefaultCode(lineEl);
         if (!defaultCode || lineEl.querySelector('.hlv-inline-stock')) return;
 
-        // console.log(`[HLV DEBUG] Tìm thấy dòng mới: ${defaultCode}`);
         const whPrefix = detectWarehousePrefix(lineEl);
-        
-        const result = await callKw(
-            RPC_MODEL,
-            RPC_METHOD,
-            [defaultCode, whPrefix],
-            {}
-        );
-
+        const result = await callKw(RPC_MODEL, RPC_METHOD, [defaultCode, whPrefix], {});
         const labelPrefix = whPrefix || "Tổng";
         insertInline(lineEl, `${labelPrefix}: ${result.qty} ${result.uom}`);
     } catch (e) {
-        console.error("[HLV DEBUG] Lỗi vẽ giao diện:", e);
+        // Silent error
     }
 }
 
-// KHỞI CHẠY UI NGAY LẬP TỨC (KHÔNG CHỜ PATCH)
 function startUiObserver() {
-    console.warn("[HLV DEBUG] Khởi động Observer vẽ giao diện...");
-    
-    // Quét ngay lập tức
+    console.log("🔥🔥🔥 [HLV] UI OBSERVER STARTED 🔥🔥🔥");
     document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
-
     const obs = new MutationObserver((mutations) => {
         for (const m of mutations) {
             m.addedNodes.forEach((node) => {
@@ -112,23 +92,19 @@ function startUiObserver() {
             });
         }
     });
-
     const waitBody = setInterval(() => {
         if (document.body) {
             obs.observe(document.body, { childList: true, subtree: true });
             clearInterval(waitBody);
-            console.log("[HLV DEBUG] Observer đã gắn vào Body!");
-            // Quét lại lần nữa
             document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
         }
     }, 1000);
 }
-// Gọi ngay ở đây!
 startUiObserver();
 
 
 // =============================================================================
-// PHẦN 2: LOGIC KIỂM TRA & CHẶN (VALIDATION PATCH)
+// PHẦN 2: LOGIC CHECK SCAN (VALIDATION)
 // =============================================================================
 
 function extractId(field) { return field && field.id ? field.id : (Array.isArray(field) ? field[0] : field); }
@@ -150,39 +126,32 @@ function safePlaySound(env, type = 'error') {
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.error("🔥🔥🔥 [HLV DEBUG] BARCODE MODEL PATCHED! 🔥🔥🔥");
-        
-        // Chặn F5
+        console.log("🔥🔥🔥 [HLV] VALIDATOR PATCHED 🔥🔥🔥");
         window.addEventListener('beforeunload', (e) => {
-            e.preventDefault();
-            e.returnValue = 'Dữ liệu chưa lưu!';
+            e.preventDefault(); e.returnValue = 'Dữ liệu chưa lưu!';
         });
     },
 
     async processBarcode(barcode) {
-        console.warn(`[HLV DEBUG] >>> ĐANG QUÉT BARCODE: ${barcode}`);
-        
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
         try {
-            // debugger; // <--- BỎ COMMENT DÒNG NÀY ĐỂ SOI CODE
+            console.log(`[HLV] Checking: ${barcode}`);
             
-            // 1. Nhận diện sản phẩm
-            let product = null;
-            if (this.cache.products) product = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
+            // 1. NHẬN DIỆN SẢN PHẨM (Nâng cấp)
+            const product = this._identifyProductSafe(barcode);
             
-            console.log("[HLV DEBUG] Nhận diện sản phẩm:", product ? product.display_name : "Không thấy");
-
-            // 2. Xác định vị trí
-            let currentLocId = this.location ? this.location.id : null;
+            // 2. Lấy vị trí
+            let currentLoc = this.location;
+            let currentLocId = currentLoc ? currentLoc.id : null;
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
-            let locName = (this.location?.display_name || this.record?.display_name || "");
+            let locName = (currentLoc?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
-            console.log(`[HLV DEBUG] Vị trí: ${locName} (ID: ${checkLocId}), Prefix: ${whPrefix}`);
-
-            // 3. Logic Check
+            // 3. THỰC HIỆN CHECK (Chỉ khi là sản phẩm)
             if (product && this.currentState.lines) {
+                console.log(`[HLV] Found Product: ${product.display_name} (ID: ${product.id})`);
+                
                 const lines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
                 let totalDone = 0;
                 let totalDemand = 0;
@@ -196,12 +165,10 @@ patch(BarcodeModel.prototype, {
                     if (currentLocId && extractId(l.location_id) === currentLocId) qtyAtLoc += d;
                 });
 
-                console.log(`[HLV DEBUG] Đã quét: ${totalDone}/${totalDemand}, Tại vị trí này: ${qtyAtLoc}`);
-
-                // Check Kế hoạch
+                // --- CHECK KẾ HOẠCH ---
                 if (totalDemand === 0) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ SẢN PHẨM NGOÀI KẾ HOẠCH!\nSP: ${product.display_name}`);
+                    alert(`⚠️ NGOÀI KẾ HOẠCH!\nSP: ${product.display_name}`);
                     return;
                 }
                 if (totalDone >= totalDemand) {
@@ -210,13 +177,12 @@ patch(BarcodeModel.prototype, {
                     return;
                 }
 
-                // Check Backend API (Check Barcode Availability)
+                // --- CHECK API (VỊ TRÍ & TỒN KHO) ---
                 const orm = this.orm || this.env.services.orm;
                 if (orm) {
-                    console.log("[HLV DEBUG] Gọi API check_barcode_availability...");
+                    // console.log("[HLV] Calling check_barcode_availability...");
                     const res = await orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
-                    console.log("[HLV DEBUG] Kết quả API Check:", res);
-
+                    
                     if (res && res.allow === false) {
                         safePlaySound(this.env, 'error');
                         alert(`⛔ SAI VỊ TRÍ!\n${res.message}`);
@@ -229,23 +195,44 @@ patch(BarcodeModel.prototype, {
                             return;
                         }
                     }
-                } else {
-                    console.error("[HLV DEBUG] Không tìm thấy ORM để gọi API!");
                 }
+            } else {
+                console.log("[HLV] Không phải sản phẩm hoặc không tìm thấy trong Cache.");
             }
 
-            // Nếu mọi thứ OK
-            console.log("[HLV DEBUG] Check OK -> Gọi super.processBarcode");
+            // OK -> Cho qua
             await super.processBarcode(...arguments);
             
-            // Trigger vẽ lại UI
+            // Trigger vẽ lại
             setTimeout(() => {
                 document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
             }, 500);
 
         } catch (err) {
-            console.error("[HLV DEBUG] LỖI FATAL:", err);
+            console.error(err);
             alert("Lỗi: " + err.message);
         }
+    },
+
+    // HÀM TÌM SẢN PHẨM MẠNH HƠN
+    _identifyProductSafe(barcode) {
+        if (!this.cache.products) return null;
+        const products = Object.values(this.cache.products);
+        
+        // 1. Tìm chính xác Barcode hoặc Default Code
+        let found = products.find(p => p.barcode === barcode || p.default_code === barcode || p.code === barcode);
+        if (found) return found;
+
+        // 2. Tìm trong Packaging (Đóng gói) - Rất quan trọng với Odoo
+        if (this.cache.packagings) {
+            const pkg = Object.values(this.cache.packagings).find(p => p.barcode === barcode);
+            if (pkg && pkg.product_id) {
+                // pkg.product_id có thể là ID hoặc mảng [id, name]
+                const pid = Array.isArray(pkg.product_id) ? pkg.product_id[0] : pkg.product_id;
+                return this.cache.products[pid];
+            }
+        }
+
+        return null;
     }
 });
