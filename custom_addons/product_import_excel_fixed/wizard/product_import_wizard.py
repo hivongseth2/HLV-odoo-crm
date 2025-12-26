@@ -240,7 +240,10 @@ class ProductImportWizard(models.TransientModel):
         - Cột 'Tên hàng': Tên sản phẩm
         - Cột 'ĐVT': Đơn vị tính (mặc định 'Cái' nếu không có)
         """
-        df = self._read_excel(self.file, dtype={'Mã hàng': str, 'Tên hàng': str, 'ĐVT': str})
+        df = self._read_excel(self.file, dtype={
+            'Mã hàng': str, 'Tên hàng': str, 'ĐVT': str,
+            'Mã hàng hóa': str, 'Tên hàng hóa': str, 'Đơn vị tính chính': str
+        })
 
         ProductTemplate = self.env['product.template'].sudo()
 
@@ -285,9 +288,14 @@ class ProductImportWizard(models.TransientModel):
                          batch_num + 1, total_batches, start_idx + 1, end_idx)
 
             for _, row in batch_df.iterrows():
-                code = self._clean_string(row.get('Mã hàng'))
-                name = self._clean_string(row.get('Tên hàng'))
-                uom_name = self._clean_string(row.get('ĐVT'))
+                # Hỗ trợ tên cột thay thế (MISA / Template cũ)
+                calc_code = row.get('Mã hàng') if 'Mã hàng' in row else row.get('Mã hàng hóa')
+                calc_name = row.get('Tên hàng') if 'Tên hàng' in row else row.get('Tên hàng hóa')
+                calc_uom = row.get('ĐVT') if 'ĐVT' in row else row.get('Đơn vị tính chính')
+
+                code = self._clean_string(calc_code)
+                name = self._clean_string(calc_name)
+                uom_name = self._clean_string(calc_uom)
 
                 if not code:
                     skipped_no_code += 1
