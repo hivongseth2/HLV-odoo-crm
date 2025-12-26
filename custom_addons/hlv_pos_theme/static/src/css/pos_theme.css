@@ -96,14 +96,15 @@
     align-items: center !important;
     justify-content: flex-start !important;
 
-    background: transparent !important;
-    border: none !important;
+    /* Distinct Button Look */
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
     border-radius: 6px !important;
     color: #475569 !important;
     font-size: 14px !important;
     font-weight: 500 !important;
     transition: all 0.15s ease !important;
-    box-shadow: none !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
     position: relative !important;
 }
 
@@ -115,13 +116,16 @@
 
 /* Hover */
 .category-button.hlv-clean-category:hover {
-    background-color: #f1f5f9 !important;
+    background-color: #f8fafc !important;
+    /* Slightly darker */
+    border-color: #cbd5e1 !important;
     color: #1e293b !important;
 }
 
 /* Active */
 .category-button.hlv-clean-category.active {
     background-color: #eff6ff !important;
+    border-color: #93c5fd !important;
     color: #2563eb !important;
     font-weight: 600 !important;
 }
@@ -130,13 +134,13 @@
 .category-button.hlv-clean-category.active::before {
     content: '' !important;
     position: absolute !important;
-    left: 0 !important;
+    left: 4px !important;
     top: 50% !important;
     transform: translateY(-50%) !important;
     height: 24px !important;
     width: 3px !important;
     background-color: #2563eb !important;
-    border-radius: 0 3px 3px 0 !important;
+    border-radius: 2px !important;
 }
 
 /* Text alignment - Allow Wrapping */
@@ -208,20 +212,25 @@
     object-fit: contain !important;
     flex-shrink: 0 !important;
     border-bottom: 1px solid #f1f5f9 !important;
+    position: relative !important;
+    /* Prevent overlap */
+    display: block !important;
 }
 
 /* Content */
 .hlv-product-card .product-content,
 .hlv-sidebar-layout .product-content {
     padding: 12px !important;
-    background: none !important;
+    background: #ffffff !important;
+    /* Force background */
     display: flex !important;
     flex-direction: column !important;
     flex: 1 !important;
-    justify-content: flex-start !important;
-    /* Align top */
+    justify-content: space-between !important;
+    /* Space name and price */
     text-align: left !important;
     position: relative !important;
+    z-index: 2 !important;
 }
 
 /* Name */
@@ -238,7 +247,7 @@
     line-clamp: 2 !important;
     -webkit-box-orient: vertical !important;
     overflow: hidden !important;
-    height: 40px !important;
+    flex-grow: 0 !important;
 }
 
 /* Price */
@@ -251,11 +260,12 @@
     color: #dc2626 !important;
     /* Red for high visibility */
     background: transparent !important;
-    padding: 0 !important;
+    padding: 4px 0 0 0 !important;
     margin-top: auto !important;
     /* Push to bottom of flex container */
     display: block !important;
-    text-align: left !important;
+    text-align: right !important;
+    /* Right align price typically */
     visibility: visible !important;
     opacity: 1 !important;
     z-index: 5 !important;

@@ -22,7 +22,7 @@ patch(ProductScreen.prototype, {
 
     _cleanCategoryButtonStyles() {
         const cleanup = () => {
-            // 0. ENSURE LAYOUT CLASS (Target Common Parent)
+            // 0. ENSURE LAYOUT CLASS
             const catList = document.querySelector('.category-list') || document.querySelector('.category-button')?.parentElement;
             const prodList = document.querySelector('.product-list:not(.category-list)') || document.querySelector('article.product')?.parentElement;
 
@@ -32,7 +32,6 @@ patch(ProductScreen.prototype, {
                     commonParent.classList.add('hlv-sidebar-layout');
                 }
             } else {
-                // Fallback for older/different structure
                 const productsWidget = document.querySelector('.products-widget');
                 if (productsWidget) {
                     productsWidget.classList.add('hlv-sidebar-layout');
@@ -62,52 +61,73 @@ patch(ProductScreen.prototype, {
                 });
             });
 
-            // 2. CLEAN PRODUCT CARDS & FORCE PRICE
+            // 2. CLEAN PRODUCT CARDS & INJECT PRICE
             const productCards = document.querySelectorAll('.product');
             productCards.forEach((card) => {
-                card.classList.add('hlv-product-card'); // Helper class
+                card.classList.add('hlv-product-card');
 
-                // Remove Odoo color classes
+                // Color Cleanup
                 const classes = [...card.classList];
                 classes.forEach(cls => {
                     if (cls.startsWith('o_colorlist_')) {
                         card.classList.remove(cls);
                     }
                 });
-
-                // CLEAN CARD BG
                 card.style.removeProperty('background-color');
                 card.style.removeProperty('background');
 
-                // CLEAN IMG BG
                 const img = card.querySelector('.product-img');
                 if (img) {
                     img.style.removeProperty('background-color');
                     img.style.removeProperty('background');
                 }
 
-                // FORCE PRICE VISIBILITY
-                const priceEl = card.querySelector('.price-tag, .product-price, .product-price-tag, span[class*="price"]');
-                if (priceEl) {
+                // 3. FORCE PRICE INJECTION
+                let priceEl = card.querySelector('.price-tag, .product-price, .product-price-tag, span[class*="price"], .hlv-price-forced');
+
+                // If missing, CREATE IT
+                if (!priceEl) {
+                    const productId = card.getAttribute('data-product-id');
+                    if (productId && this.env && this.env.services && this.env.services.pos) {
+                        try {
+                            const product = this.env.services.pos.db.get_product_by_id(parseInt(productId));
+                            if (product) {
+                                let priceText = "";
+                                if (typeof this.env.services.pos.format_currency === 'function') {
+                                    priceText = this.env.services.pos.format_currency(product.lst_price);
+                                } else {
+                                    priceText = product.lst_price + " ₫";
+                                }
+
+                                const contentDiv = card.querySelector('.product-content');
+                                if (contentDiv) {
+                                    priceEl = document.createElement('div');
+                                    priceEl.className = 'product-price hlv-price-forced';
+                                    priceEl.innerText = priceText;
+                                    contentDiv.appendChild(priceEl);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn("[HLV Theme] Price inject failed: ", e);
+                        }
+                    }
+                } else {
                     priceEl.classList.add('hlv-price-forced');
                     priceEl.style.color = '#dc2626';
                     priceEl.style.fontWeight = 'bold';
-                    priceEl.style.fontSize = '16px';
                     priceEl.style.display = 'block';
                     priceEl.style.visibility = 'visible';
-                    priceEl.style.opacity = '1';
                 }
             });
         };
 
-        // Run repeatedly to catch Odoo's dynamic rendering
+        // Run repeatedly
         setTimeout(cleanup, 50);
         setTimeout(cleanup, 200);
         setTimeout(cleanup, 500);
         setTimeout(cleanup, 1000);
         setTimeout(cleanup, 3000);
 
-        // Also observe mutations on the main screen if possible
         const screen = document.querySelector('.product-screen') || document.querySelector('.pos-content');
         if (screen) {
             const observer = new MutationObserver(cleanup);
