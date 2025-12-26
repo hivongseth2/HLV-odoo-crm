@@ -686,7 +686,8 @@ class MisaPOSync(models.TransientModel):
                 "x_studio_iu_kin_thanh_ton": custom_field1 or False,
                 'x_studio_ddgh': receive_address or False,
             }
-            po_rec = self.env["purchase.order"].create(po_vals)
+            # Skip Zalo notification during creation (because no lines yet)
+            po_rec = self.env["purchase.order"].with_context(skip_zalo_po_create=True).create(po_vals)
             total_lines = len(lines)
             message = f'✅ Đã tạo: {refno} ({total_lines} dòng)'
             title = '✅ Tạo mới thành công'
@@ -738,6 +739,15 @@ class MisaPOSync(models.TransientModel):
                 picking.location_dest_id = location.id
                 for move in picking.move_ids_without_package:
                     move.location_dest_id = location.id
+
+        # Trigger Zalo Notification manually after lines are added (for new POs)
+        # Check if it was a new creation (not update) - based on logic above, update uses write()
+        if not odoo_po and hasattr(po_rec, '_send_zalo_new_po_notification'):
+            try:
+                _logger.info("Triggering Zalo PO Notification for synced PO %s", po_rec.name)
+                po_rec._send_zalo_new_po_notification()
+            except Exception as e:
+                 _logger.exception("Error sending Zalo PO Notification for %s: %s", po_rec.name, e)
 
         return {
             'type': 'ir.actions.client',

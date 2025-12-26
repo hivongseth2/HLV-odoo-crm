@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "category": "Tools",
     "summary": "Send Zalo ZNS to customers and Stock Notifications to internal staff for warehouse operations",
-    "depends": ["stock", "base"],
+    "depends": ["stock", "base", "purchase"],
     "data": [
         "security/ir.model.access.csv",
         "views/zalo_shared_token_views.xml",

@@ -77,6 +77,11 @@ class ZaloStockNotificationConfig(models.Model):
         help='Nếu bật, sẽ sử dụng token từ Shared Token Manager thay vì token riêng'
     )
     
+    oa_secret_key = fields.Char(
+        'OA Secret Key (Webhook)', 
+        help='Key dùng để verify webhook. Copy từ màn hình Webhook trên Zalo Developer.'
+    )
+    
     # ===== OLD: Deprecated token fields (kept for backward compatibility) =====
     app_id = fields.Char('App ID', default='', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
     secret_key = fields.Char('Secret Key', default='', help='[DEPRECATED] Sử dụng Shared Token Manager thay thế')
@@ -214,9 +219,209 @@ class ZaloStockNotificationConfig(models.Model):
     incoming_recipient_user_id = fields.Char(
         'User ID Kế Toán Nhập Kho',
         default='',
-        help='Zalo User ID của kế toán xử lý TẤT CẢ đơn nhập kho. '
-             'Tất cả phiếu nhập kho sẽ gửi thông báo tới user_id này'
+        help='Zalo User ID của kế toán xử lý TẤT CẢ đơn nhập kho (nếu không cấu hình riêng theo kho). '
+             'Phiếu nhập kho sẽ gửi thông báo tới user_id này'
     )
+
+    incoming_warehouse_mapping_text = fields.Text(
+        'Mapping Kho Nhập → Zalo ID',
+        help=(
+            "Danh sách mapping giữa Mã Kho (Warehouse Code) và Zalo User ID.\n"
+            "Mỗi dòng 1 cấu hình, dạng: WAREHOUSE_CODE:ID1,ID2,...\n"
+            "Ví dụ:\n"
+            "TSN:1111111111111111111\n"
+            "KBC:2222222222222222222,3333333333333333333"
+        ),
+    )
+
+    def _parse_incoming_warehouse_mapping(self):
+        """
+        Parse text incoming_warehouse_mapping_text thành dict:
+        {
+          'TSN': ['1111...'],
+          'KBC': ['2222...', '3333...']
+        }
+        """
+        self.ensure_one()
+        mapping = {}
+        if not self.incoming_warehouse_mapping_text:
+            return mapping
+
+        for raw_line in self.incoming_warehouse_mapping_text.splitlines():
+            line = (raw_line or '').strip()
+            if not line:
+                continue
+            
+            # Bỏ qua dòng comment
+            if line.startswith('#'):
+                continue
+
+            if ':' not in line:
+                _logger.debug("Skip invalid incoming warehouse mapping line: %s", line)
+                continue
+
+            code_part, ids_part = line.split(':', 1)
+            code = (code_part or '').strip().upper()
+            if not code:
+                continue
+
+            # Cho phép phân cách ID bằng ',' hoặc ';'
+            ids_raw = (ids_part or '').replace(';', ',')
+            user_ids = []
+            for chunk in ids_raw.split(','):
+                uid = chunk.strip().strip("'").strip('"')
+                if uid:
+                    user_ids.append(uid)
+
+            if user_ids:
+                mapping[code] = user_ids
+
+        return mapping
+
+    def get_recipients_for_incoming_warehouse(self, warehouse_code):
+        """
+        Lấy danh sách user_id Zalo từ field incoming_warehouse_mapping_text
+        theo mã kho (warehouse_code).
+        
+        Nếu không tìm thấy mapping riêng cho kho, trả về [] (để fallback về global).
+        """
+        self.ensure_one()
+        if not warehouse_code:
+            return []
+
+        norm_code = str(warehouse_code).strip().upper()
+        mapping = self._parse_incoming_warehouse_mapping()
+        
+        # Tìm chính xác theo code
+        if norm_code in mapping:
+             return mapping[norm_code]
+             
+        return []
+
+    # ===================== NEW: Cấu hình gửi tin nhắn khi TẠO ĐƠN MUA HÀNG =====================
+    send_on_po_create = fields.Boolean('Gửi khi tạo đơn mua hàng', default=True)
+
+    po_create_recipient_user_id = fields.Char(
+        'User ID nhận thông báo PO Mới',
+        default='',
+        help='Zalo User ID nhận thông báo khi đơn mua hàng MỚI được tạo (trước khi validate)'
+    )
+
+    po_create_warehouse_mapping_text = fields.Text(
+        'Mapping Kho PO → Zalo ID',
+        help=(
+            "Danh sách mapping giữa Mã Kho (Warehouse Code) và Zalo User ID cho đơn PO mới.\n"
+            "Mỗi dòng 1 cấu hình, dạng: WAREHOUSE_CODE:ID1,ID2,...\n"
+            "Nếu kho của PO có trong này, sẽ gửi cho ID tương ứng, ngược lại fallback về global ID."
+        ),
+    )
+
+    def _parse_po_create_warehouse_mapping(self):
+        """Parse text po_create_warehouse_mapping_text thành dict"""
+        self.ensure_one()
+        mapping = {}
+        if not self.po_create_warehouse_mapping_text:
+            return mapping
+
+        for raw_line in self.po_create_warehouse_mapping_text.splitlines():
+            line = (raw_line or '').strip()
+            if not line or line.startswith('#'): continue
+            if ':' not in line: continue
+
+            code_part, ids_part = line.split(':', 1)
+            code = (code_part or '').strip().upper()
+            if not code: continue
+
+            ids_raw = (ids_part or '').replace(';', ',')
+            user_ids = [u.strip().strip("'").strip('"') for u in ids_raw.split(',') if u.strip()]
+
+            if user_ids:
+                mapping[code] = user_ids
+        return mapping
+
+    def get_recipients_for_po_create(self, warehouse_code):
+        """Lấy recipients cho PO create theo kho"""
+        self.ensure_one()
+        if not warehouse_code:
+            return []
+        norm_code = str(warehouse_code).strip().upper()
+        mapping = self._parse_po_create_warehouse_mapping()
+        return mapping.get(norm_code, [])
+
+    incoming_warehouse_mapping_text = fields.Text(
+        'Mapping Kho Nhập → Zalo ID',
+        help=(
+            "Danh sách mapping giữa Mã Kho (Warehouse Code) và Zalo User ID.\n"
+            "Mỗi dòng 1 cấu hình, dạng: WAREHOUSE_CODE:ID1,ID2,...\n"
+            "Ví dụ:\n"
+            "TSN:1111111111111111111\n"
+            "KBC:2222222222222222222,3333333333333333333"
+        ),
+    )
+
+    def _parse_incoming_warehouse_mapping(self):
+        """
+        Parse text incoming_warehouse_mapping_text thành dict:
+        {
+          'TSN': ['1111...'],
+          'KBC': ['2222...', '3333...']
+        }
+        """
+        self.ensure_one()
+        mapping = {}
+        if not self.incoming_warehouse_mapping_text:
+            return mapping
+
+        for raw_line in self.incoming_warehouse_mapping_text.splitlines():
+            line = (raw_line or '').strip()
+            if not line:
+                continue
+            
+            # Bỏ qua dòng comment
+            if line.startswith('#'):
+                continue
+
+            if ':' not in line:
+                _logger.debug("Skip invalid incoming warehouse mapping line: %s", line)
+                continue
+
+            code_part, ids_part = line.split(':', 1)
+            code = (code_part or '').strip().upper()
+            if not code:
+                continue
+
+            # Cho phép phân cách ID bằng ',' hoặc ';'
+            ids_raw = (ids_part or '').replace(';', ',')
+            user_ids = []
+            for chunk in ids_raw.split(','):
+                uid = chunk.strip().strip("'").strip('"')
+                if uid:
+                    user_ids.append(uid)
+
+            if user_ids:
+                mapping[code] = user_ids
+
+        return mapping
+
+    def get_recipients_for_incoming_warehouse(self, warehouse_code):
+        """
+        Lấy danh sách user_id Zalo từ field incoming_warehouse_mapping_text
+        theo mã kho (warehouse_code).
+        
+        Nếu không tìm thấy mapping riêng cho kho, trả về [] (để fallback về global).
+        """
+        self.ensure_one()
+        if not warehouse_code:
+            return []
+
+        norm_code = str(warehouse_code).strip().upper()
+        mapping = self._parse_incoming_warehouse_mapping()
+        
+        # Tìm chính xác theo code
+        if norm_code in mapping:
+             return mapping[norm_code]
+             
+        return []
 
     # ===== Cấu hình gửi tin nhắn nhắc nhở tương tác =====
     enable_interaction_reminder = fields.Boolean(
