@@ -3,16 +3,18 @@
 import BarcodeModel from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
+console.error("🔥🔥🔥 [HLV DEBUG] FILE JS V39 ĐÃ ĐƯỢC NẠP! 🔥🔥🔥");
+
 // =============================================================================
 // PHẦN 1: GIAO DIỆN HIỂN THỊ TỒN KHO (UI RENDERER)
-// (Code này dùng fetch raw để vẽ giao diện theo Mã Nội Bộ - Default Code)
 // =============================================================================
 
 const RPC_MODEL = "stock.quant";
 const RPC_METHOD = "get_qty_by_default_code_at_warehouse";
 
-// 1. Hàm gọi API thủ công (Giữ nguyên logic của bạn)
+// Hàm gọi API thủ công
 async function callKw(model, method, args = [], kwargs = {}) {
+    // console.log(`[HLV DEBUG] Đang gọi API lấy tồn kho cho:`, args);
     const res = await fetch("/web/dataset/call_kw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -28,46 +30,31 @@ async function callKw(model, method, args = [], kwargs = {}) {
     return json.result;
 }
 
-// 2. Hàm chèn Badge vào dòng
 function insertInline(lineEl, text) {
-    const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty");
-    if (!qtyEl) return;
+    const qtyEl = lineEl.querySelector(".o_barcode_scanner_qty") || lineEl.querySelector('div[name="quantity"]');
+    if (!qtyEl) {
+        // console.warn("[HLV DEBUG] Không tìm thấy chỗ chèn Badge cho dòng:", lineEl);
+        return;
+    }
     
-    // Tìm badge cũ hoặc tạo mới
-    let badge = qtyEl.parentElement.querySelector(".hlv-inline-stock");
+    let parent = qtyEl.parentElement || qtyEl;
+    let badge = parent.querySelector(".hlv-inline-stock");
+    
     if (!badge) {
-        badge = document.createElement("small");
+        badge = document.createElement("div");
         badge.className = "hlv-inline-stock";
         badge.style.cssText = "display: block; margin-top: 4px; font-size: 12px; color: #155724; background-color: #d4edda; padding: 2px 6px; border-radius: 4px; width: fit-content; font-weight: bold; border: 1px solid #c3e6cb;";
-        qtyEl.parentElement.appendChild(badge);
+        parent.appendChild(badge);
     }
     badge.textContent = `📦 ${text}`;
+    // console.log(`[HLV DEBUG] Đã vẽ Badge: ${text}`);
 }
 
-// 3. Detect Kho (TSN/KBC...)
-function detectWarehousePrefix(lineEl) {
-    // Tìm trong dòng
-    const destText = lineEl.querySelector(".o_line_destination_location")?.innerText || "";
-    let prefix = (destText.split("/")[0] || "").trim();
-    if (["TSN", "KBC", "KHD"].includes(prefix)) return prefix;
-
-    // Tìm toàn trang
-    const locHeader = document.querySelector(".o_barcode_location_line");
-    if (locHeader && locHeader.dataset.location) {
-        return locHeader.dataset.location.split("/")[0].toUpperCase();
-    }
-    return null;
-}
-
-// 4. Lấy Default Code (Mã nội bộ) để hiển thị
 function getDefaultCode(lineEl) {
     let txt = lineEl.querySelector(".o_product_ref .o_product_code")?.textContent?.trim()
            || lineEl.querySelector(".o_product_code")?.textContent?.trim()
            || "";
-    
-    // Fallback: Nếu không lấy được text, thử lấy từ data-barcode
     if (!txt && lineEl.dataset.barcode) return lineEl.dataset.barcode;
-    
     if (!txt) {
         const refText = lineEl.querySelector(".o_product_ref")?.textContent?.trim() || "";
         const m = refText.match(/^[A-Z0-9._-]+/i);
@@ -76,16 +63,25 @@ function getDefaultCode(lineEl) {
     return txt;
 }
 
-// 5. Hàm xử lý từng dòng
+function detectWarehousePrefix(lineEl) {
+    const destText = lineEl.querySelector(".o_line_destination_location")?.innerText || "";
+    let prefix = (destText.split("/")[0] || "").trim();
+    if (["TSN", "KBC", "KHD"].includes(prefix)) return prefix;
+    const locHeader = document.querySelector(".o_barcode_location_line");
+    if (locHeader && locHeader.dataset.location) {
+        return locHeader.dataset.location.split("/")[0].toUpperCase();
+    }
+    return null;
+}
+
 async function annotateLine(lineEl) {
     try {
         const defaultCode = getDefaultCode(lineEl);
-        // Nếu không có mã hoặc đã vẽ rồi thì thôi
         if (!defaultCode || lineEl.querySelector('.hlv-inline-stock')) return;
 
+        // console.log(`[HLV DEBUG] Tìm thấy dòng mới: ${defaultCode}`);
         const whPrefix = detectWarehousePrefix(lineEl);
         
-        // GỌI API LẤY TỒN KHO
         const result = await callKw(
             RPC_MODEL,
             RPC_METHOD,
@@ -93,22 +89,19 @@ async function annotateLine(lineEl) {
             {}
         );
 
-        const labelPrefix = whPrefix || (result.base_location?.split("/")?.[0]) || "Tổng";
+        const labelPrefix = whPrefix || "Tổng";
         insertInline(lineEl, `${labelPrefix}: ${result.qty} ${result.uom}`);
     } catch (e) {
-        // Silent error
+        console.error("[HLV DEBUG] Lỗi vẽ giao diện:", e);
     }
 }
 
-// 6. Hàm quét lại giao diện
-function scanExisting() {
+// KHỞI CHẠY UI NGAY LẬP TỨC (KHÔNG CHỜ PATCH)
+function startUiObserver() {
+    console.warn("[HLV DEBUG] Khởi động Observer vẽ giao diện...");
+    
+    // Quét ngay lập tức
     document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
-}
-
-// 7. Khởi tạo Observer
-function setupObserver() {
-    console.log("🔥🔥🔥 UI OBSERVER STARTED 🔥🔥🔥");
-    if (window.__hlv_stock_inline_observer__) return;
 
     const obs = new MutationObserver((mutations) => {
         for (const m of mutations) {
@@ -120,30 +113,25 @@ function setupObserver() {
         }
     });
 
-    const waitBody = () => {
+    const waitBody = setInterval(() => {
         if (document.body) {
             obs.observe(document.body, { childList: true, subtree: true });
-            window.__hlv_stock_inline_observer__ = obs;
-            scanExisting();
-        } else {
-            requestAnimationFrame(waitBody);
+            clearInterval(waitBody);
+            console.log("[HLV DEBUG] Observer đã gắn vào Body!");
+            // Quét lại lần nữa
+            document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
         }
-    };
-    waitBody();
+    }, 1000);
 }
+// Gọi ngay ở đây!
+startUiObserver();
 
 
 // =============================================================================
 // PHẦN 2: LOGIC KIỂM TRA & CHẶN (VALIDATION PATCH)
-// (Code này chạy khi bạn bấm nút quét hoặc gõ barcode)
 // =============================================================================
 
-function extractId(field) {
-    if (!field) return null;
-    if (Array.isArray(field)) return field[0];
-    if (typeof field === 'object') return field.id;
-    return field;
-}
+function extractId(field) { return field && field.id ? field.id : (Array.isArray(field) ? field[0] : field); }
 
 function getLineDemand(line) {
     if (line.reserved_uom_qty > 0) return line.reserved_uom_qty;
@@ -154,22 +142,16 @@ function getLineDemand(line) {
 
 function safePlaySound(env, type = 'error') {
     try {
-        if (env.services.sound) {
-            env.services.sound.play(type);
-        } else {
-            new Audio('/web/static/src/audio/error.mp3').play().catch(() => {});
-        }
+        if (env.services.sound) env.services.sound.play(type);
+        else new Audio('/web/static/src/audio/error.mp3').play().catch(() => {});
     } catch (e) {}
 }
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🔥🔥🔥 LOGIC VALIDATOR ATTACHED 🔥🔥🔥");
+        console.error("🔥🔥🔥 [HLV DEBUG] BARCODE MODEL PATCHED! 🔥🔥🔥");
         
-        // Kích hoạt UI Observer ngay khi Model khởi tạo
-        setupObserver();
-
         // Chặn F5
         window.addEventListener('beforeunload', (e) => {
             e.preventDefault();
@@ -178,25 +160,28 @@ patch(BarcodeModel.prototype, {
     },
 
     async processBarcode(barcode) {
+        console.warn(`[HLV DEBUG] >>> ĐANG QUÉT BARCODE: ${barcode}`);
+        
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
         try {
-            // -----------------------------------------------------------------
-            // BƯỚC 1: KIỂM TRA LOGIC (Dùng Barcode để check chính xác)
-            // -----------------------------------------------------------------
+            // debugger; // <--- BỎ COMMENT DÒNG NÀY ĐỂ SOI CODE
             
-            // A. Nhận diện sản phẩm
+            // 1. Nhận diện sản phẩm
             let product = null;
             if (this.cache.products) product = Object.values(this.cache.products).find(p => p.barcode === barcode || p.default_code === barcode);
             
-            // B. Xác định vị trí và Prefix kho
-            let currentLoc = this.location;
-            let currentLocId = currentLoc ? currentLoc.id : null;
+            console.log("[HLV DEBUG] Nhận diện sản phẩm:", product ? product.display_name : "Không thấy");
+
+            // 2. Xác định vị trí
+            let currentLocId = this.location ? this.location.id : null;
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
-            let locName = (currentLoc?.display_name || this.record?.display_name || "");
+            let locName = (this.location?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
-            // C. Thực hiện kiểm tra
+            console.log(`[HLV DEBUG] Vị trí: ${locName} (ID: ${checkLocId}), Prefix: ${whPrefix}`);
+
+            // 3. Logic Check
             if (product && this.currentState.lines) {
                 const lines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
                 let totalDone = 0;
@@ -208,63 +193,59 @@ patch(BarcodeModel.prototype, {
                     const r = parseFloat(getLineDemand(l));
                     totalDone += d;
                     totalDemand += r;
-                    // Đếm số lượng đã quét tại vị trí đang đứng
-                    if (currentLocId && extractId(l.location_id) === currentLocId) {
-                        qtyAtLoc += d;
-                    }
+                    if (currentLocId && extractId(l.location_id) === currentLocId) qtyAtLoc += d;
                 });
 
-                // --- CHECK 1: KẾ HOẠCH (DEMAND) ---
+                console.log(`[HLV DEBUG] Đã quét: ${totalDone}/${totalDemand}, Tại vị trí này: ${qtyAtLoc}`);
+
+                // Check Kế hoạch
                 if (totalDemand === 0) {
                     safePlaySound(this.env, 'error');
                     alert(`⚠️ SẢN PHẨM NGOÀI KẾ HOẠCH!\nSP: ${product.display_name}`);
-                    return; // Chặn ngay
+                    return;
                 }
                 if (totalDone >= totalDemand) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\nSP: ${product.display_name}\nĐã xong: ${totalDone}/${totalDemand}`);
-                    return; // Chặn ngay
+                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\nSP: ${product.display_name}`);
+                    return;
                 }
 
-                // --- CHECK 2: VỊ TRÍ & TỒN KHO (Gọi API check_barcode_availability) ---
+                // Check Backend API (Check Barcode Availability)
                 const orm = this.orm || this.env.services.orm;
                 if (orm) {
-                    // Gọi hàm check backend (Phải dùng đúng Barcode để check)
+                    console.log("[HLV DEBUG] Gọi API check_barcode_availability...");
                     const res = await orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
-                    
+                    console.log("[HLV DEBUG] Kết quả API Check:", res);
+
                     if (res && res.allow === false) {
                         safePlaySound(this.env, 'error');
                         alert(`⛔ SAI VỊ TRÍ!\n${res.message}`);
-                        return; // Chặn ngay
+                        return;
                     }
-                    
-                    // Check giới hạn tồn kho thực tế
                     if (currentLocId && res && res.qty !== undefined) {
-                        // Nếu quét thêm 1 cái nữa mà vượt quá tồn kho
                         if (qtyAtLoc + 1 > res.qty) {
                             safePlaySound(this.env, 'error');
-                            alert(`⛔ QUÁ TỒN KHO!\n📦 Tồn thực tế tại đây: ${res.qty}\n👉 Bạn đang cố lấy cái thứ: ${qtyAtLoc + 1}`);
-                            return; // Chặn ngay
+                            alert(`⛔ QUÁ TỒN KHO!\n📦 Tồn: ${res.qty}\n👉 Định lấy: ${qtyAtLoc + 1}`);
+                            return;
                         }
                     }
+                } else {
+                    console.error("[HLV DEBUG] Không tìm thấy ORM để gọi API!");
                 }
             }
 
-            // -----------------------------------------------------------------
-            // BƯỚC 2: NẾU HỢP LỆ -> CHO ODOO XỬ LÝ TIẾP
-            // -----------------------------------------------------------------
+            // Nếu mọi thứ OK
+            console.log("[HLV DEBUG] Check OK -> Gọi super.processBarcode");
             await super.processBarcode(...arguments);
-
-            // -----------------------------------------------------------------
-            // BƯỚC 3: CẬP NHẬT LẠI GIAO DIỆN (Để số tồn kho hiện lên dòng mới)
-            // -----------------------------------------------------------------
+            
+            // Trigger vẽ lại UI
             setTimeout(() => {
-                scanExisting();
+                document.querySelectorAll(".o_barcode_line").forEach(annotateLine);
             }, 500);
 
         } catch (err) {
-            console.error(err);
-            alert("Lỗi hệ thống: " + err.message);
+            console.error("[HLV DEBUG] LỖI FATAL:", err);
+            alert("Lỗi: " + err.message);
         }
     }
 });
