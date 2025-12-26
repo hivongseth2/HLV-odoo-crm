@@ -86,10 +86,13 @@
 .hlv-sidebar-layout .category-button {
     width: 100% !important;
     max-width: 100% !important;
-    height: 44px !important;
-    min-height: 44px !important;
-    margin: 2px 0 !important;
-    padding: 0 12px !important;
+    min-height: 48px !important;
+    /* Allow growing */
+    height: auto !important;
+    /* Auto height for wrapping */
+    margin: 4px 0 !important;
+    padding: 8px 12px !important;
+    /* More padding */
 
     display: flex !important;
     align-items: center !important;
@@ -126,20 +129,21 @@
     left: 0 !important;
     top: 50% !important;
     transform: translateY(-50%) !important;
-    height: 20px !important;
+    height: 24px !important;
     width: 3px !important;
     background-color: #2563eb !important;
     border-radius: 0 3px 3px 0 !important;
 }
 
-/* Text alignment */
+/* Text alignment - Allow Wrapping */
 .category-button.hlv-clean-category span,
 .category-button.hlv-clean-category div {
     text-align: left !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    white-space: normal !important;
+    /* Allow wrapping */
+    line-height: 1.3 !important;
     flex: 1 !important;
+    word-break: break-word !important;
 }
 
 /* Icons */
@@ -149,13 +153,17 @@
     height: 20px !important;
     object-fit: contain !important;
     opacity: 0.7 !important;
+    flex-shrink: 0 !important;
 }
 
 
 /* 6. PRODUCT CARDS */
 .hlv-sidebar-layout article.product {
     width: 100% !important;
-    height: auto !important;
+    height: 100% !important;
+    /* Fill grid cell */
+    min-height: 260px !important;
+    /* Ensure space for content */
     margin: 0 !important;
     border: 1px solid #e2e8f0 !important;
     border-radius: 8px !important;
@@ -166,6 +174,7 @@
     flex-direction: column !important;
     overflow: hidden !important;
     transition: transform 0.2s, box-shadow 0.2s !important;
+    position: relative !important;
 }
 
 /* Override any inline bg color from Odoo */
@@ -183,59 +192,78 @@
 /* Image */
 .hlv-sidebar-layout .product-img {
     width: 100% !important;
-    height: 120px !important;
-    /* Compact */
+    height: 140px !important;
+    /* Slightly larger */
     padding: 12px !important;
     background: #ffffff !important;
     object-fit: contain !important;
     flex-shrink: 0 !important;
+    border-bottom: 1px solid #f1f5f9 !important;
 }
 
 /* Content */
 .hlv-sidebar-layout .product-content {
-    padding: 10px !important;
+    padding: 12px !important;
     background: none !important;
     display: flex !important;
     flex-direction: column !important;
     flex: 1 !important;
-    justify-content: space-between !important;
+    justify-content: flex-start !important;
+    /* Align top */
     text-align: left !important;
+    position: relative !important;
 }
 
 /* Name */
 .hlv-sidebar-layout .product-name {
-    font-size: 13px !important;
+    font-size: 14px !important;
     font-weight: 500 !important;
     color: #334155 !important;
     line-height: 1.4 !important;
-    margin-bottom: 6px !important;
+    margin-bottom: 8px !important;
 
     display: -webkit-box !important;
     -webkit-line-clamp: 2 !important;
     line-clamp: 2 !important;
     -webkit-box-orient: vertical !important;
     overflow: hidden !important;
-    height: 38px !important;
-    /* enforce specific height to keep cards aligned */
+    height: 40px !important;
 }
 
 /* Price */
-.hlv-sidebar-layout .product-price {
-    font-size: 15px !important;
+.hlv-sidebar-layout .product-price,
+.hlv-sidebar-layout .product .price-tag,
+.hlv-sidebar-layout .product .product-price-tag {
+    font-size: 16px !important;
     font-weight: 700 !important;
-    color: #0f172a !important;
+    color: #dc2626 !important;
+    /* Red for high visibility */
     background: transparent !important;
     padding: 0 !important;
     margin-top: auto !important;
+    /* Push to bottom of flex container */
     display: block !important;
     text-align: left !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 5 !important;
+}
+
+/* Ensure currency aligns */
+.hlv-sidebar-layout .product-price .currency {
+    font-size: 0.8em !important;
+    font-weight: 600 !important;
+    color: #ef4444 !important;
 }
 
 /* Tags/Qty */
 .hlv-sidebar-layout .product .product-qty {
-    font-size: 10px !important;
+    font-size: 11px !important;
     padding: 2px 6px !important;
+    background: #1e293b !important;
+    color: #fff !important;
     border-radius: 4px !important;
-    top: 6px !important;
-    right: 6px !important;
+    top: 8px !important;
+    right: 8px !important;
+    position: absolute !important;
 }
