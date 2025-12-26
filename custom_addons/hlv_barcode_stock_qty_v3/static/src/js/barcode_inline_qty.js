@@ -5,7 +5,7 @@ import { patch } from "@web/core/utils/patch";
 
 // =============================================================================
 // HELPER FUNCTIONS
-// =============================================================================
+// ======================================================
 
 function extractId(field) {
     if (!field) return null;
@@ -31,35 +31,35 @@ function safePlaySound(env, type = 'error') {
     } catch (e) {}
 }
 
-// Lấy Prefix kho (VD: KBC)
-function getCurrentWarehousePrefix() {
-    const locEl = document.querySelector('.o_barcode_location_line');
-    if (locEl && locEl.dataset.location) {
-        return locEl.dataset.location.split('/')[0].toUpperCase();
-    }
-    return "";
-}
-
 // =============================================================================
-// LOGIC HIỂN THỊ TỒN KHO (FIXED)
+// UI RENDERER (LOGIC VẼ GIAO DIỆN)
 // =============================================================================
 
 async function renderInlineStock(lineEl, orm) {
-    // 1. Lấy mã để tìm kiếm (Ưu tiên Barcode, nếu không có lấy Mã nội bộ)
-    let searchCode = lineEl.dataset.barcode; // VD: 489...
-    let displayCode = ""; // Để lấy prefix check
+    // [DEBUG] 1. Kiểm tra phần tử dòng
+    // console.log("🔍 Checking Line:", lineEl);
+
+    // Bỏ qua nếu đã vẽ rồi
+    if (lineEl.querySelector(".hlv-inline-stock")) return;
+
+    // 1. Lấy mã sản phẩm
+    let searchCode = lineEl.dataset.barcode; 
+    let displayCode = "";
     
-    // Lấy thêm Mã nội bộ (M18 HB8) từ giao diện để đối chiếu
+    // Fallback: Tìm trong HTML nếu dataset trống
     const codeEl = lineEl.querySelector(".o_product_code") || lineEl.querySelector(".o_product_ref");
     if (codeEl) displayCode = codeEl.textContent.trim();
     if (!searchCode) searchCode = displayCode;
 
-    // Nếu đã vẽ rồi hoặc không có mã -> Bỏ qua
-    if (!searchCode || lineEl.querySelector(".hlv-inline-stock")) return;
+    if (!searchCode) {
+        console.warn("⚠️ Line has no barcode/code. Skipping.");
+        return;
+    }
+
+    console.groupCollapsed(`🛠️ Rendering Stock for: ${searchCode}`);
 
     try {
-        // 2. SEARCH ĐA NĂNG: Tìm theo Barcode HOẶC Default Code
-        // Domain: (barcode = code OR default_code = code) AND usage = internal
+        // 2. Gọi API (Search Quants)
         const domain = [
             '|', 
             ['product_id.barcode', '=', searchCode], 
@@ -67,104 +67,108 @@ async function renderInlineStock(lineEl, orm) {
             ['location_id.usage', '=', 'internal']
         ];
         
+        console.log("📡 Calling stock.quant search_read...");
         const quants = await orm.call("stock.quant", "search_read", [domain, ['location_id', 'quantity']]);
-        
-        // 3. Tính tổng theo Prefix Kho (KBC)
+        console.log("📩 API Result:", quants);
+
+        // 3. Tính tổng
         let totalQty = 0;
-        let whPrefix = getCurrentWarehousePrefix() || "KHO"; 
+        let qtyDetails = [];
 
         if (quants && quants.length > 0) {
             quants.forEach(q => {
-                const locName = q.location_id ? q.location_id[1] : ""; 
-                if (locName.toUpperCase().includes(whPrefix)) {
-                    totalQty += q.quantity;
-                }
+                totalQty += q.quantity;
+                qtyDetails.push(`${q.location_id[1]}: ${q.quantity}`);
             });
         }
 
+        console.log(`🧮 Total Qty: ${totalQty}`);
+
         // 4. Vẽ lên giao diện
-        // Chèn vào bên dưới tên sản phẩm hoặc bên cạnh số lượng
-        const destLocDiv = lineEl.querySelector('div[name="destination_location"]'); // Chèn vào chỗ "Vị trí đích" cho thoáng
-        
-        if (destLocDiv) {
+        // Cố gắng tìm nhiều vị trí để chèn, ưu tiên Destination Location
+        const destContainer = lineEl.querySelector('div[name="destination_location"]');
+        const qtyContainer = lineEl.querySelector('div[name="quantity"]');
+        const targetContainer = destContainer || qtyContainer;
+
+        if (targetContainer) {
             let badge = document.createElement("span"); 
             badge.className = "hlv-inline-stock";
-            badge.style.cssText = `
-                font-size: 11px; 
-                color: #fff; 
-                background-color: #28a745; 
-                padding: 1px 6px; 
-                border-radius: 4px; 
-                margin-left: 8px;
-                font-weight: bold; 
-                display: inline-block;
-            `;
-            badge.innerHTML = `<i class="fa fa-database"></i> ${whPrefix}: ${totalQty}`;
-            destLocDiv.appendChild(badge);
+            // Style cứng (Inline Style) để không bị đè
+            badge.style.cssText = "display: inline-block; background-color: #17a2b8; color: white; font-weight: bold; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 5px; z-index: 999; border: 1px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.2);";
+            badge.innerHTML = `<i class="fa fa-cubes"></i> Tồn: ${totalQty}`;
+            badge.title = qtyDetails.join("\n"); // Hover vào xem chi tiết
+
+            targetContainer.appendChild(badge);
+            console.log("✅ Badge injected successfully!");
+        } else {
+            console.error("❌ Cannot find container (destination_location or quantity) to inject badge.");
         }
+
     } catch(e) {
-        console.warn("HLV Render Error:", e);
+        console.error("❌ Render Error:", e);
+    } finally {
+        console.groupEnd();
     }
 }
 
 // =============================================================================
-// MAIN LOGIC V31
+// MAIN LOGIC V32
 // =============================================================================
 
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V31: ROBUST SEARCH + UI FIX");
+        console.log("🚀 [HLV] V32: LOGGER EDITION STARTED");
 
-        // 1. NÚT KÍCH HOẠT F5 (Bắt buộc người dùng bấm để trình duyệt ghi nhận tương tác)
-        const f5Btn = document.createElement('div');
-        f5Btn.innerText = "🔒 BẢO VỆ DỮ LIỆU (ĐANG TẮT)";
-        f5Btn.style.cssText = "position: fixed; bottom: 10px; right: 10px; background: #6c757d; color: white; padding: 5px 10px; border-radius: 5px; font-size: 10px; z-index: 9999; cursor: pointer; opacity: 0.7;";
-        f5Btn.onclick = function() {
-            f5Btn.innerText = "🛡️ ĐÃ BẬT CHẶN F5";
-            f5Btn.style.background = "#28a745";
-            f5Btn.style.opacity = "1";
-            window._f5Protected = true;
-        };
-        document.body.appendChild(f5Btn);
+        // 1. CHÈN NÚT F5 (Cứng đầu nhất có thể)
+        setTimeout(() => {
+            if (!document.getElementById('hlv-f5-btn')) {
+                const f5Btn = document.createElement('div');
+                f5Btn.id = 'hlv-f5-btn';
+                f5Btn.innerText = "⚠️ BẤM VÀO ĐÂY ĐỂ BẬT CHẶN F5";
+                f5Btn.style.cssText = "position: fixed; bottom: 10px; right: 10px; width: 200px; height: 40px; background: #dc3545; color: white; text-align: center; line-height: 40px; font-weight: bold; cursor: pointer; z-index: 2147483647; border-radius: 5px; box-shadow: 0 0 10px rgba(0,0,0,0.5);";
+                
+                f5Btn.onclick = () => {
+                    window._f5Protected = true;
+                    f5Btn.innerText = "🛡️ ĐÃ BẢO VỆ";
+                    f5Btn.style.background = "#28a745";
+                };
+                document.body.appendChild(f5Btn);
+            }
+        }, 2000);
 
-        // Sự kiện chặn thoát
+        // Logic chặn F5
         window.addEventListener('beforeunload', (e) => {
-            // Chỉ chặn nếu người dùng đã bấm nút hoặc đã có tương tác
             if (window._f5Protected) {
                 e.preventDefault();
-                e.returnValue = 'Dữ liệu chưa lưu! Đừng F5!';
-                return 'Dữ liệu chưa lưu! Đừng F5!';
+                e.returnValue = 'DỮ LIỆU CHƯA LƯU!';
+                return 'DỮ LIỆU CHƯA LƯU!';
             }
         });
 
-        // 2. KÍCH HOẠT VẼ UI LIÊN TỤC
-        this._observer = new MutationObserver((mutations) => {
-            document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
-        });
-
-        const waitLoop = setInterval(() => {
-            if (document.body) {
-                this._observer.observe(document.body, { childList: true, subtree: true });
-                clearInterval(waitLoop);
-                // Trigger lần đầu
-                document.querySelectorAll(".o_barcode_line").forEach(line => renderInlineStock(line, this.orm));
+        // 2. QUÉT GIAO DIỆN LIÊN TỤC (BRUTE FORCE RENDER)
+        // Chạy mỗi 2 giây để đảm bảo nếu Odoo vẽ lại làm mất số thì ta vẽ lại tiếp
+        setInterval(() => {
+            // console.log("🔄 Re-scanning DOM for barcode lines...");
+            const lines = document.querySelectorAll(".o_barcode_line");
+            if (lines.length > 0) {
+                lines.forEach(line => renderInlineStock(line, this.orm));
             }
-        }, 1000);
+        }, 2000);
     },
 
     async processBarcode(barcode) {
-        if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
-
-        // Tự động bật bảo vệ F5 khi bắt đầu quét
+        // Tự động bật bảo vệ F5 khi quét
         if (!window._f5Protected) {
             window._f5Protected = true;
-            const btn = document.querySelector('div[style*="position: fixed; bottom: 10px"]');
-            if(btn) { btn.innerText = "🛡️ ĐÃ BẬT CHẶN F5"; btn.style.background = "#28a745"; btn.style.opacity = "1"; }
+            const btn = document.getElementById('hlv-f5-btn');
+            if(btn) { btn.innerText = "🛡️ ĐÃ BẢO VỆ"; btn.style.background = "#28a745"; }
         }
 
+        if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
+
         try {
-            // --- LOGIC VALIDATOR ---
+            // --- VALIDATOR LOGIC (GIỮ NGUYÊN) ---
             const product = await this._identifyProductSafe(barcode);
             let currentLoc = this.location;
             let currentLocId = currentLoc ? currentLoc.id : null;
@@ -187,7 +191,6 @@ patch(BarcodeModel.prototype, {
                     if (currentLocId && lineLocId === currentLocId) qtyDoneAtCurrentLoc += d;
                 });
 
-                // Check 1: Kế hoạch
                 if (totalDemand === 0) {
                     safePlaySound(this.env, 'error');
                     alert(`⚠️ SẢN PHẨM NGOÀI KẾ HOẠCH!\nSP: ${product.display_name}`);
@@ -199,7 +202,6 @@ patch(BarcodeModel.prototype, {
                     return;
                 }
 
-                // Check 2: Vị trí & Tồn kho
                 try {
                     const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
                     if (result && result.allow === false) {
@@ -215,10 +217,11 @@ patch(BarcodeModel.prototype, {
                             return;
                         }
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.error("Validator Error:", e);
+                }
             }
 
-            // --- CHO QUA ---
             await super.processBarcode(...arguments);
 
         } catch (err) {
