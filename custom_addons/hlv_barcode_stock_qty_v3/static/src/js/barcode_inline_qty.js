@@ -1,5 +1,6 @@
 /** @odoo-module **/
-
+console.log("🔥🔥🔥 FILE JS ĐÃ ĐƯỢC TẢI THÀNH CÔNG! 🔥🔥🔥");
+alert("FILE JS ĐÃ CHẠY!");
 import  BarcodeModel  from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
 
