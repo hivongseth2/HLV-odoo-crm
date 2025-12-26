@@ -31,19 +31,19 @@
         <record id="view_product_template_bulk_tree" model="ir.ui.view">
             <field name="name">product.template.bulk.tree</field>
             <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_tree_view"/>
+            <field name="mode">primary</field>
             <field name="arch" type="xml">
-                <list string="Sửa nhanh sản phẩm" editable="bottom" multi_edit="1" sample="1">
-                    <field name="default_code" optional="show" width="100px" string="Mã nội bộ"/>
-                    <field name="name" optional="show" string="Tên sản phẩm"/>
-                    <field name="barcode" optional="show" string="Mã vạch"/>
-                    <field name="list_price" string="Giá bán lẻ" optional="show" widget="monetary"/>
+                <xpath expr="//list" position="attributes">
+                    <attribute name="editable">bottom</attribute>
+                    <attribute name="multi_edit">1</attribute>
+                    <attribute name="sample">1</attribute>
+                </xpath>
+                <field name="list_price" position="after">
                     <field name="x_studio_ga_web" string="Giá Web" optional="show" widget="monetary"/>
                     <field name="x_studio_ga_hng_nim_yt" string="Giá Niêm Yết" optional="show" widget="monetary"/>
                     <field name="x_studio_gi_bn_thng_mi" string="Giá Thương Mại" optional="show" widget="monetary"/>
-                    <field name="uom_id" optional="hide" string="Đơn vị tính"/>
-                    <field name="active" column_invisible="True"/>
-                    <field name="currency_id" column_invisible="True"/>
-                </list>
+                </field>
             </field>
         </record>
 
@@ -55,7 +55,7 @@
             <field name="view_mode">list,form</field>
             <field name="view_id" ref="view_product_template_bulk_tree"/>
             <field name="search_view_id" ref="view_product_template_bulk_search"/>
-            <field name="domain">['|', ('active', '=', True), ('active', '=', False)]</field>
+            <field name="domain">[('active', '=', True)]</field>
             <field name="context">{'search_default_filter_to_sell': 1}</field>
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">
