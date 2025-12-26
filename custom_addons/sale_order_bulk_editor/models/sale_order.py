@@ -5,19 +5,21 @@ from odoo import models, fields, api
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
-    name_link = fields.Html(string='Số báo giá', compute='_compute_name_link')
+    # Create a Many2one field pointing to self to use standard Odoo link behavior
+    sale_order_self_link = fields.Many2one(
+        'sale.order', 
+        string='Mã đơn hàng', 
+        compute='_compute_self_link'
+    )
 
     @api.depends('name')
-    def _compute_name_link(self):
+    def _compute_self_link(self):
         for record in self:
-            # Create a link to the form view of the order
-            url = f'/web#id={record.id}&model=sale.order&view_type=form'
-            # Use font-weight-bold to make it look like a primary field
-            record.name_link = f'<a href="{url}" target="_blank" class="font-weight-bold" style="color: #017e84;">{record.name}</a>'
+            record.sale_order_self_link = record.id
 
     def action_view_order_detail(self):
         """
-        Legacy method kept just in case, or can be removed if strictly cleaning up.
+        Legacy method kept just in case.
         """
         self.ensure_one()
         return {

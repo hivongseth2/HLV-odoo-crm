@@ -15,10 +15,15 @@
                     <attribute name="multi_edit">1</attribute>
                 </xpath>
                 
-                <!-- Replace name field with name_link html field -->
+                <!-- Replace name field with Many2one self-link for standard navigation -->
                 <xpath expr="//field[@name='name']" position="replace">
                     <field name="name" column_invisible="True"/>
-                    <field name="name_link" string="Số báo giá" widget="html"/>
+                    <field name="sale_order_self_link" 
+                           string="Số báo giá" 
+                           readonly="1" 
+                           widget="many2one" 
+                           decoration-bf="1"
+                           width="150px"/>
                 </xpath>
 
             </field>
