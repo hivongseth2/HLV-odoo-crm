@@ -22,6 +22,12 @@ patch(ProductScreen.prototype, {
 
     _cleanCategoryButtonStyles() {
         const cleanup = () => {
+            // 0. ENSURE LAYOUT CLASS (XML replacement)
+            const productsWidget = document.querySelector('.products-widget');
+            if (productsWidget) {
+                productsWidget.classList.add('hlv-sidebar-layout');
+            }
+
             // 1. CLEAN CATEGORY BUTTONS
             const categoryButtons = document.querySelectorAll('.category-button');
             categoryButtons.forEach((btn) => {
@@ -37,18 +43,32 @@ patch(ProductScreen.prototype, {
                 });
             });
 
-            // 2. CLEAN PRODUCT CARDS (Remove random background colors)
+            // 2. CLEAN PRODUCT CARDS & FORCE PRICE
             const productCards = document.querySelectorAll('.product');
             productCards.forEach((card) => {
-                // Odoo puts bg color on the card itself often
+                // CLEAN CARD BG
                 card.style.removeProperty('background-color');
                 card.style.removeProperty('background');
 
-                // Also inner image container if needed
+                // CLEAN IMG BG
                 const img = card.querySelector('.product-img');
                 if (img) {
                     img.style.removeProperty('background-color');
                     img.style.removeProperty('background');
+                }
+
+                // FORCE PRICE VISIBILITY
+                // Try multiple common selectors for Odoo POS prices
+                const priceEl = card.querySelector('.price-tag, .product-price, .product-price-tag, span[class*="price"]');
+                if (priceEl) {
+                    priceEl.classList.add('hlv-price-forced');
+                    // Force inline styles as a backup against extreme CSS specificity issues
+                    priceEl.style.color = '#dc2626'; // Red
+                    priceEl.style.fontWeight = 'bold';
+                    priceEl.style.fontSize = '16px';
+                    priceEl.style.display = 'block';
+                    priceEl.style.visibility = 'visible';
+                    priceEl.style.opacity = '1';
                 }
             });
         };
@@ -58,9 +78,9 @@ patch(ProductScreen.prototype, {
         setTimeout(cleanup, 200);
         setTimeout(cleanup, 500);
         setTimeout(cleanup, 1000);
+        setTimeout(cleanup, 3000); // Late cleaning for slow loaders
 
-        // Also observe mutations if possible, but this simple loop is usually enough for POS
-        // For robustness, let's try a mutation observer on the category list container if we can find it
+        // Also observe mutations if possible
         const productsWidget = document.querySelector('.products-widget');
         if (productsWidget) {
             const observer = new MutationObserver(cleanup);
