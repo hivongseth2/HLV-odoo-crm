@@ -83,16 +83,14 @@
 
 /* 5. CATEGORY ITEMS */
 .category-button.hlv-clean-category,
+/* Support both nested and direct selection */
 .hlv-sidebar-layout .category-button {
     width: 100% !important;
     max-width: 100% !important;
     min-height: 48px !important;
-    /* Allow growing */
     height: auto !important;
-    /* Auto height for wrapping */
     margin: 4px 0 !important;
     padding: 8px 12px !important;
-    /* More padding */
 
     display: flex !important;
     align-items: center !important;
@@ -107,6 +105,12 @@
     transition: all 0.15s ease !important;
     box-shadow: none !important;
     position: relative !important;
+}
+
+/* Force override of Odoo ColorList classes */
+.category-button.hlv-clean-category[class*="o_colorlist_"],
+.product.hlv-product-card[class*="o_colorlist_"] {
+    background-color: #ffffff !important;
 }
 
 /* Hover */
@@ -158,6 +162,8 @@
 
 
 /* 6. PRODUCT CARDS */
+.hlv-product-card,
+/* Use our helper class */
 .hlv-sidebar-layout article.product {
     width: 100% !important;
     height: 100% !important;
@@ -178,10 +184,12 @@
 }
 
 /* Override any inline bg color from Odoo */
-.hlv-sidebar-layout article.product[style] {
+.hlv-sidebar-layout article.product[style],
+.hlv-product-card[style] {
     background-color: #ffffff !important;
 }
 
+.hlv-product-card:hover,
 .hlv-sidebar-layout article.product:hover {
     transform: translateY(-3px) !important;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
@@ -190,6 +198,7 @@
 }
 
 /* Image */
+.hlv-product-card .product-img,
 .hlv-sidebar-layout .product-img {
     width: 100% !important;
     height: 140px !important;
@@ -202,6 +211,7 @@
 }
 
 /* Content */
+.hlv-product-card .product-content,
 .hlv-sidebar-layout .product-content {
     padding: 12px !important;
     background: none !important;
@@ -215,6 +225,7 @@
 }
 
 /* Name */
+.hlv-product-card .product-name,
 .hlv-sidebar-layout .product-name {
     font-size: 14px !important;
     font-weight: 500 !important;
@@ -231,6 +242,7 @@
 }
 
 /* Price */
+.hlv-price-forced,
 .hlv-sidebar-layout .product-price,
 .hlv-sidebar-layout .product .price-tag,
 .hlv-sidebar-layout .product .product-price-tag {
