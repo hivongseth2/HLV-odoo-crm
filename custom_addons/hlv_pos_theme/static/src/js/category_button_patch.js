@@ -1,4 +1,5 @@
 /** @odoo-module **/
+console.log("[HLV POS THEME] JS Loaded - Patching ProductScreen...");
 
 import { useEffect } from "@odoo/owl";
 import { patch } from "@web/core/utils/patch";
@@ -21,23 +22,34 @@ patch(ProductScreen.prototype, {
 
     _cleanCategoryButtonStyles() {
         const cleanup = () => {
-            // Target all category buttons
+            // 1. CLEAN CATEGORY BUTTONS
             const categoryButtons = document.querySelectorAll('.category-button');
             categoryButtons.forEach((btn) => {
-                // Remove ALL inline styles that might interfere
                 btn.removeAttribute('style');
-
-                // Add our theme class
                 btn.classList.add('hlv-clean-category');
 
-                // Also clean up children if they have weird styles (sometimes icons/spans do)
+                // Clean children
                 const children = btn.querySelectorAll('*');
                 children.forEach(child => {
-                    // Only remove background/color from children, keep layout stuff if needed
                     child.style.removeProperty('background-color');
                     child.style.removeProperty('color');
                     child.style.removeProperty('background');
                 });
+            });
+
+            // 2. CLEAN PRODUCT CARDS (Remove random background colors)
+            const productCards = document.querySelectorAll('.product');
+            productCards.forEach((card) => {
+                // Odoo puts bg color on the card itself often
+                card.style.removeProperty('background-color');
+                card.style.removeProperty('background');
+
+                // Also inner image container if needed
+                const img = card.querySelector('.product-img');
+                if (img) {
+                    img.style.removeProperty('background-color');
+                    img.style.removeProperty('background');
+                }
             });
         };
 
@@ -49,10 +61,10 @@ patch(ProductScreen.prototype, {
 
         // Also observe mutations if possible, but this simple loop is usually enough for POS
         // For robustness, let's try a mutation observer on the category list container if we can find it
-        const catList = document.querySelector('.products-widget-control-panel .categories');
-        if (catList) {
+        const productsWidget = document.querySelector('.products-widget');
+        if (productsWidget) {
             const observer = new MutationObserver(cleanup);
-            observer.observe(catList, { childList: true, subtree: true });
+            observer.observe(productsWidget, { childList: true, subtree: true });
         }
     },
 });
