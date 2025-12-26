@@ -12,7 +12,7 @@
     'data': [],
     'assets': {
         # Using the standard asset bundle for Odoo 17/18 POS
-        'point_of_sale.assets': [
+        'point_of_sale._assets_pos': [
             'hlv_pos_theme/static/src/css/pos_theme.css',
             'hlv_pos_theme/static/src/xml/Screens/ProductScreen/ProductsWidget.xml',
             'hlv_pos_theme/static/src/js/category_button_patch.js',
