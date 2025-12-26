@@ -1,4 +1,5 @@
 /** @odoo-module **/
+console.log("[HLV POS THEME] JS Loaded - Patching ProductScreen...");
 
 import { useEffect } from "@odoo/owl";
 import { patch } from "@web/core/utils/patch";
