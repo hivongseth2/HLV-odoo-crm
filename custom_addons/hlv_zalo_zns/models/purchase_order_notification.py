@@ -95,6 +95,7 @@ class PurchaseOrder(models.Model):
         payment_term = self.x_studio_iu_kin_thanh_ton or "N/A"
         delivery_method = self.x_studio_delivery_term or "N/A"
         delivery_address = self.x_studio_ddgh or "N/A"
+        expected_date = self.date_planned.strftime('%d/%m/%Y') if self.date_planned else "N/A"
 
         msg = (
             f"🆕 *ĐƠN MUA HÀNG MỚI*\n"
@@ -102,7 +103,8 @@ class PurchaseOrder(models.Model):
             f"📦 Mã đơn: {self.name}\n"
             f"🏭 Kho: {wh_name}\n"
             f"👤 NCC: {partner_name}\n"
-            f"📅 Ngày: {self.date_order.strftime('%d/%m/%Y')}\n"
+            f"📅 Ngày đặt: {self.date_order.strftime('%d/%m/%Y')}\n"
+            f"📅 Ngày về dự kiến: {expected_date}\n"
             f"💳 Điều kiện TT: {payment_term}\n"
             f"🚚 Giao hàng: {delivery_method}\n"
             f"📍 Địa điểm giao: {delivery_address}\n"
