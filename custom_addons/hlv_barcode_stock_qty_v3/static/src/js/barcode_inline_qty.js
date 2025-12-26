@@ -1,7 +1,11 @@
 /** @odoo-module **/
 
-import  BarcodeModel  from "@stock_barcode/models/barcode_model";
+import { BarcodeModel } from "@stock_barcode/models/barcode_model";
 import { patch } from "@web/core/utils/patch";
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
 
 function extractId(field) {
     if (!field) return null;
@@ -27,39 +31,44 @@ function safePlaySound(env, type = 'error') {
     } catch (e) {}
 }
 
+// =============================================================================
+// MAIN LOGIC V28 - PURE VALIDATOR (CHỈ CHECK - KHÔNG SAVE)
+// =============================================================================
+
 patch(BarcodeModel.prototype, {
     setup() {
         super.setup(...arguments);
-        console.log("🚀 [HLV] V27: STOCK LIMIT CHECK (Fix Negative Scan)");
+        console.log("🚀 [HLV] V28: VALIDATOR ONLY (No Auto-Save)");
+        
+        // Cảnh báo F5 (Vẫn cần thiết vì bây giờ dữ liệu nằm trên RAM, F5 là mất sạch)
         window.addEventListener('beforeunload', (e) => {
-            e.preventDefault(); e.returnValue = 'Đừng F5 khi đang lưu!';
+            e.preventDefault();
+            e.returnValue = 'Dữ liệu chưa được lưu vào Database! Bạn có chắc muốn tải lại?';
         });
     },
 
     async processBarcode(barcode) {
+        // Nếu là lệnh đặc biệt (O-CMD) hoặc barcode rỗng -> Cho qua
         if (!barcode || barcode.startsWith("O-CMD")) return super.processBarcode(...arguments);
 
         try {
-            // 1. NHẬN DIỆN
+            // 1. NHẬN DIỆN SẢN PHẨM (Để lấy thông tin kiểm tra)
             const product = await this._identifyProductSafe(barcode);
             
-            // 2. LẤY VỊ TRÍ
+            // 2. LẤY THÔNG TIN VỊ TRÍ HIỆN TẠI
             let currentLoc = this.location;
             let currentLocId = currentLoc ? currentLoc.id : null;
             let checkLocId = currentLocId || (this.record.location_id ? extractId(this.record.location_id) : null);
             let locName = (currentLoc?.display_name || this.record?.display_name || "");
             let whPrefix = (locName.match(/\b(TSN|KBC|KHD)\b/i) || [])[1]?.toUpperCase();
 
+            // Nếu nhận diện được sản phẩm thì mới kiểm tra
             if (product && this.currentState.lines) {
                 const productLines = this.currentState.lines.filter(l => extractId(l.product_id) === product.id);
                 
                 let totalDone = 0;
                 let totalDemand = 0;
                 let qtyDoneAtCurrentLoc = 0; // Đếm số lượng đã quét tại vị trí đang đứng
-
-                let targetLine = null;
-                let localLine = null;
-                let sourceLine = null;
 
                 productLines.forEach(l => {
                     const d = parseFloat(l.qty_done || 0);
@@ -70,26 +79,23 @@ patch(BarcodeModel.prototype, {
                     const lineLocId = extractId(l.location_id);
                     // Nếu dòng này nằm đúng vị trí đang check -> Cộng vào bộ đếm
                     if (currentLocId && lineLocId === currentLocId) {
-                        localLine = l;
                         qtyDoneAtCurrentLoc += d;
-                    } else if (d < r) {
-                        sourceLine = l;
                     }
                 });
 
-                // 🛑 CHẶN 1: DƯ DEMAND (KẾ HOẠCH)
+                // 🛑 CHECK 1: KIỂM TRA KẾ HOẠCH (DEMAND)
                 if (totalDemand === 0) {
                     safePlaySound(this.env, 'error');
                     alert(`⚠️ SẢN PHẨM NGOÀI KẾ HOẠCH!\nSP: ${product.display_name}`);
-                    return; 
+                    return; // Chặn ngay
                 }
                 if (totalDone >= totalDemand) {
                     safePlaySound(this.env, 'error');
-                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG KẾ HOẠCH!\nSP: ${product.display_name}`);
-                    return;
+                    alert(`⚠️ ĐÃ ĐỦ SỐ LƯỢNG!\nSP: ${product.display_name}\nĐã quét: ${totalDone}/${totalDemand}`);
+                    return; // Chặn ngay
                 }
 
-                // 🌍 CHẶN 2: TỒN KHO THỰC TẾ (QUANTITY LIMIT)
+                // 🌍 CHECK 2: KIỂM TRA VỊ TRÍ & TỒN KHO THỰC TẾ
                 try {
                     const result = await this.orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
                     
@@ -97,45 +103,27 @@ patch(BarcodeModel.prototype, {
                     if (result && result.allow === false) {
                         safePlaySound(this.env, 'error');
                         alert(`⛔ SAI VỊ TRÍ!\n${result.message || "Không có hàng ở đây!"}`);
-                        return;
+                        return; // Chặn ngay
                     }
 
-                    // B. Quá số lượng tồn kho (NEW FIX)
-                    // Chỉ check khi ta đang đứng ở 1 vị trí cụ thể và server trả về số lượng
+                    // B. Quá số lượng tồn kho (Limit Check)
+                    // Logic: Số dự kiến = (Đã quét ở đây + 1) > Tồn kho thực tế -> Báo lỗi
                     if (currentLocId && result && result.qty !== undefined) {
-                        // Số sắp quét = Đã quét tại đây + 1
                         const nextQty = qtyDoneAtCurrentLoc + 1;
                         if (nextQty > result.qty) {
                             safePlaySound(this.env, 'error');
-                            alert(`⛔ QUÁ TỒN KHO THỰC TẾ!\n\n📍 Vị trí: ${currentLoc.display_name}\n📦 Tồn kho: ${result.qty}\n👉 Bạn đang cố lấy: ${nextQty}`);
-                            return; // CHẶN NGAY
+                            alert(`⛔ QUÁ TỒN KHO THỰC TẾ!\n\n📍 Vị trí: ${currentLoc.display_name}\n📦 Tồn kho: ${result.qty}\n👉 Bạn đang cố lấy cái thứ: ${nextQty}`);
+                            return; // Chặn ngay
                         }
                     }
 
-                } catch (e) { console.warn("Check location skipped"); }
-
-                // 🚀 XỬ LÝ GHI (DIRECT WRITE)
-                if (localLine) targetLine = localLine;
-                else if (sourceLine) targetLine = sourceLine;
-
-                if (targetLine && targetLine.id && typeof targetLine.id === 'number') {
-                    const newQty = (targetLine.qty_done || 0) + 1;
-                    const writeVals = { "qty_done": newQty };
-                    if (!localLine && currentLocId) writeVals["location_id"] = currentLocId;
-
-                    await this.orm.write("stock.move.line", [targetLine.id], writeVals);
-                    
-                    targetLine.qty_done = newQty;
-                    if (writeVals["location_id"]) targetLine.location_id = currentLoc;
-                    this.trigger('update');
-                    return;
-                }
+                } catch (e) { console.warn("Check location skipped (Network/Error)"); }
             }
 
-            // FALLBACK
+            // ✅ NẾU TẤT CẢ OK -> CHO ODOO CHẠY LOGIC MẶC ĐỊNH
+            // Hàm này sẽ tự xử lý việc tìm dòng, cộng số lượng vào RAM.
+            // Chúng ta KHÔNG can thiệp thêm gì nữa.
             await super.processBarcode(...arguments);
-            await new Promise(r => setTimeout(r, 50));
-            await this.save();
 
         } catch (err) {
             console.error(err);
