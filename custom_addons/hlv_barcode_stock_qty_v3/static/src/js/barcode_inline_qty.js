@@ -109,7 +109,7 @@ patch(BarcodeModel.prototype, {
 
             // 💾 5. LƯU NGAY
             await this.save();
-            console.log("✅ Save synced!");
+            console.log("✅ Save syncd!");
 
         } catch (err) {
             console.error(err);
