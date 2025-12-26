@@ -1,5 +1,6 @@
 # models/purchase_order_notification.py
 import logging
+from datetime import timedelta
 from odoo import models, api, fields, _
 
 _logger = logging.getLogger(__name__)
@@ -95,7 +96,7 @@ class PurchaseOrder(models.Model):
         payment_term = self.x_studio_iu_kin_thanh_ton or "N/A"
         delivery_method = self.x_studio_delivery_term or "N/A"
         delivery_address = self.x_studio_ddgh or "N/A"
-        expected_date = self.date_planned.strftime('%d/%m/%Y') if self.date_planned else "N/A"
+        expected_date = (self.date_planned + timedelta(hours=7)).strftime('%d/%m/%Y') if self.date_planned else "N/A"
 
         msg = (
             f"🆕 *ĐƠN MUA HÀNG MỚI*\n"
