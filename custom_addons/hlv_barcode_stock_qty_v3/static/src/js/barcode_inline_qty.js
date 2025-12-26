@@ -40,7 +40,7 @@ patch(BarcodeModel.prototype, {
         super.setup(...arguments);
         console.log("🚀 [HLV] V28: VALIDATOR ONLY (No Auto-Save)");
         
-        // Cảnh báo F5 (Vẫn cần  vì bây giờ dữ liệu nằm trên RAM, F5 là mất sạch)
+        // Cảnh báo F5 (Vẫn cần thiết  vì bây giờ dữ liệu nằm trên RAM, F5 là mất sạch)
         window.addEventListener('beforeunload', (e) => {
             e.preventDefault();
             e.returnValue = 'Dữ liệu chưa được lưu vào Database! Bạn có chắc muốn tải lại?';
