@@ -49,7 +49,7 @@ patch(ProductCard.prototype, {
                             priceText = this.props.formattedPrice;
                         } else if (typeof product.get_formatted_price === 'function') {
                             priceText = product.get_formatted_price();
-                        } else if (this.env?.services?.pos) {
+                        } else if (this.env?.services?.pos && typeof this.env.services.pos.format_currency === 'function') {
                             // Safe access to pos service
                             priceText = this.env.services.pos.format_currency(product.lst_price);
                         } else {
