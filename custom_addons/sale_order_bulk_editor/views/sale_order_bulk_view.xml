@@ -15,14 +15,15 @@
                     <attribute name="multi_edit">1</attribute>
                 </xpath>
                 
-                <!-- Add "View Detail" button at the beginning of each row -->
-                <xpath expr="//field[@name='name']" position="before">
-                    <button name="action_view_order_detail" 
-                            type="object" 
-                            string="" 
-                            icon="fa-external-link" 
-                            title="Mở chi tiết đơn hàng"
-                            class="btn-link"/>
+                <!-- Replace name field with Many2one self-link for standard navigation -->
+                <xpath expr="//field[@name='name']" position="replace">
+                    <field name="name" column_invisible="True"/>
+                    <field name="sale_order_self_link" 
+                           string="Số báo giá" 
+                           readonly="1" 
+                           widget="many2one" 
+                           decoration-bf="1"
+                           width="150px"/>
                 </xpath>
 
             </field>

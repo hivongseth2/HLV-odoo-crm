@@ -1,14 +1,25 @@
 # -*- coding: utf-8 -*-
-from odoo import models
+from odoo import models, fields, api
 
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
 
+    # Create a Many2one field pointing to self to use standard Odoo link behavior
+    sale_order_self_link = fields.Many2one(
+        'sale.order', 
+        string='Mã đơn hàng', 
+        compute='_compute_self_link'
+    )
+
+    @api.depends('name')
+    def _compute_self_link(self):
+        for record in self:
+            record.sale_order_self_link = record.id
+
     def action_view_order_detail(self):
         """
-        Mở form view chi tiết của đơn hàng.
-        Dùng khi list view đang ở chế độ editable và muốn xem chi tiết đơn.
+        Legacy method kept just in case.
         """
         self.ensure_one()
         return {
