@@ -9,9 +9,6 @@ import { onMounted, onPatched } from "@odoo/owl"; // Hook của OWL
 // Test xem file chạy chưa
 console.log("🔥🔥🔥 V33 LOADED 🔥🔥🔥");
 
-// =============================================================================
-// HELPER: LOGIC VẼ TỒN KHO (UI)
-// =============================================================================
 
 async function renderStockForLine(component) {
     // component.el là phần tử HTML của dòng đó
