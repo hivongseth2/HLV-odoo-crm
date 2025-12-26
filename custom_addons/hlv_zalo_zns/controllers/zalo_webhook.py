@@ -39,7 +39,6 @@ class ZaloSheetWebhook(http.Controller):
                 
                 # Danh sách nhân viên đặc biệt
                 special_staffs = [
-                    "ĐẶNG THỊ HỒNG HẠNH", 
                     "TRẦN HOÀNG PHI LONG", 
                     "DƯƠNG THỊ HÀ", 
                     "TRƯƠNG THÁI QUANG"
