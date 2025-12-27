@@ -222,71 +222,81 @@ class MisaApiSaleOrder(http.Controller):
         env_admin = request.env(user=admin_user)
         
         try:
-            # Tìm đơn hàng
             SaleOrder = env_admin["sale.order"].sudo()
             order = SaleOrder.search([("name", "=", name)], limit=1)
             
             if not order:
-                return {
-                    "ok": False, 
-                    "error": "not_found", 
-                    "message": f"Không tìm thấy đơn hàng có tên {name}"
-                }
+                return {"ok": False, "error": "not_found", "message": f"Không tìm thấy đơn {name}"}
 
-            # Kiểm tra nếu đã huỷ rồi thì báo OK luôn
             if order.state == 'cancel':
-                return {
-                    "ok": True, 
-                    "status": "already_cancelled", 
-                    "message": f"Đơn hàng {name} đã huỷ trước đó rồi."
-                }
+                return {"ok": True, "status": "already_cancelled", "message": "Đơn đã huỷ rồi."}
             
-            # --- LOGIC MỚI: XỬ LÝ CHỨNG TỪ LIÊN KẾT TRƯỚC ---
-            
-            # 1. Kiểm tra và Huỷ phiếu kho (Picking)
-            # Nếu phiếu kho đã "Hoàn thành" (done) -> Không được huỷ đơn
+            # ---------------------------------------------------------
+            # BƯỚC 1: XỬ LÝ PHIẾU KHO (PICKING)
+            # ---------------------------------------------------------
             for picking in order.picking_ids:
                 if picking.state == 'done':
                     return {
-                        "ok": False,
-                        "error": "picking_done",
-                        "message": f"Đơn {name} đã xuất kho thành công, không thể huỷ qua API."
+                        "ok": False, 
+                        "error": "picking_done", 
+                        "message": f"Lỗi: Đơn {name} đã xuất kho hoàn thành (Done). Phải trả hàng về kho trước khi huỷ."
                     }
-                # Nếu chưa done và chưa cancel -> Huỷ phiếu kho
                 if picking.state not in ('done', 'cancel'):
                     picking.action_cancel()
-
-            # 2. Kiểm tra Hoá đơn (Invoice)
-            # Nếu hoá đơn đã vào sổ (posted) -> Cần xử lý riêng (thường là chặn lại)
+            
+            # ---------------------------------------------------------
+            # BƯỚC 2: XỬ LÝ HOÁ ĐƠN (INVOICE)
+            # ---------------------------------------------------------
             for invoice in order.invoice_ids:
                 if invoice.state == 'posted':
                     return {
-                        "ok": False,
-                        "error": "invoice_posted",
-                        "message": f"Đơn {name} đã xuất hoá đơn tài chính, không thể huỷ qua API."
+                        "ok": False, 
+                        "error": "invoice_posted", 
+                        "message": f"Lỗi: Đơn {name} đã vào sổ hoá đơn. Cần huỷ hoá đơn/làm Credit Note trước."
                     }
-                if invoice.state == 'draft':
-                    invoice.button_cancel()
+                if invoice.state != 'cancel':
+                    invoice.button_cancel() # Hoặc invoice.action_cancel() tuỳ version Odoo
+
+            # ---------------------------------------------------------
+            # BƯỚC 3: MỞ KHÓA (QUAN TRỌNG) & HUỶ SO
+            # ---------------------------------------------------------
+            # Nếu đơn đang bị khoá (state='done'), phải mở khoá trước mới huỷ được
+            if order.state == 'done':
+                order.action_unlock()
+
+            # Gọi action_cancel với context để BỎ QUA các popup cảnh báo (nếu có)
+            # disable_cancel_warning=True giúp vượt qua bước hỏi "Email confirmation"
+            order.with_context(disable_cancel_warning=True).action_cancel()
+
+            # ---------------------------------------------------------
+            # BƯỚC 4: KIỂM TRA & CƯỠNG CHẾ (FALLBACK)
+            # ---------------------------------------------------------
+            # Nếu chạy lệnh trên rồi mà trạng thái vẫn chưa về 'cancel' (do Odoo trả về Window Action)
+            # nhưng phiếu kho và hoá đơn ĐÃ huỷ sạch sẽ rồi -> Ta ép trạng thái về cancel luôn.
             
-            # -----------------------------------------------
+            # Kiểm tra lại xem còn phiếu kho nào sống không
+            all_picking_cancelled = all(p.state == 'cancel' for p in order.picking_ids)
+            all_invoice_cancelled = all(i.state == 'cancel' for i in order.invoice_ids)
+            
+            if order.state != 'cancel':
+                if all_picking_cancelled and all_invoice_cancelled:
+                    # An toàn để cưỡng chế ghi đè
+                    order.write({'state': 'cancel'})
+                else:
+                    # Vẫn còn ràng buộc, không dám cưỡng chế
+                    return {
+                        "ok": False, 
+                        "error": "cancel_failed", 
+                        "message": f"Không thể huỷ đơn {name}. Picking/Invoice chưa huỷ hết."
+                    }
 
-            # 3. Thực hiện huỷ SO
-            order.action_cancel()
-
-            # Kiểm tra lại sau khi gọi hàm
-            if order.state == 'cancel':
-                return {
-                    "ok": True, 
-                    "message": f"Đã huỷ thành công đơn hàng {name}",
-                    "order_id": order.id,
-                    "state": order.state
-                }
-            else:
-                return {
-                    "ok": False, 
-                    "error": "cancel_failed", 
-                    "message": f"Không thể huỷ đơn {name}. Trạng thái hiện tại: {order.state}. Có thể do quyền truy cập hoặc cấu hình kho."
-                }
+            # Kết quả cuối cùng
+            return {
+                "ok": True, 
+                "message": f"Đã huỷ thành công đơn hàng {name}",
+                "order_id": order.id,
+                "state": order.state
+            }
 
         except Exception as e:
             _logger.exception("MISA API /cancel_by_name exception: %s", e)
