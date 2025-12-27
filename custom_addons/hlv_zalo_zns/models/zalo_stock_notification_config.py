@@ -311,7 +311,7 @@ class ZaloStockNotificationConfig(models.Model):
                     f"🏭 Kho: {wh.name}\n"
                     f"👤 Khách hàng: {sale_order.partner_id.name}\n"
                     f"--------------------\n"
-                    f"⚠️ Vui lòng kiểm tra và DỪNG xuất hàng ngay."
+                    f"⚠️ Vui lòng kiểm tra lại đơn và DỪNG xuất hàng ngay."
                 )
 
                 for uid in wh_recipient_ids:
