@@ -222,7 +222,16 @@ class ZaloStockNotificationConfig(models.Model):
         help='Zalo User ID của kế toán xử lý TẤT CẢ đơn nhập kho (nếu không cấu hình riêng theo kho). '
              'Phiếu nhập kho sẽ gửi thông báo tới user_id này'
     )
-
+    cancel_so_warehouse_mapping_text = fields.Text(
+            'Mapping Kho Hủy SO → Zalo ID',
+            help=(
+                "Danh sách mapping giữa Mã Kho (Warehouse Code) và Zalo User ID nhận tin khi HỦY SO.\n"
+                "Mỗi dòng 1 cấu hình, dạng: WAREHOUSE_CODE:ID1,ID2,...\n"
+                "Ví dụ:\n"
+                "TSN:1111111111111111111\n"
+                "KBC:2222222222222222222"
+            ),
+        )
     incoming_warehouse_mapping_text = fields.Text(
         'Mapping Kho Nhập → Zalo ID',
         help=(
@@ -233,6 +242,94 @@ class ZaloStockNotificationConfig(models.Model):
             "KBC:2222222222222222222,3333333333333333333"
         ),
     )
+    
+    def _parse_cancel_so_warehouse_mapping(self):
+        """Parse text cancel_so_warehouse_mapping_text thành dict"""
+        self.ensure_one()
+        mapping = {}
+        if not self.cancel_so_warehouse_mapping_text:
+            return mapping
+
+        for raw_line in self.cancel_so_warehouse_mapping_text.splitlines():
+            line = (raw_line or '').strip()
+            if not line or line.startswith('#'): continue
+            if ':' not in line: continue
+
+            code_part, ids_part = line.split(':', 1)
+            code = (code_part or '').strip().upper()
+            if not code: continue
+
+            ids_raw = (ids_part or '').replace(';', ',')
+            user_ids = [u.strip().strip("'").strip('"') for u in ids_raw.split(',') if u.strip()]
+
+            if user_ids:
+                mapping[code] = user_ids
+        return mapping
+
+    def send_cancel_so_notification(self, sale_order):
+        """
+        Gửi thông báo Zalo khi đơn hàng bị hủy.
+        Logic:
+        1. Lấy tất cả kho liên quan từ các phiếu kho (picking) của SO.
+        2. Nếu chưa có picking, lấy kho mặc định của SO.
+        3. Tra cứu Zalo ID theo mã kho từ cấu hình.
+        4. Gửi tin nhắn.
+        """
+        self.ensure_one()
+        if not sale_order:
+            return
+
+        # 1. Xác định các kho liên quan
+        warehouses = set()
+        
+        # Ưu tiên lấy từ Picking (phiếu kho) đã sinh ra
+        if sale_order.picking_ids:
+            for picking in sale_order.picking_ids:
+                if picking.picking_type_id.warehouse_id:
+                    warehouses.add(picking.picking_type_id.warehouse_id)
+        
+        # Fallback: Nếu chưa có picking, lấy kho trên header SO
+        if not warehouses and sale_order.warehouse_id:
+            warehouses.add(sale_order.warehouse_id)
+
+        if not warehouses:
+            _logger.warning("Cancel SO Notification: No warehouse found for SO %s", sale_order.name)
+            return
+
+        # 2. Lấy mapping cấu hình
+        mapping = self._parse_cancel_so_warehouse_mapping()
+        if not mapping:
+            _logger.warning("Cancel SO Notification: No mapping configured")
+            return
+
+        # 3. Duyệt từng kho và gửi tin
+        for wh in warehouses:
+            wh_code = (wh.code or '').strip().upper()
+            recipient_ids = mapping.get(wh_code, [])
+
+            if not recipient_ids:
+                _logger.info("Cancel SO Notification: No recipient for warehouse %s (%s)", wh.name, wh_code)
+                continue
+            
+            # Soạn nội dung tin nhắn
+            message = (
+                f"❌ ĐƠN HÀNG ĐÃ HỦY\n"
+                f"--------------------\n"
+                f"📦 Mã đơn: {sale_order.name}\n"
+                f"🏭 Kho: {wh.name}\n"
+                f"👤 Khách hàng: {sale_order.partner_id.name}\n"
+                f"📝 Lý do/Trạng thái: Đã hủy trên Odoo\n"
+                f"--------------------\n"
+                f"⚠️ Vui lòng kiểm tra và dừng xuất hàng (nếu có)."
+            )
+
+            # Gửi cho từng thủ kho của kho đó
+            for uid in recipient_ids:
+                try:
+                    self.send_notification_message(uid, message)
+                    _logger.info("Sent Cancel SO msg to %s (Warehouse: %s)", uid, wh_code)
+                except Exception as e:
+                    _logger.exception("Failed to send Cancel SO msg to %s: %s", uid, e)
 
     def _parse_incoming_warehouse_mapping(self):
         """

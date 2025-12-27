@@ -289,6 +289,18 @@ class MisaApiSaleOrder(http.Controller):
                         "error": "cancel_failed", 
                         "message": f"Không thể huỷ đơn {name}. Picking/Invoice chưa huỷ hết."
                     }
+                    
+            
+            if order.state == 'cancel':
+                try:
+                    # Lấy config Zalo đang active
+                    zalo_config = request.env['hlv.zalo.stock.notification'].sudo()._get_active_config()
+                    if zalo_config:
+                        # Gọi hàm gửi thông báo hủy cho danh sách kho
+                        zalo_config.send_cancel_so_notification(order)
+                except Exception as e:
+                    # Log lỗi nhưng KHÔNG chặn return kết quả API
+                    _logger.exception("Failed to send Zalo Cancel Notification for %s: %s", name, e)
 
             # Kết quả cuối cùng
             return {

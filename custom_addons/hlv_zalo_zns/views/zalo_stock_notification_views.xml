@@ -194,6 +194,19 @@
                     </group>
 
 
+                    <group string="❌ Cấu Hình HỦY ĐƠN BÁN (SO)">
+                        <field name="cancel_so_warehouse_mapping_text" widget="text"
+                               placeholder="Ví dụ:&#10;TSN:1111111111111111111&#10;KBC:2222222222222222222" />
+                        <div class="alert alert-danger" role="alert" style="margin-top: 8px;">
+                            <p style="margin: 0;">
+                                Mỗi dòng 1 cấu hình: <code>WAREHOUSE_CODE:ID1,ID2,...</code><br/>
+                                Khi đơn bán bị HỦY, hệ thống sẽ quét các phiếu kho của đơn đó thuộc kho nào 
+                                và gửi tin nhắn cảnh báo cho các ID tương ứng.
+                            </p>
+                        </div>
+                    </group>
+
+
                     <!-- COMMENT: Warehouse mapping - tạm thời không sử dụng -->
                     <!-- <group string="Cấu Hình Người Nhận Thông Báo Theo Kho">
                         <field name="warehouse_recipient_ids" nolabel="1" />
