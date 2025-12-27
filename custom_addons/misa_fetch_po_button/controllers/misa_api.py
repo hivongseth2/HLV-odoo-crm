@@ -233,7 +233,7 @@ class MisaApiSaleOrder(http.Controller):
                     "message": f"Không tìm thấy đơn hàng có tên {name}"
                 }
 
-            # Kiểm tra trạng thái hiện tại
+            # Kiểm tra nếu đã huỷ rồi thì báo OK luôn
             if order.state == 'cancel':
                 return {
                     "ok": True, 
@@ -241,8 +241,36 @@ class MisaApiSaleOrder(http.Controller):
                     "message": f"Đơn hàng {name} đã huỷ trước đó rồi."
                 }
             
-            # Thực hiện huỷ (gọi hàm action_cancel chuẩn của Odoo)
-            # Hàm này sẽ xử lý cả việc huỷ picking/invoice nếu logic Odoo cho phép
+            # --- LOGIC MỚI: XỬ LÝ CHỨNG TỪ LIÊN KẾT TRƯỚC ---
+            
+            # 1. Kiểm tra và Huỷ phiếu kho (Picking)
+            # Nếu phiếu kho đã "Hoàn thành" (done) -> Không được huỷ đơn
+            for picking in order.picking_ids:
+                if picking.state == 'done':
+                    return {
+                        "ok": False,
+                        "error": "picking_done",
+                        "message": f"Đơn {name} đã xuất kho thành công, không thể huỷ qua API."
+                    }
+                # Nếu chưa done và chưa cancel -> Huỷ phiếu kho
+                if picking.state not in ('done', 'cancel'):
+                    picking.action_cancel()
+
+            # 2. Kiểm tra Hoá đơn (Invoice)
+            # Nếu hoá đơn đã vào sổ (posted) -> Cần xử lý riêng (thường là chặn lại)
+            for invoice in order.invoice_ids:
+                if invoice.state == 'posted':
+                    return {
+                        "ok": False,
+                        "error": "invoice_posted",
+                        "message": f"Đơn {name} đã xuất hoá đơn tài chính, không thể huỷ qua API."
+                    }
+                if invoice.state == 'draft':
+                    invoice.button_cancel()
+            
+            # -----------------------------------------------
+
+            # 3. Thực hiện huỷ SO
             order.action_cancel()
 
             # Kiểm tra lại sau khi gọi hàm
@@ -254,11 +282,10 @@ class MisaApiSaleOrder(http.Controller):
                     "state": order.state
                 }
             else:
-                # Trường hợp hiếm: chạy action_cancel xong mà state vẫn chưa về cancel (ví dụ bị lock)
                 return {
                     "ok": False, 
                     "error": "cancel_failed", 
-                    "message": f"Không thể huỷ đơn {name}. Trạng thái hiện tại: {order.state}"
+                    "message": f"Không thể huỷ đơn {name}. Trạng thái hiện tại: {order.state}. Có thể do quyền truy cập hoặc cấu hình kho."
                 }
 
         except Exception as e:
