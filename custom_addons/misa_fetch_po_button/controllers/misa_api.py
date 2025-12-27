@@ -158,7 +158,7 @@ class MisaApiSaleOrder(http.Controller):
         
         
         
-        @http.route('/api/misa/sale_order/cancel_by_name', type='json', auth='none', methods=['POST'], csrf=False)
+    @http.route('/api/misa/sale_order/cancel_by_name', type='json', auth='none', methods=['POST'], csrf=False)
     def api_misa_sale_order_cancel_by_name(self, **payload):
         """
         API Cancel SO theo Name (ví dụ: SO00123).
