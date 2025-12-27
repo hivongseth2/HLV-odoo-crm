@@ -155,3 +155,112 @@ class MisaApiSaleOrder(http.Controller):
         except Exception as e:
             _logger.exception("MISA API /resync_by_name exception: %s", e)
             return {"ok": False, "error": "exception", "message": str(e)}
+        
+        
+        
+        @http.route('/api/misa/sale_order/cancel_by_name', type='json', auth='none', methods=['POST'], csrf=False)
+    def api_misa_sale_order_cancel_by_name(self, **payload):
+        """
+        API Cancel SO theo Name (ví dụ: SO00123).
+        Body JSON:
+        {
+          "token": "...",
+          "name": "SO00123"
+        }
+        """
+        # ==================================================================================
+        # 1. PARSE BODY (Copy logic chuẩn từ các hàm trên để đảm bảo an toàn với Postman)
+        # ==================================================================================
+        try:
+            if not payload:
+                try:
+                    body = request.httprequest.get_json(force=False, silent=True)
+                except Exception:
+                    body = None
+                if body is None:
+                    raw = (request.httprequest.data or b'').decode('utf-8', errors='ignore')
+                    try:
+                        body = json.loads(raw) if raw else {}
+                    except Exception:
+                        body = {}
+                payload = dict(body or {})
+        except Exception:
+            pass
+
+        # ==================================================================================
+        # 2. CHECK TOKEN
+        # ==================================================================================
+        raw_token = (payload.get("token") if isinstance(payload, dict) else None) \
+                    or request.httprequest.headers.get('X-MISA-Token')
+        token = (raw_token or "").strip()
+        
+        # Log request
+        _logger.info("MISA API /cancel_by_name payload=%r token=%r", payload, token)
+
+        expected = request.env['ir.config_parameter'].sudo().get_param('misa.api.token') or "hoanglongvu"
+        
+        # Clean hidden chars
+        token = re.sub(r'[\u200B-\u200D\uFEFF]', '', token)
+        expected = re.sub(r'[\u200B-\u200D\uFEFF]', '', expected)
+
+        if token != expected:
+            return {"ok": False, "error": "invalid_token", "message": "Token không hợp lệ."}
+
+        # ==================================================================================
+        # 3. LOGIC NGHIỆP VỤ (CANCEL)
+        # ==================================================================================
+        name = (payload.get("name") or "").strip()
+        if not name:
+            return {"ok": False, "error": "missing_name", "message": "Thiếu tham số name"}
+
+        # Lấy user Admin
+        admin_user = request.env.ref("base.user_admin", raise_if_not_found=False)
+        if not admin_user:
+            return {"ok": False, "error": "admin_not_found"}
+
+        # Tạo môi trường admin
+        env_admin = request.env(user=admin_user)
+        
+        try:
+            # Tìm đơn hàng
+            SaleOrder = env_admin["sale.order"].sudo()
+            order = SaleOrder.search([("name", "=", name)], limit=1)
+            
+            if not order:
+                return {
+                    "ok": False, 
+                    "error": "not_found", 
+                    "message": f"Không tìm thấy đơn hàng có tên {name}"
+                }
+
+            # Kiểm tra trạng thái hiện tại
+            if order.state == 'cancel':
+                return {
+                    "ok": True, 
+                    "status": "already_cancelled", 
+                    "message": f"Đơn hàng {name} đã huỷ trước đó rồi."
+                }
+            
+            # Thực hiện huỷ (gọi hàm action_cancel chuẩn của Odoo)
+            # Hàm này sẽ xử lý cả việc huỷ picking/invoice nếu logic Odoo cho phép
+            order.action_cancel()
+
+            # Kiểm tra lại sau khi gọi hàm
+            if order.state == 'cancel':
+                return {
+                    "ok": True, 
+                    "message": f"Đã huỷ thành công đơn hàng {name}",
+                    "order_id": order.id,
+                    "state": order.state
+                }
+            else:
+                # Trường hợp hiếm: chạy action_cancel xong mà state vẫn chưa về cancel (ví dụ bị lock)
+                return {
+                    "ok": False, 
+                    "error": "cancel_failed", 
+                    "message": f"Không thể huỷ đơn {name}. Trạng thái hiện tại: {order.state}"
+                }
+
+        except Exception as e:
+            _logger.exception("MISA API /cancel_by_name exception: %s", e)
+            return {"ok": False, "error": "exception", "message": str(e)}
