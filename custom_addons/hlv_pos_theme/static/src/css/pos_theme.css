@@ -310,6 +310,15 @@
 .pos-content .payment-screen {
     background-color: #f1f5f9 !important;
     /* Soft Slate background */
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    width: 100% !important;
+}
+
+/* Grid Wrapper - Try multiple potential specific layout containers */
+.pos-content .payment-screen .main-content,
+.pos-content .payment-screen .screen-content {
     display: grid !important;
     grid-template-columns: 350px 1fr !important;
     /* Fixed left, Flex right */
@@ -317,12 +326,14 @@
     padding: 24px !important;
     height: 100% !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
 }
 
 /* Left Column: Interaction (Methods + Numpad) */
 .payment-screen .payment-buttons-container,
 .payment-screen .left-content {
     grid-column: 1 !important;
+    grid-row: 1 !important;
     display: flex !important;
     flex-direction: column !important;
     gap: 16px !important;
@@ -330,12 +341,14 @@
     border: none !important;
     box-shadow: none !important;
     overflow: hidden !important;
+    height: 100% !important;
 }
 
 /* Right Column: Status (Total + Lines) */
 .payment-screen .payment-status-container,
 .payment-screen .right-content {
     grid-column: 2 !important;
+    grid-row: 1 !important;
     background: #ffffff !important;
     border-radius: 12px !important;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
@@ -344,6 +357,7 @@
     flex-direction: column !important;
     justify-content: flex-start !important;
     border: 1px solid #e2e8f0 !important;
+    height: 100% !important;
 }
 
 /* 2. PAYMENT METHOD BUTTONS */
