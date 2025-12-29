@@ -268,14 +268,19 @@
     /* Red for high visibility */
     background: transparent !important;
     padding: 4px 0 0 0 !important;
-    margin-top: auto !important;
-    /* Push to bottom of flex container */
+
+    /* Absolute positioning to avoid conflict with Quantity Badge */
+    position: absolute !important;
+    bottom: 8px !important;
+    right: 8px !important;
+
     display: block !important;
     text-align: right !important;
     /* Right align price typically */
     visibility: visible !important;
     opacity: 1 !important;
-    z-index: 5 !important;
+    z-index: 20 !important;
+    /* Higher than hover/content */
 }
 
 /* Ensure currency aligns */
