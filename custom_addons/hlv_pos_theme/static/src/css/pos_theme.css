@@ -471,8 +471,12 @@
 }
 
 /* Validate Button - The Big One */
+/* Validate Button - The Big One */
 .payment-screen .button.next,
-.payment-screen .button.validate {
+.payment-screen .button.validate,
+.payment-screen .button,
+.payment-screen button,
+.payment-screen .btn {
     background: #2563eb !important;
     /* Primary Blue */
     color: #ffffff !important;
@@ -495,13 +499,19 @@
 }
 
 .payment-screen .button.next:active,
-.payment-screen .button.validate:active {
+.payment-screen .button.validate:active,
+.payment-screen .button:active,
+.payment-screen button:active,
+.payment-screen .btn:active {
     background: #1d4ed8 !important;
     transform: translateY(1px) !important;
 }
 
 .payment-screen .button.next .fa,
-.payment-screen .button.validate .fa {
+.payment-screen .button.validate .fa,
+.payment-screen .button .fa,
+.payment-screen button .fa,
+.payment-screen .btn .fa {
     margin-right: 8px !important;
 }
 
