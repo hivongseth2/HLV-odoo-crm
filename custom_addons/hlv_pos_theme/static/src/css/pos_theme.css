@@ -470,13 +470,16 @@
     box-shadow: none !important;
 }
 
-/* Validate Button - The Big One */
-/* Validate Button - The Big One */
-.payment-screen .button.next,
-.payment-screen .button.validate,
+/* UNIVERSAL POINTER CURSOR FOR BUTTONS */
 .payment-screen .button,
 .payment-screen button,
 .payment-screen .btn {
+    cursor: pointer !important;
+}
+
+/* Validate Button - The Big One (Specific Styling) */
+.payment-screen .button.next,
+.payment-screen .button.validate {
     background: #2563eb !important;
     /* Primary Blue */
     color: #ffffff !important;
@@ -492,26 +495,20 @@
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    cursor: pointer !important;
-    /* Click cursor */
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
 }
 
+/* Specific Active State for Validate */
 .payment-screen .button.next:active,
-.payment-screen .button.validate:active,
-.payment-screen .button:active,
-.payment-screen button:active,
-.payment-screen .btn:active {
+.payment-screen .button.validate:active {
     background: #1d4ed8 !important;
     transform: translateY(1px) !important;
 }
 
+/* Icons in Validate */
 .payment-screen .button.next .fa,
-.payment-screen .button.validate .fa,
-.payment-screen .button .fa,
-.payment-screen button .fa,
-.payment-screen .btn .fa {
+.payment-screen .button.validate .fa {
     margin-right: 8px !important;
 }
 
