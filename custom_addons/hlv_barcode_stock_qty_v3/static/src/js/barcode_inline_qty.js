@@ -183,10 +183,10 @@ patch(BarcodeModel.prototype, {
                         return; 
                     }
                 }
-
+                const isTransit = locName.includes("Physical Locations") || locName.includes("Inter-warehouse");
                 // B. CHECK TỒN KHO (CHỈ ÁP DỤNG NẾU KHÔNG PHẢI LÀ NHẬP HÀNG)
                 // Nếu là Incoming (Nhập) -> Bỏ qua bước check này vì ta đang lấy hàng từ Nhà cung cấp
-                if (!isIncoming) {
+                if (!isIncoming && !isTransit) {
                     const orm = this.orm || this.env.services.orm;
                     if (orm) {
                         const res = await orm.call("stock.quant", "check_barcode_availability", [barcode, whPrefix, checkLocId]);
