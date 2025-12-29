@@ -368,19 +368,25 @@
 .payment-screen .paymentmethods {
     display: flex !important;
     flex-direction: column !important;
-    gap: 10px !important;
+    gap: 8px !important;
     overflow-y: auto !important;
-    max-height: 40% !important;
-    /* Reserve space for numpad */
-    padding: 4px !important;
-    /* Prevent shadow cutout */
+    flex: 1 !important;
+    /* Grow to fill available space */
+    min-height: 0 !important;
+    /* Allow shrinking for scrolling */
+    padding: 2px !important;
+    margin-bottom: 16px !important;
+    /* Spacing from numpad */
+    max-height: none !important;
+    /* Remove fixed limit */
 }
 
 .payment-screen .paymentmethod {
     background: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
     border-radius: 8px !important;
-    padding: 16px 20px !important;
+    padding: 0 16px !important;
+    /* Adjusted padding */
     font-size: 15px !important;
     font-weight: 500 !important;
     color: #334155 !important;
@@ -388,15 +394,18 @@
     transition: all 0.2s ease !important;
     display: flex !important;
     align-items: center !important;
-    min-height: 60px !important;
+    min-height: 56px !important;
+    /* Slightly more compact */
     margin: 0 !important;
-    /* Override Odoo margin */
+    cursor: pointer !important;
+    /* Ensure pointer */
+    flex-shrink: 0 !important;
+    /* Don't squash */
 }
 
 .payment-screen .paymentmethod:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
-    border-color: #cbd5e1 !important;
+    transform: translateY(-1px) !important;
+    border-color: #94a3b8 !important;
 }
 
 .payment-screen .paymentmethod.selected {
@@ -414,18 +423,17 @@
 
 /* 3. NUMPAD styling */
 .payment-screen .payment-numpad {
-    margin-top: auto !important;
-    /* Push to bottom of left col */
+    flex: 0 0 auto !important;
+    /* Don't grow/shrink */
     background: transparent !important;
     padding: 0 !important;
-    gap: 8px !important;
 }
 
 .payment-screen .numpad {
     display: grid !important;
     grid-template-columns: repeat(4, 1fr) !important;
-    /* standard 3 + 1 func col */
-    gap: 8px !important;
+    gap: 12px !important;
+    /* Increased gap */
     width: 100% !important;
 }
 
@@ -434,21 +442,32 @@
     background: #ffffff !important;
     border: 1px solid #e2e8f0 !important;
     border-radius: 8px !important;
-    font-size: 18px !important;
+    font-size: 20px !important;
+    /* Larger text */
     font-weight: 600 !important;
-    color: #475569 !important;
-    height: 56px !important;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
-    transition: background 0.1s !important;
+    color: #334155 !important;
+    height: 60px !important;
+    /* Taller buttons */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.1s !important;
+    cursor: pointer !important;
+    /* Click cursor */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    width: auto !important;
+    /* Let grid handle width */
 }
 
 .payment-screen .numpad button:hover {
-    background: #f8fafc !important;
+    background: #f1f5f9 !important;
+    transform: translateY(-1px) !important;
 }
 
 .payment-screen .numpad button:active {
-    background: #e2e8f0 !important;
-    transform: scale(0.98) !important;
+    transform: translateY(1px) !important;
+    box-shadow: none !important;
 }
 
 /* Validate Button - The Big One */
@@ -458,16 +477,21 @@
     /* Primary Blue */
     color: #ffffff !important;
     border: none !important;
-    font-size: 20px !important;
-    font-weight: 700 !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
     border-radius: 8px !important;
-    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2) !important;
-    margin-top: 16px !important;
-    height: 64px !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
+    margin-top: 24px !important;
+    /* More separation */
+    height: 56px !important;
     width: 100% !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    cursor: pointer !important;
+    /* Click cursor */
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
 }
 
 .payment-screen .button.next:active,
@@ -482,72 +506,77 @@
 }
 
 /* 4. TOTAL & STATUS (Right Side) */
-.payment-screen .total {
-    font-size: 64px !important;
-    font-weight: 800 !important;
-    color: #1e293b !important;
-    text-align: center !important;
-    margin-bottom: 40px !important;
-    letter-spacing: -1px !important;
+/* Cleanup Visual Noise */
+
+.payment-screen .right-content {
+    border: none !important;
+    /* Remove outer border */
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05) !important;
+    /* Cleaner shadow */
 }
 
-/* Payment Lines Table styling */
+.payment-screen .total {
+    font-size: 56px !important;
+    /* Slightly smaller for balance */
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    margin-bottom: 32px !important;
+}
+
+/* Payment Status Panel - Simplify */
+.payment-screen .payment-status-container {
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
 .payment-screen .paymentlines {
-    border: 1px solid #f1f5f9 !important;
+    border: 1px solid #e2e8f0 !important;
     border-radius: 8px !important;
-    overflow: hidden !important;
-    margin-bottom: 24px !important;
+    margin-bottom: auto !important;
+    /* Push remaining down */
 }
 
 .payment-screen .paymentline {
     background: #ffffff !important;
+    padding: 18px 24px !important;
     border-bottom: 1px solid #f1f5f9 !important;
-    padding: 16px !important;
-    font-size: 16px !important;
 }
 
 .payment-screen .paymentline.selected {
     background: #f8fafc !important;
 }
 
-.payment-screen .paymentline .col-name {
-    font-weight: 500 !important;
-    color: #334155 !important;
-}
-
-.payment-screen .paymentline .col-tendered {
-    font-weight: 700 !important;
-    color: #0f172a !important;
-    font-size: 18px !important;
-}
-
-/* Remaining / Change */
+/* Remaining / Change - Flat Look */
 .payment-screen .payment-status {
-    margin-top: auto !important;
-    border-top: 2px dashed #e2e8f0 !important;
-    padding-top: 24px !important;
-    text-align: center !important;
+    margin-top: 24px !important;
+    border: 1px solid #e2e8f0 !important;
+    /* Single border outline */
+    border-radius: 12px !important;
+    padding: 24px !important;
+    background: #f8fafc !important;
+    /* Light back for contrast */
+}
+
+.payment-screen .payment-status.total-due {
+    background: #fef2f2 !important;
+    /* Subtle Red tint */
+    border-color: #fecaca !important;
+}
+
+.payment-screen .payment-status.change {
+    background: #f0fdf4 !important;
+    /* Subtle Green tint */
+    border-color: #bbf7d0 !important;
 }
 
 .payment-screen .payment-status .label {
-    font-size: 14px !important;
     color: #64748b !important;
-    text-transform: uppercase !important;
-    letter-spacing: 1px !important;
-    margin-bottom: 8px !important;
+    font-weight: 600 !important;
+    margin-bottom: 4px !important;
 }
 
 .payment-screen .payment-status .amount {
-    font-size: 32px !important;
-    font-weight: 700 !important;
-}
-
-.payment-screen .payment-status.total-due .amount {
-    color: #dc2626 !important;
-    /* Red for due */
-}
-
-.payment-screen .payment-status.change .amount {
-    color: #16a34a !important;
-    /* Green for change */
+    font-size: 36px !important;
 }
