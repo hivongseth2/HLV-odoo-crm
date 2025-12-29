@@ -123,27 +123,39 @@
     transform: translateY(-1px) !important;
 }
 
-/* Active / Highlighted - High Contrast */
+/* Active / Highlighted - Light Background per user request */
 .category-button.hlv-clean-category.active,
-.category-button.hlv-clean-category.highlight {
-    background-color: #2563eb !important;
-    /* Solid Primary Blue */
-    border-color: #2563eb !important;
-    color: #ffffff !important;
-    /* White Text */
-    font-weight: 600 !important;
-    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
+.category-button.hlv-clean-category.highlight,
+.category-button.hlv-clean-category.o-active,
+.category-button.hlv-clean-category.selected {
+    background-color: #dbeafe !important;
+    /* Light Blue 100/200 */
+    border-color: #60a5fa !important;
+    /* Blue 400 */
+    color: #1e3a8a !important;
+    /* Dark Blue Text */
+    font-weight: 700 !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
 }
 
-/* Remove the little side indicator if we are doing solid background */
-.category-button.hlv-clean-category.active::before {
+/* Remove the little side indicator if we are doing background */
+.category-button.hlv-clean-category.active::before,
+.category-button.hlv-clean-category.highlight::before,
+.category-button.hlv-clean-category.o-active::before,
+.category-button.hlv-clean-category.selected::before {
     display: none !important;
 }
 
 /* Ensure text color update on active */
 .category-button.hlv-clean-category.active span,
-.category-button.hlv-clean-category.active div {
-    color: #ffffff !important;
+.category-button.hlv-clean-category.active div,
+.category-button.hlv-clean-category.highlight span,
+.category-button.hlv-clean-category.highlight div,
+.category-button.hlv-clean-category.o-active span,
+.category-button.hlv-clean-category.o-active div,
+.category-button.hlv-clean-category.selected span,
+.category-button.hlv-clean-category.selected div {
+    color: #1e3a8a !important;
 }
 
 /* Text alignment - Allow Wrapping */
