@@ -107,6 +107,10 @@
     transition: all 0.15s ease !important;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
     position: relative !important;
+
+    /* PREVENT BLURRING / FADING */
+    opacity: 1 !important;
+    filter: none !important;
 }
 
 /* Force override of Odoo ColorList classes */
@@ -117,31 +121,33 @@
 
 /* Hover */
 .category-button.hlv-clean-category:hover {
-    background-color: #f8fafc !important;
-    /* Slightly darker */
+    background-color: #f1f5f9 !important;
     border-color: #cbd5e1 !important;
     color: #1e293b !important;
+    transform: translateY(-1px) !important;
 }
 
-/* Active */
-.category-button.hlv-clean-category.active {
-    background-color: #eff6ff !important;
-    border-color: #93c5fd !important;
-    color: #2563eb !important;
-    font-weight: 600 !important;
-}
-
-/* Active Border Indicator */
-.category-button.hlv-clean-category.active::before {
-    content: '' !important;
-    position: absolute !important;
-    left: 4px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    height: 24px !important;
-    width: 3px !important;
+/* Active / Highlighted - High Contrast */
+.category-button.hlv-clean-category.active,
+.category-button.hlv-clean-category.highlight {
     background-color: #2563eb !important;
-    border-radius: 2px !important;
+    /* Solid Primary Blue */
+    border-color: #2563eb !important;
+    color: #ffffff !important;
+    /* White Text */
+    font-weight: 600 !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
+}
+
+/* Remove the little side indicator if we are doing solid background */
+.category-button.hlv-clean-category.active::before {
+    display: none !important;
+}
+
+/* Ensure text color update on active */
+.category-button.hlv-clean-category.active span,
+.category-button.hlv-clean-category.active div {
+    color: #ffffff !important;
 }
 
 /* Text alignment - Allow Wrapping */
