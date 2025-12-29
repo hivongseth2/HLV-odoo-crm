@@ -89,6 +89,7 @@
     max-width: 100% !important;
     min-height: 48px !important;
     height: auto !important;
+    max-height: 80px !important;
     margin: 4px 0 !important;
     padding: 8px 12px !important;
 
@@ -152,6 +153,12 @@
     line-height: 1.3 !important;
     flex: 1 !important;
     word-break: break-word !important;
+
+    /* Line Clamp to prevent overflow */
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
 }
 
 /* Icons */

@@ -77,6 +77,6 @@ patch(ProductCard.prototype, {
         };
 
         onMounted(updatePrice);
-        onPatched(updatePrice);
+        onPatched(() => setTimeout(updatePrice, 0));
     }
 });
