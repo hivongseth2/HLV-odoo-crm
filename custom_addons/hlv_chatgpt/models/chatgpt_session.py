@@ -211,6 +211,7 @@ class HlvChatgptSession(models.Model):
                 category_name=args.get('category', 'Hàng hóa'),
                 product_type=args.get('type', 'goods'), # Hoặc lấy từ args nếu AI gửi
                 cat_id=args.get('category_id', False),
+                price_pu=args.get('price_pu', 0),
             )
             
             return json.dumps({
