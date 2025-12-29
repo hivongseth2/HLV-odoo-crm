@@ -536,10 +536,10 @@ class SaleOrder(models.Model):
         partner_vals = {}
         billing_addr = data.get("BillingAddress")
         partner_phone = data.get("Phone")
-        partner_province = data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText")
+        partner_province = data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText") 
 
         if billing_addr and partner.street != billing_addr:
-            partner_vals['street'] = billing_addr
+            partner_vals['street'] = data.get("ShippingAddress") or billing_addr
         if partner_phone and partner.phone != partner_phone:
             partner_vals['phone'] = partner_phone
         if partner_province and partner.city != partner_province:
@@ -595,7 +595,7 @@ class SaleOrder(models.Model):
                 parent_partner=partner,
                 addr_str=shipping_addr,
                 phone=data.get("Phone"),
-                province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
+                province_text=data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText") ,
                 contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
                 is_e_account=(partner_name in e_accounts)
             )
