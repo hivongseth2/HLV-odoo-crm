@@ -311,29 +311,32 @@
     background-color: #f1f5f9 !important;
     /* Soft Slate background */
     display: flex !important;
-    flex-direction: column !important;
-    height: 100% !important;
-    width: 100% !important;
-}
-
-/* Grid Wrapper - Try multiple potential specific layout containers */
-.pos-content .payment-screen .main-content,
-.pos-content .payment-screen .screen-content {
-    display: grid !important;
-    grid-template-columns: 350px 1fr !important;
-    /* Fixed left, Flex right */
+    flex-direction: row !important;
+    /* Force Side-by-Side */
+    align-items: stretch !important;
     gap: 24px !important;
     padding: 24px !important;
     height: 100% !important;
+    width: 100% !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
 }
 
+/* RESET Inner Wrappers if they exist */
+.pos-content .payment-screen .main-content,
+.pos-content .payment-screen .screen-content {
+    display: contents !important;
+    /* Remove wrapper influence */
+}
+
 /* Left Column: Interaction (Methods + Numpad) */
+/* Target by class AND standard structural assumptions */
 .payment-screen .payment-buttons-container,
 .payment-screen .left-content {
-    grid-column: 1 !important;
-    grid-row: 1 !important;
+    flex: 0 0 380px !important;
+    /* Fixed Width */
+    width: 380px !important;
+    min-width: 380px !important;
     display: flex !important;
     flex-direction: column !important;
     gap: 16px !important;
@@ -347,8 +350,8 @@
 /* Right Column: Status (Total + Lines) */
 .payment-screen .payment-status-container,
 .payment-screen .right-content {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
+    flex: 1 !important;
+    /* Grow to fill */
     background: #ffffff !important;
     border-radius: 12px !important;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
@@ -358,6 +361,7 @@
     justify-content: flex-start !important;
     border: 1px solid #e2e8f0 !important;
     height: 100% !important;
+    overflow-y: auto !important;
 }
 
 /* 2. PAYMENT METHOD BUTTONS */
