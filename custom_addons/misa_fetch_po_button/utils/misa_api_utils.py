@@ -1090,7 +1090,7 @@ class MisaApiUtils(models.AbstractModel):
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
-    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods",cat_id=None):
+    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods",cat_id=None, price_pu=0):
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
@@ -1117,6 +1117,7 @@ class MisaApiUtils(models.AbstractModel):
 
         # --- 2. PAYLOAD ---
         price_val = float(price)
+        price_pu_val = float(price_pu or 0)
         
         payload = {
             "ProductCode": code,
@@ -1145,7 +1146,7 @@ class MisaApiUtils(models.AbstractModel):
                 "CustomField13Text": "",
                 "CustomField14": None,
                 "CustomField15": None,
-                "CustomField16": int(price_val), 
+                "CustomField16": int(price_pu_val), 
                 "Avatar": ""
             },
             
