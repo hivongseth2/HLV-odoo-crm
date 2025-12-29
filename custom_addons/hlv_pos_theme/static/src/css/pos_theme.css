@@ -301,3 +301,235 @@
     right: 8px !important;
     position: absolute !important;
 }
+
+/* =========================================
+   HLV POS THEME - PAYMENT SCREEN REDESIGN 
+   ========================================= */
+
+/* 1. MAIN LAYOUT CONTAINER */
+.pos-content .payment-screen {
+    background-color: #f1f5f9 !important;
+    /* Soft Slate background */
+    display: grid !important;
+    grid-template-columns: 350px 1fr !important;
+    /* Fixed left, Flex right */
+    gap: 24px !important;
+    padding: 24px !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* Left Column: Interaction (Methods + Numpad) */
+.payment-screen .payment-buttons-container,
+.payment-screen .left-content {
+    grid-column: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+}
+
+/* Right Column: Status (Total + Lines) */
+.payment-screen .payment-status-container,
+.payment-screen .right-content {
+    grid-column: 2 !important;
+    background: #ffffff !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+    padding: 32px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+/* 2. PAYMENT METHOD BUTTONS */
+.payment-screen .paymentmethods {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    overflow-y: auto !important;
+    max-height: 40% !important;
+    /* Reserve space for numpad */
+    padding: 4px !important;
+    /* Prevent shadow cutout */
+}
+
+.payment-screen .paymentmethod {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    padding: 16px 20px !important;
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    color: #334155 !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    min-height: 60px !important;
+    margin: 0 !important;
+    /* Override Odoo margin */
+}
+
+.payment-screen .paymentmethod:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+    border-color: #cbd5e1 !important;
+}
+
+.payment-screen .paymentmethod.selected {
+    background: #eff6ff !important;
+    border-color: #3b82f6 !important;
+    color: #1d4ed8 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Icons in methods */
+.payment-screen .paymentmethod .payment-icon {
+    margin-right: 12px !important;
+    font-size: 20px !important;
+}
+
+/* 3. NUMPAD styling */
+.payment-screen .payment-numpad {
+    margin-top: auto !important;
+    /* Push to bottom of left col */
+    background: transparent !important;
+    padding: 0 !important;
+    gap: 8px !important;
+}
+
+.payment-screen .numpad {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    /* standard 3 + 1 func col */
+    gap: 8px !important;
+    width: 100% !important;
+}
+
+.payment-screen .numpad button,
+.payment-screen .mode-button {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: #475569 !important;
+    height: 56px !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+    transition: background 0.1s !important;
+}
+
+.payment-screen .numpad button:hover {
+    background: #f8fafc !important;
+}
+
+.payment-screen .numpad button:active {
+    background: #e2e8f0 !important;
+    transform: scale(0.98) !important;
+}
+
+/* Validate Button - The Big One */
+.payment-screen .button.next,
+.payment-screen .button.validate {
+    background: #2563eb !important;
+    /* Primary Blue */
+    color: #ffffff !important;
+    border: none !important;
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2) !important;
+    margin-top: 16px !important;
+    height: 64px !important;
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.payment-screen .button.next:active,
+.payment-screen .button.validate:active {
+    background: #1d4ed8 !important;
+    transform: translateY(1px) !important;
+}
+
+.payment-screen .button.next .fa,
+.payment-screen .button.validate .fa {
+    margin-right: 8px !important;
+}
+
+/* 4. TOTAL & STATUS (Right Side) */
+.payment-screen .total {
+    font-size: 64px !important;
+    font-weight: 800 !important;
+    color: #1e293b !important;
+    text-align: center !important;
+    margin-bottom: 40px !important;
+    letter-spacing: -1px !important;
+}
+
+/* Payment Lines Table styling */
+.payment-screen .paymentlines {
+    border: 1px solid #f1f5f9 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    margin-bottom: 24px !important;
+}
+
+.payment-screen .paymentline {
+    background: #ffffff !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    padding: 16px !important;
+    font-size: 16px !important;
+}
+
+.payment-screen .paymentline.selected {
+    background: #f8fafc !important;
+}
+
+.payment-screen .paymentline .col-name {
+    font-weight: 500 !important;
+    color: #334155 !important;
+}
+
+.payment-screen .paymentline .col-tendered {
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    font-size: 18px !important;
+}
+
+/* Remaining / Change */
+.payment-screen .payment-status {
+    margin-top: auto !important;
+    border-top: 2px dashed #e2e8f0 !important;
+    padding-top: 24px !important;
+    text-align: center !important;
+}
+
+.payment-screen .payment-status .label {
+    font-size: 14px !important;
+    color: #64748b !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1px !important;
+    margin-bottom: 8px !important;
+}
+
+.payment-screen .payment-status .amount {
+    font-size: 32px !important;
+    font-weight: 700 !important;
+}
+
+.payment-screen .payment-status.total-due .amount {
+    color: #dc2626 !important;
+    /* Red for due */
+}
+
+.payment-screen .payment-status.change .amount {
+    color: #16a34a !important;
+    /* Green for change */
+}
