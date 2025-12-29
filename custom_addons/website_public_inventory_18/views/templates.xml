@@ -25,6 +25,13 @@
             #inv-table {
                 border-collapse: separate; /* Bắt buộc để dùng sticky */
                 border-spacing: 0;
+                border-left: 1px solid #dee2e6;
+            }
+
+            #inv-table th, #inv-table td {
+                border-right: 1px solid #dee2e6;
+                text-align: center !important; /* Căn giữa nội dung */
+                vertical-align: middle;
             }
 
             /* 3. Thiết lập cho dòng header */
