@@ -614,6 +614,8 @@ class MisaPOSync(models.TransientModel):
                 "HLV":"HLV/Stock",
                 "BẾN CAM": "KBC/Tồn kho",
                  "BẾNCAM": "KBC/Tồn kho",
+                "HIỀN ĐỨC": "KHD/Tồn kho",
+                "HIEN DUC ": "KHD/Tồn kho",
             }
 
         if stock_code not in stock_mapping:
