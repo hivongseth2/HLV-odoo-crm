@@ -117,6 +117,7 @@ class PurchaseExportWizard(models.TransientModel):
             ("state", "=", "done"),
             ("date_done", ">=", fields.Date.to_date(self.date_from)),
             ("date_done", "<=", fields.Date.to_date(self.date_to)),
+            ("purchase_id", "!=", False),
         ]
 
     def _partner_code(self, partner):
@@ -233,7 +234,7 @@ class PurchaseExportWizard(models.TransientModel):
             # Invoice-ish fields
             'mau_so_hd': '01GTKT0/001',
             'ky_hieu_hd': 'AB/20E',
-            'so_hoa_don': purchase.origin or "", # Or invoice number if linked? Keep as origin/PO name for now or empty
+            'so_hoa_don': purchase.origin or "" if purchase else "", # Or invoice number if linked? Keep as origin/PO name for now or empty
             'ngay_hoa_don': receipt_date_str, # Changed: Receipt Date
 
             # Bank chi
@@ -248,7 +249,7 @@ class PurchaseExportWizard(models.TransientModel):
 
             # Misc fixed
             'nguoi_giao_hang': 'Vũ Thị Bích Thủy',
-            'dien_giai': purchase.origin or "",
+            'dien_giai': purchase.origin or "" if purchase else "",
             'so_tk_nhan': '0486523679',
             'ten_ngan_hang_nhan': 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam',
             'ly_do_chi': '',
