@@ -376,6 +376,7 @@ class SaleOrder(models.Model):
              "BẾN CAM": "KBC/Tồn kho",
              "BẾNCAM": "KBC/Tồn kho",
              "HIỀN ĐỨC": "KHD/Tồn kho",
+             "HIỀNĐỨC": "KHD/Tồn kho",
         }
 
         old_wh = None

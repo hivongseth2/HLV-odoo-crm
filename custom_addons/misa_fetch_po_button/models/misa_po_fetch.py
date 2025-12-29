@@ -330,6 +330,7 @@ class MisaPOFetch(models.TransientModel):
                 "HLV":"HLV/Stock",
                 "BẾN CAM": "KBC/Tồn kho",
                 "HIỀN ĐỨC": "KHD/Tồn kho",
+                "HIỀNĐỨC": "KHD/Tồn kho",
             }
 
 

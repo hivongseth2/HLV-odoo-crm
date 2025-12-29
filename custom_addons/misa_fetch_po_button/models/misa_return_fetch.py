@@ -35,7 +35,7 @@ class MisaReturnFetch(models.TransientModel):
         stock_mapping = {
             "HCM": "TSN/Stock", "BENCAM": "KBC/Tồn kho",
             "HIENDUC": "KHD/Tồn kho", "HCM_SHOWROOM": "TSNSR/Stock","HLV":"HLV/Stock",
-             "BẾN CAM": "KBC/Tồn kho",
+             "BẾN CAM": "KBC/Tồn kho","HIỀNĐỨC": "KHD/Tồn kho","HIỀN ĐỨC": "KHD/Tồn kho",
         }
         total_created = self._fetch_and_process_returns(
             misa_utils, headers, date_from_utc, date_to_utc, 
