@@ -40,9 +40,21 @@ patch(ProductScreen.prototype, {
 
             // 1. CLEAN CATEGORY BUTTONS
             const categoryButtons = document.querySelectorAll('.category-button');
+
+            // Get Selected Category ID from POS Service
+            const selectedCategoryId = this.env.services.pos.selectedCategoryId;
+
             categoryButtons.forEach((btn) => {
                 btn.removeAttribute('style');
                 btn.classList.add('hlv-clean-category');
+
+                // Determine if active
+                const btnId = parseInt(btn.getAttribute('data-id') || btn.getAttribute('data-category-id'));
+                if (btnId && selectedCategoryId && btnId === selectedCategoryId) {
+                    btn.classList.add('hlv-active-category');
+                } else {
+                    btn.classList.remove('hlv-active-category');
+                }
 
                 // Remove Odoo color classes
                 const classes = [...btn.classList];

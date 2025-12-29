@@ -127,7 +127,9 @@
 .category-button.hlv-clean-category.active,
 .category-button.hlv-clean-category.highlight,
 .category-button.hlv-clean-category.o-active,
-.category-button.hlv-clean-category.selected {
+.category-button.hlv-clean-category.selected,
+.category-button.hlv-clean-category.hlv-active-category {
+    /* The one true selector */
     background-color: #dbeafe !important;
     /* Light Blue 100/200 */
     border-color: #60a5fa !important;
@@ -142,7 +144,8 @@
 .category-button.hlv-clean-category.active::before,
 .category-button.hlv-clean-category.highlight::before,
 .category-button.hlv-clean-category.o-active::before,
-.category-button.hlv-clean-category.selected::before {
+.category-button.hlv-clean-category.selected::before,
+.category-button.hlv-clean-category.hlv-active-category::before {
     display: none !important;
 }
 
@@ -154,7 +157,9 @@
 .category-button.hlv-clean-category.o-active span,
 .category-button.hlv-clean-category.o-active div,
 .category-button.hlv-clean-category.selected span,
-.category-button.hlv-clean-category.selected div {
+.category-button.hlv-clean-category.selected div,
+.category-button.hlv-clean-category.hlv-active-category span,
+.category-button.hlv-clean-category.hlv-active-category div {
     color: #1e3a8a !important;
 }
 
