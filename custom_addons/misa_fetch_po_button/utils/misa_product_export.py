@@ -39,13 +39,15 @@ class MisaProductExporter:
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
         return headers
     
-    def fetch_all_products(self, page_size=100, max_pages=200):
+    def fetch_all_products(self, page_size=1000, max_pages=1000, columns=None):
         """
         Lấy tất cả sản phẩm từ MISA CRM.
         
         Args:
-            page_size: Số sản phẩm mỗi trang (giảm xuống 100 để tránh timeout)
-            max_pages: Số trang tối đa để tránh loop vô hạn
+            page_size: Số sản phẩm mỗi trang (tăng lên 1000 cho nhanh)
+            max_pages: Số trang tối đa
+            columns: Chuỗi các cột cần lấy (base64 encoded hoặc raw string). 
+                     Nếu None sẽ lấy mặc định.
             
         Returns:
             list: Danh sách sản phẩm
@@ -59,6 +61,9 @@ class MisaProductExporter:
         headers = self._get_headers(token)
         url = "https://amisapp.misa.vn/crm/g2/api/business/Product/Grid"
         
+        # Default columns payload
+        default_columns = "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg=="
+        
         all_products = []
         page = 1
         
@@ -67,7 +72,7 @@ class MisaProductExporter:
             
             # Payload theo format của search_product_by_name đang hoạt động
             payload = {
-                "Columns": "SUQsUHJvZHVjdENvZGUsUHJvZHVjdE5hbWUsUHJvZHVjdENhdGVnb3J5SUQsUHJvZHVjdENhdGVnb3J5SURUZXh0LFVzYWdlVW5pdElELFVzYWdlVW5pdElEVGV4dCxVbml0UHJpY2UsVGF4SUQsVGF4SURUZXh0LElzU2V0UHJvZHVjdCxGb3JtTGF5b3V0SUQsRm9ybUxheW91dElEVGV4dCxPd25lcklELE93bmVySURUZXh0LElzU3lzdGVtLEF2YXRhcg==",
+                "Columns": columns or default_columns,
                 "Sorts": [],
                 "Start": (page - 1) * page_size,
                 "Page": page,

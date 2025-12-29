@@ -156,13 +156,51 @@ class MisaPosProductSyncWizard(models.TransientModel):
                 all_pos_cats = pos_categ_model.search([])
                 cat_map = {c.name.lower().strip(): c for c in all_pos_cats}
             
-            # === BƯỚC 2: GÁN SẢN PHẨM VÀO DANH MỤC ===
+            # === BƯỚC 2: GÁN SẢN PHẨM VÀO DANH MỤC POS ===
             if self.sync_mode in ('product_only', 'full'):
                 logs.append("\n📦 BƯỚC 2: GÁN SẢN PHẨM VÀO DANH MỤC POS")
                 logs.append("-" * 30)
                 logs.append("   (Chỉ xử lý sản phẩm đã bật 'Sẵn sàng trong POS')")
                 
+                # 1. LOAD TOÀN BỘ SẢN PHẨM ODOO VÀO BỘ NHỚ (Chỉ lấy field cần thiết)
+                logs.append("\n   ⏳ Đang tải danh sách sản phẩm Odoo...")
                 product_model = self.env['product.template'].sudo()
+                # Chỉ lấy sản phẩm có code và available_in_pos = True
+                odoo_products = product_model.search_read(
+                    [('default_code', '!=', False), ('available_in_pos', '=', True)],
+                    ['default_code', 'pos_categ_ids']
+                )
+                
+                # Map nhanh: Code -> Record ID & Current Categories
+                odoo_map = {}
+                for p in odoo_products:
+                    code = p['default_code'].strip()
+                    odoo_map[code] = {
+                        'id': p['id'],
+                        'pos_categ_ids': p['pos_categ_ids']
+                    }
+                
+                logs.append(f"   ✅ Đã tải được {len(odoo_map)} sản phẩm Odoo vào bộ nhớ.")
+
+                # 2. FETCH MISA PRODUCTS (CHỈ LẤY CỘT CẦN THIẾT)
+                logs.append("\n   ⏳ Đang tải danh sách sản phẩm MISA (Tối ưu)...")
+                # Chỉ lấy ProductCode và ProductCategoryIDText
+                # Base64 encoded: ProductCode,ProductCategoryIDText
+                # Hoặc truyền trực tiếp chuỗi tên cột (không encoded) nếu API hỗ trợ, 
+                # nhưng ở đây ta dùng columns mặc định hoặc chuỗi raw. 
+                # API MISA thường nhận chuỗi tên cột phân cách dấu phẩy.
+                # Tuy nhiên, fetch_all_products mong đợi base64 nếu theo logic cũ, 
+                # nhưng ta sẽ truyền raw string để override default encoded string trong hàm đó nếu cần,
+                # hoặc đơn giản là để hàm fetch_all_products xử lý.
+                # Để an toàn và nhanh, ta dùng chuỗi cột tối thiểu: 
+                # "ProductCode,ProductCategoryIDText" -> Base64: "UHJvZHVjdENvZGUsUHJvZHVjdENhdGVnb3J5SURUZXh0"
+                
+                minimal_columns = "UHJvZHVjdENvZGUsUHJvZHVjdENhdGVnb3J5SURUZXh0" # ProductCode,ProductCategoryIDText
+                misa_products = exporter.fetch_all_products(page_size=1000, columns=minimal_columns)
+                logs.append(f"   ✅ Đã tải {len(misa_products)} sản phẩm từ MISA.")
+                
+                # 3. MATCH & UPDATE
+                logs.append("\n   🔄 Đang đối chiếu và cập nhật...")
                 
                 for p in misa_products:
                     code = (p.get("ProductCode") or "").strip()
@@ -171,33 +209,28 @@ class MisaPosProductSyncWizard(models.TransientModel):
                     if not code or not cat_name:
                         continue
                     
-                    # Tìm sản phẩm trong Odoo theo default_code
-                    odoo_product = product_model.search([('default_code', '=', code)], limit=1)
-                    
-                    if not odoo_product:
+                    # Tìm trong Odoo Map (O(1) lookup)
+                    if code not in odoo_map:
                         products_not_found += 1
                         continue
+                        
+                    odoo_info = odoo_map[code]
                     
-                    # CHỈ xử lý sản phẩm đã có available_in_pos = True
-                    if not odoo_product.available_in_pos:
-                        products_skipped_not_in_pos += 1
-                        continue
-                    
-                    # Tìm danh mục POS tương ứng
+                    # Tìm danh mục POS
                     if cat_name.lower().strip() not in cat_map:
                         continue
-                    
+                        
                     pos_cat = cat_map[cat_name.lower().strip()]
                     
-                    # Kiểm tra xem đã có danh mục này chưa
-                    if pos_cat.id not in odoo_product.pos_categ_ids.ids:
-                        odoo_product.write({'pos_categ_ids': [(4, pos_cat.id)]})
+                    # Kiểm tra xem cần update không
+                    current_categ_ids = odoo_info['pos_categ_ids']
+                    if pos_cat.id not in current_categ_ids:
+                        product_model.browse(odoo_info['id']).write({'pos_categ_ids': [(4, pos_cat.id)]})
                         products_updated += 1
                         logs.append(f"   ✏️  {code} → {cat_name}")
                 
-                logs.append(f"\n   ✅ Đã gán {products_updated} sản phẩm vào danh mục")
-                logs.append(f"   ⏭️  Bỏ qua {products_skipped_not_in_pos} sản phẩm (chưa bật POS)")
-                logs.append(f"   ❌ Không tìm thấy {products_not_found} sản phẩm trong Odoo")
+                logs.append(f"\n   ✅ Đã cập nhật xong: {products_updated} sản phẩm")
+                logs.append(f"   (Không tìm thấy code tương ứng trong danh sách POS Odoo: {products_not_found})")
             
             # Tổng kết
             logs.append("\n" + "=" * 50)
