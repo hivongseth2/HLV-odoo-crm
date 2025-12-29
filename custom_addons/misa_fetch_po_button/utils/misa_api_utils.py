@@ -968,6 +968,57 @@ class MisaApiUtils(models.AbstractModel):
             if str(item.get("text")).strip().lower() == search:
                 return item["id"], item["text"]
         return None, None
+    
+    def _get_category_name_by_id(self, headers, cat_id):
+        """
+        Lấy tên danh mục từ ID bằng cách gọi API chi tiết (FormDataNew)
+        """
+        if not cat_id:
+            return None
+
+        # URL lấy chi tiết (dựa trên fetch log)
+        # Số 46/4 có thể là LayoutID/Mode, giữ nguyên theo mẫu
+        url = "https://amisapp.misa.vn/crm/g1/api/business/ProductCategory/FormDataNew/ProductCategory/46/4"
+        
+        # Payload giả lập hành động xem chi tiết
+        payload = {
+            "ID": str(cat_id),
+            "MISAEntityState": 2,  # 2 thường là trạng thái View/Edit trong hệ thống MISA
+            "ActiveLayoutCode": None,
+            "CustomDicData": None
+        }
+
+        try:
+            session = self._get_retry_session()
+            
+            # Đảm bảo header có layoutcode (quan trọng với API FormData)
+            post_headers = headers.copy()
+            post_headers['layoutcode'] = 'productcategory'
+            
+            # Xóa các header xung đột nếu có (do copy từ request cũ sang)
+            for k in ['content-length', 'Content-Length']:
+                post_headers.pop(k, None)
+
+            res = session.post(url, headers=post_headers, json=payload, timeout=20)
+
+            if res.ok:
+                data = res.json()
+                if data.get("Success"):
+                    # Truy xuất theo cấu trúc: Data -> CurrentData -> ProductCategoryName
+                    current_data = data.get("Data", {}).get("CurrentData", {})
+                    cat_name = current_data.get("ProductCategoryName")
+                    
+                    if cat_name:
+                        return str(cat_name).strip()
+                else:
+                    _logger.warning(f"⚠️ [GetCatName] API Success=False for ID: {cat_id}")
+            else:
+                _logger.warning(f"⚠️ [GetCatName] HTTP {res.status_code} for ID: {cat_id}")
+
+        except Exception as e:
+            _logger.error(f"❌ [GetCatName] Exception: {e}")
+
+        return None
 
     def _get_category_id_by_name(self, headers, name):
         """Tìm Category ID: Ưu tiên Tree API -> Fallback Grid Pagination"""
@@ -1100,10 +1151,12 @@ class MisaApiUtils(models.AbstractModel):
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
         # --- 1. XỬ LÝ ID ---
-        # cat_id = self._get_category_id_by_name(headers, category_name)
+        cat_name = self._get_category_name_by_id(headers, cat_id)
         cat_id = cat_id
         # if not cat_id:
         #      cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
+        
+        _logger.debug("catname", cat_name,)
 
         unit_id, unit_text = self._find_dictionary_item(headers, "UsageUnitID", unit_name)
         if not unit_id:
@@ -1123,7 +1176,9 @@ class MisaApiUtils(models.AbstractModel):
             "ProductCode": code,
             "ProductName": name,
             "ProductCategoryID": cat_id,
-            "ProductCategoryIDText": category_name if cat_id != 23 else "Hàng hóa",
+            # "ProductCategoryIDText": category_name if cat_id != 23 else "Hàng hóa",
+            "ProductCategoryIDText": cat_name or "",
+
             "UsageUnitID": unit_id, 
             "UsageUnitIDText": unit_text,
             "ProductPropertiesID": prop_id,
