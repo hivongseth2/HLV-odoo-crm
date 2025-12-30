@@ -1182,7 +1182,7 @@ class MisaApiUtils(models.AbstractModel):
 
         if cat_id:
             # ƯU TIÊN tìm tên category từ Odoo theo ID để đồng bộ
-            cat_name_odoo = self.get_category_name_by_id(headers, cat_id)
+            cat_name_odoo = self._get_category_name_by_id(headers, cat_id)
             if cat_name_odoo and cat_name_odoo != str(cat_id):
                 category_name = cat_name_odoo
                 _logger.info(f"🔄 Sync: Sử dụng tên danh mục từ Odoo/MISA ID {cat_id} -> {category_name}")
