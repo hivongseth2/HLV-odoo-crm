@@ -128,6 +128,8 @@ class HlvChatgptSession(models.Model):
                     output_str = self._execute_search_misa(args)
                 elif fname == "create_product_misa":
                     output_str = self._execute_create_misa(args)
+                elif fname == "get_category_info":
+                    output_str = self._execute_get_category_info(args)
                 else:
                     # File Search được OpenAI tự xử lý, code này chỉ bắt các tool Custom
                     output_str = json.dumps({"error": f"Function {fname} chưa được hỗ trợ trong Code Python"})
@@ -161,6 +163,31 @@ class HlvChatgptSession(models.Model):
     # =================================================================================
     # 2. IMPLEMENTATION (CÁC HÀM CÔNG CỤ)
     # =================================================================================
+    
+    def _execute_get_category_info(self, args):
+        """Tool: Lấy tên nhóm từ ID"""
+        _logger.info("ℹ️ Check Category: %s", args)
+        cat_id = args.get('category_id')
+        if not cat_id: return json.dumps({"error": "Thiếu category_id"})
+
+        try:
+            misa_utils = self.env['misa.api.utils'].sudo()
+            misa_config = self.env['misa.config'].sudo()
+            
+            # Lấy Token & Header
+            token = misa_utils._fetch_login_crm_token()
+            headers = misa_config.get_crm_header(token)
+            
+            # Gọi hàm tra cứu (đã viết ở Bước 1)
+            real_name = misa_utils.get_category_name_by_id(headers, cat_id)
+            
+            return json.dumps({
+                "category_id": cat_id,
+                "category_name": real_name,
+                "note": "Hãy dùng tên này để trả lời User."
+            }, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
     
     def _execute_search_misa(self, args):
         """

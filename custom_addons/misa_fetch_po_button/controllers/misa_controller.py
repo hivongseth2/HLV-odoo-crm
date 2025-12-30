@@ -203,3 +203,60 @@ class MisaController(http.Controller):
                 "status": "error",
                 "message": str(e)
             }
+            
+    @http.route('/api/misa/category/info', type='json', auth='public', methods=['POST'], csrf=False)
+    def api_get_category_info(self, **kwargs):
+        """
+        API lấy thông tin Tên nhóm vật tư hàng hóa từ ID.
+        Dùng cho AI kiểm tra lại tên nhóm trước hoặc sau khi tạo.
+
+        Body mẫu (JSON):
+        {
+            "jsonrpc": "2.0",
+            "params": {
+                "category_id": "45"  # Hoặc GUID tùy database
+            }
+        }
+        """
+        try:
+            # 1. Lấy tham số
+            cat_id = kwargs.get('category_id')
+            
+            if not cat_id:
+                return {
+                    "status": "error",
+                    "message": "Thiếu tham số 'category_id'"
+                }
+
+            # 2. Khởi tạo Environment
+            misa_utils = request.env['misa.api.utils'].sudo()
+            misa_config = request.env['misa.config'].sudo()
+
+            # 3. Lấy Token & Tạo Header (Giống logic trong create_product_misa_raw)
+            token = misa_utils._fetch_login_crm_token()
+            if not token:
+                raise Exception("Lỗi: Không lấy được Token MISA")
+
+            headers = misa_config.get_crm_header(token)
+            headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
+
+            # 4. Gọi hàm lấy tên nhóm (Hàm này phải có bên misa_api_utils.py)
+            # Lưu ý: Hàm _get_category_name_by_id cần được public hoặc gọi qua instance
+            category_name = misa_utils._get_category_name_by_id(headers, cat_id)
+
+            # 5. Trả về kết quả
+            return {
+                "status": "success",
+                "message": "Lấy thông tin thành công",
+                "data": {
+                    "category_id": cat_id,
+                    "category_name": category_name
+                }
+            }
+
+        except Exception as e:
+            _logger.exception("API MISA Category Info Error")
+            return {
+                "status": "error",
+                "message": str(e)
+            }
