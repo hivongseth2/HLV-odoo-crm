@@ -48,23 +48,77 @@ patch(ProductScreen.prototype, {
                 btn.removeAttribute('style');
                 btn.classList.add('hlv-clean-category');
 
-                // Determine if active based on opacity (Odoo style)
-                // If ANY button has opacity-50, then specific selection is active.
-                // The ones WTHOUT opacity-50 are the selected ones.
-                const hasSelection = document.querySelector('.category-button.opacity-50');
+                // 3. ROBUST ID-BASED LOGIC
+                // Requires data-category-id from XML override
+                const btnId = parseInt(btn.getAttribute('data-category-id') || btn.getAttribute('data-id'));
 
-                if (hasSelection) {
-                    if (!btn.classList.contains('opacity-50')) {
+                if (btnId && selectedCategoryId && this.env.services.pos.db) {
+                    const db = this.env.services.pos.db;
+                    const selectedCategory = db.get_category_by_id(selectedCategoryId);
+
+                    let isActive = false;
+                    let isDimmed = false;
+
+                    // CASE A: Direct Selection
+                    if (btnId === selectedCategoryId) {
+                        isActive = true;
+                    }
+                    // CASE B: Parent Selection (Show children as active)
+                    // If the selected category is the PARENT of this button, this button matches.
+                    else if (selectedCategory && selectedCategory.id === db.get_category_parent_id(btnId)) {
+                        isActive = true;
+                    }
+                    // CASE C: Child Selection (I am the parent of the selected category)
+                    // (Optional, not requested but good practice)
+
+                    // CASE D: Sibling Logic (Explicit Dimming)
+                    // If I am NOT active, but my Sibling IS selected, I should be Dimmed (Gray).
+                    if (!isActive) {
+                        // Check if I share a parent with the selected category
+                        const myParentId = db.get_category_parent_id(btnId);
+                        const selectedParentId = selectedCategory ? db.get_category_parent_id(selectedCategory.id) : null;
+
+                        // If I share a parent with the Active Category, but I am not Active -> Dim me.
+                        if (myParentId === selectedParentId) {
+                            isDimmed = true;
+                        }
+                    }
+
+                    // APPLY CLASSES
+                    if (isActive) {
                         btn.classList.add('hlv-active-category');
-                        btn.classList.add('selected'); // Force standard class too
+                        btn.classList.remove('hlv-dimmed-category');
+                        btn.classList.remove('opacity-50'); // Force clear Odoo dim
+                        btn.classList.add('selected');
+                    } else if (isDimmed) {
+                        btn.classList.remove('hlv-active-category');
+                        btn.classList.add('hlv-dimmed-category');
+                        btn.classList.add('opacity-50'); // Ensure Odoo dim
+                        btn.classList.remove('selected');
+                    } else {
+                        // Neutral (Root or Unrelated)
+                        btn.classList.remove('hlv-active-category');
+                        btn.classList.remove('hlv-dimmed-category');
+                        // Let Odoo handle opacity for unrelated items or force clear if needed
+                        // btn.classList.remove('opacity-50'); 
+                        btn.classList.remove('selected');
+                    }
+
+                } else {
+                    // Fallback to opacity check if data-id missing or DB not ready
+                    const hasSelection = document.querySelector('.category-button.opacity-50');
+                    if (hasSelection) {
+                        if (!btn.classList.contains('opacity-50')) {
+                            btn.classList.add('hlv-active-category');
+                            btn.classList.add('selected');
+                        } else {
+                            btn.classList.remove('hlv-active-category');
+                            btn.classList.remove('selected');
+                        }
                     } else {
                         btn.classList.remove('hlv-active-category');
                         btn.classList.remove('selected');
                     }
-                } else {
-                    // No selection state (Root or All), keep clean
-                    btn.classList.remove('hlv-active-category');
-                    btn.classList.remove('selected');
                 }
 
                 // Remove Odoo color classes

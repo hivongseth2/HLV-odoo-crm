@@ -128,6 +128,11 @@
 .category-button.hlv-clean-category.highlight,
 .category-button.hlv-clean-category.o-active,
 .category-button.hlv-clean-category.selected,
+/* Active / Highlighted - Strong High Contrast per new request */
+.category-button.hlv-clean-category.active,
+.category-button.hlv-clean-category.highlight,
+.category-button.hlv-clean-category.o-active,
+.category-button.hlv-clean-category.selected,
 .category-button.hlv-clean-category.hlv-active-category {
     /* The one true selector */
     background-color: #2563eb !important;
@@ -139,8 +144,21 @@
     font-weight: 700 !important;
     box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.4) !important;
     opacity: 1 !important;
-    /* Force full opacity */
 }
+
+/* Dimmed / Unselected Siblings */
+.category-button.hlv-clean-category.hlv-dimmed-category,
+/* Fallback if JS applies opacity-50 and we want to control style */
+.category-button.hlv-clean-category.opacity-50 {
+    background-color: #f8fafc !important;
+    /* Very Light Gray */
+    color: #94a3b8 !important;
+    /* Muted Text */
+    border-color: #e2e8f0 !important;
+    opacity: 0.6 !important;
+    /* Consistent Dimming */
+}
+
 
 
 /* Remove the little side indicator if we are doing background */
