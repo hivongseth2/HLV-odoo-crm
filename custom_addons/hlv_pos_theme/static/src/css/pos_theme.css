@@ -128,7 +128,9 @@
 .category-button.hlv-clean-category.highlight,
 .category-button.hlv-clean-category.o-active,
 .category-button.hlv-clean-category.selected,
-.category-button.hlv-clean-category.hlv-active-category {
+.category-button.hlv-clean-category.hlv-active-category,
+/* ROBUST FIX: User's DOM shows Unselected has opacity-50, Selected does not. */
+.category-button.hlv-clean-category:not(.opacity-50) {
     /* The one true selector */
     background-color: #2563eb !important;
     /* Strong Primary Blue */
@@ -138,6 +140,8 @@
     /* White Text */
     font-weight: 700 !important;
     box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.4) !important;
+    opacity: 1 !important;
+    /* Force full opacity */
 }
 
 
@@ -160,9 +164,12 @@
 .category-button.hlv-clean-category.selected span,
 .category-button.hlv-clean-category.selected div,
 .category-button.hlv-clean-category.hlv-active-category span,
-.category-button.hlv-clean-category.hlv-active-category div {
+.category-button.hlv-clean-category.hlv-active-category div,
+.category-button.hlv-clean-category:not(.opacity-50) span,
+.category-button.hlv-clean-category:not(.opacity-50) div {
     color: #ffffff !important;
 }
+
 
 
 /* Text alignment - Allow Wrapping */
