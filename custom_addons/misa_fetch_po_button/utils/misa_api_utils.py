@@ -1286,7 +1286,7 @@ class MisaApiUtils(models.AbstractModel):
                 'name': name,
                 'list_price': price,
                 'standard_price': price_pu,
-                'type': 'product' if product_type == 'goods' else 'service',
+                'type': 'product' if str(product_type).lower() == 'goods' else 'service',
                 'available_in_pos': True,
                 'taxes_id': [(5, 0, 0)], # Xóa thuế cũ nếu update? Hoặc kệ default? Để default thì tốt hơn.
             }
