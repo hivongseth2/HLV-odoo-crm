@@ -35,11 +35,11 @@ class VendorImportWizard(models.TransientModel):
         header_row_idx = None
         headers = {}
         for row_idx, row in enumerate(sheet.iter_rows(values_only=True), start=1):
-            if row and 'Mã nhà cung cấp' in [str(c).strip() for c in row if c]:
+            if row and 'mã nhà cung cấp' in [str(c).replace('\n', ' ').strip().lower() for c in row if c]:
                 header_row_idx = row_idx
                 for col_idx, cell_value in enumerate(row):
                     if cell_value:
-                        headers[str(cell_value).strip()] = col_idx
+                        headers[str(cell_value).replace('\n', ' ').strip().lower()] = col_idx
                 break
         
         if header_row_idx is None:
@@ -50,11 +50,11 @@ class VendorImportWizard(models.TransientModel):
         updated_count = 0
         
         # Define column mappings names based on user description
-        col_name_ref = 'Mã nhà cung cấp'
-        col_name_name = 'Tên nhà cung cấp'
-        col_name_street = 'Địa chỉ'
-        col_name_vat = 'Mã số thuế'
-        col_name_phone = 'Điện thoại' # Updates both phone and mobile
+        col_name_ref = 'mã nhà cung cấp'
+        col_name_name = 'tên nhà cung cấp'
+        col_name_street = 'địa chỉ'
+        col_name_vat = 'mã số thuế/cccd chủ hộ'
+        col_name_phone = 'điện thoại' # Updates both phone and mobile
 
         for row_idx, row in enumerate(sheet.iter_rows(min_row=header_row_idx + 1, values_only=True), start=header_row_idx + 1):
             # Get Name
@@ -79,25 +79,29 @@ class VendorImportWizard(models.TransientModel):
             
             # Update 'company_registry' (Mã nhà cung cấp)
             if col_name_ref in headers:
-                ref_val = row[headers[col_name_ref]]
+                ref_idx = headers[col_name_ref]
+                ref_val = row[ref_idx] if ref_idx < len(row) else None
                 if ref_val:
                      vals['company_registry'] = str(ref_val).strip()
             
             # Update 'street' (Địa chỉ)
             if col_name_street in headers:
-                street_val = row[headers[col_name_street]]
+                street_idx = headers[col_name_street]
+                street_val = row[street_idx] if street_idx < len(row) else None
                 if street_val:
                     vals['street'] = str(street_val).strip()
 
             # Update 'vat' (Mã số thuế)
             if col_name_vat in headers:
-                vat_val = row[headers[col_name_vat]]
+                vat_idx = headers[col_name_vat]
+                vat_val = row[vat_idx] if vat_idx < len(row) else None
                 if vat_val:
                     vals['vat'] = str(vat_val).strip()
             
             # Update 'phone' and 'mobile'
             if col_name_phone in headers:
-                phone_val = row[headers[col_name_phone]]
+                phone_idx = headers[col_name_phone]
+                phone_val = row[phone_idx] if phone_idx < len(row) else None
                 if phone_val:
                     phone_str = str(phone_val).strip()
                     vals['phone'] = phone_str
