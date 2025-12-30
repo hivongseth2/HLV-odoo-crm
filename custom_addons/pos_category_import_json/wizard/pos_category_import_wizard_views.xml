@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_pos_category_import_wizard_form" model="ir.ui.view">
+        <field name="name">pos.category.import.wizard.form</field>
+        <field name="model">pos.category.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Import POS Categories">
+                <group>
+                    <field name="json_file" filename="json_filename"/>
+                    <field name="json_filename" invisible="1"/>
+                </group>
+                <footer>
+                    <button name="action_import_categories" string="Import" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_pos_category_import_wizard" model="ir.actions.act_window">
+        <field name="name">Import POS Categories</field>
+        <field name="type">ir.actions.act_window</field>
+        <field name="res_model">pos.category.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_pos_category_import"
+              name="Import Categories via JSON"
+              parent="point_of_sale.menu_point_config_product"
+              action="action_pos_category_import_wizard"
+              sequence="20"/>
+</odoo>
