@@ -48,12 +48,23 @@ patch(ProductScreen.prototype, {
                 btn.removeAttribute('style');
                 btn.classList.add('hlv-clean-category');
 
-                // Determine if active
-                const btnId = parseInt(btn.getAttribute('data-id') || btn.getAttribute('data-category-id'));
-                if (btnId && selectedCategoryId && btnId === selectedCategoryId) {
-                    btn.classList.add('hlv-active-category');
+                // Determine if active based on opacity (Odoo style)
+                // If ANY button has opacity-50, then specific selection is active.
+                // The ones WTHOUT opacity-50 are the selected ones.
+                const hasSelection = document.querySelector('.category-button.opacity-50');
+
+                if (hasSelection) {
+                    if (!btn.classList.contains('opacity-50')) {
+                        btn.classList.add('hlv-active-category');
+                        btn.classList.add('selected'); // Force standard class too
+                    } else {
+                        btn.classList.remove('hlv-active-category');
+                        btn.classList.remove('selected');
+                    }
                 } else {
+                    // No selection state (Root or All), keep clean
                     btn.classList.remove('hlv-active-category');
+                    btn.classList.remove('selected');
                 }
 
                 // Remove Odoo color classes
