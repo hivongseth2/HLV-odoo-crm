@@ -1180,6 +1180,13 @@ class MisaApiUtils(models.AbstractModel):
         # if not cat_id:
         #      cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
 
+        if cat_id:
+            # ƯU TIÊN tìm tên category từ Odoo theo ID để đồng bộ
+            cat_name_odoo = self.get_category_name_by_id(headers, cat_id)
+            if cat_name_odoo and cat_name_odoo != str(cat_id):
+                category_name = cat_name_odoo
+                _logger.info(f"🔄 Sync: Sử dụng tên danh mục từ Odoo/MISA ID {cat_id} -> {category_name}")
+
         unit_id, unit_text = self._find_dictionary_item(headers, "UsageUnitID", unit_name)
         if not unit_id:
             unit_id, unit_text = 4, "Cái"
@@ -1287,6 +1294,7 @@ class MisaApiUtils(models.AbstractModel):
                 'list_price': price,
                 'standard_price': price_pu,
                 'type': 'product' if str(product_type).lower() == 'goods' else 'service',
+                'detailed_type': 'product' if str(product_type).lower() == 'goods' else 'service',
                 'available_in_pos': True,
                 'taxes_id': [(5, 0, 0)], # Xóa thuế cũ nếu update? Hoặc kệ default? Để default thì tốt hơn.
             }
