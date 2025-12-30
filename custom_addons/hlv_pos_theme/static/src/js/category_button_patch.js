@@ -16,7 +16,7 @@ patch(ProductScreen.prototype, {
             () => {
                 this._cleanCategoryButtonStyles();
             },
-            () => []
+            () => [this.env.services.pos.selectedCategoryId]
         );
     },
 
