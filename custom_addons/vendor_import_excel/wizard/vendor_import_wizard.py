@@ -62,7 +62,7 @@ class VendorImportWizard(models.TransientModel):
                  continue # strict check? or just skip? 
             
             name_idx = headers.get(col_name_name)
-            name = row[name_idx] if name_idx is not None and row_idx < len(row) else None
+            name = row[name_idx] if name_idx is not None and name_idx < len(row) else None
             
             if not name:
                 continue

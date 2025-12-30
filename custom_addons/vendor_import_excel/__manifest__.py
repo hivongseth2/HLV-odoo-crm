@@ -1,4 +1,3 @@
-
 {
     'name': 'Vendor Import Excel',
     'version': '1.0',
