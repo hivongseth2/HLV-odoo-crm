@@ -2,6 +2,8 @@
 import logging
 import json
 import re
+import requests
+import io
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 
@@ -10,290 +12,350 @@ _logger = logging.getLogger(__name__)
 try:
     from openai import OpenAI
 except ImportError:
-    _logger.warning("Thư viện 'openai' chưa được cài đặt. Vui lòng chạy: pip install openai")
+    _logger.warning("Thư viện 'openai' chưa được cài đặt. Hãy chạy: pip install openai")
     OpenAI = None
 
 class HlvChatgptSession(models.Model):
     _name = 'hlv.chatgpt.session'
-    _description = 'Phiên Chat AI (Assistant Workflow)'
+    _description = 'Phiên Chat AI Product Manager (Single Agent)'
     _rec_name = 'name'
     _order = 'last_activity desc'
-
+    
     # --- FIELDS ---
     name = fields.Char(string='Chủ đề', default='Hội thoại mới', required=True)
-    user_id = fields.Many2one('res.users', string='Người tạo', default=lambda self: self.env.user)
-    last_activity = fields.Datetime(string='Hoạt động cuối', default=fields.Datetime.now)
-    
-    # Lưu ID luồng chat của OpenAI để nhớ ngữ cảnh
-    openai_thread_id = fields.Char(string="OpenAI Thread ID", readonly=True)
-    
-    state = fields.Selection([
-        ('new', 'Mới'),
-        ('active', 'Đang hoạt động'),
-        ('archived', 'Lưu trữ')
-    ], default='new', string='Trạng thái')
+    state = fields.Selection([('new', 'Mới'), ('active', 'Đang hoạt động')], default='new')
+    user_id = fields.Many2one('res.users', default=lambda self: self.env.user)
+    last_activity = fields.Datetime(default=fields.Datetime.now)
+    zalo_user_id = fields.Char(string="Zalo User ID", index=True)
 
-    message_ids = fields.One2many('hlv.chatgpt.message', 'session_id', string='Nội dung hội thoại')
-    input_text = fields.Text(string='Nhập tin nhắn...')
+    # --- OPENAI STATE ---
+    openai_thread_id = fields.Char(string="Thread ID", readonly=True)
+    
+    message_ids = fields.One2many('hlv.chatgpt.message', 'session_id')
+    input_text = fields.Text()
 
     # =================================================================================
-    # 1. CORE ENGINE: CHẠY ASSISTANT WORKFLOW (LOGIC MỚI)
+    # 1. CORE LOGIC: GỌI API VÀ XỬ LÝ WORKFLOW
     # =================================================================================
-    def _run_assistant_workflow(self, client, assistant_id, user_query):
-        """
-        Chạy Workflow tự động: Gửi tin nhắn -> Chờ AI suy nghĩ -> AI gọi Tool -> Trả lời
-        """
-        _logger.info("🚀 Starting Workflow | Assistant: %s", assistant_id)
+    def _call_openai_api(self, query, image_url=False):
+        """Hàm cửa ngõ gọi OpenAI"""
+        if not OpenAI: return "Lỗi Server: Chưa cài đặt thư viện OpenAI."
+        
+        config = self.env['hlv.chatgpt.config'].get_config()
+        if not config: return "Lỗi: Chưa có cấu hình ChatGPT."
 
-        # A. QUẢN LÝ THREAD (LUỒNG CHAT)
+        # Khởi tạo Client
+        client = OpenAI(api_key=config.api_key)
+        
+        # Lấy ID con Product Manager duy nhất
+        assistant_id = config.product_manager_id 
+        if not assistant_id:
+            return "Lỗi Cấu hình: Chưa nhập ID Assistant (Product Manager)."
+
+        # Chạy Workflow
+        return self._run_assistant_workflow(client, assistant_id, query, image_url=image_url)
+
+    def _run_assistant_workflow(self, client, assistant_id, user_query, image_url=False):
+        """
+        Workflow xử lý chính: 
+        1. Quản lý Thread
+        2. Gửi tin nhắn (Text/Image)
+        3. Chạy Run & Loop (Vòng lặp) để xử lý Tool Call (Hỗ trợ Retry tự động)
+        """
+        _logger.info("🚀 Start Workflow | Has Image: %s", bool(image_url))
+
+        # A. Quản lý Thread (Tạo mới hoặc lấy cũ)
         thread_id = self.openai_thread_id
         if not thread_id:
-            try:
-                thread = client.beta.threads.create()
-                self.openai_thread_id = thread.id
-                thread_id = thread.id
-                _logger.info("✨ Created New Thread: %s", thread_id)
-            except Exception as e:
-                return f"Lỗi tạo luồng chat: {str(e)}"
-        else:
-            _logger.info("🔄 Resuming Thread: %s", thread_id)
+            thread = client.beta.threads.create()
+            self.openai_thread_id = thread.id
+            thread_id = thread.id
+        
+        # B. Dọn dẹp các Run cũ bị treo (Tránh lỗi 400 Bad Request)
+        self._cancel_pending_runs(client, thread_id)
 
-        # B. GỬI TIN NHẮN USER
-        try:
+        # C. Chuẩn bị nội dung gửi lên (Payload)
+        content_payload = []
+        
+        # 1. Text
+        if user_query:
+            content_payload.append({"type": "text", "text": user_query})
+        elif image_url:
+             # Nếu chỉ gửi ảnh, thêm text mồi để AI biết phải làm gì
+             content_payload.append({"type": "text", "text": "Hãy phân tích hình ảnh này và kiểm tra xem sản phẩm đã có mã chưa."})
+
+        # 2. Image (Vision)
+        if image_url:
+            image_file_id = self._upload_image_to_openai(client, image_url)
+            if image_file_id:
+                content_payload.append({
+                    "type": "image_file",
+                    "image_file": {"file_id": image_file_id}
+                })
+            else:
+                content_payload.append({"type": "text", "text": "[System Error: Không tải được ảnh đính kèm]"})
+
+        # D. Gửi Message lên Thread
+        if content_payload:
             client.beta.threads.messages.create(
                 thread_id=thread_id,
                 role="user",
-                content=user_query
+                content=content_payload
             )
-        except Exception as e:
-            return f"Lỗi gửi tin nhắn: {str(e)}"
 
-        # C. KÍCH HOẠT RUN (AI BẮT ĐẦU NGHĨ)
-        try:
-            run = client.beta.threads.runs.create_and_poll(
-                thread_id=thread_id,
-                assistant_id=assistant_id,
-            )
-        except Exception as e:
-            return f"Lỗi khởi chạy Assistant: {str(e)}"
+        # E. Tạo Run ban đầu
+        run = client.beta.threads.runs.create_and_poll(
+            thread_id=thread_id, assistant_id=assistant_id
+        )
 
-        # D. XỬ LÝ VÒNG LẶP TOOL CALL
-        final_response = "Hệ thống không phản hồi."
-
-        # Nếu AI yêu cầu gọi Tool (Trạng thái: requires_action)
-        if run.status == 'requires_action':
+        # F. VÒNG LẶP XỬ LÝ TOOL (QUAN TRỌNG CHO RETRY)
+        # Nếu AI trả về 'requires_action', nghĩa là nó muốn gọi Tool.
+        # Ta thực hiện Tool -> Trả kết quả -> AI suy nghĩ tiếp.
+        # Nếu AI muốn tìm lại (Retry), nó sẽ lại ra 'requires_action' lần nữa -> Loop tiếp tục chạy.
+        while run.status == 'requires_action':
             tool_outputs = []
             
-            # Duyệt qua danh sách các tool AI muốn gọi
             for tool in run.required_action.submit_tool_outputs.tool_calls:
                 fname = tool.function.name
-                args_str = tool.function.arguments
                 call_id = tool.id
+                args = json.loads(tool.function.arguments or '{}')
                 
-                try: args = json.loads(args_str)
-                except: args = {}
-                
-                _logger.info("⚡ Workflow calling Tool: %s | Args: %s", fname, args)
+                _logger.info("⚡ Tool Call: %s | Args: %s", fname, str(args))
+                output_str = ""
 
-                # --- ROUTER GỌI HÀM PYTHON ODOO ---
-                output_str = json.dumps({"error": "Unknown function"})
-                
-                if fname == "search_product_stock":
-                    # Gọi hàm Search V9 (đã tối ưu bên dưới)
-                    output_str = self._execute_search_product_stock(args.get('keyword'))
-                
-                elif fname == "check_product_existence":
-                    output_str = self._execute_check_product_existence(args.get('keyword'))
+                # --- XỬ LÝ CÁC FUNCTION ---
+                if fname == "search_product_misa":
+                    output_str = self._execute_search_misa(args)
+                elif fname == "create_product_misa":
+                    output_str = self._execute_create_misa(args)
+                elif fname == "get_category_info":
+                    output_str = self._execute_get_category_info(args)
+                else:
+                    # File Search được OpenAI tự xử lý, code này chỉ bắt các tool Custom
+                    output_str = json.dumps({"error": f"Function {fname} chưa được hỗ trợ trong Code Python"})
 
-                # Đóng gói kết quả
-                tool_outputs.append({
-                    "tool_call_id": call_id,
-                    "output": output_str
-                })
+                tool_outputs.append({"tool_call_id": call_id, "output": output_str})
 
-            # Gửi kết quả Tool về lại cho OpenAI
+            # Submit kết quả Tool lên OpenAI và chờ phản hồi tiếp theo (Poll)
             if tool_outputs:
-                try:
-                    run = client.beta.threads.runs.submit_tool_outputs_and_poll(
-                        thread_id=thread_id,
-                        run_id=run.id,
-                        tool_outputs=tool_outputs
-                    )
-                except Exception as e:
-                    return f"Lỗi khi gửi kết quả tool lên OpenAI: {str(e)}"
+                run = client.beta.threads.runs.submit_tool_outputs_and_poll(
+                    thread_id=thread_id, run_id=run.id, tool_outputs=tool_outputs
+                )
 
-        # E. LẤY KẾT QUẢ CUỐI CÙNG
-        if run.status == 'completed': 
+        # G. Lấy kết quả cuối cùng (Final Response)
+        if run.status == 'completed':
             messages = client.beta.threads.messages.list(thread_id=thread_id, limit=1)
+            final_response = "..."
             if messages.data:
-                for content in messages.data[0].content:
-                    if hasattr(content, 'text'):
-                        final_response = content.text.value
-                        # Xóa các chú thích nguồn [source] nếu có
-                        final_response = re.sub(r'【.*?】', '', final_response)
+                # Lấy tin nhắn mới nhất của Assistant
+                for msg in messages.data:
+                    if msg.role == 'assistant' and msg.content:
+                        final_response = msg.content[0].text.value
+                        break
+            
+            # Xóa các ký tự tham chiếu rác (VD: 【4:0†source】)
+            final_response = re.sub(r'【.*?】', '', final_response)
+            return final_response
         else:
-            final_response = f"Workflow kết thúc bất thường. Trạng thái: {run.status}"
-
-        return final_response
+            _logger.error("Run Failed or Expired. Status: %s", run.status)
+            return "Hệ thống đang bận hoặc gặp lỗi xử lý. Vui lòng thử lại sau."
 
     # =================================================================================
-    # 2. HÀM KẾT NỐI API (CÓ BỘ LỌC ID)
+    # 2. IMPLEMENTATION (CÁC HÀM CÔNG CỤ)
     # =================================================================================
-    def _call_openai_api(self, query):
-        if not OpenAI: return "Lỗi: Server chưa cài thư viện 'openai'."
-        
-        config = self.env['hlv.chatgpt.config'].get_config()
-        if not config or not config.api_key: return "Lỗi: Chưa cấu hình API Key."
-        if not config.stock_assistant_id: return "Lỗi: Chưa nhập Stock Assistant ID."
-
-        # --- FIX LỖI ID: TỰ ĐỘNG LÀM SẠCH ---
-        # Cắt bỏ mọi thứ sau dấu '&' hoặc '?' nếu user copy nhầm link
-        raw_id = config.stock_assistant_id.strip()
-        clean_assistant_id = raw_id.split('&')[0].split('?')[0].strip()
-        
-        # Validate cơ bản
-        if not clean_assistant_id.startswith("asst_"):
-            return f"Lỗi ID: Assistant ID phải bắt đầu bằng 'asst_'. (Hiện tại: {clean_assistant_id})"
-
-        client = OpenAI(api_key=config.api_key)
+    
+    def _execute_get_category_info(self, args):
+        """Tool: Lấy tên nhóm từ ID"""
+        _logger.info("ℹ️ Check Category: %s", args)
+        cat_id = args.get('category_id')
+        if not cat_id: return json.dumps({"error": "Thiếu category_id"})
 
         try:
-            # Gọi hàm Workflow mới
-            response_text = self._run_assistant_workflow(
-                client=client,
-                assistant_id=clean_assistant_id,
-                user_query=query
-            )
-            return response_text
+            misa_utils = self.env['misa.api.utils'].sudo()
+            misa_config = self.env['misa.config'].sudo()
+            
+            # Lấy Token & Header
+            token = misa_utils._fetch_login_crm_token()
+            headers = misa_config.get_crm_header(token)
+            
+            # Gọi hàm tra cứu (đã viết ở Bước 1)
+            real_name = misa_utils.get_category_name_by_id(headers, cat_id)
+            
+            return json.dumps({
+                "category_id": cat_id,
+                "category_name": real_name,
+                "note": "Hãy dùng tên này để trả lời User."
+            }, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+    
+    def _execute_search_misa(self, args):
+        """
+        Tìm kiếm sản phẩm trong MISA (Live DB)
+        AI có thể gọi hàm này nhiều lần (Retry) với các từ khóa khác nhau.
+        """
+        _logger.info("🔍 MISA Search: %s", args)
+        try:
+            name = args.get('name')
+            code = args.get('code')
+            
+            # Gọi Utils Model (Đảm bảo bạn đã có model 'misa.api.utils')
+            misa_utils = self.env['misa.api.utils'].sudo()
+            products = misa_utils.search_product_by_name(name=name, code=code, limit=5)
+            
+            if not products:
+                return json.dumps({
+                    "status": "not_found", 
+                    "message": "Không tìm thấy trong DB. Hãy thử lại với từ khóa ngắn gọn hơn hoặc tìm theo Mã Model."
+                }, ensure_ascii=False)
+            
+            return json.dumps({
+                "status": "found", 
+                "count": len(products),
+                "data": products,
+                "instruction": "Hãy so sánh kỹ Tên và Mã. Nếu trùng khớp -> Báo đã có. Nếu khác -> Đề xuất tạo mới."
+            }, ensure_ascii=False)
 
         except Exception as e:
-            _logger.exception("OpenAI Connection Error")
-            return f"Lỗi kết nối: {str(e)}"
+            return json.dumps({"status": "error", "message": str(e)})
+
+    def _execute_create_misa(self, args):
+        """
+        Tạo 1 sản phẩm MISA (Single Object)
+        Argument nhận vào phẳng: {code, name, price, ...}
+        """
+        _logger.info("🆕 MISA Create: %s", args)
+        try:
+            misa_utils = self.env['misa.api.utils'].sudo()
+            
+            # Gọi hàm tạo raw với tham số từ AI
+            misa_id = misa_utils.create_product_misa_raw(
+                code=args.get('code'),
+                name=args.get('name'),
+                price=args.get('price', 0),
+                tax_percent=args.get('tax', 10),
+                unit_name=args.get('unit', 'Cái'),
+                category_name=args.get('category', 'Hàng hóa'),
+                product_type=args.get('type', 'goods'), # Hoặc lấy từ args nếu AI gửi
+                cat_id=args.get('category_id', False),
+                price_pu=args.get('price_pu', 0),
+            )
+            
+            return json.dumps({
+                "status": "success", 
+                "message": f"Tạo thành công sản phẩm: {args.get('name')}",
+                "misa_id": misa_id,
+                "code": args.get('code')
+            }, ensure_ascii=False)
+
+        except Exception as e:
+            _logger.exception("Create Misa Error")
+            return json.dumps({"status": "error", "message": f"Lỗi tạo MISA: {str(e)}"}, ensure_ascii=False)
 
     # =================================================================================
-    # 3. TOOLS LOGIC (HÀM TÌM KIẾM SẢN PHẨM V9)
+    # 3. HELPER METHODS (Xử lý Ảnh, Run Cleanup)
     # =================================================================================
-    def _execute_search_product_stock(self, keyword):
+    def _cancel_pending_runs(self, client, thread_id):
+        """Hủy các Run đang treo để tránh lỗi 400"""
+        try:
+            runs = client.beta.threads.runs.list(thread_id=thread_id, limit=1)
+            if runs.data:
+                last_run = runs.data[0]
+                if last_run.status in ['queued', 'in_progress', 'requires_action']:
+                    _logger.warning("⚠️ Cancelling stuck run: %s", last_run.id)
+                    client.beta.threads.runs.cancel(thread_id=thread_id, run_id=last_run.id)
+        except Exception as e:
+            _logger.warning("Check run warning: %s", str(e))
+
+    def _upload_image_to_openai(self, client, image_url):
+        """Tải ảnh từ Zalo -> Upload lên OpenAI File Storage"""
+        try:
+            _logger.info("⬇️ Downloading image: %s", image_url)
+            response = requests.get(image_url, timeout=10)
+            if response.status_code == 200:
+                file_bytes = io.BytesIO(response.content)
+                file_bytes.name = "zalo_img.jpg" # Đặt tên giả định
+                uploaded_file = client.files.create(file=file_bytes, purpose='vision')
+                return uploaded_file.id
+            return False
+        except Exception as e:
+            _logger.error("❌ Image Upload Error: %s", str(e))
+            return False
+
+    # =================================================================================
+    # 4. ZALO & UI INTEGRATION
+    # =================================================================================
+    @api.model
+    def process_zalo_message(self, zalo_user_id, message_content, zalo_msg_id=False, image_url=False):
         """
-        V9: Search Thông Minh - Ưu tiên khớp Tên & Lọc rác (Anti-Noise)
+        Webhook Entry Point: Nhận tin nhắn từ Zalo -> Xử lý AI -> Trả lời
         """
-        _logger.info("🔧 AI Search V9 Input: %s", keyword)
-        if not keyword: return json.dumps({"error": "Thiếu từ khóa"})
+        # 1. Tìm hoặc tạo Session
+        session = self.sudo().search([
+            ('zalo_user_id', '=', zalo_user_id)
+        ], limit=1, order='last_activity desc')
 
-        Product = self.env['product.product'].sudo()
-        
-        # 1. CLEANING
-        stop_words = ["kiểm", "tra", "tồn", "kho", "giá", "xem", "có", "không", "bao", "nhiêu", "cái", "con", "máy", "bộ"]
-        keyword_clean = keyword.lower()
-        for w in stop_words: 
-            keyword_clean = keyword_clean.replace(f" {w} ", " ").replace(f"{w} ", "")
-        keyword_clean = keyword_clean.strip()
-        if not keyword_clean: keyword_clean = keyword
-        
-        tokens = keyword_clean.split()
-
-        # 2. BROAD SEARCH (Tìm rộng)
-        domain = [('active', '=', True)]
-        
-        # Build Domain OR (Name | Code | Barcode)
-        if tokens:
-            # Logic: (Name contains T1) OR (Code contains T1) ...
-            # Cách viết domain gọn cho Odoo
-            search_domain = []
-            for token in tokens:
-                 search_domain += ['|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token)]
-            
-            # Cân bằng toán tử OR (Polish Notation): Cần (N-1) dấu '|' ở đầu
-            # Nhưng ở trên ta đã nhét '|' vào giữa rồi.
-            # Cách an toàn nhất là dùng phép cộng domain chuẩn:
-            final_domain = []
-            for token in tokens:
-                sub_domain = ['|', '|', ('name', 'ilike', token), ('default_code', 'ilike', token), ('barcode', 'ilike', token)]
-                if not final_domain:
-                    final_domain = sub_domain
-                else:
-                    final_domain = ['|'] + final_domain + sub_domain
-            domain += final_domain
-
-        products = Product.search(domain, limit=30)
-        
-        if not products:
-             return json.dumps({"status": "empty", "message": f"Không tìm thấy sản phẩm nào khớp '{keyword_clean}'."})
-
-        # 3. SCORING (Chấm điểm)
-        result_list = []
-        junk_keywords = ["vỏ", "pin", "sạc", "thùng", "combo", "phụ tùng", "tem", "nhãn"]
-        
-        for p in products:
-            score = 0
-            p_name = p.name.lower()
-            p_code = (p.default_code or "").lower()
-            
-            # Tiêu chí: Khớp token
-            matched = sum(1 for t in tokens if t in p_name or t in p_code)
-            score += matched * 1000
-
-            # Tiêu chí: Khớp chuỗi liền mạch
-            if keyword_clean in p_name: score += 2000
-            if keyword_clean in p_code: score += 3000
-
-            # Tiêu chí: Có tồn kho
-            if p.qty_available > 0: score += 1000
-
-            # Tiêu chí: Trừ điểm rác (Nếu khách không tìm rác)
-            for junk in junk_keywords:
-                if junk in p_name and junk not in keyword_clean:
-                    score -= 5000 # Đẩy xuống đáy
-
-            result_list.append({
-                "name": p.name,
-                "code": p.default_code or "N/A",
-                "price": p.list_price,
-                "qty": p.qty_available,
-                "uom": p.uom_id.name,
-                "_score": score
+        if not session:
+            session = self.sudo().create({
+                'name': f'Zalo Chat - {zalo_user_id}',
+                'zalo_user_id': zalo_user_id,
+                'state': 'active'
             })
 
-        # 4. SORT & RETURN
-        result_list.sort(key=lambda x: x['_score'], reverse=True)
-        final_results = result_list[:5]
-        for item in final_results: del item['_score']
+        # 2. Lưu tin nhắn User (Text + Link Ảnh hiển thị)
+        display_content = message_content
+        if image_url:
+            display_content = f"{message_content or '[Gửi ảnh]'} \n[IMG: {image_url}]"
 
-        return json.dumps(final_results, ensure_ascii=False)
+        self.env['hlv.chatgpt.message'].sudo().create({
+            'session_id': session.id,
+            'role': 'user',
+            'content': display_content,
+            'zalo_msg_id': zalo_msg_id
+        })
 
-    def _execute_check_product_existence(self, keyword):
-        # Hàm phụ trợ đơn giản
-        return self._execute_search_product_stock(keyword)
+        # 3. Gọi AI
+        ai_reply = session._call_openai_api(message_content, image_url=image_url)
 
-    # =================================================================================
-    # 4. UI ACTIONS
-    # =================================================================================
+        # 4. Lưu câu trả lời AI
+        self.env['hlv.chatgpt.message'].sudo().create({
+            'session_id': session.id,
+            'role': 'assistant',
+            'content': ai_reply
+        })
+        session.sudo().write({'last_activity': fields.Datetime.now()})
+
+        return ai_reply
+
     def action_send_message(self):
+        """Nút gửi tin nhắn từ giao diện Odoo"""
         self.ensure_one()
-        if not self.input_text: raise UserError("Vui lòng nhập nội dung.")
-
-        # 1. Lưu User Message
+        if not self.input_text: raise UserError("Chưa nhập nội dung.")
+        
+        # Lưu User Msg
         self.env['hlv.chatgpt.message'].create({
-            'session_id': self.id, 'role': 'user', 'content': self.input_text
+            'session_id': self.id, 
+            'role': 'user', 
+            'content': self.input_text
         })
         
-        user_query = self.input_text
-        self.input_text = ""
-
-        # 2. Gọi AI
-        ai_reply = self._call_openai_api(user_query)
-
-        # 3. Lưu AI Message
+        # Gọi AI
+        response = self._call_openai_api(self.input_text)
+        
+        # Lưu AI Msg
         self.env['hlv.chatgpt.message'].create({
-            'session_id': self.id, 'role': 'assistant', 'content': ai_reply
+            'session_id': self.id, 
+            'role': 'assistant', 
+            'content': response
         })
-        self.last_activity = fields.Datetime.now()
+        self.input_text = ""
 
 class HlvChatgptMessage(models.Model):
     _name = 'hlv.chatgpt.message'
-    _description = 'Chi tiết tin nhắn'
+    _description = 'Lịch sử tin nhắn Chat'
     _order = 'create_date asc'
 
-    session_id = fields.Many2one('hlv.chatgpt.session', string='Phiên chat', ondelete='cascade')
-    role = fields.Selection([('user', 'Bạn'), ('assistant', 'AI')], string='Role', required=True)
-    content = fields.Text(string='Nội dung')
+    session_id = fields.Many2one('hlv.chatgpt.session', ondelete='cascade')
+    role = fields.Selection([('user','User'),('assistant','AI'),('system','System')], required=True)
+    content = fields.Text(string="Nội dung")
+    zalo_msg_id = fields.Char(string="Msg ID Zalo (Deduplication)")
