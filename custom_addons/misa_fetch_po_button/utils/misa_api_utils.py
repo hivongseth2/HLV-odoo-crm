@@ -994,6 +994,56 @@ class MisaApiUtils(models.AbstractModel):
                 return item["id"], item["text"]
         return None, None
 
+    def _get_category_name_by_id(self, headers, cat_id):
+        """
+        Lấy tên danh mục từ ID bằng cách gọi API chi tiết (FormDataNew)
+        """
+        if not cat_id:
+            return None
+
+        # URL lấy chi tiết (dựa trên fetch log)
+        # Số 46/4 có thể là LayoutID/Mode, giữ nguyên theo mẫu
+        url = "https://amisapp.misa.vn/crm/g1/api/business/ProductCategory/FormDataNew/ProductCategory/46/4"
+        
+        # Payload giả lập hành động xem chi tiết
+        payload = {
+            "ID": str(cat_id),
+            "MISAEntityState": 2,  # 2 thường là trạng thái View/Edit trong hệ thống MISA
+            "ActiveLayoutCode": None,
+            "CustomDicData": None
+        }
+
+        try:
+            session = self._get_retry_session()
+            
+            # Đảm bảo header có layoutcode (quan trọng với API FormData)
+            post_headers = headers.copy()
+            post_headers['layoutcode'] = 'productcategory'
+            
+            # Xóa các header xung đột nếu có (do copy từ request cũ sang)
+            for k in ['content-length', 'Content-Length']:
+                post_headers.pop(k, None)
+
+            res = session.post(url, headers=post_headers, json=payload, timeout=20)
+
+            if res.ok:
+                data = res.json()
+                if data.get("Success"):
+                    # Truy xuất theo cấu trúc: Data -> CurrentData -> ProductCategoryName
+                    current_data = data.get("Data", {}).get("CurrentData", {})
+                    cat_name = current_data.get("ProductCategoryName")
+                    
+                    if cat_name:
+                        return str(cat_name).strip()
+                else:
+                    _logger.warning(f"⚠️ [GetCatName] API Success=False for ID: {cat_id}")
+            else:
+                _logger.warning(f"⚠️ [GetCatName] HTTP {res.status_code} for ID: {cat_id}")
+
+        except Exception as e:
+            _logger.error(f"❌ [GetCatName] Exception: {e}")
+
+        return None
     def _get_category_id_by_name(self, headers, name):
         """Tìm Category ID: Ưu tiên Tree API -> Fallback Grid Pagination"""
         clean_name = str(name).strip().lower()
