@@ -7,11 +7,6 @@ from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
-try:
-    import openpyxl
-except ImportError:
-    _logger.error("openpyxl not installed")
-
 class VendorImportWizard(models.TransientModel):
     _name = 'vendor.import.wizard'
     _description = 'Import/Update Vendors from Excel'
@@ -23,6 +18,11 @@ class VendorImportWizard(models.TransientModel):
         self.ensure_one()
         if not self.excel_file:
             raise UserError(_("Please upload an Excel file."))
+
+        try:
+            import openpyxl
+        except ImportError:
+            raise UserError(_("openpyxl library is not installed."))
 
         try:
             file_content = base64.b64decode(self.excel_file)
