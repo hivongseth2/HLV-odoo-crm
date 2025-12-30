@@ -1,0 +1,33 @@
+
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_vendor_import_wizard_form" model="ir.ui.view">
+        <field name="name">vendor.import.wizard.form</field>
+        <field name="model">vendor.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Import Vendors">
+                <group>
+                    <field name="excel_file" filename="file_name"/>
+                    <field name="file_name" invisible="1"/>
+                </group>
+                <footer>
+                    <button name="action_import" string="Import" type="object" class="btn-primary"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_vendor_import_wizard" model="ir.actions.act_window">
+        <field name="name">Import Vendors from Excel</field>
+        <field name="res_model">vendor.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_vendor_import_wizard"
+              name="Import Vendors (Excel)"
+              parent="contacts.menu_contacts"
+              action="action_vendor_import_wizard"
+              sequence="100"/>
+</odoo>
