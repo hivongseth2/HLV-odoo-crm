@@ -1292,7 +1292,7 @@ class MisaApiUtils(models.AbstractModel):
             }
 
             if pos_categ:
-                vals['pos_categ_id'] = pos_categ.id
+                vals['pos_categ_ids'] = [(6, 0, [pos_categ.id])]
             
             if uom_id:
                 vals['uom_id'] = uom_id
