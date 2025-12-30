@@ -123,22 +123,23 @@
     transform: translateY(-1px) !important;
 }
 
-/* Active / Highlighted - Light Background per user request */
+/* Active / Highlighted - Strong High Contrast per new request */
 .category-button.hlv-clean-category.active,
 .category-button.hlv-clean-category.highlight,
 .category-button.hlv-clean-category.o-active,
 .category-button.hlv-clean-category.selected,
 .category-button.hlv-clean-category.hlv-active-category {
     /* The one true selector */
-    background-color: #dbeafe !important;
-    /* Light Blue 100/200 */
-    border-color: #60a5fa !important;
-    /* Blue 400 */
-    color: #1e3a8a !important;
-    /* Dark Blue Text */
+    background-color: #2563eb !important;
+    /* Strong Primary Blue */
+    border-color: #1d4ed8 !important;
+    /* Darker Blue */
+    color: #ffffff !important;
+    /* White Text */
     font-weight: 700 !important;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.4) !important;
 }
+
 
 /* Remove the little side indicator if we are doing background */
 .category-button.hlv-clean-category.active::before,
@@ -160,8 +161,9 @@
 .category-button.hlv-clean-category.selected div,
 .category-button.hlv-clean-category.hlv-active-category span,
 .category-button.hlv-clean-category.hlv-active-category div {
-    color: #1e3a8a !important;
+    color: #ffffff !important;
 }
+
 
 /* Text alignment - Allow Wrapping */
 .category-button.hlv-clean-category span,
