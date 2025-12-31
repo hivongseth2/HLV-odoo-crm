@@ -1201,7 +1201,7 @@ class MisaApiUtils(models.AbstractModel):
         
         _logger.debug("catname", cat_name,)
 
-        unit_id, unit_text = self._find_dictionary_item_unit(headers, "UsageUnitID", unit_name)
+        unit_id, unit_text = self._find_dictionary_item_unit(headers, unit_name)
         _logger.info(f"Checking Unit: {unit_name} -> Found: {unit_id} - {unit_text}")
         
 
