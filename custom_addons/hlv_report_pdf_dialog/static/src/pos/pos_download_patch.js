@@ -30,7 +30,7 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
                     try {
                         const decodedFilename = decodeURIComponent(encodedFilename);
                         // Create a simple ASCII-safe filename
-                        const safeFilename = encodeURIComponent(decodedFilename);
+                        const safeFilename = decodedFilename.replace(/"/g, '\\"');
                         const disposition = value.startsWith('attachment') ? 'attachment' : 'inline';
                         const newValue = `${disposition}; filename="${safeFilename}"`;
                         console.log("POS Download: Sanitized Content-Disposition header", { original: value, sanitized: newValue });
@@ -48,7 +48,7 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
                     const encodedFilename = rfc2231Match[2];
                     try {
                         const decodedFilename = decodeURIComponent(encodedFilename);
-                        const safeFilename = encodeURIComponent(decodedFilename);
+                        const safeFilename = decodedFilename.replace(/"/g, '\\"');
                         const disposition = value.startsWith('attachment') ? 'attachment' : 'inline';
                         const newValue = `${disposition}; filename="${safeFilename}"`;
                         console.log("POS Download: Sanitized Content-Disposition header (RFC2231)", { original: value, sanitized: newValue });
