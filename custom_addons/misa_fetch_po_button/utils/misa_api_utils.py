@@ -1269,7 +1269,7 @@ class MisaApiUtils(models.AbstractModel):
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
-    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods",cat_id=None, price_pu=0):
+    def create_product_misa_raw(self, code, name, price=0, tax_percent=10, unit_name="Cái", category_name="Hàng hóa", product_type="goods", cat_id=None, category_id=None, price_pu=0):
         misa_config = self.env['misa.config']
         token = self._fetch_login_crm_token()
         if not token:
@@ -1279,8 +1279,8 @@ class MisaApiUtils(models.AbstractModel):
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
         # --- 1. XỬ LÝ ID ---
+        cat_id = category_id or cat_id
         cat_name = self._get_category_name_by_id(headers, cat_id)
-        cat_id = cat_id
         # if not cat_id:
         #      cat_id = self._get_category_id_by_name(headers, "Hàng hóa") or 23 
         
@@ -1378,6 +1378,61 @@ class MisaApiUtils(models.AbstractModel):
         
         if not misa_id:
              raise Exception("MISA báo thành công nhưng không trả ID.")
+
+        # --- TẠO SẢN PHẨM Ở ODOO ---
+        try:
+            # Tìm category POS theo MISA ID (đã import ở module pos_category_import_json)
+            pos_categ = False
+            if cat_id:
+                pos_categ = self.env['pos.category'].sudo().search([('x_misa_id', '=', int(cat_id))], limit=1)
+
+            # Tìm Unit
+            uom_id = False
+            if unit_name:
+                found_uom = self.env['uom.uom'].sudo().search([('name', '=', unit_name)], limit=1)
+                if found_uom:
+                    uom_id = found_uom.id
+
+            # Chuẩn bị values
+            vals = {
+                'name': name,
+                'list_price': price,
+                'standard_price': price_pu,
+                'type': 'consu' if str(product_type).lower() == 'goods' else 'service',
+                'is_storable': True if str(product_type).lower() == 'goods' else False,
+                'available_in_pos': True,
+            }
+
+            # Tìm và gán thuế theo phần trăm
+            if tax_percent:
+                tax = self.env['account.tax'].sudo().search([
+                    ('amount', '=', float(tax_percent)),
+                    ('type_tax_use', '=', 'sale')
+                ], limit=1)
+                if tax:
+                    vals['taxes_id'] = [(6, 0, [tax.id])]
+
+            if pos_categ:
+                vals['pos_categ_ids'] = [(6, 0, [pos_categ.id])]
+            
+            if uom_id:
+                vals['uom_id'] = uom_id
+                vals['uom_po_id'] = uom_id
+
+            # Check tồn tại
+            existing_prod = self.env['product.template'].sudo().search([('default_code', '=', code)], limit=1)
+            
+            if not existing_prod:
+                vals['default_code'] = code
+                new_prod = self.env['product.template'].sudo().create(vals)
+                _logger.info("Đã tạo sản phẩm Odoo: %s (ID: %s) từ API MISA", new_prod.name, new_prod.id)
+            else:
+                existing_prod.sudo().write(vals)
+                _logger.info("Đã cập nhật sản phẩm Odoo: %s (ID: %s) từ API MISA", existing_prod.name, existing_prod.id)
+
+        except Exception as e:
+            _logger.error("Lỗi khi tạo sản phẩm Odoo từ API MISA: %s", str(e))
+            # Không raise lỗi để tránh ảnh hưởng response MISA ID nếu MISA tạo thành công rồi
 
         return misa_id
     
