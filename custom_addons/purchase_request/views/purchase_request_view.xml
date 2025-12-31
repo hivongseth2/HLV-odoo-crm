@@ -267,6 +267,7 @@
         <field name="name">purchase.request.list.select</field>
         <field name="model">purchase.request</field>
         <field name="arch" type="xml">
+            <search string="Tìm kiếm yêu cầu mua hàng">
                 <field name="name" string="Yêu cầu mua hàng" />
                 <separator />
                 <field name="product_id" />
@@ -298,7 +299,7 @@
                 />
                 <filter
                     name="state_in_progress"
-                    string="In Progress"
+                    string="Đang thực hiện"
                     domain="[('state','=','in_progress')]"
                     help="Request is in progress"
                 />
@@ -310,7 +311,7 @@
                 />
                 <filter
                     name="state_done"
-                    string="Done"
+                    string="Hoàn thành"
                     domain="[('state','=','done')]"
                     help="Request is done"
                 />
