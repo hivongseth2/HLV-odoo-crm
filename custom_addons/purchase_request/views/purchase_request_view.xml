@@ -422,6 +422,7 @@
         <field name="context">{"search_default_requested_by":uid}</field>
         <field name="search_view_id" ref="view_purchase_request_search" />
         <field name="help" type="html">
+            <p class="oe_view_nocontent_create">
                 Nhấp để bắt đầu một quy trình yêu cầu mua hàng mới.
             </p>
             <p>
