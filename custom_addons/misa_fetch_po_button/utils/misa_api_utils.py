@@ -1140,69 +1140,67 @@ class MisaApiUtils(models.AbstractModel):
     
     def _find_dictionary_item_unit(self, headers, search_text):
         """
-        Lấy danh sách Unit từ MISA.
-        FIX: Thêm User-Agent và Referer để tránh bị Timeout do tường lửa chặn.
+        Lấy danh sách Unit. Viết lại theo style của _get_category_name_by_id.
+        QUAN TRỌNG: Phải set layoutcode='settings' thì mới không bị Timeout.
         """
         if not search_text:
             return None, None
 
+        # 1. URL chuẩn (như fetch mẫu)
         url = "https://amisapp.misa.vn/crm/g1/api/business/Dictionary/DictionaryNotUsedAllFormLayout/Product/UsageUnitID"
         
-        # 1. COPY HEADER ĐỂ GIỐNG TRÌNH DUYỆT
-        # Tạo bản sao của headers để không ảnh hưởng biến gốc
-        request_headers = headers.copy()
-        
-        # Thêm các header giả lập trình duyệt (quan trọng để tránh timeout)
-        request_headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://amisapp.misa.vn/crm/settings/main/other-settings/other-settings",
-            "Accept": "application/json, text/plain, */*",
-            # Đảm bảo Content-Type đúng
-            "Content-Type": "application/json"
-        })
-
-        # LOG HEADER ĐỂ KIỂM TRA (Debug xong thì xóa)
-        # _logger.info(f"DEBUG HEADERS: {request_headers}")
-
         try:
-            session = getattr(self, '_get_retry_session', requests.Session)()
+            session = self._get_retry_session()
             
-            # 2. GỬI REQUEST
-            # Lưu ý: MISA yêu cầu POST với body là null (json=None)
-            _logger.info(f"Connecting to MISA Dictionary...")
-            res = session.post(url, headers=request_headers, json=None, timeout=30)
+            # 2. Xử lý Header (Giống hệt hàm Category đang chạy ngon)
+            post_headers = headers.copy()
             
-            if res.status_code != 200:
-                _logger.warning(f"MISA Unit Fetch Failed: {res.status_code} | {res.text[:100]}")
-                return None, None
+            # --- KHÁC BIỆT QUAN TRỌNG NHẤT ---
+            # API này nằm ở module thiết lập, bắt buộc phải là 'settings'. 
+            # Nếu để 'product' nó sẽ bị timeout.
+            post_headers['layoutcode'] = 'settings' 
+            
+            # Thêm Referer cho chắc (giống fetch mẫu)
+            post_headers['referrer'] = "https://amisapp.misa.vn/crm/settings/main/other-settings/other-settings"
 
-            res_json = res.json()
-            if not res_json.get("Success"):
-                _logger.warning(f"MISA API Success=False: {res_json}")
-                return None, None
+            # Xóa header rác
+            for k in ['content-length', 'Content-Length']:
+                post_headers.pop(k, None)
 
-            # 3. XỬ LÝ DATA (Data[0] chứa list items)
-            raw_data = res_json.get("Data", [])
-            items = []
-            if raw_data and isinstance(raw_data, list) and len(raw_data) > 0:
-                items = raw_data[0]
+            # 3. Gọi POST với body rỗng (json=None)
+            _logger.info(f"fetching Unit with layoutcode=settings...")
+            res = session.post(url, headers=post_headers, json=None, timeout=30)
 
-            search_norm = search_text.strip().lower()
+            if res.ok:
+                data = res.json()
+                if data.get("Success"):
+                    # Xử lý cấu trúc Data: [[{id:1, text:'Cái'},...], []]
+                    # Data nằm trong phần tử đầu tiên của mảng Data
+                    raw_data_list = data.get("Data", [])
+                    items = []
+                    
+                    if raw_data_list and isinstance(raw_data_list, list) and len(raw_data_list) > 0:
+                        items = raw_data_list[0] # Lấy list thật sự bên trong
 
-            for item in items:
-                # Key là "text" và "id" dựa trên response bạn gửi
-                item_name = item.get("text") or ""
-                
-                if item_name.strip().lower() == search_norm:
-                    found_id = item.get("id")
-                    _logger.info(f"✅ Found Unit: '{search_text}' -> ID: {found_id}")
-                    return found_id, item_name
+                    search_norm = search_text.strip().lower()
 
-        except requests.exceptions.ReadTimeout:
-            _logger.error("❌ MISA Timeout: Server không phản hồi sau 30s. Kiểm tra lại CompanyCode hoặc VPN/Firewall.")
+                    for item in items:
+                        # Key trong response này là 'text' và 'id'
+                        item_name = item.get("text") or ""
+                        if item_name.strip().lower() == search_norm:
+                            found_id = item.get("id")
+                            _logger.info(f"✅ Found Unit: '{search_text}' -> ID: {found_id}")
+                            return found_id, item_name
+                            
+                    _logger.warning(f"⚠️ Unit '{search_text}' not found in list.")
+                else:
+                     _logger.warning(f"⚠️ [GetUnit] API Success=False: {data}")
+            else:
+                _logger.warning(f"⚠️ [GetUnit] HTTP {res.status_code} | {res.text[:100]}")
+
         except Exception as e:
-            _logger.error(f"❌ Error in _find_dictionary_item: {str(e)}")
-        
+            _logger.error(f"❌ [GetUnit] Exception: {e}")
+
         return None, None
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
