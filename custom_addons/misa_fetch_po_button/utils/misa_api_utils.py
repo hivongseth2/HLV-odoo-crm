@@ -1138,7 +1138,7 @@ class MisaApiUtils(models.AbstractModel):
             raise Exception(f"Không tìm thấy sản phẩm có ID {product_id} trong Odoo")
         return self._process_create_product(product)
     
-    def _find_dictionary_item(self, headers, search_text):
+    def _find_dictionary_item_unit(self, headers, search_text):
         """
         Lấy danh sách Unit từ MISA, tìm ID ứng với search_text.
         """
