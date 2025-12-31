@@ -11,29 +11,29 @@ from odoo.tools import get_lang
 
 class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     _name = "purchase.request.line.make.purchase.order"
-    _description = "Purchase Request Line Make Purchase Order"
+    _description = "Tạo đơn mua hàng từ chi tiết yêu cầu mua hàng"
 
     supplier_id = fields.Many2one(
         comodel_name="res.partner",
-        string="Supplier",
+        string="Nhà cung cấp",
         required=True,
         context={"res_partner_search_mode": "supplier"},
     )
     item_ids = fields.One2many(
         comodel_name="purchase.request.line.make.purchase.order.item",
         inverse_name="wiz_id",
-        string="Items",
+        string="Mục",
     )
     purchase_order_id = fields.Many2one(
         comodel_name="purchase.order",
-        string="Purchase Order",
+        string="Đơn mua hàng",
         domain=[("state", "=", "draft")],
     )
     sync_data_planned = fields.Boolean(
-        string="Match existing PO lines by Scheduled Date",
+        string="Khớp các dòng PO hiện có theo Ngày dự kiến",
         help=(
-            "When checked, PO lines on the selected purchase order are only reused "
-            "if the scheduled date matches as well."
+            "Khi được chọn, các dòng PO trên đơn mua hàng đã chọn chỉ được sử dụng lại "
+            "nếu ngày dự kiến cũng khớp."
         ),
     )
 
@@ -56,28 +56,28 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
 
         for line in self.env["purchase.request.line"].browse(request_line_ids):
             if line.request_id.state == "done":
-                raise UserError(_("The purchase has already been completed."))
+                raise UserError(_("Việc mua hàng đã hoàn thành."))
             if line.request_id.state not in ["approved", "in_progress"]:
                 raise UserError(
-                    _("Purchase Request %s is not approved or in progress")
+                    _("Yêu cầu mua hàng %s không được phê duyệt hoặc đang thực hiện")
                     % line.request_id.name
                 )
 
             if line.purchase_state == "done":
-                raise UserError(_("The purchase has already been completed."))
+                raise UserError(_("Việc mua hàng đã hoàn thành."))
 
             line_company_id = line.company_id and line.company_id.id or False
             if company_id is not False and line_company_id != company_id:
-                raise UserError(_("You have to select lines from the same company."))
+                raise UserError(_("Bạn phải chọn các dòng từ cùng một công ty."))
             else:
                 company_id = line_company_id
 
             line_picking_type = line.request_id.picking_type_id or False
             if not line_picking_type:
-                raise UserError(_("You have to enter a Picking Type."))
+                raise UserError(_("Bạn phải nhập một Loại lấy hàng."))
             if picking_type is not False and line_picking_type != picking_type:
                 raise UserError(
-                    _("You have to select lines from the same Picking Type.")
+                    _("Bạn phải chọn các dòng từ cùng một Loại lấy hàng.")
                 )
             else:
                 picking_type = line_picking_type
@@ -87,8 +87,8 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         if len(list(set(request_lines.mapped("request_id.group_id")))) > 1:
             raise UserError(
                 _(
-                    "You cannot create a single purchase order from "
-                    "purchase requests that have different procurement group."
+                    "Bạn không thể tạo một đơn mua hàng duy nhất từ "
+                    "các yêu cầu mua hàng có nhóm cung ứng khác nhau."
                 )
             )
 
@@ -127,7 +127,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     @api.model
     def _prepare_purchase_order(self, picking_type, group_id, company, origin):
         if not self.supplier_id:
-            raise UserError(_("Enter a supplier."))
+            raise UserError(_("Nhập một nhà cung cấp."))
         supplier = self.supplier_id
         data = {
             "origin": origin,
@@ -162,7 +162,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
     @api.model
     def _prepare_purchase_order_line(self, po, item):
         if not item.product_id:
-            raise UserError(_("Please select a product for all lines"))
+            raise UserError(_("Vui lòng chọn một sản phẩm cho tất cả các dòng"))
         product = item.product_id
 
         # Keep the standard product UOM for purchase order so we should
@@ -234,7 +234,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         for item in self.item_ids:
             line = item.line_id
             if item.product_qty <= 0.0:
-                raise UserError(_("Enter a positive quantity."))
+                raise UserError(_("Nhập một số lượng dương."))
             if self.purchase_order_id:
                 purchase = self.purchase_order_id
             if not purchase:
@@ -332,52 +332,52 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
 
 class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     _name = "purchase.request.line.make.purchase.order.item"
-    _description = "Purchase Request Line Make Purchase Order Item"
+    _description = "Mục tạo đơn mua hàng từ chi tiết yêu cầu mua hàng"
 
     wiz_id = fields.Many2one(
         comodel_name="purchase.request.line.make.purchase.order",
-        string="Wizard",
+        string="Trình thuật sĩ",
         required=True,
         ondelete="cascade",
         readonly=True,
     )
     line_id = fields.Many2one(
-        comodel_name="purchase.request.line", string="Purchase Request Line"
+        comodel_name="purchase.request.line", string="Dòng yêu cầu mua hàng"
     )
     request_id = fields.Many2one(
         comodel_name="purchase.request",
         related="line_id.request_id",
-        string="Purchase Request",
+        string="Yêu cầu mua hàng",
         readonly=False,
     )
     product_id = fields.Many2one(
         comodel_name="product.product",
-        string="Product",
+        string="Sản phẩm",
         related="line_id.product_id",
         readonly=False,
     )
-    name = fields.Char(string="Description", required=True)
+    description = fields.Char(string="Mô tả", required=True)
     product_qty = fields.Float(
-        string="Quantity to purchase", digits="Product Unit of Measure"
+        string="Số lượng cần mua", digits="Product Unit of Measure"
     )
     product_uom_id = fields.Many2one(
-        comodel_name="uom.uom", string="UoM", required=True
+        comodel_name="uom.uom", string="ĐVT", required=True
     )
     estimated_cost = fields.Monetary(currency_field="currency_id")
     currency_id = fields.Many2one(
-        "res.currency", string="Currency", related="line_id.currency_id", readonly=True
+        "res.currency", string="Tiền tệ", related="line_id.currency_id", readonly=True
     )
-    keep_description = fields.Boolean(
-        string="Copy descriptions to new PO",
-        help="Set true if you want to keep the "
-        "descriptions provided in the "
-        "wizard in the new PO.",
+    keep_descriptions = fields.Boolean(
+        string="Sao chép mô tả sang PO mới",
+        help="Đặt thành đúng nếu bạn muốn giữ "
+        "mô tả được cung cấp trong "
+        "trình thuật sĩ vào PO mới.",
     )
-    keep_estimated_cost = fields.Boolean(
-        string="Copy estimative cost to new PO",
-        help="Set true if you want to keep the "
-        "estimated cost provided in the "
-        "wizard in the new PO.",
+    keep_estimated_costs = fields.Boolean(
+        string="Sao chép chi phí ước tính sang PO mới",
+        help="Đặt thành đúng nếu bạn muốn giữ "
+        "chi phí ước tính được cung cấp trong "
+        "trình thuật sĩ vào PO mới.",
     )
 
     @api.onchange("product_id")

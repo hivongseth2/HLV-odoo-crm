@@ -13,16 +13,16 @@ class StockMoveLine(models.Model):
     @api.model
     def _purchase_request_confirm_done_message_content(self, message_data):
         title = _(
-            "Receipt confirmation {picking_name} for your Request {request_name}"
+            "Xác nhận nhận hàng {picking_name} cho yêu cầu {request_name}"
         ).format(
             picking_name=message_data["picking_name"],
             request_name=message_data["request_name"],
         )
 
         message_body = _(
-            "The following requested items from Purchase Request {request_name} "
-            "have now been received in {location_name} "
-            "using Picking {picking_name}:"
+            "Các mục yêu cầu sau đây từ Yêu cầu mua hàng {request_name} "
+            "hiện đã được nhận tại {location_name} "
+            "thông qua Phiếu lấy hàng {picking_name}:"
         ).format(
             request_name=message_data["request_name"],
             location_name=message_data["location_name"],
@@ -41,14 +41,14 @@ class StockMoveLine(models.Model):
 
     @api.model
     def _picking_confirm_done_message_content(self, message_data):
-        title = _("Receipt confirmation for Request {name}").format(
+        title = _("Xác nhận nhận hàng cho Yêu cầu {name}").format(
             name=message_data["request_name"]
         )
 
         message_body = _(
-            "The following requested items from Purchase Request {request_name} "
-            "requested by {requestor} "
-            "have now been received in {location_name}:"
+            "Các mục yêu cầu sau đây từ Yêu cầu mua hàng {request_name} "
+            "được yêu cầu bởi {requestor} "
+            "hiện đã được nhận tại {location_name}:"
         ).format(
             request_name=message_data["request_name"],
             requestor=message_data["requestor"],
@@ -56,7 +56,7 @@ class StockMoveLine(models.Model):
         )
 
         product_line = Markup(
-            "<ul><li><b>{}</b>: " + _("Transferred quantity") + " {} {}</li></ul>"
+            "<ul><li><b>{}</b>: " + _("Số lượng đã dịch chuyển") + " {} {}</li></ul>"
         ).format(
             html_escape(message_data["product_name"]),
             message_data["product_qty"],

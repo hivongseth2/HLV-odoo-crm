@@ -11,7 +11,7 @@ class StockMove(models.Model):
 
     created_purchase_request_line_id = fields.Many2one(
         comodel_name="purchase.request.line",
-        string="Created Purchase Request Line",
+        string="Dòng yêu cầu mua hàng đã tạo",
         ondelete="set null",
         readonly=True,
         copy=False,
@@ -22,12 +22,12 @@ class StockMove(models.Model):
         comodel_name="purchase.request.allocation",
         inverse_name="stock_move_id",
         copy=False,
-        string="Purchase Request Allocation",
+        string="Phân bổ yêu cầu mua hàng",
     )
 
     purchase_request_ids = fields.One2many(
         comodel_name="purchase.request",
-        string="Purchase Requests",
+        string="Yêu cầu mua hàng",
         compute="_compute_purchase_request_ids",
     )
 
@@ -55,9 +55,9 @@ class StockMove(models.Model):
                     {
                         "activity_type_id": activity_type_id,
                         "note": _(
-                            "A sale/manufacturing order that generated this "
-                            "purchase request has been cancelled/deleted. "
-                            "Check if an action is needed."
+                            "Đơn hàng bán/sản xuất đã tạo ra "
+                            "yêu cầu mua hàng này đã bị hủy/xóa. "
+                            "Hãy kiểm tra xem có cần hành động gì không."
                         ),
                         "user_id": activity_user.id,
                         "res_id": pr_line.request_id.id,

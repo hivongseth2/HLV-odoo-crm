@@ -14,22 +14,22 @@ class PurchaseOrder(models.Model):
         self.ensure_one()
         if not request_dict:
             request_dict = {}
-        title = _("Order confirmation %(po_name)s for your Request %(pr_name)s") % {
+        title = _("Xác nhận đơn hàng %(po_name)s cho yêu cầu %(pr_name)s của bạn") % {
             "po_name": self.name,
             "pr_name": request.name,
         }
         message = f"<h3>{title}</h3><ul>"
         message += _(
-            "The following requested items from Purchase Request %(pr_name)s "
-            "have now been confirmed in Purchase Order %(po_name)s:",
+            "Các mục yêu cầu sau đây từ Yêu cầu mua hàng %(pr_name)s "
+            "hiện đã được xác nhận trong Đơn đặt hàng %(po_name)s:",
             po_name=self.name,
             pr_name=request.name,
         )
 
         for line in request_dict.values():
             message += _(
-                "<li><b>%(prl_name)s</b>: Ordered quantity %(prl_qty)s %(prl_uom)s, "
-                "Planned date %(prl_date_planned)s</li>"
+                "<li><b>%(prl_name)s</b>: Số lượng đã đặt %(prl_qty)s %(prl_uom)s, "
+                "Ngày dự kiến %(prl_date_planned)s</li>"
             ) % {
                 "prl_name": html_escape(line["name"]),
                 "prl_qty": line["product_qty"],
@@ -75,7 +75,7 @@ class PurchaseOrder(models.Model):
                 for request_line in line.purchase_request_lines:
                     if request_line.sudo().purchase_state == "done":
                         raise exceptions.UserError(
-                            _("Purchase Request %s has already been completed")
+                            _("Yêu cầu mua hàng %s đã được hoàn thành")
                             % (request_line.request_id.name)
                         )
         return True
@@ -117,7 +117,7 @@ class PurchaseOrderLine(models.Model):
     purchase_request_allocation_ids = fields.One2many(
         comodel_name="purchase.request.allocation",
         inverse_name="purchase_line_id",
-        string="Purchase Request Allocation",
+        string="Phân bổ yêu cầu mua hàng",
         copy=False,
     )
 
@@ -132,7 +132,7 @@ class PurchaseOrderLine(models.Model):
         domain = [("id", "in", request_line_ids)]
 
         return {
-            "name": _("Purchase Request Lines"),
+            "name": _("Dòng yêu cầu mua hàng"),
             "type": "ir.actions.act_window",
             "res_model": "purchase.request.line",
             "view_mode": "list,form",
@@ -195,20 +195,20 @@ class PurchaseOrderLine(models.Model):
 
     @api.model
     def _purchase_request_confirm_done_message_content(self, message_data):
-        title = _("Service confirmation for Request {request_name}").format(
+        title = _("Xác nhận dịch vụ cho Yêu cầu {request_name}").format(
             request_name=message_data["request_name"]
         )
 
         message_body = _(
-            "The following requested services from Purchase Request {request_name} "
-            "requested by {requestor} have now been received:"
+            "Các dịch vụ được yêu cầu sau đây từ Yêu cầu mua hàng {request_name} "
+            "được yêu cầu bởi {requestor} hiện đã được nhận:"
         ).format(
             request_name=message_data["request_name"],
             requestor=message_data["requestor"],
         )
 
         product_line = Markup(
-            "<ul><li><b>{}</b>: " + _("Received quantity") + " {} {}</li></ul>"
+            "<ul><li><b>{}</b>: " + _("Số lượng đã nhận") + " {} {}</li></ul>"
         ).format(
             html_escape(message_data["product_name"]),
             message_data["product_qty"],

@@ -9,10 +9,10 @@ from odoo.tools import html_escape
 
 class PurchaseRequestAllocation(models.Model):
     _name = "purchase.request.allocation"
-    _description = "Purchase Request Allocation"
+    _description = "Phân bổ yêu cầu mua hàng"
 
     purchase_request_line_id = fields.Many2one(
-        string="Purchase Request Line",
+        string="Dòng yêu cầu mua hàng",
         comodel_name="purchase.request.line",
         required=True,
         ondelete="cascade",
@@ -20,7 +20,7 @@ class PurchaseRequestAllocation(models.Model):
         index=True,
     )
     company_id = fields.Many2one(
-        string="Company",
+        string="Công ty",
         comodel_name="res.company",
         readonly=True,
         related="purchase_request_line_id.request_id.company_id",
@@ -28,46 +28,44 @@ class PurchaseRequestAllocation(models.Model):
         index=True,
     )
     stock_move_id = fields.Many2one(
-        string="Stock Move",
+        string="Dịch chuyển kho",
         comodel_name="stock.move",
         ondelete="cascade",
         index=True,
     )
     purchase_line_id = fields.Many2one(
-        string="Purchase Line",
+        string="Dòng mua hàng",
         comodel_name="purchase.order.line",
         copy=True,
         ondelete="cascade",
-        help="Service Purchase Order Line",
+        help="Dòng đơn đặt hàng dịch vụ",
         index=True,
     )
     product_id = fields.Many2one(
-        string="Product",
+        string="Sản phẩm",
         comodel_name="product.product",
         related="purchase_request_line_id.product_id",
         readonly=True,
     )
     product_uom_id = fields.Many2one(
-        string="UoM",
+        string="Đơn vị tính",
         comodel_name="uom.uom",
         related="purchase_request_line_id.product_uom_id",
         readonly=True,
         required=True,
     )
     requested_product_uom_qty = fields.Float(
-        string="Requested Quantity",
-        help="Quantity of the purchase request line allocated to the"
-        "stock move, in the UoM of the Purchase Request Line",
+        string="Số lượng yêu cầu",
+        help="Số lượng của dòng yêu cầu mua hàng được phân bổ cho dịch chuyển kho, theo ĐVT của dòng yêu cầu mua hàng",
     )
 
     allocated_product_qty = fields.Float(
-        string="Allocated Quantity",
+        string="Số lượng đã phân bổ",
         copy=False,
-        help="Quantity of the purchase request line allocated to the stock"
-        "move, in the default UoM of the product",
+        help="Số lượng của dòng yêu cầu mua hàng được phân bổ cho dịch chuyển kho, theo ĐVT mặc định của sản phẩm",
     )
     open_product_qty = fields.Float(
-        string="Open Quantity", compute="_compute_open_product_qty"
+        string="Số lượng mở", compute="_compute_open_product_qty"
     )
 
     purchase_state = fields.Selection(related="purchase_line_id.state")
@@ -98,13 +96,13 @@ class PurchaseRequestAllocation(models.Model):
     def _purchase_request_confirm_done_message_content(self, message_data):
         message = ""
         message += _(
-            "From last reception this quantity has been "
-            "allocated to this purchase request"
+            "Từ lần nhận cuối cùng, số lượng này đã được "
+            "phân bổ cho yêu cầu mua hàng này"
         )
         message += "<ul>"
         message += _(
             "<li><b>%(product_name)s</b>: "
-            "Received quantity %(product_qty)s %(product_uom)s</li>"
+            "Số lượng đã nhận %(product_qty)s %(product_uom)s</li>"
         ) % {
             "product_name": html_escape(message_data["product_name"]),
             "product_qty": message_data["product_qty"],

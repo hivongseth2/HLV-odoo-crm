@@ -7,8 +7,8 @@
         <field name="model">purchase.request.line.make.purchase.order</field>
         <field name="type">form</field>
         <field name="arch" type="xml">
-            <form string="Create RFQ">
-                <separator string="Existing RFQ to update:" />
+            <form string="Tạo RFQ">
+                <separator string="RFQ hiện có để cập nhật:" />
                 <newline />
                 <group>
                     <field
@@ -18,7 +18,7 @@
                     <field name="sync_data_planned" />
                 </group>
                 <newline />
-                <separator string="New PO details:" />
+                <separator string="Chi tiết Đơn mua hàng mới:" />
                 <newline />
                 <group>
                     <field name="supplier_id" />
@@ -26,7 +26,7 @@
                 <newline />
                 <group>
                     <field name="item_ids" nolabel="1" colspan="2">
-                        <list name="Details" create="false" editable="bottom">
+                        <list name="Chi tiết" create="false" editable="bottom">
                             <field
                                 name="line_id"
                                 options="{'no_open': true}"
@@ -60,11 +60,11 @@
                 <footer>
                     <button
                         name="make_purchase_order"
-                        string="Create RFQ"
+                        string="Tạo RFQ"
                         type="object"
                         class="oe_highlight"
                     />
-                    <button special="cancel" string="Cancel" class="oe_link" />
+                    <button special="cancel" string="Hủy" class="oe_link" />
                 </footer>
             </form>
         </field>
@@ -73,7 +73,7 @@
         id="action_purchase_request_line_make_purchase_order"
         model="ir.actions.act_window"
     >
-        <field name="name">Create RFQ</field>
+        <field name="name">Tạo RFQ</field>
         <field name="type">ir.actions.act_window</field>
         <field name="res_model">purchase.request.line.make.purchase.order</field>
         <field name="view_mode">form</field>

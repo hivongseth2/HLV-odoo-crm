@@ -8,7 +8,8 @@ class ProductTemplate(models.Model):
     _inherit = "product.template"
 
     purchase_request = fields.Boolean(
-        help="Check this box to generate Purchase Request instead of "
-        "generating Requests For Quotation from procurement.",
+        string="Yêu cầu mua hàng",
+        help="Chọn ô này để tạo Yêu cầu mua hàng thay vì "
+        "tạo Yêu cầu báo giá từ cung ứng.",
         company_dependent=True,
     )

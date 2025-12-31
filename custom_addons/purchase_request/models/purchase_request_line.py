@@ -5,35 +5,35 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 _STATES = [
-    ("draft", "Draft"),
-    ("to_approve", "To be approved"),
-    ("approved", "Approved"),
-    ("in_progress", "In progress"),
-    ("done", "Done"),
-    ("rejected", "Rejected"),
+    ("draft", "Mới"),
+    ("to_approve", "Chờ phê duyệt"),
+    ("approved", "Đã phê duyệt"),
+    ("in_progress", "Đang thực hiện"),
+    ("done", "Hoàn thành"),
+    ("rejected", "Từ chối"),
 ]
 
 
 class PurchaseRequestLine(models.Model):
     _name = "purchase.request.line"
-    _description = "Purchase Request Line"
+    _description = "Chi tiết yêu cầu mua hàng"
     _inherit = ["mail.thread", "mail.activity.mixin", "analytic.mixin"]
     _order = "id desc"
 
-    name = fields.Char(string="Description", tracking=True)
+    name = fields.Char(string="Mô tả", tracking=True)
     product_uom_id = fields.Many2one(
         comodel_name="uom.uom",
-        string="UoM",
+        string="Đơn vị tính",
         tracking=True,
         domain="[('category_id', '=', product_uom_category_id)]",
     )
     product_uom_category_id = fields.Many2one(related="product_id.uom_id.category_id")
     product_qty = fields.Float(
-        string="Quantity", tracking=True, digits="Product Unit of Measure"
+        string="Số lượng", tracking=True, digits="Product Unit of Measure"
     )
     request_id = fields.Many2one(
         comodel_name="purchase.request",
-        string="Purchase Request",
+        string="Yêu cầu mua hàng",
         ondelete="cascade",
         readonly=True,
         index=True,
@@ -42,48 +42,48 @@ class PurchaseRequestLine(models.Model):
     company_id = fields.Many2one(
         comodel_name="res.company",
         related="request_id.company_id",
-        string="Company",
+        string="Công ty",
         store=True,
         index=True,
     )
     requested_by = fields.Many2one(
         comodel_name="res.users",
         related="request_id.requested_by",
-        string="Requested by",
+        string="Người yêu cầu",
         store=True,
     )
     assigned_to = fields.Many2one(
         comodel_name="res.users",
         related="request_id.assigned_to",
-        string="Assigned to",
+        string="Giao cho",
         store=True,
     )
     date_start = fields.Date(related="request_id.date_start", store=True)
     description = fields.Text(
         related="request_id.description",
-        string="PR Description",
+        string="Mô tả yêu cầu",
         store=True,
         readonly=False,
     )
     origin = fields.Char(
-        related="request_id.origin", string="Source Document", store=True
+        related="request_id.origin", string="Tài liệu gốc", store=True
     )
     date_required = fields.Date(
-        string="Request Date",
+        string="Ngày yêu cầu",
         required=True,
         tracking=True,
         default=fields.Date.context_today,
     )
     is_editable = fields.Boolean(compute="_compute_is_editable", readonly=True)
-    specifications = fields.Text()
+    specifications = fields.Text(string="Thông số kỹ thuật")
     request_state = fields.Selection(
-        string="Request state",
+        string="Trạng thái yêu cầu",
         related="request_id.state",
         store=True,
     )
     supplier_id = fields.Many2one(
         comodel_name="res.partner",
-        string="Preferred supplier",
+        string="Nhà cung cấp ưa thích",
         compute="_compute_supplier_id",
         compute_sudo=True,
         store=True,
@@ -91,7 +91,7 @@ class PurchaseRequestLine(models.Model):
     cancelled = fields.Boolean(readonly=True, default=False, copy=False)
 
     purchased_qty = fields.Float(
-        string="RFQ/PO Qty",
+        string="Số lượng RFQ/PO",
         digits="Product Unit of Measure",
         compute="_compute_purchased_qty",
     )
@@ -100,13 +100,13 @@ class PurchaseRequestLine(models.Model):
         relation="purchase_request_purchase_order_line_rel",
         column1="purchase_request_line_id",
         column2="purchase_order_line_id",
-        string="Purchase Order Lines",
+        string="Dòng đơn đặt hàng",
         readonly=True,
         copy=False,
     )
     purchase_state = fields.Selection(
         compute="_compute_purchase_state",
-        string="Purchase Status",
+        string="Trạng thái mua hàng",
         selection=lambda self: self.env["purchase.order"]
         ._fields["state"]
         ._description_selection(self.env),
@@ -115,11 +115,11 @@ class PurchaseRequestLine(models.Model):
     move_dest_ids = fields.One2many(
         comodel_name="stock.move",
         inverse_name="created_purchase_request_line_id",
-        string="Downstream Moves",
+        string="Dịch chuyển kho hạ nguồn",
     )
 
     orderpoint_id = fields.Many2one(
-        comodel_name="stock.warehouse.orderpoint", string="Orderpoint"
+        comodel_name="stock.warehouse.orderpoint", string="Điểm đặt hàng"
     )
     purchase_request_allocation_ids = fields.One2many(
         comodel_name="purchase.request.allocation",
@@ -132,43 +132,43 @@ class PurchaseRequestLine(models.Model):
         readonly=True,
         compute="_compute_qty",
         store=True,
-        help="Quantity in progress.",
+        help="Số lượng đang thực hiện.",
     )
     qty_done = fields.Float(
         digits="Product Unit of Measure",
         readonly=True,
         compute="_compute_qty",
         store=True,
-        help="Quantity completed",
+        help="Số lượng đã hoàn thành",
     )
     qty_cancelled = fields.Float(
         digits="Product Unit of Measure",
         readonly=True,
         compute="_compute_qty_cancelled",
         store=True,
-        help="Quantity cancelled",
+        help="Số lượng đã hủy",
     )
     qty_to_buy = fields.Boolean(
         compute="_compute_qty_to_buy",
-        string="There is some pending qty to buy",
+        string="Có số lượng chờ mua",
         store=True,
     )
     pending_qty_to_receive = fields.Float(
         compute="_compute_qty_to_buy",
         digits="Product Unit of Measure",
         copy=False,
-        string="Pending Qty to Receive",
+        string="Số lượng chờ nhận",
         store=True,
     )
     estimated_cost = fields.Monetary(
         currency_field="currency_id",
         default=0.0,
-        help="Estimated cost of Purchase Request Line, not propagated to PO.",
+        help="Chi phí ước tính của dòng yêu cầu mua hàng, không truyền sang PO.",
     )
     currency_id = fields.Many2one(related="company_id.currency_id", readonly=True)
     product_id = fields.Many2one(
         comodel_name="product.product",
-        string="Product",
+        string="Sản phẩm",
         domain=[("purchase_ok", "=", True)],
         tracking=True,
     )
@@ -372,14 +372,14 @@ class PurchaseRequestLine(models.Model):
     def unlink(self):
         if self.mapped("purchase_lines"):
             raise UserError(
-                _("You cannot delete a record that refers to purchase lines!")
+                _("Bạn không thể xóa một bản ghi có tham chiếu đến các dòng mua hàng!")
             )
         for line in self:
             if not line._can_be_deleted():
                 raise UserError(
                     _(
-                        "You can only delete a purchase request line "
-                        "if the purchase request is in draft state."
+                        "Bạn chỉ có thể xóa một dòng yêu cầu mua hàng "
+                        "nếu yêu cầu mua hàng đang ở trạng thái nháp."
                     )
                 )
         return super().unlink()
@@ -388,7 +388,7 @@ class PurchaseRequestLine(models.Model):
         self.ensure_one()
         view = self.env.ref("purchase_request.view_purchase_request_line_details")
         return {
-            "name": _("Detailed Line"),
+            "name": _("Chi tiết dòng"),
             "type": "ir.actions.act_window",
             "view_mode": "form",
             "res_model": "purchase.request.line",

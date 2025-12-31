@@ -7,7 +7,7 @@
         <field name="model">purchase.request.line</field>
         <field name="arch" type="xml">
             <list
-                name="Purchase Request Lines"
+                name="Chi tiết yêu cầu mua hàng"
                 create="false"
                 decoration-muted="cancelled == True"
                 decoration-info="request_state in ('draft', 'to_approve')"
@@ -65,7 +65,7 @@
         <field name="model">purchase.request.line</field>
         <field name="priority" eval="20" />
         <field name="arch" type="xml">
-            <form string="Purchase Request Line" create="false" duplicate="false">
+            <form string="Chi tiết yêu cầu mua hàng" create="false" duplicate="false">
                 <header>
                     <field
                         name="request_state"
@@ -165,7 +165,7 @@
                                              'search_view_ref' : 'purchase_request.purchase_order_line_search_sub'}"
                             />
                         </page>
-                        <page name="allocations" string="Allocations">
+                        <page name="allocations" string="Phân bổ">
                             <field name="purchase_request_allocation_ids">
                                 <list decoration-muted="purchase_state == 'cancel'">
                                     <field name="purchase_line_id" />
@@ -189,7 +189,7 @@
         <field name="name">purchase.request.line.search</field>
         <field name="model">purchase.request.line</field>
         <field name="arch" type="xml">
-            <search string="Search Purchase Request">
+            <search string="Tìm kiếm yêu cầu mua hàng">
                 <field name="request_id" />
                 <field name="product_id" />
                 <field name="requested_by" />
@@ -198,27 +198,27 @@
                 <field name="date_required" />
                 <filter
                     name="purchase_state_none"
-                    string="Purchasing not started"
+                    string="Mua hàng chưa bắt đầu"
                     domain="[('purchase_state','=', False)]"
-                    help="No RFQ or Purchase has been created"
+                    help="Chưa có RFQ hoặc Đơn mua hàng nào được tạo"
                 />
                 <filter
                     name="purchase_state_draft"
-                    string="Requested for Quotation"
+                    string="Đã yêu cầu báo giá"
                     domain="[('purchase_state','=','draft')]"
-                    help="At least a Draft PO has been created"
+                    help="Ít nhất một Đơn mua hàng nháp đã được tạo"
                 />
                 <filter
                     name="purchase_state_confirmed"
-                    string="Purchase Confirmed"
+                    string="Mua hàng đã xác nhận"
                     domain="[('purchase_state','=','confirmed')]"
-                    help="At least a PO has been confirmed"
+                    help="Ít nhất một Đơn mua hàng đã được xác nhận"
                 />
                 <filter
                     name="purchase_state_done"
-                    string="Purchase Done"
+                    string="Mua hàng hoàn tất"
                     domain="[('purchase_state','=','done')]"
-                    help="At least a PO has been completed"
+                    help="Ít nhất một Đơn mua hàng đã hoàn thành"
                 />
                 <field
                     name="analytic_distribution"
@@ -227,110 +227,110 @@
                 <field name="cancelled" invisible="1" />
                 <filter
                     name="request_state_draft"
-                    string="Draft"
+                    string="Mới"
                     domain="[('request_state','=','draft')]"
                     help="Request is to be approved"
                 />
                 <filter
                     name="request_state_to_approve"
-                    string="To Approve"
+                    string="Chờ phê duyệt"
                     domain="[('request_state','=','to_approve')]"
                     help="Request is to be approved"
                 />
                 <filter
                     name="request_state_approved"
-                    string="Approved"
+                    string="Đã phê duyệt"
                     domain="[('request_state','=','approved')]"
                     help="Request is approved"
                 />
                 <filter
                     name="request_state_rejected"
-                    string="Rejected"
+                    string="Từ chối"
                     domain="[('request_state','=','rejected')]"
                     help="Request is rejected"
                 />
                 <filter
                     name="request_state_in_progress"
-                    string="In Progress"
+                    string="Đang thực hiện"
                     domain="[('request_state','=','in_progress')]"
                     help="Request is in progress"
                 />
                 <filter
                     name="assigned_to_me"
                     domain="[( 'assigned_to','=', uid)]"
-                    help="Assigned to me"
+                    help="Được phân bổ cho tôi"
                 />
                 <filter
                     name="my_requests"
                     domain="[('requested_by','=', uid)]"
-                    help="My requests"
+                    help="Yêu cầu của tôi"
                 />
                 <filter
                     name="uncancelled"
                     domain="[('cancelled','=', False)]"
-                    string="Uncancelled"
+                    string="Chưa bị hủy"
                 />
                 <filter
                     name="qty_to_buy"
-                    string="Pending Qty to Receive"
+                    string="Số lượng chờ nhận"
                     domain="[('qty_to_buy','=',True)]"
                 />
                 <filter
                     name="all_bought"
-                    string="All Bought"
+                    string="Đã mua tất cả"
                     domain="[('qty_to_buy','=',False)]"
                 />
                 <filter
                     name="open"
                     domain="[('qty_in_progress','!=', 0.0)]"
-                    string="Open Quantity"
+                    string="Số lượng đang mở"
                 />
                 <filter
                     name="cancel"
                     domain="[('qty_cancelled','>', 0.0)]"
-                    string="Cancelled Quantity"
+                    string="Số lượng đã hủy"
                 />
-                <group expand="0" string="Group By...">
+                <group expand="0" string="Nhóm theo...">
                     <filter
                         name="product"
-                        string="Product"
+                        string="Sản phẩm"
                         domain="[]"
                         context="{'group_by' : 'product_id'}"
                     />
                     <filter
                         name="requested_by"
-                        string="Requested by"
+                        string="Người yêu cầu"
                         domain="[]"
                         context="{'group_by':'requested_by'}"
                     />
                     <filter
                         name="assigned_to"
-                        string="Assigned to"
+                        string="Người phê duyệt"
                         domain="[]"
                         context="{'group_by':'assigned_to'}"
                     />
                     <filter
                         name="request_status"
-                        string="Request status"
+                        string="Trạng thái yêu cầu"
                         domain="[]"
                         context="{'group_by':'request_state'}"
                     />
                     <filter
                         name="group_analytic_distribution"
-                        string="Analytic Distribution"
+                        string="Phân bổ phân tích"
                         domain="[]"
                         context="{'group_by':'analytic_distribution'}"
                         groups="analytic.group_analytic_accounting"
                     />
                     <filter
                         name="purchase_status"
-                        string="Purchase Status"
+                        string="Trạng thái mua hàng"
                         domain="[]"
                         context="{'group_by':'purchase_state'}"
                     />
                     <filter
                         name="request"
-                        string="Request"
+                        string="Yêu cầu"
                         domain="[]"
                         context="{'group_by':'request_id'}"
                     />
@@ -345,7 +345,7 @@
         <field name="context">
             {'search_default_product_id': [active_id], 'default_product_id': active_id}
         </field>
-        <field name="name">Purchase Requests</field>
+        <field name="name">Yêu cầu mua hàng</field>
         <field name="res_model">purchase.request.line</field>
         <field name="binding_model_id" ref="product.model_product_product" />
         <field
@@ -354,7 +354,7 @@
         />
     </record>
     <record id="purchase_request_line_form_action" model="ir.actions.act_window">
-        <field name="name">Purchase Request Lines</field>
+        <field name="name">Chi tiết yêu cầu mua hàng</field>
         <field name="type">ir.actions.act_window</field>
         <field name="res_model">purchase.request.line</field>
         <field name="view_mode">list,form</field>
@@ -382,7 +382,7 @@
         <field name="name">purchase.order.line.form2</field>
         <field name="model">purchase.order.line</field>
         <field name="arch" type="xml">
-            <form string="Purchase Order Lines" create="false" readonly="1">
+            <form string="Chi tiết đơn mua hàng" create="false" readonly="1">
                 <sheet>
                     <label for="order_id" readonly="1" class="oe_edit_only" />
                     <h1>
@@ -443,11 +443,11 @@
                         </group>
                     </group>
                     <field name="name" readonly="1" />
-                    <separator string="Manual Invoices" />
+                    <separator string="Hóa đơn thủ công" />
                     <field name="invoice_lines" readonly="1" />
-                    <separator string="Stock Moves" />
+                    <separator string="Dịch chuyển kho" />
                     <field name="move_ids" readonly="1" />
-                    <separator string="Purchase Request Lines" />
+                    <separator string="Chi tiết yêu cầu mua hàng" />
                     <field name="purchase_request_lines" readonly="1" />
                 </sheet>
             </form>
@@ -457,10 +457,10 @@
         <field name="name">purchase.order.line.list</field>
         <field name="model">purchase.order.line</field>
         <field name="arch" type="xml">
-            <list name="Purchase Order Lines" create="true">
+            <list name="Chi tiết đơn mua hàng" create="true">
                 <field name="order_id" />
                 <field name="name" />
-                <field name="partner_id" string="Vendor" />
+                <field name="partner_id" string="Nhà cung cấp" />
                 <field name="product_id" />
                 <field name="price_unit" />
                 <field name="product_qty" />
@@ -475,7 +475,7 @@
         <field name="name">purchase.order.line.search</field>
         <field name="model">purchase.order.line</field>
         <field name="arch" type="xml">
-            <search string="Search Purchase Order Line">
+            <search string="Tìm kiếm chi tiết đơn mua hàng">
                 <field name="order_id" />
                 <field name="product_id" />
                 <field
@@ -485,19 +485,19 @@
                 />
                 <filter
                     name="hide_cancelled"
-                    string="Hide cancelled lines"
+                    string="Ẩn các dòng đã hủy"
                     domain="[('state', '!=', 'cancel')]"
                 />
-                <group expand="0" string="Group By">
+                <group expand="0" string="Nhóm theo">
                     <filter
                         name="order_reference"
-                        string="Order Reference"
+                        string="Tham chiếu đơn hàng"
                         domain="[]"
                         context="{'group_by': 'order_id'}"
                     />
                     <filter
                         name="groupby_supplier"
-                        string="Vendor"
+                        string="Nhà cung cấp"
                         domain="[]"
                         context="{'group_by': 'partner_id'}"
                     />

@@ -6,11 +6,11 @@
         <field name="name">purchase.request.form</field>
         <field name="model">purchase.request</field>
         <field name="arch" type="xml">
-            <form string="Purchase Request">
+            <form string="Yêu cầu mua hàng">
                 <header>
                     <button
                         name="button_draft"
-                        string="Reset"
+                        string="Thiết lập lại"
                         invisible="state not in ('to_approve','approved','rejected','in_progress','done')"
                         type="object"
                         groups="purchase_request.group_purchase_request_manager"
@@ -18,14 +18,14 @@
                     <button
                         name="button_to_approve"
                         invisible="state not in ('draft')"
-                        string="Request approval"
+                        string="Yêu cầu phê duyệt"
                         type="object"
                         class="oe_highlight"
                     />
                     <button
                         name="button_approved"
                         invisible="state not in ('to_approve')"
-                        string="Approve"
+                        string="Phê duyệt"
                         type="object"
                         class="oe_highlight"
                         groups="purchase_request.group_purchase_request_manager"
@@ -33,20 +33,20 @@
                     <button
                         name="button_in_progress"
                         invisible="state != 'approved'"
-                        string="In Progress"
+                        string="Đang thực hiện"
                         type="object"
                         groups="purchase_request.group_purchase_request_manager"
                     />
                     <button
                         name="%(action_purchase_request_line_make_purchase_order)d"
                         invisible="state not in ('approved', 'in_progress')"
-                        string="Create RFQ"
+                        string="Tạo RFQ"
                         type="action"
                     />
                     <button
                         name="button_done"
                         invisible="state not in ('approved', 'in_progress')"
-                        string="Done"
+                        string="Hoàn thành"
                         type="object"
                         class="oe_highlight"
                         groups="purchase_request.group_purchase_request_manager"
@@ -54,7 +54,7 @@
                     <button
                         name="button_rejected"
                         invisible="state not in ('to_approve', 'approved', 'in_progress')"
-                        string="Reject"
+                        string="Từ chối"
                         type="object"
                         groups="purchase_request.group_purchase_request_manager"
                     />
@@ -74,7 +74,7 @@
                             invisible="line_count == 0"
                             icon="fa-list"
                         >
-                            <field name="line_count" widget="statinfo" string="Lines" />
+                            <field name="line_count" widget="statinfo" string="Dòng" />
                         </button>
                         <button
                             type="object"
@@ -87,7 +87,7 @@
                             <field
                                 name="purchase_count"
                                 widget="statinfo"
-                                string="Purchase Orders"
+                                string="Đơn mua hàng"
                             />
                         </button>
                         <button
@@ -102,7 +102,7 @@
                             <field
                                 name="move_count"
                                 widget="statinfo"
-                                string="Pickings"
+                                string="Phiếu lấy hàng"
                             />
                         </button>
                     </div>
@@ -155,7 +155,7 @@
                         </group>
                     </group>
                     <notebook>
-                        <page string="Products">
+                        <page string="Sản phẩm">
                             <field name="line_ids" readonly="state != 'draft'">
                                 <list
                                     decoration-muted="cancelled == True"
@@ -237,7 +237,7 @@
                 decoration-bf="message_needaction==True"
                 decoration-info="state in ('draft','to_approve')"
                 decoration-muted="state in ('rejected')"
-                name="Purchase Request"
+                name="Yêu cầu mua hàng"
             >
                 <field name="message_needaction" column_invisible="1" />
                 <field name="name" />
@@ -267,33 +267,32 @@
         <field name="name">purchase.request.list.select</field>
         <field name="model">purchase.request</field>
         <field name="arch" type="xml">
-            <search string="Search Purchase Request">
-                <field name="name" string="Purchase Request" />
+                <field name="name" string="Yêu cầu mua hàng" />
                 <separator />
                 <field name="product_id" />
                 <field name="state" />
                 <filter
                     name="unassigned"
-                    string="Unassigned"
+                    string="Chưa phân bổ"
                     domain="[('assigned_to','=', False)]"
-                    help="Unassigned Request"
+                    help="Yêu cầu chưa phân bổ"
                 />
                 <separator />
                 <filter
                     name="state_draft"
-                    string="Draft"
+                    string="Mới"
                     domain="[('state','=','draft')]"
                     help="Request is to be approved"
                 />
                 <filter
                     name="state_to_approve"
-                    string="To Approve"
+                    string="Chờ phê duyệt"
                     domain="[('state','=','to_approve')]"
                     help="Request is to be approved"
                 />
                 <filter
                     name="state_approved"
-                    string="Approved"
+                    string="Đã phê duyệt"
                     domain="[('state','=','approved')]"
                     help="Request is approved"
                 />
@@ -305,7 +304,7 @@
                 />
                 <filter
                     name="state_rejected"
-                    string="Rejected"
+                    string="Từ chối"
                     domain="[('state','=','rejected')]"
                     help="Request is rejected"
                 />
@@ -317,48 +316,48 @@
                 />
                 <separator />
                 <filter
-                    string="Unread Messages"
+                    string="Tin nhắn chưa đọc"
                     name="message_needaction"
                     domain="[('message_needaction','=',True)]"
                 />
                 <filter
                     name="assigned_to_me"
                     domain="[('assigned_to','=', uid)]"
-                    help="Assigned to me"
+                    help="Được phân bổ cho tôi"
                 />
                 <filter
                     name="my_requests"
                     domain="[('requested_by','=', uid)]"
-                    help="My requests"
+                    help="Yêu cầu của tôi"
                 />
                 <field name="requested_by" />
                 <field name="assigned_to" />
                 <field name="picking_type_id" />
-                <group expand="0" string="Group By...">
+                <group expand="0" string="Nhóm theo...">
                     <filter
                         name="requested_by"
-                        string="Requested by"
+                        string="Người yêu cầu"
                         icon="fa-user"
                         domain="[]"
                         context="{'group_by':'requested_by'}"
                     />
                     <filter
                         name="assigned_to"
-                        string="Assigned to"
+                        string="Người phê duyệt"
                         icon="fa-user"
                         domain="[]"
                         context="{'group_by':'assigned_to'}"
                     />
                     <filter
                         name="source"
-                        string="Source"
+                        string="Nguồn"
                         icon="fa-caret-square-o-left"
                         domain="[]"
                         context="{'group_by':'origin'}"
                     />
                     <filter
                         name="start_date"
-                        string="Start Date"
+                        string="Ngày bắt đầu"
                         icon="fa-calendar"
                         domain="[]"
                         context="{'group_by':'date_start'}"
@@ -415,20 +414,19 @@
         </field>
     </record>
     <record model="ir.actions.act_window" id="purchase_request_form_action">
-        <field name="name">Purchase Requests</field>
+        <field name="name">Yêu cầu mua hàng</field>
         <field name="type">ir.actions.act_window</field>
         <field name="res_model">purchase.request</field>
         <field name="view_mode">list,kanban,form</field>
         <field name="context">{"search_default_requested_by":uid}</field>
         <field name="search_view_id" ref="view_purchase_request_search" />
         <field name="help" type="html">
-            <p class="oe_view_nocontent_create">
-                Click to start a new purchase request process.
+                Nhấp để bắt đầu một quy trình yêu cầu mua hàng mới.
             </p>
             <p>
-                A purchase request is an instruction to Purchasing to procure
-            a certain quantity of materials services, so that they are
-            available at a certain point in time.
+                Yêu cầu mua hàng là một chỉ thị cho bộ phận Thu mua để mua
+            một số lượng vật liệu hoặc dịch vụ nhất định, để chúng
+            có sẵn tại một thời điểm nhất định.
             </p>
         </field>
     </record>

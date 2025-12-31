@@ -9,73 +9,73 @@
                     <div class="page">
                         <div id="oe_structure_report_request_1" class="oe_structure" />
                         <h2>
-                            Purchase Request
+                            Yêu cầu mua hàng
                             <span t-field="o.name" />
                         </h2>
                         <div class="row mt32 mb32">
                             <div class="col-2">
-                                <strong>Request Reference:</strong>
+                                <strong>Số tham chiếu yêu cầu:</strong>
                                 <br />
                                 <span t-field="o.name" />
                             </div>
                             <div class="col-2">
-                                <strong>Creation Date:</strong>
+                                <strong>Ngày tạo:</strong>
                                 <br />
                                 <span t-field="o.date_start" />
                             </div>
                             <div class="col-2">
-                                <strong>Source:</strong>
+                                <strong>Nguồn:</strong>
                                 <br />
                                 <span t-field="o.origin" />
                             </div>
                             <div class="col-2">
-                                <strong>Requested by:</strong>
+                                <strong>Người yêu cầu:</strong>
                                 <br />
                                 <span t-field="o.requested_by" />
                             </div>
                             <div class="col-2">
-                                <strong>Assigned to:</strong>
+                                <strong>Người phê duyệt:</strong>
                                 <br />
                                 <span t-field="o.assigned_to" />
                             </div>
                             <div class="col-2">
-                                <strong>Picking Type:</strong>
+                                <strong>Loại lấy hàng:</strong>
                                 <br />
                                 <span t-field="o.picking_type_id" />
                             </div>
                         </div>
                         <div class="row mt32 mb32">
                             <div class="col-12">
-                                <strong>Description:</strong>
+                                <strong>Mô tả:</strong>
                                 <br />
                                 <span t-field="o.description" />
                             </div>
                         </div>
                         <t t-if="o.line_ids">
-                            <h3>Products</h3>
+                            <h3>Sản phẩm</h3>
                             <table class="table table-condensed">
                                 <thead>
                                     <tr>
                                         <th>
-                                            <strong>Description</strong>
+                                            <strong>Mô tả</strong>
                                         </th>
                                         <th groups="analytic.group_analytic_accounting">
-                                            <strong>Analytic Distribution</strong>
+                                            <strong>Phân bổ phân tích</strong>
                                         </th>
                                         <th class="text-right">
-                                            <strong>Qty</strong>
+                                            <strong>SL</strong>
                                         </th>
                                         <th class="text-center" groups="uom.group_uom">
-                                            <strong>Product UoM</strong>
+                                            <strong>ĐVT</strong>
                                         </th>
                                         <th>
-                                            <strong>Estimated Cost</strong>
+                                            <strong>Chi phí ước tính</strong>
                                         </th>
                                         <th class="text-right">
-                                            <strong>Requested Date</strong>
+                                            <strong>Ngày yêu cầu</strong>
                                         </th>
                                         <th>
-                                            <strong>Specifications</strong>
+                                            <strong>Thông số kỹ thuật</strong>
                                         </th>
                                     </tr>
                                 </thead>

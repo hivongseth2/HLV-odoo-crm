@@ -5,18 +5,18 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 _STATES = [
-    ("draft", "Draft"),
-    ("to_approve", "To be approved"),
-    ("approved", "Approved"),
-    ("in_progress", "In progress"),
-    ("done", "Done"),
-    ("rejected", "Rejected"),
+    ("draft", "Mới"),
+    ("to_approve", "Chờ phê duyệt"),
+    ("approved", "Đã phê duyệt"),
+    ("in_progress", "Đang thực hiện"),
+    ("done", "Hoàn thành"),
+    ("rejected", "Từ chối"),
 ]
 
 
 class PurchaseRequest(models.Model):
     _name = "purchase.request"
-    _description = "Purchase Request"
+    _description = "Yêu cầu mua hàng"
     _mail_post_access = "read"
     _inherit = ["mail.thread", "mail.activity.mixin"]
     _order = "id desc"
@@ -61,23 +61,24 @@ class PurchaseRequest(models.Model):
                 rec.is_editable = True
 
     name = fields.Char(
-        string="Request Reference",
-        required=True,
-        default=lambda self: _("New"),
-        tracking=True,
-    )
+    string="Số tham chiếu",
+    required=True,
+    default=lambda self: _("Mới"),
+    tracking=True,
+)
     is_name_editable = fields.Boolean(
         default=lambda self: self.env.user.has_group("base.group_no_one"),
     )
-    origin = fields.Char(string="Source Document")
+    origin = fields.Char(string="Tài liệu gốc")
     date_start = fields.Date(
-        string="Creation date",
-        help="Date when the user initiated the request.",
+        string="Ngày tạo",
+        help="Ngày người dùng bắt đầu yêu cầu.",
         default=fields.Date.context_today,
         tracking=True,
     )
     requested_by = fields.Many2one(
         comodel_name="res.users",
+        string="Người yêu cầu",
         required=True,
         copy=False,
         tracking=True,
@@ -86,7 +87,7 @@ class PurchaseRequest(models.Model):
     )
     assigned_to = fields.Many2one(
         comodel_name="res.users",
-        string="Approver",
+        string="Người phê duyệt",
         tracking=True,
         domain=lambda self: [
             (
@@ -97,7 +98,7 @@ class PurchaseRequest(models.Model):
         ],
         index=True,
     )
-    description = fields.Text()
+    description = fields.Text(string="Mô tả")
     company_id = fields.Many2one(
         comodel_name="res.company",
         required=False,
@@ -107,7 +108,7 @@ class PurchaseRequest(models.Model):
     line_ids = fields.One2many(
         comodel_name="purchase.request.line",
         inverse_name="request_id",
-        string="Products to Purchase",
+        string="Chi tiết yêu cầu",
         readonly=False,
         copy=True,
         tracking=True,
@@ -115,12 +116,12 @@ class PurchaseRequest(models.Model):
     product_id = fields.Many2one(
         comodel_name="product.product",
         related="line_ids.product_id",
-        string="Product",
+        string="Sản phẩm",
         readonly=True,
     )
     state = fields.Selection(
         selection=_STATES,
-        string="Status",
+        string="Trạng thái",
         index=True,
         tracking=True,
         required=True,
@@ -131,31 +132,31 @@ class PurchaseRequest(models.Model):
     to_approve_allowed = fields.Boolean(compute="_compute_to_approve_allowed")
     picking_type_id = fields.Many2one(
         comodel_name="stock.picking.type",
-        string="Picking Type",
+        string="Loại lấy hàng",
         required=True,
         default=_default_picking_type,
     )
     group_id = fields.Many2one(
         comodel_name="procurement.group",
-        string="Procurement Group",
+        string="Nhóm cung ứng",
         copy=False,
         index=True,
     )
     line_count = fields.Integer(
-        string="Purchase Request Line count",
+        string="Số lượng dòng",
         compute="_compute_line_count",
         readonly=True,
     )
     move_count = fields.Integer(
-        string="Stock Move count", compute="_compute_move_count", readonly=True
+        string="Số lượng dịch chuyển kho", compute="_compute_move_count", readonly=True
     )
     purchase_count = fields.Integer(
-        string="Purchases count", compute="_compute_purchase_count", readonly=True
+        string="Số lượng mua hàng", compute="_compute_purchase_count", readonly=True
     )
     currency_id = fields.Many2one(related="company_id.currency_id", readonly=True)
     estimated_cost = fields.Monetary(
         compute="_compute_estimated_cost",
-        string="Total Estimated Cost",
+        string="Tổng chi phí ước tính",
         store=True,
     )
 
@@ -246,7 +247,7 @@ class PurchaseRequest(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
-            if vals.get("name", _("New")) == _("New"):
+            if vals.get("name", _("Mới")) == _("Mới"):
                 vals["name"] = self._get_default_name()
         requests = super().create(vals_list)
         for vals, request in zip(vals_list, requests, strict=True):
@@ -271,7 +272,7 @@ class PurchaseRequest(models.Model):
         for request in self:
             if not request._can_be_deleted():
                 raise UserError(
-                    _("You cannot delete a purchase request which is not draft.")
+                    _("Bạn không thể xóa một yêu cầu mua hàng không phải trạng thái nháp.")
                 )
         return super().unlink()
 
@@ -308,8 +309,7 @@ class PurchaseRequest(models.Model):
             if not rec.to_approve_allowed:
                 raise UserError(
                     _(
-                        "You can't request an approval for a purchase request "
-                        "which is empty. (%s)"
+                        "Bạn không thể yêu cầu phê duyệt cho một yêu cầu mua hàng rỗng. (%s)"
                     )
                     % rec.name
                 )
