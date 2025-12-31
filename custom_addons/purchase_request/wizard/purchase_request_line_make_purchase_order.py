@@ -356,7 +356,7 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
         related="line_id.product_id",
         readonly=False,
     )
-    description = fields.Char(string="Mô tả", required=True)
+    name = fields.Char(string="Mô tả", required=True)
     product_qty = fields.Float(
         string="Số lượng cần mua", digits="Product Unit of Measure"
     )
@@ -367,13 +367,13 @@ class PurchaseRequestLineMakePurchaseOrderItem(models.TransientModel):
     currency_id = fields.Many2one(
         "res.currency", string="Tiền tệ", related="line_id.currency_id", readonly=True
     )
-    keep_descriptions = fields.Boolean(
+    keep_description = fields.Boolean(
         string="Sao chép mô tả sang PO mới",
         help="Đặt thành đúng nếu bạn muốn giữ "
         "mô tả được cung cấp trong "
         "trình thuật sĩ vào PO mới.",
     )
-    keep_estimated_costs = fields.Boolean(
+    keep_estimated_cost = fields.Boolean(
         string="Sao chép chi phí ước tính sang PO mới",
         help="Đặt thành đúng nếu bạn muốn giữ "
         "chi phí ước tính được cung cấp trong "
