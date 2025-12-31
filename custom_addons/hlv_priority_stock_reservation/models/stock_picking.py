@@ -75,6 +75,8 @@ class StockPicking(models.Model):
             # Sắp xếp trong Python vì x_studio_hn_giao_hng là studio field
             def sort_deadline(m):
                 d = getattr(m.picking_id, 'x_studio_hn_giao_hng', False)
+                if d:
+                    d = fields.Date.to_date(d)
                 return d or picking.env.context.get('max_date', fields.Date.today().replace(year=2099))
 
             sorted_candidates = sorted(candidate_moves, key=sort_deadline, reverse=True)
