@@ -13,7 +13,6 @@
                         string="Thiết lập lại"
                         invisible="state not in ('to_approve','approved','rejected','in_progress','done')"
                         type="object"
-                        groups="purchase_request.group_purchase_request_manager"
                     />
                     <button
                         name="button_to_approve"
@@ -28,14 +27,12 @@
                         string="Phê duyệt"
                         type="object"
                         class="oe_highlight"
-                        groups="purchase_request.group_purchase_request_manager"
                     />
                     <button
                         name="button_in_progress"
                         invisible="state != 'approved'"
                         string="Đang thực hiện"
                         type="object"
-                        groups="purchase_request.group_purchase_request_manager"
                     />
                     <button
                         name="%(action_purchase_request_line_make_purchase_order)d"
@@ -49,14 +46,12 @@
                         string="Hoàn thành"
                         type="object"
                         class="oe_highlight"
-                        groups="purchase_request.group_purchase_request_manager"
                     />
                     <button
                         name="button_rejected"
                         invisible="state not in ('to_approve', 'approved', 'in_progress')"
                         string="Từ chối"
                         type="object"
-                        groups="purchase_request.group_purchase_request_manager"
                     />
                     <field
                         name="state"
@@ -442,13 +437,11 @@
         name="Purchase Requests"
         sequence="22"
         web_icon="purchase_request,static/description/icon.png"
-        groups="group_purchase_request_user,group_purchase_request_manager"
     />
     <menuitem
         id="menu_purchase_request"
         name="Purchase Requests"
         parent="parent_menu_purchase_request"
-        groups="group_purchase_request_user,group_purchase_request_manager"
     />
     <menuitem
         id="menu_purchase_request_act"
