@@ -5,6 +5,7 @@ import re
 from dateutil import parser as dtparser
 from requests.utils import dict_from_cookiejar
 from http.cookiejar import Cookie
+import json
 
 _logger = logging.getLogger(__name__)
 
@@ -1140,47 +1141,131 @@ class MisaApiUtils(models.AbstractModel):
     
     def _find_dictionary_item_unit(self, headers, search_text):
         """
-        Lấy danh sách Unit từ MISA, tìm ID ứng với search_text.
+        Lấy danh sách Unit. Viết lại theo style của _get_category_name_by_id.
+        QUAN TRỌNG: Phải set layoutcode='settings' thì mới không bị Timeout.
         """
         if not search_text:
             return None, None
 
-        # 1. URL CHUẨN (Không nối thêm gì nữa)
+        # 1. URL chuẩn (như fetch mẫu)
         url = "https://amisapp.misa.vn/crm/g1/api/business/Dictionary/DictionaryNotUsedAllFormLayout/Product/UsageUnitID"
         
         try:
-            # 2. Tăng timeout lên 30s để tránh lỗi Read timed out
-            session = getattr(self, '_get_retry_session', requests.Session)()
-            res = session.post(url, headers=headers, json=None, timeout=30)
+            session = self._get_retry_session()
             
-            if res.status_code != 200:
-                _logger.warning(f"MISA Unit Fetch Failed: {res.status_code} - {res.text}")
-                return None, None
+            # 2. Xử lý Header (Giống hệt hàm Category đang chạy ngon)
+            post_headers = headers.copy()
+            
+            # --- KHÁC BIỆT QUAN TRỌNG NHẤT ---
+            # API này nằm ở module thiết lập, bắt buộc phải là 'settings'. 
+            # Nếu để 'product' nó sẽ bị timeout.
+            post_headers['layoutcode'] = 'settings' 
+            
+            # Thêm Referer cho chắc (giống fetch mẫu)
+            post_headers['referrer'] = "https://amisapp.misa.vn/crm/settings/main/other-settings/other-settings"
 
-            res_json = res.json()
-            if not res_json.get("Success"):
-                return None, None
+            # Xóa header rác
+            for k in ['content-length', 'Content-Length']:
+                post_headers.pop(k, None)
 
-            # 3. Lấy Data và Loop so sánh
-            items = res_json.get("Data", [])
-            search_norm = search_text.strip().lower()
+            # 3. Gọi POST với body rỗng (json=None)
+            _logger.info(f"fetching Unit with layoutcode=settings...")
+            res = session.post(url, headers=post_headers, json=None, timeout=30)
 
-            for item in items:
-                # MISA trả về key: "UsageUnitName" và "UsageUnitID"
-                # Lấy tên ra, nếu None thì lấy chuỗi rỗng
-                item_name = item.get("UsageUnitName") or ""
-                
-                # So sánh (bỏ viết hoa/thường, bỏ khoảng trắng thừa)
-                if item_name.strip().lower() == search_norm:
-                    found_id = item.get("UsageUnitID")
-                    _logger.info(f"✅ Found Unit: '{search_text}' -> ID: {found_id}")
-                    return found_id, item_name
+            if res.ok:
+                data = res.json()
+                if data.get("Success"):
+                    # Xử lý cấu trúc Data: [[{id:1, text:'Cái'},...], []]
+                    # Data nằm trong phần tử đầu tiên của mảng Data
+                    raw_data_list = data.get("Data", [])
+                    items = []
+                    
+                    if raw_data_list and isinstance(raw_data_list, list) and len(raw_data_list) > 0:
+                        items = raw_data_list[0] # Lấy list thật sự bên trong
+
+                    search_norm = search_text.strip().lower()
+
+                    for item in items:
+                        # Key trong response này là 'text' và 'id'
+                        item_name = item.get("text") or ""
+                        if item_name.strip().lower() == search_norm:
+                            found_id = item.get("id")
+                            _logger.info(f"✅ Found Unit: '{search_text}' -> ID: {found_id}")
+                            return found_id, item_name
+                            
+                    _logger.warning(f"⚠️ Unit '{search_text}' not found in list.")
+                else:
+                     _logger.warning(f"⚠️ [GetUnit] API Success=False: {data}")
+            else:
+                _logger.warning(f"⚠️ [GetUnit] HTTP {res.status_code} | {res.text[:100]}")
 
         except Exception as e:
-            _logger.error(f"❌ Error in _find_dictionary_item: {str(e)}")
-        
-        _logger.info(f"⚠️ Unit '{search_text}' not found in MISA list.")
+            _logger.error(f"❌ [GetUnit] Exception: {e}")
+
         return None, None
+    
+    def _find_tax_id_misa(self, headers, tax_percent, default_text=""):
+        """
+        Lấy danh sách Thuế suất từ cấu hình (DBOption).
+        Payload chỉ cần gọi "TaxRateConfig" cho nhẹ.
+        """
+        # 1. URL & Headers chuẩn Settings
+        url = "https://amisapp.misa.vn/crm/g1/api/business/DBOption/otherConfig"
+        
+        req_headers = headers.copy()
+        req_headers['layoutcode'] = 'settings' # Quan trọng
+        req_headers['referrer'] = "https://amisapp.misa.vn/crm/settings/main/other-settings/other-settings"
+        
+        # Chỉ request đúng config Thuế để response nhẹ
+        payload = ["TaxRateConfig"] 
+
+        try:
+            session = self._get_retry_session()
+            
+            # Gọi API
+            res = session.post(url, headers=req_headers, json=payload, timeout=30)
+            
+            if res.ok:
+                res_json = res.json()
+                if res_json.get("Success"):
+                    items = res_json.get("Data", [])
+                    
+                    # 2. Tìm Item có OptionID là TaxRateConfig
+                    tax_config_item = next((item for item in items if item["OptionID"] == "TaxRateConfig"), None)
+                    
+                    if tax_config_item:
+                        # 3. Parse chuỗi JSON trong OptionValue
+                        # Giá trị trả về là string: "[{\"ID\":1,...}, ...]"
+                        option_value_str = tax_config_item.get("OptionValue", "[]")
+                        tax_list = json.loads(option_value_str)
+                        
+                        # 4. So sánh TaxRateValue
+                        target_val = float(tax_percent)
+                        
+                        for tax in tax_list:
+                            # MISA lưu: TaxRateValue là float (10.0, 8.0, 5.0, 0.0)
+                            if tax.get("TaxRateValue") == target_val:
+                                found_id = str(tax.get("ID"))
+                                found_text = tax.get("TaxRateText")
+                                
+                                # Lưu ý: Với mức 0%, MISA có nhiều loại (0%, KCT, KKKNT). 
+                                # Code này sẽ lấy cái đầu tiên tìm thấy (thường là 0% - ID 1).
+                                _logger.info(f"✅ Found Tax: {tax_percent}% -> ID: {found_id} ({found_text})")
+                                return found_id, found_text
+
+                        _logger.warning(f"⚠️ Tax value {tax_percent}% not found in MISA config.")
+                else:
+                    _logger.warning(f"⚠️ [GetTax] Success=False: {res_json}")
+            else:
+                 _logger.warning(f"⚠️ [GetTax] HTTP {res.status_code}")
+
+        except Exception as e:
+            _logger.error(f"❌ Error in _find_tax_id_misa: {str(e)}")
+
+        # 5. Fallback (Nếu lỗi hoặc không tìm thấy)
+        # Mặc định trả về 10% (ID 3) nếu input là 10, hoặc trả về ID 3 cứng để không lỗi create
+        _logger.info("Using default Tax: 10% (ID 3)")
+        return "3", "10%"
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
@@ -1208,7 +1293,7 @@ class MisaApiUtils(models.AbstractModel):
         if not unit_id:
             unit_id, unit_text = 4, "Cái"
 
-        tax_id, tax_text = self._find_tax_id_smart(headers, float(tax_percent), "")
+        tax_id, tax_text = self._find_tax_id_misa(headers, float(tax_percent), "")
 
         is_service = (product_type == 'service' or product_type == 'dịch vụ')
         prop_id = 2 if is_service else 1
