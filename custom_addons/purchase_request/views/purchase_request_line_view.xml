@@ -553,7 +553,7 @@
                         </group>
                     </group>
                     <group name="specifications">
-                        <separator string="Specifications" />
+                        <separator string="Thông số kỹ thuật" />
                         <newline />
                         <field
                             name="specifications"
@@ -561,7 +561,7 @@
                             readonly="is_editable == False"
                         />
                     </group>
-                    <group name="quantities" string="Tracking">
+                    <group name="quantities" string="Theo dõi">
                         <group>
                             <field name="pending_qty_to_receive" />
                             <field name="qty_in_progress" />
@@ -570,7 +570,7 @@
                         </group>
                     </group>
                     <notebook>
-                        <page name="purchase_lines" string="Purchase Order Lines">
+                        <page name="purchase_lines" string="Chi tiết đơn hàng">
                             <group name="purchase_state">
                                 <field name="purchased_qty" />
                                 <field name="purchase_state" />

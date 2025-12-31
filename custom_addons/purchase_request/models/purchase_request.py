@@ -89,6 +89,13 @@ class PurchaseRequest(models.Model):
         comodel_name="res.users",
         string="Người phê duyệt",
         tracking=True,
+        domain=lambda self: [
+            (
+                "groups_id",
+                "in",
+                self.env.ref("purchase_request.group_purchase_request_manager").id,
+            )
+        ],
         index=True,
     )
     description = fields.Text(string="Mô tả")

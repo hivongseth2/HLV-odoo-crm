@@ -295,7 +295,7 @@ class PurchaseRequestLineMakePurchaseOrder(models.TransientModel):
         purchase_requests.button_in_progress()
         return {
             "domain": [("id", "in", res)],
-            "name": _("RFQ"),
+            "name": _("Yêu cầu báo giá"),
             "view_mode": "list,form",
             "res_model": "purchase.order",
             "view_id": False,
