@@ -1159,6 +1159,11 @@ class MisaApiUtils(models.AbstractModel):
         _logger.debug("catname", cat_name,)
 
         unit_id, unit_text = self._find_dictionary_item(headers, "UsageUnitID", unit_name)
+        
+        _logger.debug("unit_name", unit_name,)
+        _logger.debug("unit_id", unit_id,unit_text)
+
+
         if not unit_id:
             unit_id, unit_text = 4, "Cái"
 
