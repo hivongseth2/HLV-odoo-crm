@@ -5,6 +5,7 @@ import re
 from dateutil import parser as dtparser
 from requests.utils import dict_from_cookiejar
 from http.cookiejar import Cookie
+import json
 
 _logger = logging.getLogger(__name__)
 
@@ -1202,6 +1203,69 @@ class MisaApiUtils(models.AbstractModel):
             _logger.error(f"❌ [GetUnit] Exception: {e}")
 
         return None, None
+    
+    def _find_tax_id_misa(self, headers, tax_percent, default_text=""):
+        """
+        Lấy danh sách Thuế suất từ cấu hình (DBOption).
+        Payload chỉ cần gọi "TaxRateConfig" cho nhẹ.
+        """
+        # 1. URL & Headers chuẩn Settings
+        url = "https://amisapp.misa.vn/crm/g1/api/business/DBOption/otherConfig"
+        
+        req_headers = headers.copy()
+        req_headers['layoutcode'] = 'settings' # Quan trọng
+        req_headers['referrer'] = "https://amisapp.misa.vn/crm/settings/main/other-settings/other-settings"
+        
+        # Chỉ request đúng config Thuế để response nhẹ
+        payload = ["TaxRateConfig"] 
+
+        try:
+            session = self._get_retry_session()
+            
+            # Gọi API
+            res = session.post(url, headers=req_headers, json=payload, timeout=30)
+            
+            if res.ok:
+                res_json = res.json()
+                if res_json.get("Success"):
+                    items = res_json.get("Data", [])
+                    
+                    # 2. Tìm Item có OptionID là TaxRateConfig
+                    tax_config_item = next((item for item in items if item["OptionID"] == "TaxRateConfig"), None)
+                    
+                    if tax_config_item:
+                        # 3. Parse chuỗi JSON trong OptionValue
+                        # Giá trị trả về là string: "[{\"ID\":1,...}, ...]"
+                        option_value_str = tax_config_item.get("OptionValue", "[]")
+                        tax_list = json.loads(option_value_str)
+                        
+                        # 4. So sánh TaxRateValue
+                        target_val = float(tax_percent)
+                        
+                        for tax in tax_list:
+                            # MISA lưu: TaxRateValue là float (10.0, 8.0, 5.0, 0.0)
+                            if tax.get("TaxRateValue") == target_val:
+                                found_id = str(tax.get("ID"))
+                                found_text = tax.get("TaxRateText")
+                                
+                                # Lưu ý: Với mức 0%, MISA có nhiều loại (0%, KCT, KKKNT). 
+                                # Code này sẽ lấy cái đầu tiên tìm thấy (thường là 0% - ID 1).
+                                _logger.info(f"✅ Found Tax: {tax_percent}% -> ID: {found_id} ({found_text})")
+                                return found_id, found_text
+
+                        _logger.warning(f"⚠️ Tax value {tax_percent}% not found in MISA config.")
+                else:
+                    _logger.warning(f"⚠️ [GetTax] Success=False: {res_json}")
+            else:
+                 _logger.warning(f"⚠️ [GetTax] HTTP {res.status_code}")
+
+        except Exception as e:
+            _logger.error(f"❌ Error in _find_tax_id_misa: {str(e)}")
+
+        # 5. Fallback (Nếu lỗi hoặc không tìm thấy)
+        # Mặc định trả về 10% (ID 3) nếu input là 10, hoặc trả về ID 3 cứng để không lỗi create
+        _logger.info("Using default Tax: 10% (ID 3)")
+        return "3", "10%"
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
@@ -1229,7 +1293,7 @@ class MisaApiUtils(models.AbstractModel):
         if not unit_id:
             unit_id, unit_text = 4, "Cái"
 
-        tax_id, tax_text = self._find_tax_id_smart(headers, float(tax_percent), "")
+        tax_id, tax_text = self._find_tax_id_misa(headers, float(tax_percent), "")
 
         is_service = (product_type == 'service' or product_type == 'dịch vụ')
         prop_id = 2 if is_service else 1
