@@ -1141,38 +1141,44 @@ class MisaApiUtils(models.AbstractModel):
     def _find_dictionary_item_unit(self, headers, search_text):
         """
         Lấy danh sách Unit từ MISA, tìm ID ứng với search_text.
+        FIXED: Dựa trên response thực tế (Data[0], key: id, text)
         """
         if not search_text:
             return None, None
 
-        # 1. URL CHUẨN (Không nối thêm gì nữa)
         url = "https://amisapp.misa.vn/crm/g1/api/business/Dictionary/DictionaryNotUsedAllFormLayout/Product/UsageUnitID"
         
         try:
-            # 2. Tăng timeout lên 30s để tránh lỗi Read timed out
+            # Tăng timeout lên 30s
             session = getattr(self, '_get_retry_session', requests.Session)()
             res = session.post(url, headers=headers, json=None, timeout=30)
             
             if res.status_code != 200:
-                _logger.warning(f"MISA Unit Fetch Failed: {res.status_code} - {res.text}")
+                _logger.warning(f"MISA Unit Fetch Failed: {res.status_code}")
                 return None, None
 
             res_json = res.json()
             if not res_json.get("Success"):
                 return None, None
 
-            # 3. Lấy Data và Loop so sánh
-            items = res_json.get("Data", [])
+            # --- SỬA LỖI Ở ĐÂY ---
+            # Data trả về dạng: [ [ {id:1, text:'Bao'}, ... ], [] ]
+            # Nên cần lấy phần tử đầu tiên: raw_data[0]
+            raw_data = res_json.get("Data", [])
+            
+            items = []
+            if raw_data and isinstance(raw_data, list) and len(raw_data) > 0:
+                items = raw_data[0] # Lấy danh sách thực sự bên trong
+
             search_norm = search_text.strip().lower()
 
             for item in items:
-                # MISA trả về key: "UsageUnitName" và "UsageUnitID"
-                # Lấy tên ra, nếu None thì lấy chuỗi rỗng
-                item_name = item.get("UsageUnitName") or ""
+                # Key thực tế là "text" và "id"
+                item_name = item.get("text") or ""
                 
-                # So sánh (bỏ viết hoa/thường, bỏ khoảng trắng thừa)
+                # So sánh
                 if item_name.strip().lower() == search_norm:
-                    found_id = item.get("UsageUnitID")
+                    found_id = item.get("id")
                     _logger.info(f"✅ Found Unit: '{search_text}' -> ID: {found_id}")
                     return found_id, item_name
 
