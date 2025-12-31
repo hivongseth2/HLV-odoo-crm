@@ -24,7 +24,7 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
             if (value.includes("filename*=")) {
                 // Try to convert to simple format
                 // RFC5987 format: filename*=charset'language'encoded_value
-                const rfc5987Match = value.match(/filename\*=([^']+)'([^']*)'([^;]+)/);
+                const rfc5987Match = value.match(/filename\*=([^']+)'([^']*)'([^;,]+)/);
                 if (rfc5987Match) {
                     const encodedFilename = rfc5987Match[3];
                     try {
@@ -47,7 +47,7 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
                 }
 
                 // Try another RFC2231 format: filename*=utf-8''encoded
-                const rfc2231Match = value.match(/filename\*=([^']*'')?([^;]+)/);
+                const rfc2231Match = value.match(/filename\*=([^']*'')?([^;,]+)/);
                 if (rfc2231Match) {
                     const encodedFilename = rfc2231Match[2];
                     try {
