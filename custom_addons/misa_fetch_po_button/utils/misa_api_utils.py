@@ -1245,7 +1245,7 @@ class MisaApiUtils(models.AbstractModel):
                         for tax in tax_list:
                             # MISA lưu: TaxRateValue là float (10.0, 8.0, 5.0, 0.0)
                             if tax.get("TaxRateValue") == target_val:
-                                found_id = str(tax.get("ID"))
+                                found_id = str(tax.get("TaxRateEnum"))
                                 found_text = tax.get("TaxRateText")
                                 
                                 # Lưu ý: Với mức 0%, MISA có nhiều loại (0%, KCT, KKKNT). 
