@@ -1137,7 +1137,50 @@ class MisaApiUtils(models.AbstractModel):
         if not product.exists():
             raise Exception(f"Không tìm thấy sản phẩm có ID {product_id} trong Odoo")
         return self._process_create_product(product)
+    
+    def _find_dictionary_item_unit(self, headers, search_text):
+        """
+        Lấy danh sách Unit từ MISA, tìm ID ứng với search_text.
+        """
+        if not search_text:
+            return None, None
 
+        # 1. URL CHUẨN (Không nối thêm gì nữa)
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Dictionary/DictionaryNotUsedAllFormLayout/Product/UsageUnitID"
+        
+        try:
+            # 2. Tăng timeout lên 30s để tránh lỗi Read timed out
+            session = getattr(self, '_get_retry_session', requests.Session)()
+            res = session.post(url, headers=headers, json=None, timeout=30)
+            
+            if res.status_code != 200:
+                _logger.warning(f"MISA Unit Fetch Failed: {res.status_code} - {res.text}")
+                return None, None
+
+            res_json = res.json()
+            if not res_json.get("Success"):
+                return None, None
+
+            # 3. Lấy Data và Loop so sánh
+            items = res_json.get("Data", [])
+            search_norm = search_text.strip().lower()
+
+            for item in items:
+                # MISA trả về key: "UsageUnitName" và "UsageUnitID"
+                # Lấy tên ra, nếu None thì lấy chuỗi rỗng
+                item_name = item.get("UsageUnitName") or ""
+                
+                # So sánh (bỏ viết hoa/thường, bỏ khoảng trắng thừa)
+                if item_name.strip().lower() == search_norm:
+                    found_id = item.get("UsageUnitID")
+                    _logger.info(f"✅ Found Unit: '{search_text}' -> ID: {found_id}")
+                    return found_id, item_name
+
+        except Exception as e:
+            _logger.error(f"❌ Error in _find_dictionary_item: {str(e)}")
+        
+        _logger.info(f"⚠️ Unit '{search_text}' not found in MISA list.")
+        return None, None
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
@@ -1158,7 +1201,10 @@ class MisaApiUtils(models.AbstractModel):
         
         _logger.debug("catname", cat_name,)
 
-        unit_id, unit_text = self._find_dictionary_item(headers, "UsageUnitID", unit_name)
+        unit_id, unit_text = self._find_dictionary_item_unit(headers, unit_name)
+        _logger.info(f"Checking Unit: {unit_name} -> Found: {unit_id} - {unit_text}")
+        
+
         if not unit_id:
             unit_id, unit_text = 4, "Cái"
 
