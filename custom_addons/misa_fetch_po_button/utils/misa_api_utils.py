@@ -1138,59 +1138,49 @@ class MisaApiUtils(models.AbstractModel):
             raise Exception(f"Không tìm thấy sản phẩm có ID {product_id} trong Odoo")
         return self._process_create_product(product)
     
-    def _find_dictionary_item_unit(self, headers, field_key, search_text):
+    def _find_dictionary_item(self, headers, search_text):
         """
-        Gọi API Dictionary lấy danh sách và trả về (ID, Text) khớp với search_text.
-        :param field_key: Ví dụ "UsageUnitID"
-        :param search_text: Ví dụ "Cái", "Hộp"
+        Lấy danh sách Unit từ MISA, tìm ID ứng với search_text.
         """
         if not search_text:
             return None, None
 
-        # URL based on your fetch snippet
-        base_url = "https://amisapp.misa.vn/crm/g1/api/business/Dictionary/DictionaryNotUsedAllFormLayout/Product"
-        url = f"{base_url}/{field_key}"
-
+        # 1. URL CHUẨN (Không nối thêm gì nữa)
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Dictionary/DictionaryNotUsedAllFormLayout/Product/UsageUnitID"
+        
         try:
-            # Sử dụng session có sẵn hoặc requests
+            # 2. Tăng timeout lên 30s để tránh lỗi Read timed out
             session = getattr(self, '_get_retry_session', requests.Session)()
-            
-            # MISA Dictionary API thường dùng POST với body rỗng hoặc GET.
-            # Theo snippet của bạn là POST.
-            res = session.post(url, headers=headers, json=None, timeout=10)
+            res = session.post(url, headers=headers, json=None, timeout=30)
             
             if res.status_code != 200:
-                _logger.warning(f"MISA Dictionary Fetch Failed [{field_key}]: {res.status_code}")
+                _logger.warning(f"MISA Unit Fetch Failed: {res.status_code} - {res.text}")
                 return None, None
 
             res_json = res.json()
             if not res_json.get("Success"):
                 return None, None
 
-            # Danh sách các items trả về
+            # 3. Lấy Data và Loop so sánh
             items = res_json.get("Data", [])
-            
-            # Chuẩn hóa text để so sánh (lowercase, strip)
             search_norm = search_text.strip().lower()
 
-            # Xác định key chứa Tên hiển thị. 
-            # Với UsageUnitID, MISA thường trả về key là "UsageUnitName"
-            name_key = "UsageUnitName" if field_key == "UsageUnitID" else f"{field_key.replace('ID', '')}Name"
-
             for item in items:
-                # Lấy tên từ item, nếu không thấy key chuẩn thì thử tìm key có chứa 'Name' hoặc 'Text'
-                item_name = item.get(name_key) or item.get(f"{field_key}Text") or ""
+                # MISA trả về key: "UsageUnitName" và "UsageUnitID"
+                # Lấy tên ra, nếu None thì lấy chuỗi rỗng
+                item_name = item.get("UsageUnitName") or ""
                 
-                if item_name and item_name.strip().lower() == search_norm:
-                    # Tìm thấy! Trả về ID và Tên gốc của MISA
-                    found_id = item.get(field_key)
+                # So sánh (bỏ viết hoa/thường, bỏ khoảng trắng thừa)
+                if item_name.strip().lower() == search_norm:
+                    found_id = item.get("UsageUnitID")
+                    _logger.info(f"✅ Found Unit: '{search_text}' -> ID: {found_id}")
                     return found_id, item_name
 
         except Exception as e:
-            _logger.error(f"Error in _find_dictionary_item: {str(e)}")
+            _logger.error(f"❌ Error in _find_dictionary_item: {str(e)}")
         
+        _logger.info(f"⚠️ Unit '{search_text}' not found in MISA list.")
         return None, None
-
     # -------------------------------------------------------------------------
     # API RAW: CẬP NHẬT LOG CHI TIẾT & CẤU TRÚC CUSTOM TABLES
     # -------------------------------------------------------------------------
