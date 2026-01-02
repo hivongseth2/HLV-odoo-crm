@@ -19,6 +19,7 @@
     'assets': {
         'point_of_sale._assets_pos': [
             'hlv_pos_customer_type/static/src/xml/partner_details.xml',
+            'hlv_pos_customer_type/static/src/js/debug_partner.js',
         ],
     },
     'installable': True,
