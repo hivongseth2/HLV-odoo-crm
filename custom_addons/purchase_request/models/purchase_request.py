@@ -277,6 +277,8 @@ class PurchaseRequest(models.Model):
         return super().unlink()
 
     def button_draft(self):
+        if not self.env.user.has_group("purchase_request.group_purchase_request_manager"):
+            raise UserError(_("Bạn không có quyền thực hiện hành động này."))
         self.mapped("line_ids").do_uncancel()
         return self.write({"state": "draft"})
 
@@ -285,9 +287,13 @@ class PurchaseRequest(models.Model):
         return self.write({"state": "to_approve"})
 
     def button_approved(self):
+        if not self.env.user.has_group("purchase_request.group_purchase_request_manager"):
+            raise UserError(_("Bạn không có quyền thực hiện hành động này."))
         return self.write({"state": "approved"})
 
     def button_rejected(self):
+        if not self.env.user.has_group("purchase_request.group_purchase_request_manager"):
+            raise UserError(_("Bạn không có quyền thực hiện hành động này."))
         self.mapped("line_ids").do_cancel()
         return self.write({"state": "rejected"})
 
@@ -295,6 +301,8 @@ class PurchaseRequest(models.Model):
         return self.write({"state": "in_progress"})
 
     def button_done(self):
+        if not self.env.user.has_group("purchase_request.group_purchase_request_manager"):
+            raise UserError(_("Bạn không có quyền thực hiện hành động này."))
         return self.write({"state": "done"})
 
     def check_auto_reject(self):
