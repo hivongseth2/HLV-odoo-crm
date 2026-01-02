@@ -399,12 +399,12 @@ class MisaApiUtils(models.AbstractModel):
             if resp.status_code != 200:
                 _logger.error("FormDataNew(SaleOrder) HTTP %s: %s", resp.status_code, resp.text[:300])
 
-                return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "shipping_contact": None, "httt": None, "htgh": None}
+                return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "shipping_contact": None, "httt": None, "htgh": None, "is_crm_delivery": False}
                 # return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None}
             data = resp.json() if resp.content else {}
         except Exception as ex:
             _logger.exception("Lỗi gọi FormDataNew SaleOrder (ID=%s): %s", sale_order_id, ex)
-            return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "shipping_contact": None, "httt": None, "htgh": None}
+            return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "shipping_contact": None, "httt": None, "htgh": None, "is_crm_delivery": False}
             # return {"owner_code": None, "sale_order_date": None, "misa_delivery": None, "other_sys_order_code": None, "delivery_order_number": None, "shipping_contact": None}
 
         # Lấy dữ liệu chi tiết đơn hàng từ response
@@ -455,7 +455,8 @@ class MisaApiUtils(models.AbstractModel):
             "other_sys_order_code": other_sys_order_code,
             "delivery_order_number": delivery_order_number,
             "httt": httt,
-            "htgh": htgh
+            "htgh": htgh,
+            "is_crm_delivery": is_crm_delivery,  # True nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
         }
     
 

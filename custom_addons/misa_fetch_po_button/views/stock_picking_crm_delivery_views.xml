@@ -1,0 +1,21 @@
+<odoo>
+    <!-- Action mở danh sách phiếu giao hàng CRM Delivery (x_studio_crm_elivery = True) -->
+    <record id="action_stock_picking_crm_delivery" model="ir.actions.act_window">
+        <field name="name">Giao hàng</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('picking_type_code', '=', 'outgoing'), ('sale_id.x_studio_crm_elivery', '=', True)]</field>
+        <field name="context">{'default_picking_type_code': 'outgoing'}</field>
+        <field name="search_view_id" ref="stock.view_picking_internal_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Chưa có phiếu giao hàng CRM Delivery nào
+            </p>
+        </field>
+    </record>
+
+    <!-- Ghi đè action menu "Giao hàng" trong Hoạt động kho hàng -->
+    <record id="stock.stock_picking_action_picking_type" model="ir.actions.act_window">
+        <field name="domain">[('picking_type_code', '=', 'outgoing'), ('sale_id.x_studio_crm_elivery', '=', True)]</field>
+    </record>
+</odoo>
