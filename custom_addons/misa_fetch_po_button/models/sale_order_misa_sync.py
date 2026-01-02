@@ -1261,6 +1261,9 @@ class SaleOrder(models.Model):
         all_products = set(list(misa_total_by_product.keys()) + list(delivered_by_product.keys()))
 
         for prod in all_products:
+            if prod.type == 'service':
+                continue
+
             misa_total = float(misa_total_by_product.get(prod, 0.0) or 0.0)
             delivered  = float(delivered_by_product.get(prod, 0.0) or 0.0)
 
