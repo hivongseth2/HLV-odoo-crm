@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
 
-    <t t-name="hlv_pos_theme.CategoryButton" t-inherit="point_of_sale.CategoryButton" t-inherit-mode="extension" owl="1">
+    <t t-name="hlv_pos_theme.CategorySelector" t-inherit="point_of_sale.CategorySelector" t-inherit-mode="extension" owl="1">
         <xpath expr="//button" position="attributes">
             <attribute name="t-att-data-category-id">category.id</attribute>
             <!-- Also add data-id for good measure as standard Odoo sometimes uses it -->
