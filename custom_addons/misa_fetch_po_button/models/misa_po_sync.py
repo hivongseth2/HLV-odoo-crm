@@ -602,9 +602,7 @@ class MisaPOSync(models.TransientModel):
             raise models.UserError(f"⚠️ Đơn {refno} không có chi tiết sản phẩm")
 
         # stock_code = lines[0].get("stock_code", "").strip().replace(" ", "").upper()
-        stock_code = lines[0].get("custom_field5", "").strip().replace(" ", "").upper()
-
-        
+        stock_code = lines[0].get("custom_field5", "").strip()
         
         stock_mapping = {
                 "HCM": "TSN/Stock",
@@ -613,7 +611,13 @@ class MisaPOSync(models.TransientModel):
                 "HCM_SHOWROOM": "TSNSR/Stock",
                 "HLV":"HLV/Stock",
                 "BẾN CAM": "KBC/Tồn kho",
-                 "BẾNCAM": "KBC/Tồn kho",
+                "BẾNCAM": "KBC/Tồn kho",
+                "HIỀN ĐỨC": "KHD/Tồn kho",
+                "ĐÀ NẴNG": "KDN/Tồn kho",
+                "ĐÀNẴNG": "KDN/Tồn kho",
+                "HIỀNĐỨC": "KHD/Tồn kho",
+                "HIENDUC": "KHD/Tồn kho",
+                "DANANG": "KDN/Tồn kho",
             }
 
         if stock_code not in stock_mapping:
