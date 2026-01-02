@@ -119,6 +119,17 @@ class StockPickingCrmDelivery(models.Model):
                     "✅ [CRM DELIVERY] Đã cập nhật MISA Sale Order %s với ShippingRouteID=%s",
                     misa_sale_order_id, shipping_route_id
                 )
+                
+                # 6. Chuyển trạng thái giao hàng thành "Giao thành công"
+                try:
+                    status_success = MisaApiUtils.change_delivery_status_misa(misa_sale_order_id)
+                    if status_success:
+                        _logger.info("✅ [CRM DELIVERY] Đã chuyển trạng thái giao hàng thành công cho SO %s", misa_sale_order_id)
+                    else:
+                         _logger.warning("⚠️ [CRM DELIVERY] Lỗi chuyển trạng thái giao hàng cho SO %s", misa_sale_order_id)
+                except Exception as es:
+                    _logger.error("❌ [CRM DELIVERY] Exception chuyển trạng thái: %s", es)
+
             else:
                 _logger.warning(
                     "⚠️ [CRM DELIVERY] Không thể cập nhật MISA Sale Order %s với ShippingRouteID=%s",

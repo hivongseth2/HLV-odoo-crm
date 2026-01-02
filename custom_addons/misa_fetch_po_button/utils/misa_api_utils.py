@@ -1892,6 +1892,7 @@ class MisaApiUtils(models.AbstractModel):
             raise e
 
 
+
     def update_sale_order_shipping_route(self, misa_sale_order_id, shipping_route_id, shipping_route_name=""):
         """
         Cập nhật ShippingRouteID vào Sale Order trên MISA CRM.
@@ -1951,6 +1952,67 @@ class MisaApiUtils(models.AbstractModel):
             
         except Exception as e:
             _logger.error(f"❌ [MISA] Failed to save delivery: {e}")
+            return False
+
+
+    def change_delivery_status_misa(self, misa_sale_order_id):
+        """
+        Chuyển trạng thái giao hàng thành 'Giao thành công' (Value=4) trên MISA CRM.
+        API: POST /g1/api/business/SaleOrder/ChangeDeliveryStatus
+        """
+        misa_config = self.env['misa.config']
+        token = self._fetch_login_crm_token()
+        if not token:
+            raise Exception("Lỗi Token MISA")
+
+        headers = misa_config.get_crm_header(token)
+        # Thêm layoutcode
+        headers.update({
+            "layoutcode": "saleorder",
+        })
+
+        url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/ChangeDeliveryStatus"
+        
+        payload = [{
+            "FieldName": "DeliveryPartnerStatusID",
+            "PrimaryKeyName": "ID",
+            "PrimaryKeyValue": int(misa_sale_order_id),
+            "Id": int(misa_sale_order_id),
+            "Value": 4,          # Giao thành công
+            "OldValue": 1,       # Chờ xử lý
+            "OldText": "Chờ xử lý",
+            "TypeControl": 5,
+            "IsCustomField": False,
+            "FormLayoutID": 37,  
+            "LayoutCode": "SaleOrder",
+            "Lable": "Tình trạng vận chuyển",
+            "Text": "Giao thành công",
+            "MISAEntityState": 2,
+            "ExtendedField": {}
+        }]
+
+        _logger.info(f"🚚 [MISA] Updating Delivery Status to Success for SO {misa_sale_order_id}")
+        _logger.debug(f"📤 [MISA] Status Payload: {json.dumps(payload, ensure_ascii=False)}")
+
+        session = self._get_retry_session()
+        try:
+            res = session.post(url, headers=headers, json=payload, timeout=30)
+            res.raise_for_status()
+            data = res.json()
+
+            _logger.info(f"📥 [MISA] ChangeDeliveryStatus Response: {data}")
+
+            if data.get('Success'):
+                _logger.info(f"✅ [MISA] Delivery Status updated to Success for SO {misa_sale_order_id}")
+                return True
+            
+            # Nếu thất bại
+            error_msg = data.get('UserMessage') or data.get('ValidateInfo') or str(data)
+            _logger.error(f"❌ [MISA] ChangeDeliveryStatus Failed: {error_msg}")
+            return False
+
+        except Exception as e:
+            _logger.error(f"❌ [MISA] Failed to update delivery status: {e}")
             return False
 
 
