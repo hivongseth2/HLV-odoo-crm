@@ -1718,3 +1718,350 @@ class MisaApiUtils(models.AbstractModel):
         
         _logger.info(f"✅ [MISA PURCHASE VOUCHER SEARCH] Tổng tìm thấy {len(all_results)} chứng từ cho {len(search_terms)} keywords")
         return all_results
+    
+    # =========================================================================
+    # 5. API CREATE SHIPPING ROUTE (TUYẾN VẬN CHUYỂN)
+    # =========================================================================
+    def _generate_shipping_route_code(self, headers):
+        """
+        Gọi API GenerateNumber để lấy mã ShippingRouteCode tự động từ MISA.
+        
+        Returns:
+            str: Mã tuyến vận chuyển (e.g., "TVC0000002")
+        """
+        url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute/GenerateNumber/ShippingRoute/ShippingRouteCode/142"
+        
+        # Dùng session thường - KHÔNG retry vì sẽ dùng fallback nếu fail
+        session = requests.Session()
+        try:
+            res = session.get(url, headers=headers, timeout=2)  # Giảm timeout xuống 2s
+            res.raise_for_status()
+            data = res.json()
+            
+            _logger.info(f"📥 [MISA] GenerateNumber Response: {data}")
+            
+            if data.get('Success') and data.get('Data'):
+                generated_code = data.get('Data')
+                _logger.info(f"✅ [MISA] Generated ShippingRouteCode: {generated_code}")
+                return generated_code
+            
+            _logger.warning(f"⚠️ [MISA] GenerateNumber failed: {data}")
+            return None
+            
+        except Exception as e:
+            _logger.warning(f"⚠️ [MISA] GenerateNumber error (using fallback): {e}")
+            return None
+
+    def create_shipping_route_misa(self, code, name, owner_id=59):
+        """
+        Tạo tuyến vận chuyển mới trên MISA CRM.
+        
+        Args:
+            code (str): Mã tuyến backup (sẽ dùng nếu GenerateNumber fail)
+            name (str): Tên tuyến (thường dùng SO name)
+            owner_id (int): MISA User ID (default 59)
+            
+        Returns:
+            int/str: MISA ID của tuyến vừa tạo
+        """
+        from datetime import datetime
+        
+        misa_config = self.env['misa.config']
+        token = self._fetch_login_crm_token()
+        if not token:
+            raise Exception("Lỗi Token MISA")
+
+        headers = misa_config.get_crm_header(token)
+        
+        # 1. Gọi GenerateNumber để lấy mã ShippingRouteCode hợp lệ
+        generated_code = self._generate_shipping_route_code(headers)
+        
+        if generated_code:
+            shipping_route_code = generated_code
+        else:
+            # Fallback: Dùng code gốc trực tiếp (mã phiếu OUT)
+            shipping_route_code = code
+            _logger.info(f"⚠️ [MISA] GenerateNumber failed, using original code: {shipping_route_code}")
+        
+        # 2. API endpoint
+        url = "https://amisapp.misa.vn/crm/g1/api/business/ShippingRoute"
+        
+        # 3. Build payload theo đúng format capture từ MISA browser
+        # StartDate format: UTC với Z suffix
+        current_date_utc = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        
+        payload = {
+            "ShippingRouteCode": shipping_route_code,
+            "ShippingRouteName": name,
+            "StatusID": "3",  # 3 = Đã hoàn thành
+            "OwnerID": owner_id,
+            "StartDate": current_date_utc,
+            "WarehouseEmployeeID": owner_id,
+            "EndDate": None,
+            "MISAEntityState": 1,  # 1 = Insert (tạo mới)
+            "FormLayoutID": 142,
+            "FormLayoutIDText": "Mẫu tiêu chuẩn",
+            "LayoutCode": "ShippingRoute",
+            "ActiveLayoutCode": "ShippingRoute",
+            "Fields": [
+                {
+                    "ID": 11409,
+                    "FieldName": "ShippingRouteCode",
+                    "DisplayText": "Mã tuyến",
+                    "Value": shipping_route_code,
+                    "TypeControl": 10,
+                    "MaxLength": 100,
+                    "DecimalLength": 2,
+                    "IsRequired": True,
+                    "IsNotZero": False,
+                    "IsUnique": True,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "ID": 11411,
+                    "FieldName": "OwnerID",
+                    "DisplayText": "Người thực hiện",
+                    "Value": owner_id,
+                    "TypeControl": 5,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "FieldName": "OwnerIDText",
+                    "DisplayText": "Người thực hiện",
+                    "Value": "",
+                    "TypeControl": 1,
+                    "MaxLength": 255
+                },
+                {
+                    "ID": 11413,
+                    "FieldName": "StartDate",
+                    "DisplayText": "Ngày bắt đầu",
+                    "Value": current_date_utc,
+                    "TypeControl": 7,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "ID": 11415,
+                    "FieldName": "StatusID",
+                    "DisplayText": "Tình trạng",
+                    "Value": "3",
+                    "TypeControl": 5,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "FieldName": "StatusIDText",
+                    "DisplayText": "Tình trạng",
+                    "Value": "Đã hoàn thành",
+                    "TypeControl": 1,
+                    "MaxLength": 255
+                },
+                {
+                    "ID": 11410,
+                    "FieldName": "ShippingRouteName",
+                    "DisplayText": "Tên tuyến",
+                    "Value": name,
+                    "TypeControl": 1,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": True,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "ID": 11412,
+                    "FieldName": "WarehouseEmployeeID",
+                    "DisplayText": "Nhân viên kho",
+                    "Value": owner_id,
+                    "TypeControl": 5,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "FieldName": "WarehouseEmployeeIDText",
+                    "DisplayText": "Nhân viên kho",
+                    "Value": "",
+                    "TypeControl": 1,
+                    "MaxLength": 255
+                },
+                {
+                    "ID": 11414,
+                    "FieldName": "EndDate",
+                    "DisplayText": "Ngày kết thúc",
+                    "Value": None,
+                    "TypeControl": 7,
+                    "MaxLength": 255,
+                    "DecimalLength": 2,
+                    "IsRequired": False,
+                    "IsNotZero": False,
+                    "IsUnique": False,
+                    "IsValidateFormat": False,
+                    "CustomRoundDigit": 2,
+                    "IsAutoCreateSequenceAfterSave": False,
+                    "IsOnlyNumeric": False,
+                    "IsCustomField": False
+                },
+                {
+                    "FieldName": "FormLayoutID",
+                    "Value": 142,
+                    "TypeControl": 14
+                },
+                {
+                    "FieldName": "FormLayoutIDText",
+                    "Value": "Mẫu tiêu chuẩn",
+                    "TypeControl": 1
+                },
+                {
+                    "FieldName": "PersonInChargeID",
+                    "TypeControl": 9
+                },
+                {
+                    "FieldName": "PersonInChargeIDText",
+                    "TypeControl": 1
+                }
+            ]
+        }
+        
+        _logger.info(f"🚀 [MISA] Creating Shipping Route: Code={shipping_route_code}, Name={name}")
+        _logger.debug(f"📤 [MISA] Payload: {json.dumps(payload, ensure_ascii=False)}")
+        
+        session = self._get_retry_session()
+        try:
+            res = session.post(url, headers=headers, json=payload, timeout=30)
+            res.raise_for_status()
+            data = res.json()
+            
+            _logger.info(f"📥 [MISA] Shipping Route Response: {data}")
+
+            if data.get('Success') and data.get('Data'):
+                res_data = data.get('Data')
+                
+                # Parse ID từ response
+                if isinstance(res_data, dict):
+                    found_id = res_data.get('ID') or res_data.get('ShippingRouteID')
+                    if found_id:
+                        _logger.info(f"✅ [MISA] Shipping Route created: ID={found_id}")
+                        return found_id
+                    
+                    _logger.warning(f"⚠️ [MISA] Response Data (Dict) but no ID found: {res_data}")
+                    raise Exception(f"MISA Response missing ID: {json.dumps(res_data, ensure_ascii=False)}")
+
+                # Nếu Data là primitive (int/str), return trực tiếp
+                if isinstance(res_data, (int, str)):
+                    _logger.info(f"✅ [MISA] Shipping Route created: ID={res_data}")
+                    return res_data
+            
+            # Xử lý lỗi
+            error_msg = data.get('UserMessage') or data.get('ValidateInfo')
+            if not error_msg:
+                error_msg = json.dumps(data, ensure_ascii=False)
+            raise Exception(f"MISA Create Shipping Route Failed: {error_msg}")
+            
+        except Exception as e:
+            _logger.error(f"❌ [MISA] Failed to create shipping route: {e}")
+            raise e
+
+
+    def update_sale_order_shipping_route(self, misa_sale_order_id, shipping_route_id, shipping_route_name=""):
+        """
+        Cập nhật ShippingRouteID vào Sale Order trên MISA CRM.
+        Sử dụng API /Delivery/SaveDelivery
+        
+        Args:
+            misa_sale_order_id (int/str): MISA Sale Order ID
+            shipping_route_id (int/str): MISA Shipping Route ID vừa tạo
+            shipping_route_name (str): Tên tuyến vận chuyển (để hiển thị)
+            
+        Returns:
+            bool: True nếu thành công
+        """
+        misa_config = self.env['misa.config']
+        token = self._fetch_login_crm_token()
+        if not token:
+            raise Exception("Lỗi Token MISA")
+
+        headers = misa_config.get_crm_header(token)
+        
+        # API endpoint đúng - /Delivery/SaveDelivery
+        url = "https://amisapp.misa.vn/crm/g1/api/business/Delivery/SaveDelivery"
+        
+        payload = {
+            "ID": str(misa_sale_order_id),
+            "ShippingRouteID": str(shipping_route_id),
+            "ShippingRouteIDText": shipping_route_name,
+            "WarehouseUserID": None,
+            "WarehouseUserIDText": None,
+            "DeliveryUserID": None,
+            "DeliveryUserIDText": None,
+            "EstimatedDeliveryDate": None,
+            "Description": ""
+        }
+        
+        _logger.info(f"🔄 [MISA] Updating Sale Order {misa_sale_order_id} with ShippingRouteID={shipping_route_id}")
+        _logger.debug(f"📤 [MISA] Payload: {json.dumps(payload, ensure_ascii=False)}")
+        
+        session = self._get_retry_session()
+        try:
+            res = session.post(url, headers=headers, json=payload, timeout=30)
+            res.raise_for_status()
+            data = res.json()
+            
+            _logger.info(f"📥 [MISA] SaveDelivery Response: {data}")
+
+            if data.get('Success'):
+                _logger.info(f"✅ [MISA] Sale Order {misa_sale_order_id} updated with ShippingRouteID={shipping_route_id}")
+                return True
+            
+            # Xử lý lỗi
+            error_msg = data.get('UserMessage') or data.get('ValidateInfo')
+            if not error_msg:
+                error_msg = json.dumps(data, ensure_ascii=False)
+            _logger.error(f"❌ [MISA] SaveDelivery Failed: {error_msg}")
+            return False
+            
+        except Exception as e:
+            _logger.error(f"❌ [MISA] Failed to save delivery: {e}")
+            return False
