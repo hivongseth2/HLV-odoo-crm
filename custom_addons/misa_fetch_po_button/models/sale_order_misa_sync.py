@@ -373,10 +373,14 @@ class SaleOrder(models.Model):
             "HIENDUC": "KHD/Tồn kho",
             "HCM_SHOWROOM": "TSNSR/Stock",
             "HLV":"TSN/Stock",
-             "BẾN CAM": "KBC/Tồn kho",
-             "BẾNCAM": "KBC/Tồn kho",
-             "HIỀN ĐỨC": "KHD/Tồn kho",
-             "HIỀNĐỨC": "KHD/Tồn kho",
+            "BẾN CAM": "KBC/Tồn kho",
+            "BẾNCAM": "KBC/Tồn kho",
+            "HIỀN ĐỨC": "KHD/Tồn kho",
+            "ĐÀ NẴNG": "KDN/Tồn kho",
+            "ĐÀNẴNG": "KDN/Tồn kho",
+            "HIỀNĐỨC": "KHD/Tồn kho",
+            "HIENDUC": "KHD/Tồn kho",
+            "DANANG": "KDN/Tồn kho",
         }
 
         old_wh = None
