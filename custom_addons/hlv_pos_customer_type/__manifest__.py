@@ -16,11 +16,8 @@
     'data': [
         'views/res_partner_views.xml',
     ],
-    'assets': {
-        'point_of_sale._assets_pos': [
-            'hlv_pos_customer_type/static/src/xml/partner_details.xml',
-        ],
-    },
+    # Note: Odoo 18 POS uses FormViewDialog from backend for partner editing.
+    # The pos_customer_type field is displayed via res_partner_views.xml form inheritance.
     'installable': True,
     'auto_install': False,
     'application': False,

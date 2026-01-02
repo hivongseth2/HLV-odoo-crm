@@ -1,15 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+    Note: Odoo 18 POS uses FormViewDialog from backend for partner editing.
+    There is no point_of_sale.PartnerDetailsEdit or point_of_sale.ClientDetailsEdit template.
+    The pos_customer_type field will be visible in POS via the backend form view inheritance
+    defined in views/res_partner_views.xml
+-->
 <templates id="template" xml:space="preserve">
-    <t t-name="hlv_pos_customer_type.ClientDetailsEdit" t-inherit="point_of_sale.ClientDetailsEdit" t-inherit-mode="extension" owl="1">
-        <xpath expr="//input[@name='name']/ancestor::div[hasclass('partner-detail')]" position="after">
-            <div class="partner-detail">
-                <span class="label">Loại khách hàng</span>
-                <select class="detail" name="pos_customer_type" t-model="changes.pos_customer_type">
-                    <option value="">-- Chọn --</option>
-                    <option value="cash">Khách thanh toán tiền mặt</option>
-                    <option value="bank">Khách thanh toán qua chuyển khoản</option>
-                </select>
-            </div>
-        </xpath>
-    </t>
+    <!-- No template extension needed - Odoo 18 uses backend FormViewDialog -->
 </templates>
