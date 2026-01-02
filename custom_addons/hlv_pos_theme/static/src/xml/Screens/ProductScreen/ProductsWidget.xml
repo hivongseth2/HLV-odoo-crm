@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!-- 
+        Extend ProductsWidget to force a structural change.
+        We add a wrapping class 'hlv-sidebar-layout' to the root div 
+        to ensure our CSS selectors hit.
+    -->
+    <t t-name="hlv_pos_theme.ProductsWidget" t-inherit="point_of_sale.ProductsWidget" t-inherit-mode="extension" owl="1">
+        <xpath expr="//div[hasclass('products-widget')]" position="attributes">
+            <attribute name="class">products-widget hlv-sidebar-layout</attribute>
+        </xpath>
+        
+        <!-- 
+           If possible, we want to ensure the control panel (sidebar) is distinct.
+           This XML mainly acts as a hook for our CSS.
+        -->
+    </t>
+
+</templates>

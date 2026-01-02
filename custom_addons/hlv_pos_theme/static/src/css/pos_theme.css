@@ -1,0 +1,633 @@
+/* HLV POS THEME - SIDEBAR LAYOUT (CSS GRID) */
+
+/* 1. RESET & GRID */
+.pos-content .product-screen .products-widget.hlv-sidebar-layout,
+.products-widget.hlv-sidebar-layout {
+    display: grid !important;
+    grid-template-columns: 260px 1fr !important;
+    grid-template-rows: auto 1fr !important;
+    height: 100% !important;
+    width: 100% !important;
+    background-color: #f8fafc !important;
+    gap: 0 !important;
+}
+
+/* 2. SIDEBAR (Categories) */
+.hlv-sidebar-layout .products-widget-control-panel .categories,
+.hlv-sidebar-layout .products-widget-control-panel .category-list,
+.hlv-sidebar-layout .category-list {
+    grid-column: 1 !important;
+    grid-row: 1 / span 2 !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+
+    background-color: #ffffff !important;
+    border-right: 1px solid #e2e8f0 !important;
+    padding: 12px !important;
+    overflow-y: auto !important;
+    z-index: 50 !important;
+}
+
+/* 3. SEARCH BAR AREA */
+.hlv-sidebar-layout .products-widget-control-panel .search-box-container,
+.hlv-sidebar-layout .products-widget-control-panel .search-box,
+.hlv-sidebar-layout .search-box {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+
+    padding: 12px 24px !important;
+    background: #f8fafc !important;
+    border-bottom: 1px solid transparent !important;
+    /* Optional */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    /* Right align search */
+}
+
+.hlv-sidebar-layout .products-widget-control-panel {
+    display: contents !important;
+    /* Magical - unwrap container */
+}
+
+/* Search Input Styling */
+.hlv-sidebar-layout .search-box input {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    padding: 10px 16px !important;
+    font-size: 14px !important;
+    min-width: 300px !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 4. CONTENT AREA (Products) */
+.hlv-sidebar-layout .product-list-container {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+
+    overflow-y: auto !important;
+    padding: 20px !important;
+    background-color: #f8fafc !important;
+}
+
+.hlv-sidebar-layout .product-list {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important;
+    /* Better card width */
+    gap: 16px !important;
+    padding: 0 !important;
+}
+
+/* 5. CATEGORY ITEMS */
+.category-button.hlv-clean-category,
+/* Support both nested and direct selection */
+.hlv-sidebar-layout .category-button {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 48px !important;
+    height: auto !important;
+    max-height: 80px !important;
+    margin: 4px 0 !important;
+    padding: 8px 12px !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+
+    /* Distinct Button Look */
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 6px !important;
+    color: #475569 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    transition: all 0.15s ease !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+    position: relative !important;
+}
+
+/* Force override of Odoo ColorList classes */
+.category-button.hlv-clean-category[class*="o_colorlist_"],
+.product.hlv-product-card[class*="o_colorlist_"] {
+    background-color: #ffffff !important;
+}
+
+/* Hover */
+.category-button.hlv-clean-category:hover {
+    background-color: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+    color: #1e293b !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Active / Highlighted - Strong High Contrast per new request */
+.category-button.hlv-clean-category.active,
+.category-button.hlv-clean-category.highlight,
+.category-button.hlv-clean-category.o-active,
+.category-button.hlv-clean-category.selected,
+/* Active / Highlighted - Strong High Contrast per new request */
+.category-button.hlv-clean-category.active,
+.category-button.hlv-clean-category.highlight,
+.category-button.hlv-clean-category.o-active,
+.category-button.hlv-clean-category.selected,
+.category-button.hlv-clean-category.hlv-active-category {
+    /* The one true selector */
+    background-color: #2563eb !important;
+    /* Strong Primary Blue */
+    border-color: #1d4ed8 !important;
+    /* Darker Blue */
+    color: #ffffff !important;
+    /* White Text */
+    font-weight: 700 !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.4) !important;
+    opacity: 1 !important;
+}
+
+/* Dimmed / Unselected Siblings */
+.category-button.hlv-clean-category.hlv-dimmed-category,
+/* Fallback if JS applies opacity-50 and we want to control style */
+.category-button.hlv-clean-category.opacity-50 {
+    background-color: #f8fafc !important;
+    /* Very Light Gray */
+    color: #94a3b8 !important;
+    /* Muted Text */
+    border-color: #e2e8f0 !important;
+    opacity: 0.6 !important;
+    /* Consistent Dimming */
+}
+
+
+
+/* Remove the little side indicator if we are doing background */
+.category-button.hlv-clean-category.active::before,
+.category-button.hlv-clean-category.highlight::before,
+.category-button.hlv-clean-category.o-active::before,
+.category-button.hlv-clean-category.selected::before,
+.category-button.hlv-clean-category.hlv-active-category::before {
+    display: none !important;
+}
+
+/* Ensure text color update on active */
+.category-button.hlv-clean-category.active span,
+.category-button.hlv-clean-category.active div,
+.category-button.hlv-clean-category.highlight span,
+.category-button.hlv-clean-category.highlight div,
+.category-button.hlv-clean-category.o-active span,
+.category-button.hlv-clean-category.o-active div,
+.category-button.hlv-clean-category.selected span,
+.category-button.hlv-clean-category.selected div,
+.category-button.hlv-clean-category.hlv-active-category span,
+.category-button.hlv-clean-category.hlv-active-category div {
+    color: #ffffff !important;
+}
+
+
+
+
+/* Text alignment - Allow Wrapping */
+.category-button.hlv-clean-category span,
+.category-button.hlv-clean-category div {
+    text-align: left !important;
+    white-space: normal !important;
+    /* Allow wrapping */
+    line-height: 1.3 !important;
+    flex: 1 !important;
+    word-break: break-word !important;
+
+    /* Line Clamp to prevent overflow */
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+}
+
+/* Icons */
+.category-button.hlv-clean-category img {
+    margin-right: 10px !important;
+    width: 20px !important;
+    height: 20px !important;
+    object-fit: contain !important;
+    opacity: 0.7 !important;
+    flex-shrink: 0 !important;
+}
+
+
+/* 6. PRODUCT CARDS */
+.hlv-product-card,
+/* Use our helper class */
+.hlv-sidebar-layout article.product {
+    width: 100% !important;
+    height: 100% !important;
+    /* Fill grid cell */
+    min-height: 260px !important;
+    /* Ensure space for content */
+    margin: 0 !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+    /* Force White */
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    transition: transform 0.2s, box-shadow 0.2s !important;
+    position: relative !important;
+}
+
+/* Override any inline bg color from Odoo */
+.hlv-sidebar-layout article.product[style],
+.hlv-product-card[style] {
+    background-color: #ffffff !important;
+}
+
+.hlv-product-card:hover,
+.hlv-sidebar-layout article.product:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+    border-color: #cbd5e1 !important;
+    z-index: 10 !important;
+}
+
+/* Image */
+.hlv-product-card .product-img,
+.hlv-sidebar-layout .product-img {
+    width: 100% !important;
+    height: 140px !important;
+    /* Slightly larger */
+    padding: 12px !important;
+    background: #ffffff !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    position: relative !important;
+    /* Prevent overlap */
+    display: block !important;
+}
+
+/* Content */
+.hlv-product-card .product-content,
+.hlv-sidebar-layout .product-content {
+    padding: 12px !important;
+    background: #ffffff !important;
+    /* Force background */
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+    justify-content: space-between !important;
+    /* Space name and price */
+    text-align: left !important;
+    position: relative !important;
+    z-index: 2 !important;
+}
+
+/* Name */
+.hlv-product-card .product-name,
+.hlv-sidebar-layout .product-name {
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: #334155 !important;
+    line-height: 1.4 !important;
+    margin-bottom: 8px !important;
+
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    flex-grow: 0 !important;
+}
+
+/* Price */
+.hlv-price-forced,
+.hlv-sidebar-layout .product-price,
+.hlv-sidebar-layout .product .price-tag,
+.hlv-sidebar-layout .product .product-price-tag {
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    color: #dc2626 !important;
+    /* Red for high visibility */
+    background: transparent !important;
+    padding: 4px 0 0 0 !important;
+
+    /* Absolute positioning to avoid conflict with Quantity Badge */
+    position: absolute !important;
+    bottom: 8px !important;
+    right: 8px !important;
+
+    display: block !important;
+    text-align: right !important;
+    /* Right align price typically */
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 20 !important;
+    /* Higher than hover/content */
+}
+
+/* Ensure currency aligns */
+.hlv-sidebar-layout .product-price .currency {
+    font-size: 0.8em !important;
+    font-weight: 600 !important;
+    color: #ef4444 !important;
+}
+
+/* Tags/Qty */
+.hlv-sidebar-layout .product .product-qty {
+    font-size: 11px !important;
+    padding: 2px 6px !important;
+    background: #1e293b !important;
+    color: #fff !important;
+    border-radius: 4px !important;
+    top: 8px !important;
+    right: 8px !important;
+    position: absolute !important;
+}
+
+/* =========================================
+   HLV POS THEME - PAYMENT SCREEN REDESIGN 
+   ========================================= */
+
+/* 1. MAIN LAYOUT CONTAINER */
+.pos-content .payment-screen {
+    background-color: #f1f5f9 !important;
+    /* Soft Slate background */
+    display: flex !important;
+    flex-direction: row !important;
+    /* Force Side-by-Side */
+    align-items: stretch !important;
+    gap: 24px !important;
+    padding: 24px !important;
+    height: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+/* RESET Inner Wrappers if they exist */
+.pos-content .payment-screen .main-content,
+.pos-content .payment-screen .screen-content {
+    display: contents !important;
+    /* Remove wrapper influence */
+}
+
+/* Left Column: Interaction (Methods + Numpad) */
+/* Target by class AND standard structural assumptions */
+.payment-screen .payment-buttons-container,
+.payment-screen .left-content {
+    flex: 0 0 380px !important;
+    /* Fixed Width */
+    width: 380px !important;
+    min-width: 380px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    height: 100% !important;
+}
+
+/* Right Column: Status (Total + Lines) */
+.payment-screen .payment-status-container,
+.payment-screen .right-content {
+    flex: 1 !important;
+    /* Grow to fill */
+    background: #ffffff !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+    padding: 32px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    border: 1px solid #e2e8f0 !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+}
+
+/* 2. PAYMENT METHOD BUTTONS */
+.payment-screen .paymentmethods {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    overflow-y: auto !important;
+    flex: 1 !important;
+    /* Grow to fill available space */
+    min-height: 0 !important;
+    /* Allow shrinking for scrolling */
+    padding: 2px !important;
+    margin-bottom: 16px !important;
+    /* Spacing from numpad */
+    max-height: none !important;
+    /* Remove fixed limit */
+}
+
+.payment-screen .paymentmethod {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    padding: 0 16px !important;
+    /* Adjusted padding */
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    color: #334155 !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    min-height: 56px !important;
+    /* Slightly more compact */
+    margin: 0 !important;
+    cursor: pointer !important;
+    /* Ensure pointer */
+    flex-shrink: 0 !important;
+    /* Don't squash */
+}
+
+.payment-screen .paymentmethod:hover {
+    transform: translateY(-1px) !important;
+    border-color: #94a3b8 !important;
+}
+
+.payment-screen .paymentmethod.selected {
+    background: #eff6ff !important;
+    border-color: #3b82f6 !important;
+    color: #1d4ed8 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Icons in methods */
+.payment-screen .paymentmethod .payment-icon {
+    margin-right: 12px !important;
+    font-size: 20px !important;
+}
+
+/* 3. NUMPAD styling */
+.payment-screen .payment-numpad {
+    flex: 0 0 auto !important;
+    /* Don't grow/shrink */
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+.payment-screen .numpad {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 12px !important;
+    /* Increased gap */
+    width: 100% !important;
+}
+
+.payment-screen .numpad button,
+.payment-screen .mode-button {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    font-size: 20px !important;
+    /* Larger text */
+    font-weight: 600 !important;
+    color: #334155 !important;
+    height: 60px !important;
+    /* Taller buttons */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+    transition: all 0.1s !important;
+    cursor: pointer !important;
+    /* Click cursor */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    width: auto !important;
+    /* Let grid handle width */
+}
+
+.payment-screen .numpad button:hover {
+    background: #f1f5f9 !important;
+    transform: translateY(-1px) !important;
+}
+
+.payment-screen .numpad button:active {
+    transform: translateY(1px) !important;
+    box-shadow: none !important;
+}
+
+/* UNIVERSAL POINTER CURSOR FOR BUTTONS */
+.payment-screen .button,
+.payment-screen button,
+.payment-screen .btn {
+    cursor: pointer !important;
+}
+
+/* Validate Button - The Big One (Specific Styling) */
+.payment-screen .button.next,
+.payment-screen .button.validate {
+    background: #2563eb !important;
+    /* Primary Blue */
+    color: #ffffff !important;
+    border: none !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
+    margin-top: 24px !important;
+    /* More separation */
+    height: 56px !important;
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+
+/* Specific Active State for Validate */
+.payment-screen .button.next:active,
+.payment-screen .button.validate:active {
+    background: #1d4ed8 !important;
+    transform: translateY(1px) !important;
+}
+
+/* Icons in Validate */
+.payment-screen .button.next .fa,
+.payment-screen .button.validate .fa {
+    margin-right: 8px !important;
+}
+
+/* 4. TOTAL & STATUS (Right Side) */
+/* Cleanup Visual Noise */
+
+.payment-screen .right-content {
+    border: none !important;
+    /* Remove outer border */
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05) !important;
+    /* Cleaner shadow */
+}
+
+.payment-screen .total {
+    font-size: 56px !important;
+    /* Slightly smaller for balance */
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    margin-bottom: 32px !important;
+}
+
+/* Payment Status Panel - Simplify */
+.payment-screen .payment-status-container {
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+.payment-screen .paymentlines {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    margin-bottom: auto !important;
+    /* Push remaining down */
+}
+
+.payment-screen .paymentline {
+    background: #ffffff !important;
+    padding: 18px 24px !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.payment-screen .paymentline.selected {
+    background: #f8fafc !important;
+}
+
+/* Remaining / Change - Flat Look */
+.payment-screen .payment-status {
+    margin-top: 24px !important;
+    border: 1px solid #e2e8f0 !important;
+    /* Single border outline */
+    border-radius: 12px !important;
+    padding: 24px !important;
+    background: #f8fafc !important;
+    /* Light back for contrast */
+}
+
+.payment-screen .payment-status.total-due {
+    background: #fef2f2 !important;
+    /* Subtle Red tint */
+    border-color: #fecaca !important;
+}
+
+.payment-screen .payment-status.change {
+    background: #f0fdf4 !important;
+    /* Subtle Green tint */
+    border-color: #bbf7d0 !important;
+}
+
+.payment-screen .payment-status .label {
+    color: #64748b !important;
+    font-weight: 600 !important;
+    margin-bottom: 4px !important;
+}
+
+.payment-screen .payment-status .amount {
+    font-size: 36px !important;
+}
