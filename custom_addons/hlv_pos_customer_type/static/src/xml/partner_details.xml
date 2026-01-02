@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
-    <t t-name="hlv_pos_customer_type.PartnerDetailsEdit" t-inherit="point_of_sale.PartnerDetails" t-inherit-mode="extension" owl="1">
+    <t t-name="hlv_pos_customer_type.PartnerDetailsEdit" t-inherit="point_of_sale.PartnerDetailsEdit" t-inherit-mode="extension" owl="1">
         <xpath expr="//input[@name='name']/ancestor::div[hasclass('partner-detail')]" position="after">
             <div class="partner-detail">
                 <span class="label">Loại khách hàng</span>
