@@ -3,6 +3,7 @@
 
     <!-- Add Customer Type Header to Partner List -->
     <t t-name="hlv_pos_customer_type.PartnerList" t-inherit="point_of_sale.PartnerList" t-inherit-mode="extension" owl="1">
+        <!-- Insert before the empty action column at the end -->
         <xpath expr="//th[last()]" position="before">
             <th class="partner-line-type py-2">Loại KH</th>
         </xpath>
@@ -10,7 +11,8 @@
 
     <!-- Add Customer Type Value to Partner Line with Inline Editing -->
     <t t-name="hlv_pos_customer_type.PartnerLine" t-inherit="point_of_sale.PartnerLine" t-inherit-mode="extension" owl="1">
-        <xpath expr="//td[last()]" position="before">
+        <!-- Insert before the FIRST action cell (Checkmark/Action) to avoid splitting them -->
+        <xpath expr="//td[contains(@class, 'edit-partner-button-cell')][1]" position="before">
             <td class="partner-line-type" t-on-click="onToggleCustomerType" style="cursor: pointer;">
                 <t t-if="props.partner.pos_customer_type">
                     <span class="badge text-bg-info" t-if="props.partner.pos_customer_type == 'cash'">Tiền mặt</span>
