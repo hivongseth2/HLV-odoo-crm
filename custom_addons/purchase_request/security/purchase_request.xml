@@ -68,6 +68,7 @@
         <field name="perm_write" eval="True" />
         <field name="perm_create" eval="True" />
         <field name="perm_unlink" eval="True" />
+        <field name="domain_force">[(1,'=',1)]</field>
     </record>
     <record id="purchase_request_line_followers_rule" model="ir.rule">
         <field name="name">Follow Purchase Request Line</field>
@@ -101,5 +102,6 @@
         <field name="perm_write" eval="True" />
         <field name="perm_create" eval="True" />
         <field name="perm_unlink" eval="True" />
+        <field name="domain_force">[(1,'=',1)]</field>
     </record>
 </odoo>
