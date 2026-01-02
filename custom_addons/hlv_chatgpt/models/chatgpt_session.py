@@ -145,6 +145,10 @@ class HlvChatgptSession(models.Model):
         # G. Lấy kết quả cuối cùng (Final Response)
         if run.status == 'completed':
             messages = client.beta.threads.messages.list(thread_id=thread_id, limit=1)
+            _logger.info("-------------------- DEBUG MESSAGE OPENAI --------------------")
+            _logger.info(messages.data)
+            _logger.info("--------------------------------------------------------------")
+            
             final_response = "..."
             if messages.data:
                 # Lấy tin nhắn mới nhất của Assistant
