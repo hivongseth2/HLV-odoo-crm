@@ -837,36 +837,36 @@ class SaleApiImportWizard(models.TransientModel):
                 zns = bool(order.get("CustomField23", False))
 
                 # Bỏ qua đơn đã giao (DeliveryStatusID=2)
-                delivery_status = order.get("DeliveryStatusID", "0")
-                if delivery_status is not None and str(delivery_status).strip() == "2":
-                    _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
-                    continue
+                # delivery_status = order.get("DeliveryStatusID", "0")
+                # if delivery_status is not None and str(delivery_status).strip() == "2":
+                #     _logger.info("⏭️ Bỏ qua SO %s (id=%s) vì Đơn hàng đã giao (DeliveryStatusID=2)", order.get("SaleOrderNo"), order.get("ID"))
+                #     continue
                 
                 # Nếu là 'Từ chối ghi' → hủy các SO hiện có trùng tên rồi bỏ qua import
-                if revenue_status_id == 4 or status == "từ chối ghi":
-                    # found = self.env['sale.order'].sudo().search([('name', '=', order_ref)])
-                    # if found:
-                    #     for so in found:
-                    #         self._force_cancel_sale_order(so, revenue_status_id, status)
-                    continue              
+                # if revenue_status_id == 4 or status == "từ chối ghi":
+                #     # found = self.env['sale.order'].sudo().search([('name', '=', order_ref)])
+                #     # if found:
+                #     #     for so in found:
+                #     #         self._force_cancel_sale_order(so, revenue_status_id, status)
+                #     continue              
 
 
 
                 # Bỏ qua SO 'Bản nháp' mà không thuộc e_accounts
                 #if customer_name not in e_accounts and status == "Bản nháp" :
-                if customer_name not in e_accounts and (status in ["Bản nháp", "bản nháp"] or status_id == 1):
-                    _logger.info("⏭️ SO %s là 'Bản nháp' và không thuộc e_accounts => bỏ qua", order.get("SaleOrderNo"))
-                    continue
+                # if customer_name not in e_accounts and (status in ["Bản nháp", "bản nháp"] or status_id == 1):
+                #     _logger.info("⏭️ SO %s là 'Bản nháp' và không thuộc e_accounts => bỏ qua", order.get("SaleOrderNo"))
+                #     continue
 
                 # --- Lấy chi tiết dòng hàng ---
                 order_id = order.get("ID")
                 misa_id_str = str(order_id) if order_id else False  
                 payload_detail = misa_config.get_crm_sale_order_detail_payload(order_id)
                 
-                if customer_name not in e_accounts :
-                    continue
-                if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
-                    continue
+                # if customer_name not in e_accounts :
+                #     continue
+                # if customer_name in e_accounts and not order.get('DeliveryOrderNumber'):
+                #     continue
 
                 # base_pick_name logic has been moved down
                 # if customer_name in e_accounts:
@@ -897,8 +897,8 @@ class SaleApiImportWizard(models.TransientModel):
                 else:
                     pick_code = del_code
 
-                if customer_name in e_accounts and not pick_code:
-                    continue
+                # if customer_name in e_accounts and not pick_code:
+                #     continue
 
                 if customer_name in e_accounts:
                     base_pick_name = pick_code
