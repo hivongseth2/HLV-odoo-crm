@@ -8,20 +8,23 @@
         </xpath>
     </t>
 
-    <!-- Add Customer Type Value to Partner Line -->
+    <!-- Add Customer Type Value to Partner Line with Inline Editing -->
     <t t-name="hlv_pos_customer_type.PartnerLine" t-inherit="point_of_sale.PartnerLine" t-inherit-mode="extension" owl="1">
         <xpath expr="//td[last()]" position="before">
-            <td class="partner-line-type">
-                <span class="badge text-bg-info" t-if="props.partner.pos_customer_type == 'cash'">Tiền mặt</span>
-                <span class="badge text-bg-warning" t-if="props.partner.pos_customer_type == 'bank'">Chuyển khoản</span>
-                <span t-if="!props.partner.pos_customer_type" style="color: #ccc;">-</span>
+            <td class="partner-line-type" t-on-click="onToggleCustomerType" style="cursor: pointer;">
+                <t t-if="props.partner.pos_customer_type">
+                    <span class="badge text-bg-info" t-if="props.partner.pos_customer_type == 'cash'">Tiền mặt</span>
+                    <span class="badge text-bg-warning" t-if="props.partner.pos_customer_type == 'bank'">Chuyển khoản</span>
+                </t>
+                <t t-else="">
+                    <span class="badge text-bg-secondary" style="opacity: 0.5;">- Chọn -</span>
+                </t>
             </td>
         </xpath>
         
-        <!-- For Mobile View: Add to partner-info div -->
-        <!-- Try to append to the end of partner-info content -->
+        <!-- For Mobile View -->
         <xpath expr="//div[hasclass('partner-info')]/div[1]" position="inside">
-             <div class="partner-line-type p-1" t-if="props.partner.pos_customer_type">
+             <div class="partner-line-type p-1" t-if="props.partner.pos_customer_type" t-on-click="onToggleCustomerType">
                 <i class="fa fa-fw fa-tag me-2" />
                 <span t-if="props.partner.pos_customer_type == 'cash'">Tiền mặt</span>
                 <span t-if="props.partner.pos_customer_type == 'bank'">Chuyển khoản</span>
