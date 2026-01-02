@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
     <t t-name="hlv_pos_customer_type.PartnerDetailsEdit" t-inherit="point_of_sale.PartnerDetailsEdit" t-inherit-mode="extension">
-        <xpath expr="//div[hasclass('partner-details-box')]" position="inside">
+        <xpath expr="//input[@name='name']/ancestor::div[hasclass('partner-detail')]" position="after">
             <div class="partner-detail">
                 <span class="label">Loại khách hàng</span>
                 <select class="detail" name="pos_customer_type" t-model="changes.pos_customer_type">
