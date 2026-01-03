@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'HLV POS Customer Type',
-    'version': '18.0.1.1.0',
+    'version': '18.0.1.0.0',
     'category': 'Point of Sale',
     'summary': 'Add Customer Type selection to POS Partner Details',
     'description': """
