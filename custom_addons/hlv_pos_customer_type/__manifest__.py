@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'HLV POS Customer Type',
-    'version': '18.0.1.0.0',
+    'version': '18.0.1.1.0',
     'category': 'Point of Sale',
     'summary': 'Add Customer Type selection to POS Partner Details',
     'description': """
@@ -25,8 +25,11 @@
             'hlv_pos_customer_type/static/src/js/partner_line_patch.js',
         ],
     },
+    'pre_init_hook': 'pre_init_hook',
+    'post_init_hook': 'post_init_hook',
     'installable': True,
     'auto_install': False,
     'application': False,
     'license': 'LGPL-3',
 }
+
