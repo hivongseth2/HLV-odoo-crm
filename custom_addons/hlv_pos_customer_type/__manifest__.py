@@ -25,11 +25,10 @@
             'hlv_pos_customer_type/static/src/js/partner_line_patch.js',
         ],
     },
-    'pre_init_hook': 'pre_init_hook',
-    'post_init_hook': 'post_init_hook',
     'installable': True,
     'auto_install': False,
     'application': False,
     'license': 'LGPL-3',
 }
+
 
