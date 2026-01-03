@@ -10,7 +10,7 @@ patch(PartnerLine.prototype, {
     setup() {
         super.setup();
         this.orm = useService("orm");
-        this.popup = useService("popup"); // Standard POS popup service in earlier versions, but Odoo 18 uses dialogs
+        this.dialog = useService("dialog");
     },
 
     async onToggleCustomerType(ev) {
@@ -28,7 +28,7 @@ patch(PartnerLine.prototype, {
         try {
             // Show Selection Popup
             // Odoo 18 style: use makeAwaitable with SelectionPopup component
-            const selectedItem = await makeAwaitable(this.env.services.dialog, SelectionPopup, {
+            const selectedItem = await makeAwaitable(this.dialog, SelectionPopup, {
                 title: 'Chọn loại khách hàng',
                 list: selectionList,
             });
