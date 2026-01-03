@@ -14,9 +14,10 @@
         <!-- Insert before the FIRST action cell (Checkmark/Action) to avoid splitting them -->
         <xpath expr="//td[contains(@class, 'edit-partner-button-cell')][1]" position="before">
             <td class="partner-line-type" t-on-click="onToggleCustomerType" style="cursor: pointer;">
-                <t t-if="props.partner.pos_customer_type">
-                    <span class="badge text-bg-info" t-if="props.partner.pos_customer_type == 'cash'">Tiền mặt</span>
-                    <span class="badge text-bg-warning" t-if="props.partner.pos_customer_type == 'bank'">Chuyển khoản</span>
+                <t t-set="typeName" t-value="getCustomerTypeName()"/>
+                <t t-set="typeColor" t-value="getCustomerTypeColor()"/>
+                <t t-if="typeName">
+                    <span t-attf-class="badge text-bg-{{ typeColor }}" t-esc="typeName"/>
                 </t>
                 <t t-else="">
                     <span class="badge text-bg-secondary" style="opacity: 0.5;">- Chọn -</span>
@@ -26,12 +27,13 @@
         
         <!-- For Mobile View -->
         <xpath expr="//div[hasclass('partner-info')]/div[1]" position="inside">
-             <div class="partner-line-type p-1" t-if="props.partner.pos_customer_type" t-on-click="onToggleCustomerType">
+            <t t-set="typeName" t-value="getCustomerTypeName()"/>
+            <div class="partner-line-type p-1" t-if="typeName" t-on-click="onToggleCustomerType">
                 <i class="fa fa-fw fa-tag me-2" />
-                <span t-if="props.partner.pos_customer_type == 'cash'">Tiền mặt</span>
-                <span t-if="props.partner.pos_customer_type == 'bank'">Chuyển khoản</span>
+                <span t-esc="typeName"/>
             </div>
         </xpath>
     </t>
 
 </templates>
+

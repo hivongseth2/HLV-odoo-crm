@@ -14,6 +14,9 @@
         'contacts',
     ],
     'data': [
+        'security/ir.model.access.csv',
+        'data/pos_customer_type_data.xml',
+        'views/pos_customer_type_views.xml',
         'views/res_partner_views.xml',
     ],
     'assets': {

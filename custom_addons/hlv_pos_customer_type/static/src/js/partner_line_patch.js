@@ -5,12 +5,46 @@ import { PartnerLine } from "@point_of_sale/app/screens/partner_list/partner_lin
 import { useService } from "@web/core/utils/hooks";
 import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
 import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
+import { usePos } from "@point_of_sale/app/store/pos_hook";
 
 patch(PartnerLine.prototype, {
     setup() {
         super.setup();
         this.orm = useService("orm");
         this.dialog = useService("dialog");
+        this.pos = usePos();
+    },
+
+    getCustomerTypeName() {
+        const partner = this.props.partner;
+        if (!partner.pos_customer_type) return null;
+
+        // pos_customer_type is now [id, name] or just id
+        const typeId = Array.isArray(partner.pos_customer_type)
+            ? partner.pos_customer_type[0]
+            : partner.pos_customer_type;
+
+        // Find in loaded data
+        const customerTypes = this.pos.data?.models?.['pos.customer.type']?.records ||
+            this.pos.models?.['pos.customer.type']?.getAll?.() || [];
+
+        const typeRecord = customerTypes.find(t => t.id === typeId);
+        return typeRecord ? typeRecord.name : null;
+    },
+
+    getCustomerTypeColor() {
+        const partner = this.props.partner;
+        if (!partner.pos_customer_type) return 'secondary';
+
+        const typeId = Array.isArray(partner.pos_customer_type)
+            ? partner.pos_customer_type[0]
+            : partner.pos_customer_type;
+
+        const customerTypes = this.pos.data?.models?.['pos.customer.type']?.records ||
+            this.pos.models?.['pos.customer.type']?.getAll?.() || [];
+
+        const typeRecord = customerTypes.find(t => t.id === typeId);
+        return typeRecord?.color || 'info';
     },
 
     async onToggleCustomerType(ev) {
@@ -18,48 +52,56 @@ patch(PartnerLine.prototype, {
 
         const partner = this.props.partner;
 
-        // Define selection list
-        const selectionList = [
-            { id: 'cash', label: 'Tiền mặt', item: 'cash' },
-            { id: 'bank', label: 'Chuyển khoản', item: 'bank' },
-            { id: 'false', label: 'Bỏ chọn', item: false },
-        ];
+        // Build selection list dynamically from loaded customer types
+        const customerTypes = this.pos.data?.models?.['pos.customer.type']?.records ||
+            this.pos.models?.['pos.customer.type']?.getAll?.() || [];
+
+        const selectionList = customerTypes.map(type => ({
+            id: type.id,
+            label: type.name,
+            item: type.id,
+        }));
+
+        // Add "clear" option
+        selectionList.push({ id: 'false', label: 'Bỏ chọn', item: false });
 
         try {
-            // Show Selection Popup
-            // Odoo 18 style: use makeAwaitable with SelectionPopup component
             const selectedItem = await makeAwaitable(this.dialog, SelectionPopup, {
                 title: 'Chọn loại khách hàng',
                 list: selectionList,
             });
 
-            // If user cancelled (selectedItem is undefined or null usually on cancel)
             if (selectedItem !== undefined && selectedItem !== null) {
-                // Note: SelectionPopup returns the 'item' property of the selected object directly? 
-                // Or returns the payload? Standard SelectionPopup returns the item.
+                const newTypeId = selectedItem;
 
-                const newType = selectedItem; // Assuming it returns the payload 'item'
+                // Get current type id for comparison
+                const currentTypeId = Array.isArray(partner.pos_customer_type)
+                    ? partner.pos_customer_type[0]
+                    : partner.pos_customer_type;
 
-                // Skip if no change (except if we want to force re-set)
-                if (newType === partner.pos_customer_type) {
+                if (newTypeId === currentTypeId) {
                     return;
                 }
 
-                // Optimistic update
-                partner.pos_customer_type = newType;
+                // Optimistic update - find the type record for display
+                if (newTypeId) {
+                    const typeRecord = customerTypes.find(t => t.id === newTypeId);
+                    partner.pos_customer_type = typeRecord ? [typeRecord.id, typeRecord.name] : newTypeId;
+                } else {
+                    partner.pos_customer_type = false;
+                }
 
                 // Backend update
                 await this.orm.write("res.partner", [partner.id], {
-                    pos_customer_type: newType || false // Handle false/null
+                    pos_customer_type: newTypeId || false
                 });
 
-                console.log(`[HLV] Set partner ${partner.name} type to ${newType}`);
+                console.log(`[HLV] Set partner ${partner.name} type to ${newTypeId}`);
             }
 
         } catch (error) {
-            // makeAwaitable might throw on cancel? Or just return null?
-            // Usually returns null/undefined or throws "Cancelled".
             console.log("[HLV] Selection cancelled or failed", error);
         }
     }
 });
+
