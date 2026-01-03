@@ -1,0 +1,270 @@
+# -*- coding: utf-8 -*-
+"""
+Wizard đồng bộ sản phẩm từ MISA CRM vào POS Odoo
+
+Chức năng:
+1. Lấy tất cả sản phẩm từ MISA
+2. Tự động tạo danh mục POS từ category MISA (giữ cấu trúc phân cấp)
+3. Tìm sản phẩm trong Odoo theo code, nếu đã bật available_in_pos thì gán vào danh mục POS
+"""
+from odoo import models, fields, api
+from odoo.exceptions import UserError
+import logging
+
+_logger = logging.getLogger(__name__)
+
+
+class MisaPosProductSyncWizard(models.TransientModel):
+    _name = 'misa.pos.product.sync.wizard'
+    _description = 'Đồng bộ sản phẩm MISA vào POS'
+
+    sync_mode = fields.Selection([
+        ('category_only', 'Chỉ tạo danh mục POS'),
+        ('product_only', 'Chỉ gán sản phẩm vào danh mục'),
+        ('full', 'Đầy đủ (Tạo danh mục + Gán sản phẩm)'),
+    ], string='Chế độ đồng bộ', default='full', required=True)
+    
+    log_text = fields.Text(string='Kết quả', readonly=True)
+    state = fields.Selection([
+        ('draft', 'Chuẩn bị'),
+        ('done', 'Hoàn thành')
+    ], default='draft')
+
+    def _create_pos_categories_with_hierarchy(self, misa_categories, logs):
+        """
+        Tạo danh mục POS với cấu trúc phân cấp đúng.
+        
+        Args:
+            misa_categories: List danh mục từ MISA với thông tin parent
+            logs: List để ghi log
+            
+        Returns:
+            dict: Map {category_name_lower: pos.category record}
+        """
+        pos_categ_model = self.env['pos.category'].sudo()
+        categories_created = 0
+        
+        # Build map: name -> category info
+        cat_info_map = {}
+        for cat in misa_categories:
+            name = (cat.get("name") or "").strip()
+            parent = (cat.get("parent") or "").strip()
+            if name:
+                cat_info_map[name.lower()] = {
+                    "name": name,
+                    "parent": parent,
+                    "id": cat.get("id")
+                }
+        
+        # Map để lưu pos.category đã tạo: name_lower -> record
+        created_map = {}
+        
+        # Lấy tất cả danh mục POS hiện có
+        existing_cats = pos_categ_model.search([])
+        for cat in existing_cats:
+            created_map[cat.name.lower().strip()] = cat
+        
+        def get_or_create_category(name):
+            """Đệ quy tạo category và parent của nó"""
+            name_lower = name.lower().strip()
+            
+            # Đã có trong map -> trả về
+            if name_lower in created_map:
+                return created_map[name_lower]
+            
+            # Lấy thông tin từ MISA
+            info = cat_info_map.get(name_lower, {"name": name, "parent": ""})
+            parent_name = info.get("parent", "").strip()
+            
+            # Tìm hoặc tạo parent trước
+            parent_id = False
+            if parent_name:
+                parent_cat = get_or_create_category(parent_name)
+                if parent_cat:
+                    parent_id = parent_cat.id
+            
+            # Tạo category mới
+            new_cat = pos_categ_model.create({
+                'name': info.get("name", name),
+                'parent_id': parent_id
+            })
+            created_map[name_lower] = new_cat
+            
+            nonlocal categories_created
+            categories_created += 1
+            
+            if parent_name:
+                logs.append(f"   ➕ Tạo: {info.get('name')} (cha: {parent_name})")
+            else:
+                logs.append(f"   ➕ Tạo: {info.get('name')} (gốc)")
+            
+            return new_cat
+        
+        # Tạo tất cả categories
+        for cat in misa_categories:
+            name = (cat.get("name") or "").strip()
+            if name:
+                get_or_create_category(name)
+        
+        return created_map, categories_created
+
+    def action_sync(self):
+        """Thực hiện đồng bộ"""
+        self.ensure_one()
+        
+        logs = []
+        logs.append("=" * 50)
+        logs.append("ĐỒNG BỘ SẢN PHẨM MISA → POS")
+        logs.append("=" * 50)
+        
+        try:
+            # Import exporter
+            from odoo.addons.misa_fetch_po_button.utils.misa_product_export import MisaProductExporter
+            
+            exporter = MisaProductExporter(self.env)
+            
+            # Lấy danh mục từ MISA (cấu trúc cây)
+            logs.append("\n📥 Đang lấy danh mục từ MISA CRM...")
+            misa_categories = exporter.fetch_all_categories()
+            logs.append(f"✅ Tìm thấy {len(misa_categories)} danh mục trong MISA")
+            
+            # Lấy sản phẩm từ MISA
+            logs.append("\n📥 Đang lấy sản phẩm từ MISA CRM...")
+            misa_products = exporter.fetch_all_products()
+            logs.append(f"✅ Tìm thấy {len(misa_products)} sản phẩm trong MISA")
+            
+            # Thống kê
+            categories_created = 0
+            products_updated = 0
+            products_skipped_not_in_pos = 0
+            products_not_found = 0
+            
+            # === BƯỚC 1: TẠO DANH MỤC POS (GIỮ CẤU TRÚC PHÂN CẤP) ===
+            cat_map = {}
+            if self.sync_mode in ('category_only', 'full'):
+                logs.append("\n📁 BƯỚC 1: TẠO DANH MỤC POS (CÓ PHÂN CẤP)")
+                logs.append("-" * 30)
+                
+                cat_map, categories_created = self._create_pos_categories_with_hierarchy(
+                    misa_categories, logs
+                )
+                
+                logs.append(f"\n   ✅ Đã tạo {categories_created} danh mục POS mới")
+            else:
+                # Chỉ build map từ existing categories
+                pos_categ_model = self.env['pos.category'].sudo()
+                all_pos_cats = pos_categ_model.search([])
+                cat_map = {c.name.lower().strip(): c for c in all_pos_cats}
+            
+            # === BƯỚC 2: GÁN SẢN PHẨM VÀO DANH MỤC POS ===
+            if self.sync_mode in ('product_only', 'full'):
+                logs.append("\n📦 BƯỚC 2: GÁN SẢN PHẨM VÀO DANH MỤC POS")
+                logs.append("-" * 30)
+                logs.append("   (Chỉ xử lý sản phẩm đã bật 'Sẵn sàng trong POS')")
+                
+                # 1. LOAD TOÀN BỘ SẢN PHẨM ODOO VÀO BỘ NHỚ (Chỉ lấy field cần thiết)
+                logs.append("\n   ⏳ Đang tải danh sách sản phẩm Odoo...")
+                product_model = self.env['product.template'].sudo()
+                # Chỉ lấy sản phẩm có code và available_in_pos = True
+                odoo_products = product_model.search_read(
+                    [('default_code', '!=', False), ('available_in_pos', '=', True)],
+                    ['default_code', 'pos_categ_ids']
+                )
+                
+                # Map nhanh: Code -> Record ID & Current Categories
+                odoo_map = {}
+                for p in odoo_products:
+                    code = p['default_code'].strip()
+                    odoo_map[code] = {
+                        'id': p['id'],
+                        'pos_categ_ids': p['pos_categ_ids']
+                    }
+                
+                logs.append(f"   ✅ Đã tải được {len(odoo_map)} sản phẩm Odoo vào bộ nhớ.")
+
+                # 2. FETCH MISA PRODUCTS (CHỈ LẤY CỘT CẦN THIẾT)
+                logs.append("\n   ⏳ Đang tải danh sách sản phẩm MISA (Tối ưu)...")
+                # Chỉ lấy ProductCode và ProductCategoryIDText
+                # Base64 encoded: ProductCode,ProductCategoryIDText
+                # Hoặc truyền trực tiếp chuỗi tên cột (không encoded) nếu API hỗ trợ, 
+                # nhưng ở đây ta dùng columns mặc định hoặc chuỗi raw. 
+                # API MISA thường nhận chuỗi tên cột phân cách dấu phẩy.
+                # Tuy nhiên, fetch_all_products mong đợi base64 nếu theo logic cũ, 
+                # nhưng ta sẽ truyền raw string để override default encoded string trong hàm đó nếu cần,
+                # hoặc đơn giản là để hàm fetch_all_products xử lý.
+                # Để an toàn và nhanh, ta dùng chuỗi cột tối thiểu: 
+                # "ProductCode,ProductCategoryIDText" -> Base64: "UHJvZHVjdENvZGUsUHJvZHVjdENhdGVnb3J5SURUZXh0"
+                
+                minimal_columns = "UHJvZHVjdENvZGUsUHJvZHVjdENhdGVnb3J5SURUZXh0" # ProductCode,ProductCategoryIDText
+                misa_products = exporter.fetch_all_products(page_size=1000, columns=minimal_columns)
+                logs.append(f"   ✅ Đã tải {len(misa_products)} sản phẩm từ MISA.")
+                
+                # 3. MATCH & UPDATE
+                logs.append("\n   🔄 Đang đối chiếu và cập nhật...")
+                
+                for p in misa_products:
+                    code = (p.get("ProductCode") or "").strip()
+                    cat_name = (p.get("ProductCategoryIDText") or "").strip()
+                    
+                    if not code or not cat_name:
+                        continue
+                    
+                    # Tìm trong Odoo Map (O(1) lookup)
+                    if code not in odoo_map:
+                        products_not_found += 1
+                        continue
+                        
+                    odoo_info = odoo_map[code]
+                    
+                    # Tìm danh mục POS
+                    if cat_name.lower().strip() not in cat_map:
+                        continue
+                        
+                    pos_cat = cat_map[cat_name.lower().strip()]
+                    
+                    # Kiểm tra xem cần update không
+                    current_categ_ids = odoo_info['pos_categ_ids']
+                    if pos_cat.id not in current_categ_ids:
+                        product_model.browse(odoo_info['id']).write({'pos_categ_ids': [(4, pos_cat.id)]})
+                        products_updated += 1
+                        logs.append(f"   ✏️  {code} → {cat_name}")
+                
+                logs.append(f"\n   ✅ Đã cập nhật xong: {products_updated} sản phẩm")
+                logs.append(f"   (Không tìm thấy code tương ứng trong danh sách POS Odoo: {products_not_found})")
+            
+            # Tổng kết
+            logs.append("\n" + "=" * 50)
+            logs.append("HOÀN THÀNH!")
+            logs.append("=" * 50)
+            logs.append(f"📁 Danh mục POS tạo mới: {categories_created}")
+            logs.append(f"📦 Sản phẩm được gán danh mục: {products_updated}")
+            logs.append(f"⏭️  Bỏ qua (chưa bật POS): {products_skipped_not_in_pos}")
+            logs.append(f"❌ Không tìm thấy trong Odoo: {products_not_found}")
+            
+        except Exception as e:
+            _logger.exception("Lỗi đồng bộ MISA → POS")
+            logs.append(f"\n❌ LỖI: {str(e)}")
+        
+        self.write({
+            'log_text': '\n'.join(logs),
+            'state': 'done'
+        })
+        
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def action_reset(self):
+        """Reset wizard"""
+        self.write({'state': 'draft', 'log_text': ''})
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': self._name,
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
