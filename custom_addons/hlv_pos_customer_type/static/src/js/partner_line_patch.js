@@ -3,48 +3,63 @@
 import { patch } from "@web/core/utils/patch";
 import { PartnerLine } from "@point_of_sale/app/screens/partner_list/partner_line/partner_line";
 import { useService } from "@web/core/utils/hooks";
+import { SelectionPopup } from "@point_of_sale/app/utils/input_popups/selection_popup";
+import { makeAwaitable } from "@point_of_sale/app/store/make_awaitable_dialog";
 
 patch(PartnerLine.prototype, {
     setup() {
         super.setup();
         this.orm = useService("orm");
-        // No need for pos service if we don't reload
+        this.popup = useService("popup"); // Standard POS popup service in earlier versions, but Odoo 18 uses dialogs
     },
 
     async onToggleCustomerType(ev) {
         ev.stopPropagation(); // Avoid selecting the partner row
 
         const partner = this.props.partner;
-        const currentType = partner.pos_customer_type;
 
-        let newType = false;
-        if (currentType === 'cash') {
-            newType = 'bank';
-        } else if (currentType === 'bank') {
-            newType = false; // Toggle to empty
-        } else {
-            newType = 'cash';
-        }
+        // Define selection list
+        const selectionList = [
+            { id: 'cash', label: 'Tiền mặt', item: 'cash' },
+            { id: 'bank', label: 'Chuyển khoản', item: 'bank' },
+            { id: 'false', label: 'Bỏ chọn', item: false },
+        ];
 
         try {
-            // Optimistic UI Update: Update local model immediately
-            // Since Odoo 18 uses reactive record objects in POS, this might trigger UI update
-            // However, verify if 'partner' is directly mutable or if we need to go through DB
-            const oldType = partner.pos_customer_type;
-            partner.pos_customer_type = newType;
-
-            // Update backend
-            await this.orm.write("res.partner", [partner.id], {
-                pos_customer_type: newType
+            // Show Selection Popup
+            // Odoo 18 style: use makeAwaitable with SelectionPopup component
+            const selectedItem = await makeAwaitable(this.env.services.dialog, SelectionPopup, {
+                title: 'Chọn loại khách hàng',
+                list: selectionList,
             });
 
-            console.log(`[HLV] Toggled partner ${partner.name} (${partner.id}) type to ${newType}`);
+            // If user cancelled (selectedItem is undefined or null usually on cancel)
+            if (selectedItem !== undefined && selectedItem !== null) {
+                // Note: SelectionPopup returns the 'item' property of the selected object directly? 
+                // Or returns the payload? Standard SelectionPopup returns the item.
+
+                const newType = selectedItem; // Assuming it returns the payload 'item'
+
+                // Skip if no change (except if we want to force re-set)
+                if (newType === partner.pos_customer_type) {
+                    return;
+                }
+
+                // Optimistic update
+                partner.pos_customer_type = newType;
+
+                // Backend update
+                await this.orm.write("res.partner", [partner.id], {
+                    pos_customer_type: newType || false // Handle false/null
+                });
+
+                console.log(`[HLV] Set partner ${partner.name} type to ${newType}`);
+            }
 
         } catch (error) {
-            console.error("[HLV] Failed to update customer type:", error);
-            // Revert on error
-            // partner.pos_customer_type = oldType; // Need to keep oldType in scope if revert needed
-            // Ensure UI shows error state if needed
+            // makeAwaitable might throw on cancel? Or just return null?
+            // Usually returns null/undefined or throws "Cancelled".
+            console.log("[HLV] Selection cancelled or failed", error);
         }
     }
 });
