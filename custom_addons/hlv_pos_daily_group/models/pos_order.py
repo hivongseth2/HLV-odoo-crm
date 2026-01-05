@@ -23,6 +23,6 @@ class PosOrder(models.Model):
                         local_dt = src_date
                         
                     # Format: POS/ddmmyy
-                    group_name = local_dt.strftime("POS/%d%m%y")
+                    group_name = local_dt.strftime("POS%d%m%y")
                     picking.write({'x_studio_pos_group': group_name})
         return res
