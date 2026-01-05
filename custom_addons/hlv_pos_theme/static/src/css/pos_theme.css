@@ -87,9 +87,12 @@
 .hlv-sidebar-layout .category-button {
     width: 100% !important;
     max-width: 100% !important;
-    min-height: 48px !important;
+    min-height: 60px !important;
+    /* Increased for taller content */
     height: auto !important;
-    max-height: 80px !important;
+    max-height: 100px !important;
+    /* Allow more growth */
+
     margin: 4px 0 !important;
     padding: 8px 12px !important;
 
@@ -199,10 +202,12 @@
 
     /* Line Clamp to prevent overflow */
     display: -webkit-box !important;
-    -webkit-line-clamp: 2 !important;
-    line-clamp: 2 !important;
+    -webkit-line-clamp: 3 !important;
+    /* Allow 3 lines */
+    line-clamp: 3 !important;
     -webkit-box-orient: vertical !important;
     overflow: hidden !important;
+
 }
 
 /* Icons */

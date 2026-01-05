@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="pos_customer_type_cash" model="pos.customer.type">
+            <field name="name">Tiền mặt</field>
+            <field name="code">cash</field>
+            <field name="color">info</field>
+            <field name="sequence">1</field>
+        </record>
+        
+        <record id="pos_customer_type_bank" model="pos.customer.type">
+            <field name="name">Chuyển khoản</field>
+            <field name="code">bank</field>
+            <field name="color">warning</field>
+            <field name="sequence">2</field>
+        </record>
+    </data>
+</odoo>
