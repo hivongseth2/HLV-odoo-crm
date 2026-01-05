@@ -183,7 +183,9 @@ class HlvChatgptSession(models.Model):
             headers = misa_config.get_crm_header(token)
             
             # Gọi hàm tra cứu (đã viết ở Bước 1)
-            real_name = misa_utils.get_category_name_by_id(headers, cat_id)
+            real_name = misa_utils._get_category_name_by_id(headers, cat_id)
+
+            _logger.info("ℹ️ Check Category: %s", real_name)
             
             return json.dumps({
                 "category_id": cat_id,
