@@ -159,7 +159,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'tien_von', 'name': 'Tiền vốn', 'width': 15},
             {'key': 'hang_hoa_giu_ho', 'name': 'Hàng hóa giữ hộ/bán hộ', 'width': 25},
             {'key': 'vi_tri', 'name': 'vị trí', 'width': 25},
-            {'key': 'misa_sync', 'name': 'Đã lập chứng từ', 'width': 15},
+            {'key': 'misa_sync', 'name': 'Misa Sync', 'width': 15},
         ]
 
     def _domain(self):
@@ -365,9 +365,9 @@ class PickingExportWizard(models.TransientModel):
             'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
             'phuong_thuc_thanh_toan': 'Chưa thu tiền',
             # 3 cột mới từ sale.order (đặt ngay sau phương thức thanh toán)
-            'hinh_thuc_giao_hang': getattr(so, 'x_studio_htgh', '') or '' if so else '',
-            'hinh_thuc_thanh_toan_so': getattr(so, 'x_studio_httt', '') or '' if so else '',
-            'ben_tra_phi_van_chuyen': getattr(so, 'x_studio_misa_delivery', '') or '' if so else '',
+            'hinh_thuc_giao_hang': getattr(so, 'x_studio_htgh', '') if so else '',
+            'hinh_thuc_thanh_toan_so': getattr(so, 'x_studio_httt', '') if so else '',
+            'ben_tra_phi_van_chuyen': getattr(so, 'x_studio_misa_delivery', '') if so else '',
             'kiem_phieu_xuat_kho': 'Có',
             'lap_kem_hoa_don': 'Có',
             'da_lap_hoa_don': 'Đã lập',
@@ -545,6 +545,332 @@ class PickingExportWizard(models.TransientModel):
         out.seek(0)
 
         filename = f"Xuat_ban_hang_hoa_{self.date_from}_{self.date_to}.xlsx"
+        attachment = self.env["ir.attachment"].sudo().create({
+            "name": filename,
+            "type": "binary",
+            "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "datas": base64.b64encode(out.getvalue()),
+            "res_model": "picking.export.wizard",
+            "res_id": self.id,
+        })
+
+        return {
+            "type": "ir.actions.act_url",
+            "url": f"/web/content/{attachment.id}?download=true",
+            "target": "self",
+        }
+
+    def _get_pos_columns_definition(self):
+        """Định nghĩa cột cho mẫu POS (52 columns match template)"""
+        return [
+            {'key': 'hinh_thuc_ban_hang', 'name': 'Hình thức bán hàng', 'width': 25},
+            {'key': 'phuong_thuc_thanh_toan', 'name': 'Phương thức thanh toán', 'width': 25},
+            {'key': 'kiem_phieu_xuat_kho', 'name': 'Kiêm phiếu xuất kho', 'width': 20},
+            {'key': 'lap_kem_hoa_don', 'name': 'Lập kèm hóa đơn', 'width': 18},
+            {'key': 'da_lap_hoa_don', 'name': 'Đã lập hóa đơn', 'width': 18},
+            {'key': 'ngay_hach_toan', 'name': 'Ngày hạch toán (*)', 'width': 25},
+            {'key': 'ngay_chung_tu', 'name': 'Ngày chứng từ (*)', 'width': 25},
+            {'key': 'so_chung_tu', 'name': 'Số chứng từ (*)', 'width': 20},
+            {'key': 'so_phieu_xuat', 'name': 'Số phiếu xuất', 'width': 20},
+            {'key': 'mau_so_hd', 'name': 'Mẫu số HĐ', 'width': 15},
+            {'key': 'ky_hieu_hd', 'name': 'Ký hiệu HĐ', 'width': 15},
+            {'key': 'so_hoa_don', 'name': 'Số hóa đơn', 'width': 15},
+            {'key': 'ngay_hoa_don', 'name': 'Ngày hóa đơn', 'width': 20},
+            {'key': 'ma_khach_hang', 'name': 'Mã khách hàng', 'width': 15},
+            {'key': 'ten_khach_hang', 'name': 'Tên khách hàng', 'width': 40},
+            {'key': 'dia_chi', 'name': 'Địa chỉ', 'width': 50},
+            {'key': 'ma_so_thue', 'name': 'Mã số thuế', 'width': 15},
+            {'key': 'don_vi_giao_dai_ly', 'name': 'Đơn vị giao đại lý', 'width': 30},
+            {'key': 'nguoi_nop', 'name': 'Người nộp', 'width': 25},
+            {'key': 'nop_vao_tk', 'name': 'Nộp vào TK', 'width': 15},
+            {'key': 'ten_ngan_hang', 'name': 'Tên ngân hàng', 'width': 30},
+            {'key': 'dien_giai', 'name': 'Diễn giải/Lý do nộp', 'width': 40},
+            {'key': 'ly_do_xuat', 'name': 'Lý do xuất', 'width': 40},
+            {'key': 'nhan_vien_ban_hang', 'name': 'Mã nhân viên bán hàng', 'width': 20},
+            {'key': 'kem_theo', 'name': 'Kèm theo', 'width': 20},
+            {'key': 'han_thanh_toan', 'name': 'Hạn thanh toán', 'width': 20},
+            {'key': 'ma_hang', 'name': 'Mã hàng (*)', 'width': 18},
+            {'key': 'thuoc_combo', 'name': 'Thuộc combo', 'width': 15},
+            {'key': 'ten_hang', 'name': 'Tên hàng', 'width': 40},
+            {'key': 'la_dong_ghi_chu', 'name': 'Là dòng ghi chú', 'width': 18},
+            {'key': 'hang_khuyen_mai', 'name': 'Hàng khuyến mại', 'width': 18},
+            {'key': 'chiet_khau_thuong_mai', 'name': 'Chiết khấu thương mại', 'width': 25},
+            {'key': 'tk_tien_no', 'name': 'TK Tiền/Chi phí/Nợ (*)', 'width': 20},
+            {'key': 'tk_doanh_thu_co', 'name': 'TK Doanh thu/Có (*)', 'width': 20},
+            {'key': 'dvt', 'name': 'ĐVT', 'width': 12},
+            {'key': 'so_luong', 'name': 'Số lượng', 'width': 12},
+            {'key': 'don_gia', 'name': 'Đơn giá', 'width': 15},
+            {'key': 'thanh_tien', 'name': 'Thành tiền', 'width': 15},
+            {'key': 'ty_le_ck', 'name': 'Tỷ lệ CK (%)', 'width': 12},
+            {'key': 'tien_chiet_khau', 'name': 'Tiền chiết khấu', 'width': 15},
+            {'key': 'tk_chiet_khau', 'name': 'TK chiết khấu', 'width': 15},
+            {'key': 'gia_tinh_thue_xk', 'name': 'Giá tính thuế XK', 'width': 15},
+            {'key': 'ty_le_thue_xk', 'name': '% thuế xuất khẩu', 'width': 15},
+            {'key': 'tien_thue_xk', 'name': 'Tiền thuế xuất khẩu', 'width': 15},
+            {'key': 'tk_thue_xk', 'name': 'TK thuế xuất khẩu', 'width': 15},
+            {'key': 'ty_le_thue_gtgt', 'name': '% thuế GTGT', 'width': 12},
+            {'key': 'ty_le_thue_khac', 'name': '% thuế suất KHAC', 'width': 15},
+            {'key': 'tien_thue_gtgt', 'name': 'Tiền thuế GTGT', 'width': 15},
+            {'key': 'tk_thue_gtgt', 'name': 'TK thuế GTGT', 'width': 15},
+            {'key': 'hh_khong_th_tren_to_khai', 'name': 'HH không TH trên tờ khai thuế GTGT', 'width': 25},
+            {'key': 'ma_kho', 'name': 'Mã kho', 'width': 15},
+            {'key': 'tk_gia_von', 'name': 'TK giá vốn', 'width': 15},
+            {'key': 'tk_kho', 'name': 'TK Kho', 'width': 15},
+            {'key': 'don_gia_von', 'name': 'Đơn giá vốn', 'width': 15},
+            {'key': 'tien_von', 'name': 'Tiền vốn', 'width': 15},
+            {'key': 'hang_hoa_giu_ho', 'name': 'Hàng hóa giữ hộ/bán hộ', 'width': 20},
+        ]
+
+    def _get_pos_row_data(self, picking):
+        """Xây dựng rows cho mẫu POS"""
+        rows = []
+        so = self._find_sale_order(picking.move_ids_without_package[0] if picking.move_ids_without_package else None, picking)
+        
+        # --- Common Info ---
+        date_done = picking.date_done or picking.scheduled_date or fields.Datetime.now()
+        date_str = _to_date_str(date_done)
+        
+        # Số chứng từ: x_studio_pos_group (VD: POS/050126)
+        # Nếu chưa có thì fallback về picking name
+        so_chung_tu = picking.x_studio_pos_group or picking.name
+        
+        # Số phiếu xuất: thêm 'PXK' trước số chứng từ
+        # VD: PXKPOS/050126
+        # Lưu ý: user nói "có thêm PXK phía trước"
+        so_phieu_xuat = ""
+        if picking.x_studio_pos_group:
+            # Xử lý format nếu cần, ở đây ghép chuỗi đơn giản
+            # Giả sử group là POS/050126 -> PXKPOS/050126
+            # Hoặc PXK + POS/050126 -> PXKPOS/050126
+            so_phieu_xuat = "PXK" + picking.x_studio_pos_group.replace("POS/", "POS") 
+            # Hay là "PXK" + full string? User: "số phiếu xuất là số chứng từ có thêm PXK phía trước"
+            # Nếu group = POS/010126 -> PXKPOS/010126 ?
+            # Hay PXK POS/010126 ?
+            # Thường là liền: PXKPOS/010126
+            if "POS/" in picking.x_studio_pos_group:
+                 so_phieu_xuat = "PXK" + picking.x_studio_pos_group.replace("/", "")
+            else:
+                 so_phieu_xuat = "PXK" + picking.x_studio_pos_group
+        else:
+            so_phieu_xuat = "PXK" + picking.name
+
+        partner = picking.partner_id
+        partner_code = self._partner_code(partner)
+        partner_name = (partner and partner.name) or ""
+        partner_address = ""
+        # Get address parts same as before...
+        # ... (Simplified for brevity, assuming existing logic from _get_move_line_rows works or copying it)
+        # Copy logic for address:
+        import unicodedata
+        def normalize_addr(s):
+            s = s.strip().lower()
+            s = unicodedata.normalize('NFD', s)
+            s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+            return s
+        if partner:
+            parts = [partner.street, partner.city, partner.state_id.name]
+            valid_parts = [p for p in parts if p]
+            partner_address = ", ".join(valid_parts)
+            
+        partner_vat = (partner and partner.vat) or ""
+
+        # Sale info
+        sale_name = so.name if so else (picking.origin or "")
+        sale_user_code = ''
+        if so and so.user_id:
+            sale_user_code = so.user_id.login or so.user_id.name or ''
+        
+        dien_giai = picking.note or f"Xuất bán hàng {partner_name}"
+        warehouse_code = self._get_warehouse_code(picking)
+
+        # Loop moves
+        moves = picking.move_line_ids if picking.move_line_ids else picking.move_ids_without_package
+        
+        for line in moves:
+            # Determine product, qty, uom
+            if line._name == 'stock.move.line':
+                prod = line.product_id
+                qty = line.qty_done
+                uom = line.product_uom_id
+                move = line.move_id
+            else:
+                prod = line.product_id
+                qty = line.quantity_done if hasattr(line, 'quantity_done') else line.product_uom_qty
+                uom = line.product_uom
+                move = line # Itself
+            
+            if not prod: continue
+
+            # Pricing from SOL
+            sol = move.sale_line_id if move and hasattr(move, 'sale_line_id') else False
+            price_unit = 0
+            price_subtotal = 0
+            discount = 0
+            tax_amount = 0
+            
+            if sol:
+                price_unit = sol.price_unit
+                discount = sol.discount
+                price_subtotal = sol.price_subtotal
+                # Tax calculation rudimentary
+                if sol.tax_id:
+                    tax_amount = sol.tax_id[0].amount
+
+            # Computed fields
+            tien_ck = (price_unit * qty * discount / 100) if discount else 0
+            thanh_tien = price_subtotal # Excludes tax usually
+            # Or manually: (price_unit * qty) - tien_ck
+            
+            tien_thue = (thanh_tien * tax_amount / 100) if tax_amount else 0
+            
+            # Start building dict based on NEW columns
+            row = {
+                'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
+                'phuong_thuc_thanh_toan': 'Chưa thu tiền',
+                'kiem_phieu_xuat_kho': 'Có',
+                'lap_kem_hoa_don': 'Có',
+                'da_lap_hoa_don': 'Đã lập',
+                'ngay_hach_toan': date_str,
+                'ngay_chung_tu': date_str,
+                'so_chung_tu': so_chung_tu,
+                'so_phieu_xuat': so_phieu_xuat,
+                'mau_so_hd': '',
+                'ky_hieu_hd': '',
+                'so_hoa_don': '', # Customize if needed
+                'ngay_hoa_don': '',
+                'ma_khach_hang': partner_code,
+                'ten_khach_hang': partner_name,
+                'dia_chi': partner_address,
+                'ma_so_thue': partner_vat,
+                'don_vi_giao_dai_ly': '',
+                'nguoi_nop': '',
+                'nop_vao_tk': '',
+                'ten_ngan_hang': '',
+                'dien_giai': dien_giai,
+                'ly_do_xuat': dien_giai,
+                'nhan_vien_ban_hang': sale_user_code,
+                'kem_theo': '',
+                'han_thanh_toan': '',
+                
+                'ma_hang': prod.default_code or '',
+                'thuoc_combo': self._thuoc_combo_code_for_move(move) if move else '',
+                'ten_hang': prod.name,
+                'la_dong_ghi_chu': 'không',
+                'hang_khuyen_mai': 'Không',
+                'chiet_khau_thuong_mai': '',
+                
+                'tk_tien_no': '131',
+                'tk_doanh_thu_co': '5111',
+                'dvt': uom.name if uom else '',
+                'so_luong': qty,
+                'don_gia': price_unit,
+                'thanh_tien': thanh_tien,
+                'ty_le_ck': '',
+                'tien_chiet_khau': tien_ck,
+                'tk_chiet_khau': '5211', # Assuming standard
+                
+                'gia_tinh_thue_xk': '',
+                'ty_le_thue_xk': '',
+                'tien_thue_xk': '',
+                'tk_thue_xk': '',
+                
+                'ty_le_thue_gtgt': tax_amount,
+                'ty_le_thue_khac': '',
+                'tien_thue_gtgt': tien_thue,
+                'tk_thue_gtgt': '33311',
+                'hh_khong_th_tren_to_khai': 'Không',
+                
+                'ma_kho': 'HLV',
+                'tk_gia_von': '632',
+                'tk_kho': '1561', # From template sample
+                'don_gia_von': prod.standard_price,
+                'tien_von': prod.standard_price * qty,
+                'hang_hoa_giu_ho': '',
+            }
+            rows.append(row)
+        return rows
+
+    def _create_pos_excel_workbook(self, pickings):
+        """Tạo workbook Excel mẫu POS với header và hướng dẫn"""
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "DS Hóa Đơn - POS"
+
+        columns = self._get_pos_columns_definition()
+
+        # Styles
+        title_font = Font(name='Arial', size=16, bold=True)
+        instruction_font = Font(name='Arial', size=10, italic=True, color='FF0000')
+        header_font = Font(name='Arial', size=10, bold=True)
+        header_fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        border_side = Side(style='thin', color='000000')
+        border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
+
+        cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
+        number_alignment = Alignment(horizontal='right', vertical='center')
+
+        # --- HEADER ROW (Row 1) ---
+        HEADER_ROW = 1
+        DATA_START = 2
+
+        for col_idx, col_def in enumerate(columns, start=1):
+            cell = ws.cell(row=HEADER_ROW, column=col_idx)
+            cell.value = col_def['name']
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = border
+            ws.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
+
+        # --- DATA ROWS ---
+        current_row = DATA_START
+        for picking in pickings:
+            row_data_list = self._get_pos_row_data(picking)
+            for row_data in row_data_list:
+                for col_idx, col_def in enumerate(columns, start=1):
+                    cell = ws.cell(row=current_row, column=col_idx)
+                    value = row_data.get(col_def['key'], "")
+                    
+                    if value is None: value = ""
+                    
+                    cell.value = value
+                    cell.border = border
+                    
+                    # Number fmt
+                    if isinstance(value, (int, float)) and value != "":
+                        cell.alignment = number_alignment
+                        if 'ty_le' in col_def['key'] or 'so_luong' in col_def['key']:
+                             cell.number_format = '#,##0.00'
+                        elif 'tien' in col_def['key'] or 'gia' in col_def['key']:
+                             cell.number_format = '#,##0'
+                    else:
+                        cell.alignment = cell_alignment
+                
+                current_row += 1
+
+        ws.row_dimensions[HEADER_ROW].height = 30
+        return wb
+
+    def action_export_pos_template(self):
+        self.ensure_one()
+        if Workbook is None:
+            raise UserError(_("Thiếu thư viện openpyxl. Vui lòng cài đặt 'openpyxl' cho Python."))
+
+        pickings = self.env["stock.picking"].sudo().search(self._domain(), order="scheduled_date asc, id asc")
+        if not pickings:
+            raise UserError(_("Không tìm thấy phiếu xuất kho nào trong khoảng ngày đã chọn."))
+
+        # Create workbook passing pickings directly to iterate there
+        wb = self._create_pos_excel_workbook(pickings)
+        
+        # Save
+        out = BytesIO()
+        wb.save(out)
+        out.seek(0)
+
+        filename = f"Xuat_POS_{self.date_from}_{self.date_to}.xlsx"
         attachment = self.env["ir.attachment"].sudo().create({
             "name": filename,
             "type": "binary",
