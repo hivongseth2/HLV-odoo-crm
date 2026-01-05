@@ -9,7 +9,7 @@ patch(PartnerListScreen.prototype, {
         if (!partners) {
             return [];
         }
-        // Filter out delivery addresses
-        return partners.filter(partner => partner.type !== 'delivery');
+        // Filter out child contacts (only show parents)
+        return partners.filter(partner => !partner.parent_id);
     }
 });

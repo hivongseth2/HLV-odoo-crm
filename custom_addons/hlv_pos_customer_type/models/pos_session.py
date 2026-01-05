@@ -19,7 +19,7 @@ class PosSession(models.Model):
         print("DEBUG: _loader_params_res_partner called")
         print(f"DEBUG: Original domain: {result.get('search_params', {}).get('domain')}")
         
-        result['search_params']['domain'].append(('type', '!=', 'delivery'))
+        result['search_params']['domain'].append(('parent_id', '=', False))
         
         print(f"DEBUG: Modified domain: {result['search_params']['domain']}")
         return result

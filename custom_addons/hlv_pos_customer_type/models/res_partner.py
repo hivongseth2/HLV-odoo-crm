@@ -21,5 +21,5 @@ class ResPartner(models.Model):
     def _load_pos_data_domain(self, data):
         domain = super()._load_pos_data_domain(data)
         domain = domain or []
-        domain.append(('type', '!=', 'delivery'))
+        domain.append(('parent_id', '=', False))
         return domain
