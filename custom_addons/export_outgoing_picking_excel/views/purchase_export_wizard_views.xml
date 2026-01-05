@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-  <!-- Form view cho wizard xuất Excel lệnh mua hàng -->
+  <!-- Form View cho Purchase Export Wizard -->
   <record id="view_purchase_export_wizard_form" model="ir.ui.view">
     <field name="name">purchase.export.wizard.form</field>
     <field name="model">purchase.export.wizard</field>
@@ -21,9 +21,9 @@
     </field>
   </record>
 
-  <!-- Action mở wizard -->
+  <!-- Action cho Purchase Export Wizard -->
   <record id="action_purchase_export_wizard" model="ir.actions.act_window">
-    <field name="name">Xuất lệnh mua hàng (Excel)</field>
+    <field name="name">Xuất Excel lệnh mua hàng</field>
     <field name="res_model">purchase.export.wizard</field>
     <field name="view_mode">form</field>
     <field name="view_id" ref="view_purchase_export_wizard_form"/>
