@@ -926,23 +926,9 @@ class PickingExportWizard(models.TransientModel):
         cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
         number_alignment = Alignment(horizontal='right', vertical='center')
 
-        # --- ROW 1: TITLE ---
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(columns))
-        cell_title = ws.cell(row=1, column=1)
-        cell_title.value = "FILE MẪU CHỨNG TỪ BÁN HÀNG"
-        cell_title.font = title_font
-        cell_title.alignment = Alignment(horizontal='center', vertical='center')
-
-        # --- ROW 7: INSTRUCTION ---
-        ws.merge_cells(start_row=7, start_column=1, end_row=7, end_column=len(columns))
-        cell_instr = ws.cell(row=7, column=1)
-        cell_instr.value = "Hướng dẫn: Điền dữ liệu vào các cột tương ứng. Các cột có dấu (*) là bắt buộc."
-        cell_instr.font = instruction_font
-        cell_instr.alignment = Alignment(horizontal='left', vertical='center')
-
-        # --- ROW 8: HEADERS ---
-        HEADER_ROW = 8
-        DATA_START = 9
+        # --- HEADER ROW (Row 1) ---
+        HEADER_ROW = 1
+        DATA_START = 2
 
         for col_idx, col_def in enumerate(columns, start=1):
             cell = ws.cell(row=HEADER_ROW, column=col_idx)
