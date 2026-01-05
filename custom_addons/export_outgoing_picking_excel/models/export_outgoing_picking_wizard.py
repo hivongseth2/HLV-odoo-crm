@@ -729,6 +729,7 @@ class PickingExportWizard(models.TransientModel):
             {'key': 'ty_le_thue_khac', 'name': '% thuế suất KHAC', 'width': 15},
             {'key': 'tien_thue_gtgt', 'name': 'Tiền thuế GTGT', 'width': 15},
             {'key': 'tk_thue_gtgt', 'name': 'TK thuế GTGT', 'width': 15},
+            {'key': 'hh_khong_th_tren_to_khai', 'name': 'HH không TH trên tờ khai thuế GTGT', 'width': 25},
             {'key': 'ma_kho', 'name': 'Mã kho', 'width': 15},
             {'key': 'tk_gia_von', 'name': 'TK giá vốn', 'width': 15},
             {'key': 'tk_kho', 'name': 'TK Kho', 'width': 15},
@@ -853,13 +854,13 @@ class PickingExportWizard(models.TransientModel):
                 'mau_so_hd': '',
                 'ky_hieu_hd': '',
                 'so_hoa_don': '', # Customize if needed
-                'ngay_hoa_don': date_str,
+                'ngay_hoa_don': '',
                 'ma_khach_hang': partner_code,
                 'ten_khach_hang': partner_name,
                 'dia_chi': partner_address,
                 'ma_so_thue': partner_vat,
                 'don_vi_giao_dai_ly': '',
-                'nguoi_nop': partner_name,
+                'nguoi_nop': '',
                 'nop_vao_tk': '',
                 'ten_ngan_hang': '',
                 'dien_giai': dien_giai,
@@ -881,7 +882,7 @@ class PickingExportWizard(models.TransientModel):
                 'so_luong': qty,
                 'don_gia': price_unit,
                 'thanh_tien': thanh_tien,
-                'ty_le_ck': discount,
+                'ty_le_ck': '',
                 'tien_chiet_khau': tien_ck,
                 'tk_chiet_khau': '5211', # Assuming standard
                 
@@ -894,6 +895,7 @@ class PickingExportWizard(models.TransientModel):
                 'ty_le_thue_khac': '',
                 'tien_thue_gtgt': tien_thue,
                 'tk_thue_gtgt': '33311',
+                'hh_khong_th_tren_to_khai': 'Không',
                 
                 'ma_kho': 'HLV',
                 'tk_gia_von': '632',
