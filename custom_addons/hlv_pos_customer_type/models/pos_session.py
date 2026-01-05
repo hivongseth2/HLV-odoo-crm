@@ -14,6 +14,12 @@ class PosSession(models.Model):
 
     @api.model
     def _loader_params_res_partner(self):
-        params = super()._loader_params_res_partner()
-        params['search_params']['domain'].append(('type', '!=', 'delivery'))
-        return params
+        result = super()._loader_params_res_partner()
+        # Debug logging
+        print("DEBUG: _loader_params_res_partner called")
+        print(f"DEBUG: Original domain: {result.get('search_params', {}).get('domain')}")
+        
+        result['search_params']['domain'].append(('type', '!=', 'delivery'))
+        
+        print(f"DEBUG: Modified domain: {result['search_params']['domain']}")
+        return result
