@@ -832,6 +832,10 @@ class PickingExportWizard(models.TransientModel):
                 # Tax calculation rudimentary
                 if sol.tax_id:
                     tax_amount = sol.tax_id[0].amount
+            else:
+                 # Fallback to product list price if no SOL
+                 price_unit = prod.list_price
+                 price_subtotal = price_unit * qty
 
             # Computed fields
             tien_ck = (price_unit * qty * discount / 100) if discount else 0
