@@ -676,3 +676,145 @@ class PickingExportWizard(models.TransientModel):
             "url": f"/web/content/{attachment.id}?download=true",
             "target": "self",
         }
+
+    def _get_pos_columns_definition(self):
+        """Định nghĩa cột cho mẫu POS (tương tự mẫu kế toán nhưng có thể tùy biến)"""
+        # Sử dụng lại định nghĩa cột hiện tại vì user không yêu cầu thay đổi cột cụ thể
+        # Chỉ thay đổi cấu trúc file (header/instruction)
+        return self._get_columns_definition()
+
+    def _create_pos_excel_workbook(self, data_rows):
+        """Tạo workbook Excel mẫu POS với header và hướng dẫn"""
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "DS Hóa Đơn - POS"
+
+        columns = self._get_pos_columns_definition()
+
+        # Styles
+        title_font = Font(name='Arial', size=16, bold=True)
+        instruction_font = Font(name='Arial', size=10, italic=True, color='FF0000') # Màu đỏ cho chú ý
+        header_font = Font(name='Arial', size=10, bold=True)
+        header_fill = PatternFill(start_color='D3D3D3', end_color='D3D3D3', fill_type='solid')
+        header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+        border_side = Side(style='thin', color='000000')
+        border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
+
+        cell_alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
+        number_alignment = Alignment(horizontal='right', vertical='center')
+
+        # --- ROW 1: TITLE ---
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(columns))
+        cell_title = ws.cell(row=1, column=1)
+        cell_title.value = "FILE MẪU CHỨNG TỪ BÁN HÀNG"
+        cell_title.font = title_font
+        cell_title.alignment = Alignment(horizontal='center', vertical='center')
+
+        # --- ROW 7: INSTRUCTION ---
+        # User nói: "line 7 trong file là hướng dẫn điền giá trị"
+        # Row 7 openpyxl (index 1-based)
+        ws.merge_cells(start_row=7, start_column=1, end_row=7, end_column=len(columns))
+        cell_instr = ws.cell(row=7, column=1)
+        cell_instr.value = "Hướng dẫn: Điền dữ liệu vào các cột tương ứng. Các cột có dấu (*) là bắt buộc."
+        cell_instr.font = instruction_font
+        cell_instr.alignment = Alignment(horizontal='left', vertical='center')
+
+        # --- ROW 8: HEADERS ---
+        HEADER_ROW = 8
+        DATA_START = 9
+
+        for col_idx, col_def in enumerate(columns, start=1):
+            cell = ws.cell(row=HEADER_ROW, column=col_idx)
+            cell.value = col_def['name']
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = border
+            ws.column_dimensions[get_column_letter(col_idx)].width = col_def.get('width', 15)
+
+        # --- DATA ROWS ---
+        for row_idx, row_data in enumerate(data_rows, start=DATA_START):
+            for col_idx, col_def in enumerate(columns, start=1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                value = row_data.get(col_def['key'], "")
+
+                if value is None:
+                    value = ""
+
+                cell.value = value
+                cell.border = border
+
+                # Number formatting
+                if isinstance(value, (int, float)) and value != "":
+                    cell.alignment = number_alignment
+                    if col_def['key'] in ['don_gia', 'thanh_tien', 'tien_chiet_khau', 
+                                         'tien_thue_gtgt', 'don_gia_von', 'tien_von']:
+                        cell.number_format = '#,##0'
+                    elif col_def['key'] in ['ty_le_ck', 'ty_le_thue_gtgt', 'ty_le_thue_xk']:
+                        cell.number_format = '0.00'
+                    elif col_def['key'] == 'so_luong':
+                        cell.number_format = '#,##0.00'
+                else:
+                    cell.alignment = cell_alignment
+
+        ws.row_dimensions[HEADER_ROW].height = 30
+        return wb
+
+    def action_export_pos_template(self):
+        self.ensure_one()
+        if Workbook is None:
+            raise UserError(_("Thiếu thư viện openpyxl. Vui lòng cài đặt 'openpyxl' cho Python."))
+
+        # Filter strictly for POS Orders if possible? 
+        # User said "các đơn hàng pos".
+        # Let's filter domain to include only pickings from POS orders?
+        # Typically POS pickings have origin like 'POS/...'. 
+        # But for now, we use the same user-selected filters but apply the new template.
+        # It's safer to let the user filter by warehouse/date than to hardcode 'POS only' 
+        # unless we are sure. But "các đơn hàng pos" implies intent.
+        # Let's verify if we should filter. 
+        # Since this is a wizard action, the user provides Date From/To and Warehouse.
+        # If they select a generic warehouse, they might get non-POS. 
+        # But filtering *strictly* might hide data if origin format changes.
+        # I will stick to the user's selected domain.
+
+        pickings = self.env["stock.picking"].sudo().search(self._domain(), order="scheduled_date asc, id asc")
+        if not pickings:
+            raise UserError(_("Không tìm thấy phiếu xuất kho nào trong khoảng ngày đã chọn."))
+
+        # Tạo dữ liệu
+        all_rows = []
+        for picking in pickings:
+            # OPTIONAL: Filter specifically for POS if needed?
+            # if 'POS' not in (picking.origin or ''): continue
+            
+            rows = self._get_move_line_rows(picking)
+            all_rows.extend(rows)
+
+        if not all_rows:
+            raise UserError(_("Không có dữ liệu chi tiết để xuất."))
+
+        # Tạo Excel workbook theo mẫu POS
+        wb = self._create_pos_excel_workbook(all_rows)
+
+        # Xuất file
+        out = BytesIO()
+        wb.save(out)
+        out.seek(0)
+
+        filename = f"Xuat_POS_{self.date_from}_{self.date_to}.xlsx"
+        attachment = self.env["ir.attachment"].sudo().create({
+            "name": filename,
+            "type": "binary",
+            "mimetype": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "datas": base64.b64encode(out.getvalue()),
+            "res_model": "picking.export.wizard",
+            "res_id": self.id,
+        })
+
+        return {
+            "type": "ir.actions.act_url",
+            "url": f"/web/content/{attachment.id}?download=true",
+            "target": "self",
+        }
