@@ -895,7 +895,7 @@ class PickingExportWizard(models.TransientModel):
                 'tien_thue_gtgt': tien_thue,
                 'tk_thue_gtgt': '33311',
                 
-                'ma_kho': warehouse_code,
+                'ma_kho': 'HLV',
                 'tk_gia_von': '632',
                 'tk_kho': '1561', # From template sample
                 'don_gia_von': prod.standard_price,
