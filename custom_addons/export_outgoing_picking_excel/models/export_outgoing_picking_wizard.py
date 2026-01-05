@@ -975,7 +975,12 @@ class PickingExportWizard(models.TransientModel):
         if Workbook is None:
             raise UserError(_("Thiếu thư viện openpyxl. Vui lòng cài đặt 'openpyxl' cho Python."))
 
-        pickings = self.env["stock.picking"].sudo().search(self._domain(), order="scheduled_date asc, id asc")
+        domain = self._domain()
+        # Filter: Either has Group OR has POS Session (ungrouped POS orders)
+        domain.append('|')
+        domain.append(('x_studio_pos_group', '!=', False))
+        domain.append(('pos_session_id', '!=', False))
+        pickings = self.env["stock.picking"].sudo().search(domain, order="scheduled_date asc, id asc")
         if not pickings:
             raise UserError(_("Không tìm thấy phiếu xuất kho nào trong khoảng ngày đã chọn."))
 
