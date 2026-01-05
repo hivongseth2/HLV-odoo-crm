@@ -23,6 +23,8 @@
         'point_of_sale._assets_pos': [
             'hlv_pos_customer_type/static/src/xml/partner_details.xml',
             'hlv_pos_customer_type/static/src/js/partner_line_patch.js',
+            'hlv_pos_customer_type/static/src/js/payment_screen_patch.js',
+            'hlv_pos_customer_type/static/src/js/partner_list_patch.js',
         ],
     },
     'installable': True,
