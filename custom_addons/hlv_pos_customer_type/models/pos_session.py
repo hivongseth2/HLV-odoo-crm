@@ -11,3 +11,9 @@ class PosSession(models.Model):
         if 'pos.customer.type' not in result:
             result.append('pos.customer.type')
         return result
+
+    @api.model
+    def _loader_params_res_partner(self):
+        params = super()._loader_params_res_partner()
+        params['search_params']['domain'].append(('type', '!=', 'delivery'))
+        return params
