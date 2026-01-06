@@ -53,7 +53,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   document.addEventListener('click', (e) => {
     // If clicking safely -> ignore
-    if (e.target.classList.contains('done-input') || e.target.closest('button')) return;
+    if (e.target.classList.contains('done-input') || e.target.closest('button') || e.target.closest('.modal-overlay')) return;
     // Otherwise force focus
     setFocus();
   });
