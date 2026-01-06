@@ -499,36 +499,60 @@ document.addEventListener("DOMContentLoaded", function () {
           // ============================================================
           // [FIX] Cập nhật lại UI danh sách chính (Main List)
           // ============================================================
-          items.forEach(item => {
-            const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
-            if (el) {
-              const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
-              const newPacked = currentPacked + item.qty;
+          if (items && items.length > 0) {
+            console.log("[UI SYNC] Packing Success. Updating Main UI...", items);
+            items.forEach(item => {
+              const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
+              if (el) {
+                const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
+                const qtyPacked = parseFloat(item.qty || 0);
+                const newPacked = currentPacked + qtyPacked;
 
-              // 1. Cập nhật data-packed-qty
-              el.setAttribute('data-packed-qty', newPacked);
+                // 1. Cập nhật data-packed-qty
+                el.setAttribute('data-packed-qty', newPacked);
+                console.log(`[UI SYNC] Updated Packed Qty for Line ${item.move_line_id}: ${currentPacked} -> ${newPacked}`);
 
-              // 2. Cập nhật hoặc xóa thông báo "Chưa đóng gói"
-              const input = el.querySelector(".done-input");
-              const currentDone = parseFloat(input ? input.value : (el.querySelector(".done")?.innerText || 0));
-              const unpackedQty = currentDone - newPacked;
+                // 2. Cập nhật hoặc xóa thông báo "Chưa đóng gói"
+                const input = el.querySelector(".done-input");
+                const currentDone = parseFloat(input ? input.value : (el.querySelector(".done")?.innerText || 0));
+                const unpackedQty = currentDone - newPacked;
 
-              const unpackedEl = el.querySelector('.unpacked-info');
+                const unpackedEl = el.querySelector('.unpacked-info');
 
-              if (unpackedQty <= 0) {
-                if (unpackedEl) unpackedEl.remove();
-              } else {
-                if (unpackedEl) {
-                  unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
+                if (unpackedQty <= 0.001) { // Floating point safety
+                  if (unpackedEl) unpackedEl.remove();
+                } else {
+                  if (!unpackedEl) {
+                    const newInfo = document.createElement('div');
+                    newInfo.className = 'unpacked-info';
+                    newInfo.style.cssText = "font-size: 0.8rem; color: #d97706; margin-top: 4px; font-style: italic;";
+                    const container = el.querySelector('div') || el;
+                    container.appendChild(newInfo);
+                  }
+                  // Re-query to be safe
+                  const updateInfo = el.querySelector('.unpacked-info');
+                  if (updateInfo) updateInfo.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
                 }
+
+                // 3. Hiệu ứng báo thành công
+                highlightElement(el, "#dcfce7"); // Màu xanh nhạt
+              } else {
+                console.warn(`[UI SYNC] Could not find element for line ${item.move_line_id} to update packed qty`);
               }
+            });
 
-              // 3. Hiệu ứng báo thành công
-              highlightElement(el, "#dcfce7"); // Màu xanh nhạt
-            }
-          });
+            const pkgId = result.package_id;
+            const pkgName = result.package_name;
 
-          renderNewPackageToPanel(result.package_id, result.package_name, items);
+            // Render preview (Optimistic)
+            renderNewPackageToPanel(pkgId, pkgName, items);
+
+            // Force fetch latest details to ensure correct IDs for Edit
+            // This is crucial because packed items have NEW IDs in backend
+            // setTimeout(() => {
+            //    fetchPackageDetailsSilent(pkgId); 
+            // }, 500);
+          }
 
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
@@ -1078,6 +1102,35 @@ async function openPackageEditModal(event) {
     currentPackageData = result;
     updateSidePanelUI(currentPackageData);
 
+    // [NEW] SELF-HEALING: Đồng bộ lại data-packed-qty từ Server về Client
+    if (result.sync_info && Array.isArray(result.sync_info)) {
+      console.log("[UI SYNC] Starting Self-Healing with server data...", result.sync_info);
+      result.sync_info.forEach(info => {
+        let targetEl = null;
+
+        // 1. Tìm theo Barcode (Ưu tiên cao nhất)
+        if (info.product_barcode) {
+          targetEl = document.querySelector(`#product_list .product-item[data-barcode="${info.product_barcode}"]`);
+        }
+
+        // 2. Tìm theo SKU (Default Code)
+        if (!targetEl && info.product_sku) {
+          targetEl = document.querySelector(`#product_list .product-item[data-default-code="${info.product_sku}"]`);
+        }
+
+        // 3. Update nếu tìm thấy
+        if (targetEl) {
+          const oldPacked = parseFloat(targetEl.getAttribute('data-packed-qty') || 0);
+          const serverPacked = parseFloat(info.packed_qty || 0);
+
+          if (Math.abs(oldPacked - serverPacked) > 0.001) {
+            console.warn(`[UI SYNC] Correction for ${info.product_sku || info.product_barcode}: Client(${oldPacked}) -> Server(${serverPacked})`);
+            targetEl.setAttribute('data-packed-qty', serverPacked);
+          }
+        }
+      });
+    }
+
     // Xử lý các trường null/undefined
     if (!Array.isArray(currentPackageData.other_packages)) {
       currentPackageData.other_packages = [];
@@ -1088,31 +1141,17 @@ async function openPackageEditModal(event) {
     if (titleEl) titleEl.innerText = result.package_name;
 
     // ============================================================
-    // BƯỚC 1: GỘP CÁC DÒNG TRÙNG SẢN PHẨM (AGGREGATION)
+    // BƯỚC 1: KHÔNG GỘP DÒNG (NO AGGREGATION)
+    // Để tránh lỗi cập nhật sai ID khi Odoo tự tách dòng
     // ============================================================
-    const aggregatedMap = {};
 
-    result.items.forEach(item => {
-      // Dùng product_id để định danh sản phẩm trùng
-      const key = item.product_id || item.product_name;
-
-      if (aggregatedMap[key]) {
-        // Đã có -> Cộng dồn số lượng
-        aggregatedMap[key].qty_done += parseFloat(item.qty_done) || 0;
-        // move_line_id giữ nguyên của dòng đầu tiên để làm ID đại diện thao tác
-      } else {
-        // Chưa có -> Tạo mới (Clone object để không ảnh hưởng data gốc)
-        aggregatedMap[key] = { ...item };
-        aggregatedMap[key].qty_done = parseFloat(item.qty_done) || 0;
-      }
-    });
-
-    // Chuyển Map thành Mảng để render
-    const mergedItems = Object.values(aggregatedMap);
+    // Sử dụng trực tiếp danh sách từ server
+    const mergedItems = result.items || [];
 
     // Cập nhật Badge số lượng loại sản phẩm (Unique products)
+    const uniqueProducts = new Set(mergedItems.map(i => i.product_id));
     const badgeEl = document.getElementById('itemCountBadge');
-    if (badgeEl) badgeEl.innerText = mergedItems.length;
+    if (badgeEl) badgeEl.innerText = uniqueProducts.size;
 
     // ============================================================
     // BƯỚC 2: RENDER DANH SÁCH ĐÃ GỘP
