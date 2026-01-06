@@ -37,6 +37,28 @@ document.addEventListener("DOMContentLoaded", function () {
   const completeBtn = document.getElementById("complete_pack_btn");
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
+  // === SMART AUTO-FOCUS ===
+  // Always keep focus on Barcode Scanner Input, unless user is typing manually
+  const enforceFocus = () => {
+    const active = document.activeElement;
+    // Allow focus if it's the Done Input, or inside a Modal, or a Button
+    if (active && (active.classList.contains('done-input') || active.closest('.modal-overlay') || active.tagName === 'BUTTON')) return;
+    setFocus();
+  };
+
+  document.addEventListener('focusout', (e) => {
+    // Check what will be focused next
+    setTimeout(enforceFocus, 50);
+  });
+
+  document.addEventListener('click', (e) => {
+    // If clicking safely -> ignore
+    if (e.target.classList.contains('done-input') || e.target.closest('button')) return;
+    // Otherwise force focus
+    setFocus();
+  });
+  // ========================
+
   /* --- CUSTOM LOGIC: Scanner Detection & Manual Input Handlers --- */
   let lastKeyTime = 0;
   let fastKeyCount = 0;
@@ -211,36 +233,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  list?.querySelectorAll(".btn-plus").forEach(btn =>
-    btn.addEventListener("click", () => {
-      const lineId = btn.dataset.lineId;
-      const lineEl = document.querySelector(`.product-item[data-line-id="${lineId}"]`);
-      const required = parseFloat(lineEl?.querySelectorAll("span")[1]?.innerText || 0);
+  // Listeners for +/- buttons removed as buttons are hidden/removed from UI.
 
-      // RESTRICTION: Qty < 10 -> Không được click
-      if (required < 10) {
-        toast.warn("Sản phẩm SL < 10: Vui lòng dùng máy quét!");
-        playError();
-        return;
-      }
-      updateQty(btn.dataset.barcode, 1, btn.dataset.lineId);
-    })
-  );
-  list?.querySelectorAll(".btn-minus").forEach(btn =>
-    btn.addEventListener("click", () => {
-      const lineId = btn.dataset.lineId;
-      const lineEl = document.querySelector(`.product-item[data-line-id="${lineId}"]`);
-      const required = parseFloat(lineEl?.querySelectorAll("span")[1]?.innerText || 0);
-
-      // RESTRICTION: Qty < 10 -> Không được click
-      if (required < 10) {
-        toast.warn("Sản phẩm SL < 10: Vui lòng dùng máy quét!");
-        playError();
-        return;
-      }
-      updateQty(btn.dataset.barcode, -1, btn.dataset.lineId);
-    })
-  );
 
   completeBtn?.addEventListener("click", async function () {
     const items = document.querySelectorAll("#product_list .product-item");
