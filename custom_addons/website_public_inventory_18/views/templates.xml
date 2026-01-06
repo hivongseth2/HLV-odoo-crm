@@ -25,17 +25,16 @@
 
             /* 2. Thiết lập cho bảng */
             #inv-table {
-                border-collapse: collapse;
-                border: none;
+                border-collapse: separate;
+                border-spacing: 0;
+                border-left: 1px solid #dee2e6;
             }
 
             #inv-table th, #inv-table td {
+                border-right: 1px solid #dee2e6;
+                border-bottom: 1px solid #dee2e6;
                 text-align: center !important;
                 vertical-align: middle;
-                border-bottom: 1px solid #eee; /* Chỉ giữ border dưới */
-                border-top: none;
-                border-left: none;
-                border-right: none;
             }
 
             /* 3. Thiết lập cho dòng header */
@@ -43,12 +42,10 @@
                 position: -webkit-sticky;
                 position: sticky;
                 top: 0;
-                background-color: #fcfcfc !important;
+                background-color: #f8f9fa !important;
                 z-index: 1020;
-                border-bottom: 1px solid #dee2e6;
-                text-transform: uppercase;
-                font-size: 0.8rem;
-                color: #666;
+                box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
+                border-bottom: 2px solid #dee2e6;
             }
 
             /* Nếu website Odoo của bạn có thanh navbar cố định phía trên (thường cao 56px-70px)
@@ -486,34 +483,33 @@
                   var html = '';
                   var rows = data.rows || [];
 
-                  // CASE 1: COMBO
-                  if(data.mode === 'components_by_warehouse') {
-                      html += '<div class="p-3 detail-container-mobile"><div class="row g-3">';
-                      rows.forEach(function(c){
-                          var imgUrl = c.image_url || '/web/static/img/placeholder.png';
-                          html += '<div class="col-12 col-md-12">';
-                          html += '  <div class="card h-100 border shadow-sm">';
-                          html += '    <div class="card-header bg-white d-flex align-items-center py-2">';
-                          html += '      <img src="' + imgUrl + '" class="rounded border me-3" style="width:40px; height:40px; object-fit:contain;">';
-                          html += '      <div class="flex-grow-1">';
-                          html += '        <div class="fw-bold text-primary">' + c.name + '</div>';
-                          html += '        <div class="small text-muted">SL Combo: <b>' + fmt(c.component_qty_in_combo) + '</b></div>';
-                          html += '      </div>';
-                          html += '    </div>';
-                          html += '    <div class="card-body p-0">';
-                          (c.warehouses||[]).forEach(function(w){
-                              html += '<div class="border-bottom p-2">';
-                              html += '  <div class="fw-bold small mb-1">' + w.warehouse_name + '</div>';
-                              html += '  <div class="d-flex">';
-                              html += '    <div class="flex-fill text-center border-end"><div class="small text-muted">Sẵn sàng</div><div class="fw-bold text-success">' + fmt(w.qty_available) + '</div></div>';
-                              html += '    <div class="flex-fill text-center"><div class="small text-muted">Thực tế</div><div>' + fmt(w.qty_total) + '</div></div>';
-                              html += '  </div>';
-                              html += '</div>';
-                          });
-                          html += '    </div></div></div>';
-                      });
-                      html += '</div></div>';
-                  } 
+                   // CASE 1: COMBO
+                   if(data.mode === 'components_by_warehouse') {
+                       html += '<div class="p-3 detail-container-mobile"><div class="row g-3">';
+                       rows.forEach(function(c){
+                           var imgUrl = c.image_url || '/web/static/img/placeholder.png';
+                           html += '<div class="col-12 col-md-12 mb-2">';
+                           html += '  <div class="d-flex align-items-center mb-2 px-2">';
+                           html += '    <img src="' + imgUrl + '" class="rounded border me-3" style="width:40px; height:40px; object-fit:contain;">';
+                           html += '    <div class="flex-grow-1">';
+                           html += '        <div class="fw-bold text-primary">' + c.name + '</div>';
+                           html += '        <div class="small text-muted">Số lượng trong Combo: <b>' + fmt(c.component_qty_in_combo) + '</b></div>';
+                           html += '    </div>';
+                           html += '  </div>';
+                           html += '  <div class="bg-white border rounded shadow-sm overflow-hidden">';
+                           (c.warehouses||[]).forEach(function(w, idx){
+                               html += '<div class="' + (idx < c.warehouses.length - 1 ? 'border-bottom' : '') + ' p-2">';
+                               html += '  <div class="fw-bold small mb-1">' + w.warehouse_name + '</div>';
+                               html += '  <div class="d-flex">';
+                               html += '    <div class="flex-fill text-center border-end"><div class="small text-muted" style="font-size: 0.7rem;">SẴN SÀNG</div><div class="fw-bold text-success">' + fmt(w.qty_available) + '</div></div>';
+                               html += '    <div class="flex-fill text-center"><div class="small text-muted" style="font-size: 0.7rem;">THỰC TẾ</div><div>' + fmt(w.qty_total) + '</div></div>';
+                               html += '  </div>';
+                               html += '</div>';
+                           });
+                           html += '  </div></div>';
+                       });
+                       html += '</div></div>';
+                   } 
                   
                    // CASE 2: SẢN PHẨM THƯỜNG
                    else {
