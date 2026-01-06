@@ -406,11 +406,16 @@
                 products.forEach(function(p) {
                    var displayName = p.name || p.default_code || '';
                    var imgUrl = p.image_url || '/web/static/img/placeholder.png';
+                   var qtyInfo = (p.qty_total > 0) ? ('<span class="badge bg-success text-white border ms-2">Tồn: ' + fmt(p.qty_total) + '</span>') : '<span class="badge bg-light text-muted border ms-2">Hết hàng</span>';
+                   
                    html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
                    html += '  <div class="d-flex align-items-center">';
                    html += '    <img src="' + imgUrl + '" class="rounded border me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
                    html += '    <div class="flex-grow-1 overflow-hidden">';
-                   html += '      <div class="fw-bold text-dark text-truncate" style="font-size:0.9rem;">' + (p.default_code || '') + '</div>';
+                   html += '      <div class="d-flex align-items-center mb-1">';
+                   html += '        <div class="fw-bold text-dark text-truncate" style="font-size:0.9rem;">' + (p.default_code || '') + '</div>';
+                   html +=          qtyInfo;
+                   html += '      </div>';
                    html += '      <div class="text-muted text-truncate small">' + (p.name || '') + '</div>';
                    html += '    </div>';
                    html += '    <div class="ms-2 text-primary"><i class="fa fa-angle-right"></i></div>';
