@@ -173,15 +173,30 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Helper to flash element
-  function highlightElement(el, color = "#d4edda") {
+  function highlightElement(el, color = "#ffeb3b") { // Default strong yellow
     if (!el) return;
-    el.style.transition = "background-color 0.5s ease";
-    el.style.backgroundColor = color;
+
+    // Clear previous transition/timers if any (simple approach)
+    el.style.transition = "none";
+    el.style.backgroundColor = "transparent";
+
+    // Force Reflow
+    void el.offsetWidth;
+
+    el.style.transition = "background-color 0.4s ease-out";
+    el.style.removeProperty("background-color"); // Clear first
+
+    // Use cssText to ensure priority or just standard inline
+    el.style.setProperty("background-color", color, "important");
+
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
     setTimeout(() => {
-      el.style.backgroundColor = "";
-      setTimeout(() => { el.style.transition = ""; }, 500); // Cleanup transition
-    }, 1500);
+      el.style.transition = "background-color 1.5s ease-out"; // Slow fade
+      el.style.backgroundColor = ""; // Remove inline, reverts to CSS
+      // Cleanup transition style after fade
+      setTimeout(() => { el.style.transition = ""; }, 1500);
+    }, 600);
   }
 
   async function updateQty(barcode, delta = 1, lineId = null) {
@@ -243,7 +258,7 @@ document.addEventListener("DOMContentLoaded", function () {
         else el.classList.remove("completed");
 
         // Flash highlight to notify user
-        highlightElement(el, "#fff3cd"); // Yellowish for scan update
+        highlightElement(el, "#ffd43b"); // Vivid Yellow
       });
 
     } catch (err) {
@@ -1262,7 +1277,7 @@ async function removePackageItem(moveLineId) {
         }
 
         // Highlight nhẹ dòng vừa update để user dễ thấy
-        highlightElement(mainListEl, "#ffe3e3"); // Reddish for removal
+        highlightElement(mainListEl, "#ffc9c9"); // Reddish for removal
       }
     }
 
@@ -1425,7 +1440,7 @@ async function savePackageChanges() {
         else mainListEl.classList.remove("completed");
 
         // Hiệu ứng nháy vàng để báo hiệu đã update thành công
-        highlightElement(mainListEl, "#fff3cd");
+        highlightElement(mainListEl, "#ffd43b");
       } else {
         console.warn("⚠️ Không tìm thấy dòng sản phẩm bên ngoài để update ID:", change.moveLineId);
       }
