@@ -10,7 +10,9 @@
     """,
     'author': 'Antigravity',
     'depends': ['point_of_sale'],
-    'data': [],
+    'data': [
+        'views/stock_picking_views.xml',
+    ],
     'installable': True,
     'auto_install': False,
     'license': 'LGPL-3',
