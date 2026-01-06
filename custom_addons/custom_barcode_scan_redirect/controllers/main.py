@@ -426,10 +426,27 @@ class CustomBarcodeScanController(http.Controller):
                     # Nếu đang trừ: tìm dòng có qty_done > 0
                     elif delta < 0:
                         if ml.qty_done > 0:
+                            # [VALIDATION] Check if line is already packed
+                            if ml.result_package_id:
+                                # Nếu đã đóng gói -> Bỏ qua dòng này (uu tiên dòng chưa đóng gói trước)
+                                # Nhưng nếu chỉ còn dòng này? Chúng ta sẽ check lại ở dưới.
+                                continue 
                             target_ml = ml
                             break
                 if target_ml:
                     break
+        
+        # [Fallback] Nếu chưa tìm thấy target_ml và delta < 0, có thể do TOÀN BỘ đã đóng gói
+        if not target_ml and delta < 0:
+             # Check xem có dòng nào có thể trừ được không (kể cả đã pack) để báo lỗi chính xác
+             has_packed_items = False
+             for move in moves:
+                 for ml in move.move_line_ids:
+                     if ml.qty_done > 0 and ml.result_package_id:
+                         has_packed_items = True
+                         break
+             if has_packed_items:
+                 return {"error": "⚠️ Sản phẩm nằm trong kiện. Vui lòng vào chi tiết kiện để xóa!"}
         
         # --- THỰC HIỆN CẬP NHẬT ---
         if target_ml:
@@ -478,7 +495,7 @@ class CustomBarcodeScanController(http.Controller):
         if not updated_lines:
             # Trường hợp delta > 0 nhưng không tìm thấy dòng nào còn thiếu (dù check tổng ở trên đã pass)
             # Có thể do logic phân bổ move_line phức tạp, ta báo lỗi hoặc ignore
-            return {"error": "⚠️ Không tìm thấy dòng sản phẩm phù hợp để cập nhật!"}
+            return {"error": "⚠️ Không tìm thấy dòng sản phẩm phù hợp để cập nhật! Có thể sản phẩm đã "}
         return {"scanned": updated_lines}
 
 

@@ -126,7 +126,25 @@ document.addEventListener("DOMContentLoaded", function () {
       try {
         await updateQty(barcode, delta, lineId);
         // On success, updateQty refreshes the input.
+      } catch (err) {
+        console.error("Update failed", err);
+        // Revert on error
+        el.value = currentDone;
+        toast.error("Cập nhật thất bại. Vui lòng thử lại.");
+        playError();
       } finally {
+        // If updateQty returned early due to internal error checks (which trigger toast but resolves promise)
+        // We need to verify if value actually changed or if we should revert?
+        // Actually updateQty calls setFocus/toast internally on error result.
+        // We just need to check if input is still desynced?
+        // Better yet: updateQty should THROW if result.error so we catch here.
+        // BUT updateQty is void/async. Let's make it throw or return false.
+
+        // RE-READ dataset just in case updateQty success updated it
+        if (el.dataset.currentQty) {
+          el.value = el.dataset.currentQty;
+        }
+
         el.disabled = false;
         el.focus(); // Keep focus?
       }
@@ -240,8 +258,18 @@ document.addEventListener("DOMContentLoaded", function () {
       const response = await res.json();
       const result = response.result;
 
-      if (result?.error) { toast.error(result.error); playError(); setFocus(); return; }
-      if (!result?.scanned?.length) { toast.warn('Không có dòng nào được cập nhật'); playError(); setFocus(); return; }
+      if (result?.error) {
+        toast.error(result.error);
+        playError();
+        setFocus();
+        throw new Error(result.error); // Throw to trigger catch in caller
+      }
+      if (!result?.scanned?.length) {
+        toast.warn('Không có dòng nào được cập nhật');
+        playError();
+        setFocus();
+        throw new Error("No lines updated");
+      }
 
       result.scanned.forEach(item => {
         // cố gắng tìm theo line_id, nếu không có thì rớt về tìm theo barcode
