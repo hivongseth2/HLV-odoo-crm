@@ -49,6 +49,16 @@
                     </div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 5px;">
+                    <t t-if="line.product_uom_qty >= 10">
+                      <input type="number" 
+                             class="manual-qty-input" 
+                             t-att-data-barcode="line.product_id.barcode" 
+                             t-att-data-line-id="ml.id"
+                             placeholder="SL"
+                             style="width: 60px; text-align: center; border: 1px solid #ced4da; border-radius: 4px; padding: 2px 4px; font-weight: 600;"
+                             onkeydown="handleManualQtyKey(event, this)"
+                             onchange="handleManualQtyChange(this)"/>
+                    </t>
                     <button class="btn-minus" 
                             t-att-data-barcode="line.product_id.barcode" 
                             t-att-data-line-id="ml.id">−</button>
