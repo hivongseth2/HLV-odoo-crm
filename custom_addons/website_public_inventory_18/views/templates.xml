@@ -483,7 +483,7 @@
                       rows.forEach(function(c){
                           var imgUrl = c.image_url || '/web/static/img/placeholder.png';
                           html += '<div class="col-12 col-md-12">';
-                          html += '  <div class="card h-100 border shadow-sm">';
+                          html += '  <div class="card h-100 shadow-sm">';
                           html += '    <div class="card-header bg-white d-flex align-items-center py-2">';
                           html += '      <img src="' + imgUrl + '" class="rounded border me-3" style="width:40px; height:40px; object-fit:contain;">';
                           html += '      <div class="flex-grow-1">';
@@ -509,7 +509,7 @@
                   // CASE 2: SẢN PHẨM THƯỜNG
                   else {
                       html += '<div class="detail-container-mobile">';
-                      html += '<div class="d-none d-md-block p-3 bg-white border rounded">';
+                      html += '<div class="d-none d-md-block p-3 bg-white">';
                       html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
                       rows.forEach(function(r){
                           var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
