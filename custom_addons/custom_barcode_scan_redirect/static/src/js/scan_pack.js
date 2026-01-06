@@ -1465,20 +1465,26 @@ async function savePackageChanges() {
       const delta = change.newQty - change.oldQty;
       const strLineId = String(change.moveLineId);
 
+      console.log(`[UI SYNC] ID=${strLineId} Delta=${delta}. Looking for DOM...`);
+
       // A. Tìm dòng ở màn hình chính theo ID
       let mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${strLineId}"]`);
+      if (mainListEl) console.log(`[UI SYNC] Found by ID`);
 
       // B. Nếu không tìm thấy theo ID (do Odoo tách dòng), tìm theo Barcode/SKU/Tên
       if (!mainListEl && currentPackageData?.items) {
         const itemDetail = currentPackageData.items.find(i => String(i.move_line_id) === strLineId);
         if (itemDetail) {
+          console.log(`[UI SYNC] Fallback search for`, itemDetail);
           // 1. Tìm theo Barcode
           if (itemDetail.product_barcode) {
             mainListEl = document.querySelector(`#product_list .product-item[data-barcode="${itemDetail.product_barcode}"]`);
+            if (mainListEl) console.log(`[UI SYNC] Found by Barcode`);
           }
           // 2. Tìm theo SKU (Default Code)
           if (!mainListEl && itemDetail.product_sku) {
             mainListEl = document.querySelector(`#product_list .product-item[data-default-code="${itemDetail.product_sku}"]`);
+            if (mainListEl) console.log(`[UI SYNC] Found by SKU`);
           }
           // 3. Tìm theo Tên (Fallback cuối cùng)
           if (!mainListEl) {
@@ -1487,6 +1493,7 @@ async function savePackageChanges() {
               const nameEl = el.querySelector('strong');
               if (nameEl && nameEl.innerText.includes(itemDetail.product_name)) {
                 mainListEl = el;
+                console.log(`[UI SYNC] Found by Name`);
                 break;
               }
             }
