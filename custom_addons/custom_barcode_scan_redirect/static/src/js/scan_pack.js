@@ -1496,7 +1496,10 @@ async function savePackageChanges() {
             unpackedEl = document.createElement('div');
             unpackedEl.className = 'unpacked-info';
             unpackedEl.style.cssText = "font-size: 0.8rem; color: #d97706; margin-top: 4px; font-style: italic;";
-            mainListEl.querySelector('.product-info').appendChild(unpackedEl);
+
+            // [FIX] Selector robust: tìm div chứa info (thường là div đầu tiên)
+            const infoContainer = mainListEl.querySelector('div') || mainListEl;
+            infoContainer.appendChild(unpackedEl);
           }
           unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
         } else if (unpackedEl) {
