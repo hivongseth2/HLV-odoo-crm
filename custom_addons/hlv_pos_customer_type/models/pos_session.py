@@ -14,8 +14,10 @@ class PosSession(models.Model):
 
     @api.model
     def _loader_params_product_product(self):
+        print("DEBUG: _loader_params_product_product called")
         result = super()._loader_params_product_product()
-        result['search_params']['fields'].extend(['qty_available', 'type'])
+        result['search_params']['fields'].extend(['qty_available', 'type', 'detailed_type'])
+        print(f"DEBUG: Product fields: {result['search_params']['fields']}")
         return result
 
     @api.model
