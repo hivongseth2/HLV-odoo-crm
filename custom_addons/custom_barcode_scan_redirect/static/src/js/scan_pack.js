@@ -1468,16 +1468,27 @@ async function savePackageChanges() {
       // A. Tìm dòng ở màn hình chính theo ID
       let mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${strLineId}"]`);
 
-      // B. Nếu không tìm thấy theo ID (do Odoo tách dòng), tìm theo Tên sản phẩm
+      // B. Nếu không tìm thấy theo ID (do Odoo tách dòng), tìm theo Barcode/SKU/Tên
       if (!mainListEl && currentPackageData?.items) {
         const itemDetail = currentPackageData.items.find(i => String(i.move_line_id) === strLineId);
         if (itemDetail) {
-          const allItems = document.querySelectorAll('#product_list .product-item');
-          for (const el of allItems) {
-            const nameEl = el.querySelector('strong');
-            if (nameEl && nameEl.innerText.includes(itemDetail.product_name)) {
-              mainListEl = el;
-              break;
+          // 1. Tìm theo Barcode
+          if (itemDetail.product_barcode) {
+            mainListEl = document.querySelector(`#product_list .product-item[data-barcode="${itemDetail.product_barcode}"]`);
+          }
+          // 2. Tìm theo SKU (Default Code)
+          if (!mainListEl && itemDetail.product_sku) {
+            mainListEl = document.querySelector(`#product_list .product-item[data-default-code="${itemDetail.product_sku}"]`);
+          }
+          // 3. Tìm theo Tên (Fallback cuối cùng)
+          if (!mainListEl) {
+            const allItems = document.querySelectorAll('#product_list .product-item');
+            for (const el of allItems) {
+              const nameEl = el.querySelector('strong');
+              if (nameEl && nameEl.innerText.includes(itemDetail.product_name)) {
+                mainListEl = el;
+                break;
+              }
             }
           }
         }
