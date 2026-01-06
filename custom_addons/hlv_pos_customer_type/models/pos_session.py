@@ -19,15 +19,33 @@ class PosSession(models.Model):
         return result
 
     @api.model
-    def get_products_stock(self, product_ids, warehouse_id):
+    def get_products_stock(self, product_ids, warehouse_id=None):
         """
         Lấy tồn kho thực tế của danh sách sản phẩm tại một kho cụ thể.
-        Trả về dict {product_id: qty}
+        Nếu không truyền warehouse_id, tự động lấy kho từ config của session hiện tại.
         """
-        print(f"DEBUG: get_products_stock called - products: {product_ids}, warehouse: {warehouse_id}")
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.info(f"DEBUG: get_products_stock called - products: {product_ids}, warehouse: {warehouse_id}")
+        
         res = {}
-        if not product_ids or not warehouse_id:
-            print("DEBUG: Missing product_ids or warehouse_id")
+        if not product_ids:
+            return res
+
+        # Nếu không có warehouse_id, cố gắng tìm từ session hiện tại
+        if not warehouse_id:
+            # Tìm session đang mở của user hiện tại
+            session = self.env['pos.session'].search([
+                ('state', '=', 'opened'),
+                ('user_id', '=', self.env.user.id)
+            ], limit=1)
+            
+            if session and session.config_id and session.config_id.picking_type_id:
+                warehouse_id = session.config_id.picking_type_id.warehouse_id.id
+                _logger.info(f"DEBUG: Identified warehouse {warehouse_id} from session {session.name}")
+        
+        if not warehouse_id:
+            _logger.warning("DEBUG: Could not identify warehouse for stock check")
             return res
             
         # Tìm tất cả quants của các sản phẩm này tại kho (bao gồm các location con)
@@ -36,14 +54,15 @@ class PosSession(models.Model):
             ('location_id.warehouse_id', '=', warehouse_id),
             ('location_id.usage', '=', 'internal')
         ]
+        # Dùng sudo để có quyền truy cập stock.quant
         quants = self.env['stock.quant'].sudo().search(domain)
-        print(f"DEBUG: Found {len(quants)} quants")
+        _logger.info(f"DEBUG: Found {len(quants)} quants")
         
         for product_id in product_ids:
             product_quants = quants.filtered(lambda q: q.product_id.id == product_id)
             qty = sum(product_quants.mapped('quantity'))
             res[product_id] = qty
-            print(f"DEBUG: Product ID {product_id} - Total Qty: {qty}")
+            _logger.info(f"DEBUG: Product ID {product_id} - Total Qty: {qty}")
             
         return res
 
