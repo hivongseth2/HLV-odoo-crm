@@ -173,7 +173,8 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Helper to flash element
-  function highlightElement(el, color = "#ffeb3b") { // Default strong yellow
+  // Helper to flash element (EXPOSED TO WINDOW for global access)
+  window.highlightElement = function (el, color = "#ffeb3b") { // Default strong yellow
     if (!el) return;
 
     // Clear previous transition/timers if any (simple approach)
@@ -197,7 +198,7 @@ document.addEventListener("DOMContentLoaded", function () {
       // Cleanup transition style after fade
       setTimeout(() => { el.style.transition = ""; }, 1500);
     }, 600);
-  }
+  };
 
   async function updateQty(barcode, delta = 1, lineId = null) {
     if (!lineId) {
