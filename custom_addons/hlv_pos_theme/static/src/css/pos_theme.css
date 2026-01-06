@@ -638,6 +638,45 @@
 }
 
 /* =========================================
+   DESKTOP ZOOM / TABLET RESPONSIVENESS (Max-Width 1280px)
+   ========================================= */
+@media (max-width: 1280px) {
+
+    /* Compress grid slightly */
+    .pos-content .product-screen .products-widget.hlv-sidebar-layout,
+    .products-widget.hlv-sidebar-layout {
+        grid-template-columns: 200px 1fr !important;
+        /* Reduce sidebar width */
+    }
+
+    /* Adjust Sidebar Content */
+    .hlv-sidebar-layout .products-widget-control-panel .categories,
+    .hlv-sidebar-layout .products-widget-control-panel .category-list,
+    .hlv-sidebar-layout .category-list {
+        padding: 8px !important;
+    }
+
+    .category-button.hlv-clean-category,
+    .hlv-sidebar-layout .category-button {
+        font-size: 13px !important;
+        /* Smaller text */
+        padding: 6px 8px !important;
+        min-height: 50px !important;
+    }
+
+    /* Product Grid - Allow more columns */
+    .hlv-sidebar-layout .product-list {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+        gap: 12px !important;
+    }
+
+    /* Search Box */
+    .hlv-sidebar-layout .search-box input {
+        min-width: 200px !important;
+    }
+}
+
+/* =========================================
    MOBILE RESPONSIVENESS (Max-Width 768px)
    ========================================= */
 @media (max-width: 768px) {
