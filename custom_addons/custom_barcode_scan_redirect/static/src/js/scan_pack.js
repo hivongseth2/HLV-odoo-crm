@@ -1301,7 +1301,8 @@ async function removePackageItem(moveLineId) {
         // LOGIC MỚI: newDone giữ nguyên (vì hàng nhả ra khỏi pack vẫn tính là Done)
         // Chỉ giảm data-packed-qty
 
-        // const newDone = Math.max(0, currentDone - qtyToRemove); // Disable dòng này
+        const newDone = currentDone; // Keep done count same
+
 
         /* 
            Tuy nhiên, UI cần phản hồi gì?
