@@ -119,11 +119,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // 2.5: Check Max Required Constraint (tránh nhập lố)
-    const requiredEl = itemEl.querySelectorAll('span')[1];
-    const required = parseFloat(requiredEl?.innerText || 0);
+    const maxQty = parseFloat(el.dataset.maxQty || 0);
 
-    if (required > 0 && newVal > required) { // Chỉ check nếu có required set
-      toast.warn(`Không được nhập quá số lượng yêu cầu (${required})!`);
+    if (maxQty > 0 && newVal > maxQty) { // Chỉ check nếu có maxQty set
+      toast.warn(`Không được nhập quá số lượng yêu cầu (${maxQty})!`);
       playError();
       el.value = oldVal;
       return;
