@@ -172,6 +172,18 @@ document.addEventListener("DOMContentLoaded", function () {
     return null; // tất cả đã đủ
   }
 
+  // Helper to flash element
+  function highlightElement(el, color = "#d4edda") {
+    if (!el) return;
+    el.style.transition = "background-color 0.5s ease";
+    el.style.backgroundColor = color;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setTimeout(() => {
+      el.style.backgroundColor = "";
+      setTimeout(() => { el.style.transition = ""; }, 500); // Cleanup transition
+    }, 1500);
+  }
+
   async function updateQty(barcode, delta = 1, lineId = null) {
     if (!lineId) {
       lineId = findLineToUpdate(barcode);
@@ -229,6 +241,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (item.done_qty >= required) el.classList.add("completed");
         else el.classList.remove("completed");
+
+        // Flash highlight to notify user
+        highlightElement(el, "#fff3cd"); // Yellowish for scan update
       });
 
     } catch (err) {
@@ -1247,8 +1262,7 @@ async function removePackageItem(moveLineId) {
         }
 
         // Highlight nhẹ dòng vừa update để user dễ thấy
-        mainListEl.style.backgroundColor = "#fff3cd";
-        setTimeout(() => mainListEl.style.backgroundColor = "", 1000);
+        highlightElement(mainListEl, "#ffe3e3"); // Reddish for removal
       }
     }
 
@@ -1411,9 +1425,7 @@ async function savePackageChanges() {
         else mainListEl.classList.remove("completed");
 
         // Hiệu ứng nháy vàng để báo hiệu đã update thành công
-        mainListEl.style.transition = "background 0.5s";
-        mainListEl.style.backgroundColor = "#fff3cd";
-        setTimeout(() => mainListEl.style.backgroundColor = "", 1000);
+        highlightElement(mainListEl, "#fff3cd");
       } else {
         console.warn("⚠️ Không tìm thấy dòng sản phẩm bên ngoài để update ID:", change.moveLineId);
       }
