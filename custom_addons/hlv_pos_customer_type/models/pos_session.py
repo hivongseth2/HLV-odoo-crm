@@ -13,19 +13,48 @@ class PosSession(models.Model):
         return result
 
     @api.model
+    def _loader_params_pos_config(self):
+        result = super()._loader_params_pos_config()
+        result['search_params']['fields'].append('warehouse_id')
+        return result
+
+    @api.model
+    def get_products_stock(self, product_ids, warehouse_id):
+        """
+        Lấy tồn kho thực tế của danh sách sản phẩm tại một kho cụ thể.
+        Trả về dict {product_id: qty}
+        """
+        print(f"DEBUG: get_products_stock called - products: {product_ids}, warehouse: {warehouse_id}")
+        res = {}
+        if not product_ids or not warehouse_id:
+            print("DEBUG: Missing product_ids or warehouse_id")
+            return res
+            
+        # Tìm tất cả quants của các sản phẩm này tại kho (bao gồm các location con)
+        domain = [
+            ('product_id', 'in', product_ids),
+            ('location_id.warehouse_id', '=', warehouse_id),
+            ('location_id.usage', '=', 'internal')
+        ]
+        quants = self.env['stock.quant'].sudo().search(domain)
+        print(f"DEBUG: Found {len(quants)} quants")
+        
+        for product_id in product_ids:
+            product_quants = quants.filtered(lambda q: q.product_id.id == product_id)
+            qty = sum(product_quants.mapped('quantity'))
+            res[product_id] = qty
+            print(f"DEBUG: Product ID {product_id} - Total Qty: {qty}")
+            
+        return res
+
+    @api.model
     def _loader_params_product_product(self):
         result = super()._loader_params_product_product()
-        result['search_params']['fields'].extend(['qty_available', 'type'])
+        result['search_params']['fields'].extend(['qty_available', 'type', 'detailed_type'])
         return result
 
     @api.model
     def _loader_params_res_partner(self):
         result = super()._loader_params_res_partner()
-        # Debug logging
-        print("DEBUG: _loader_params_res_partner called")
-        print(f"DEBUG: Original domain: {result.get('search_params', {}).get('domain')}")
-        
         result['search_params']['domain'].append(('parent_id', '=', False))
-        
-        print(f"DEBUG: Modified domain: {result['search_params']['domain']}")
         return result
