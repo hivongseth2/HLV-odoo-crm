@@ -157,6 +157,54 @@ document.addEventListener("DOMContentLoaded", function () {
       setFocus(); // Focus back to barcode input
     }
   };
+
+  /**
+   * [NEW] Validate Manual Input
+   * - Prevent negative
+   * - Prevent reducing below Packed Qty
+   */
+  window.handleManualQtyChange = async function (el) {
+    const newVal = parseFloat(el.value);
+    const oldVal = parseFloat(el.dataset.currentQty || 0); // Value before change (from dataset)
+
+    // 1. Check Negative
+    if (isNaN(newVal) || newVal < 0) {
+      toast.warn("Số lượng không được nhỏ hơn 0");
+      playError();
+      el.value = oldVal;
+      return;
+    }
+
+    // 2. Check Packed Constraint
+    const itemEl = el.closest('.product-item');
+    const packedQty = parseFloat(itemEl ? itemEl.getAttribute('data-packed-qty') : 0) || 0;
+
+    if (newVal < packedQty) {
+      toast.warn(`Đã đóng gói ${packedQty} sản phẩm. Không được sửa nhỏ hơn số lượng đã đóng gói!`);
+      playError();
+      el.value = oldVal;
+      return;
+    }
+
+    const delta = newVal - oldVal;
+    if (delta === 0) return;
+
+    // 3. Call Server to Update
+    const barcode = el.dataset.barcode; // Prefer barcode if available
+    const lineId = el.dataset.lineId;   // Or Line ID
+
+    try {
+      // Pass lineId as explicit target
+      await updateQty(barcode, delta, lineId);
+      // Success: updateQty calls savePackageChanges -> updates UI & dataset.currentQty
+    } catch (e) {
+      // Fail: Revert UI
+      // Note: updateQty already toasts error
+      console.warn("Manual update failed, reverting...", e);
+      el.value = oldVal;
+    }
+  };
+
   /* ----------------------------------------------------------- */
 
   const BARCODE_MAP_POINT_ONE = {
