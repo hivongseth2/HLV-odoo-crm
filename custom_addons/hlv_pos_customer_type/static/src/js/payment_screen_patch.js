@@ -20,11 +20,20 @@ patch(PaymentScreen.prototype, {
 
         // Stock validation via RPC
         const orderLines = this.currentOrder.get_orderlines();
-        const storableLines = orderLines.filter(l => l.get_product().type === 'product' || l.get_product().detailed_type === 'product');
+        // Check both 'product' (storable) and 'consu' (consumable)
+        const storableLines = orderLines.filter(l => {
+            const p = l.get_product();
+            console.log(`DEBUG: Line product: ${p.display_name}, type: ${p.type}, detailed_type: ${p.detailed_type}`);
+            return p.type === 'product' || p.detailed_type === 'product' || p.type === 'consu' || p.detailed_type === 'consu';
+        });
+
+        console.log("DEBUG: storableLines found count:", storableLines.length);
 
         if (storableLines.length > 0) {
             const productIds = storableLines.map(l => l.get_product().id);
             const warehouseId = this.pos.config.warehouse_id ? (Array.isArray(this.pos.config.warehouse_id) ? this.pos.config.warehouse_id[0] : this.pos.config.warehouse_id) : false;
+
+            console.log("DEBUG: warehouseId identified:", warehouseId);
 
             if (warehouseId) {
                 try {
@@ -34,12 +43,17 @@ patch(PaymentScreen.prototype, {
                         [productIds, warehouseId]
                     );
 
+                    console.log("DEBUG: stockData received:", stockData);
+
                     for (const line of storableLines) {
                         const product = line.get_product();
                         const qtyRequested = line.get_quantity();
                         const qtyAvailable = stockData[product.id] || 0;
 
+                        console.log(`DEBUG: Checking ${product.display_name}: Requested ${qtyRequested}, Available ${qtyAvailable}`);
+
                         if (qtyRequested > qtyAvailable) {
+                            console.log(`DEBUG: BLOCKING validation for ${product.display_name}`);
                             this.env.services.notification.add(
                                 _t('Sản phẩm "%s" không đủ tồn kho (Yêu cầu: %s, Hiện có: %s).',
                                     product.display_name, qtyRequested, qtyAvailable), {
@@ -51,9 +65,11 @@ patch(PaymentScreen.prototype, {
                         }
                     }
                 } catch (error) {
-                    console.error("Error during stock validation:", error);
+                    console.error("DEBUG: Error during stock validation RPC:", error);
                     // Fallback: allow validation if RPC fails to avoid blocking the shop completely
                 }
+            } else {
+                console.warn("DEBUG: warehouseId not found in pos.config");
             }
         }
 

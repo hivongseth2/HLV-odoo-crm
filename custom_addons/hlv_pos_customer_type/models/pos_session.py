@@ -24,8 +24,10 @@ class PosSession(models.Model):
         Lấy tồn kho thực tế của danh sách sản phẩm tại một kho cụ thể.
         Trả về dict {product_id: qty}
         """
+        print(f"DEBUG: get_products_stock called - products: {product_ids}, warehouse: {warehouse_id}")
         res = {}
         if not product_ids or not warehouse_id:
+            print("DEBUG: Missing product_ids or warehouse_id")
             return res
             
         # Tìm tất cả quants của các sản phẩm này tại kho (bao gồm các location con)
@@ -35,10 +37,13 @@ class PosSession(models.Model):
             ('location_id.usage', '=', 'internal')
         ]
         quants = self.env['stock.quant'].sudo().search(domain)
+        print(f"DEBUG: Found {len(quants)} quants")
         
         for product_id in product_ids:
             product_quants = quants.filtered(lambda q: q.product_id.id == product_id)
-            res[product_id] = sum(product_quants.mapped('quantity'))
+            qty = sum(product_quants.mapped('quantity'))
+            res[product_id] = qty
+            print(f"DEBUG: Product ID {product_id} - Total Qty: {qty}")
             
         return res
 
