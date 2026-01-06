@@ -150,9 +150,40 @@ class StockPickingPartial(models.Model):
                                 'qty_done': available - take_qty
                             })
         
+        # [NEW] Trả về thông tin đồng bộ (Global Packed Qty) để frontend tự sửa
+        sync_info = []
+        # Lấy danh sách sản phẩm liên quan đến các line vừa đóng gói
+        # (Ở đây ta lấy hết sản phẩm trong picking để đồng bộ cho chắc, hoặc chỉ các sp trong gói mới)
+        # Lấy các sp trong gói mới:
+        package_products = new_package.quant_ids.mapped('product_id') 
+        # Tuy nhiên quant_ids có thể chưa cập nhật ngay nếu chưa done? 
+        # Dùng move_line_ids của gói thì chuẩn hơn.
+        # Nhưng move_line chưa có quan hệ ngược trực tiếp ra gói nhanh?
+        # Search ngược:
+        related_lines = self.env['stock.move.line'].search([
+            ('result_package_id', '=', new_package.id)
+        ])
+        related_products = related_lines.mapped('product_id')
+        
+        for product in related_products:
+            # Tính tổng đã đóng gói (Global)
+            packed_qty = sum(self.env['stock.move.line'].search([
+                ('picking_id', '=', self.id),
+                ('product_id', '=', product.id),
+                ('result_package_id', '!=', False)
+            ]).mapped('qty_done'))
+            
+            sync_info.append({
+                'product_id': product.id,
+                'product_barcode': product.barcode,
+                'product_sku': product.default_code,
+                'packed_qty': packed_qty
+            })
+
         return {
             'package_id': new_package.id,
             'package_name': new_package.name,
+            'sync_info': sync_info
         }
 
 

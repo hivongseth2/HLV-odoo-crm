@@ -572,62 +572,34 @@ document.addEventListener("DOMContentLoaded", function () {
           toast.success(`Tạo gói hàng ${result.package_name} thành công!`);
 
           // ============================================================
-          // [FIX] Cập nhật lại UI danh sách chính (Main List)
+          // [FIX] Cập nhật lại UI danh sách chính (Mới: Dùng SyncInfo từ Server)
           // ============================================================
-          if (items && items.length > 0) {
-            console.log("[UI SYNC] Packing Success. Updating Main UI...", items);
-            items.forEach(item => {
-              const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
-              if (el) {
-                const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
-                const qtyPacked = parseFloat(item.qty || 0);
-                const newPacked = currentPacked + qtyPacked;
-
-                // 1. Cập nhật data-packed-qty
-                el.setAttribute('data-packed-qty', newPacked);
-                console.log(`[UI SYNC] Updated Packed Qty for Line ${item.move_line_id}: ${currentPacked} -> ${newPacked}`);
-
-                // 2. Cập nhật hoặc xóa thông báo "Chưa đóng gói"
-                const input = el.querySelector(".done-input");
-                const currentDone = parseFloat(input ? input.value : (el.querySelector(".done")?.innerText || 0));
-                const unpackedQty = currentDone - newPacked;
-
-                const unpackedEl = el.querySelector('.unpacked-info');
-
-                if (unpackedQty <= 0.001) { // Floating point safety
-                  if (unpackedEl) unpackedEl.remove();
-                } else {
-                  if (!unpackedEl) {
-                    const newInfo = document.createElement('div');
-                    newInfo.className = 'unpacked-info';
-                    newInfo.style.cssText = "font-size: 0.8rem; color: #d97706; margin-top: 4px; font-style: italic;";
-                    const container = el.querySelector('div') || el;
-                    container.appendChild(newInfo);
-                  }
-                  // Re-query to be safe
-                  const updateInfo = el.querySelector('.unpacked-info');
-                  if (updateInfo) updateInfo.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
+          if (result.sync_info) {
+            applyServerSyncInfo(result.sync_info);
+          } else {
+            // Fallback nếu không có sync_info (Legacy)
+            // (Giữ lại logic cũ phòng khi server chưa update kịp code, nhưng nên ưu tiên sync_info)
+            if (items && items.length > 0) {
+              // ... (Logic cũ - tạm thời comment hoặc xóa nếu tự tin)
+              // Để an toàn, chỉ chạy nếu ko có sync_info
+              items.forEach(item => {
+                const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
+                if (el) {
+                  const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
+                  const qtyPacked = parseFloat(item.qty || 0);
+                  // Chỉ cộng dồn tạm thời (Optimistic), hy vọng lần sau sync sẽ chuẩn
+                  el.setAttribute('data-packed-qty', currentPacked + qtyPacked);
+                  updateUnpackedLabel(el);
                 }
-
-                // 3. Hiệu ứng báo thành công
-                highlightElement(el, "#dcfce7"); // Màu xanh nhạt
-              } else {
-                console.warn(`[UI SYNC] Could not find element for line ${item.move_line_id} to update packed qty`);
-              }
-            });
-
-            const pkgId = result.package_id;
-            const pkgName = result.package_name;
-
-            // Render preview (Optimistic)
-            renderNewPackageToPanel(pkgId, pkgName, items);
-
-            // Force fetch latest details to ensure correct IDs for Edit
-            // This is crucial because packed items have NEW IDs in backend
-            // setTimeout(() => {
-            //    fetchPackageDetailsSilent(pkgId); 
-            // }, 500);
+              });
+            }
           }
+
+          const pkgId = result.package_id;
+          const pkgName = result.package_name;
+
+          // Render preview (Optimistic)
+          renderNewPackageToPanel(pkgId, pkgName, items);
 
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
@@ -714,6 +686,74 @@ async function finishServerUploadSession() {
     });
   } finally {
     uploadId = null;
+  }
+}
+
+// ============================================================
+// [HELPER] AUTORITATIVE SYNC WITH SERVER
+// ============================================================
+function applyServerSyncInfo(syncInfoList) {
+  if (!Array.isArray(syncInfoList)) return;
+  console.log("[UI SYNC] Applying Server Sync Info...", syncInfoList);
+
+  syncInfoList.forEach(info => {
+    let targetEl = null;
+
+    // 1. Tìm theo Barcode (Ưu tiên cao nhất)
+    if (info.product_barcode) {
+      const code = normalizeCode(info.product_barcode).toUpperCase();
+      // [Fix] Selector cần quote nếu barcode chứa kí tự đặc biệt
+      targetEl = document.querySelector(`#product_list .product-item[data-barcode="${CSS.escape(code)}"]`) ||
+        document.querySelector(`#product_list .product-item[data-barcode="${code}"]`);
+    }
+
+    // 2. Tìm theo SKU (Default Code)
+    if (!targetEl && info.product_sku) {
+      const code = normalizeCode(info.product_sku).toUpperCase();
+      targetEl = document.querySelector(`#product_list .product-item[data-default-code="${CSS.escape(code)}"]`) ||
+        document.querySelector(`#product_list .product-item[data-default-code="${code}"]`);
+    }
+
+    // 3. Update nếu tìm thấy
+    if (targetEl) {
+      const oldPacked = parseFloat(targetEl.getAttribute('data-packed-qty') || 0);
+      const serverPacked = parseFloat(info.packed_qty || 0);
+
+      if (Math.abs(oldPacked - serverPacked) > 0.001) {
+        console.warn(`[UI SYNC] Correction for ${info.product_sku}: Client(${oldPacked}) -> Server(${serverPacked})`);
+        targetEl.setAttribute('data-packed-qty', serverPacked);
+
+        // Hiệu ứng visual báo hiệu update
+        highlightElement(targetEl, "#dbe4ff"); // Xanh dương nhạt
+      }
+
+      // Luôn update label unpacked để đảm bảo nhất quán
+      updateUnpackedLabel(targetEl);
+    }
+  });
+}
+
+function updateUnpackedLabel(el) {
+  if (!el) return;
+  const packedQty = parseFloat(el.getAttribute('data-packed-qty') || 0);
+  const input = el.querySelector(".done-input");
+  const currentDone = parseFloat(input ? input.value : (el.querySelector(".done")?.innerText || 0));
+
+  const unpackedQty = currentDone - packedQty;
+  let unpackedEl = el.querySelector('.unpacked-info');
+
+  if (unpackedQty > 0.001) {
+    if (!unpackedEl) {
+      const newInfo = document.createElement('div');
+      newInfo.className = 'unpacked-info';
+      newInfo.style.cssText = "font-size: 0.8rem; color: #d97706; margin-top: 4px; font-style: italic;";
+      const container = el.querySelector('div') || el;
+      container.appendChild(newInfo);
+      unpackedEl = newInfo;
+    }
+    unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
+  } else {
+    if (unpackedEl) unpackedEl.remove();
   }
 }
 
