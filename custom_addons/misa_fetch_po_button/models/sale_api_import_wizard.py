@@ -195,69 +195,6 @@ class SaleApiImportWizard(models.TransientModel):
         return qty_base, price_base, False
     
     # ==== Helper lấy VAT ====
-    def _get_or_create_vn_vat(self, rate, use='sale'):
-        """
-        Lấy hoặc tạo thuế VAT Việt Nam với định dạng tên cố định: 'VAT VN X%'.
-        Luôn gán country_id = Việt Nam, tax_group_id = 'VAT'.
-        """
-        Tax = self.env['account.tax'].with_company(self.env.company)
-        TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
-
-        rate = float(rate)
-        # 🔹 Lấy quốc gia Việt Nam (ưu tiên mã VN, fallback theo tên)
-        country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
-        if not country_vn:
-            country_vn = self.env['res.country'].search([('name', 'ilike', 'Viet%')], limit=1)
-
-        # 🔹 Tìm / tạo nhóm thuế VAT
-        vat_group = TaxGroup.search([
-            ('name', 'in', ['VAT', 'Thuế GTGT', 'GTGT']),
-            ('company_id', '=', self.env.company.id),
-        ], limit=1)
-        if not vat_group:
-            vat_group = TaxGroup.create({
-                'name': 'VAT',
-                'company_id': self.env.company.id,
-                'country_id': country_vn.id or self.env.company.country_id.id,
-                'sequence': 10,
-            })
-
-        # 🔹 Tên thuế theo chuẩn VN
-        rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
-        vat_name = f'VAT VN {rate_str}%'
-
-        # 🔹 Tìm thuế cùng % trong công ty (ưu tiên theo tên chuẩn)
-        tax = Tax.search([
-            ('type_tax_use', '=', use),
-            ('amount_type', '=', 'percent'),
-            ('amount', '=', rate),
-            ('company_id', '=', self.env.company.id),
-        ], limit=1)
-
-        if tax:
-            # Nếu tên đang khác chuẩn => cập nhật lại luôn cho đồng bộ
-            if tax.name != vat_name or tax.country_id.code != 'VN':
-                tax.write({
-                    'name': vat_name,
-                    'country_id': country_vn.id or self.env.company.country_id.id,
-                    'tax_group_id': vat_group.id,
-                })
-            return tax
-
-        # 🔹 Nếu chưa có, tạo mới đúng chuẩn
-        new_tax = Tax.create({
-            'name': vat_name,
-            'type_tax_use': use,
-            'amount_type': 'percent',
-            'amount': rate,
-            'company_id': self.env.company.id,
-            'price_include': False,
-            'country_id': country_vn.id or self.env.company.country_id.id,
-            'tax_group_id': vat_group.id,
-            'active': True,
-        })
-        _logger.info("✅ Tạo mới thuế: %s (id=%s)", new_tax.name, new_tax.id)
-        return new_tax
 
 
 
@@ -266,30 +203,15 @@ class SaleApiImportWizard(models.TransientModel):
         Trả về list tax_id cho dòng SO từ dữ liệu MISA.
         MISA CRM trả: TaxPercentIDText (ví dụ: '8%', '10%', 'KCT')
         """
-        kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', 'Không chịu thuế', ''}
-
-        tax_text = str(l.get('TaxPercentIDText') or '').strip()
-
-        # 1) Kiểm tra KCT
-        if not tax_text or tax_text.upper() in kct_markers:
+        rate = self.env['odoo.utils']._extract_tax_amount_from_misa_line(l)
+        if rate is None:
             return []
-
-        # 2) Parse số % từ text (loại bỏ ký tự %)
-        try:
-            rate_str = tax_text.replace('%', '').strip()
-            rate = float(rate_str)
-        except Exception as e:
-            _logger.warning("❌ Không parse được VAT '%s': %s -> bỏ qua", tax_text, e)
-            return []
-
-        # 3) 0% khác KCT → tạo/gắn VAT 0%
-        if abs(rate) < 1e-9:
-            tax = self._get_or_create_vn_vat(0.0, use='sale')
-            return [tax.id] if tax else []
-
-        # 4) Các mức khác (8%, 10%, v.v.)
-        tax = self._get_or_create_vn_vat(rate, use='sale')
+        tax = self.env['odoo.utils']._get_or_create_vn_vat(rate, use='sale')
         return [tax.id] if tax else []
+
+    def _extract_tax_amount_from_misa_line(self, l: dict):
+        """Trích xuất % thuế từ line MISA."""
+        return self.env['odoo.utils']._extract_tax_amount_from_misa_line(l)
 
 
     def _sync_all_product_names_from_misa(self, product_lines):
@@ -549,6 +471,7 @@ class SaleApiImportWizard(models.TransientModel):
             is_combo_parent = misa_line.get("IsSetProduct", False)
             
             # ===== TẠO/LẤY PRODUCT =====
+            tax_amount = self._extract_tax_amount_from_misa_line(misa_line)
             if is_combo_parent:
                 # Combo parent
                 combo_product = misa_utils.get_or_create_combo_product(
@@ -564,7 +487,8 @@ class SaleApiImportWizard(models.TransientModel):
                     cost=price_unit,
                     product_type="consu",
                     purchase_ok=True,
-                    sale_ok=True
+                    sale_ok=True,
+                    tax_amount=tax_amount
                 )
             else:
                 # Dòng thường
@@ -575,7 +499,8 @@ class SaleApiImportWizard(models.TransientModel):
                     cost=price_unit,
                     product_type="consu",
                     purchase_ok=True,
-                    sale_ok=True
+                    sale_ok=True,
+                    tax_amount=tax_amount
                 )
             
             # ===== QUY ĐỔI UOM =====
@@ -1225,6 +1150,7 @@ class SaleApiImportWizard(models.TransientModel):
                         is_combo_child = line.get("IsChildProduct", False)
                         
                         # ===== TẠO/LẤY PRODUCT =====
+                        tax_amount = self._extract_tax_amount_from_misa_line(line)
                         if is_combo_parent:
                             # COMBO CHA: tạo combo product
                             combo_product = misa_utils.get_or_create_combo_product(
@@ -1240,7 +1166,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 cost=price_unit,
                                 product_type="consu",
                                 purchase_ok=True,
-                                sale_ok=True
+                                sale_ok=True,
+                                tax_amount=tax_amount
                             )
                         elif is_combo_child:
                             # COMBO CON: chỉ get product (KHÔNG UPDATE cost vì MISA không trả giá đúng)
@@ -1259,7 +1186,8 @@ class SaleApiImportWizard(models.TransientModel):
                                     cost=0.0,  # Cost tạm, không lấy từ MISA vì không đúng
                                     product_type="consu",
                                     purchase_ok=True,
-                                    sale_ok=True
+                                    sale_ok=True,
+                                    tax_amount=tax_amount
                                 )
                             # Nếu đã có → dùng luôn, KHÔNG cập nhật cost
                         else:
@@ -1271,7 +1199,8 @@ class SaleApiImportWizard(models.TransientModel):
                                 cost=price_unit,  # Dòng thường có giá đầy đủ
                                 product_type="consu",
                                 purchase_ok=True,
-                                sale_ok=True
+                                sale_ok=True,
+                                tax_amount=tax_amount
                             )
                         
                         # ===== QUY ĐỔI UOM =====
