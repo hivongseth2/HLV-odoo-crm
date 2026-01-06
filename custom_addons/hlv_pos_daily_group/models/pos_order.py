@@ -31,7 +31,7 @@ class PosOrder(models.Model):
                     
                     # Update payment method
                     if payment_method_str:
-                        vals['x_pos_payment_method'] = payment_method_str
+                        vals['x_studio_pos_payment_method'] = payment_method_str
                         
                     if vals:
                         picking.write(vals)

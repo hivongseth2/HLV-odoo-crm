@@ -363,7 +363,7 @@ class PickingExportWizard(models.TransientModel):
         return {
             # Hardcoded fields
             'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
-            'phuong_thuc_thanh_toan': picking.x_pos_payment_method or 'Chưa thu tiền',
+            'phuong_thuc_thanh_toan': picking.x_studio_pos_payment_method or 'Chưa thu tiền',
             # 3 cột mới từ sale.order (đặt ngay sau phương thức thanh toán)
             'hinh_thuc_giao_hang': getattr(so, 'x_studio_htgh', '') if so else '',
             'hinh_thuc_thanh_toan_so': getattr(so, 'x_studio_httt', '') if so else '',
@@ -843,7 +843,7 @@ class PickingExportWizard(models.TransientModel):
             # Start building dict based on NEW columns
             row = {
                 'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
-                'phuong_thuc_thanh_toan': picking.x_pos_payment_method or 'Chưa thu tiền',
+                'phuong_thuc_thanh_toan': picking.x_studio_pos_payment_method or 'Chưa thu tiền',
                 'kiem_phieu_xuat_kho': 'Có',
                 'lap_kem_hoa_don': 'Có',
                 'da_lap_hoa_don': 'Đã lập',
