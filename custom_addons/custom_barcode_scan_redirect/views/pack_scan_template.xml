@@ -49,21 +49,25 @@
                     </div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 5px;">
-                    <t t-if="line.product_uom_qty >= 10">
-                      <input type="number" 
-                             class="manual-qty-input" 
-                             t-att-data-barcode="line.product_id.barcode" 
-                             t-att-data-line-id="ml.id"
-                             placeholder="SL"
-                             style="width: 60px; text-align: center; border: 1px solid #ced4da; border-radius: 4px; padding: 2px 4px; font-weight: 600;"
-                             onkeydown="handleManualQtyKey(event, this)"
-                             onchange="handleManualQtyChange(this)"/>
-                    </t>
                     <button class="btn-minus" 
                             t-att-data-barcode="line.product_id.barcode" 
                             t-att-data-line-id="ml.id">−</button>
-                    <span class="done"><t t-esc="sum(line.move_line_ids.mapped('qty_done'))"/></span> /
-                    <span><t t-esc="line.product_uom_qty"/></span>
+                    
+                    <div style="display: flex; align-items: center; background: #fff; border: 1px solid #ced4da; border-radius: 4px; padding: 0 4px;">
+                        <input type="number" 
+                               class="done-input" 
+                               t-att-value="sum(line.move_line_ids.mapped('qty_done'))"
+                               t-att-data-barcode="line.product_id.barcode" 
+                               t-att-data-line-id="ml.id"
+                               t-att-readonly="'readonly' if line.product_uom_qty &lt; 10 else None"
+                               style="width: 50px; text-align: right; border: none; font-weight: 600; color: #333; outline: none; padding: 4px 0;"
+                               onfocus="this.dataset.oldValue = this.value"
+                               onkeydown="handleManualQtyKey(event, this)"
+                               onchange="handleManualQtyChange(this)"/>
+                        <span style="padding: 0 4px; color: #888;">/</span>
+                        <span style="font-weight: 600; color: #666;"><t t-esc="line.product_uom_qty"/></span>
+                    </div>
+
                     <button class="btn-plus" 
                             t-att-data-barcode="line.product_id.barcode" 
                             t-att-data-line-id="ml.id">+</button>

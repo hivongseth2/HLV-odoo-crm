@@ -62,12 +62,29 @@ document.addEventListener("DOMContentLoaded", function () {
     const lineEl = document.querySelector(`.product-item[data-line-id="${lineId}"]`);
     if (!lineEl) { toast.error("Không tìm thấy dòng sản phẩm"); return; }
 
-    const doneEl = lineEl.querySelector(".done");
-    const currentDone = parseFloat(doneEl?.innerText || 0);
+    // Get old value from dataset (set by onfocus) or fallback to 0
+    // Be careful: if onfocus didn't fire (e.g. programmatic change?), fallback might be wrong if not initialized.
+    // But this is triggered by "onchange" which implies user interaction -> focus happened.
+    const currentDone = parseFloat(el.dataset.oldValue !== undefined ? el.dataset.oldValue : 0);
+
+    // Safety check: if oldValue is way off? logic is dependent on it.
 
     const delta = qty - currentDone;
+    // Update old value immediately to avoid double firing or inconsistent states if rapid changes? 
+    // Actually we should wait for updateQty? No, updateQty will refresh the whole input.
+
     if (delta !== 0) {
-      await updateQty(barcode, delta, lineId);
+      // Optimistically update old value so next change is relative to this one? 
+      // No, updateQty is async. If user types again before it finishes...?
+      // Ideally we disable input while updating.
+      el.disabled = true;
+      try {
+        await updateQty(barcode, delta, lineId);
+        // On success, updateQty refreshes the input.
+      } finally {
+        el.disabled = false;
+        el.focus(); // Keep focus?
+      }
     }
   };
 
@@ -107,10 +124,15 @@ document.addEventListener("DOMContentLoaded", function () {
   function findLineToUpdate(barcode) {
     const elements = [...document.querySelectorAll(`[data-barcode="${barcode}"]`)];
     for (const el of elements) {
-      const doneEl = el.querySelector(".done");
-      const requiredEl = el.querySelectorAll("span")[1];
+      // Changed: Support done-input or fallback to .done
+      const input = el.querySelector(".done-input");
+      const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
+      const done = parseFloat(doneVal);
 
-      const done = parseFloat(doneEl?.innerText || 0);
+
+      // Attempt to find required element relative to input (if input exists)
+      const requiredEl = input ? input.nextElementSibling.nextElementSibling : el.querySelectorAll("span")[1];
+
       const required = parseFloat(requiredEl?.innerText || 0);
 
       if (done < required) {
@@ -159,16 +181,19 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         if (!el) { console.warn('No DOM line for', item); return; }
 
-        const doneEl = el.querySelector('.done');
         const requiredEl = el.querySelectorAll('span')[1];
         const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
 
-        doneEl.innerText = item.done_qty;
+        // Check if there is a done input
+        const doneInput = el.querySelector('.done-input');
 
-        // Update handling for manual input if it exists
-        const inputManual = el.querySelector('.manual-qty-input');
-        if (inputManual) {
-          inputManual.value = item.done_qty; // Sync input with real value
+        // If we found the input, update it
+        if (doneInput) {
+          doneInput.value = item.done_qty;
+        } else {
+          // Fallback for safety (though we replaced it)
+          const doneEl = el.querySelector('.done');
+          if (doneEl) doneEl.innerText = item.done_qty;
         }
 
         if (item.done_qty >= required) el.classList.add("completed");
@@ -218,10 +243,14 @@ document.addEventListener("DOMContentLoaded", function () {
     let isValid = true, missingProducts = [];
     items.forEach(item => {
       const name = item.querySelector("strong").innerText;
-      const doneEl = item.querySelector(".done");
-      const spanEls = item.querySelectorAll("span");
-      const done = parseFloat(doneEl?.innerText || 0);
-      const required = parseFloat(spanEls[1]?.innerText || 0);
+
+      const input = item.querySelector(".done-input");
+      const doneVal = input ? input.value : (item.querySelector(".done")?.innerText || 0);
+      const done = parseFloat(doneVal);
+
+      const requiredEl = input ? input.nextElementSibling.nextElementSibling : item.querySelectorAll("span")[1];
+      const required = parseFloat(requiredEl?.innerText || 0);
+
       if (done < required) { isValid = false; missingProducts.push(`${name} (${done}/${required})`); }
     });
 
@@ -338,7 +367,11 @@ document.addEventListener("DOMContentLoaded", function () {
       const items = [];
       document.querySelectorAll("#product_list .product-item").forEach(el => {
         const lineId = parseInt(el.dataset.lineId);
-        const currentDone = parseFloat(el.querySelector(".done")?.innerText || 0);
+
+        const input = el.querySelector(".done-input");
+        const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
+        const currentDone = parseFloat(doneVal);
+
         const alreadyPacked = parseFloat(el.dataset.packedQty || 0); // Lấy số đã đóng gói từ data attribute
 
         // Tính số lượng trôi nổi (chưa vào gói)
