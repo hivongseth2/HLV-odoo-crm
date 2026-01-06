@@ -1117,31 +1117,17 @@ async function openPackageEditModal(event) {
     if (titleEl) titleEl.innerText = result.package_name;
 
     // ============================================================
-    // BƯỚC 1: GỘP CÁC DÒNG TRÙNG SẢN PHẨM (AGGREGATION)
+    // BƯỚC 1: KHÔNG GỘP DÒNG (NO AGGREGATION)
+    // Để tránh lỗi cập nhật sai ID khi Odoo tự tách dòng
     // ============================================================
-    const aggregatedMap = {};
 
-    result.items.forEach(item => {
-      // Dùng product_id để định danh sản phẩm trùng
-      const key = item.product_id || item.product_name;
-
-      if (aggregatedMap[key]) {
-        // Đã có -> Cộng dồn số lượng
-        aggregatedMap[key].qty_done += parseFloat(item.qty_done) || 0;
-        // move_line_id giữ nguyên của dòng đầu tiên để làm ID đại diện thao tác
-      } else {
-        // Chưa có -> Tạo mới (Clone object để không ảnh hưởng data gốc)
-        aggregatedMap[key] = { ...item };
-        aggregatedMap[key].qty_done = parseFloat(item.qty_done) || 0;
-      }
-    });
-
-    // Chuyển Map thành Mảng để render
-    const mergedItems = Object.values(aggregatedMap);
+    // Sử dụng trực tiếp danh sách từ server
+    const mergedItems = result.items || [];
 
     // Cập nhật Badge số lượng loại sản phẩm (Unique products)
+    const uniqueProducts = new Set(mergedItems.map(i => i.product_id));
     const badgeEl = document.getElementById('itemCountBadge');
-    if (badgeEl) badgeEl.innerText = mergedItems.length;
+    if (badgeEl) badgeEl.innerText = uniqueProducts.size;
 
     // ============================================================
     // BƯỚC 2: RENDER DANH SÁCH ĐÃ GỘP
