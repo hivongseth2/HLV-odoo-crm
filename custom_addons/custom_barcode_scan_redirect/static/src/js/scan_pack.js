@@ -62,16 +62,19 @@ document.addEventListener("DOMContentLoaded", function () {
     const lineEl = document.querySelector(`.product-item[data-line-id="${lineId}"]`);
     if (!lineEl) { toast.error("Không tìm thấy dòng sản phẩm"); return; }
 
-    // Get old value from dataset (set by onfocus) or fallback to 0
-    // Be careful: if onfocus didn't fire (e.g. programmatic change?), fallback might be wrong if not initialized.
-    // But this is triggered by "onchange" which implies user interaction -> focus happened.
-    const currentDone = parseFloat(el.dataset.oldValue !== undefined ? el.dataset.oldValue : 0);
+    // Get old value from data attribute (robust against focus issues)
+    // "dataset.currentQty" comes from server initial render or previous updateQty
+    let currentDone = parseFloat(el.dataset.currentQty);
+    if (isNaN(currentDone)) currentDone = 0;
 
-    // Safety check: if oldValue is way off? logic is dependent on it.
+    // Safety check: if inputs are weird
 
     const delta = qty - currentDone;
-    // Update old value immediately to avoid double firing or inconsistent states if rapid changes? 
-    // Actually we should wait for updateQty? No, updateQty will refresh the whole input.
+    // Update old value can wait for updateQty? NO. 
+    // updateQty is async. If we don't block user, they might type again. 
+    // But we disabled input.
+    // However, if we fail to update, we should maybe revert?
+    // Let's rely on updateQty to fix the state.
 
     if (delta !== 0) {
       // Optimistically update old value so next change is relative to this one? 
@@ -190,6 +193,7 @@ document.addEventListener("DOMContentLoaded", function () {
         // If we found the input, update it
         if (doneInput) {
           doneInput.value = item.done_qty;
+          doneInput.dataset.currentQty = item.done_qty; // Sync current qty
         } else {
           // Fallback for safety (though we replaced it)
           const doneEl = el.querySelector('.done');
