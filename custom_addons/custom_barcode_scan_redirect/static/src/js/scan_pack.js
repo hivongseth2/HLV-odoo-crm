@@ -484,8 +484,8 @@ document.addEventListener("DOMContentLoaded", function () {
             method: 'call',
             params: {
               picking_id: pickingId,
-              package_code: pkgCode,
-              items: items // list [{move_line_id, qty}]
+              package_barcode: pkgCode,
+              move_line_data: items // list [{move_line_id, qty}]
             }
           })
         });
