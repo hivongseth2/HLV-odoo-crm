@@ -330,7 +330,7 @@ class PublicInventory(http.Controller):
             rows.append({"warehouse_id": wh.id, "warehouse_name": wh.name, "qty_available": qt - qr, "qty_total": qt, "qty_reserved": qr})
         return {"ok": True, "mode": "warehouses", "rows": rows}
     
-    # --- CẬP NHẬT: Gợi ý cũng lọc theo checkbox ---
+    # --- CẬP NHẬT: Gợi ý cũng lọc theo checkbox và bổ sung thông tin tồn kho ---
     @http.route(["/search_stock/suggest"], type="json", auth="public", methods=["POST"])
     def search_suggest(self, q="", combo_search=False):
         if not _pw_allowed(): return {"ok": False, "error": "access_denied", "products": []}
@@ -340,6 +340,7 @@ class PublicInventory(http.Controller):
         
         company_ids = env.companies.ids
         Product = env["product.product"].sudo().with_context(allowed_company_ids=company_ids)
+        Quant = env["stock.quant"].sudo().with_context(allowed_company_ids=company_ids)
         
         domain = [('active', '=', True)]
         # Nếu không tick tìm combo -> Lọc bỏ combo
@@ -354,10 +355,36 @@ class PublicInventory(http.Controller):
         if domains_per_token: domain = expression.AND([domain, expression.AND(domains_per_token)])
         
         products = Product.search(domain, limit=10, order='name')
+        
+        # Tính toán tồn kho tổng cho các warehouse được phép
+        pids = products.ids
+        quant_domain = [
+            ("product_id", "in", pids),
+            ("location_id.usage", "=", "internal")
+        ]
+        allowed_whs = _get_allowed_warehouses()
+        if allowed_whs:
+            quant_domain.append(("location_id", "child_of", allowed_whs.mapped('view_location_id').ids))
+        
+        quant_groups = Quant.read_group(quant_domain, ["product_id", "quantity:sum"], ["product_id"], lazy=False)
+        qty_map = {g["product_id"][0]: _rg_sum(g, "quantity") for g in quant_groups if g.get("product_id")}
+
         results = []
         for p in products:
+            is_combo = bool(getattr(p.product_tmpl_id, "is_combo", False))
+            qty_total = 0.0
+            if is_combo:
+                qty_total = self._compute_combo_qty(env, p, None)
+            else:
+                qty_total = qty_map.get(p.id, 0.0)
+
             results.append({
-                "id": p.id, "name": p.name, "default_code": p.default_code or "", "barcode": p.barcode or "",
+                "id": p.id, 
+                "name": p.name, 
+                "default_code": p.default_code or "", 
+                "barcode": p.barcode or "",
                 "image_url": _get_product_image_url(p),
+                "qty_total": qty_total,
+                "is_combo": is_combo,
             })
         return {"ok": True, "products": results}

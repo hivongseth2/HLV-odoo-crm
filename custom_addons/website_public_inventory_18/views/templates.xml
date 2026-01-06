@@ -25,26 +25,30 @@
 
             /* 2. Thiết lập cho bảng */
             #inv-table {
-                border-collapse: separate; /* Bắt buộc để dùng sticky */
-                border-spacing: 0;
-                border-left: 1px solid #dee2e6;
+                border-collapse: collapse;
+                border: none;
             }
 
             #inv-table th, #inv-table td {
-                border-right: 1px solid #dee2e6;
-                text-align: center !important; /* Căn giữa nội dung */
+                text-align: center !important;
                 vertical-align: middle;
+                border-bottom: 1px solid #eee; /* Chỉ giữ border dưới */
+                border-top: none;
+                border-left: none;
+                border-right: none;
             }
 
             /* 3. Thiết lập cho dòng header */
             #inv-table thead th {
-                position: -webkit-sticky; /* Hỗ trợ Safari */
+                position: -webkit-sticky;
                 position: sticky;
-                top: 0; /* Mặc định lên sát mép trên */
-                background-color: #f8f9fa !important; /* Phải có nền để không bị lộ chữ bên dưới khi cuộn */
-                z-index: 1020; /* Nằm trên các nội dung khác */
-                box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); /* Tạo đường kẻ đổ bóng thay cho border-bottom bị mất khi dùng sticky */
-                border-bottom: 2px solid #dee2e6;
+                top: 0;
+                background-color: #fcfcfc !important;
+                z-index: 1020;
+                border-bottom: 1px solid #dee2e6;
+                text-transform: uppercase;
+                font-size: 0.8rem;
+                color: #666;
             }
 
             /* Nếu website Odoo của bạn có thanh navbar cố định phía trên (thường cao 56px-70px)
@@ -406,11 +410,16 @@
                 products.forEach(function(p) {
                    var displayName = p.name || p.default_code || '';
                    var imgUrl = p.image_url || '/web/static/img/placeholder.png';
+                   var qtyInfo = (p.qty_total > 0) ? ('<span class="badge bg-success-soft text-success border border-success-subtle ms-2">Tồn: ' + fmt(p.qty_total) + '</span>') : '<span class="badge bg-light text-muted border ms-2">Hết hàng</span>';
+                   
                    html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
                    html += '  <div class="d-flex align-items-center">';
                    html += '    <img src="' + imgUrl + '" class="rounded border me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
                    html += '    <div class="flex-grow-1 overflow-hidden">';
-                   html += '      <div class="fw-bold text-dark text-truncate" style="font-size:0.9rem;">' + (p.default_code || '') + '</div>';
+                   html += '      <div class="d-flex align-items-center mb-1">';
+                   html += '        <div class="fw-bold text-dark text-truncate" style="font-size:0.9rem;">' + (p.default_code || '') + '</div>';
+                   html +=          qtyInfo;
+                   html += '      </div>';
                    html += '      <div class="text-muted text-truncate small">' + (p.name || '') + '</div>';
                    html += '    </div>';
                    html += '    <div class="ms-2 text-primary"><i class="fa fa-angle-right"></i></div>';
@@ -445,7 +454,7 @@
                    if ($next.length && $next.hasClass('detail-row') && $next.is(':visible')) { $next.remove(); $btn.html('<i class="fa fa-plus"></i>'); return; }
                    
                    var colCount = $row.children('td').length;
-                   var $detail = $('<tr class="detail-row"><td colspan="' + colCount + '"><div class="p-3 bg-light text-center"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải...</div></td></tr>');
+                   var $detail = $('<tr class="detail-row"><td colspan="' + colCount + '" style="background-color: #fafafa; border-bottom: 2px solid #dee2e6;"><div class="p-3 text-center"><span class="spinner-border spinner-border-sm me-2 text-primary"></span>Đang tải dữ liệu...</div></td></tr>');
                    $row.after($detail);
                    $btn.html('<i class="fa fa-minus"></i>');
 
@@ -506,31 +515,39 @@
                       html += '</div></div>';
                   } 
                   
-                  // CASE 2: SẢN PHẨM THƯỜNG
-                  else {
-                      html += '<div class="detail-container-mobile">';
-                      html += '<div class="d-none d-md-block p-3 bg-white border rounded">';
-                      html += '<table class="table table-sm mb-0"><thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead><tbody>';
-                      rows.forEach(function(r){
-                          var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
-                          html += '<tr><td>' + r.warehouse_name + '</td><td class="text-end">' + fmt(r.qty_total) + '</td><td class="text-end">' + fmt(r.qty_reserved) + '</td><td class="text-end ' + availClass + '">' + fmt(r.qty_available) + '</td></tr>';
-                      });
-                      html += '</tbody></table></div>';
+                   // CASE 2: SẢN PHẨM THƯỜNG
+                   else {
+                       html += '<div class="detail-container-mobile">';
+                       html += '<div class="d-none d-md-block p-3">';
+                       html += '<table class="table table-sm mb-0" style="border: none;">';
+                       html += '  <thead style="background: transparent;"><tr><th style="border: none; color: #888;">Kho hàng</th><th class="text-end" style="border: none; color: #888;">Tồn</th><th class="text-end" style="border: none; color: #888;">Giữ</th><th class="text-end" style="border: none; color: #888;">Sẵn sàng</th></tr></thead>';
+                       html += '  <tbody style="border: none;">';
+                       rows.forEach(function(r){
+                           var availClass = (r.qty_available > 0) ? 'text-success fw-bold' : 'text-muted';
+                           html += '<tr style="border-bottom: 1px dashed #eee;">';
+                           html += '  <td style="border: none; padding: 8px 0;">' + r.warehouse_name + '</td>';
+                           html += '  <td class="text-end" style="border: none; padding: 8px 0;">' + fmt(r.qty_total) + '</td>';
+                           html += '  <td class="text-end" style="border: none; padding: 8px 0;">' + fmt(r.qty_reserved) + '</td>';
+                           html += '  <td class="text-end ' + availClass + '" style="border: none; padding: 8px 0;">' + fmt(r.qty_available) + '</td>';
+                           html += '</tr>';
+                       });
+                       html += '  </tbody>';
+                       html += '</table></div>';
 
-                      html += '<div class="d-md-none">';
-                      rows.forEach(function(r){
-                           html += '<div class="wh-card">';
-                           html += '  <div class="wh-header">' + r.warehouse_name + '</div>';
-                           html += '  <div class="wh-stats">';
-                           html += '    <div class="wh-stat-col ' + (r.qty_total==0 ? 'dim':'') + '"><div class="wh-label">Tổng</div><div class="wh-val">' + fmt(r.qty_total) + '</div></div>';
-                           html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div></div>';
-                           html += '    <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val">' + fmt(r.qty_available) + '</div></div>';
-                           html += '  </div>';
-                           html += '</div>';
-                      });
-                      html += '</div>';
-                      html += '</div>';
-                  }
+                       html += '<div class="d-md-none">';
+                       rows.forEach(function(r){
+                            html += '<div class="wh-card" style="border: none; box-shadow: none; border-bottom: 1px solid #eee; border-radius: 0;">';
+                            html += '  <div class="wh-header" style="background: transparent; border: none; padding-bottom: 0;">' + r.warehouse_name + '</div>';
+                            html += '  <div class="wh-stats">';
+                            html += '    <div class="wh-stat-col ' + (r.qty_total==0 ? 'dim':'') + '"><div class="wh-label">Tổng</div><div class="wh-val">' + fmt(r.qty_total) + '</div></div>';
+                            html += '    <div class="wh-stat-col ' + (r.qty_reserved==0 ? 'dim':'') + '"><div class="wh-label">Đã giữ</div><div class="wh-val text-muted">' + fmt(r.qty_reserved) + '</div></div>';
+                            html += '    <div class="wh-stat-col highlight"><div class="wh-label">Có thể bán</div><div class="wh-val">' + fmt(r.qty_available) + '</div></div>';
+                            html += '  </div>';
+                            html += '</div>';
+                       });
+                       html += '</div>';
+                       html += '</div>';
+                   }
                   
                   return html;
               }
