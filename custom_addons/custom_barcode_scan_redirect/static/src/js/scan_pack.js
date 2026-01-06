@@ -484,8 +484,8 @@ document.addEventListener("DOMContentLoaded", function () {
             method: 'call',
             params: {
               picking_id: pickingId,
-              package_code: pkgCode,
-              items: items // list [{move_line_id, qty}]
+              package_barcode: pkgCode,
+              move_line_data: items // list [{move_line_id, qty}]
             }
           })
         });
@@ -1465,19 +1465,37 @@ async function savePackageChanges() {
       const delta = change.newQty - change.oldQty;
       const strLineId = String(change.moveLineId);
 
+      console.log(`[UI SYNC] ID=${strLineId} Delta=${delta}. Looking for DOM...`);
+
       // A. Tìm dòng ở màn hình chính theo ID
       let mainListEl = document.querySelector(`#product_list .product-item[data-line-id="${strLineId}"]`);
+      if (mainListEl) console.log(`[UI SYNC] Found by ID`);
 
-      // B. Nếu không tìm thấy theo ID (do Odoo tách dòng), tìm theo Tên sản phẩm
+      // B. Nếu không tìm thấy theo ID (do Odoo tách dòng), tìm theo Barcode/SKU/Tên
       if (!mainListEl && currentPackageData?.items) {
         const itemDetail = currentPackageData.items.find(i => String(i.move_line_id) === strLineId);
         if (itemDetail) {
-          const allItems = document.querySelectorAll('#product_list .product-item');
-          for (const el of allItems) {
-            const nameEl = el.querySelector('strong');
-            if (nameEl && nameEl.innerText.includes(itemDetail.product_name)) {
-              mainListEl = el;
-              break;
+          console.log(`[UI SYNC] Fallback search for`, itemDetail);
+          // 1. Tìm theo Barcode
+          if (itemDetail.product_barcode) {
+            mainListEl = document.querySelector(`#product_list .product-item[data-barcode="${itemDetail.product_barcode}"]`);
+            if (mainListEl) console.log(`[UI SYNC] Found by Barcode`);
+          }
+          // 2. Tìm theo SKU (Default Code)
+          if (!mainListEl && itemDetail.product_sku) {
+            mainListEl = document.querySelector(`#product_list .product-item[data-default-code="${itemDetail.product_sku}"]`);
+            if (mainListEl) console.log(`[UI SYNC] Found by SKU`);
+          }
+          // 3. Tìm theo Tên (Fallback cuối cùng)
+          if (!mainListEl) {
+            const allItems = document.querySelectorAll('#product_list .product-item');
+            for (const el of allItems) {
+              const nameEl = el.querySelector('strong');
+              if (nameEl && nameEl.innerText.includes(itemDetail.product_name)) {
+                mainListEl = el;
+                console.log(`[UI SYNC] Found by Name`);
+                break;
+              }
             }
           }
         }
@@ -1508,7 +1526,21 @@ async function savePackageChanges() {
         // 2. Cập nhật số lượng đã đóng gói ngầm (Packed Qty)
         // Phải cập nhật cái này để lần sau quét thêm nó tính toán đúng
         const currentPacked = parseFloat(mainListEl.getAttribute('data-packed-qty') || 0);
-        mainListEl.setAttribute('data-packed-qty', Math.max(0, currentPacked + delta));
+        const newPacked = Math.max(0, currentPacked + delta);
+
+        mainListEl.setAttribute('data-packed-qty', newPacked);
+
+        // --- DEBUG LOGS ---
+        console.log(`[UI SYNC] Update Stats:`, {
+          lineId: strLineId,
+          currentDone,
+          delta,
+          newDone,
+          currentPacked,
+          newPacked,
+          unpackedQtyCalculation: newDone - newPacked
+        });
+        // ------------------
 
         // 3. Check lại trạng thái completed (Màu xanh)
         const requiredEl = mainListEl.querySelectorAll('span')[1];

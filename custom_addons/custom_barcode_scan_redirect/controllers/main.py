@@ -816,8 +816,8 @@ class CustomBarcodeScanController(http.Controller):
         """
         Lấy chi tiết sản phẩm trong 1 package để hiển thị modal edit
         """
-        picking_id = kwargs.get("picking_id")
-        package_id = kwargs.get("package_id")
+        picking_id = int(kwargs.get("picking_id") or 0)
+        package_id = int(kwargs.get("package_id") or 0)
         
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         if not picking.exists():
