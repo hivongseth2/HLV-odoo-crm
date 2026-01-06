@@ -1526,7 +1526,21 @@ async function savePackageChanges() {
         // 2. Cập nhật số lượng đã đóng gói ngầm (Packed Qty)
         // Phải cập nhật cái này để lần sau quét thêm nó tính toán đúng
         const currentPacked = parseFloat(mainListEl.getAttribute('data-packed-qty') || 0);
-        mainListEl.setAttribute('data-packed-qty', Math.max(0, currentPacked + delta));
+        const newPacked = Math.max(0, currentPacked + delta);
+
+        mainListEl.setAttribute('data-packed-qty', newPacked);
+
+        // --- DEBUG LOGS ---
+        console.log(`[UI SYNC] Update Stats:`, {
+          lineId: strLineId,
+          currentDone,
+          delta,
+          newDone,
+          currentPacked,
+          newPacked,
+          unpackedQtyCalculation: newDone - newPacked
+        });
+        // ------------------
 
         // 3. Check lại trạng thái completed (Màu xanh)
         const requiredEl = mainListEl.querySelectorAll('span')[1];
