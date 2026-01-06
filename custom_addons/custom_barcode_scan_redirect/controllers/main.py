@@ -495,7 +495,7 @@ class CustomBarcodeScanController(http.Controller):
         if not updated_lines:
             # Trường hợp delta > 0 nhưng không tìm thấy dòng nào còn thiếu (dù check tổng ở trên đã pass)
             # Có thể do logic phân bổ move_line phức tạp, ta báo lỗi hoặc ignore
-            return {"error": "⚠️ Không tìm thấy dòng sản phẩm phù hợp để cập nhật! Có thể sản phẩm đã "}
+            return {"error": "⚠️ Không tìm thấy dòng sản phẩm phù hợp để cập nhật! Có thể sản phẩm đã được đóng gói, vui lòng chỉnh sửa trong giao diện đóng gói!"}
         return {"scanned": updated_lines}
 
 
