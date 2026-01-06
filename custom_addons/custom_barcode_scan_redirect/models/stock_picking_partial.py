@@ -66,38 +66,85 @@ class StockPickingPartial(models.Model):
 
         # Xử lý từng move_line: tạo move_line mới cho phần được pack (qty),
         # giảm qty_done trên move_line nguồn để giữ phần còn lại cho các pack tiếp theo.
+        # Xử lý từng yêu cầu đóng gói
         for data in move_line_data:
             move_line_id = data.get('move_line_id')
-            qty = float(data.get('qty', 0) or 0)
-
-            move_line = self.env['stock.move.line'].sudo().browse(move_line_id)
-            if not move_line.exists() or qty <= 0:
+            qty_needed = float(data.get('qty', 0) or 0)
+            
+            if qty_needed <= 0:
                 continue
 
-            # Nếu source move_line có đủ qty_done để tách
-            src_done = float(move_line.qty_done or 0.0)
-            take_qty = min(qty, src_done)
-
-            if take_qty <= 0:
-                # không còn qty_done trên dòng nguồn; skip
+            ref_ml = self.env['stock.move.line'].sudo().browse(move_line_id)
+            if not ref_ml.exists():
                 continue
 
-            # [OPTIMIZATION] Nếu lấy hết số lượng hiện có -> Chỉ cần gán package, KHÔNG copy
-            if take_qty == src_done:
-                move_line.sudo().with_context(skip_qty_validation=True).write({
-                    'result_package_id': new_package.id
-                })
-            else:
-                # Nếu chỉ lấy một phần -> Tách dòng (Split)
-                # 1. Tạo dòng mới cho package
-                move_line.sudo().with_context(skip_qty_validation=True).copy({
-                    'qty_done': take_qty,
-                    'result_package_id': new_package.id,
-                })
+            product_id = ref_ml.product_id.id
+            
+            # 1. ƯU TIÊN LẤY TỪ HÀNG LẺ (LOOSE LINES) TRƯỚC
+            # Tìm tất cả line chưa đóng gói của sản phẩm này
+            loose_lines = self.env['stock.move.line'].sudo().search([
+                ('picking_id', '=', self.id),
+                ('product_id', '=', product_id),
+                ('result_package_id', '=', False),
+                ('qty_done', '>', 0)
+            ], order='qty_done asc') # Lấy line nhỏ trước để gom gọn, hoặc desc tùy logic
+            
+            _logger.info(f"[PACK] Product {product_id} Need {qty_needed}. Found {len(loose_lines)} loose lines.")
 
-                # 2. Giảm qty trên dòng cũ
-                remaining = src_done - take_qty
-                move_line.sudo().with_context(skip_qty_validation=True).write({'qty_done': remaining})
+            for loose_ml in loose_lines:
+                if qty_needed <= 0:
+                    break
+                    
+                available = loose_ml.qty_done
+                take_qty = min(qty_needed, available)
+                _logger.info(f"   -> Loose ML {loose_ml.id} has {available}. Taking {take_qty}")
+                
+                # Logic đưa vào pack
+                if take_qty == available:
+                    # Lấy hết dòng lẻ -> Gán luôn vào pack
+                    loose_ml.sudo().with_context(skip_qty_validation=True).write({
+                        'result_package_id': new_package.id
+                    })
+                else:
+                    # Lấy 1 phần -> Tách ra
+                    loose_ml.sudo().with_context(skip_qty_validation=True).copy({
+                        'qty_done': take_qty,
+                        'result_package_id': new_package.id,
+                    })
+                    loose_ml.sudo().with_context(skip_qty_validation=True).write({
+                        'qty_done': available - take_qty
+                    })
+                
+                qty_needed -= take_qty
+            
+            _logger.info(f"[PACK] After loose Check, Need: {qty_needed}")
+
+            # 2. KHÔNG ĐỦ HÀNG LẺ -> MỚI LẤY TỪ LINE ĐƯỢC CHỈ ĐỊNH (Fallback)
+            # Chỉ chạy vào đây nếu ref_ml KHI NÃY chưa bị xử lý (ví dụ ref_ml cũng là loose line thì đã bị xử lý ở trên rồi)
+            # Tuy nhiên nếu ref_ml là line ĐÃ ĐÓNG GÓI (trong gói khác), logic này sẽ tách hàng từ gói đó ra (Steal).
+            if qty_needed > 0:
+                # Refresh ref_ml để lấy data mới nhất (lỡ nó bị sửa ở step 1)
+                ref_ml = self.env['stock.move.line'].browse(ref_ml.id)
+                
+                # Chỉ xử lý nếu ref_ml vẫn còn qty và CHƯA ĐƯỢC GÁN VÀO GÓI MỚI NÀY
+                # (Nếu ref_ml là loose_ml vừa được gán package_id = new_package thì skip)
+                if ref_ml.result_package_id.id != new_package.id and ref_ml.qty_done > 0:
+                     available = ref_ml.qty_done
+                     take_qty = min(qty_needed, available)
+                     
+                     if take_qty > 0:
+                        if take_qty == available:
+                            ref_ml.sudo().with_context(skip_qty_validation=True).write({
+                                'result_package_id': new_package.id
+                            })
+                        else:
+                            ref_ml.sudo().with_context(skip_qty_validation=True).copy({
+                                'qty_done': take_qty,
+                                'result_package_id': new_package.id,
+                            })
+                            ref_ml.sudo().with_context(skip_qty_validation=True).write({
+                                'qty_done': available - take_qty
+                            })
         
         return {
             'package_id': new_package.id,
