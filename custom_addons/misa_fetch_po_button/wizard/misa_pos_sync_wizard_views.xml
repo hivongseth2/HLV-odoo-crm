@@ -48,7 +48,7 @@
     <!-- Menu item trong Inventory -->
     <menuitem id="menu_misa_product_sync_stock"
               name="Đồng bộ sản phẩm MISA"
-              parent="stock.menu_stock_products"
+              parent="stock.menu_stock_root"
               action="action_misa_pos_sync_wizard"
               sequence="99"/>
 
