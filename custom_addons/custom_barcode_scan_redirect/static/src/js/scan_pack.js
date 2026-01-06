@@ -1297,19 +1297,25 @@ async function removePackageItem(moveLineId) {
         const doneEl = mainListEl.querySelector('.done');
 
         const currentDone = parseFloat(doneInput ? doneInput.value : (doneEl?.innerText || 0));
-        const newDone = Math.max(0, currentDone - qtyToRemove);
+        // LOGIC CŨ: newDone = currentDone - qtyToRemove; -> Sai vì bây giờ UNPACK chứ không XÓA
+        // LOGIC MỚI: newDone giữ nguyên (vì hàng nhả ra khỏi pack vẫn tính là Done)
+        // Chỉ giảm data-packed-qty
 
-        if (doneInput) {
-          doneInput.value = newDone;
-          doneInput.dataset.currentQty = newDone; // Sync for safety
-        } else if (doneEl) {
-          doneEl.innerText = newDone;
-        }
+        // const newDone = Math.max(0, currentDone - qtyToRemove); // Disable dòng này
+
+        /* 
+           Tuy nhiên, UI cần phản hồi gì?
+           "Đã đóng gói" (data-packed-qty) GIẢM.
+           "Đã quét" (value input) GIỮ NGUYÊN.
+        */
 
         // 2. Giảm số lượng "Đã đóng gói" (Packed Qty - dữ liệu ẩn)
         const currentPacked = parseFloat(mainListEl.getAttribute('data-packed-qty') || 0);
         const newPacked = Math.max(0, currentPacked - qtyToRemove);
         mainListEl.setAttribute('data-packed-qty', newPacked);
+
+        // [OPTIONAL] Nếu muốn hiển thị rõ hơn, có thể flash màu khác
+
 
         // 3. Cập nhật màu sắc (xanh/đen)
         const requiredEl = mainListEl.querySelectorAll('span')[1];
