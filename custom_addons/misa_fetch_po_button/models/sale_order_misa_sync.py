@@ -196,72 +196,15 @@ class SaleOrder(models.Model):
             if keep.name != new_name:
                 keep.name = new_name
 
-    # ==== Helpers VAT (chuẩn "VAT VN X%") ====
-    def _get_or_create_vn_vat(self, rate, use='sale'):
-        Tax = self.env['account.tax'].with_company(self.env.company)
-        TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
-
-        rate = float(rate)
-        # lấy country VN, fallback theo name
-        country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
-        if not country_vn:
-            country_vn = self.env['res.country'].search([('name', 'ilike', 'Viet%')], limit=1)
-
-        vat_group = TaxGroup.search([
-            ('name', 'in', ['VAT', 'Thuế GTGT', 'GTGT']),
-            ('company_id', '=', self.env.company.id),
-        ], limit=1)
-        if not vat_group:
-            vat_group = TaxGroup.create({
-                'name': 'VAT',
-                'company_id': self.env.company.id,
-                'country_id': country_vn.id or self.env.company.country_id.id,
-                'sequence': 10,
-            })
-
-        rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
-        vat_name = f'VAT VN {rate_str}%'
-
-        tax = Tax.search([
-            ('type_tax_use', '=', use),
-            ('amount_type', '=', 'percent'),
-            ('amount', '=', rate),
-            ('company_id', '=', self.env.company.id),
-        ], limit=1)
-        if tax:
-            # sửa lại tên/country nếu chưa chuẩn
-            if tax.name != vat_name or tax.country_id.code != 'VN':
-                tax.write({
-                    'name': vat_name,
-                    'country_id': country_vn.id or self.env.company.country_id.id,
-                    'tax_group_id': vat_group.id,
-                })
-            return tax
-
-        return Tax.create({
-            'name': vat_name,
-            'type_tax_use': use,
-            'amount_type': 'percent',
-            'amount': rate,
-            'company_id': self.env.company.id,
-            'price_include': False,
-            'country_id': country_vn.id or self.env.company.country_id.id,
-            'tax_group_id': vat_group.id,
-            'active': True,
-        })
 
 
     def _tax_ids_from_misa_line(self, line):
         """Trích xuất %VAT từ line MISA (TaxPercentIDText) → trả về list tax_id."""
         txt = str(line.get('TaxPercentIDText') or '').strip()
-        kct = {'', 'KCT', 'KHONGCHIU', 'NO_VAT', 'Không chịu thuế'}
-        if not txt or txt.upper() in kct:
+        rate = self.env['odoo.utils']._extract_tax_amount_from_misa_line(line)
+        if rate is None:
             return []
-        try:
-            rate = float(txt.replace('%', '').strip())
-        except Exception:
-            return []
-        tax = self._get_or_create_vn_vat(rate, use='sale')
+        tax = self.env['odoo.utils']._get_or_create_vn_vat(rate, use='sale')
         return [tax.id] if tax else []
 
 
@@ -828,6 +771,16 @@ class SaleOrder(models.Model):
 
             # tạo/lấy product (đơn vị mặc định của Odoo là product.uom_id)
             # sửa purchase_ok và sale_ok True
+            
+            # --- TRÍCH XUẤT VAT ---
+            tax_amount = None
+            tax_txt = str(ln.get('TaxPercentIDText') or '').strip()
+            if tax_txt and tax_txt.upper() not in {'', 'KCT', 'KHONGCHIU', 'NO_VAT', 'Không chịu thuế'}:
+                try:
+                    tax_amount = float(tax_txt.replace('%', '').strip())
+                except Exception:
+                    pass
+
             product = odoo_utils._get_or_create_product(
                 code=product_code,
                 name=description,
@@ -836,6 +789,7 @@ class SaleOrder(models.Model):
                 product_type="consu",
                 purchase_ok=True,
                 sale_ok=True,
+                tax_amount=tax_amount
             )
 
             # id sản phẩm bên MISA (để truy bảng quy đổi)

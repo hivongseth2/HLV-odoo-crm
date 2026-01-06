@@ -49,21 +49,115 @@ class OdooUtils(models.AbstractModel):
             'rounding': 1.0,
         })
 
-    def _get_or_create_product(self, code, name, unit_name, cost=0.0, product_type="consu", purchase_ok=True, sale_ok=False):
+    def _extract_tax_amount_from_misa_line(self, line_data):
+        """Trích xuất % thuế từ dữ liệu dòng MISA (TaxPercentIDText)."""
+        kct_markers = {'KCT', 'KHONGCHIU', 'NO_VAT', 'Không chịu thuế', ''}
+        tax_text = str(line_data.get('TaxPercentIDText') or '').strip()
+
+        if not tax_text or tax_text.upper() in kct_markers:
+            return None
+
+        try:
+            rate_str = tax_text.replace('%', '').strip()
+            return float(rate_str)
+        except Exception:
+            return None
+
+    def _get_or_create_vn_vat(self, rate, use='sale'):
+        """
+        Lấy hoặc tạo thuế VAT Việt Nam với định dạng tên cố định: 'VAT VN X%'.
+        """
+        Tax = self.env['account.tax'].with_company(self.env.company)
+        TaxGroup = self.env['account.tax.group'].with_company(self.env.company)
+
+        # 🔹 Lấy quốc gia Việt Nam
+        country_vn = self.env['res.country'].search([('code', '=', 'VN')], limit=1)
+        if not country_vn:
+            country_vn = self.env['res.country'].search([('name', 'ilike', 'Viet%')], limit=1)
+
+        # 🔹 Tìm / tạo nhóm thuế VAT
+        vat_group = TaxGroup.search([
+            ('name', 'in', ['VAT', 'Thuế GTGT', 'GTGT']),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+        if not vat_group:
+            vat_group = TaxGroup.create({
+                'name': 'VAT',
+                'company_id': self.env.company.id,
+                'country_id': country_vn.id or self.env.company.country_id.id,
+                'sequence': 10,
+            })
+
+        rate_str = str(int(rate)) if float(rate).is_integer() else str(rate)
+        vat_name = f'VAT VN {rate_str}%'
+
+        tax = Tax.search([
+            ('type_tax_use', '=', use),
+            ('amount_type', '=', 'percent'),
+            ('amount', '=', rate),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+
+        if tax:
+            # Sửa lại tên/country nếu chưa chuẩn
+            if tax.name != vat_name or (country_vn and tax.country_id.id != country_vn.id):
+                tax.write({
+                    'name': vat_name,
+                    'country_id': country_vn.id if country_vn else tax.country_id.id,
+                    'tax_group_id': vat_group.id,
+                })
+            return tax
+
+        return Tax.create({
+            'name': vat_name,
+            'type_tax_use': use,
+            'amount_type': 'percent',
+            'amount': rate,
+            'company_id': self.env.company.id,
+            'price_include': False,
+            'country_id': country_vn.id if country_vn else False,
+            'tax_group_id': vat_group.id,
+            'active': True,
+        })
+
+    def _get_or_create_product(self, code, name, unit_name, cost=0.0, product_type="consu", purchase_ok=True, sale_ok=False, tax_amount=None):
         """
         Tìm hoặc tạo mới sản phẩm dựa trên mã.
         Nếu tìm thấy → CẬP NHẬT: tên (từ MISA).
         """
-        code = code.strip()
-        name = name.strip()
+        code = (code or "").strip()
+        name = (name or "").strip()
+        if not code:
+            return False
+
         product = self.env["product.product"].search([("default_code", "=", code)], limit=1)
         
+        # Chuẩn bị thuế nếu có tax_amount
+        tax_ids = []
+        if tax_amount is not None:
+            try:
+                rate = float(tax_amount)
+                tax = self._get_or_create_vn_vat(rate, use='sale')
+                if tax:
+                    tax_ids = [(6, 0, [tax.id])]
+            except (ValueError, TypeError):
+                pass
+
         if product:
             # ✅ CẬP NHẬT tên từ MISA nếu khác
             tmpl = product.product_tmpl_id
+            vals_upd = {}
             if tmpl.name != name:
-                tmpl.write({'name': name})
-                _logger.info("📝 Cập nhật tên sản phẩm %s: '%s' → '%s'", code, tmpl.name, name)
+                vals_upd['name'] = name
+            
+            # Cập nhật thuế nếu truyền vào
+            if tax_ids and not tmpl.taxes_id:
+                vals_upd['taxes_id'] = tax_ids
+                _logger.info("💰 Cập nhật thuế cho sản phẩm %s: %s%%", code, tax_amount)
+
+            if vals_upd:
+                tmpl.write(vals_upd)
+                _logger.info("📝 Cập nhật sản phẩm %s: %s", code, vals_upd.keys())
             else:
                 _logger.info("🔁 Sản phẩm %s đã tồn tại và không thay đổi", code)
             
@@ -71,7 +165,7 @@ class OdooUtils(models.AbstractModel):
 
         # Tạo mới nếu chưa có
         uom = self._get_or_create_uom(unit_name)
-        tmpl = self.env["product.template"].create({
+        vals_create = {
             "name": name,
             "default_code": code,
             "type": product_type,
@@ -81,8 +175,12 @@ class OdooUtils(models.AbstractModel):
             "purchase_ok": purchase_ok,
             "sale_ok": sale_ok,
             "is_storable": True
-        })
-        _logger.info("🆕 Tạo sản phẩm %s với UOM: %s", code, uom.name)
+        }
+        if tax_ids:
+            vals_create["taxes_id"] = tax_ids
+
+        tmpl = self.env["product.template"].create(vals_create)
+        _logger.info("🆕 Tạo sản phẩm %s với UOM: %s, VAT: %s%%", code, uom.name, tax_amount)
         return tmpl.product_variant_id
     
     

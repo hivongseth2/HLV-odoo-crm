@@ -1289,6 +1289,17 @@ class MisaApiUtils(models.AbstractModel):
                 if found_uom:
                     uom_id = found_uom.id
 
+            # Chuẩn bị thuế
+            tax_ids = []
+            if tax_percent:
+                try:
+                    # Dùng helper từ odoo_utils
+                    tax = self.env['odoo.utils'].sudo()._get_or_create_vn_vat(float(tax_percent), use='sale')
+                    if tax:
+                        tax_ids = [(6, 0, [tax.id])]
+                except Exception:
+                    pass
+
             # Chuẩn bị values
             vals = {
                 'name': name,
@@ -1297,8 +1308,15 @@ class MisaApiUtils(models.AbstractModel):
                 'type': 'consu' if str(product_type).lower() == 'goods' else 'service',
                 'is_storable': True if str(product_type).lower() == 'goods' else False,
                 'available_in_pos': True,
-                'taxes_id': [(5, 0, 0)], # Xóa thuế cũ nếu update? Hoặc kệ default? Để default thì tốt hơn.
             }
+            if tax_ids:
+                vals['taxes_id'] = tax_ids
+            else:
+                # Nếu không có thuế truyền vào, giữ default hoặc clear? 
+                # Thường là giữ default Odoo (10% hoặc 8%) nếu MISA không nói gì. 
+                # Nhưng ở đây code cũ clear, nên tôi sẽ để nó tự nhiên (không ghi đè taxes_id) 
+                # trừ khi thực sự muốn clear. 
+                pass
 
             if pos_categ:
                 vals['pos_categ_ids'] = [(6, 0, [pos_categ.id])]
