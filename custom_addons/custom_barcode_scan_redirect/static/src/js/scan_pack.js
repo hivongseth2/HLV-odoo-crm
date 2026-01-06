@@ -67,6 +67,8 @@ document.addEventListener("DOMContentLoaded", function () {
   /* --- CUSTOM LOGIC: Scanner Detection & Manual Input Handlers --- */
   let lastKeyTime = 0;
   let fastKeyCount = 0;
+  // [NEW] Semaphore to prevent double-packing (race condition)
+  let isProcessingPack = false;
 
   document.addEventListener("keydown", (e) => {
     const now = Date.now();
@@ -79,77 +81,7 @@ document.addEventListener("DOMContentLoaded", function () {
     lastKeyTime = now;
   });
 
-  // Expose handlers for manual input
-  window.handleManualQtyChange = async function (el) {
-    const qty = parseFloat(el.value);
-    if (isNaN(qty) || qty < 0) return;
 
-    const lineId = el.dataset.lineId;
-    const barcode = el.dataset.barcode;
-    const lineEl = document.querySelector(`.product-item[data-line-id="${lineId}"]`);
-    if (!lineEl) { toast.error("Không tìm thấy dòng sản phẩm"); return; }
-
-    // Get old value from data attribute (robust against focus issues)
-    // "dataset.currentQty" comes from server initial render or previous updateQty
-    let currentDone = parseFloat(el.dataset.currentQty);
-    if (isNaN(currentDone)) currentDone = 0;
-
-    // Safety check: if inputs are weird
-
-    // --- VALIDATION: Prevent Excess Input ---
-    const requiredEl = el.nextElementSibling ? el.nextElementSibling.nextElementSibling : null;
-    const required = parseFloat(requiredEl ? requiredEl.innerText : 999999);
-
-    if (qty > required) {
-      toast.error(`Không được nhập quá số lượng yêu cầu (${required})`);
-      playError();
-      el.value = currentDone; // Revert to old value
-      el.dataset.currentQty = currentDone; // Ensure dataset is sync
-      // Force Refocus and select to easy edit?
-      el.select();
-      return; // Abort update
-    }
-    // ----------------------------------------
-
-    const delta = qty - currentDone;
-    // Update old value can wait for updateQty? NO. 
-    // updateQty is async. If we don't block user, they might type again. 
-    // But we disabled input.
-    // However, if we fail to update, we should maybe revert?
-    // Let's rely on updateQty to fix the state.
-
-    if (delta !== 0) {
-      // Optimistically update old value so next change is relative to this one? 
-      // No, updateQty is async. If user types again before it finishes...?
-      // Ideally we disable input while updating.
-      el.disabled = true;
-      try {
-        await updateQty(barcode, delta, lineId);
-        // On success, updateQty refreshes the input.
-      } catch (err) {
-        console.error("Update failed", err);
-        // Revert on error
-        el.value = currentDone;
-        toast.error("Cập nhật thất bại. Vui lòng thử lại.");
-        playError();
-      } finally {
-        // If updateQty returned early due to internal error checks (which trigger toast but resolves promise)
-        // We need to verify if value actually changed or if we should revert?
-        // Actually updateQty calls setFocus/toast internally on error result.
-        // We just need to check if input is still desynced?
-        // Better yet: updateQty should THROW if result.error so we catch here.
-        // BUT updateQty is void/async. Let's make it throw or return false.
-
-        // RE-READ dataset just in case updateQty success updated it
-        if (el.dataset.currentQty) {
-          el.value = el.dataset.currentQty;
-        }
-
-        el.disabled = false;
-        el.focus(); // Keep focus?
-      }
-    }
-  };
 
   window.handleManualQtyKey = function (event, el) {
     if (event.key === 'Enter') {
@@ -181,6 +113,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (newVal < packedQty) {
       toast.warn(`Đã đóng gói ${packedQty} sản phẩm. Không được sửa nhỏ hơn số lượng đã đóng gói!`);
+      playError();
+      el.value = oldVal;
+      return;
+    }
+
+    // 2.5: Check Max Required Constraint (tránh nhập lố)
+    const requiredEl = itemEl.querySelectorAll('span')[1];
+    const required = parseFloat(requiredEl?.innerText || 0);
+
+    if (required > 0 && newVal > required) { // Chỉ check nếu có required set
+      toast.warn(`Không được nhập quá số lượng yêu cầu (${required})!`);
       playError();
       el.value = oldVal;
       return;
@@ -515,6 +458,12 @@ document.addEventListener("DOMContentLoaded", function () {
     // C. LOGIC MỚI: Xử lý mã lệnh tạo gói (CMD-CREATE-PACK hoặc AUTO-PKG-...)
     if (barcode === 'CMD-CREATE-PACK' || barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
 
+      // [Rule] Prevent Double-Submit
+      if (isProcessingPack) {
+        console.warn("Packing already in progress...");
+        return;
+      }
+
       // 1. Thu thập các dòng đã quét (qty > 0) ở danh sách bên trái
       const items = [];
       document.querySelectorAll("#product_list .product-item").forEach(el => {
@@ -549,6 +498,7 @@ document.addEventListener("DOMContentLoaded", function () {
         toast.info(`Đang tạo gói hàng tự động...`, { ms: 2000 });
       }
 
+      isProcessingPack = true; // Lock
       try {
         // 4. Gọi API tạo Partial Pack
         const res = await fetch('/pack_scan/create_partial_pack', {
@@ -608,6 +558,8 @@ document.addEventListener("DOMContentLoaded", function () {
       } catch (e) {
         toast.error("Lỗi kết nối: " + e.message);
         playError();
+      } finally {
+        isProcessingPack = false; // Unlock
       }
       return;
     }
