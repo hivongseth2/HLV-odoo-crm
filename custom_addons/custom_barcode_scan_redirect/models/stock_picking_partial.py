@@ -82,12 +82,15 @@ class StockPickingPartial(models.Model):
             
             # 1. ƯU TIÊN LẤY TỪ HÀNG LẺ (LOOSE LINES) TRƯỚC
             # Tìm tất cả line chưa đóng gói của sản phẩm này
-            loose_lines = self.env['stock.move.line'].sudo().search([
+            # [FIX] Bỏ điều kiện qty_done > 0 trong domain vì qty_done có thể không store -> Lỗi SQL
+            all_loose_lines = self.env['stock.move.line'].sudo().search([
                 ('picking_id', '=', self.id),
                 ('product_id', '=', product_id),
                 ('result_package_id', '=', False),
-                ('qty_done', '>', 0)
-            ], order='qty_done asc') # Lấy line nhỏ trước để gom gọn, hoặc desc tùy logic
+            ]) 
+            
+            # Filter và Sort bằng Python
+            loose_lines = all_loose_lines.filtered(lambda l: l.qty_done > 0).sorted(key=lambda l: l.qty_done)
             
             _logger.info(f"[PACK] Product {product_id} Need {qty_needed}. Found {len(loose_lines)} loose lines.")
 
