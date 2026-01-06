@@ -12,7 +12,6 @@ patch(PaymentScreen.prototype, {
 
         if (!partner) {
             console.log("DEBUG: No partner selected, blocking validation");
-            // Use notification instead of ErrorPopup to avoid import issues
             this.env.services.notification.add(_t('Vui lòng chọn khách hàng để thanh toán.'), {
                 type: 'danger',
                 sticky: false,
@@ -20,6 +19,28 @@ patch(PaymentScreen.prototype, {
             });
             return;
         }
+
+        // Stock validation
+        const orderLines = this.currentOrder.get_orderlines();
+        for (const line of orderLines) {
+            const product = line.get_product();
+            if (product.type === 'product') {
+                const qtyRequested = line.get_quantity();
+                const qtyAvailable = product.qty_available || 0;
+
+                if (qtyRequested > qtyAvailable) {
+                    this.env.services.notification.add(
+                        _t('Sản phẩm "%s" không đủ tồn kho (Yêu cầu: %s, Hiện có: %s).',
+                            product.display_name, qtyRequested, qtyAvailable), {
+                        type: 'danger',
+                        sticky: false,
+                        title: _t('Lỗi tồn kho'),
+                    });
+                    return;
+                }
+            }
+        }
+
         await super.validateOrder(isForceValidate);
     }
 });

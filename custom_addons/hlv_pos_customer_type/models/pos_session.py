@@ -13,6 +13,12 @@ class PosSession(models.Model):
         return result
 
     @api.model
+    def _loader_params_product_product(self):
+        result = super()._loader_params_product_product()
+        result['search_params']['fields'].extend(['qty_available', 'type'])
+        return result
+
+    @api.model
     def _loader_params_res_partner(self):
         result = super()._loader_params_res_partner()
         # Debug logging
