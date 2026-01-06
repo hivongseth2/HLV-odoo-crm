@@ -82,16 +82,22 @@ class StockPickingPartial(models.Model):
                 # không còn qty_done trên dòng nguồn; skip
                 continue
 
-            # Luôn tạo move_line mới cho package, không gán trực tiếp move_line nguồn vào package
-            # Sử dụng skip_qty_validation để bypass validation tạm thời (sẽ giảm qty_done nguồn ngay sau)
-            move_line.sudo().with_context(skip_qty_validation=True).copy({
-                'qty_done': take_qty,
-                'result_package_id': new_package.id,
-            })
+            # [OPTIMIZATION] Nếu lấy hết số lượng hiện có -> Chỉ cần gán package, KHÔNG copy
+            if take_qty == src_done:
+                move_line.sudo().with_context(skip_qty_validation=True).write({
+                    'result_package_id': new_package.id
+                })
+            else:
+                # Nếu chỉ lấy một phần -> Tách dòng (Split)
+                # 1. Tạo dòng mới cho package
+                move_line.sudo().with_context(skip_qty_validation=True).copy({
+                    'qty_done': take_qty,
+                    'result_package_id': new_package.id,
+                })
 
-            # Giảm qty_done trên dòng nguồn
-            remaining = src_done - take_qty
-            move_line.sudo().with_context(skip_qty_validation=True).write({'qty_done': remaining})
+                # 2. Giảm qty trên dòng cũ
+                remaining = src_done - take_qty
+                move_line.sudo().with_context(skip_qty_validation=True).write({'qty_done': remaining})
         
         return {
             'package_id': new_package.id,
@@ -355,6 +361,7 @@ class StockPickingPartial(models.Model):
     def update_package_item_qty(self, package_id, move_line_id, new_qty):
         """
         Cập nhật số lượng của 1 sản phẩm trong package
+        LOGIC MỚI: Nếu giảm số lượng -> Tách phần giảm ra thành hàng lẻ (Unpack), không xóa mất qty_done
         """
         self.ensure_one()
         
@@ -368,21 +375,56 @@ class StockPickingPartial(models.Model):
         if new_qty < 0:
             raise ValidationError("Số lượng không được âm!")
         
-        # Lấy move gốc để kiểm tra qty_done tối đa
-        original_move = move_line.move_id
-        if original_move:
-            # Tính tổng qty_done hiện tại từ tất cả move_line của move gốc
-            total_current_done = sum(ml.qty_done for ml in original_move.move_line_ids)
-            # Tính qty available (khôi phục lại qty_done cũ của line này để so sánh)
-            old_qty = move_line.qty_done
-            available_qty = original_move.product_uom_qty - (total_current_done - old_qty)
-            
-            if new_qty > available_qty:
-                raise ValidationError(f"⚠️ Số lượng không được vượt quá {available_qty:.2f} (tối đa cho sản phẩm này)")
-        
         old_qty = move_line.qty_done
-        move_line.with_context(skip_qty_validation=True).write({'qty_done': new_qty})
         
+        # Trường hợp tăng số lượng: kiểm tra available như cũ
+        if new_qty > old_qty:
+            # Lấy move gốc để kiểm tra qty_done tối đa
+            original_move = move_line.move_id
+            if original_move:
+                total_current_done = sum(ml.qty_done for ml in original_move.move_line_ids)
+                available_qty = original_move.product_uom_qty - (total_current_done - old_qty)
+                
+                if new_qty > available_qty:
+                    raise ValidationError(f"⚠️ Số lượng không được vượt quá {available_qty:.2f} (tối đa cho sản phẩm này)")
+            
+            move_line.with_context(skip_qty_validation=True).write({'qty_done': new_qty})
+            
+        # Trường hợp giảm số lượng: Unpack phần thừa
+        elif new_qty < old_qty:
+            diff = old_qty - new_qty
+            
+            # 1. Cập nhật dòng hiện tại trong package
+            if new_qty == 0:
+                # Nếu giảm về 0 -> Unpack toàn bộ (chỉ cần xóa result_package_id)
+                move_line.with_context(skip_qty_validation=True).write({'result_package_id': False})
+            else:
+                # Giảm dòng trong package
+                move_line.with_context(skip_qty_validation=True).write({'qty_done': new_qty})
+                
+                # 2. Tạo dòng mới cho phần thừa (Unpack)
+                # Check xem đã có dòng lẻ nào cho SP này chưa để merge? (Optional, nhưng tốt cho data)
+                # Để an toàn và đơn giản, cứ copy ra dòng mới, Odoo sẽ tự xử lý hoặc user thấy 2 dòng cũng ko sao.
+                # Nhưng tốt nhất là nên check dòng lẻ có sẵn.
+                
+                existing_loose_line = self.env['stock.move.line'].sudo().search([
+                    ('picking_id', '=', self.id),
+                    ('product_id', '=', move_line.product_id.id),
+                    ('result_package_id', '=', False),
+                    ('location_id', '=', move_line.location_id.id),
+                    ('location_dest_id', '=', move_line.location_dest_id.id),
+                ], limit=1)
+                
+                if existing_loose_line:
+                     existing_loose_line.with_context(skip_qty_validation=True).write({
+                         'qty_done': existing_loose_line.qty_done + diff
+                     })
+                else:
+                    move_line.with_context(skip_qty_validation=True).copy({
+                        'qty_done': diff,
+                        'result_package_id': False
+                    })
+
         return {
             'success': True,
             'old_qty': old_qty,
@@ -392,7 +434,7 @@ class StockPickingPartial(models.Model):
 
     def remove_package_item(self, package_id, move_line_id):
         """
-        Xoá 1 sản phẩm khỏi package (đặt qty_done = 0 và xoá result_package_id)
+        Xoá 1 sản phẩm khỏi package -> LOGIC MỚI: UNPACK (Bỏ khỏi kiện, giữ nguyên qty_done)
         """
         self.ensure_one()
         
@@ -403,15 +445,18 @@ class StockPickingPartial(models.Model):
         if move_line.result_package_id.id != package_id:
             raise ValidationError("Move line này không thuộc package này!")
         
-        # Xoá khỏi package
+        # UNPACK: Chỉ cần set result_package_id = False
         move_line.with_context(skip_qty_validation=True).write({
             'result_package_id': False,
-            'qty_done': 0
+            # 'qty_done': 0  <-- KHÔNG set về 0 nữa
         })
+        
+        # Merge vào dòng lẻ có sẵn nếu muốn đẹp data (Optional but recommended)
+        # ... (Có thể làm sau, hiện tại tách ra là được)
         
         return {
             'success': True,
-            'message': f"Đã xoá sản phẩm khỏi package"
+            'message': f"Đã bỏ sản phẩm khỏi kiện (vẫn giữ trạng thái đã quét)"
         }
 
     def transfer_package_item(self, from_package_id, to_package_id, move_line_id, qty):
