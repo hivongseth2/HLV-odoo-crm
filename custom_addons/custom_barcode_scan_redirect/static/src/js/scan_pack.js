@@ -1469,7 +1469,10 @@ async function savePackageChanges() {
         const doneEl = mainListEl.querySelector('.done');
 
         const currentDone = parseFloat(doneInput ? doneInput.value : (doneEl?.innerText || 0));
-        const newDone = Math.max(0, currentDone + delta);
+
+        // LOGIC MỚI: Nếu delta < 0 (Unpack), giữ nguyên Done (vì nó chuyển ra ngoài).
+        // Nếu delta > 0 (Thêm vào pack), tăng Done (giả sử là scan thêm).
+        const newDone = delta < 0 ? currentDone : Math.max(0, currentDone + delta);
 
         if (doneInput) {
           doneInput.value = newDone;
