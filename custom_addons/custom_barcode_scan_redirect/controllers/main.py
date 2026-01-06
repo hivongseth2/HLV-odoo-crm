@@ -412,29 +412,47 @@ class CustomBarcodeScanController(http.Controller):
                 target_ml = None # Fallback nếu ID sai
         # Nếu chưa xác định được target_ml (do line_id null hoặc sai), tự động tìm dòng phù hợp
         if not target_ml:
-            for move in moves:
-                for ml in move.move_line_ids:
-                    # Nếu đang cộng: tìm dòng chưa đủ
-                    if delta > 0:
-                        if ml.qty_done < move.product_uom_qty: # (logic đơn giản, có thể chỉnh theo demand của line)
-                            # So sánh với reserved hoặc logic phân bổ của bạn. 
-                            # Ở đây giả định muốn fill vào dòng chưa full
-                            remaining = move.product_uom_qty - sum(l.qty_done for l in move.move_line_ids)
-                            if remaining > 0:
-                                target_ml = ml
-                                break
-                    # Nếu đang trừ: tìm dòng có qty_done > 0
-                    elif delta < 0:
+            # Chiến lược tìm kiếm mới (delta > 0):
+            # 1. Tìm dòng CHƯA đóng gói (Unpacked) mà còn chỗ trống (qty_done < uom_qty)
+            # 2. Tìm dòng ĐÃ đóng gói (Packed) mà còn chỗ trống (qty_done < uom_qty)
+            # 3. Nếu không dòng nào khớp, tạo dòng mới (nếu move cho phép - logic này phức tạp, tạm thời dùng dòng có sẵn)
+            
+            if delta > 0:
+                candidates = []
+                for move in moves:
+                    for ml in move.move_line_ids:
+                        # Check if there's still capacity in this move line
+                        # We need to check against the move's product_uom_qty, as move lines often don't have their own product_uom_qty
+                        # The sum of qty_done across all move lines for a move should not exceed move.product_uom_qty
+                        current_move_total_done = sum(l.qty_done for l in move.move_line_ids)
+                        if current_move_total_done < move.product_uom_qty:
+                            candidates.append(ml)
+                            
+                # Ưu tiên dòng chưa đóng gói
+                loose_candidates = [ml for ml in candidates if not ml.result_package_id]
+                if loose_candidates:
+                    target_ml = loose_candidates[0]
+                elif candidates:
+                     # Nếu chỉ còn dòng đã đóng gói thì cộng vào đó (hoặc báo lỗi tùy logic)
+                     # HIỆN TẠI: Cho phép cộng vào, nhưng user có thể muốn tách ra?
+                     # Tốt nhất là cộng vào dòng loose nếu được. 
+                     # Nếu candidates chỉ toàn packed, có nghĩa là user đang scan thêm vào pack đó?
+                     # Hoặc user muốn scan hàng lẻ mới?
+                     # Để an toàn: Lấy dòng packed đó.
+                    target_ml = candidates[0]
+                    
+            # Nếu đang trừ: tìm dòng có qty_done > 0
+            elif delta < 0:
+                for move in moves:
+                    for ml in move.move_line_ids:
                         if ml.qty_done > 0:
                             # [VALIDATION] Check if line is already packed
+                            # CHỈ trừ dòng chưa đóng gói. Dòng đã đóng gói KHÔNG được trừ ở đây.
                             if ml.result_package_id:
-                                # Nếu đã đóng gói -> Bỏ qua dòng này (uu tiên dòng chưa đóng gói trước)
-                                # Nhưng nếu chỉ còn dòng này? Chúng ta sẽ check lại ở dưới.
                                 continue 
                             target_ml = ml
                             break
-                if target_ml:
-                    break
+                    if target_ml: break
         
         # [Fallback] Nếu chưa tìm thấy target_ml và delta < 0, có thể do TOÀN BỘ đã đóng gói
         if not target_ml and delta < 0:
