@@ -351,12 +351,28 @@ class StockPickingPartial(models.Model):
                         'qty_available': qty_available
                     })
 
+        # D. Tạo thông tin Sync UI (Để frontend tự sửa data-packed-qty)
+        sync_info = []
+        for pid, data in product_map.items():
+            total = data['total_scanned']
+            unassigned = data['unassigned_scanned']
+            packed_qty = total - unassigned
+            
+            # Chỉ gửi nếu có packed_qty (hoặc gửi hết cũng được để sync chuẩn 100%)
+            sync_info.append({
+                'product_id': pid,
+                'product_barcode': data['product_barcode'],
+                'product_sku': data['product_sku'],
+                'packed_qty': packed_qty
+            })
+
         return {
             'package_id': package.id,
             'package_name': package.name,
             'items': items,
             'other_packages': other_packages,
-            'all_items': all_items
+            'all_items': all_items,
+            'sync_info': sync_info # [NEW]
         }
     def update_package_item_qty(self, package_id, move_line_id, new_qty):
         """

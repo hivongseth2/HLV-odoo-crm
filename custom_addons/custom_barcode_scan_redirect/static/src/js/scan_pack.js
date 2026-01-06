@@ -1078,6 +1078,35 @@ async function openPackageEditModal(event) {
     currentPackageData = result;
     updateSidePanelUI(currentPackageData);
 
+    // [NEW] SELF-HEALING: Đồng bộ lại data-packed-qty từ Server về Client
+    if (result.sync_info && Array.isArray(result.sync_info)) {
+      console.log("[UI SYNC] Starting Self-Healing with server data...", result.sync_info);
+      result.sync_info.forEach(info => {
+        let targetEl = null;
+
+        // 1. Tìm theo Barcode (Ưu tiên cao nhất)
+        if (info.product_barcode) {
+          targetEl = document.querySelector(`#product_list .product-item[data-barcode="${info.product_barcode}"]`);
+        }
+
+        // 2. Tìm theo SKU (Default Code)
+        if (!targetEl && info.product_sku) {
+          targetEl = document.querySelector(`#product_list .product-item[data-default-code="${info.product_sku}"]`);
+        }
+
+        // 3. Update nếu tìm thấy
+        if (targetEl) {
+          const oldPacked = parseFloat(targetEl.getAttribute('data-packed-qty') || 0);
+          const serverPacked = parseFloat(info.packed_qty || 0);
+
+          if (Math.abs(oldPacked - serverPacked) > 0.001) {
+            console.warn(`[UI SYNC] Correction for ${info.product_sku || info.product_barcode}: Client(${oldPacked}) -> Server(${serverPacked})`);
+            targetEl.setAttribute('data-packed-qty', serverPacked);
+          }
+        }
+      });
+    }
+
     // Xử lý các trường null/undefined
     if (!Array.isArray(currentPackageData.other_packages)) {
       currentPackageData.other_packages = [];
