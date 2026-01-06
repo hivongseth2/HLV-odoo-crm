@@ -27,7 +27,7 @@
           </div>
         </div>
 
-        <div class="pack-grid" style="display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 16px; height: calc(100vh - 100px); overflow: hidden;">
+        <div class="pack-grid" style="display: grid; grid-template-columns: 1.6fr 1.4fr; gap: 16px; height: calc(100vh - 100px); overflow: hidden;">
           
           <div class="scan-wrapper card" style="height: 100%; display: flex; flex-direction: column; overflow: hidden;">
             <!-- Hidden Input for Barcode Scanner -->
@@ -79,14 +79,13 @@
 
           <div class="right-column" style="display: flex; flex-direction: column; gap: 16px; height: 100%; overflow: hidden;">
             
-            <div class="recording-pane card" style="flex: 0 0 auto; min-height: 300px; max-height: 40%;">
+            <div class="recording-pane card" style="flex: 0 0 auto; min-height: 300px; max-height: 47%;">
               <div class="rec-header">
                 <span id="recStatus" class="rec-dot">●</span>
                 <span id="recText">Đang chuẩn bị camera...</span>
-                <span id="recCountdown" class="rec-countdown" title="Tự dừng sau 5 phút">05:00</span>
+                <span id="recCountdown" class="rec-countdown" title="Tự dừng sau 15 phút">15:00</span>
               </div>
               <video id="recPreview" autoplay="autoplay" muted="muted" playsinline="playsinline" style="width: 100%; height: 100%; object-fit: cover;"></video>
-              <div class="rec-hint">Video sẽ tự upload ngầm ngay khi đang quay.</div>
             </div>
 
             <div class="pack-side-panel card" style="flex: 1; min-height: 0; background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; position: static; width: 100%;">

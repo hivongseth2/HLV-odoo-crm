@@ -96,6 +96,21 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Safety check: if inputs are weird
 
+    // --- VALIDATION: Prevent Excess Input ---
+    const requiredEl = el.nextElementSibling ? el.nextElementSibling.nextElementSibling : null;
+    const required = parseFloat(requiredEl ? requiredEl.innerText : 999999);
+
+    if (qty > required) {
+      toast.error(`Không được nhập quá số lượng yêu cầu (${required})`);
+      playError();
+      el.value = currentDone; // Revert to old value
+      el.dataset.currentQty = currentDone; // Ensure dataset is sync
+      // Force Refocus and select to easy edit?
+      el.select();
+      return; // Abort update
+    }
+    // ----------------------------------------
+
     const delta = qty - currentDone;
     // Update old value can wait for updateQty? NO. 
     // updateQty is async. If we don't block user, they might type again. 
