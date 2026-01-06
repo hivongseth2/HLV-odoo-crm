@@ -484,21 +484,51 @@ document.addEventListener("DOMContentLoaded", function () {
             method: 'call',
             params: {
               picking_id: pickingId,
-              move_line_data: items,
-              package_barcode: pkgCode
+              package_code: pkgCode,
+              items: items // list [{move_line_id, qty}]
             }
           })
         });
+
         const response = await res.json();
         const result = response.result || response;
 
-        if (result?.success) {
-          toast.success(result.message);
-          playSuccess();
+        if (result?.package_id) {
+          toast.success(`Tạo gói hàng ${result.package_name} thành công!`);
 
-          // 5. CẬP NHẬT UI: Thêm gói mới vào Side Panel ngay lập tức
+          // ============================================================
+          // [FIX] Cập nhật lại UI danh sách chính (Main List)
+          // ============================================================
+          items.forEach(item => {
+            const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
+            if (el) {
+              const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
+              const newPacked = currentPacked + item.qty;
+
+              // 1. Cập nhật data-packed-qty
+              el.setAttribute('data-packed-qty', newPacked);
+
+              // 2. Cập nhật hoặc xóa thông báo "Chưa đóng gói"
+              const input = el.querySelector(".done-input");
+              const currentDone = parseFloat(input ? input.value : (el.querySelector(".done")?.innerText || 0));
+              const unpackedQty = currentDone - newPacked;
+
+              const unpackedEl = el.querySelector('.unpacked-info');
+
+              if (unpackedQty <= 0) {
+                if (unpackedEl) unpackedEl.remove();
+              } else {
+                if (unpackedEl) {
+                  unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
+                }
+              }
+
+              // 3. Hiệu ứng báo thành công
+              highlightElement(el, "#dcfce7"); // Màu xanh nhạt
+            }
+          });
+
           renderNewPackageToPanel(result.package_id, result.package_name, items);
-
 
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
