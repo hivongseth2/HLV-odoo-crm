@@ -30,7 +30,9 @@
         <div class="pack-grid" style="display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 16px; height: calc(100vh - 100px); overflow: hidden;">
           
           <div class="scan-wrapper card" style="height: 100%; display: flex; flex-direction: column; overflow: hidden;">
-            <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus"/>
+            <!-- Hidden Input for Barcode Scanner -->
+            <input id="pack_barcode_input" placeholder="Quét mã sản phẩm..." autofocus="autofocus" 
+                   style="opacity: 0; width: 1px; height: 1px; position: absolute; top: -9999px; left: 0;"/>
 
             <ul id="product_list" class="product-list" style="flex: 1; overflow-y: auto;">
               <t t-foreach="lines" t-as="line">
@@ -49,9 +51,6 @@
                     </div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 5px;">
-                    <button class="btn-minus" 
-                            t-att-data-barcode="line.product_id.barcode" 
-                            t-att-data-line-id="ml.id">−</button>
                     
                     <div style="display: flex; align-items: center; background: #fff; border: 1px solid #ced4da; border-radius: 4px; padding: 0 4px;">
                         <input type="number" 
@@ -68,9 +67,6 @@
                         <span style="font-weight: 600; color: #666;"><t t-esc="line.product_uom_qty"/></span>
                     </div>
 
-                    <button class="btn-plus" 
-                            t-att-data-barcode="line.product_id.barcode" 
-                            t-att-data-line-id="ml.id">+</button>
                   </div>
                 </li>
               </t>
