@@ -392,8 +392,11 @@
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    overflow: hidden !important;
+    overflow-y: auto !important;
+    /* Allow scroll if content is too tall */
     height: 100% !important;
+    padding-bottom: 10px !important;
+    /* Ensure bottom padding for scroll */
 }
 
 /* Right Column: Status (Total + Lines) */
@@ -635,4 +638,218 @@
 
 .payment-screen .payment-status .amount {
     font-size: 36px !important;
+}
+
+/* =========================================
+   DESKTOP ZOOM / TABLET RESPONSIVENESS (Max-Width 1280px)
+   ========================================= */
+@media (max-width: 1280px) {
+
+    /* Compress grid slightly */
+    .pos-content .product-screen .products-widget.hlv-sidebar-layout,
+    .products-widget.hlv-sidebar-layout {
+        grid-template-columns: 200px 1fr !important;
+        /* Reduce sidebar width */
+    }
+
+    /* Adjust Sidebar Content */
+    .hlv-sidebar-layout .products-widget-control-panel .categories,
+    .hlv-sidebar-layout .products-widget-control-panel .category-list,
+    .hlv-sidebar-layout .category-list {
+        padding: 8px !important;
+    }
+
+    .category-button.hlv-clean-category,
+    .hlv-sidebar-layout .category-button {
+        font-size: 13px !important;
+        /* Smaller text */
+        padding: 6px 8px !important;
+        min-height: 50px !important;
+    }
+
+    /* Product Grid - Allow more columns */
+    .hlv-sidebar-layout .product-list {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+        gap: 12px !important;
+    }
+
+    /* Search Box */
+    .hlv-sidebar-layout .search-box input {
+        min-width: 200px !important;
+    }
+}
+
+/* =========================================
+   MOBILE RESPONSIVENESS (Max-Width 768px)
+   ========================================= */
+@media (max-width: 768px) {
+
+    /* --- PRODUCT SCREEN --- */
+
+    /* 1. Main Grid: Stack Vertically */
+    .pos-content .product-screen .products-widget.hlv-sidebar-layout,
+    .products-widget.hlv-sidebar-layout {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto auto 1fr !important;
+        /* Search, Categories, Products */
+        overflow: hidden !important;
+    }
+
+    /* 2. Order of Elements */
+
+    /* Search Bar: Top */
+    .hlv-sidebar-layout .products-widget-control-panel .search-box-container,
+    .hlv-sidebar-layout .products-widget-control-panel .search-box,
+    .hlv-sidebar-layout .search-box {
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+        padding: 8px !important;
+    }
+
+    .hlv-sidebar-layout .search-box input {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Categories: Middle Strip */
+    .hlv-sidebar-layout .products-widget-control-panel .categories,
+    .hlv-sidebar-layout .products-widget-control-panel .category-list,
+    .hlv-sidebar-layout .category-list {
+        grid-column: 1 !important;
+        grid-row: 2 !important;
+
+        width: 100% !important;
+        height: auto !important;
+        max-height: 70px !important;
+
+        flex-direction: row !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+
+        border-right: none !important;
+        border-bottom: 1px solid #e2e8f0 !important;
+        padding: 4px 8px !important;
+        white-space: nowrap !important;
+    }
+
+    /* Category Buttons in Strip */
+    .category-button.hlv-clean-category,
+    .hlv-sidebar-layout .category-button {
+        width: auto !important;
+        min-width: 100px !important;
+        height: 100% !important;
+        min-height: 40px !important;
+        margin: 0 4px !important;
+        display: inline-flex !important;
+        flex: 0 0 auto !important;
+    }
+
+    /* Products: Bottom Area */
+    .hlv-sidebar-layout .product-list-container {
+        grid-column: 1 !important;
+        grid-row: 3 !important;
+        padding: 10px !important;
+    }
+
+    .hlv-sidebar-layout .product-list {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+        /* Smaller cards */
+        gap: 10px !important;
+    }
+
+    /* Product Card adjustments */
+    .hlv-product-card .product-img,
+    .hlv-sidebar-layout .product-img {
+        height: 100px !important;
+    }
+
+
+    /* --- PAYMENT SCREEN --- */
+
+    /* 1. Stack Layout */
+    .pos-content .payment-screen {
+        flex-direction: column !important;
+        padding: 10px !important;
+        overflow-y: auto !important;
+        height: auto !important;
+        /* Allow scroll if needed on very small screens */
+        min-height: 100% !important;
+    }
+
+    /* 2. Right Content (Summary): Show first or compacted? Standard is usually summary at top or methods. 
+          Let's put Summary at top for visibility.
+    */
+    .payment-screen .payment-status-container,
+    .payment-screen .right-content {
+        order: 1 !important;
+        flex: 0 0 auto !important;
+        width: 100% !important;
+        max-height: 30vh !important;
+        /* Limit height */
+        margin-bottom: 10px !important;
+        padding: 16px !important;
+        overflow-y: auto !important;
+    }
+
+    .payment-screen .total {
+        font-size: 32px !important;
+        margin-bottom: 16px !important;
+        text-align: center !important;
+    }
+
+    /* 3. Left Content (Interaction) */
+    .payment-screen .payment-buttons-container,
+    .payment-screen .left-content {
+        order: 2 !important;
+        flex: 1 0 auto !important;
+        /* Grow interaction area */
+        width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+    }
+
+    /* Methods horizontal or smaller vertical? Keep vertical but smaller */
+    .payment-screen .paymentmethods {
+        flex-direction: row !important;
+        /* Horizontal scroll for methods? */
+        overflow-x: auto !important;
+        flex: 0 0 auto !important;
+        /* Don't grow indefinitely */
+        margin-bottom: 10px !important;
+        gap: 8px !important;
+    }
+
+    .payment-screen .paymentmethod {
+        flex: 0 0 auto !important;
+        min-width: 120px !important;
+        padding: 8px !important;
+        font-size: 13px !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        text-align: center !important;
+        height: 70px !important;
+    }
+
+    .payment-screen .paymentmethod .payment-icon {
+        margin-right: 0 !important;
+        margin-bottom: 4px !important;
+    }
+
+    /* Numpad specific */
+    .payment-screen .numpad {
+        gap: 8px !important;
+    }
+
+    .payment-screen .numpad button,
+    .payment-screen .mode-button {
+        height: 50px !important;
+        font-size: 18px !important;
+    }
+
+    .payment-screen .button.next,
+    .payment-screen .button.validate {
+        margin-top: 10px !important;
+        height: 50px !important;
+        font-size: 16px !important;
+    }
 }
