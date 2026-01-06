@@ -40,9 +40,14 @@ document.addEventListener("DOMContentLoaded", function () {
   // === SMART AUTO-FOCUS ===
   // Always keep focus on Barcode Scanner Input, unless user is typing manually
   const enforceFocus = () => {
+    // 1. Check if ANY modal is currently visible (robust check)
+    // We check for .modal-overlay that does NOT have "display: none"
+    const visibleModal = document.querySelector('.modal-overlay:not([style*="display: none"])');
+    if (visibleModal) return; // Completely disable auto-focus if a modal is open
+
     const active = document.activeElement;
-    // Allow focus if it's the Done Input, or inside a Modal, or a Button
-    if (active && (active.classList.contains('done-input') || active.closest('.modal-overlay') || active.tagName === 'BUTTON')) return;
+    // Allow focus if it's the Done Input or a Button
+    if (active && (active.classList.contains('done-input') || active.tagName === 'BUTTON')) return;
     setFocus();
   };
 
@@ -53,7 +58,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   document.addEventListener('click', (e) => {
     // If clicking safely -> ignore
-    if (e.target.classList.contains('done-input') || e.target.closest('button')) return;
+    if (e.target.classList.contains('done-input') || e.target.closest('button') || e.target.closest('.modal-overlay')) return;
     // Otherwise force focus
     setFocus();
   });
@@ -1213,10 +1218,19 @@ async function removePackageItem(moveLineId) {
       // Bước C: Thực hiện cập nhật số liệu nếu tìm thấy dòng tương ứng
       if (mainListEl) {
         // 1. Giảm số lượng hiển thị (Done)
+        // 1. Giảm số lượng hiển thị (Done)
+        const doneInput = mainListEl.querySelector('.done-input');
         const doneEl = mainListEl.querySelector('.done');
-        const currentDone = parseFloat(doneEl.innerText || 0);
+
+        const currentDone = parseFloat(doneInput ? doneInput.value : (doneEl?.innerText || 0));
         const newDone = Math.max(0, currentDone - qtyToRemove);
-        doneEl.innerText = newDone;
+
+        if (doneInput) {
+          doneInput.value = newDone;
+          doneInput.dataset.currentQty = newDone; // Sync for safety
+        } else if (doneEl) {
+          doneEl.innerText = newDone;
+        }
 
         // 2. Giảm số lượng "Đã đóng gói" (Packed Qty - dữ liệu ẩn)
         const currentPacked = parseFloat(mainListEl.getAttribute('data-packed-qty') || 0);
@@ -1369,10 +1383,20 @@ async function savePackageChanges() {
       if (mainListEl) {
         // 1. Cập nhật số lượng hiển thị (Done)
         // Delta dương = cộng thêm, Delta âm = trừ đi
+        // 1. Cập nhật số lượng hiển thị (Done)
+        // Delta dương = cộng thêm, Delta âm = trừ đi
+        const doneInput = mainListEl.querySelector('.done-input');
         const doneEl = mainListEl.querySelector('.done');
-        const currentDone = parseFloat(doneEl.innerText || 0);
+
+        const currentDone = parseFloat(doneInput ? doneInput.value : (doneEl?.innerText || 0));
         const newDone = Math.max(0, currentDone + delta);
-        doneEl.innerText = newDone;
+
+        if (doneInput) {
+          doneInput.value = newDone;
+          doneInput.dataset.currentQty = newDone; // Sync for safety
+        } else if (doneEl) {
+          doneEl.innerText = newDone;
+        }
 
         // 2. Cập nhật số lượng đã đóng gói ngầm (Packed Qty)
         // Phải cập nhật cái này để lần sau quét thêm nó tính toán đúng
