@@ -15,7 +15,6 @@
                     <group invisible="state == 'done'">
                         <field name="state" invisible="1"/>
                         <field name="sync_mode" widget="radio"/>
-                        <field name="auto_update_tax"/>
                     </group>
                     
                     <group invisible="state != 'done'">
@@ -45,10 +44,10 @@
         <field name="target">new</field>
     </record>
 
-    <!-- Menu item trong Inventory -->
-    <menuitem id="menu_misa_product_sync_stock"
-              name="Đồng bộ sản phẩm MISA"
-              parent="stock.menu_stock_root"
+    <!-- Menu item trong Point of Sale -->
+    <menuitem id="menu_misa_pos_sync"
+              name="Đồng bộ sản phẩm MISA → POS"
+              parent="point_of_sale.menu_point_config_product"
               action="action_misa_pos_sync_wizard"
               sequence="99"/>
 

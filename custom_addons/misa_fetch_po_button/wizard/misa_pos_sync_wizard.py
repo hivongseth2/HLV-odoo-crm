@@ -10,7 +10,6 @@ Chức năng:
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 import logging
-import re
 
 _logger = logging.getLogger(__name__)
 
@@ -24,9 +23,6 @@ class MisaPosProductSyncWizard(models.TransientModel):
         ('product_only', 'Chỉ gán sản phẩm vào danh mục'),
         ('full', 'Đầy đủ (Tạo danh mục + Gán sản phẩm)'),
     ], string='Chế độ đồng bộ', default='full', required=True)
-
-    auto_update_tax = fields.Boolean(string='Cập nhật thuế theo MISA', default=False,
-                                   help='Tự động tìm thuế trong Odoo theo % từ MISA và cập nhật vào sản phẩm')
     
     log_text = fields.Text(string='Kết quả', readonly=True)
     state = fields.Selection([
@@ -141,21 +137,7 @@ class MisaPosProductSyncWizard(models.TransientModel):
             categories_created = 0
             products_updated = 0
             products_skipped_not_in_pos = 0
-            products_skipped_not_in_pos = 0
             products_not_found = 0
-            products_tax_updated = 0
-            
-            # Cache taxes if needed
-            tax_map = {} # amount -> tax_id
-            if self.auto_update_tax:
-                # Lấy tất cả thuế bán ra
-                taxes = self.env['account.tax'].search([('type_tax_use', '=', 'sale')])
-                for t in taxes:
-                    # Map theo update amount (float)
-                    # Lưu ý: Có thể có nhiều thuế cùng %, ta lấy cái đầu tiên tìm thấy hoặc cần logic complex hơn
-                    # Ở đây lấy cái đầu tiên tìm thấy matching amount
-                    if t.amount not in tax_map:
-                        tax_map[t.amount] = t.id
             
             # === BƯỚC 1: TẠO DANH MỤC POS (GIỮ CẤU TRÚC PHÂN CẤP) ===
             cat_map = {}
@@ -183,17 +165,10 @@ class MisaPosProductSyncWizard(models.TransientModel):
                 # 1. LOAD TOÀN BỘ SẢN PHẨM ODOO VÀO BỘ NHỚ (Chỉ lấy field cần thiết)
                 logs.append("\n   ⏳ Đang tải danh sách sản phẩm Odoo...")
                 product_model = self.env['product.template'].sudo()
-                
-                # Domain tìm kiếm sản phẩm:
-                # Nếu update tax -> tìm tất cả sản phẩm
-                # Nếu không -> chỉ tìm sản phẩm available_in_pos
-                domain = [('default_code', '!=', False)]
-                if not self.auto_update_tax:
-                    domain.append(('available_in_pos', '=', True))
-                    
+                # Chỉ lấy sản phẩm có code và available_in_pos = True
                 odoo_products = product_model.search_read(
-                    domain,
-                    ['default_code', 'pos_categ_ids', 'taxes_id']
+                    [('default_code', '!=', False), ('available_in_pos', '=', True)],
+                    ['default_code', 'pos_categ_ids']
                 )
                 
                 # Map nhanh: Code -> Record ID & Current Categories
@@ -202,19 +177,25 @@ class MisaPosProductSyncWizard(models.TransientModel):
                     code = p['default_code'].strip()
                     odoo_map[code] = {
                         'id': p['id'],
-                        'pos_categ_ids': p['pos_categ_ids'],
-                        'taxes_id': p['taxes_id']
+                        'pos_categ_ids': p['pos_categ_ids']
                     }
                 
                 logs.append(f"   ✅ Đã tải được {len(odoo_map)} sản phẩm Odoo vào bộ nhớ.")
 
-                # 3. FETCH MISA PRODUCTS (CHỈ LẤY CỘT CẦN THIẾT)
+                # 2. FETCH MISA PRODUCTS (CHỈ LẤY CỘT CẦN THIẾT)
                 logs.append("\n   ⏳ Đang tải danh sách sản phẩm MISA (Tối ưu)...")
-                # Chỉ lấy ProductCode, ProductCategoryIDText và Tax info
-                # "ProductCode,ProductCategoryIDText,TaxID,TaxIDText"
-                # Base64: UHJvZHVjdENvZGUsUHJvZHVjdENhdGVnb3J5SURUZXh0LFRheElELFRheElEVGV4dA==
+                # Chỉ lấy ProductCode và ProductCategoryIDText
+                # Base64 encoded: ProductCode,ProductCategoryIDText
+                # Hoặc truyền trực tiếp chuỗi tên cột (không encoded) nếu API hỗ trợ, 
+                # nhưng ở đây ta dùng columns mặc định hoặc chuỗi raw. 
+                # API MISA thường nhận chuỗi tên cột phân cách dấu phẩy.
+                # Tuy nhiên, fetch_all_products mong đợi base64 nếu theo logic cũ, 
+                # nhưng ta sẽ truyền raw string để override default encoded string trong hàm đó nếu cần,
+                # hoặc đơn giản là để hàm fetch_all_products xử lý.
+                # Để an toàn và nhanh, ta dùng chuỗi cột tối thiểu: 
+                # "ProductCode,ProductCategoryIDText" -> Base64: "UHJvZHVjdENvZGUsUHJvZHVjdENhdGVnb3J5SURUZXh0"
                 
-                minimal_columns = "UHJvZHVjdENvZGUsUHJvZHVjdENhdGVnb3J5SURUZXh0LFRheElELFRheElEVGV4dA=="
+                minimal_columns = "UHJvZHVjdENvZGUsUHJvZHVjdENhdGVnb3J5SURUZXh0" # ProductCode,ProductCategoryIDText
                 misa_products = exporter.fetch_all_products(page_size=1000, columns=minimal_columns)
                 logs.append(f"   ✅ Đã tải {len(misa_products)} sản phẩm từ MISA.")
                 
@@ -241,43 +222,12 @@ class MisaPosProductSyncWizard(models.TransientModel):
                         
                     pos_cat = cat_map[cat_name.lower().strip()]
                     
-                    # Cập nhật danh mục POS
+                    # Kiểm tra xem cần update không
                     current_categ_ids = odoo_info['pos_categ_ids']
                     if pos_cat.id not in current_categ_ids:
                         product_model.browse(odoo_info['id']).write({'pos_categ_ids': [(4, pos_cat.id)]})
                         products_updated += 1
                         logs.append(f"   ✏️  {code} → {cat_name}")
-
-                    # Cập nhật thuế (nếu được chọn)
-                    if self.auto_update_tax:
-                        tax_text = str(p.get("TaxIDText") or "")
-                        # Parse số từ string, ví dụ "8.0%" hoặc "8%" -> 8.0
-                        # Regex tìm số thực
-                        nums = re.findall(r"[-+]?\d*\.\d+|\d+", tax_text)
-                        if nums:
-                            try:
-                                tax_amount = float(nums[0])
-                                # Tìm tax id trong map
-                                if tax_amount in tax_map:
-                                    new_tax_id = tax_map[tax_amount]
-                                    current_tax_ids = odoo_info['taxes_id']
-                                    
-                                    # Nếu chưa có thuế này hoặc thuế hiện tại khác (ở đây thay thế hoàn toàn nếu khác)
-                                    # Logic: Replace existing taxes with new tax if not present?
-                                    # Yêu cầu: "thực hiện cập nhật vat cho toàn bộ sản phẩm"
-                                    # -> Set thuế = thuế tìm được.
-                                    
-                                    if new_tax_id not in current_tax_ids or len(current_tax_ids) > 1:
-                                        # Chỉ update nếu khác biệt
-                                        # Ở đây ta set đè (6, 0, [ids]) để đảm bảo đúng thuế duy nhất
-                                        product_model.browse(odoo_info['id']).write({'taxes_id': [(6, 0, [new_tax_id])]})
-                                        products_tax_updated += 1
-                                        if products_updated == 0: # Tránh log duplicate nếu đã log ở trên (tuy nhiên log trên là category)
-                                            # Chúng ta nên log riêng cho rõ
-                                            pass
-                                        logs.append(f"   💰 {code} cập nhật thuế: {tax_amount}%")
-                            except:
-                                pass
                 
                 logs.append(f"\n   ✅ Đã cập nhật xong: {products_updated} sản phẩm")
                 logs.append(f"   (Không tìm thấy code tương ứng trong danh sách POS Odoo: {products_not_found})")
@@ -288,8 +238,7 @@ class MisaPosProductSyncWizard(models.TransientModel):
             logs.append("=" * 50)
             logs.append(f"📁 Danh mục POS tạo mới: {categories_created}")
             logs.append(f"📦 Sản phẩm được gán danh mục: {products_updated}")
-            logs.append(f"💰 Sản phẩm được cập nhật thuế: {products_tax_updated}")
-            logs.append(f"⏭️  Bỏ qua (chưa bật POS và không update tax): {products_skipped_not_in_pos}")
+            logs.append(f"⏭️  Bỏ qua (chưa bật POS): {products_skipped_not_in_pos}")
             logs.append(f"❌ Không tìm thấy trong Odoo: {products_not_found}")
             
         except Exception as e:
