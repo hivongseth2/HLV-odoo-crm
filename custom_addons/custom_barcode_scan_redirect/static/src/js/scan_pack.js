@@ -37,6 +37,48 @@ document.addEventListener("DOMContentLoaded", function () {
   const completeBtn = document.getElementById("complete_pack_btn");
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
+  /* --- CUSTOM LOGIC: Scanner Detection & Manual Input Handlers --- */
+  let lastKeyTime = 0;
+  let fastKeyCount = 0;
+
+  document.addEventListener("keydown", (e) => {
+    const now = Date.now();
+    // Reset count if gap is large (> 70ms implies manual typing or start of new sequence)
+    if (now - lastKeyTime < 70) {
+      fastKeyCount++;
+    } else {
+      fastKeyCount = 0;
+    }
+    lastKeyTime = now;
+  });
+
+  // Expose handlers for manual input
+  window.handleManualQtyChange = async function (el) {
+    const qty = parseFloat(el.value);
+    if (isNaN(qty) || qty < 0) return;
+
+    const lineId = el.dataset.lineId;
+    const barcode = el.dataset.barcode;
+    const lineEl = document.querySelector(`.product-item[data-line-id="${lineId}"]`);
+    if (!lineEl) { toast.error("Không tìm thấy dòng sản phẩm"); return; }
+
+    const doneEl = lineEl.querySelector(".done");
+    const currentDone = parseFloat(doneEl?.innerText || 0);
+
+    const delta = qty - currentDone;
+    if (delta !== 0) {
+      await updateQty(barcode, delta, lineId);
+    }
+  };
+
+  window.handleManualQtyKey = function (event, el) {
+    if (event.key === 'Enter') {
+      el.blur(); // Trigger change
+      setFocus(); // Focus back to barcode input
+    }
+  };
+  /* ----------------------------------------------------------- */
+
   const BARCODE_MAP_POINT_ONE = {
     "452424752161": "045242475216",//4361
     "452424752301": "045242475230", //4364
@@ -122,6 +164,13 @@ document.addEventListener("DOMContentLoaded", function () {
         const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
 
         doneEl.innerText = item.done_qty;
+
+        // Update handling for manual input if it exists
+        const inputManual = el.querySelector('.manual-qty-input');
+        if (inputManual) {
+          inputManual.value = item.done_qty; // Sync input with real value
+        }
+
         if (item.done_qty >= required) el.classList.add("completed");
         else el.classList.remove("completed");
       });
@@ -134,14 +183,34 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   list?.querySelectorAll(".btn-plus").forEach(btn =>
-    btn.addEventListener("click", () =>
-      updateQty(btn.dataset.barcode, 1, btn.dataset.lineId)
-    )
+    btn.addEventListener("click", () => {
+      const lineId = btn.dataset.lineId;
+      const lineEl = document.querySelector(`.product-item[data-line-id="${lineId}"]`);
+      const required = parseFloat(lineEl?.querySelectorAll("span")[1]?.innerText || 0);
+
+      // RESTRICTION: Qty < 10 -> Không được click
+      if (required < 10) {
+        toast.warn("Sản phẩm SL < 10: Vui lòng dùng máy quét!");
+        playError();
+        return;
+      }
+      updateQty(btn.dataset.barcode, 1, btn.dataset.lineId);
+    })
   );
   list?.querySelectorAll(".btn-minus").forEach(btn =>
-    btn.addEventListener("click", () =>
-      updateQty(btn.dataset.barcode, -1, btn.dataset.lineId)
-    )
+    btn.addEventListener("click", () => {
+      const lineId = btn.dataset.lineId;
+      const lineEl = document.querySelector(`.product-item[data-line-id="${lineId}"]`);
+      const required = parseFloat(lineEl?.querySelectorAll("span")[1]?.innerText || 0);
+
+      // RESTRICTION: Qty < 10 -> Không được click
+      if (required < 10) {
+        toast.warn("Sản phẩm SL < 10: Vui lòng dùng máy quét!");
+        playError();
+        return;
+      }
+      updateQty(btn.dataset.barcode, -1, btn.dataset.lineId);
+    })
   );
 
   completeBtn?.addEventListener("click", async function () {
@@ -236,6 +305,31 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Chuẩn hóa barcode
     const barcode = raw;
+
+    // --- CHECK RESTRICTION FOR MANUAL INPUT ---
+    // Kiểm tra nếu là barcode thường (không phải lệnh) và số lượng < 10
+    if (barcode !== 'CMD-CREATE-PACK' && !barcode.startsWith("AUTO-PKG-") && !barcode.startsWith("PACK")) {
+      // Tìm dòng sản phẩm tương ứng
+      // Lưu ý: findLineToUpdate trả về lineId (string) hoặc null
+      const lineId = findLineToUpdate(barcode);
+
+      // Nếu tìm thấy dòng cần update (chưa done), kiểm tra required qty
+      if (lineId) {
+        const lineEl = document.querySelector(`[data-line-id="${lineId}"]`);
+        if (lineEl) {
+          const required = parseFloat(lineEl.querySelectorAll("span")[1]?.innerText || 0);
+          if (required < 10) {
+            // Nếu nhập tay (fastKeyCount thấp) -> Chặn
+            if (fastKeyCount < 2) {
+              toast.warn("Sản phẩm SL < 10: Chỉ được dùng máy quét (không nhập tay)!");
+              playError();
+              return;
+            }
+          }
+        }
+      }
+    }
+    // ------------------------------------------
 
     // C. LOGIC MỚI: Xử lý mã lệnh tạo gói (CMD-CREATE-PACK hoặc AUTO-PKG-...)
     if (barcode === 'CMD-CREATE-PACK' || barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
