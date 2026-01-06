@@ -82,16 +82,22 @@ class StockPickingPartial(models.Model):
                 # không còn qty_done trên dòng nguồn; skip
                 continue
 
-            # Luôn tạo move_line mới cho package, không gán trực tiếp move_line nguồn vào package
-            # Sử dụng skip_qty_validation để bypass validation tạm thời (sẽ giảm qty_done nguồn ngay sau)
-            move_line.sudo().with_context(skip_qty_validation=True).copy({
-                'qty_done': take_qty,
-                'result_package_id': new_package.id,
-            })
+            # [OPTIMIZATION] Nếu lấy hết số lượng hiện có -> Chỉ cần gán package, KHÔNG copy
+            if take_qty == src_done:
+                move_line.sudo().with_context(skip_qty_validation=True).write({
+                    'result_package_id': new_package.id
+                })
+            else:
+                # Nếu chỉ lấy một phần -> Tách dòng (Split)
+                # 1. Tạo dòng mới cho package
+                move_line.sudo().with_context(skip_qty_validation=True).copy({
+                    'qty_done': take_qty,
+                    'result_package_id': new_package.id,
+                })
 
-            # Giảm qty_done trên dòng nguồn
-            remaining = src_done - take_qty
-            move_line.sudo().with_context(skip_qty_validation=True).write({'qty_done': remaining})
+                # 2. Giảm qty trên dòng cũ
+                remaining = src_done - take_qty
+                move_line.sudo().with_context(skip_qty_validation=True).write({'qty_done': remaining})
         
         return {
             'package_id': new_package.id,

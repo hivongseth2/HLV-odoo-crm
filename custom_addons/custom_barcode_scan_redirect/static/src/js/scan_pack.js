@@ -1124,7 +1124,6 @@ async function openPackageEditModal(event) {
               <button class="qty-btn qty-increase" data-move-line-id="${item.move_line_id}">+</button>
             </div>
             <div class="item-actions">
-              <button class="action-btn action-remove" data-move-line-id="${item.move_line_id}" title="Xóa sản phẩm">Xóa</button>
               <button class="action-btn action-transfer" data-move-line-id="${item.move_line_id}" title="Chuyển sản phẩm">Chuyển</button>
             </div>
           `;
@@ -1174,12 +1173,7 @@ async function openPackageEditModal(event) {
             item.qty_done = newQty;
           });
 
-          // 3. Remove
-          li.querySelector('.action-remove').addEventListener('click', async () => {
-            if (confirm('Bạn chắc chắn muốn xoá sản phẩm này khỏi gói?')) {
-              await removePackageItem(item.move_line_id);
-            }
-          });
+
 
           // 4. Transfer
           li.querySelector('.action-transfer').addEventListener('click', (ev) => {
@@ -1493,10 +1487,39 @@ async function savePackageChanges() {
         if (newDone >= required && required > 0) mainListEl.classList.add("completed");
         else mainListEl.classList.remove("completed");
 
+        // [NEW] Hiển thị dòng "Sản phẩm chưa đóng gói"
+        const unpackedQty = newDone - parseFloat(mainListEl.getAttribute('data-packed-qty') || 0);
+        let unpackedEl = mainListEl.querySelector('.unpacked-info');
+
+        if (unpackedQty > 0) {
+          if (!unpackedEl) {
+            unpackedEl = document.createElement('div');
+            unpackedEl.className = 'unpacked-info';
+            unpackedEl.style.cssText = "font-size: 0.8rem; color: #d97706; margin-top: 4px; font-style: italic;";
+            mainListEl.querySelector('.product-info').appendChild(unpackedEl);
+          }
+          unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
+        } else if (unpackedEl) {
+          unpackedEl.remove();
+        }
+
         // Hiệu ứng nháy vàng để báo hiệu đã update thành công
         highlightElement(mainListEl, "#ffd43b");
       } else {
         console.warn("⚠️ Không tìm thấy dòng sản phẩm bên ngoài để update ID:", change.moveLineId);
+      }
+
+      // D. Cập nhật data trong currentPackageData để đồng bộ với Side Panel
+      if (currentPackageData?.items) {
+        const itemIndex = currentPackageData.items.findIndex(i => String(i.move_line_id) === strLineId);
+        if (itemIndex > -1) {
+          currentPackageData.items[itemIndex].qty = change.newQty;
+
+          // Nếu số lượng về 0 -> Xóa khỏi list items để side panel không hiện nữa
+          if (change.newQty <= 0) {
+            currentPackageData.items.splice(itemIndex, 1);
+          }
+        }
       }
 
     } catch (err) {
