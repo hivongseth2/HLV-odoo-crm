@@ -185,24 +185,51 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function findLineToUpdate(barcode) {
-    const elements = [...document.querySelectorAll(`[data-barcode="${barcode}"]`)];
+    if (!barcode) return null;
+    const searchCode = normalizeCode(barcode).toUpperCase();
+
+    // 1. Tìm theo Barcode chính xác (Ưu tiên 1)
+    let elements = [...document.querySelectorAll(`[data-barcode="${searchCode}"]`)];
+
+    // 2. Nếu không tìm thấy, tìm theo SKU (Default Code) - Ưu tiên 2
+    // Vì có thể user scan mã SKU thay vì mã vạch
+    if (elements.length === 0) {
+      elements = [...document.querySelectorAll(`[data-default-code="${searchCode}"]`)];
+    }
+
+    // 3. Nếu vẫn không thấy, thử tìm Barcode chứa trong attribute (Fallback) - Ưu tiên 3
+    // Ví dụ barcode scan là "123456" nhưng data-barcode="0123456"
+    if (elements.length === 0) {
+      const allItems = document.querySelectorAll('.product-item');
+      for (const item of allItems) {
+        const itemBar = normalizeCode(item.dataset.barcode || '').toUpperCase();
+        if (itemBar.endsWith(searchCode) || searchCode.endsWith(itemBar)) {
+          elements.push(item);
+        }
+      }
+    }
+
     for (const el of elements) {
       // Changed: Support done-input or fallback to .done
       const input = el.querySelector(".done-input");
       const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
       const done = parseFloat(doneVal);
 
-
       // Attempt to find required element relative to input (if input exists)
       const requiredEl = input ? input.nextElementSibling.nextElementSibling : el.querySelectorAll("span")[1];
 
       const required = parseFloat(requiredEl?.innerText || 0);
 
+      // Ưu tiên dòng chưa hoàn thành
       if (done < required) {
         return el.dataset.lineId;
       }
     }
-    return null; // tất cả đã đủ
+
+    // Nếu tất cả đã đủ, trả về dòng đầu tiên tìm thấy (để cộng dồn warning hoặc dư)
+    if (elements.length > 0) return elements[0].dataset.lineId;
+
+    return null;
   }
 
   // Helper to flash element
