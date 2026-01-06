@@ -49,10 +49,10 @@
         <field name="target">new</field>
     </record>
 
-    <!-- Menu item trong Inventory > Products -->
+    <!-- Menu item trong Inventory > Operations (Hoạt động) -->
     <menuitem id="menu_misa_tax_update_stock"
               name="Cập nhật thuế MISA"
-              parent="stock.menu_stock_inventory_control"
+              parent="stock.menu_stock_warehouse_mgmt"
               action="action_misa_tax_update_wizard"
-              sequence="100"/>
+              sequence="1"/>
 </odoo>
