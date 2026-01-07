@@ -417,7 +417,7 @@
                    
                    html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
                    html += '  <div class="d-flex align-items-center">';
-                   html += '    <img src="' + imgUrl + '" class="rounded border me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
+                   html += '    <img src="' + imgUrl + '" class=" me-2 flex-shrink-0" style="width:40px; height:40px; object-fit:cover;"/>';
                    html += '    <div class="flex-grow-1 overflow-hidden">';
                    html += '      <div class="d-flex align-items-center mb-1">';
                    html += '        <div class="fw-bold text-dark text-truncate" style="font-size:0.9rem;">' + (p.default_code || '') + '</div>';
