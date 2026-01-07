@@ -192,17 +192,17 @@ class HlvChatgptSession(models.Model):
         # Thêm tin nhắn mới nhất của User
         current_content = []
         if user_query:
-            current_content.append({"type": "text", "text": user_query})
+            current_content.append({"type": "input_text", "text": user_query})
         
         if image_url:
              # Nếu chỉ gửi ảnh, thêm text mồi
              if not user_query:
-                 current_content.append({"type": "text", "text": "Hãy phân tích hình ảnh này."})
+                 current_content.append({"type": "input_text", "text": "Hãy phân tích hình ảnh này."})
              
              image_data = self._download_image_to_base64(image_url)
              if image_data:
                 current_content.append({
-                    "type": "image_url",
+                    "type": "input_image",
                     "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
                 })
              else:
