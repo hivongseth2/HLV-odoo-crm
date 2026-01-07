@@ -575,7 +575,7 @@ class HlvChatgptMessage(models.Model):
     _order = 'create_date asc'
 
     session_id = fields.Many2one('hlv.chatgpt.session', ondelete='cascade')
-    # Thêm 'tool' vào role nếu cần lưu lịch sử detailed, nhưng hiện tại chỉ lưu user/assistant
+    # Thêm 'tool' vào role nếu cần lưu lịch sử detailed, nhưng hiện tại chỉ lưu user/as
     role = fields.Selection([('user','User'),('assistant','AI'),('system','System'),('tool','Tool')], required=True)
     content = fields.Text(string="Nội dung")
     zalo_msg_id = fields.Char(string="Msg ID Zalo (Deduplication)")
