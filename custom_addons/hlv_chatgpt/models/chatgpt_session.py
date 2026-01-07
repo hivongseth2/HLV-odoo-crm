@@ -240,26 +240,50 @@ class HlvChatgptSession(models.Model):
                 return f"Lỗi gọi OpenAI: {str(e)}"
 
             # Kiểm tra Output Message
-            _logger.info("API Response Attributes: %s", dir(response))
+            # Kiểm tra Output Message
+            _logger.info("API Response Object: %s", str(response))
+            try:
+                _logger.info("API Response Dict: %s", response.to_dict())
+            except:
+                pass
             
-            # Response object của Responses API thường có cấu trúc phẳng hơn
-            # Thử lấy tool_calls từ top-level hoặc output_message (dự phòng)
-            tool_calls = getattr(response, 'tool_calls', [])
-            output_text = getattr(response, 'output_text', None)
-            
-            # Nếu không thấy ở top-level, thử tìm trong output_message (nếu có)
+            # Reset values
+            tool_calls = []
+            output_text = None
+
+            # 1. Cấu trúc có thể là response.output_message.content / tool_calls (như docs cũ/mới khác nhau)
             if hasattr(response, 'output_message') and response.output_message:
-                tool_calls = getattr(response.output_message, 'tool_calls', [])
-                content = getattr(response.output_message, 'content', '')
-                # Handle content list vs str
-                if isinstance(content, list):
-                     for c in content:
-                        if hasattr(c, 'text'):
-                            output_text = (output_text or "") + (c.text.value if hasattr(c.text, 'value') else str(c.text))
-                        elif isinstance(c, dict) and 'text' in c:
-                            output_text = (output_text or "") + c['text']
-                else:
-                    output_text = content
+                om = response.output_message
+                tool_calls = getattr(om, 'tool_calls', [])
+                output_text = getattr(om, 'content', None) # Content có thể là list hoặc str
+            
+            # 2. Hoặc cấu trúc phẳng response.tool_calls / response.output_text
+            elif hasattr(response, 'tool_calls'):
+                tool_calls = response.tool_calls
+                output_text = getattr(response, 'output_text', None)
+            
+            # 3. Hoặc cấu trúc response.choices[0].message (Chat Completion style)
+            elif hasattr(response, 'choices') and response.choices:
+                msg = response.choices[0].message
+                tool_calls = msg.tool_calls or []
+                output_text = msg.content
+
+            # Normalize output_text if it's a list (Response API specific)
+            if isinstance(output_text, list):
+                full_text = ""
+                for c in output_text:
+                    if hasattr(c, 'type') and c.type == 'text':
+                        val = c.text
+                        full_text += val.value if hasattr(val, 'value') else str(val)
+                    elif hasattr(c, 'text'):
+                         # Fallback attr check
+                         val = c.text
+                         full_text += val.value if hasattr(val, 'value') else str(val)
+                output_text = full_text
+            
+            # Normalize output_text if it is None
+            if output_text is None:
+                output_text = ""
 
             # 1. Nếu có Tool Calls -> Thực hiện
             if tool_calls:
