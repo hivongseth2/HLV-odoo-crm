@@ -136,7 +136,7 @@ TOOLS_SCHEMA = [
         "region": None,
         "timezone": None
       }
-    }
+    },
     {
       "type": "function",
       "description": "Tìm kiếm ID nhóm sản phẩm theo tên. Dùng khi người dùng yêu cầu nhóm cụ thể hoặc check nhóm.",
