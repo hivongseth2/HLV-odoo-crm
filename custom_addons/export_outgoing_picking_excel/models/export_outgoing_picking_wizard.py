@@ -847,7 +847,7 @@ class PickingExportWizard(models.TransientModel):
             # Start building dict based on NEW columns
             row = {
                 'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
-                'phuong_thuc_thanh_toan': 'Chưa thu tiền',
+                'phuong_thuc_thanh_toan': picking.x_studio_pos_payment_method or 'Chưa thu tiền',
                 'kiem_phieu_xuat_kho': 'Có',
                 'lap_kem_hoa_don': 'Không',
                 'da_lap_hoa_don': 'Chưa lập',
@@ -862,7 +862,7 @@ class PickingExportWizard(models.TransientModel):
                 'ma_khach_hang': partner_code,
                 'ten_khach_hang': partner_name,
                 'dia_chi': partner_address,
-                'ma_so_thue': '',
+                'ma_so_thue': partner_vat,
                 'don_vi_giao_dai_ly': '',
                 'nguoi_nop': '',
                 'nop_vao_tk': '',
