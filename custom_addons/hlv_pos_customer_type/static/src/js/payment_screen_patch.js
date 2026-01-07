@@ -8,15 +8,16 @@ patch(PaymentScreen.prototype, {
     async validateOrder(isForceValidate) {
         const order = this.currentOrder;
         const pos = this.pos;
-        const session = pos.pos_session;
-        const config = pos.config;
+        // Odoo 18 might use different paths. Try multiple common ones.
+        const configId = pos.config ? pos.config.id : false;
+        const session = pos.pos_session || pos.session || {};
+        const sessionId = session.id || pos.pos_session_id || false;
 
         console.log("-----------------------------------------");
         console.log(`DEBUG IDENTITY: validateOrder triggered`);
-        console.log(`DEBUG IDENTITY: Current Order: ${order ? order.name : 'NULL'} (UID: ${order ? order.uid : 'NULL'})`);
-        console.log(`DEBUG IDENTITY: Active POS Config: ${config ? config.name : 'NULL'} (ID: ${config ? config.id : 'NULL'})`);
-        console.log(`DEBUG IDENTITY: Active Session ID: ${session ? session.id : 'NULL'}`);
-        console.log(`DEBUG IDENTITY: Current User: ${pos.user ? pos.user.name : 'NULL'} (ID: ${pos.user ? pos.user.id : 'NULL'})`);
+        console.log(`DEBUG IDENTITY: Current Order: ${order ? order.name : 'NULL'}`);
+        console.log(`DEBUG IDENTITY: Active POS Config ID: ${configId}`);
+        console.log(`DEBUG IDENTITY: Active Session ID: ${sessionId}`);
 
         const partner = order.get_partner();
         if (!partner) {
@@ -30,26 +31,22 @@ patch(PaymentScreen.prototype, {
 
         // Stock validation via RPC
         const orderLines = order.get_orderlines();
-        console.log(`DEBUG IDENTITY: Total Order Lines: ${orderLines.length}`);
-
         const storableLines = orderLines.filter(l => {
             const p = l.get_product();
-            const isStorable = p.type === 'product' || p.type === 'consu';
-            console.log(`DEBUG IDENTITY:   - Line Product: ${p.display_name} (ID: ${p.id}), Type: ${p.type}, Qty: ${l.get_quantity()}`);
-            return isStorable;
+            return p.type === 'product' || p.type === 'consu';
         });
 
         if (storableLines.length > 0) {
             const productIds = storableLines.map(l => l.get_product().id);
-            const sessionId = session ? session.id : false;
 
-            console.log(`DEBUG IDENTITY: SENDING RPC - products: [${productIds.join(',')}], session: ${sessionId}`);
+            console.log(`DEBUG IDENTITY: SENDING RPC - products: [${productIds.join(',')}], session: ${sessionId}, config: ${configId}`);
 
             try {
+                // Pass both sessionId and configId for robust backend lookup
                 const stockData = await this.env.services.orm.call(
                     'pos.session',
                     'get_products_stock',
-                    [productIds, false, sessionId]
+                    [productIds, false, sessionId, configId]
                 );
 
                 console.log(`DEBUG IDENTITY: RECEIVED RPC DATA:`, stockData);
@@ -59,10 +56,7 @@ patch(PaymentScreen.prototype, {
                     const qtyRequested = line.get_quantity();
                     const qtyAvailable = (stockData && stockData[product.id] !== undefined) ? stockData[product.id] : 0;
 
-                    console.log(`DEBUG IDENTITY: FINAL CHECK - ${product.display_name}: Requested ${qtyRequested}, Available ${qtyAvailable}`);
-
                     if (qtyRequested > qtyAvailable) {
-                        console.log(`DEBUG IDENTITY: !!! BLOCKING !!! - Reason: Insufficient Stock`);
                         this.env.services.notification.add(
                             _t('Sản phẩm "%s" không đủ tồn kho (Yêu cầu: %s, Hiện có: %s).',
                                 product.display_name, qtyRequested, qtyAvailable), {
@@ -76,8 +70,6 @@ patch(PaymentScreen.prototype, {
             } catch (error) {
                 console.error("DEBUG IDENTITY: RPC FAILED", error);
             }
-        } else {
-            console.log(`DEBUG IDENTITY: Skip validation (No storable/consumable products)`);
         }
         console.log("-----------------------------------------");
 
