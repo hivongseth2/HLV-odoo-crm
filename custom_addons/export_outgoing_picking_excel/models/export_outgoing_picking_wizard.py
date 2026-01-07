@@ -832,6 +832,10 @@ class PickingExportWizard(models.TransientModel):
                 # Tax calculation rudimentary
                 if sol.tax_id:
                     tax_amount = sol.tax_id[0].amount
+            else:
+                 # Fallback to product list price if no SOL
+                 price_unit = prod.list_price
+                 price_subtotal = price_unit * qty
 
             # Computed fields
             tien_ck = (price_unit * qty * discount / 100) if discount else 0
@@ -843,10 +847,10 @@ class PickingExportWizard(models.TransientModel):
             # Start building dict based on NEW columns
             row = {
                 'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
-                'phuong_thuc_thanh_toan': picking.x_studio_pos_payment_method or 'Chưa thu tiền',
+                'phuong_thuc_thanh_toan': 'Chưa thu tiền',
                 'kiem_phieu_xuat_kho': 'Có',
-                'lap_kem_hoa_don': 'Có',
-                'da_lap_hoa_don': 'Đã lập',
+                'lap_kem_hoa_don': 'Không',
+                'da_lap_hoa_don': 'Chưa lập',
                 'ngay_hach_toan': date_str,
                 'ngay_chung_tu': date_str,
                 'so_chung_tu': so_chung_tu,
@@ -858,7 +862,7 @@ class PickingExportWizard(models.TransientModel):
                 'ma_khach_hang': partner_code,
                 'ten_khach_hang': partner_name,
                 'dia_chi': partner_address,
-                'ma_so_thue': partner_vat,
+                'ma_so_thue': '',
                 'don_vi_giao_dai_ly': '',
                 'nguoi_nop': '',
                 'nop_vao_tk': '',
@@ -975,7 +979,12 @@ class PickingExportWizard(models.TransientModel):
         if Workbook is None:
             raise UserError(_("Thiếu thư viện openpyxl. Vui lòng cài đặt 'openpyxl' cho Python."))
 
-        pickings = self.env["stock.picking"].sudo().search(self._domain(), order="scheduled_date asc, id asc")
+        domain = self._domain()
+        # Filter: Either has Group OR has POS Session (ungrouped POS orders)
+        domain.append('|')
+        domain.append(('x_studio_pos_group', '!=', False))
+        domain.append(('pos_session_id', '!=', False))
+        pickings = self.env["stock.picking"].sudo().search(domain, order="scheduled_date asc, id asc")
         if not pickings:
             raise UserError(_("Không tìm thấy phiếu xuất kho nào trong khoảng ngày đã chọn."))
 
