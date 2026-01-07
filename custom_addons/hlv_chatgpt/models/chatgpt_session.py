@@ -323,7 +323,7 @@ class HlvChatgptSession(models.Model):
                 # Append AI turn vào history
                 ai_msg_dict = {
                     "role": "assistant",
-                    "content": output_text or None, 
+                    "content": output_text or "", 
                     "tool_calls": tool_calls
                 }
                 input_messages.append(ai_msg_dict)
