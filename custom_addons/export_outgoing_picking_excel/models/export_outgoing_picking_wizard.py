@@ -848,13 +848,13 @@ class PickingExportWizard(models.TransientModel):
             ma_khach_hang = partner_code
             phuong_thuc_excel = 'Chưa thu tiền'
             
-            # Get payment method from picking field (set by hlv_pos_daily_group)
-            raw_payment_method = getattr(picking, 'x_studio_pos_payment_method', '') or ''
-            is_multiple = ',' in raw_payment_method
-            payment_method_lower = raw_payment_method.lower()
+            # Get payment method from picking field (try both possible field names)
+            raw_payment_method = getattr(picking, 'x_studio_pos_payment_method', '') or getattr(picking, 'x_studio_payment_method', '') or ''
+            is_multiple = (',' in str(raw_payment_method)) or ("kết hợp" in str(raw_payment_method).lower())
+            payment_method_lower = str(raw_payment_method).lower()
 
-            # Mapping for KBC
-            if warehouse_code == "KBC":
+            # Mapping for KBC (BENCAM)
+            if warehouse_code in ["KBC", "BENCAM"]:
                 if "tiền mặt" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013179"
                     phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
@@ -865,8 +865,8 @@ class PickingExportWizard(models.TransientModel):
                     ma_khach_hang = "KHACHLE-BC"
                     phuong_thuc_excel = "Chưa thu tiền"
             
-            # Mapping for TSN
-            elif warehouse_code == "TSN":
+            # Mapping for TSN (HCM)
+            elif warehouse_code in ["TSN", "HCM"]:
                 if "tiền mặt" in payment_method_lower and not is_multiple:
                     ma_khach_hang = "KH27182013176"
                     phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
