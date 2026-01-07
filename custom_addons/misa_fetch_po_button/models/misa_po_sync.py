@@ -557,6 +557,7 @@ class MisaPOSync(models.TransientModel):
         planned_naive_utc = _to_naive_utc(receive_date_str)
         custom_field1 = misa_po.get("custom_field1", "")  # điều khoản giao hàng
         receive_address = misa_po.get("receive_address", "")  # địa chỉ nhận hàng
+        misa_purchase_status = misa_po.get("custom_field10", "")  # trạng thái đơn mua hàng từ MISA
 
         # Chuyển refdate sang date (chỉ lấy ngày)
         misa_date = False
@@ -669,6 +670,7 @@ class MisaPOSync(models.TransientModel):
                 'x_studio_delivery_term': custom_field2 or False,
                 "x_studio_iu_kin_thanh_ton": custom_field1 or False,
                 'x_studio_ddgh': receive_address or False,
+                'x_studio_misa_purchase_status': misa_purchase_status or False,
                 
                 
                 
@@ -691,6 +693,7 @@ class MisaPOSync(models.TransientModel):
                 "x_studio_delivery_term": custom_field2 or False,
                 "x_studio_iu_kin_thanh_ton": custom_field1 or False,
                 'x_studio_ddgh': receive_address or False,
+                'x_studio_misa_purchase_status': misa_purchase_status or False,
             }
             # Skip Zalo notification during creation (because no lines yet)
             po_rec = self.env["purchase.order"].with_context(skip_zalo_po_create=True).create(po_vals)
