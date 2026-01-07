@@ -387,4 +387,8 @@ class PublicInventory(http.Controller):
                 "qty_total": qty_total,
                 "is_combo": is_combo,
             })
+        
+        # Sắp xếp theo số lượng tồn kho giảm dần
+        results.sort(key=lambda x: x['qty_total'], reverse=True)
+        
         return {"ok": True, "products": results}

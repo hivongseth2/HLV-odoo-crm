@@ -406,7 +406,14 @@
                 products.forEach(function(p) {
                    var displayName = p.name || p.default_code || '';
                    var imgUrl = p.image_url || '/web/static/img/placeholder.png';
-                   var qtyInfo = (p.qty_total > 0) ? ('<span class="badge bg-success text-white border ms-2">Tồn: ' + fmt(p.qty_total) + '</span>') : '<span class="badge bg-light text-muted border ms-2">Hết hàng</span>';
+                   var q = p.qty_total || 0;
+                   var badgeClass = 'bg-secondary';
+                   if (q > 10) badgeClass = 'bg-success';
+                   else if (q > 5) badgeClass = 'bg-info';
+                   else if (q > 0) badgeClass = 'bg-warning text-dark';
+                   
+                   var qtyInfo = (q > 0) ? ('<span class="badge ' + badgeClass + ' text-white border ms-2">Tồn: ' + fmt(q) + '</span>') : '<span class="badge bg-light text-muted border ms-2">Hết hàng</span>';
+                   if (q > 0 && q <= 5) qtyInfo = '<span class="badge ' + badgeClass + ' border ms-2">Tồn: ' + fmt(q) + '</span>';
                    
                    html += '<div class="suggestion-item border-bottom p-2" data-name="' + displayName + '" style="cursor:pointer;">';
                    html += '  <div class="d-flex align-items-center">';
