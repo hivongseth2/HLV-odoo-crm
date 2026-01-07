@@ -137,6 +137,24 @@ TOOLS_SCHEMA = [
         "timezone": None
       }
     }
+    {
+      "type": "function",
+      "description": "Tìm kiếm ID nhóm sản phẩm theo tên. Dùng khi người dùng yêu cầu nhóm cụ thể hoặc check nhóm.",
+      "name": "search_category_misa",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tên nhóm cần tìm (VD: Vật tư khí nén, Bảo hộ lao động...)"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "strict": False
+    }
 ]
 
 class HlvChatgptSession(models.Model):
@@ -325,6 +343,8 @@ class HlvChatgptSession(models.Model):
                         tool_result_str = self._execute_create_misa(args)
                     elif fname == "get_category_info":
                         tool_result_str = self._execute_get_category_info(args)
+                    elif fname == "search_category_misa":
+                        tool_result_str = self._execute_search_category_misa(args)
                     else:
                         tool_result_str = json.dumps({"error": f"Function {fname} chưa được hỗ trợ"})
                     
@@ -406,6 +426,40 @@ class HlvChatgptSession(models.Model):
         except Exception as e:
             return json.dumps({"error": str(e)})
     
+    def _execute_search_category_misa(self, args):
+        """Tool: Tìm ID nhóm từ tên"""
+        _logger.info("ℹ️ Search Category Data: %s", args)
+        name = args.get('name')
+        if not name: return json.dumps({"error": "Thiếu tên nhóm"})
+
+        try:
+            misa_utils = self.env['misa.api.utils'].sudo()
+            misa_config = self.env['misa.config'].sudo()
+            token = misa_utils._fetch_login_crm_token()
+            headers = misa_config.get_crm_header(token)
+            
+            # Gọi hàm tìm ID từ tên trong Utils
+            cat_id = misa_utils._get_category_id_by_name(headers, name)
+            
+            if cat_id:
+                # Nếu tìm thấy ID, lấy luôn tên chuẩn để trả về
+                real_name = misa_utils._get_category_name_by_id(headers, cat_id) or name
+                return json.dumps({
+                    "status": "found",
+                    "category_id": cat_id,
+                    "category_name": real_name,
+                    "message": "Tìm thấy nhóm. Hãy dùng ID này để tạo sản phẩm."
+                }, ensure_ascii=False)
+            else:
+                return json.dumps({
+                    "status": "not_found",
+                    "category_id": 2, # Fallback ID 2 (Danh mục khác)
+                    "message": "Không tìm thấy nhóm này. Có thể dùng ID 2 (DANH MỤC KHÁC) hoặc tìm lại với từ khóa khác."
+                }, ensure_ascii=False)
+
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
     def _execute_search_misa(self, args):
         """Tìm kiếm sản phẩm trong MISA (Live DB)"""
         _logger.info("🔍 MISA Search: %s", args)
