@@ -888,7 +888,7 @@ class PickingExportWizard(models.TransientModel):
                 'thanh_tien': thanh_tien,
                 'ty_le_ck': '',
                 'tien_chiet_khau': tien_ck,
-                'tk_chiet_khau': '5211', # Assuming standard
+                'tk_chiet_khau': '',
                 
                 'gia_tinh_thue_xk': '',
                 'ty_le_thue_xk': '',
