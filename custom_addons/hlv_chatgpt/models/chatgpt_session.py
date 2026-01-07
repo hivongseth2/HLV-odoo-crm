@@ -240,75 +240,81 @@ class HlvChatgptSession(models.Model):
                 return f"Lỗi gọi OpenAI: {str(e)}"
 
             # Kiểm tra Output Message
-            # Kiểm tra Output Message
             _logger.info("API Response Object: %s", str(response))
             try:
                 _logger.info("API Response Dict: %s", response.to_dict())
             except:
                 pass
             
-            # Reset values
             tool_calls = []
-            output_text = None
+            output_text = ""
 
-            # 1. Cấu trúc có thể là response.output_message.content / tool_calls (như docs cũ/mới khác nhau)
-            if hasattr(response, 'output_message') and response.output_message:
-                om = response.output_message
-                tool_calls = getattr(om, 'tool_calls', [])
-                output_text = getattr(om, 'content', None) # Content có thể là list hoặc str
-            
-            # 2. Hoặc cấu trúc phẳng response.tool_calls / response.output_text
-            elif hasattr(response, 'tool_calls'):
-                tool_calls = response.tool_calls
-                output_text = getattr(response, 'output_text', None)
-            
-            # 3. Hoặc cấu trúc response.choices[0].message (Chat Completion style)
-            elif hasattr(response, 'choices') and response.choices:
-                msg = response.choices[0].message
-                tool_calls = msg.tool_calls or []
-                output_text = msg.content
+            # API Responses v2: response.output là list các item (text generated, function call, etc)
+            if hasattr(response, 'output') and response.output:
+                for item in response.output:
+                    # 1. Text Output
+                    if hasattr(item, 'type') and item.type == 'message':
+                        # Item có thể là ResponseMessage?
+                        # Trong log user gửi không thấy type='message' trong output list, mà là content list?
+                        # Log mẫu: output=[ResponseFileSearchToolCall(...), ResponseFunctionToolCall(...)]
+                        # Không thấy text. Có thể text nằm ở object khác hoặc user prompt chỉ trigger tool.
+                        pass
+                    
+                    # Cấu trúc khác: item có thể là content block?
+                    # Check các attribute thường gặp
+                    if hasattr(item, 'content'):
+                        # Nếu là message object
+                        pass
 
-            # Normalize output_text if it's a list (Response API specific)
-            if isinstance(output_text, list):
-                full_text = ""
-                for c in output_text:
-                    if hasattr(c, 'type') and c.type == 'text':
-                        val = c.text
-                        full_text += val.value if hasattr(val, 'value') else str(val)
-                    elif hasattr(c, 'text'):
-                         # Fallback attr check
-                         val = c.text
-                         full_text += val.value if hasattr(val, 'value') else str(val)
-                output_text = full_text
+                    # 2. Function Call (Tool)
+                    if hasattr(item, 'type') and item.type == 'function_call':
+                        # Map ResponseFunctionToolCall -> Standard Tool Call dict
+                        tool_calls.append({
+                            "id": item.call_id, # Lưu ý: dùng call_id (call_...) chứ không phải id (fc_...)
+                            "type": "function",
+                            "function": {
+                                "name": item.name,
+                                "arguments": item.arguments
+                            }
+                        })
+                    
+                    # 3. Text content (nếu item là text object?)
+                    # Hiện tại chưa thấy mẫu text object trong log, nhưng nếu có sẽ xử lý sau.
+                    # Nếu output là list các 'ResponseInputText' hay tương tự?
             
-            # Normalize output_text if it is None
-            if output_text is None:
-                output_text = ""
+            # Fallback (Phòng hờ trường hợp cũ hoặc cấu trúc khác)
+            if not tool_calls and not output_text:
+                # Code cũ của output_message / tool_calls / output_text flat
+                flat_tool_calls = getattr(response, 'tool_calls', [])
+                if flat_tool_calls:
+                   for tc in flat_tool_calls:
+                       tool_calls.append({
+                           "id": tc.id,
+                           "type": tc.type,
+                           "function": {
+                               "name": tc.function.name,
+                               "arguments": tc.function.arguments
+                           }
+                       })
+                
+                flat_text = getattr(response, 'output_text', None)
+                if flat_text: output_text = flat_text
 
             # 1. Nếu có Tool Calls -> Thực hiện
             if tool_calls:
-                # Append AI turn vào history (để AI biết mình vừa gọi tool gì)
+                # Append AI turn vào history
                 ai_msg_dict = {
                     "role": "assistant",
-                    "content": output_text, 
-                    "tool_calls": [
-                        {
-                            "id": tc.id,
-                            "type": tc.type,
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments
-                            }
-                        } for tc in tool_calls
-                    ]
+                    "content": output_text or None, 
+                    "tool_calls": tool_calls
                 }
                 input_messages.append(ai_msg_dict)
 
                 # Thực hiện từng Tool
-                for tool in tool_calls:
-                    fname = tool.function.name
-                    call_id = tool.id
-                    args = json.loads(tool.function.arguments or '{}')
+                for tc in tool_calls:
+                    fname = tc['function']['name']
+                    call_id = tc['id']
+                    args = json.loads(tc['function']['arguments'] or '{}')
                     
                     _logger.info("⚡ Tool Call: %s | Args: %s", fname, str(args))
                     tool_result_str = ""
