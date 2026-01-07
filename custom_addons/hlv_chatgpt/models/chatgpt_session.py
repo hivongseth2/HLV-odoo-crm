@@ -240,24 +240,33 @@ class HlvChatgptSession(models.Model):
                 return f"Lỗi gọi OpenAI: {str(e)}"
 
             # Kiểm tra Output Message
-            # Response object có cấu trúc output_message (message generated)
-            if not response.output_message:
-                 _logger.warning("API trả về rỗng.")
-                 return "AI không phản hồi."
+            _logger.info("API Response Attributes: %s", dir(response))
+            
+            # Response object của Responses API thường có cấu trúc phẳng hơn
+            # Thử lấy tool_calls từ top-level hoặc output_message (dự phòng)
+            tool_calls = getattr(response, 'tool_calls', [])
+            output_text = getattr(response, 'output_text', None)
+            
+            # Nếu không thấy ở top-level, thử tìm trong output_message (nếu có)
+            if hasattr(response, 'output_message') and response.output_message:
+                tool_calls = getattr(response.output_message, 'tool_calls', [])
+                content = getattr(response.output_message, 'content', '')
+                # Handle content list vs str
+                if isinstance(content, list):
+                     for c in content:
+                        if hasattr(c, 'text'):
+                            output_text = (output_text or "") + (c.text.value if hasattr(c.text, 'value') else str(c.text))
+                        elif isinstance(c, dict) and 'text' in c:
+                            output_text = (output_text or "") + c['text']
+                else:
+                    output_text = content
 
-            output_msg = response.output_message
-            
-            # Thêm message của AI vào history cho lượt gọi sau (nếu cần loop tool)
-            # Lưu ý: `output_msg` là object, cần convert sang dict nếu append vào input_messages request
-            # SDK OpenAI python thường trả về object pydantic.
-            
             # 1. Nếu có Tool Calls -> Thực hiện
-            if output_msg.tool_calls:
+            if tool_calls:
                 # Append AI turn vào history (để AI biết mình vừa gọi tool gì)
-                # Cần format đúng chuẩn message cho 'input'
                 ai_msg_dict = {
                     "role": "assistant",
-                    "content": output_msg.content, # Text content nếu có (thường là None hoặc text dẫn)
+                    "content": output_text, 
                     "tool_calls": [
                         {
                             "id": tc.id,
@@ -266,13 +275,13 @@ class HlvChatgptSession(models.Model):
                                 "name": tc.function.name,
                                 "arguments": tc.function.arguments
                             }
-                        } for tc in output_msg.tool_calls
+                        } for tc in tool_calls
                     ]
                 }
                 input_messages.append(ai_msg_dict)
 
                 # Thực hiện từng Tool
-                for tool in output_msg.tool_calls:
+                for tool in tool_calls:
                     fname = tool.function.name
                     call_id = tool.id
                     args = json.loads(tool.function.arguments or '{}')
@@ -300,20 +309,8 @@ class HlvChatgptSession(models.Model):
                 continue
             
             else:
-                # 2. Nếu không có Tool Call -> Đây là câu trả lời cuối cùng (Final Response)
-                text_content = ""
-                # output_msg.content có thể là list hoặc str hoặc None
-                if output_msg.content:
-                    if isinstance(output_msg.content, list):
-                        for c in output_msg.content:
-                            if hasattr(c, 'text'):
-                                text_content += c.text.value if hasattr(c.text, 'value') else str(c.text)
-                            elif isinstance(c, dict) and 'text' in c:
-                                text_content += c['text']
-                    else:
-                        text_content = str(output_msg.content)
-                
-                final_response_text = text_content
+                # 2. Nếu không có Tool Call -> Đây là câu trả lời cuối cùng
+                final_response_text = output_text
                 break
 
         # Xóa các ký tự tham chiếu rác (VD: 【4:0†source】) của File Search
