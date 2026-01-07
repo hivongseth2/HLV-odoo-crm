@@ -363,7 +363,7 @@ class PickingExportWizard(models.TransientModel):
         return {
             # Hardcoded fields
             'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
-            'phuong_thuc_thanh_toan': picking.x_studio_pos_payment_method or 'Chưa thu tiền',
+            'phuong_thuc_thanh_toan': 'Chưa thu tiền',
             # 3 cột mới từ sale.order (đặt ngay sau phương thức thanh toán)
             'hinh_thuc_giao_hang': getattr(so, 'x_studio_htgh', '') if so else '',
             'hinh_thuc_thanh_toan_so': getattr(so, 'x_studio_httt', '') if so else '',
@@ -844,10 +844,43 @@ class PickingExportWizard(models.TransientModel):
             
             tien_thue = (thanh_tien * tax_amount / 100) if tax_amount else 0
             
+            # Mapping logic based on warehouse and payment method
+            ma_khach_hang = partner_code
+            phuong_thuc_excel = 'Chưa thu tiền'
+            
+            # Get payment method from picking field (set by hlv_pos_daily_group)
+            raw_payment_method = getattr(picking, 'x_studio_pos_payment_method', '') or ''
+            is_multiple = ',' in raw_payment_method
+            payment_method_lower = raw_payment_method.lower()
+
+            # Mapping for KBC
+            if warehouse_code == "KBC":
+                if "tiền mặt" in payment_method_lower and not is_multiple:
+                    ma_khach_hang = "KH27182013179"
+                    phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                elif "chuyển khoản" in payment_method_lower and not is_multiple:
+                    ma_khach_hang = "KH27182013178"
+                    phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                elif is_multiple:
+                    ma_khach_hang = "KHACHLE-BC"
+                    phuong_thuc_excel = "Chưa thu tiền"
+            
+            # Mapping for TSN
+            elif warehouse_code == "TSN":
+                if "tiền mặt" in payment_method_lower and not is_multiple:
+                    ma_khach_hang = "KH27182013176"
+                    phuong_thuc_excel = "Thu tiền ngay - Tiền mặt"
+                elif "chuyển khoản" in payment_method_lower and not is_multiple:
+                    ma_khach_hang = "KH27182013177"
+                    phuong_thuc_excel = "Thu tiền ngay - Chuyển khoản"
+                elif is_multiple:
+                    ma_khach_hang = "KHACHLE-HCM"
+                    phuong_thuc_excel = "Chưa thu tiền"
+
             # Start building dict based on NEW columns
             row = {
                 'hinh_thuc_ban_hang': 'Bán hàng hóa trong nước',
-                'phuong_thuc_thanh_toan': picking.x_studio_pos_payment_method or 'Chưa thu tiền',
+                'phuong_thuc_thanh_toan': phuong_thuc_excel,
                 'kiem_phieu_xuat_kho': 'Có',
                 'lap_kem_hoa_don': 'Không',
                 'da_lap_hoa_don': 'Chưa lập',
@@ -859,10 +892,10 @@ class PickingExportWizard(models.TransientModel):
                 'ky_hieu_hd': '',
                 'so_hoa_don': '', # Customize if needed
                 'ngay_hoa_don': '',
-                'ma_khach_hang': partner_code,
+                'ma_khach_hang': ma_khach_hang,
                 'ten_khach_hang': partner_name,
                 'dia_chi': partner_address,
-                'ma_so_thue': partner_vat,
+                'ma_so_thue': '',
                 'don_vi_giao_dai_ly': '',
                 'nguoi_nop': '',
                 'nop_vao_tk': '',
@@ -887,8 +920,8 @@ class PickingExportWizard(models.TransientModel):
                 'don_gia': price_unit,
                 'thanh_tien': thanh_tien,
                 'ty_le_ck': '',
-                'tien_chiet_khau': tien_ck,
-                'tk_chiet_khau': '5211', # Assuming standard
+                'tien_chiet_khau': string_tien_ck if 'string_tien_ck' in locals() else tien_ck, # Fixed if needed, but original used tien_ck
+                'tk_chiet_khau': '',
                 
                 'gia_tinh_thue_xk': '',
                 'ty_le_thue_xk': '',
