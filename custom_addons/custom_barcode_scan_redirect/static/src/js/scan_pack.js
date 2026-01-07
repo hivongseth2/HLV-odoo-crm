@@ -67,6 +67,8 @@ document.addEventListener("DOMContentLoaded", function () {
   /* --- CUSTOM LOGIC: Scanner Detection & Manual Input Handlers --- */
   let lastKeyTime = 0;
   let fastKeyCount = 0;
+  // [NEW] Semaphore to prevent double-packing (race condition)
+  let isProcessingPack = false;
 
   document.addEventListener("keydown", (e) => {
     const now = Date.now();
@@ -79,77 +81,7 @@ document.addEventListener("DOMContentLoaded", function () {
     lastKeyTime = now;
   });
 
-  // Expose handlers for manual input
-  window.handleManualQtyChange = async function (el) {
-    const qty = parseFloat(el.value);
-    if (isNaN(qty) || qty < 0) return;
 
-    const lineId = el.dataset.lineId;
-    const barcode = el.dataset.barcode;
-    const lineEl = document.querySelector(`.product-item[data-line-id="${lineId}"]`);
-    if (!lineEl) { toast.error("Không tìm thấy dòng sản phẩm"); return; }
-
-    // Get old value from data attribute (robust against focus issues)
-    // "dataset.currentQty" comes from server initial render or previous updateQty
-    let currentDone = parseFloat(el.dataset.currentQty);
-    if (isNaN(currentDone)) currentDone = 0;
-
-    // Safety check: if inputs are weird
-
-    // --- VALIDATION: Prevent Excess Input ---
-    const requiredEl = el.nextElementSibling ? el.nextElementSibling.nextElementSibling : null;
-    const required = parseFloat(requiredEl ? requiredEl.innerText : 999999);
-
-    if (qty > required) {
-      toast.error(`Không được nhập quá số lượng yêu cầu (${required})`);
-      playError();
-      el.value = currentDone; // Revert to old value
-      el.dataset.currentQty = currentDone; // Ensure dataset is sync
-      // Force Refocus and select to easy edit?
-      el.select();
-      return; // Abort update
-    }
-    // ----------------------------------------
-
-    const delta = qty - currentDone;
-    // Update old value can wait for updateQty? NO. 
-    // updateQty is async. If we don't block user, they might type again. 
-    // But we disabled input.
-    // However, if we fail to update, we should maybe revert?
-    // Let's rely on updateQty to fix the state.
-
-    if (delta !== 0) {
-      // Optimistically update old value so next change is relative to this one? 
-      // No, updateQty is async. If user types again before it finishes...?
-      // Ideally we disable input while updating.
-      el.disabled = true;
-      try {
-        await updateQty(barcode, delta, lineId);
-        // On success, updateQty refreshes the input.
-      } catch (err) {
-        console.error("Update failed", err);
-        // Revert on error
-        el.value = currentDone;
-        toast.error("Cập nhật thất bại. Vui lòng thử lại.");
-        playError();
-      } finally {
-        // If updateQty returned early due to internal error checks (which trigger toast but resolves promise)
-        // We need to verify if value actually changed or if we should revert?
-        // Actually updateQty calls setFocus/toast internally on error result.
-        // We just need to check if input is still desynced?
-        // Better yet: updateQty should THROW if result.error so we catch here.
-        // BUT updateQty is void/async. Let's make it throw or return false.
-
-        // RE-READ dataset just in case updateQty success updated it
-        if (el.dataset.currentQty) {
-          el.value = el.dataset.currentQty;
-        }
-
-        el.disabled = false;
-        el.focus(); // Keep focus?
-      }
-    }
-  };
 
   window.handleManualQtyKey = function (event, el) {
     if (event.key === 'Enter') {
@@ -157,6 +89,64 @@ document.addEventListener("DOMContentLoaded", function () {
       setFocus(); // Focus back to barcode input
     }
   };
+
+  /**
+   * [NEW] Validate Manual Input
+   * - Prevent negative
+   * - Prevent reducing below Packed Qty
+   */
+  window.handleManualQtyChange = async function (el) {
+    const newVal = parseFloat(el.value);
+    const oldVal = parseFloat(el.dataset.currentQty || 0); // Value before change (from dataset)
+
+    // 1. Check Negative
+    if (isNaN(newVal) || newVal < 0) {
+      toast.warn("Số lượng không được nhỏ hơn 0");
+      playError();
+      el.value = oldVal;
+      return;
+    }
+
+    // 2. Check Packed Constraint
+    const itemEl = el.closest('.product-item');
+    const packedQty = parseFloat(itemEl ? itemEl.getAttribute('data-packed-qty') : 0) || 0;
+
+    if (newVal < packedQty) {
+      toast.warn(`Đã đóng gói ${packedQty} sản phẩm. Không được sửa nhỏ hơn số lượng đã đóng gói!`);
+      playError();
+      el.value = oldVal;
+      return;
+    }
+
+    // 2.5: Check Max Required Constraint (tránh nhập lố)
+    const maxQty = parseFloat(el.dataset.maxQty || 0);
+
+    if (maxQty > 0 && newVal > maxQty) { // Chỉ check nếu có maxQty set
+      toast.warn(`Không được nhập quá số lượng yêu cầu (${maxQty})!`);
+      playError();
+      el.value = oldVal;
+      return;
+    }
+
+    const delta = newVal - oldVal;
+    if (delta === 0) return;
+
+    // 3. Call Server to Update
+    const barcode = el.dataset.barcode; // Prefer barcode if available
+    const lineId = el.dataset.lineId;   // Or Line ID
+
+    try {
+      // Pass lineId as explicit target
+      await updateQty(barcode, delta, lineId);
+      // Success: updateQty calls savePackageChanges -> updates UI & dataset.currentQty
+    } catch (e) {
+      // Fail: Revert UI
+      // Note: updateQty already toasts error
+      console.warn("Manual update failed, reverting...", e);
+      el.value = oldVal;
+    }
+  };
+
   /* ----------------------------------------------------------- */
 
   const BARCODE_MAP_POINT_ONE = {
@@ -185,24 +175,51 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function findLineToUpdate(barcode) {
-    const elements = [...document.querySelectorAll(`[data-barcode="${barcode}"]`)];
+    if (!barcode) return null;
+    const searchCode = normalizeCode(barcode).toUpperCase();
+
+    // 1. Tìm theo Barcode chính xác (Ưu tiên 1)
+    let elements = [...document.querySelectorAll(`[data-barcode="${searchCode}"]`)];
+
+    // 2. Nếu không tìm thấy, tìm theo SKU (Default Code) - Ưu tiên 2
+    // Vì có thể user scan mã SKU thay vì mã vạch
+    if (elements.length === 0) {
+      elements = [...document.querySelectorAll(`[data-default-code="${searchCode}"]`)];
+    }
+
+    // 3. Nếu vẫn không thấy, thử tìm Barcode chứa trong attribute (Fallback) - Ưu tiên 3
+    // Ví dụ barcode scan là "123456" nhưng data-barcode="0123456"
+    if (elements.length === 0) {
+      const allItems = document.querySelectorAll('.product-item');
+      for (const item of allItems) {
+        const itemBar = normalizeCode(item.dataset.barcode || '').toUpperCase();
+        if (itemBar.endsWith(searchCode) || searchCode.endsWith(itemBar)) {
+          elements.push(item);
+        }
+      }
+    }
+
     for (const el of elements) {
       // Changed: Support done-input or fallback to .done
       const input = el.querySelector(".done-input");
       const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
       const done = parseFloat(doneVal);
 
-
       // Attempt to find required element relative to input (if input exists)
       const requiredEl = input ? input.nextElementSibling.nextElementSibling : el.querySelectorAll("span")[1];
 
       const required = parseFloat(requiredEl?.innerText || 0);
 
+      // Ưu tiên dòng chưa hoàn thành
       if (done < required) {
         return el.dataset.lineId;
       }
     }
-    return null; // tất cả đã đủ
+
+    // Nếu tất cả đã đủ, trả về dòng đầu tiên tìm thấy (để cộng dồn warning hoặc dư)
+    if (elements.length > 0) return elements[0].dataset.lineId;
+
+    return null;
   }
 
   // Helper to flash element
@@ -440,6 +457,12 @@ document.addEventListener("DOMContentLoaded", function () {
     // C. LOGIC MỚI: Xử lý mã lệnh tạo gói (CMD-CREATE-PACK hoặc AUTO-PKG-...)
     if (barcode === 'CMD-CREATE-PACK' || barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
 
+      // [Rule] Prevent Double-Submit
+      if (isProcessingPack) {
+        console.warn("Packing already in progress...");
+        return;
+      }
+
       // 1. Thu thập các dòng đã quét (qty > 0) ở danh sách bên trái
       const items = [];
       document.querySelectorAll("#product_list .product-item").forEach(el => {
@@ -474,6 +497,7 @@ document.addEventListener("DOMContentLoaded", function () {
         toast.info(`Đang tạo gói hàng tự động...`, { ms: 2000 });
       }
 
+      isProcessingPack = true; // Lock
       try {
         // 4. Gọi API tạo Partial Pack
         const res = await fetch('/pack_scan/create_partial_pack', {
@@ -497,62 +521,34 @@ document.addEventListener("DOMContentLoaded", function () {
           toast.success(`Tạo gói hàng ${result.package_name} thành công!`);
 
           // ============================================================
-          // [FIX] Cập nhật lại UI danh sách chính (Main List)
+          // [FIX] Cập nhật lại UI danh sách chính (Mới: Dùng SyncInfo từ Server)
           // ============================================================
-          if (items && items.length > 0) {
-            console.log("[UI SYNC] Packing Success. Updating Main UI...", items);
-            items.forEach(item => {
-              const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
-              if (el) {
-                const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
-                const qtyPacked = parseFloat(item.qty || 0);
-                const newPacked = currentPacked + qtyPacked;
-
-                // 1. Cập nhật data-packed-qty
-                el.setAttribute('data-packed-qty', newPacked);
-                console.log(`[UI SYNC] Updated Packed Qty for Line ${item.move_line_id}: ${currentPacked} -> ${newPacked}`);
-
-                // 2. Cập nhật hoặc xóa thông báo "Chưa đóng gói"
-                const input = el.querySelector(".done-input");
-                const currentDone = parseFloat(input ? input.value : (el.querySelector(".done")?.innerText || 0));
-                const unpackedQty = currentDone - newPacked;
-
-                const unpackedEl = el.querySelector('.unpacked-info');
-
-                if (unpackedQty <= 0.001) { // Floating point safety
-                  if (unpackedEl) unpackedEl.remove();
-                } else {
-                  if (!unpackedEl) {
-                    const newInfo = document.createElement('div');
-                    newInfo.className = 'unpacked-info';
-                    newInfo.style.cssText = "font-size: 0.8rem; color: #d97706; margin-top: 4px; font-style: italic;";
-                    const container = el.querySelector('div') || el;
-                    container.appendChild(newInfo);
-                  }
-                  // Re-query to be safe
-                  const updateInfo = el.querySelector('.unpacked-info');
-                  if (updateInfo) updateInfo.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
+          if (result.sync_info) {
+            applyServerSyncInfo(result.sync_info);
+          } else {
+            // Fallback nếu không có sync_info (Legacy)
+            // (Giữ lại logic cũ phòng khi server chưa update kịp code, nhưng nên ưu tiên sync_info)
+            if (items && items.length > 0) {
+              // ... (Logic cũ - tạm thời comment hoặc xóa nếu tự tin)
+              // Để an toàn, chỉ chạy nếu ko có sync_info
+              items.forEach(item => {
+                const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
+                if (el) {
+                  const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
+                  const qtyPacked = parseFloat(item.qty || 0);
+                  // Chỉ cộng dồn tạm thời (Optimistic), hy vọng lần sau sync sẽ chuẩn
+                  el.setAttribute('data-packed-qty', currentPacked + qtyPacked);
+                  updateUnpackedLabel(el);
                 }
-
-                // 3. Hiệu ứng báo thành công
-                highlightElement(el, "#dcfce7"); // Màu xanh nhạt
-              } else {
-                console.warn(`[UI SYNC] Could not find element for line ${item.move_line_id} to update packed qty`);
-              }
-            });
-
-            const pkgId = result.package_id;
-            const pkgName = result.package_name;
-
-            // Render preview (Optimistic)
-            renderNewPackageToPanel(pkgId, pkgName, items);
-
-            // Force fetch latest details to ensure correct IDs for Edit
-            // This is crucial because packed items have NEW IDs in backend
-            // setTimeout(() => {
-            //    fetchPackageDetailsSilent(pkgId); 
-            // }, 500);
+              });
+            }
           }
+
+          const pkgId = result.package_id;
+          const pkgName = result.package_name;
+
+          // Render preview (Optimistic)
+          renderNewPackageToPanel(pkgId, pkgName, items);
 
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
@@ -561,6 +557,8 @@ document.addEventListener("DOMContentLoaded", function () {
       } catch (e) {
         toast.error("Lỗi kết nối: " + e.message);
         playError();
+      } finally {
+        isProcessingPack = false; // Unlock
       }
       return;
     }
@@ -639,6 +637,74 @@ async function finishServerUploadSession() {
     });
   } finally {
     uploadId = null;
+  }
+}
+
+// ============================================================
+// [HELPER] AUTORITATIVE SYNC WITH SERVER
+// ============================================================
+function applyServerSyncInfo(syncInfoList) {
+  if (!Array.isArray(syncInfoList)) return;
+  console.log("[UI SYNC] Applying Server Sync Info...", syncInfoList);
+
+  syncInfoList.forEach(info => {
+    let targetEl = null;
+
+    // 1. Tìm theo Barcode (Ưu tiên cao nhất)
+    if (info.product_barcode) {
+      const code = normalizeCode(info.product_barcode).toUpperCase();
+      // [Fix] Selector cần quote nếu barcode chứa kí tự đặc biệt
+      targetEl = document.querySelector(`#product_list .product-item[data-barcode="${CSS.escape(code)}"]`) ||
+        document.querySelector(`#product_list .product-item[data-barcode="${code}"]`);
+    }
+
+    // 2. Tìm theo SKU (Default Code)
+    if (!targetEl && info.product_sku) {
+      const code = normalizeCode(info.product_sku).toUpperCase();
+      targetEl = document.querySelector(`#product_list .product-item[data-default-code="${CSS.escape(code)}"]`) ||
+        document.querySelector(`#product_list .product-item[data-default-code="${code}"]`);
+    }
+
+    // 3. Update nếu tìm thấy
+    if (targetEl) {
+      const oldPacked = parseFloat(targetEl.getAttribute('data-packed-qty') || 0);
+      const serverPacked = parseFloat(info.packed_qty || 0);
+
+      if (Math.abs(oldPacked - serverPacked) > 0.001) {
+        console.warn(`[UI SYNC] Correction for ${info.product_sku}: Client(${oldPacked}) -> Server(${serverPacked})`);
+        targetEl.setAttribute('data-packed-qty', serverPacked);
+
+        // Hiệu ứng visual báo hiệu update
+        highlightElement(targetEl, "#dbe4ff"); // Xanh dương nhạt
+      }
+
+      // Luôn update label unpacked để đảm bảo nhất quán
+      updateUnpackedLabel(targetEl);
+    }
+  });
+}
+
+function updateUnpackedLabel(el) {
+  if (!el) return;
+  const packedQty = parseFloat(el.getAttribute('data-packed-qty') || 0);
+  const input = el.querySelector(".done-input");
+  const currentDone = parseFloat(input ? input.value : (el.querySelector(".done")?.innerText || 0));
+
+  const unpackedQty = currentDone - packedQty;
+  let unpackedEl = el.querySelector('.unpacked-info');
+
+  if (unpackedQty > 0.001) {
+    if (!unpackedEl) {
+      const newInfo = document.createElement('div');
+      newInfo.className = 'unpacked-info';
+      newInfo.style.cssText = "font-size: 0.8rem; color: #d97706; margin-top: 4px; font-style: italic;";
+      const container = el.querySelector('div') || el;
+      container.appendChild(newInfo);
+      unpackedEl = newInfo;
+    }
+    unpackedEl.innerText = `⚠️ Chưa đóng gói: ${unpackedQty}`;
+  } else {
+    if (unpackedEl) unpackedEl.remove();
   }
 }
 
