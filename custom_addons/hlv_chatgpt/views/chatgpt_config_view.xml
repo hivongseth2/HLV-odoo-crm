@@ -15,7 +15,8 @@
                             <field name="api_key" password="True"/>
                         </group>
                         <group string="Cấu hình Assistant">
-                            <field name="product_manager_id" placeholder="asst_..."/>
+                            <field name="product_manager_id" placeholder="asst_..." invisible="1"/>
+                            <field name="prompt_id" placeholder="pmpt_..."/>
                         </group>
                     </group>
                 </sheet>
