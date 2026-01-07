@@ -324,7 +324,6 @@ class HlvChatgptSession(models.Model):
                 ai_msg_dict = {
                     "role": "assistant",
                     "content": output_text or "", 
-                    "tool_calls": tool_calls
                 }
                 input_messages.append(ai_msg_dict)
 
@@ -348,11 +347,10 @@ class HlvChatgptSession(models.Model):
                     else:
                         tool_result_str = json.dumps({"error": f"Function {fname} chưa được hỗ trợ"})
                     
-                    # Append Tool Output (Role: tool)
+                    # Append Tool Output (biến tấu thành User role vì API Responses không chịu tool_calls input)
                     input_messages.append({
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "content": tool_result_str
+                        "role": "user",
+                        "content": f"[System System] Executed Tool '{fname}': {tool_result_str}"
                     })
                 
                 # Loop tiếp để gửi kết quả tool lên AI
