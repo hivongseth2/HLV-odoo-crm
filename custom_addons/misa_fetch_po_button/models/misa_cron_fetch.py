@@ -79,6 +79,7 @@ class MisaCronFetch(models.Model):
                 refno = po.get("refno", "PO-MISA")
                 memo = po.get("journal_memo", "")
                 partner = odoo_utils._get_or_create_partner(supplier_name)
+                misa_purchase_status = po.get("custom_field10", "")
 
                 detail_payload = {
                     "columns": [2157, 1355, 2161, 4670, 5683, 5274, 3870, 3895, 5279, 308, 5364, 5350, 3404, 2358],
@@ -118,6 +119,7 @@ class MisaCronFetch(models.Model):
                 po_rec = self.env["purchase.order"].create({
                     "partner_id": partner.id,
                     "origin": refno,
+                    "x_studio_misa_purchase_status": misa_purchase_status or False,
                 })
 
                 for line in lines:
