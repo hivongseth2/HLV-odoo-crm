@@ -115,7 +115,7 @@
   border: 1px solid #e5e7eb;
   border-radius: 14px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  padding: 16px;
+  padding: 6px;
 }
 
 /* Inputs */
@@ -797,7 +797,7 @@
 
 .add-form {
   display: grid !important;
-  grid-template-columns:1fr auto;
+  grid-template-columns: 1fr auto;
   gap: 16px;
 }
 
@@ -1026,7 +1026,8 @@
 /* NEW: Side Panel Styles */
 .pack-side-panel {
   position: fixed;
-  left: 18px; /* Đổi từ right sang left */
+  left: 18px;
+  /* Đổi từ right sang left */
   bottom: 18px;
   width: 340px;
   background: white;
@@ -1054,7 +1055,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding:0px !important;
+  padding: 0px !important;
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
@@ -1354,7 +1355,8 @@
 @media (max-width: 768px) {
   .pack-side-panel {
     width: 360px;
-    left: 12px; /* Đổi từ right sang left cho mobile luôn */
+    left: 12px;
+    /* Đổi từ right sang left cho mobile luôn */
     bottom: 12px;
   }
 }
@@ -1372,9 +1374,11 @@
 /* Layout Grid chính - Chia 2 cột (65% - 35%) */
 .pack-grid {
   display: grid;
-  grid-template-columns: 2fr 1.2fr; /* Cột trái rộng hơn */
+  grid-template-columns: 2fr 1.2fr;
+  /* Cột trái rộng hơn */
   gap: 20px;
-  height: calc(100vh - 200px); /* Chiều cao full màn hình trừ header */
+  height: calc(100vh - 200px);
+  /* Chiều cao full màn hình trừ header */
   min-height: 600px;
 }
 
@@ -1389,7 +1393,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow: hidden; /* Để scroll nằm trong product list */
+  overflow: hidden;
+  /* Để scroll nằm trong product list */
 }
 
 /* 1. Input Barcode - Tạo thành khối riêng */
@@ -1399,7 +1404,8 @@
   border-radius: 12px;
   font-size: 16px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-  margin-bottom: 0; /* Xóa margin cũ */
+  margin-bottom: 0;
+  /* Xóa margin cũ */
   background: white;
 }
 
@@ -1409,8 +1415,10 @@
   border-radius: 12px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
   border: 1px solid #e5e7eb;
-  flex: 1; /* Chiếm hết khoảng trống còn lại */
-  overflow-y: auto; /* Scroll nội bộ */
+  flex: 1;
+  /* Chiếm hết khoảng trống còn lại */
+  overflow-y: auto;
+  /* Scroll nội bộ */
   padding: 12px;
 }
 
@@ -1422,7 +1430,8 @@
   border: 1px solid #e5e7eb;
   padding: 16px;
   margin-top: 0;
-  flex-shrink: 0; /* Không bị co lại */
+  flex-shrink: 0;
+  /* Không bị co lại */
 }
 
 /* Cột phải: Video Recording (Box 3 trong hình) */
@@ -1431,7 +1440,8 @@
   display: flex;
   flex-direction: column;
 
-  background: #1f2937; /* Màu tối cho giống khu vực camera chuyên nghiệp */
+  background: #1f2937;
+  /* Màu tối cho giống khu vực camera chuyên nghiệp */
   border: 1px solid #374151;
   color: white;
 }
@@ -1445,7 +1455,8 @@
   flex: 1;
   width: 100%;
   height: auto;
-  min-height: 0; /* Fix lỗi flex child overflow */
+  min-height: 0;
+  /* Fix lỗi flex child overflow */
   border-radius: 8px;
   background: black;
 }
@@ -1459,6 +1470,7 @@
   border: 1px solid #f3f4f6;
   margin-bottom: 8px;
 }
+
 .product-item:last-child {
   margin-bottom: 0;
 }
