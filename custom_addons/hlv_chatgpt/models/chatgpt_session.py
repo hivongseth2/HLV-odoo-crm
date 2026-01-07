@@ -244,11 +244,10 @@ class HlvChatgptSession(models.Model):
             step_count += 1
             try:
                 # Gọi API
+                # Gọi API
                 response = client.responses.create(
-                    model="gpt-4o", # Model mặc định hoặc user có thể config
                     prompt={
                         "id": prompt_id,
-                        "version": "1" # Có thể bỏ version để lấy bản mới nhất
                     },
                     input=input_messages,
                     tools=TOOLS_SCHEMA, # Định nghĩa lại Tool schema để server biết tool nào khả dụng
