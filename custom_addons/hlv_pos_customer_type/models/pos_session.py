@@ -21,42 +21,47 @@ class PosSession(models.Model):
     @api.model
     def get_products_stock(self, product_ids, warehouse_id=None):
         """
-        Lấy tồn kho thực tế của danh sách sản phẩm tại một kho cụ thể.
-        Nếu không truyền warehouse_id, tự động lấy kho từ config của session hiện tại.
+        Lấy tồn kho thực tế của danh sách sản phẩm tại địa điểm bán hàng của POS.
+        Ưu tiên lấy đúng location (Stock Location) của quầy bán hàng.
         """
         import logging
         _logger = logging.getLogger(__name__)
-        _logger.info(f"DEBUG: get_products_stock called - products: {product_ids}, warehouse: {warehouse_id}")
+        _logger.info(f"DEBUG: get_products_stock called - products: {product_ids}")
         
         res = {}
         if not product_ids:
             return res
 
-        # Nếu không có warehouse_id, cố gắng tìm từ session hiện tại
-        if not warehouse_id:
-            # Tìm session đang mở của user hiện tại
-            session = self.env['pos.session'].search([
-                ('state', '=', 'opened'),
-                ('user_id', '=', self.env.user.id)
-            ], limit=1)
-            
-            if session and session.config_id and session.config_id.picking_type_id:
-                warehouse_id = session.config_id.picking_type_id.warehouse_id.id
-                _logger.info(f"DEBUG: Identified warehouse {warehouse_id} from session {session.name}")
+        # Tìm session đang mở của user hiện tại để xác định location
+        session = self.env['pos.session'].search([
+            ('state', '=', 'opened'),
+            ('user_id', '=', self.env.user.id)
+        ], limit=1)
         
-        if not warehouse_id:
-            _logger.warning("DEBUG: Could not identify warehouse for stock check")
+        location_id = False
+        if session and session.config_id:
+            # Ưu tiên lấy địa điểm xuất kho mặc định của POS
+            if session.config_id.picking_type_id and session.config_id.picking_type_id.default_location_src_id:
+                location_id = session.config_id.picking_type_id.default_location_src_id.id
+                _logger.info(f"DEBUG: Identified location {location_id} from picking_type")
+            # Nếu không có, lấy warehouse_id (giữ logic cũ làm fallback)
+            elif not warehouse_id and session.config_id.picking_type_id:
+                warehouse_id = session.config_id.picking_type_id.warehouse_id.id
+        
+        domain = [('product_id', 'in', product_ids)]
+        
+        if location_id:
+            domain.append(('location_id', 'child_of', location_id))
+        elif warehouse_id:
+            domain.append(('location_id.warehouse_id', '=', warehouse_id))
+            domain.append(('location_id.usage', '=', 'internal'))
+        else:
+            _logger.warning("DEBUG: Could not identify warehouse or location for stock check")
             return res
             
-        # Tìm tất cả quants của các sản phẩm này tại kho (bao gồm các location con)
-        domain = [
-            ('product_id', 'in', product_ids),
-            ('location_id.warehouse_id', '=', warehouse_id),
-            ('location_id.usage', '=', 'internal')
-        ]
         # Dùng sudo để có quyền truy cập stock.quant
         quants = self.env['stock.quant'].sudo().search(domain)
-        _logger.info(f"DEBUG: Found {len(quants)} quants")
+        _logger.info(f"DEBUG: Found {len(quants)} quants for domain {domain}")
         
         for product_id in product_ids:
             product_quants = quants.filtered(lambda q: q.product_id.id == product_id)
