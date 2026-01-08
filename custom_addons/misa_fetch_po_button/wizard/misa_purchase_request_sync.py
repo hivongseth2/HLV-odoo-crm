@@ -79,7 +79,7 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
 
 
     def _find_or_create_products_from_codes(self, product_codes_text):
-        """Tìm sản phẩm từ danh sách mã phân cách bởi dấu phẩy"""
+        """Tìm hoặc tạo sản phẩm từ danh sách mã phân cách bởi dấu phẩy"""
         if not product_codes_text:
             return []
         
@@ -87,8 +87,47 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
         codes = [c.strip() for c in product_codes_text.split(',') if c.strip()]
         
         Product = self.env['product.product'].sudo()
+        OdooUtils = self.env['odoo.utils'].sudo()
+        MisaUtils = self.env['misa.api.utils'].sudo()
+        
         for code in codes:
+            # 1. Tìm trong Odoo trước
             product = Product.search([('default_code', '=', code)], limit=1)
+            
+            if not product:
+                # 2. Nếu không có, tìm thông tin từ MISA CRM
+                _logger.info("🔍 Đang tìm thông tin sản phẩm %s từ MISA...", code)
+                try:
+                    misa_products = MisaUtils.search_product_by_name(code=code, limit=1)
+                    if misa_products:
+                        m_prod = misa_products[0]
+                        m_name = m_prod.get('name') or code
+                        m_unit = m_prod.get('unit') or 'Cái'
+                        m_price = m_prod.get('price') or 0.0
+                        
+                        # Tạo mới bằng odoo.utils
+                        product = OdooUtils._get_or_create_product(
+                            code=code,
+                            name=m_name,
+                            unit_name=m_unit,
+                            cost=m_price,
+                            purchase_ok=True,
+                            sale_ok=True
+                        )
+                        _logger.info("🆕 Đã tạo sản phẩm mới từ MISA: %s (%s)", code, m_name)
+                    else:
+                        # Fallback
+                        product = OdooUtils._get_or_create_product(
+                            code=code,
+                            name=code,
+                            unit_name='Cái',
+                            purchase_ok=True,
+                            sale_ok=True
+                        )
+                except Exception as e:
+                    _logger.error("❌ Lỗi fetch sản phẩm %s: %s", code, e)
+                    product = OdooUtils._get_or_create_product(code=code, name=code, unit_name='Cái')
+
             if product:
                 product_lines.append({
                     'product_id': product.id,
@@ -96,10 +135,9 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                     'product_qty': 1.0,
                     'product_uom_id': product.uom_id.id,
                 })
-            else:
-                _logger.warning("⚠️ Không tìm thấy sản phẩm với mã: %s", code)
         
         return product_lines
+
 
     def action_sync(self):
         """Thực hiện đồng bộ Purchase Request từ MISA theo khoảng ngày"""
