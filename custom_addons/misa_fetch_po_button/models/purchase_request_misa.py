@@ -50,8 +50,8 @@ class PurchaseRequestMisa(models.Model):
     def _get_purchase_request_payload_by_code(self, purchase_request_no):
         """Tạo payload để tìm Purchase Request theo mã"""
         import uuid
-        # Base64 decoded: ID,PurchaseRequestNo,RequestDate,OwnerID,OwnerIDText,ProcessStatusID,ProcessStatusIDText,PurchaseStatusID,PurchaseStatusIDText,ListProductID,ListProductIDText,FormLayoutID,FormLayoutIDText,ProcessID,URLViewProcess,SaleOrderIDText
-        columns_b64 = "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsUHJvY2Vzc0lELFVSTFZpZXdQcm9jZXNzLFNhbGVPcmRlcklEVGV4dA=="
+        # Base64 decoded: ID,PurchaseRequestNo,RequestDate,OwnerID,OwnerIDText,ProcessStatusID,ProcessStatusIDText,PurchaseStatusID,PurchaseStatusIDText,ListProductID,ListProductIDText,FormLayoutID,FormLayoutIDText,ProcessID,URLViewProcess,SaleOrderIDText,DeliveryAddress
+        columns_b64 = "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsUHJvY2Vzc0lELFVSTFZpZXdQcm9jZXNzLFNhbGVPcmRlcklEVGV4dCxEZWxpdmVyeUFkZHJlc3M="
         return {
             "Columns": columns_b64,
             "Sorts": [
@@ -230,6 +230,22 @@ class PurchaseRequestMisa(models.Model):
             owner_text = pr_data.get("OwnerIDText") or ""
             product_codes = pr_data.get("ListProductIDText") or ""
             sale_order_text = pr_data.get("SaleOrderIDText") or ""
+            delivery_address = pr_data.get("DeliveryAddress") or ""
+            
+            # Logic mapping Picking Type (Phiếu lấy hàng)
+            # Default ID 9: Kho Tân Sơn Nhì: Phiếu nhập kho
+            picking_type_id = 9
+            
+            if delivery_address:
+                addr_upper = delivery_address.upper()
+                
+                # Kho Bến Cam (ID 17)
+                if any(k in addr_upper for k in ["BẾN CAM", "BEN CAM", "BENCAM"]):
+                    picking_type_id = 17
+                
+                # Kho Tân Sơn Nhì (ID 9)
+                elif any(k in addr_upper for k in ["HCM", "TSN", "TÂN SƠN NHÌ", "TAN SON NHI", "HỒ CHÍ MINH", "HO CHI MINH"]):
+                    picking_type_id = 9
             
             request_date = None
             if request_date_str:
@@ -246,6 +262,7 @@ class PurchaseRequestMisa(models.Model):
                     'misa_requester_text': owner_text,
                     'requested_by': odoo_user_id,
                     'origin': sale_order_text,
+                    'picking_type_id': picking_type_id,
                 }
                 if request_date:
                     vals['date_start'] = request_date
@@ -264,6 +281,7 @@ class PurchaseRequestMisa(models.Model):
                     'assigned_to': self._get_default_approver(),
                     'state': 'to_approve',
                     'origin': sale_order_text,
+                    'picking_type_id': picking_type_id,
                 }
 
                 new_pr = self.create(vals)
