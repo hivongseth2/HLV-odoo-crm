@@ -199,19 +199,45 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
             while True:
                 payload = self._get_purchase_request_payload(start_datetime, end_datetime, page)
                 
+                # Log payload để debug
+                _logger.info("📤 Request payload: %s", payload)
+                
                 try:
                     response = requests.post(api_url, headers=headers, json=payload, timeout=60)
+                    
+                    # Log response status
+                    logs.append(f"\n📡 API Response Status: {response.status_code}")
+                    _logger.info("📡 API Response Status: %s", response.status_code)
+                    
                     response.raise_for_status()
                     data = response.json()
+                    
+                    # Log response details
+                    total = data.get("Total", 0)
+                    page_count_api = data.get("PageCount", 0)
+                    code = data.get("Code", "N/A")
+                    success = data.get("Success", "N/A")
+                    
+                    logs.append(f"📊 Response - Code: {code}, Success: {success}, Total: {total}, PageCount: {page_count_api}")
+                    _logger.info("📊 Response: Code=%s Success=%s Total=%s PageCount=%s", code, success, total, page_count_api)
+                    
+                    # Log raw response nếu không có data
+                    if not data.get("Data"):
+                        logs.append(f"⚠️ Raw response keys: {list(data.keys())}")
+                        _logger.warning("⚠️ No Data in response. Keys: %s", list(data.keys()))
+                    
                 except Exception as e:
                     logs.append(f"❌ Lỗi khi gọi API: {e}")
+                    _logger.exception("❌ API Error: %s", e)
                     break
                 
                 requests_data = data.get("Data", [])
                 if not requests_data:
                     if page == 1:
                         logs.append("\n⚠️ Không tìm thấy yêu cầu mua hàng nào trong khoảng thời gian này")
+                        logs.append("💡 Thử mở rộng khoảng ngày hoặc kiểm tra lại MISA CRM")
                     break
+
                 
                 logs.append(f"\n📄 Trang {page}: {len(requests_data)} yêu cầu")
                 total_fetched += len(requests_data)
