@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Inherit tree view để thêm cột requested_by (giờ là Char) -->
+    <record id="view_purchase_request_tree_misa" model="ir.ui.view">
+        <field name="name">purchase.request.tree.misa</field>
+        <field name="model">purchase.request</field>
+        <field name="inherit_id" ref="purchase_request.view_purchase_request_tree"/>
+        <field name="arch" type="xml">
+            <!-- Thay thế widget many2one_avatar_user bằng text thường vì requested_by giờ là Char -->
+            <field name="requested_by" position="attributes">
+                <attribute name="widget"/>
+            </field>
+        </field>
+    </record>
+</odoo>

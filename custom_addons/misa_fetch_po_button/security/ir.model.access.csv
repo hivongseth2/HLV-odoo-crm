@@ -8,3 +8,4 @@ access_login_misa,login.misa,model_login_misa,base.group_user,1,1,1,1
 access_misa_pos_product_sync_wizard,misa.pos.product.sync.wizard,model_misa_pos_product_sync_wizard,point_of_sale.group_pos_manager,1,1,1,1
 access_misa_tag_update_wizard,misa.tag.update.wizard,model_misa_tag_update_wizard,base.group_user,1,1,1,1
 access_misa_tax_update_wizard,misa.tax.update.wizard,model_misa_tax_update_wizard,base.group_user,1,1,1,1
+access_misa_purchase_request_sync_wizard,misa.purchase.request.sync.wizard,model_misa_purchase_request_sync_wizard,base.group_user,1,1,1,1

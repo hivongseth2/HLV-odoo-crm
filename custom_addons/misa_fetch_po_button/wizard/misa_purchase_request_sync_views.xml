@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Action cho Purchase Request Sync -->
+    <record id="action_misa_purchase_request_sync_wizard" model="ir.actions.act_window">
+        <field name="name">Lấy Yêu cầu mua hàng từ MISA</field>
+        <field name="res_model">misa.purchase.request.sync.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <!-- Giao diện form cho Purchase Request Sync - chỉ có từ ngày và đến ngày -->
+    <record id="view_misa_purchase_request_sync_wizard_form" model="ir.ui.view">
+        <field name="name">misa.purchase.request.sync.wizard.form</field>
+        <field name="model">misa.purchase.request.sync.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Đồng bộ Yêu cầu mua hàng từ MISA">
+                <group invisible="state == 'done'">
+                    <group>
+                        <field name="from_date" required="1"/>
+                        <field name="to_date" required="1"/>
+                    </group>
+                </group>
+                <field name="state" invisible="1"/>
+                <group invisible="state == 'draft'">
+                    <field name="log_text" nolabel="1" readonly="1" widget="text"/>
+                </group>
+                <footer>
+                    <button name="action_sync" 
+                            string="Đồng bộ" 
+                            type="object" 
+                            class="btn-primary"
+                            invisible="state == 'done'"/>
+                    <button name="action_reset"
+                            string="Làm mới"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="state == 'draft'"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Menu con cho Purchase Request - đặt cùng với các wizard MISA khác -->
+    <menuitem id="menu_import_misa_purchase_request"
+              name="Lấy Yêu cầu mua hàng từ MISA"
+              parent="menu_misa_import_root"
+              action="action_misa_purchase_request_sync_wizard"
+              sequence="105"/>
+</odoo>
