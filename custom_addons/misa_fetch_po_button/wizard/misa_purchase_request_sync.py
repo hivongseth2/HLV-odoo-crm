@@ -52,8 +52,10 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
         start_obj = parse_date(start_date)
         end_obj = parse_date(end_date)
 
-        iso_start = start_obj.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        iso_end = end_obj.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        # Format ngày theo múi giờ Việt Nam (+07:00) thay vì UTC (Z)
+        # MISA API dùng +07:00 trong response nên cần match
+        iso_start = start_obj.strftime("%Y-%m-%dT%H:%M:%S.000+07:00")
+        iso_end = end_obj.strftime("%Y-%m-%dT%H:%M:%S.000+07:00")
         display_value = f"{start_obj.strftime('%d/%m/%Y')} - {end_obj.strftime('%d/%m/%Y')}"
         value_json = f'{{"FirstVal":"{iso_start}","SecondVal":"{iso_end}"}}'
 
@@ -169,11 +171,17 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
             # Build headers
             headers = misa_config.get_crm_header(crm_token)
             
-            # Build datetime range
+            # Build datetime range - dùng múi giờ Việt Nam
             start_datetime = datetime.combine(self.from_date, datetime.min.time())
             end_datetime = datetime.combine(self.to_date, datetime.max.time())
             
+            # Log chi tiết khoảng thời gian filter
+            iso_start = start_datetime.strftime("%Y-%m-%dT%H:%M:%S.000+07:00")
+            iso_end = end_datetime.strftime("%Y-%m-%dT%H:%M:%S.000+07:00")
+            
             logs.append(f"\n📆 Khoảng thời gian: {self.from_date} đến {self.to_date}")
+            logs.append(f"🕐 Filter API: {iso_start} → {iso_end}")
+
             
             # API URL
             api_url = "https://amisapp.misa.vn/crm/g1/api/business/PurchaseRequest/Grid"
