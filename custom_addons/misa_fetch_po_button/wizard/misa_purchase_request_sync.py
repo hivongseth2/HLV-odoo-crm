@@ -43,8 +43,9 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
         start = (page - 1) * page_size if page > 0 else 0
 
         return {
-            # Columns từ working payload của user
-            "Columns": "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsUHJvY2Vzc0lELFVSTFZpZXdQcm9jZXNz",
+            # Columns incl SaleOrderIDText
+            "Columns": "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsUHJvY2Vzc0lELFVSTFZpZXdQcm9jZXNzLFNhbGVPcmRlcklEVGV4dA==",
+
             "Sorts": [
                 {
                     "SortBy": "ModifiedDate",
@@ -240,6 +241,7 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                     request_date_str = pr_data.get("RequestDate")
                     owner_text = pr_data.get("OwnerIDText") or ""
                     product_codes = pr_data.get("ListProductIDText") or ""
+                    sale_order_text = pr_data.get("SaleOrderIDText") or ""
                     
                     if not pr_no:
                         skipped_count += 1
@@ -273,6 +275,7 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                         vals = {
                             'misa_requester_text': owner_text,
                             'requested_by': odoo_user_id, # Link tới user nếu tìm thấy
+                            'origin': sale_order_text,
                         }
                         if request_date:
                             vals['date_start'] = request_date
@@ -289,7 +292,9 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                             'requested_by': odoo_user_id, # Link tới user nếu tìm thấy
                             'assigned_to': PurchaseRequest._get_default_approver(), # Set người phê duyệt mặc định
                             'state': 'to_approve',
+                            'origin': sale_order_text,
                         }
+
                         
                         new_pr = PurchaseRequest.create(vals)
                         

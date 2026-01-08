@@ -50,8 +50,8 @@ class PurchaseRequestMisa(models.Model):
     def _get_purchase_request_payload_by_code(self, purchase_request_no):
         """Tạo payload để tìm Purchase Request theo mã"""
         import uuid
-        # Base64 decoded: ID,PurchaseRequestNo,RequestDate,OwnerID,OwnerIDText,ProcessStatusID,ProcessStatusIDText,PurchaseStatusID,PurchaseStatusIDText,ListProductID,ListProductIDText,FormLayoutID,FormLayoutIDText,ProcessID,URLViewProcess
-        columns_b64 = "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsUHJvY2Vzc0lELFVSTFZpZXdQcm9jZXNz"
+        # Base64 decoded: ID,PurchaseRequestNo,RequestDate,OwnerID,OwnerIDText,ProcessStatusID,ProcessStatusIDText,PurchaseStatusID,PurchaseStatusIDText,ListProductID,ListProductIDText,FormLayoutID,FormLayoutIDText,ProcessID,URLViewProcess,SaleOrderIDText
+        columns_b64 = "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsUHJvY2Vzc0lELFVSTFZpZXdQcm9jZXNzLFNhbGVPcmRlcklEVGV4dA=="
         return {
             "Columns": columns_b64,
             "Sorts": [
@@ -117,6 +117,7 @@ class PurchaseRequestMisa(models.Model):
             "LayoutCodeCheckPermission": "PurchaseRequest",
             "AISearchKeyword": ""
         }
+
 
 
 
@@ -228,6 +229,7 @@ class PurchaseRequestMisa(models.Model):
             request_date_str = pr_data.get("RequestDate")
             owner_text = pr_data.get("OwnerIDText") or ""
             product_codes = pr_data.get("ListProductIDText") or ""
+            sale_order_text = pr_data.get("SaleOrderIDText") or ""
             
             request_date = None
             if request_date_str:
@@ -243,10 +245,12 @@ class PurchaseRequestMisa(models.Model):
                 vals = {
                     'misa_requester_text': owner_text,
                     'requested_by': odoo_user_id,
+                    'origin': sale_order_text,
                 }
                 if request_date:
                     vals['date_start'] = request_date
                 existing_pr.write(vals)
+
                 return {"ok": True, "res_id": existing_pr.id, "name": pr_no, "action": "updated"}
             else:
                 if not create_when_missing:
@@ -259,7 +263,9 @@ class PurchaseRequestMisa(models.Model):
                     'requested_by': odoo_user_id,
                     'assigned_to': self._get_default_approver(),
                     'state': 'to_approve',
+                    'origin': sale_order_text,
                 }
+
                 new_pr = self.create(vals)
                 
                 product_lines = self._find_or_create_products_from_codes(product_codes, token=crm_token)
