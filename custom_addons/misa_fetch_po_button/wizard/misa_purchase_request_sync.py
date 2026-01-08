@@ -71,10 +71,11 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
             "IsGetCache": True,
             "IsCheckInactive": False,
             "IsConverted": False,
-            "SessionID": "purchase-request-sync",
+            "SessionID": "67667793-1891-4493-820f-51ea32ebe990",
             "LayoutCodeCheckPermission": "PurchaseRequest",
             "AISearchKeyword": ""
         }
+
 
 
     def _find_or_create_products_from_codes(self, product_codes_text):

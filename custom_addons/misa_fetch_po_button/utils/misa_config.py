@@ -61,18 +61,17 @@ class MisaConfig(models.AbstractModel):
         return self.get_default_headers(access_token)
     
         # header của list order
-    def get_crm_header(self,token):
+    def get_crm_header(self, token):
         return {
             "Accept": "application/json, text/plain, */*",
-            "accept-encoding": "gzip, deflate, br, zstd",
-            "accept-language":"en-US,en;q=0.9,vi;q=0.8",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Accept-Language": "vi,en-US;q=0.9,en;q=0.8",
             "Authorization": f"Bearer {token}",
-            "companycode":"3R2PY2F4",
-            "connection":"keep-alive",
-            "content-length":"2448",
-            "content-type":"application/json",
-            
+            "CompanyCode": "3R2PY2F4",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         }
+
         # payload listorder
     def get_crm_sale_order_payload(self, start_date, end_date, page):
         page_size = 20
