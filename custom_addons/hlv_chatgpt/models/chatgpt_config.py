@@ -12,8 +12,13 @@ class HlvChatgptConfig(models.Model):
     # Chỉ giữ 1 con duy nhất
     product_manager_id = fields.Char(
         string='Product Manager ID', 
-        required=True, 
-        help="ID của Assistant (đã cấu hình File Search và Function Calling trên OpenAI)"
+        help="Legacy: ID của Assistant cũ (nếu còn dùng)"
+    )
+    
+    prompt_id = fields.Char(
+        string='Prompt ID',
+        required=True,
+        help="ID của Stored Prompt (VD: pmpt_...)"
     )
 
     @api.model
