@@ -58,21 +58,13 @@ class PurchaseRequestMisa(models.Model):
             "Filters": [
                 {
                     "Value": purchase_request_no,
-                    "IsDefaultFilter": False,
-                    "IsCustomField": False,
-                    "IsRelatedField": False,
-                    "Operator": 1,
-                    "Addition": 1,
                     "Property": "PurchaseRequestNo",
-                    "InputType": 1,
-                    "FieldType": 0,
+                    "Operator": 1, # Chứa/Bằng tùy API
+                    "Addition": 1,
                     "FieldName": "PurchaseRequestNo",
-                    "DisplayField": "Mã yêu cầu mua hàng",
-                    "DisplayOperator": "Bằng",
-                    "DisplayValue": purchase_request_no
                 }
             ],
-            "Formula": "",
+            "Formula": "1",
             "LayoutCode": "PurchaseRequest",
             "DefaultTotal": True,
             "IsMappingData": False,
@@ -90,6 +82,7 @@ class PurchaseRequestMisa(models.Model):
             "LayoutCodeCheckPermission": "PurchaseRequest",
             "AISearchKeyword": ""
         }
+
 
     def _get_default_approver(self):
         """Lấy người phê duyệt mặc định (Manager của PR)"""
@@ -178,12 +171,19 @@ class PurchaseRequestMisa(models.Model):
             api_url = "https://amisapp.misa.vn/crm/g1/api/business/PurchaseRequest/Grid"
             payload = self._get_purchase_request_payload_by_code(pr_code)
             
+            _logger.info("📡 Requesting MISA PR API: %s | Payload: %s", api_url, payload)
+            
             response = requests.post(api_url, headers=headers, json=payload, timeout=60)
             response.raise_for_status()
             data = response.json()
             
+            _logger.info("📡 MISA PR API Response: %s", data)
+            
             requests_data = data.get("Data", [])
+            _logger.info("🔍 MISA PR Found: %s records", len(requests_data))
+            
             if not requests_data:
+
                 return {"ok": False, "action": "not_found", "message": f"Không tìm thấy yêu cầu {pr_code}"}
             
             pr_data = requests_data[0]
