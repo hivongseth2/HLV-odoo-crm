@@ -98,7 +98,7 @@ class PurchaseRequestMisa(models.Model):
             return manager_group.users[0].id
         return False
 
-    def _find_or_create_products_from_codes(self, product_codes_text):
+    def _find_or_create_products_from_codes(self, product_codes_text, token=None):
         """Tìm hoặc tạo sản phẩm từ danh sách mã phân cách bởi dấu phẩy"""
         if not product_codes_text:
             return []
@@ -110,6 +110,10 @@ class PurchaseRequestMisa(models.Model):
         OdooUtils = self.env['odoo.utils'].sudo()
         MisaUtils = self.env['misa.api.utils'].sudo()
         
+        # Lấy token một lần nếu chưa có để dùng cho cả loop
+        if not token and any(not Product.search([('default_code', '=', c)], limit=1) for c in codes):
+            token = MisaUtils._fetch_login_crm_token()
+
         for code in codes:
             # 1. Tìm trong Odoo trước
             product = Product.search([('default_code', '=', code)], limit=1)
@@ -118,7 +122,7 @@ class PurchaseRequestMisa(models.Model):
                 # 2. Nếu không có, tìm thông tin từ MISA CRM
                 _logger.info("🔍 Đang tìm thông tin sản phẩm %s từ MISA...", code)
                 try:
-                    misa_products = MisaUtils.search_product_by_name(code=code, limit=1)
+                    misa_products = MisaUtils.search_product_by_name(code=code, limit=1, token=token)
                     if misa_products:
                         m_prod = misa_products[0]
                         m_name = m_prod.get('name') or code
@@ -221,7 +225,7 @@ class PurchaseRequestMisa(models.Model):
                 }
                 new_pr = self.create(vals)
                 
-                product_lines = self._find_or_create_products_from_codes(product_codes)
+                product_lines = self._find_or_create_products_from_codes(product_codes, token=crm_token)
                 PurchaseRequestLine = self.env['purchase.request.line'].sudo()
                 for pline in product_lines:
                     PurchaseRequestLine.create({
@@ -232,6 +236,7 @@ class PurchaseRequestMisa(models.Model):
                         'product_uom_id': pline['product_uom_id'],
                     })
                 return {"ok": True, "res_id": new_pr.id, "name": pr_no, "action": "created"}
+
                 
         except Exception as e:
             _logger.exception("❌ Lỗi sync Purchase Request: %s", e)

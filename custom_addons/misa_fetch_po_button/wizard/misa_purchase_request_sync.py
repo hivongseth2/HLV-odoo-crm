@@ -232,6 +232,9 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                 
                 # Filter client-side theo khoảng ngày
                 filtered_count = 0
+                # Lấy token login CRM một lần để dùng cho cả quá trình sync sản phẩm
+                crm_token = misa_utils._fetch_login_crm_token() or ""
+
                 for pr_data in requests_data:
                     pr_no = pr_data.get("PurchaseRequestNo") or ""
                     request_date_str = pr_data.get("RequestDate")
@@ -290,8 +293,8 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                         
                         new_pr = PurchaseRequest.create(vals)
                         
-                        # Tạo các dòng sản phẩm
-                        product_lines = self._find_or_create_products_from_codes(product_codes)
+                        # Tạo các dòng sản phẩm - PASS TOKEN ĐỂ REUSE
+                        product_lines = self._find_or_create_products_from_codes(product_codes, token=crm_token)
                         for pline in product_lines:
                             PurchaseRequestLine.create({
                                 'request_id': new_pr.id,
@@ -303,6 +306,7 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                         
                         created_count += 1
                         logs.append(f"   ✅ Tạo mới: {pr_no} ({len(product_lines)} sản phẩm)")
+
 
                 
                 # Log số lượng đã filter

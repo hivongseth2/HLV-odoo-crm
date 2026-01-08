@@ -1345,18 +1345,20 @@ class MisaApiUtils(models.AbstractModel):
     # =========================================================================
     # API SEARCH PRODUCT BY NAME
     # =========================================================================
-    def search_product_by_name(self, name=None, code=None, limit=20):
+    def search_product_by_name(self, name=None, code=None, limit=20, token=None):
         import uuid
         
         if not name and not code:
             raise Exception("Cần truyền ít nhất 'name' hoặc 'code' để tìm kiếm")
         
         misa_config = self.env['misa.config']
-        token = self._fetch_login_crm_token()
+        if not token:
+            token = self._fetch_login_crm_token()
         if not token:
             raise Exception("Lỗi Token MISA")
 
         headers = misa_config.get_crm_header(token)
+
         headers.update({"LayoutCode": "product", "X-Misa-Language": "vi-VN"})
 
         # Sử dụng API g1 thay vì g2
