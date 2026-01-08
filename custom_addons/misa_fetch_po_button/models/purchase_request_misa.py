@@ -233,8 +233,8 @@ class PurchaseRequestMisa(models.Model):
             delivery_address = pr_data.get("DeliveryAddress") or ""
             
             # Logic mapping Picking Type (Phiếu lấy hàng)
-            # Default ID 9: Kho Tân Sơn Nhì: Phiếu nhập kho
-            picking_type_id = 9
+            # Default ID 17: Kho Tân Sơn Nhì: Phiếu nhập kho
+            picking_type_id = 17
             
             if delivery_address:
                 addr_upper = delivery_address.upper()
