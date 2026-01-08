@@ -25,8 +25,27 @@ class PosOrder(models.Model):
                         except Exception:
                             local_dt = src_date
                             
-                        # Format: POS/ddmmyy
-                        group_name = local_dt.strftime("POS%d%m%y")
+                        # Determine prefix based on payment method
+                        prefix = "POS"
+                        if len(payment_methods) == 1:
+                            pm_name = payment_methods[0].lower()
+                            if "tiền mặt" in pm_name:
+                                prefix = "TM"
+                            elif "chuyển khoản" in pm_name:
+                                prefix = "CK"
+                                
+                        # Determine warehouse suffix
+                        wh_suffix = "WH"
+                        wh = order.picking_type_id.warehouse_id
+                        if wh:
+                            wh_val = (wh.code or wh.name or "").upper()
+                            if wh_val in ["KBC", "BENCAM"]:
+                                wh_suffix = "BC"
+                            elif wh_val in ["TSN", "HCM"]:
+                                wh_suffix = "HCM"
+                                
+                        # Format: [Prefix][Warehouse][ddmmyy]
+                        group_name = local_dt.strftime(f"{prefix}{wh_suffix}%d%m%y")
                         vals['x_studio_pos_group'] = group_name
                     
                     # Update payment method
