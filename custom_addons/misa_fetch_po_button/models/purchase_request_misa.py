@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Extension của purchase.request để:
+Extension của purchase.request và purchase.request.line để:
 1. Override requested_by thành Char field để nhận text từ MISA (OwnerIDText)
 2. Thêm method api_sync_purchase_request_by_code() cho API endpoint
 """
@@ -215,3 +215,15 @@ class PurchaseRequestMisa(models.Model):
         except Exception as e:
             _logger.exception("❌ Lỗi sync Purchase Request: %s", e)
             return {"ok": False, "error": "exception", "message": str(e)}
+
+
+class PurchaseRequestLineMisa(models.Model):
+    _inherit = 'purchase.request.line'
+
+    # Override requested_by từ Many2one related thành Char related
+    # để match với purchase.request.requested_by đã đổi thành Char
+    requested_by = fields.Char(
+        related="request_id.requested_by",
+        string="Người yêu cầu",
+        store=True,
+    )
