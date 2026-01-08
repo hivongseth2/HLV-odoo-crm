@@ -49,6 +49,7 @@ class PurchaseRequestMisa(models.Model):
 
     def _get_purchase_request_payload_by_code(self, purchase_request_no):
         """Tạo payload để tìm Purchase Request theo mã"""
+        import uuid
         return {
             "Columns": "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQscFByb2Nlc3NJRCxVUkxWaWV3UHJvY2Vzcw==",
             "Sorts": [],
@@ -57,14 +58,40 @@ class PurchaseRequestMisa(models.Model):
             "PageSize": 20,
             "Filters": [
                 {
-                    "Value": purchase_request_no,
-                    "Property": "PurchaseRequestNo",
-                    "Operator": 1, # Chứa/Bằng tùy API
+                    "Value": purchase_request_no.strip(),
+                    "IsDefaultFilter": False,
+                    "IsCustomField": False,
+                    "IsRelatedField": False,
+                    "ModuleRelated": "",
+                    "FromFilterCustom": False,
+                    "ValueDisplayText": "",
+                    "isValueDateNumber": False,
+                    "IsSearchModule": False,
+                    "ConfigDisplayRelatedField": "",
+                    "ConfigSubDisplayRelatedField": "",
+                    "ConfigSearchField": [],
+                    "ConfigUrlCbx": "",
+                    "FilterObjects": [],
+                    "dataOperator": [],
+                    "IsProductCategory": False,
+                    "SelectedDataList": [],
+                    "IsCustomTypeDecimalDigits": False,
+                    "IsFromFormula": False,
+                    "Operator": 1,
                     "Addition": 1,
+                    "Property": "PurchaseRequestNo",
+                    "InputType": 1,
+                    "FieldType": 0,
                     "FieldName": "PurchaseRequestNo",
+                    "OperatorBeforeDetectChanges": 1,
+                    "InputTypeOrigin": 1,
+                    "DisplayField": "Mã yêu cầu mua hàng",
+                    "DisplayOperator": "Chứa",
+                    "DisplayValue": purchase_request_no.strip(),
+                    "ValueOrigin": purchase_request_no.strip()
                 }
             ],
-            "Formula": "1",
+            "Formula": "",
             "LayoutCode": "PurchaseRequest",
             "DefaultTotal": True,
             "IsMappingData": False,
@@ -78,10 +105,11 @@ class PurchaseRequestMisa(models.Model):
             "IsGetCache": True,
             "IsCheckInactive": False,
             "IsConverted": False,
-            "SessionID": "67667793-1891-4493-820f-51ea32ebe990",
+            "SessionID": str(uuid.uuid4()),
             "LayoutCodeCheckPermission": "PurchaseRequest",
             "AISearchKeyword": ""
         }
+
 
 
     def _get_default_approver(self):
