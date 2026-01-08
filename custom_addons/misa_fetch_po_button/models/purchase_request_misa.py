@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Extension của purchase.request và purchase.request.line để:
-1. Override requested_by thành Char field để nhận text từ MISA (OwnerIDText)
-2. Thêm method api_sync_purchase_request_by_code() cho API endpoint
+Extension của purchase.request để:
+1. Thêm field misa_requester_text để nhận text từ MISA (OwnerIDText)
+2. Override requested_by để không bắt buộc (dữ liệu từ MISA dùng misa_requester_text)
+3. Thêm method api_sync_purchase_request_by_code() cho API endpoint
 """
 import requests
 from odoo import models, fields, api, _
@@ -17,11 +18,22 @@ _logger = logging.getLogger(__name__)
 class PurchaseRequestMisa(models.Model):
     _inherit = 'purchase.request'
 
-    # Override requested_by từ Many2one thành Char để nhận text từ MISA
-    requested_by = fields.Char(
-        string="Người yêu cầu",
+    # Thêm field mới để lưu tên người yêu cầu từ MISA
+    misa_requester_text = fields.Char(
+        string="Người yêu cầu (MISA)",
         tracking=True,
-        help="Tên người yêu cầu (từ MISA OwnerIDText hoặc nhập thủ công)",
+        help="Tên người yêu cầu được đồng bộ từ MISA CRM (OwnerIDText)",
+    )
+
+    # Override requested_by để bỏ required=True
+    # Cho phép tạo Purchase Request từ MISA mà không cần chọn user Odoo
+    requested_by = fields.Many2one(
+        comodel_name="res.users",
+        string="Người yêu cầu",
+        required=False,  # Bỏ required để sync từ MISA không lỗi
+        copy=False,
+        tracking=True,
+        index=True,
     )
 
     def _get_purchase_request_payload_by_code(self, purchase_request_no):
@@ -154,7 +166,7 @@ class PurchaseRequestMisa(models.Model):
             if existing_pr:
                 # Cập nhật
                 vals = {
-                    'requested_by': owner_text,
+                    'misa_requester_text': owner_text,
                 }
                 if request_date:
                     vals['date_start'] = request_date
@@ -177,11 +189,11 @@ class PurchaseRequestMisa(models.Model):
                         "message": f"Yêu cầu mua hàng {pr_no} chưa tồn tại trong Odoo"
                     }
                 
-                # Tạo mới
+                # Tạo mới - không cần requested_by vì đã bỏ required
                 vals = {
                     'name': pr_no,
                     'date_start': request_date or fields.Date.today(),
-                    'requested_by': owner_text,
+                    'misa_requester_text': owner_text,
                     'state': 'to_approve',
                 }
                 
@@ -215,15 +227,3 @@ class PurchaseRequestMisa(models.Model):
         except Exception as e:
             _logger.exception("❌ Lỗi sync Purchase Request: %s", e)
             return {"ok": False, "error": "exception", "message": str(e)}
-
-
-class PurchaseRequestLineMisa(models.Model):
-    _inherit = 'purchase.request.line'
-
-    # Override requested_by từ Many2one related thành Char related
-    # để match với purchase.request.requested_by đã đổi thành Char
-    requested_by = fields.Char(
-        related="request_id.requested_by",
-        string="Người yêu cầu",
-        store=True,
-    )

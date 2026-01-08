@@ -232,7 +232,7 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                     if existing_pr:
                         # Cập nhật nếu đã tồn tại
                         vals = {
-                            'requested_by': owner_text,
+                            'misa_requester_text': owner_text,
                         }
                         if request_date:
                             vals['date_start'] = request_date
@@ -245,7 +245,7 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                         vals = {
                             'name': pr_no,
                             'date_start': request_date or fields.Date.today(),
-                            'requested_by': owner_text,
+                            'misa_requester_text': owner_text,
                             'state': 'to_approve',
                         }
                         
