@@ -16,7 +16,6 @@
         'views/product_view.xml',
         'views/crm_tag_views.xml',
         'views/purchase_request_misa_view.xml',
-        'views/purchase_request_bulk_actions.xml',
         'wizard/misa_pos_sync_wizard_views.xml',
 
         'wizard/misa_tax_update_wizard_views.xml',
