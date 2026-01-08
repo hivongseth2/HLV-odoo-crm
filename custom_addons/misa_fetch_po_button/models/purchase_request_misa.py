@@ -26,20 +26,33 @@ class PurchaseRequestMisa(models.Model):
     )
 
     # Override requested_by để bỏ required=True
-    # Cho phép tạo Purchase Request từ MISA mà không cần chọn user Odoo
     requested_by = fields.Many2one(
         comodel_name="res.users",
         string="Người yêu cầu",
-        required=False,  # Bỏ required để sync từ MISA không lỗi
+        required=False,
         copy=False,
         tracking=True,
         index=True,
     )
 
+    def _find_user_by_name(self, name):
+        """Tìm user Odoo theo tên hoặc login"""
+        if not name:
+            return False
+        # Strip whitespace
+        name = name.strip()
+        User = self.env['res.users'].sudo()
+        # Tìm theo tên chính xác hoặc login (email)
+        user = User.search(['|', ('name', '=', name), ('login', '=', name)], limit=1)
+        if not user:
+            # Thử tìm theo tên không phân biệt hoa thường (phòng hờ)
+            user = User.search(['|', ('name', 'ilike', name), ('login', 'ilike', name)], limit=1)
+        return user.id if user else False
+
     def _get_purchase_request_payload_by_code(self, purchase_request_no):
         """Tạo payload để tìm Purchase Request theo mã"""
         return {
-            "Columns": "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQ=",
+            "Columns": "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQscFByb2Nlc3NJRCxVUkxWaWV3UHJvY2Vzcw==",
             "Sorts": [],
             "Start": 0,
             "Page": 1,
@@ -50,7 +63,7 @@ class PurchaseRequestMisa(models.Model):
                     "IsDefaultFilter": False,
                     "IsCustomField": False,
                     "IsRelatedField": False,
-                    "Operator": 1,  # Equals
+                    "Operator": 1,
                     "Addition": 1,
                     "Property": "PurchaseRequestNo",
                     "InputType": 1,
@@ -75,10 +88,18 @@ class PurchaseRequestMisa(models.Model):
             "IsGetCache": True,
             "IsCheckInactive": False,
             "IsConverted": False,
-            "SessionID": "purchase-request-api",
+            "SessionID": "67667793-1891-4493-820f-51ea32ebe990",
             "LayoutCodeCheckPermission": "PurchaseRequest",
             "AISearchKeyword": ""
         }
+
+    def _get_default_approver(self):
+        """Lấy người phê duyệt mặc định (Manager của PR)"""
+        manager_group = self.env.ref("purchase_request.group_purchase_request_manager")
+        if manager_group and manager_group.users:
+            # Lấy user đầu tiên trong group manager làm mặc định
+            return manager_group.users[0].id
+        return False
 
     def _find_or_create_products_from_codes(self, product_codes_text):
         """Tìm sản phẩm từ danh sách mã phân cách bởi dấu phẩy"""
@@ -105,30 +126,15 @@ class PurchaseRequestMisa(models.Model):
 
     @api.model
     def api_sync_purchase_request_by_code(self, pr_code, create_when_missing=True):
-        """
-        API method để sync Purchase Request theo mã từ MISA CRM.
-        
-        Args:
-            pr_code: Mã yêu cầu mua hàng (PurchaseRequestNo)
-            create_when_missing: Có tạo mới nếu chưa có không
-            
-        Returns:
-            dict: {ok, res_id, name, action, detail}
-        """
         if not pr_code:
             return {"ok": False, "error": "missing_pr_code", "message": "Thiếu mã yêu cầu mua hàng"}
-        
-        _logger.info("🔄 API Sync Purchase Request: %s", pr_code)
         
         try:
             misa_utils = self.env['misa.api.utils']
             misa_config = self.env['misa.config']
-            
-            # Lấy CRM token
             crm_token = misa_utils._fetch_login_crm_token()
             headers = misa_config.get_crm_header(crm_token)
             
-            # Gọi API tìm Purchase Request theo mã
             api_url = "https://amisapp.misa.vn/crm/g1/api/business/PurchaseRequest/Grid"
             payload = self._get_purchase_request_payload_by_code(pr_code)
             
@@ -137,22 +143,15 @@ class PurchaseRequestMisa(models.Model):
             data = response.json()
             
             requests_data = data.get("Data", [])
-            
             if not requests_data:
-                return {
-                    "ok": False, 
-                    "action": "not_found", 
-                    "message": f"Không tìm thấy yêu cầu mua hàng {pr_code} trên MISA CRM"
-                }
+                return {"ok": False, "action": "not_found", "message": f"Không tìm thấy yêu cầu {pr_code}"}
             
-            # Lấy dữ liệu đầu tiên
             pr_data = requests_data[0]
             pr_no = pr_data.get("PurchaseRequestNo") or ""
             request_date_str = pr_data.get("RequestDate")
             owner_text = pr_data.get("OwnerIDText") or ""
             product_codes = pr_data.get("ListProductIDText") or ""
             
-            # Parse ngày
             request_date = None
             if request_date_str:
                 try:
@@ -160,46 +159,34 @@ class PurchaseRequestMisa(models.Model):
                 except Exception:
                     request_date = fields.Date.today()
             
-            # Tìm existing
-            existing_pr = self.search([('name', '=', pr_no)], limit=1)
+            # Tìm user Odoo tương ứng với OwnerIDText
+            odoo_user_id = self._find_user_by_name(owner_text)
             
+            existing_pr = self.search([('name', '=', pr_no)], limit=1)
             if existing_pr:
-                # Cập nhật
                 vals = {
                     'misa_requester_text': owner_text,
+                    'requested_by': odoo_user_id, # Link tới user nếu tìm thấy
                 }
                 if request_date:
                     vals['date_start'] = request_date
-                
                 existing_pr.write(vals)
-                _logger.info("✅ Cập nhật Purchase Request: %s", pr_no)
-                
-                return {
-                    "ok": True,
-                    "res_id": existing_pr.id,
-                    "name": pr_no,
-                    "action": "updated",
-                    "detail": f"Đã cập nhật yêu cầu mua hàng {pr_no}"
-                }
+                return {"ok": True, "res_id": existing_pr.id, "name": pr_no, "action": "updated"}
             else:
                 if not create_when_missing:
-                    return {
-                        "ok": False,
-                        "action": "not_found",
-                        "message": f"Yêu cầu mua hàng {pr_no} chưa tồn tại trong Odoo"
-                    }
+                    return {"ok": False, "message": "Yêu cầu chưa tồn tại"}
                 
-                # Tạo mới - không cần requested_by vì đã bỏ required
+                # Tạo mới
                 vals = {
                     'name': pr_no,
                     'date_start': request_date or fields.Date.today(),
                     'misa_requester_text': owner_text,
+                    'requested_by': odoo_user_id, # Link tới user nếu tìm thấy
+                    'assigned_to': self._get_default_approver(), # Set người phê duyệt mặc định
                     'state': 'to_approve',
                 }
-                
                 new_pr = self.create(vals)
                 
-                # Tạo các dòng sản phẩm
                 product_lines = self._find_or_create_products_from_codes(product_codes)
                 PurchaseRequestLine = self.env['purchase.request.line'].sudo()
                 for pline in product_lines:
@@ -210,20 +197,8 @@ class PurchaseRequestMisa(models.Model):
                         'product_qty': pline['product_qty'],
                         'product_uom_id': pline['product_uom_id'],
                     })
+                return {"ok": True, "res_id": new_pr.id, "name": pr_no, "action": "created"}
                 
-                _logger.info("✅ Tạo mới Purchase Request: %s (%d sản phẩm)", pr_no, len(product_lines))
-                
-                return {
-                    "ok": True,
-                    "res_id": new_pr.id,
-                    "name": pr_no,
-                    "action": "created",
-                    "detail": f"Đã tạo yêu cầu mua hàng {pr_no} với {len(product_lines)} sản phẩm"
-                }
-                
-        except requests.exceptions.RequestException as e:
-            _logger.exception("❌ Lỗi kết nối MISA API: %s", e)
-            return {"ok": False, "error": "api_error", "message": str(e)}
         except Exception as e:
             _logger.exception("❌ Lỗi sync Purchase Request: %s", e)
             return {"ok": False, "error": "exception", "message": str(e)}
