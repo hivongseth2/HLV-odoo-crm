@@ -759,17 +759,17 @@ class PickingExportWizard(models.TransientModel):
             # Xử lý format nếu cần, ở đây ghép chuỗi đơn giản
             # Giả sử group là POS/050126 -> PXKPOS/050126
             # Hoặc PXK + POS/050126 -> PXKPOS/050126
-            so_phieu_xuat = "PXK" + picking.x_studio_pos_group.replace("POS/", "POS") 
+            so_phieu_xuat = "XK" + picking.x_studio_pos_group.replace("POS/", "POS") 
             # Hay là "PXK" + full string? User: "số phiếu xuất là số chứng từ có thêm PXK phía trước"
             # Nếu group = POS/010126 -> PXKPOS/010126 ?
             # Hay PXK POS/010126 ?
             # Thường là liền: PXKPOS/010126
             if "POS/" in picking.x_studio_pos_group:
-                 so_phieu_xuat = "PXK" + picking.x_studio_pos_group.replace("/", "")
+                 so_phieu_xuat = "XK" + picking.x_studio_pos_group.replace("/", "")
             else:
-                 so_phieu_xuat = "PXK" + picking.x_studio_pos_group
+                 so_phieu_xuat = "XK" + picking.x_studio_pos_group
         else:
-            so_phieu_xuat = "PXK" + picking.name
+            so_phieu_xuat = "XK" + picking.name
 
         partner = picking.partner_id
         partner_code = self._partner_code(partner)
