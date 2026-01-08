@@ -23,9 +23,11 @@
                 <field name="misa_requester_text" optional="show"/>
             </field>
         </field>
+    </record>
     <!-- Override action để bỏ filter mặc định -->
     <record id="purchase_request.purchase_request_form_action" model="ir.actions.act_window">
         <field name="context">{}</field>
     </record>
 </odoo>
+
 
