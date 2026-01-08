@@ -50,9 +50,17 @@ class PurchaseRequestMisa(models.Model):
     def _get_purchase_request_payload_by_code(self, purchase_request_no):
         """Tạo payload để tìm Purchase Request theo mã"""
         import uuid
+        # Base64 decoded: ID,PurchaseRequestNo,RequestDate,OwnerID,OwnerIDText,ProcessStatusID,ProcessStatusIDText,PurchaseStatusID,PurchaseStatusIDText,ListProductID,ListProductIDText,FormLayoutID,FormLayoutIDText,ProcessID,URLViewProcess
+        columns_b64 = "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsUHJvY2Vzc0lELFVSTFZpZXdQcm9jZXNz"
         return {
-            "Columns": "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQscFByb2Nlc3NJRCxVUkxWaWV3UHJvY2Vzcw==",
-            "Sorts": [],
+            "Columns": columns_b64,
+            "Sorts": [
+                {
+                    "SortBy": "ModifiedDate",
+                    "Type": 0,
+                    "SortDirection": 1
+                }
+            ],
             "Start": 0,
             "Page": 1,
             "PageSize": 20,
@@ -109,6 +117,7 @@ class PurchaseRequestMisa(models.Model):
             "LayoutCodeCheckPermission": "PurchaseRequest",
             "AISearchKeyword": ""
         }
+
 
 
 
