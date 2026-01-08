@@ -220,7 +220,9 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                     
                     filtered_count += 1
                     total_fetched += 1
-
+                    
+                    # Tìm user Odoo tương ứng
+                    odoo_user_id = PurchaseRequest._find_user_by_name(owner_text)
                     
                     # Tìm existing
                     existing_pr = PurchaseRequest.search([('name', '=', pr_no)], limit=1)
@@ -229,6 +231,7 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                         # Cập nhật nếu đã tồn tại
                         vals = {
                             'misa_requester_text': owner_text,
+                            'requested_by': odoo_user_id, # Link tới user nếu tìm thấy
                         }
                         if request_date:
                             vals['date_start'] = request_date
@@ -242,6 +245,8 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                             'name': pr_no,
                             'date_start': request_date or fields.Date.today(),
                             'misa_requester_text': owner_text,
+                            'requested_by': odoo_user_id, # Link tới user nếu tìm thấy
+                            'assigned_to': PurchaseRequest._get_default_approver(), # Set người phê duyệt mặc định
                             'state': 'to_approve',
                         }
                         
@@ -260,6 +265,7 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                         
                         created_count += 1
                         logs.append(f"   ✅ Tạo mới: {pr_no} ({len(product_lines)} sản phẩm)")
+
                 
                 # Log số lượng đã filter
                 if filtered_count > 0:
