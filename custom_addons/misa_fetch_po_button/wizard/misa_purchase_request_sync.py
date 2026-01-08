@@ -33,34 +33,18 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
         ('done', 'Hoàn thành')
     ], default='draft')
 
-    def _get_purchase_request_payload(self, start_date, end_date, page):
-        """Tạo payload cho API PurchaseRequest/Grid"""
+    def _get_purchase_request_payload(self, page):
+        """Tạo payload cho API PurchaseRequest/Grid
+        
+        Note: API Purchase Request không hỗ trợ date filter như Sale Order,
+        nên dùng empty filters và filter client-side sau khi fetch.
+        """
         page_size = 20
         start = (page - 1) * page_size if page > 0 else 0
 
-        def parse_date(date):
-            if isinstance(date, str):
-                try:
-                    return datetime.fromisoformat(date)
-                except ValueError:
-                    raise ValueError("Date string must be ISO format")
-            elif isinstance(date, datetime):
-                return date
-            else:
-                raise TypeError("Date must be a string or datetime object")
-
-        start_obj = parse_date(start_date)
-        end_obj = parse_date(end_date)
-
-        # Format ngày theo múi giờ Việt Nam (+07:00) thay vì UTC (Z)
-        # MISA API dùng +07:00 trong response nên cần match
-        iso_start = start_obj.strftime("%Y-%m-%dT%H:%M:%S.000+07:00")
-        iso_end = end_obj.strftime("%Y-%m-%dT%H:%M:%S.000+07:00")
-        display_value = f"{start_obj.strftime('%d/%m/%Y')} - {end_obj.strftime('%d/%m/%Y')}"
-        value_json = f'{{"FirstVal":"{iso_start}","SecondVal":"{iso_end}"}}'
-
         return {
-            "Columns": "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQ=",
+            # Columns từ working payload của user
+            "Columns": "SUQsUHVyY2hhc2VSZXF1ZXN0Tm8sUmVxdWVzdERhdGUsT3duZXJJRCxPd25lcklEVGV4dCxQcm9jZXNzU3RhdHVzSUQsUHJvY2Vzc1N0YXR1c0lEVGV4dCxQdXJjaGFzZVN0YXR1c0lELFB1cmNoYXNlU3RhdHVzSURUZXh0LExpc3RQcm9kdWN0SUQsTGlzdFByb2R1Y3RJRFRleHQsRm9ybUxheW91dElELEZvcm1MYXlvdXRJRFRleHQsUHJvY2Vzc0lELFVSTFZpZXdQcm9jZXNz",
             "Sorts": [
                 {
                     "SortBy": "ModifiedDate",
@@ -71,43 +55,8 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
             "Start": start,
             "Page": page,
             "PageSize": page_size,
-            "Filters": [
-                {
-                    "Value": value_json,
-                    "IsDefaultFilter": False,
-                    "IsCustomField": False,
-                    "IsRelatedField": False,
-                    "ModuleRelated": "",
-                    "FromFilterCustom": False,
-                    "ValueDisplayText": "",
-                    "isValueDateNumber": False,
-                    "IsSearchModule": False,
-                    "ConfigDisplayRelatedField": "",
-                    "ConfigSubDisplayRelatedField": "",
-                    "ConfigSearchField": [],
-                    "ConfigUrlCbx": "",
-                    "FilterObjects": [],
-                    "dataOperator": [],
-                    "IsProductCategory": False,
-                    "SelectedDataList": [],
-                    "IsCustomTypeDecimalDigits": False,
-                    "IsFromFormula": False,
-                    "Operator": 29,
-                    "Addition": 1,
-                    "Property": "RequestDate",
-                    "InputType": 7,
-                    "FieldType": 0,
-                    "FieldName": "RequestDate",
-                    "OperatorBeforeDetectChanges": 29,
-                    "InputTypeOrigin": 7,
-                    "Value1": iso_start,
-                    "Value2": iso_end,
-                    "DisplayField": "Ngày yêu cầu",
-                    "DisplayOperator": "Trong khoảng",
-                    "DisplayValue": display_value,
-                    "ValueOrigin": value_json
-                }
-            ],
+            # Empty filters - filter client-side
+            "Filters": [],
             "Formula": "",
             "LayoutCode": "PurchaseRequest",
             "DefaultTotal": True,
@@ -126,6 +75,7 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
             "LayoutCodeCheckPermission": "PurchaseRequest",
             "AISearchKeyword": ""
         }
+
 
     def _find_or_create_products_from_codes(self, product_codes_text):
         """Tìm sản phẩm từ danh sách mã phân cách bởi dấu phẩy"""
@@ -197,7 +147,8 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
             PurchaseRequestLine = self.env['purchase.request.line'].sudo()
             
             while True:
-                payload = self._get_purchase_request_payload(start_datetime, end_datetime, page)
+                # Payload không có date filter - sẽ filter client-side
+                payload = self._get_purchase_request_payload(page)
                 
                 # Log payload để debug
                 _logger.info("📤 Request payload: %s", payload)
@@ -234,14 +185,14 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                 requests_data = data.get("Data", [])
                 if not requests_data:
                     if page == 1:
-                        logs.append("\n⚠️ Không tìm thấy yêu cầu mua hàng nào trong khoảng thời gian này")
-                        logs.append("💡 Thử mở rộng khoảng ngày hoặc kiểm tra lại MISA CRM")
+                        logs.append("\n⚠️ Không có dữ liệu từ API")
                     break
 
                 
-                logs.append(f"\n📄 Trang {page}: {len(requests_data)} yêu cầu")
-                total_fetched += len(requests_data)
+                logs.append(f"\n📄 Trang {page}: {len(requests_data)} yêu cầu từ API")
                 
+                # Filter client-side theo khoảng ngày
+                filtered_count = 0
                 for pr_data in requests_data:
                     pr_no = pr_data.get("PurchaseRequestNo") or ""
                     request_date_str = pr_data.get("RequestDate")
@@ -258,7 +209,17 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                         try:
                             request_date = parse(request_date_str).date()
                         except Exception:
-                            request_date = fields.Date.today()
+                            request_date = None
+                    
+                    # Client-side date filter
+                    if request_date:
+                        if request_date < self.from_date or request_date > self.to_date:
+                            _logger.debug("Skipped %s: date %s not in range", pr_no, request_date)
+                            continue
+                    
+                    filtered_count += 1
+                    total_fetched += 1
+
                     
                     # Tìm existing
                     existing_pr = PurchaseRequest.search([('name', '=', pr_no)], limit=1)
@@ -298,6 +259,10 @@ class MisaPurchaseRequestSyncWizard(models.TransientModel):
                         
                         created_count += 1
                         logs.append(f"   ✅ Tạo mới: {pr_no} ({len(product_lines)} sản phẩm)")
+                
+                # Log số lượng đã filter
+                if filtered_count > 0:
+                    logs.append(f"   📋 Lọc được {filtered_count} yêu cầu trong khoảng ngày")
                 
                 # Kiểm tra phân trang
                 page_count = data.get("PageCount", 1)
