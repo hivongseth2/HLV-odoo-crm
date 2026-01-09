@@ -456,7 +456,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
       inputEl.dispatchEvent(enterEvent);
     }
-    toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 4000 });
+    toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 1000 });
   });
 
 
@@ -562,7 +562,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const pkgCode = (barcode === 'CMD-CREATE-PACK') ? `AUTO-PKG-${Date.now()}` : barcode;
 
       if (barcode === 'CMD-CREATE-PACK') {
-        toast.info(`Đang tạo gói hàng tự động...`, { ms: 2000 });
+        toast.info(`Đang tạo gói hàng tự động...`, { ms: 1000 });
       }
 
       isProcessingPack = true; // Lock
