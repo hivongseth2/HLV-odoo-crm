@@ -121,7 +121,10 @@ class BarcodeShipperController(http.Controller):
         items = []
 
         # 0. Check Setting
-        allow_package = request.env.company.hlv_barcode_shipper_allow_package
+        try:
+            allow_package = request.env.company.hlv_barcode_shipper_allow_package
+        except Exception:
+            allow_package = True
 
         # 1. Nếu cho phép Package: Lấy danh sách Packages (như cũ)
         if allow_package and picking.package_level_ids:
@@ -189,7 +192,11 @@ class BarcodeShipperController(http.Controller):
             return {"success": False, "error": "Mã vạch trống"}
 
         # 0. Check Setting
-        allow_package = request.env.company.hlv_barcode_shipper_allow_package
+        # 0. Check Setting
+        try:
+            allow_package = request.env.company.hlv_barcode_shipper_allow_package
+        except Exception:
+            allow_package = True
 
         # Ưu tiên PACK (package_level) - CHỈ KHI ĐƯỢC PHÉP
         if allow_package:
