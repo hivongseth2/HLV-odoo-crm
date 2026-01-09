@@ -120,8 +120,11 @@ class BarcodeShipperController(http.Controller):
         """
         items = []
 
-        # 1. Lấy danh sách Packages (nếu có)
-        if picking.package_level_ids:
+        # 0. Check Setting
+        allow_package = request.env.company.hlv_barcode_shipper_allow_package
+
+        # 1. Nếu cho phép Package: Lấy danh sách Packages (như cũ)
+        if allow_package and picking.package_level_ids:
             for pl in picking.package_level_ids:
                 if not pl.package_id:
                     continue
@@ -135,16 +138,32 @@ class BarcodeShipperController(http.Controller):
                     }
                 )
 
-        # 2. Lấy danh sách Products KHÔNG thuộc package nào (loose products)
-        # Những move_line có result_package_id=False và package_id=False (hoặc tùy logic đóng gói)
-        # Ở đây ta lấy tất cả move_line chưa được gán vào package_level (hoặc đơn giản là không có result_package_id)
-        # Tuy nhiên, để đơn giản và tránh duplicate với package_level, ta chỉ lấy những line không nằm trong package_level đã lấy.
-        
-        # Cách đơn giản nhất: Lấy những move_line mà result_package_id là False.
-        loose_lines = picking.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+        # 2. Xử lý logic sản phẩm lẻ
+        if allow_package:
+            # Logic cũ: chỉ lấy loose products (không thuộc package nào đã lấy)
+            # Cách đơn giản nhất: Lấy những move_line mà result_package_id là False.
+            loose_lines = picking.move_line_ids.filtered(lambda ml: not ml.result_package_id)
+        else:
+             # Nếu KHÔNG cho phép package -> Lấy TẤT CẢ move_line dưới dạng sản phẩm lẻ
+             # Bỏ qua việc nó có thuộc package hay không.
+             # Tuy nhiên cần group by product để hiển thị gọn gàng (optional, nhưng nên làm để list không quá dài)
+             # Ở đây ta lấy raw lines trước, nếu trùng product thì cộng dồn qty ở client hoặc xử lý ở đây.
+             # Để đơn giản, ta cứ trả về từng line (hoặc group đơn giản). 
+             # Vì JS đang nhận list items, nếu trả về nhiều dòng cho cùng 1 product cũng ok (JS có cộng dồn không? 
+             # JS hiện tại: group by barcode? -> JS hiện tại: "Find item in local list". JS xử lý logic +1.
+             # Nhưng JS hiển thị list ban đầu dựa trên items trả về. Nếu trả về nhiều item cùng product, JS hiển thị nhiều dòng.
+             # Tốt nhất nên group by product ở đây nếu Flatten.
+             loose_lines = picking.move_line_ids
+
+        # Group by product for better display if flattening (or just loose lines)
+        # Để đảm bảo unique barcode trong list items (để JS dễ map), ta nên group.
+        # Nhưng code cũ loose_lines là từng line. Nếu 1 product có nhiều line (do lot/serial) thì sao?
+        # Code cũ: for ml in loose_lines... items.append(...) -> nhiều dòng.
+        # Vậy ta cứ giữ nguyên logic đó cho nhất quán.
         
         for ml in loose_lines:
-            items.append(
+             # Nếu allow_package=False, ta coi mọi thứ là product
+             items.append(
                 {
                     "type": "product",
                     "id": ml.id,
@@ -155,6 +174,8 @@ class BarcodeShipperController(http.Controller):
                     "qty": ml.quantity,
                 }
             )
+        
+
 
         return items
 
@@ -167,14 +188,29 @@ class BarcodeShipperController(http.Controller):
         if not barcode:
             return {"success": False, "error": "Mã vạch trống"}
 
-        # Ưu tiên PACK (package_level)
-        for pl in picking.package_level_ids:
-            if pl.package_id and pl.package_id.name == barcode:
+        # 0. Check Setting
+        allow_package = request.env.company.hlv_barcode_shipper_allow_package
+
+        # Ưu tiên PACK (package_level) - CHỈ KHI ĐƯỢC PHÉP
+        if allow_package:
+            for pl in picking.package_level_ids:
+                if pl.package_id and pl.package_id.name == barcode:
+                    return {
+                        "success": True,
+                        "type": "package",
+                        "name": pl.package_id.name,
+                        "message": f"Đã tìm thấy kiện {barcode}",
+                    }
+        else:
+            # Nếu tắt tính năng package mà scan trúng package -> Báo lỗi hoặc nhắc nhở
+            # Kiểm tra xem barcode có phải là tên package trong đơn này không
+            is_package = picking.package_level_ids.filtered(
+                lambda pl: pl.package_id and pl.package_id.name == barcode
+            )
+            if is_package:
                 return {
-                    "success": True,
-                    "type": "package",
-                    "name": pl.package_id.name,
-                    "message": f"Đã tìm thấy kiện {barcode}",
+                    "success": False,
+                    "error": f"Chức năng quét kiện đang TẮT. Vui lòng quét từng sản phẩm bên trong {barcode}.",
                 }
 
         # Product barcode / default_code

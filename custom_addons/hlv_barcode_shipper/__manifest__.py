@@ -16,6 +16,7 @@
         "views/barcode_scan_log_views.xml",
         "views/stock_picking_views.xml",
         "views/barcode_shipper_views.xml",
+        "views/res_config_settings_views.xml",
     ],
     "assets": {
         "web.assets_frontend": [
