@@ -185,6 +185,8 @@ class StockPickingPartial(models.Model):
                 'packed_qty': packed_qty
             })
 
+        _logger.info(f"[PACK-RESULT] Created Package {new_package.name} (ID: {new_package.id}). Sync Info: {sync_info}")
+
         return {
             'package_id': new_package.id,
             'package_name': new_package.name,
