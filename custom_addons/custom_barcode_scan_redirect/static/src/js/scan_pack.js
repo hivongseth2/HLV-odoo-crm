@@ -467,6 +467,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const items = [];
       document.querySelectorAll("#product_list .product-item").forEach(el => {
         const lineId = parseInt(el.dataset.lineId);
+        const name = el.querySelector("strong")?.innerText;
 
         const input = el.querySelector(".done-input");
         const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
@@ -477,6 +478,8 @@ document.addEventListener("DOMContentLoaded", function () {
         // Tính số lượng trôi nổi (chưa vào gói)
         const qtyToPack = currentDone - alreadyPacked;
 
+        console.log(`[DEBUG_PACK] ${name} | Line: ${lineId} | Done: ${currentDone} | Packed: ${alreadyPacked} | ToPack: ${qtyToPack}`);
+
         // Chỉ lấy nếu còn hàng chưa đóng gói
         if (lineId && qtyToPack > 0) {
           items.push({ move_line_id: lineId, qty: qtyToPack });
@@ -485,7 +488,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // 2. Validate: Nếu items rỗng nghĩa là tất cả đã vào gói hết rồi
       if (items.length === 0) {
-        toast.warn("Không có sản phẩm nào mới để đóng gói (Tất cả đã nằm trong gói).");
+        // [DEBUG] Show detailed reason why it is empty
+        const details = [...document.querySelectorAll("#product_list .product-item")].map(el => {
+          const d = parseFloat(el.querySelector(".done-input")?.value || 0);
+          const p = parseFloat(el.dataset.packedQty || 0);
+          return `${d - p}`;
+        }).join(", ");
+
+        toast.warn(`Không có sản phẩm nào mới để đóng gói (Tất cả đã nằm trong gói). Debug: ${details}`);
         playError();
         return;
       }
