@@ -495,9 +495,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
         console.log(`[DEBUG_PACK] ${name} | Line: ${lineId} | Done: ${currentDone} | Packed: ${alreadyPacked} | ToPack: ${qtyToPack}`);
 
+        const barcode = el.dataset.barcode || "";
         // Chỉ lấy nếu còn hàng chưa đóng gói
         if (lineId && qtyToPack > 0) {
-          items.push({ move_line_id: lineId, qty: qtyToPack });
+          items.push({
+            move_line_id: lineId,
+            qty: qtyToPack,
+            // [FIX] Enrich data for UI rendering
+            name: name,
+            barcode: barcode
+          });
         }
       });
 
@@ -656,19 +663,24 @@ function applyServerSyncInfo(syncInfoList) {
   syncInfoList.forEach(info => {
     let targetEl = null;
 
-    // 1. Tìm theo Barcode (Ưu tiên cao nhất)
-    if (info.product_barcode) {
-      const code = normalizeCode(info.product_barcode).toUpperCase();
-      // [Fix] Selector cần quote nếu barcode chứa kí tự đặc biệt
-      targetEl = document.querySelector(`#product_list .product-item[data-barcode="${CSS.escape(code)}"]`) ||
-        document.querySelector(`#product_list .product-item[data-barcode="${code}"]`);
-    }
+    // [FIX IMPROVED] Use strict Loop matching to ensure we find the element even if querySelector fails
+    const allItems = document.querySelectorAll('#product_list .product-item');
+    for (const item of allItems) {
+      const itemBar = normalizeCode(item.dataset.barcode || '').toUpperCase();
+      const itemSku = normalizeCode(item.dataset.defaultCode || '').toUpperCase();
+      const sBarcode = normalizeCode(info.product_barcode || '').toUpperCase();
+      const sSku = normalizeCode(info.product_sku || '').toUpperCase();
 
-    // 2. Tìm theo SKU (Default Code)
-    if (!targetEl && info.product_sku) {
-      const code = normalizeCode(info.product_sku).toUpperCase();
-      targetEl = document.querySelector(`#product_list .product-item[data-default-code="${CSS.escape(code)}"]`) ||
-        document.querySelector(`#product_list .product-item[data-default-code="${code}"]`);
+      // Match by Barcode
+      if (sBarcode && itemBar === sBarcode) {
+        targetEl = item;
+        break;
+      }
+      // Match by SKU
+      if (!targetEl && sSku && itemSku === sSku) {
+        targetEl = item;
+        break;
+      }
     }
 
     // 3. Update nếu tìm thấy
@@ -1859,25 +1871,26 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
   const newItemsQty = itemsData.reduce((sum, i) => sum + i.qty, 0);
 
   // ============================================================
-  // HELPER: Hàm lấy tên chuẩn [Barcode] Tên và cập nhật data ẩn
+  // HELPER: Hàm lấy tên chuẩn [Barcode] Tên (KHÔNG update data-packed-qty nữa)
   // ============================================================
   const getProductInfo = (item) => {
-    const lineEl = document.querySelector(`[data-line-id="${item.move_line_id}"]`);
-    let finalName = 'Sản phẩm...';
+    // Ưu tiên lấy tên từ item đã enriched
+    let finalName = item.name || 'Sản phẩm...';
 
-    if (lineEl) {
-      // Cập nhật packed-qty ẩn
-      const currentPacked = parseFloat(lineEl.getAttribute('data-packed-qty') || 0);
-      lineEl.setAttribute('data-packed-qty', currentPacked + item.qty);
+    // Nếu có barcode, ghép vào theo chuẩn
+    if (item.barcode && !finalName.startsWith('[')) {
+      finalName = `[${item.barcode}] ${finalName}`;
+    }
 
-      // Logic lấy tên và barcode
-      const rawName = lineEl.querySelector('strong')?.innerText.trim() || '';
-      const barcode = lineEl.getAttribute('data-barcode') || '';
-
-      if (rawName && !rawName.startsWith('[') && barcode) {
-        finalName = `[${barcode}] ${rawName}`;
-      } else {
-        finalName = rawName || finalName;
+    // Fallback: Nếu không có name/barcode trong item, thử tìm DOM (Legacy)
+    if ((!item.name || !item.barcode) && item.move_line_id) {
+      const lineEl = document.querySelector(`[data-line-id="${item.move_line_id}"]`);
+      if (lineEl) {
+        const rawName = lineEl.querySelector('strong')?.innerText.trim() || '';
+        const barcode = lineEl.getAttribute('data-barcode') || '';
+        if (rawName) {
+          finalName = (barcode && !rawName.startsWith('[')) ? `[${barcode}] ${rawName}` : rawName;
+        }
       }
     }
     return finalName;
