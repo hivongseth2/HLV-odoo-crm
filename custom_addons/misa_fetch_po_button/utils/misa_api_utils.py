@@ -520,7 +520,7 @@ class MisaApiUtils(models.AbstractModel):
 
             # 1) Ưu tiên trường đã gộp sẵn
             shipping_address = (cd.get("ShippingAddress") or "").strip()
-            billing_address = (cd.get("BillingAddress") or "").strip()
+            billing_address = (cd.get("ShippingAddress") or "").strip()
             if shipping_address:
                 return shipping_address
             if billing_address:

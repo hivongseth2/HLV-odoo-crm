@@ -483,9 +483,9 @@ class SaleOrder(models.Model):
 
         # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
         partner_vals = {}
-        billing_addr = data.get("BillingAddress")
+        billing_addr = data.get("ShippingAddress")
         partner_phone = data.get("Phone")
-        partner_province = data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText")
+        partner_province = data.get("ShippingProvinceIDText") or ""
 
         if billing_addr and partner.street != billing_addr:
             partner_vals['street'] = billing_addr
@@ -1113,6 +1113,8 @@ class SaleOrder(models.Model):
             vals_header_upd['x_studio_httt'] = owner_date['httt']
         if owner_date.get('htgh'):
             vals_header_upd['x_studio_htgh'] = owner_date['htgh']
+        if owner_date.get('ShippingAddress'):
+            vals_header_upd['x_studio_a_ch_giao_hng'] = owner_date['ShippingAddress']
         # Auto-set CRM Delivery flag nếu DeliveryPartnerID = 3000 (Tự vận chuyển)
         if owner_date.get('is_crm_delivery'):
             vals_header_upd['x_studio_crm_elivery'] = True
