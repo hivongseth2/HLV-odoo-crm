@@ -808,7 +808,7 @@ let mediaRecorder = null;
 let isRecording = false;
 let chunkBusy = Promise.resolve();
 
-const MAX_DURATION_MS = 15 * 60 * 1000; // 5 phút
+const MAX_DURATION_MS = 25 * 60 * 1000; // 5 phút
 let stopTimer = null, countdownTimer = null, endAt = 0;
 let overlayCanvas = null, overlayCtx = null, drawRAF = 0;
 
@@ -2018,14 +2018,12 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
             const oldQty = parseFloat(qtyEl.innerText.replace('x', '')) || 0;
             qtyEl.innerText = `x${oldQty + item.qty}`;
           }
-          console.log('1541', foundRow);
 
           // Nháy màu
           foundRow.style.transition = 'background 0.3s';
           foundRow.style.backgroundColor = '#fff3cd';
           setTimeout(() => foundRow.style.backgroundColor = 'transparent', 500);
         } else {
-          console.log('1555', name);
 
           // Nếu chưa có: Thêm mới lên đầu
           const newHtml = `
