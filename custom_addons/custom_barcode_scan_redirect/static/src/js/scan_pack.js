@@ -275,6 +275,12 @@ document.addEventListener("DOMContentLoaded", function () {
       const response = await res.json();
       const result = response.result;
 
+      // [DEBUG ALERT] Show exactly what server returned
+      if (result && result.scanned && result.scanned.length > 0) {
+        const item = result.scanned[0];
+        alert(`SERVER RETURNED:\nDone: ${item.done_qty}\nPacked (Server): ${item.packed_qty}\nRequired: ${item.required_qty}`);
+      }
+
       if (result?.error) {
         toast.error(result.error);
         playError();
@@ -505,10 +511,13 @@ document.addEventListener("DOMContentLoaded", function () {
         const details = [...document.querySelectorAll("#product_list .product-item")].map(el => {
           const d = parseFloat(el.querySelector(".done-input")?.value || 0);
           const p = parseFloat(el.dataset.packedQty || 0);
-          return `${d - p}`;
-        }).join(", ");
+          const lineId = el.dataset.lineId;
+          return `L${lineId}: Done=${d}, Packed=${p} => ToPack=${d - p}`;
+        }).join("\n");
 
-        toast.warn(`Không có sản phẩm nào mới để đóng gói (Tất cả đã nằm trong gói). Debug: ${details}`);
+        alert(`DEBUG ERROR: All Packed condition met!\n${details}`);
+
+        toast.warn(`Không có sản phẩm nào mới để đóng gói (Tất cả đã nằm trong gói).`);
         playError();
         return;
       }
