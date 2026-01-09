@@ -548,16 +548,19 @@ class CustomBarcodeScanController(http.Controller):
                     # move_total_done_new = move_total_done + add_qty (nhưng phải cẩn thận vì qty_done đã update vào DB chưa?)
                     # write() đã update DB.
                     
-                    # Recalculate correctly
-                    new_total_done_all = sum(l.qty_done for l in move.move_line_ids)
-                    _logger.info(f"Updated Done Qty: {new_qty}. New Move Total: {new_total_done_all}")
+                    # [FIX] Calculate GLOBAL Total Done for this product in the Picking
+                    # Frontend expects the cumulative 'Done' quantity, not just for this specific move (if split)
+                    # moves variable was filtered by product barcode at start of function
+                    global_total_done = sum(sum(ml.qty_done for ml in m.move_line_ids) for m in moves)
+                    
+                    _logger.info(f"Updated Done Qty: {new_qty}. New Global Total: {global_total_done}")
 
                     updated_lines.append({
                         "line_id": ml.id,
                         "product": move.product_id.display_name,
-                        "done_qty": new_total_done_all,
-                        "required_qty": move.product_uom_qty,
-                        "barcode": move.product_id.barcode # Trả về barcode để FE map lại nếu cần
+                        "done_qty": global_total_done, # Return GLOBAL total
+                        "required_qty": sum(m.product_uom_qty for m in moves), # Return GLOBAL required (lines 400 already calcs this but we re-sum or use var)
+                        "barcode": move.product_id.barcode 
                     })
             
             elif delta < 0:
