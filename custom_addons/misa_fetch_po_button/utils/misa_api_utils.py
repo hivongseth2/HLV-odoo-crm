@@ -455,6 +455,105 @@ class MisaApiUtils(models.AbstractModel):
     
 
 
+    def extract_shipping_address_from_data(self, cd):
+        """
+        Helper tách biệt logic lấy/build địa chỉ từ dict dữ liệu (CurrentData).
+        Dùng để tái sử dụng ở chỗ khác (ví dụ resync).
+        ƯU TIÊN TUYỆT ĐỐI GIAO HÀNG (Shipping) -> rồi mới tới Billing.
+        """
+        # Helper: nối các phần địa chỉ, bỏ None/"" và làm sạch dấu phẩy thừa
+        def _join_address_parts(*parts):
+            items = [str(p).strip() for p in parts if p and str(p).strip()]
+            addr = ", ".join(items)
+            # làm sạch: nhiều dấu phẩy/space -> 1, bỏ dấu phẩy ở đầu/cuối
+            addr = re.sub(r"\s*,\s*", ", ", addr)
+            addr = re.sub(r"(,\s*){2,}", ", ", addr).strip(", ").strip()
+            return addr or None
+
+        # Helper: chuẩn hóa vài tên hành chính phổ biến
+        def _normalize_admin(s: str | None) -> str | None:
+            if not s:
+                return s
+            mapping = {
+                "tphcm": "Thành phố Hồ Chí Minh",
+                "TPHCM": "Thành phố Hồ Chí Minh",
+                "BR-VT": "Bà Rịa - Vũng Tàu",
+                "đồng nai": "Tỉnh Đồng Nai",
+                "Đồng Nai": "Tỉnh Đồng Nai",
+                "q8": "Quận 8",
+            }
+            raw = s.strip()
+            return mapping.get(raw, raw)
+
+        # CHIẾN LƯỢC:
+        # 1. Build từ component Shipping -> return
+        # 2. Lấy field ShippingAddress -> return
+        # 3. Build từ component Billing -> return
+        # 4. Lấy field BillingAddress -> return
+        
+        # DEBUG Log raw address fields
+        _logger.info("📍 MISA Resync Addr Debug: ShipAddr='%s', ShipStreet='%s', ShipWard='%s', ShipDist='%s', ShipProv='%s'", 
+                     cd.get("ShippingAddress"), cd.get("ShippingStreet"), cd.get("ShippingWardIDText"), 
+                     cd.get("ShippingDistrictIDText"), cd.get("ShippingProvinceIDText"))
+
+        # 1. Component Shipping
+        ship_parts = [
+            cd.get("ShippingStreet"),
+            _normalize_admin(cd.get("ShippingWardIDText")),
+            _normalize_admin(cd.get("ShippingDistrictIDText")),
+            _normalize_admin(cd.get("ShippingProvinceIDCustomText") or cd.get("ShippingProvinceIDText")),
+            cd.get("ShippingCountryIDText")
+        ]
+        
+        # Check if we have significant components (Street OR Ward OR District)
+        # Avoid matching just "Việt Nam" or "Province" if everything else is empty
+        has_significant_ship = (
+            cd.get("ShippingStreet") or 
+            cd.get("ShippingWardIDText") or 
+            cd.get("ShippingDistrictIDText")
+        )
+        
+        built_ship = _join_address_parts(*ship_parts)
+        
+        # Nếu có thành phần quan trọng (Street/Ward/District) -> Dùng components
+        if built_ship and has_significant_ship:
+            _logger.info("   -> Using Shipping Components: %s", built_ship)
+            return built_ship
+            
+        # 2. Field ShippingAddress (Fallback)
+        shipping_address = (cd.get("ShippingAddress") or "").strip()
+        if shipping_address:
+            _logger.info("   -> Using ShippingAddress field: %s", shipping_address)
+            return shipping_address
+
+        # 3. Component Billing
+        bill_parts = [
+            cd.get("BillingStreet"),
+            _normalize_admin(cd.get("BillingWardIDText")),
+            _normalize_admin(cd.get("BillingDistrictIDText")),
+            _normalize_admin(cd.get("BillingProvinceIDCustomText") or cd.get("BillingProvinceIDText")),
+            cd.get("BillingCountryIDText")
+        ]
+        built_bill = _join_address_parts(*bill_parts)
+        
+        # Tương tự check BillingStreet
+        if built_bill and cd.get("BillingStreet"):
+            return built_bill
+
+        # 4. Field BillingAddress
+        billing_address = (cd.get("BillingAddress") or "").strip()
+        if billing_address:
+            return billing_address
+
+        # 5. Fallback cuối cùng: nếu có built_ship (dù thiếu Street) thì vẫn trả về còn hơn null?
+        # Hoặc built_bill?
+        if built_ship:
+             return built_ship
+        if built_bill:
+             return built_bill
+
+        return None
+
     def get_shipping_address(self, sale_order_id, order_ref=None, token=None):
         """
         Lấy địa chỉ giao hàng từ MISA CRM.
