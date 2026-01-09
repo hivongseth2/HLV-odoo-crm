@@ -446,6 +446,7 @@ class CustomBarcodeScanController(http.Controller):
                 else:
                     _logger.info("No loose line found. Creating new...")
                     sample_ml = None
+                    # Try to find a sample from existing moves
                     for m in moves:
                         if m.move_line_ids:
                             sample_ml = m.move_line_ids[0]
@@ -462,16 +463,23 @@ class CustomBarcodeScanController(http.Controller):
                          # Trường hợp move chưa có line nào? (Ít gặp vì thường Odoo tạo sẵn)
                          # Tạo line từ move
                         if moves:
-                             target_ml = request.env['stock.move.line'].sudo().create({
-                                 'picking_id': picking.id,
-                                 'move_id': moves[0].id,
-                                 'product_id': moves[0].product_id.id,
-                                 'product_uom_id': moves[0].product_uom.id,
-                                 'location_id': moves[0].location_id.id,
-                                 'location_dest_id': moves[0].location_dest_id.id,
-                                 'qty_done': 0,
-                             })
-                             _logger.info(f"Created new from scratch: {target_ml.id}")
+                             _logger.info("Creating from moves[0]...")
+                             try:
+                                 target_ml = request.env['stock.move.line'].sudo().create({
+                                     'picking_id': picking.id,
+                                     'move_id': moves[0].id,
+                                     'product_id': moves[0].product_id.id,
+                                     'product_uom_id': moves[0].product_uom.id,
+                                     'location_id': moves[0].location_id.id,
+                                     'location_dest_id': moves[0].location_dest_id.id,
+                                     'qty_done': 0,
+                                 })
+                                 _logger.info(f"Created new from scratch: {target_ml.id}")
+                             except Exception as e:
+                                 _logger.error(f"Failed to create move line: {e}")
+                                 return {"error": "❌ Lỗi hệ thống: Không thể tạo dòng sản phẩm mới."}
+                        else:
+                             return {"error": "❌ Không tìm thấy move phù hợp."}
 
             # Nếu đang trừ: tìm dòng có qty_done > 0
             elif delta < 0:
