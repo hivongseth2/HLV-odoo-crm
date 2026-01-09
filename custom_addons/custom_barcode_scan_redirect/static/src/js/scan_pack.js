@@ -165,6 +165,19 @@ document.addEventListener("DOMContentLoaded", function () {
     new Audio("/custom_barcode_scan_redirect/static/src/sound/error.mp3").play();
   }
 
+  // [NEW] Helper to flush manual input before critical actions
+  async function flushActiveInput() {
+    const active = document.activeElement;
+    if (active && active.classList.contains('done-input')) {
+      // Trigger change manually
+      // Note: handleManualQtyChange is attached to window but we can call it directly if scope permits
+      // or rely on the global assignment
+      if (window.handleManualQtyChange) {
+        await window.handleManualQtyChange(active);
+      }
+    }
+  }
+
   function normalizeCode(s) {
     // Bỏ kí tự điều khiển ASCII, khoảng trắng, NBSP, BOM, zero-width, v.v.
     return String(s ?? '')
@@ -370,6 +383,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
   completeBtn?.addEventListener("click", async function () {
+    // [FIX] Flush active input before completing
+    await flushActiveInput();
+
     const items = document.querySelectorAll("#product_list .product-item");
     let isValid = true, missingProducts = [];
     items.forEach(item => {
@@ -420,7 +436,10 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Nút Partial Pack - tạo mã barcode tự động (người dùng có thể scan mã này để đóng gói)
-  document.getElementById('btnPartialPack')?.addEventListener('click', function () {
+  document.getElementById('btnPartialPack')?.addEventListener('click', async function () {
+    // [FIX] Flush active input before packing
+    await flushActiveInput();
+
     const autoPackageBarcode = `AUTO-PKG-${Date.now()}`;
     // Put barcode into input (so user can scan it later) and copy to clipboard
     const inputEl = document.getElementById('pack_barcode_input');
