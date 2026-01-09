@@ -254,6 +254,28 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!lineId) {
       lineId = findLineToUpdate(barcode);
     }
+
+    // [NEW] Client-side Over-Quantity Validation
+    if (lineId) {
+      const checkEl = document.querySelector(`[data-line-id="${lineId}"]`);
+      if (checkEl) {
+        const maxQty = parseFloat(checkEl.getAttribute('data-max-qty') || 0);
+        const input = checkEl.querySelector(".done-input");
+        const currentDone = parseFloat(input ? input.value : (checkEl.querySelector(".done")?.innerText || 0));
+
+        // Allow slight floating point tolerance if needed, but strict for > logic
+        if (maxQty > 0 && (currentDone + delta) > maxQty) {
+          toast.warn(`❌ Không được nhập quá số lượng yêu cầu (${maxQty})!`);
+          playError();
+          // Reset input if it was manual change (heuristic)
+          if (input && Math.abs(currentDone - parseFloat(input.value)) > 0.001) {
+            input.value = input.dataset.currentQty || 0;
+          }
+          return;
+        }
+      }
+    }
+
     try {
       const res = await fetch("/pack_scan/scan_item", {
         method: "POST",
@@ -469,6 +491,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     // ------------------------------------------
 
+    // ------------------------------------------
+
     // C. LOGIC MỚI: Xử lý mã lệnh tạo gói (CMD-CREATE-PACK hoặc AUTO-PKG-...)
     if (barcode === 'CMD-CREATE-PACK' || barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
 
@@ -548,20 +572,48 @@ document.addEventListener("DOMContentLoaded", function () {
           // ============================================================
           // [FIX] Cập nhật lại UI danh sách chính (Mới: Dùng SyncInfo từ Server)
           // ============================================================
-          if (result.sync_info) {
+          // ============================================================
+          // [FIX FINAL] LOGIC CẬP NHẬT UI TOÀN DIỆN
+          // ============================================================
+
+          // 1. Luôn hiển thị gói mới bên phải
+          const pkgId = result.package_id;
+          const pkgName = result.package_name;
+          renderNewPackageToPanel(pkgId, pkgName, items);
+
+          // 2. Cập nhật thông tin "Đã đóng gói" (Sync vs Optimistic)
+          if (result.sync_info && result.sync_info.length > 0) {
+            console.log("[PACK UI] Using Server Sync Info");
             applyServerSyncInfo(result.sync_info);
           } else {
-            // Fallback nếu không có sync_info (Legacy)
-            // (Giữ lại logic cũ phòng khi server chưa update kịp code, nhưng nên ưu tiên sync_info)
+            console.warn("[PACK UI] No Sync Info from Server -> Using Optimistic Update");
+            // Fallback: Tự cộng dồn data-packed-qty từ danh sách items vừa gửi đi
             if (items && items.length > 0) {
-              // Legacy fallback removed to prevent state corruption.
+              items.forEach(item => {
+                const lineId = item.move_line_id;
+                const qty = parseFloat(item.qty || 0);
+                let el = document.querySelector(`#product_list .product-item[data-line-id="${lineId}"]`);
+
+                // Fallback finding logic (borrowed from findLineToUpdate)
+                if (!el && item.barcode) {
+                  const code = normalizeCode(item.barcode).toUpperCase();
+                  el = document.querySelector(`#product_list .product-item[data-barcode="${CSS.escape(code)}"]`) ||
+                    document.querySelector(`#product_list .product-item[data-barcode="${code}"]`);
+                }
+
+                if (el) {
+                  const oldPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
+                  const newPacked = oldPacked + qty;
+                  el.setAttribute('data-packed-qty', newPacked);
+
+                  // Visual flash
+                  highlightElement(el, "#dbe4ff");
+
+                  // IMPORTANT: Update label
+                  updateUnpackedLabel(el);
+                }
+              });
             }
-
-            const pkgId = result.package_id;
-            const pkgName = result.package_name;
-
-            // Render preview (Optimistic)
-            renderNewPackageToPanel(pkgId, pkgName, items);
           }
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
