@@ -616,17 +616,25 @@ class SaleApiImportWizard(models.TransientModel):
             if not existing:
                 _logger.info("🆕 [E-ACCOUNT] No existing contact with addr='%s' → will create new", addr_str)
         else:
+        else:
             # ===== LOGIC CHO KHÁCH HÀNG THƯỜNG =====
             if contact_name:
                  # Ưu tiên tìm theo tên contact - tìm cả 'delivery' và 'contact' để migrate
-                 _logger.info("🔎 Search delivery by NAME: '%s' (parent=%s)", contact_name, parent_partner.id)
-                 existing = Partner.search([
+                 # KÈM ĐỊA CHỈ để đảm bảo nếu địa chỉ khác thì tạo mới (giữ lịch sử)
+                 domain = [
                     ('parent_id', '=', parent_partner.id),
                     ('type', 'in', ['delivery', 'contact']),
                     ('name', '=', contact_name)
-                 ], limit=1)
+                 ]
+                 # Nếu có địa chỉ, buộc phải khớp địa chỉ mới coi là "đã có"
+                 if addr_str:
+                     domain.append(('street', '=', addr_str))
+
+                 _logger.info("🔎 Search delivery by NAME+ADDR: '%s' / '%s' (parent=%s)", contact_name, addr_str, parent_partner.id)
+                 existing = Partner.search(domain, limit=1)
+
             elif addr_str:
-                 # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name - tìm cả 'delivery' và 'contact'
+                 # Chỉ tìm theo địa chỉ nếu KHÔNG có contact_name
                  _logger.info("🔎 Search delivery by ADDR: '%s' (parent=%s)", addr_str, parent_partner.id)
                  existing = Partner.search([
                     ('parent_id', '=', parent_partner.id),
@@ -645,9 +653,13 @@ class SaleApiImportWizard(models.TransientModel):
             if contact_name and existing.name != contact_name:
                 vals_upd['name'] = contact_name
 
-            # Luôn cập nhật địa chỉ nếu khác
-            if addr_str and existing.street != addr_str:
-                vals_upd['street'] = addr_str
+            # KHÔNG cập nhật địa chỉ ở đây nữa, vì đã search theo địa chỉ rồi.
+            # Nếu tìm thấy nghĩa là địa chỉ đã khớp (hoặc search logic cho phép).
+            # Trường hợp e_accounts vẫn cần cẩn thận, nhưng e_accounts logic ở trên đã tách ra.
+            
+            # Tuy nhiên, nếu tìm theo tên mà không có addr_str (ví dụ MISA xóa địa chỉ), 
+            # thì existing tìm được có thể có địa chỉ cũ. Ta có nên xóa không? 
+            # Thôi giữ nguyên, chỉ update các field khác.
 
             if country and existing.country_id != country:
                 vals_upd['country_id'] = country.id
