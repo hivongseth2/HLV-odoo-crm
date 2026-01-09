@@ -556,6 +556,12 @@ class SaleOrder(models.Model):
         except Exception as e:
             _logger.warning("Không set delivery contact: %s", e)
             shipping_id = False
+
+        if shipping_id and shipping_addr:
+            d_partner = env['res.partner'].browse(shipping_id)
+            if d_partner.street != shipping_addr:
+                _logger.info("🚚 FORCE UPDATE: Địa chỉ giao hàng khác MISA → cập nhật: %s", shipping_addr)
+                d_partner.write({'street': shipping_addr})
             
         zns = bool(data.get("CustomField23", False))
 
