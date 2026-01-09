@@ -506,10 +506,12 @@ class MisaApiUtils(models.AbstractModel):
             cd.get("ShippingCountryIDText")
         ]
         built_ship = _join_address_parts(*ship_parts)
-        if built_ship:
+        
+        # Chỉ dùng component nếu có ít nhất ShippingStreet (để tránh trường hợp MISA trả về Ward/District nhưng thiếu Street)
+        if built_ship and cd.get("ShippingStreet"):
             return built_ship
             
-        # 2. Field ShippingAddress
+        # 2. Field ShippingAddress (Fallback nếu component thiếu Street)
         shipping_address = (cd.get("ShippingAddress") or "").strip()
         if shipping_address:
             return shipping_address
@@ -523,13 +525,22 @@ class MisaApiUtils(models.AbstractModel):
             cd.get("BillingCountryIDText")
         ]
         built_bill = _join_address_parts(*bill_parts)
-        if built_bill:
+        
+        # Tương tự check BillingStreet
+        if built_bill and cd.get("BillingStreet"):
             return built_bill
 
         # 4. Field BillingAddress
         billing_address = (cd.get("BillingAddress") or "").strip()
         if billing_address:
             return billing_address
+
+        # 5. Fallback cuối cùng: nếu có built_ship (dù thiếu Street) thì vẫn trả về còn hơn null?
+        # Hoặc built_bill?
+        if built_ship:
+             return built_ship
+        if built_bill:
+             return built_bill
 
         return None
 

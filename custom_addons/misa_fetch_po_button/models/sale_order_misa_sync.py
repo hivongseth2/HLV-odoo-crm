@@ -478,7 +478,7 @@ class SaleOrder(models.Model):
         # Khách hàng (partner_id) LUÔN lấy từ AccountIDText
         # Địa chỉ giao hàng/lập hóa đơn lấy từ ShippingContactIDText
         partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
-        shipping_contact_name = owner_date.get('ShippingAddress') or data.get("ShippingContactIDText")
+        shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
         partner       = odoo_utils._get_or_create_partner(partner_name)
 
         # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
