@@ -519,7 +519,8 @@ class SaleOrder(models.Model):
         # delivery_no   = data.get("OtherSysOrderCode") or data.get("DeliveryOrderNumber") or order_no
         book_date     = data.get("BookDate") or data.get("InvoiceDate") or data.get("DeliveryDate")
         deadline_date_raw = data.get("DeadlineDate")
-        shipping_addr = data.get("ShippingAddress") or data.get("BillingAddress") or ''
+        # Sử dụng helper để extract full address từ các trường thành phần
+        shipping_addr = env['misa.api.utils'].extract_shipping_address_from_data(data) or ''
         origin        = data.get("SaleOrderName") or ''
 
         # Địa chỉ giao hàng và lập hóa đơn sử dụng ShippingContactIDText
@@ -548,7 +549,7 @@ class SaleOrder(models.Model):
                 parent_partner=partner,
                 addr_str=shipping_addr,
                 phone=data.get("Phone"),
-                province_text=data.get("BillingProvinceIDText") or data.get("ShippingProvinceIDText"),
+                province_text=data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText"),
                 contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
                 is_e_account=(partner_name in e_accounts)
             )

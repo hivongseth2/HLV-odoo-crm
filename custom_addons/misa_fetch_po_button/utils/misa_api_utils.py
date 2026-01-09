@@ -461,13 +461,11 @@ class MisaApiUtils(models.AbstractModel):
     
 
 
-    def get_shipping_address(self, sale_order_id, order_ref=None, token=None):
+    def extract_shipping_address_from_data(self, cd):
         """
-        Lấy địa chỉ giao hàng từ MISA CRM.
-        Ưu tiên:
-        1) Data.CurrentData.ShippingAddress
-        2) Data.CurrentData.BillingAddress
-        3) Tự build từ các trường Shipping* (fallback sang Billing* nếu thiếu)
+        Helper tách biệt logic lấy/build địa chỉ từ dict dữ liệu (CurrentData).
+        Dùng để tái sử dụng ở chỗ khác (ví dụ resync).
+        ƯU TIÊN TUYỆT ĐỐI GIAO HÀNG (Shipping) -> rồi mới tới Billing.
         """
         # Helper: nối các phần địa chỉ, bỏ None/"" và làm sạch dấu phẩy thừa
         def _join_address_parts(*parts):
@@ -478,7 +476,7 @@ class MisaApiUtils(models.AbstractModel):
             addr = re.sub(r"(,\s*){2,}", ", ", addr).strip(", ").strip()
             return addr or None
 
-        # Helper: chuẩn hóa vài tên hành chính phổ biến (có thể mở rộng theo nhu cầu)
+        # Helper: chuẩn hóa vài tên hành chính phổ biến
         def _normalize_admin(s: str | None) -> str | None:
             if not s:
                 return s
@@ -492,6 +490,62 @@ class MisaApiUtils(models.AbstractModel):
             }
             raw = s.strip()
             return mapping.get(raw, raw)
+
+        # CHIẾN LƯỢC:
+        # 1. Build từ component Shipping -> return
+        # 2. Lấy field ShippingAddress -> return
+        # 3. Build từ component Billing -> return
+        # 4. Lấy field BillingAddress -> return
+        
+        # 1. Component Shipping
+        ship_parts = [
+            cd.get("ShippingStreet"),
+            _normalize_admin(cd.get("ShippingWardIDText")),
+            _normalize_admin(cd.get("ShippingDistrictIDText")),
+            _normalize_admin(cd.get("ShippingProvinceIDCustomText") or cd.get("ShippingProvinceIDText")),
+            cd.get("ShippingCountryIDText")
+        ]
+        built_ship = _join_address_parts(*ship_parts)
+        if built_ship:
+            return built_ship
+            
+        # 2. Field ShippingAddress
+        shipping_address = (cd.get("ShippingAddress") or "").strip()
+        if shipping_address:
+            return shipping_address
+
+        # 3. Component Billing
+        bill_parts = [
+            cd.get("BillingStreet"),
+            _normalize_admin(cd.get("BillingWardIDText")),
+            _normalize_admin(cd.get("BillingDistrictIDText")),
+            _normalize_admin(cd.get("BillingProvinceIDCustomText") or cd.get("BillingProvinceIDText")),
+            cd.get("BillingCountryIDText")
+        ]
+        built_bill = _join_address_parts(*bill_parts)
+        if built_bill:
+            return built_bill
+
+        # 4. Field BillingAddress
+        billing_address = (cd.get("BillingAddress") or "").strip()
+        if billing_address:
+            return billing_address
+
+        return None
+
+    def get_shipping_address(self, sale_order_id, order_ref=None, token=None):
+        """
+        Lấy địa chỉ giao hàng từ MISA CRM.
+        """
+        # Helper: nối các phần địa chỉ (đã move vào extract_shipping_address_from_data, 
+        # nhưng giữ lại đây nếu cần tương thích ngược logic cũ? -> Không cần, dùng hàm mới luôn)
+        def _join_address_parts(*parts):
+            items = [str(p).strip() for p in parts if p and str(p).strip()]
+            addr = ", ".join(items)
+            addr = re.sub(r"\s*,\s*", ", ", addr)
+            addr = re.sub(r"(,\s*){2,}", ", ", addr).strip(", ").strip()
+            return addr or None
+
 
         session = requests.Session()
         api_url = "https://amisapp.misa.vn/crm/g1/api/business/SaleOrder/FormDataNew/SaleOrder/37/4"
@@ -508,7 +562,6 @@ class MisaApiUtils(models.AbstractModel):
 
         api_response = session.post(api_url, headers=api_headers, json=api_payload) 
 
-        # Nếu không 200 thì vẫn ráng parse JSON để fallback; nếu parse fail thì trả sale_order_id
         try:
             response_data = api_response.json()
         except Exception:
@@ -518,38 +571,12 @@ class MisaApiUtils(models.AbstractModel):
         try:
             cd = (response_data or {}).get("Data", {}).get("CurrentData", {}) or {}
 
-            # 1) Ưu tiên trường đã gộp sẵn
-            shipping_address = (cd.get("ShippingAddress") or "").strip()
-            billing_address = (cd.get("ShippingAddress") or "").strip()
-            if shipping_address:
-                return shipping_address
-            if billing_address:
-                return billing_address
-
-            # 2) Tự build từ các phần tử (ưu tiên Shipping*, thiếu thì mượn Billing*)
-            #    Dùng các nhãn *Text và *CustomText nếu có
-            ship_street = cd.get("ShippingStreet") or cd.get("BillingStreet")
-            ship_ward = cd.get("ShippingWardIDText") or cd.get("BillingWardIDText")
-            ship_district = cd.get("ShippingDistrictIDText") or cd.get("BillingDistrictIDText")
-            ship_province = (
-                cd.get("ShippingProvinceIDCustomText")
-                or cd.get("ShippingProvinceIDText")
-                or cd.get("BillingProvinceIDCustomText")
-                or cd.get("BillingProvinceIDText")
-            )
-            ship_country = cd.get("ShippingCountryIDText") or cd.get("BillingCountryIDText")
-
-            # Chuẩn hóa vài giá trị hành chính thường gặp
-            ship_ward = _normalize_admin(ship_ward)
-            ship_district = _normalize_admin(ship_district)
-            ship_province = _normalize_admin(ship_province)
-
-            built = _join_address_parts(ship_street, ship_ward, ship_district, ship_province, ship_country)
-            if built:
-                return built
+            # Dùng hàm helper mới extract
+            addr = self.extract_shipping_address_from_data(cd)
+            if addr:
+                return addr
 
             # 3) Thua nữa thì lấy Account/Contact text làm fallback mềm, rồi tới sale_order_id
-            # (đề phòng dữ liệu quá thiếu)
             acc = (cd.get("AccountIDText") or "").strip()
             contact = (cd.get("ContactIDText") or "").strip()
             soft = _join_address_parts(contact, acc)
