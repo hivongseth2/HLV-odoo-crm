@@ -534,3 +534,18 @@ class BarcodeShipperController(http.Controller):
         return request.render(
             "hlv_barcode_shipper.shipper_interface", {"user": request.env.user}
         )
+
+    # ===== TEMP FIX: Create Column Manual =====
+    @http.route("/api/barcode/fix_db", type="http", auth="user", csrf=False)
+    def fix_db_column(self, **kwargs):
+        """Manually add the missing column to prevent crash."""
+        try:
+            cr = request.env.cr
+            # Check if column exists
+            cr.execute("SELECT column_name FROM information_schema.columns WHERE table_name='res_company' AND column_name='hlv_barcode_shipper_allow_package'")
+            if not cr.fetchone():
+                cr.execute("ALTER TABLE res_company ADD COLUMN hlv_barcode_shipper_allow_package BOOLEAN DEFAULT true")
+                return "<h1>SUCCESS: Column 'hlv_barcode_shipper_allow_package' added. You can now enable the code safely.</h1>"
+            return "<h1>OK: Column already exists.</h1>"
+        except Exception as e:
+            return f"<h1>ERROR: {e}</h1>"
