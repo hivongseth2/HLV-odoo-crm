@@ -250,6 +250,20 @@ class CustomBarcodeScanController(http.Controller):
                 return (2, p.id)
 
             packs_sorted = sorted(packs, key=_priority)
+            
+            # [NEW] Nếu có nhiều phiếu -> Trả về danh sách để user chọn
+            if len(packs_sorted) > 1:
+                return {
+                    'type': 'custom_pack_selection',
+                    'title': f"Tìm thấy {len(packs_sorted)} phiếu PACK cho {picking.name}",
+                    'items': [{
+                        'id': p.id,
+                        'name': p.name,
+                        'state': dict(p._fields['state'].selection).get(p.state, p.state),
+                        'date': p.scheduled_date and p.scheduled_date.strftime('%d/%m') or ''
+                    } for p in packs_sorted]
+                }
+
             next_picking = packs_sorted and packs_sorted[0] or False
 
             if next_picking:
