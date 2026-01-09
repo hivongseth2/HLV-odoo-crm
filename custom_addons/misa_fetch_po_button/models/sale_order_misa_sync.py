@@ -540,7 +540,7 @@ class SaleOrder(models.Model):
 
         # Cập nhật thông tin partner chính từ MISA (địa chỉ, phone, province...)
         partner_vals = {}
-        billing_addr = data.get("ShippingAddress")
+        billing_addr = data.get("BillingAddress")
         partner_phone = data.get("Phone")
         partner_province = data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText") 
 
