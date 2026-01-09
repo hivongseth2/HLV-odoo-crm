@@ -1123,6 +1123,52 @@ class SaleOrder(models.Model):
             self.write(vals_header_upd)
             _logger.info("✅ Đã cập nhật misa_saler_code/order_date/httt/htgh/misa_delivery cho SO %s", self.name)
 
+        # --------- Cập nhật Địa chỉ Giao hàng (như action_resync_from_misa_hard) ---------
+        try:
+             # Danh sách e_accounts để xác định khách hàng TMĐT
+            e_accounts = {
+                "TIKTOK HOÀNG LONG VŨ",
+                "SHOPEE TRANG MILWAUKEE",
+                "SHOPEE TRANG TBCN HLV",
+                "SHOPEE TRANG DEWALT STANLEY",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE STANLEY",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_SHOPEE TBCN",
+                "KHÁCH LẺ KHÔNG LẤY HÓA ĐƠN_TIKTOK",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE TBCN",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_TIKTOK",
+                "TOOL DEWALT",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE HLV",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE STANLEY",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE MILWAUKEE",
+                "KHÁCH HÀNG KHÔNG CUNG CẤP THÔNG TIN_SHOPEE DEWALT",
+            }
+            
+            shipping_addr = env['misa.api.utils'].extract_shipping_address_from_data(data) or ''
+            partner_name  = data.get("AccountIDText") or data.get("BillingAccountIDText") or _("Khách hàng MISA")
+            shipping_contact_name = owner_date.get('shipping_contact') or data.get("ShippingContactIDText")
+            partner = odoo_utils._get_or_create_partner(partner_name)
+
+            delivery_contact = env['sale.api.import.wizard']._get_or_create_delivery_contact(
+                parent_partner=partner,
+                addr_str=shipping_addr,
+                phone=data.get("Phone"),
+                province_text=data.get("ShippingProvinceIDText") or data.get("BillingProvinceIDText"),
+                contact_name=shipping_contact_name.strip() if shipping_contact_name else None,
+                is_e_account=(partner_name in e_accounts)
+            )
+            
+            if delivery_contact:
+                self.write({
+                    'partner_shipping_id': delivery_contact.id,
+                    'partner_invoice_id': delivery_contact.id
+                })
+                _logger.info("✅ Partial Resync: Updated shipping/invoice address to %s", delivery_contact.display_name)
+        except Exception as e_addr:
+            _logger.warning("❌ Partial Resync: Failed to update address: %s", e_addr)
+
         # --------- Bước 0a: ĐỒNG BỘ TÊN SẢN PHẨM TỪ MISA ---------
         _logger.info("🔄 Đồng bộ tên sản phẩm từ MISA cho SO %s...", self.name)
         synced_count = 0
