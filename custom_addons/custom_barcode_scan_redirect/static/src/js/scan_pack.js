@@ -671,13 +671,18 @@ function applyServerSyncInfo(syncInfoList) {
       const sBarcode = normalizeCode(info.product_barcode || '').toUpperCase();
       const sSku = normalizeCode(info.product_sku || '').toUpperCase();
 
+      // [DEBUG LOG] Print comparison
+      // console.log(`[SYNC CHECK] Item: ${itemBar}/${itemSku} vs Info: ${sBarcode}/${sSku}`);
+
       // Match by Barcode (Fuzzy: endsWith)
       if (sBarcode && (itemBar === sBarcode || itemBar.endsWith(sBarcode) || sBarcode.endsWith(itemBar))) {
+        console.log(`[SYNC MATCH] Matched by Barcode: ${itemBar} ~= ${sBarcode}`);
         targetEl = item;
         break;
       }
       // Match by SKU (Fuzzy: endsWith)
       if (!targetEl && sSku && (itemSku === sSku || itemSku.endsWith(sSku) || sSku.endsWith(itemSku))) {
+        console.log(`[SYNC MATCH] Matched by SKU: ${itemSku} ~= ${sSku}`);
         targetEl = item;
         break;
       }
