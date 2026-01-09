@@ -9,15 +9,27 @@
             <xpath expr="//block[@name='barcode_setting_container']" position="after">
                 <h2 class="mt32">HLV Barcode Shipper</h2>
                 <div class="row mt16 o_settings_container">
+                    <!-- Bỏ qua quét Package -->
                     <div class="col-12 col-lg-6 o_setting_box">
                         <div class="o_setting_left_pane">
-                            <field name="hlv_barcode_shipper_allow_package"/>
+                            <field name="hlv_barcode_skip_package_scan"/>
                         </div>
                         <div class="o_setting_right_pane">
-                            <label for="hlv_barcode_shipper_allow_package"/>
+                            <label for="hlv_barcode_skip_package_scan"/>
                             <div class="text-muted">
-                                Nếu được bật, Shipper có thể quét mã kiện (Package) để xác nhận tất cả sản phẩm bên trong.
-                                Nếu tắt, bắt buộc quét từng sản phẩm.
+                                Nếu bật, các kiện (Package) sẽ tự động được coi là đã quét, shipper không cần quét kiện.
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Bỏ qua quét Sản phẩm lẻ -->
+                    <div class="col-12 col-lg-6 o_setting_box">
+                        <div class="o_setting_left_pane">
+                            <field name="hlv_barcode_skip_product_scan"/>
+                        </div>
+                        <div class="o_setting_right_pane">
+                            <label for="hlv_barcode_skip_product_scan"/>
+                            <div class="text-muted">
+                                Nếu bật, các sản phẩm lẻ sẽ tự động được coi là đã quét, shipper không cần quét từng sản phẩm.
                             </div>
                         </div>
                     </div>
@@ -26,3 +38,4 @@
         </field>
     </record>
 </odoo>
+
