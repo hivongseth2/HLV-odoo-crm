@@ -469,6 +469,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     // ------------------------------------------
 
+    // ------------------------------------------
+
     // C. LOGIC MỚI: Xử lý mã lệnh tạo gói (CMD-CREATE-PACK hoặc AUTO-PKG-...)
     if (barcode === 'CMD-CREATE-PACK' || barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
 
