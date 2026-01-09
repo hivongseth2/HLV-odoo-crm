@@ -159,20 +159,22 @@ class StockPickingPartial(models.Model):
         # Tuy nhiên quant_ids có thể chưa cập nhật ngay nếu chưa done? 
         # Dùng move_line_ids của gói thì chuẩn hơn.
         # Nhưng move_line chưa có quan hệ ngược trực tiếp ra gói nhanh?
-        # Search ngược:
-        related_lines = self.env['stock.move.line'].search([
+        # Search ngược (Use SUDO to ensure visibility of changes made by sudo just now)
+        related_lines = self.env['stock.move.line'].sudo().search([
             ('result_package_id', '=', new_package.id)
         ])
         related_products = related_lines.mapped('product_id')
         
         for product in related_products:
-            # Tính tổng đã đóng gói (Global)
-            packed_qty = sum(self.env['stock.move.line'].search([
+            # Tính tổng đã đóng gói (Global) - Use SUDO
+            packed_qty = sum(self.env['stock.move.line'].sudo().search([
                 ('picking_id', '=', self.id),
                 ('product_id', '=', product.id),
                 ('result_package_id', '!=', False)
             ]).mapped('qty_done'))
             
+            _logger.info(f"[PACK-SYNC] Product {product.display_name} (ID: {product.id}) -> Packed: {packed_qty}")
+
             sync_info.append({
                 'product_id': product.id,
                 'product_barcode': product.barcode,
