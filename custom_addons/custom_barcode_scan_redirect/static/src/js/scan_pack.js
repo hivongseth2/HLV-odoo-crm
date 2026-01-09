@@ -671,13 +671,13 @@ function applyServerSyncInfo(syncInfoList) {
       const sBarcode = normalizeCode(info.product_barcode || '').toUpperCase();
       const sSku = normalizeCode(info.product_sku || '').toUpperCase();
 
-      // Match by Barcode
-      if (sBarcode && itemBar === sBarcode) {
+      // Match by Barcode (Fuzzy: endsWith)
+      if (sBarcode && (itemBar === sBarcode || itemBar.endsWith(sBarcode) || sBarcode.endsWith(itemBar))) {
         targetEl = item;
         break;
       }
-      // Match by SKU
-      if (!targetEl && sSku && itemSku === sSku) {
+      // Match by SKU (Fuzzy: endsWith)
+      if (!targetEl && sSku && (itemSku === sSku || itemSku.endsWith(sSku) || sSku.endsWith(itemSku))) {
         targetEl = item;
         break;
       }
