@@ -390,6 +390,7 @@ class CustomBarcodeScanController(http.Controller):
         delta = float(kwargs.get("delta", 1))
         line_id = kwargs.get("line_id")
         _logger = logging.getLogger(__name__)
+        _logger.info(f"SCAN_ITEM START: barcode={barcode}, delta={delta}, line_id={line_id}")
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         # Tìm move dựa trên barcode
         moves = picking.move_ids_without_package.filtered(lambda m: m.product_id.barcode == barcode)
@@ -406,7 +407,7 @@ class CustomBarcodeScanController(http.Controller):
         # Nếu dòng được chỉ định ĐÃ ĐÓNG GÓI, ta không nên cộng thêm vào nó (trừ khi delta < 0 để sửa)
         # Vì nếu cộng vào, item mới sẽ chui vào gói cũ.
         if target_ml and delta > 0 and target_ml.result_package_id:
-            # _logger.info(f"Target line {target_ml.id} is packed. Switching to find a loose line.")
+            _logger.info(f"Target line {target_ml.id} is packed. Switching to find a loose line.")
             target_ml = None # Force finding a loose line
 
         # Nếu chưa xác định được target_ml (do line_id null hoặc sai hoặc đã bị packed), tự động tìm dòng phù hợp
@@ -419,8 +420,8 @@ class CustomBarcodeScanController(http.Controller):
                 # 1. Tìm dòng loose có sẵn
                 # Tìm tất cả loose lines của sản phẩm này
                 product_movies = moves.mapped('product_id')
-                # Moves đã filter theo barcode ở trên, nên items chỉ thuộc 1 loại product (thường là vậy)
-                
+                _logger.info(f"Searching loose line for product {product_movies.ids} in picking {picking.id}")
+
                 loose_candidates = request.env['stock.move.line'].sudo().search([
                     ('picking_id', '=', picking.id),
                     ('product_id', 'in', product_movies.ids),
@@ -429,9 +430,9 @@ class CustomBarcodeScanController(http.Controller):
 
                 if loose_candidates:
                     target_ml = loose_candidates[0]
+                    _logger.info(f"Found existing loose line: {target_ml.id}")
                 else:
-                    # 2. Không có dòng loose nào -> Phải tạo mới
-                    # Lấy 1 dòng mẫu để copy (ưu tiên dòng có sẵn trong moves)
+                    _logger.info("No loose line found. Creating new...")
                     sample_ml = None
                     for m in moves:
                         if m.move_line_ids:
@@ -444,6 +445,7 @@ class CustomBarcodeScanController(http.Controller):
                             'qty_done': 0,
                             'result_package_id': False,
                         })
+                        _logger.info(f"Created new from sample: {target_ml.id}")
                     else:
                          # Trường hợp move chưa có line nào? (Ít gặp vì thường Odoo tạo sẵn)
                          # Tạo line từ move
@@ -457,6 +459,7 @@ class CustomBarcodeScanController(http.Controller):
                                  'location_dest_id': moves[0].location_dest_id.id,
                                  'qty_done': 0,
                              })
+                             _logger.info(f"Created new from scratch: {target_ml.id}")
 
             # Nếu đang trừ: tìm dòng có qty_done > 0
             elif delta < 0:
@@ -498,6 +501,8 @@ class CustomBarcodeScanController(http.Controller):
             
             move_remain = max(0, move.product_uom_qty - move_total_done)
             
+            _logger.info(f"Updating line {ml.id}. Current: {current_qty}. Move Total: {move_total_done}. Remain: {move_remain}")
+
             if delta > 0:
                 # Chỉ cộng phần còn thiếu của move này
                 # [LOGIC] Thực ra user muốn scan bao nhiêu cũng được, miễn là tổng không quá demand?
@@ -525,6 +530,7 @@ class CustomBarcodeScanController(http.Controller):
                     
                     # Recalculate correctly
                     new_total_done_all = sum(l.qty_done for l in move.move_line_ids)
+                    _logger.info(f"Updated Done Qty: {new_qty}. New Move Total: {new_total_done_all}")
 
                     updated_lines.append({
                         "line_id": ml.id,
@@ -549,6 +555,8 @@ class CustomBarcodeScanController(http.Controller):
                         "required_qty": move.product_uom_qty,
                         "barcode": move.product_id.barcode
                     })
+        
+        _logger.info(f"Returning updated_lines: {len(updated_lines)}")
         if not updated_lines:
             # Trường hợp delta > 0 nhưng không tìm thấy dòng nào còn thiếu (dù check tổng ở trên đã pass)
             # Có thể do logic phân bổ move_line phức tạp, ta báo lỗi hoặc ignore
