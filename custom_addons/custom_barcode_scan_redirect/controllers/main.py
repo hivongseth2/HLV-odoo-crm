@@ -555,12 +555,20 @@ class CustomBarcodeScanController(http.Controller):
                     # moves variable was filtered by product barcode at start of function
                     global_total_done = sum(sum(ml.qty_done for ml in m.move_line_ids) for m in moves)
                     
-                    _logger.info(f"Updated Done Qty: {new_qty}. New Global Total: {global_total_done}")
+                    # [NEW] Calculate Global Packed Qty to force sync Frontend
+                    global_packed_qty = sum(request.env['stock.move.line'].sudo().search([
+                        ('picking_id', '=', picking.id),
+                        ('product_id', '=', move.product_id.id),
+                        ('result_package_id', '!=', False)
+                    ]).mapped('qty_done'))
+                    
+                    _logger.info(f"Updated Done Qty: {new_qty}. New Global Total: {global_total_done}. Packed: {global_packed_qty}")
 
                     updated_lines.append({
                         "line_id": ml.id,
                         "product": move.product_id.display_name,
                         "done_qty": global_total_done, # Return GLOBAL total
+                        "packed_qty": global_packed_qty, # Return GLOBAL packed (Force sync FE)
                         "required_qty": sum(m.product_uom_qty for m in moves), # Return GLOBAL required (lines 400 already calcs this but we re-sum or use var)
                         "barcode": move.product_id.barcode 
                     })

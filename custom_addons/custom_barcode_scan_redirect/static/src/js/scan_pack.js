@@ -315,6 +315,19 @@ document.addEventListener("DOMContentLoaded", function () {
           if (doneEl) doneEl.innerText = item.done_qty;
         }
 
+        // [NEW] FORCE SYNC PACKED QTY FROM SERVER (Self-Correction)
+        // If server returns packed_qty, overwrite client state to prevent corruption
+        if (typeof item.packed_qty !== 'undefined') {
+          const srvPacked = parseFloat(item.packed_qty);
+          const oldPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
+          if (Math.abs(oldPacked - srvPacked) > 0.001) {
+            console.warn(`[AUTO-SYNC] Correcting Packed Qty: ${oldPacked} -> ${srvPacked}`);
+            el.setAttribute('data-packed-qty', srvPacked);
+          }
+        }
+        // Force update unpacked label
+        updateUnpackedLabel(el);
+
         if (item.done_qty >= required) el.classList.add("completed");
         else el.classList.remove("completed");
 
