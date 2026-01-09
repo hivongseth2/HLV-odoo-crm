@@ -132,10 +132,10 @@ class BarcodeShipper {
 
     playSound(type = 'success') {
         try {
-            const soundPath = type === 'success' 
+            const soundPath = type === 'success'
                 ? '/custom_barcode_scan_redirect/static/src/sound/success.mp3'
                 : '/custom_barcode_scan_redirect/static/src/sound/error.mp3';
-            new Audio(soundPath).play().catch(() => {});
+            new Audio(soundPath).play().catch(() => { });
         } catch (e) {
             console.warn('Sound play failed:', e);
         }
@@ -287,21 +287,27 @@ class BarcodeShipper {
                 return;
             }
 
-            // Initialize items with scanned_qty = 0
+            // Initialize items with scanned_qty based on 'scanned' flag from API
+            // If scanned=true (item was skipped by setting), set scanned_qty = qty (fully scanned)
             this.currentItems = (res.items || []).map(item => {
-                return { ...item, scanned_qty: 0 };
+                const preScanned = item.scanned === true;
+                return {
+                    ...item,
+                    scanned_qty: preScanned ? (item.qty || 0) : 0
+                };
             });
 
             this.updateOrderInfo(res.picking);
 
-            const total = this.currentItems.length; // Total unique items
             const totalQty = this.currentItems.reduce((sum, i) => sum + (i.qty || 0), 0);
+            const scannedQty = this.currentItems.reduce((sum, i) => sum + (i.scanned_qty || 0), 0);
+            const allScanned = this.currentItems.every(i => (i.scanned_qty || 0) >= (i.qty || 0));
 
             this.updateItemsList(this.currentItems);
             this.updateProgress({
                 total_qty: totalQty,
-                scanned_qty: 0,
-                all_scanned: false,
+                scanned_qty: scannedQty,
+                all_scanned: allScanned,
             });
         } catch (e) {
             console.error(e);
@@ -414,7 +420,7 @@ class BarcodeShipper {
                 // Find item in local list
                 let found = false;
                 let alreadyFull = false;
-                
+
                 this.currentItems = (this.currentItems || []).map(item => {
                     if (!item.barcode) return item;
                     if (item.barcode === barcode) {
@@ -457,7 +463,7 @@ class BarcodeShipper {
                     // Success - update UI
                     this.showMessage('item-result', res.message, 'success');
                     this.playSound('success');
-                    
+
                     const totalQty = this.currentItems.reduce((sum, i) => sum + (i.qty || 0), 0);
                     const scannedQty = this.currentItems.reduce((sum, i) => sum + (i.scanned_qty || 0), 0);
                     const allScanned = this.currentItems.every(i => (i.scanned_qty || 0) >= (i.qty || 0));
@@ -499,7 +505,7 @@ class BarcodeShipper {
             if (res.success) {
                 this.showMessage('pick-result', '✅ Giao hàng thành công! Đã sẵn sàng cho đơn tiếp theo.', 'success');
                 this.playSound('success');
-                
+
                 // Reset immediately to Step 1
                 this.startNewDelivery();
             } else {
