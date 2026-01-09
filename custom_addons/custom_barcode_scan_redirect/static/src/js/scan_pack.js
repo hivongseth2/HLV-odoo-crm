@@ -275,11 +275,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const response = await res.json();
       const result = response.result;
 
-      // [DEBUG ALERT] Show exactly what server returned
-      if (result && result.scanned && result.scanned.length > 0) {
-        const item = result.scanned[0];
-        alert(`SERVER RETURNED:\nDone: ${item.done_qty}\nPacked (Server): ${item.packed_qty}\nRequired: ${item.required_qty}`);
-      }
+      // [DEBUG ALERT REMOVED]
 
       if (result?.error) {
         toast.error(result.error);
@@ -507,17 +503,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // 2. Validate: Nếu items rỗng nghĩa là tất cả đã vào gói hết rồi
       if (items.length === 0) {
-        // [DEBUG] Show detailed reason why it is empty
-        const details = [...document.querySelectorAll("#product_list .product-item")].map(el => {
-          const d = parseFloat(el.querySelector(".done-input")?.value || 0);
-          const p = parseFloat(el.dataset.packedQty || 0);
-          const lineId = el.dataset.lineId;
-          return `L${lineId}: Done=${d}, Packed=${p} => ToPack=${d - p}`;
-        }).join("\n");
-
-        alert(`DEBUG ERROR: All Packed condition met!\n${details}`);
-
-        toast.warn(`Không có sản phẩm nào mới để đóng gói (Tất cả đã nằm trong gói).`);
+        toast.warn("Không có sản phẩm nào mới để đóng gói (Tất cả đã nằm trong gói).");
         playError();
         return;
       }
@@ -561,27 +547,15 @@ document.addEventListener("DOMContentLoaded", function () {
             // Fallback nếu không có sync_info (Legacy)
             // (Giữ lại logic cũ phòng khi server chưa update kịp code, nhưng nên ưu tiên sync_info)
             if (items && items.length > 0) {
-              // ... (Logic cũ - tạm thời comment hoặc xóa nếu tự tin)
-              // Để an toàn, chỉ chạy nếu ko có sync_info
-              items.forEach(item => {
-                const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
-                if (el) {
-                  const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
-                  const qtyPacked = parseFloat(item.qty || 0);
-                  // Chỉ cộng dồn tạm thời (Optimistic), hy vọng lần sau sync sẽ chuẩn
-                  el.setAttribute('data-packed-qty', currentPacked + qtyPacked);
-                  updateUnpackedLabel(el);
-                }
-              });
+              // Legacy fallback removed to prevent state corruption.
             }
+
+            const pkgId = result.package_id;
+            const pkgName = result.package_name;
+
+            // Render preview (Optimistic)
+            renderNewPackageToPanel(pkgId, pkgName, items);
           }
-
-          const pkgId = result.package_id;
-          const pkgName = result.package_name;
-
-          // Render preview (Optimistic)
-          renderNewPackageToPanel(pkgId, pkgName, items);
-
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
           playError();
