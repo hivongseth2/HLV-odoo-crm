@@ -616,7 +616,7 @@ class SaleApiImportWizard(models.TransientModel):
             if not existing:
                 _logger.info("🆕 [E-ACCOUNT] No existing contact with addr='%s' → will create new", addr_str)
         else:
-        else:
+
             # ===== LOGIC CHO KHÁCH HÀNG THƯỜNG =====
             if contact_name:
                  # Ưu tiên tìm theo tên contact - tìm cả 'delivery' và 'contact' để migrate
