@@ -415,12 +415,14 @@ class CustomBarcodeScanController(http.Controller):
             except:
                 target_ml = None
 
-        # [MODIFIED] Check target_ml status
-        # Nếu dòng được chỉ định ĐÃ ĐÓNG GÓI, ta không nên cộng thêm vào nó (trừ khi delta < 0 để sửa)
-        # Vì nếu cộng vào, item mới sẽ chui vào gói cũ.
-        if target_ml and delta > 0 and target_ml.result_package_id:
-            _logger.info(f"Target line {target_ml.id} is packed. Switching to find a loose line.")
-            target_ml = None # Force finding a loose line
+        if target_ml:
+            # Force read-ahead/prefetch
+            is_packed = target_ml.sudo().result_package_id
+            _logger.info(f"Target Line {target_ml.id} Check. Packed: {is_packed.id if is_packed else 'False'}")
+            
+            if delta > 0 and is_packed:
+                _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}). Switching to find a loose line.")
+                target_ml = None # Force finding a loose line
 
         # Nếu chưa xác định được target_ml (do line_id null hoặc sai hoặc đã bị packed), tự động tìm dòng phù hợp
         if not target_ml:
