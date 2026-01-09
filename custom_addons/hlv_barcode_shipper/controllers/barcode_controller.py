@@ -61,6 +61,28 @@ class BarcodeShipperController(http.Controller):
             )
 
         if not pick:
+            # 1.1) Thử tìm theo Sale Order (Phiếu báo giá)
+            SaleOrder = request.env.get("sale.order")
+            if SaleOrder is not None:
+                so = SaleOrder.sudo().search([("name", "=", pick_name)], limit=1)
+                if not so:
+                    so = SaleOrder.sudo().search([("name", "ilike", pick_name)], limit=1)
+
+                if so:
+                    # Nếu tìm thấy SO, tìm phiếu OUT liên quan
+                    # Điều kiện: OUT (outgoing), trạng thái sẵn sàng
+                    out_from_so = so.picking_ids.filtered(
+                        lambda p: p.picking_type_id.code == "outgoing"
+                        and p.state in ["assigned", "partially_available"]
+                    )
+                    if out_from_so:
+                        return out_from_so[0]  # Lấy phiếu đầu tiên
+                    
+                    # Nếu tìm thấy SO mà không có OUT phù hợp -> Báo lỗi cụ thể
+                    raise UserError(
+                        f"Phiếu báo giá {so.name} không có phiếu xuất kho (OUT) nào đang sẵn sàng."
+                    )
+
             raise UserError(f"Không tìm thấy phiếu {pick_name}")
 
         # 2) thử theo group_id
