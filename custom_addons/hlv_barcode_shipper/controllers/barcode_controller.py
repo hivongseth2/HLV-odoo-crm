@@ -120,13 +120,11 @@ class BarcodeShipperController(http.Controller):
         """
         items = []
 
-        # 0. Check Setting
-        # TEMPORARY FIX: Hardcode to True until DB is updated
-        # try:
-        #     allow_package = request.env.company.hlv_barcode_shipper_allow_package
-        # except Exception:
-        #     allow_package = True
-        allow_package = True
+        # Đọc setting từ company (với fallback nếu field chưa tồn tại)
+        try:
+            allow_package = request.env.company.hlv_barcode_shipper_allow_package
+        except Exception:
+            allow_package = True
 
         # 1. Nếu cho phép Package: Lấy danh sách Packages (như cũ)
         if allow_package and picking.package_level_ids:
@@ -193,13 +191,11 @@ class BarcodeShipperController(http.Controller):
         if not barcode:
             return {"success": False, "error": "Mã vạch trống"}
 
-        # 0. Check Setting
-        # 0. Check Setting
-        # try:
-        #     allow_package = request.env.company.hlv_barcode_shipper_allow_package
-        # except Exception:
-        #     allow_package = True
-        allow_package = True
+        # Đọc setting từ company (với fallback nếu field chưa tồn tại)
+        try:
+            allow_package = request.env.company.hlv_barcode_shipper_allow_package
+        except Exception:
+            allow_package = True
 
         # Ưu tiên PACK (package_level) - CHỈ KHI ĐƯỢC PHÉP
         if allow_package:
@@ -534,18 +530,3 @@ class BarcodeShipperController(http.Controller):
         return request.render(
             "hlv_barcode_shipper.shipper_interface", {"user": request.env.user}
         )
-
-    # ===== TEMP FIX: Create Column Manual =====
-    @http.route("/api/barcode/fix_db", type="http", auth="user", csrf=False)
-    def fix_db_column(self, **kwargs):
-        """Manually add the missing column to prevent crash."""
-        try:
-            cr = request.env.cr
-            # Check if column exists
-            cr.execute("SELECT column_name FROM information_schema.columns WHERE table_name='res_company' AND column_name='hlv_barcode_shipper_allow_package'")
-            if not cr.fetchone():
-                cr.execute("ALTER TABLE res_company ADD COLUMN hlv_barcode_shipper_allow_package BOOLEAN DEFAULT true")
-                return "<h1>SUCCESS: Column 'hlv_barcode_shipper_allow_package' added. You can now enable the code safely.</h1>"
-            return "<h1>OK: Column already exists.</h1>"
-        except Exception as e:
-            return f"<h1>ERROR: {e}</h1>"

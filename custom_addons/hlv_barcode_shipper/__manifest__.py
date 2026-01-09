@@ -4,12 +4,13 @@
 {
     "name": "HLV Barcode Shipper",
     "summary": "Mobile barcode screen for shipper to scan PICK -> OUT",
-    "version": "18.0.1.0.0",
+    "version": "18.0.1.0.1",
     "author": "Hoang Long Vu",
     "website": "https://hoanglongvu.com",
     "category": "Inventory/Barcode",
     "license": "OPL-1",
     "depends": ["stock", "web"],
+    "pre_init_hook": "pre_init_hook",
     "data": [
         "security/hlv_barcode_shipper_security.xml",
         "security/ir.model.access.csv",
@@ -27,3 +28,4 @@
     "installable": True,
     "application": False,
 }
+
