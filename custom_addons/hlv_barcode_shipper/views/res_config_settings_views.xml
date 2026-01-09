@@ -11,10 +11,10 @@
                 <div class="row mt16 o_settings_container">
                     <div class="col-12 col-lg-6 o_setting_box">
                         <div class="o_setting_left_pane">
-                            <field name="hlv_barcode_shipper_allow_package"/>
+                            <!-- <field name="hlv_barcode_shipper_allow_package"/> -->
                         </div>
                         <div class="o_setting_right_pane">
-                            <label for="hlv_barcode_shipper_allow_package"/>
+                            <!-- <label for="hlv_barcode_shipper_allow_package"/> -->
                             <div class="text-muted">
                                 Nếu được bật, Shipper có thể quét mã kiện (Package) để xác nhận tất cả sản phẩm bên trong.
                                 Nếu tắt, bắt buộc quét từng sản phẩm.
