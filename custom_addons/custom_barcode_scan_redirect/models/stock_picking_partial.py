@@ -160,6 +160,9 @@ class StockPickingPartial(models.Model):
         # Dùng move_line_ids của gói thì chuẩn hơn.
         # Nhưng move_line chưa có quan hệ ngược trực tiếp ra gói nhanh?
         # Search ngược (Use SUDO to ensure visibility of changes made by sudo just now)
+        # [FIX] Force flush to ensure DB has the latest move_line updates (result_package_id)
+        self.env['stock.move.line'].flush_model(['result_package_id', 'qty_done'])
+        
         related_lines = self.env['stock.move.line'].sudo().search([
             ('result_package_id', '=', new_package.id)
         ])
