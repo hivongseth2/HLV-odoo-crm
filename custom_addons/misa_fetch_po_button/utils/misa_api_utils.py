@@ -497,6 +497,11 @@ class MisaApiUtils(models.AbstractModel):
         # 3. Build từ component Billing -> return
         # 4. Lấy field BillingAddress -> return
         
+        # DEBUG Log raw address fields
+        _logger.info("📍 MISA Resync Addr Debug: ShipAddr='%s', ShipStreet='%s', ShipWard='%s', ShipDist='%s', ShipProv='%s'", 
+                     cd.get("ShippingAddress"), cd.get("ShippingStreet"), cd.get("ShippingWardIDText"), 
+                     cd.get("ShippingDistrictIDText"), cd.get("ShippingProvinceIDText"))
+
         # 1. Component Shipping
         ship_parts = [
             cd.get("ShippingStreet"),
@@ -505,15 +510,26 @@ class MisaApiUtils(models.AbstractModel):
             _normalize_admin(cd.get("ShippingProvinceIDCustomText") or cd.get("ShippingProvinceIDText")),
             cd.get("ShippingCountryIDText")
         ]
+        
+        # Check if we have significant components (Street OR Ward OR District)
+        # Avoid matching just "Việt Nam" or "Province" if everything else is empty
+        has_significant_ship = (
+            cd.get("ShippingStreet") or 
+            cd.get("ShippingWardIDText") or 
+            cd.get("ShippingDistrictIDText")
+        )
+        
         built_ship = _join_address_parts(*ship_parts)
         
-        # Chỉ dùng component nếu có ít nhất ShippingStreet (để tránh trường hợp MISA trả về Ward/District nhưng thiếu Street)
-        if built_ship and cd.get("ShippingStreet"):
+        # Nếu có thành phần quan trọng (Street/Ward/District) -> Dùng components
+        if built_ship and has_significant_ship:
+            _logger.info("   -> Using Shipping Components: %s", built_ship)
             return built_ship
             
-        # 2. Field ShippingAddress (Fallback nếu component thiếu Street)
+        # 2. Field ShippingAddress (Fallback)
         shipping_address = (cd.get("ShippingAddress") or "").strip()
         if shipping_address:
+            _logger.info("   -> Using ShippingAddress field: %s", shipping_address)
             return shipping_address
 
         # 3. Component Billing

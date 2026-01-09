@@ -671,7 +671,10 @@ class SaleApiImportWizard(models.TransientModel):
                 vals_upd['phone'] = phone
 
             if vals_upd:
+                _logger.info("♻️ Updating delivery contact %s: %s", existing.name, vals_upd)
                 existing.write(vals_upd)
+            else:
+                _logger.info("♻️ Existing delivery contact %s found, NO CHANGES detected.", existing.name)
             return existing
 
         # Tạo mới contact
