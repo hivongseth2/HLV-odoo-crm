@@ -260,11 +260,18 @@ class BarcodeShipper {
         try {
             const res = await this.apiCall('/api/barcode/scan_pick', { barcode });
             if (res.success) {
-                this.currentPickingId = res.out_picking_id;
-                this.showMessage('pick-result', res.message, 'success');
-                this.playSound('success');
-                await this.loadOutOrderDetails();
-                setTimeout(() => this.showStep('step-scan-items'), 1000);
+                if (res.multiple && res.pickings && res.pickings.length > 1) {
+                    // Nhiều phiếu OUT -> hiển thị modal chọn
+                    this.showPickingSelectionModal(res.pickings);
+                    this.showMessage('pick-result', res.message, 'warning');
+                } else {
+                    // Chỉ 1 phiếu -> tự động chọn
+                    this.currentPickingId = res.out_picking_id;
+                    this.showMessage('pick-result', res.message, 'success');
+                    this.playSound('success');
+                    await this.loadOutOrderDetails();
+                    setTimeout(() => this.showStep('step-scan-items'), 1000);
+                }
             } else {
                 this.showMessage('pick-result', res.error || 'Không tìm thấy', 'danger');
                 this.playSound('error');
@@ -275,6 +282,86 @@ class BarcodeShipper {
             this.playSound('error');
         }
     }
+
+    showPickingSelectionModal(pickings) {
+        // Tạo hoặc lấy modal
+        let modal = document.getElementById('picking-selection-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'picking-selection-modal';
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+                    <div class="modal-header">
+                        <h3>Chọn phiếu xuất kho</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div id="picking-selection-list" class="modal-body"></div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            // Bind close event
+            modal.querySelector('.modal-close').addEventListener('click', () => this.closeModal(modal));
+            modal.addEventListener('click', e => {
+                if (e.target === modal) this.closeModal(modal);
+            });
+        }
+
+        // Render danh sách
+        const list = modal.querySelector('#picking-selection-list');
+        list.innerHTML = pickings.map(p => `
+            <div class="picking-option" data-id="${p.id}" style="
+                padding: 15px;
+                margin: 10px 0;
+                background: #f8f9fa;
+                border-radius: 8px;
+                cursor: pointer;
+                border: 2px solid transparent;
+                transition: all 0.2s;
+            ">
+                <div style="font-weight: bold; font-size: 1.1rem; color: var(--primary-color);">
+                    ${p.name}
+                </div>
+                <div style="font-size: 0.9rem; color: #666; margin-top: 5px;">
+                    <div><i class="fa fa-user"></i> ${p.partner_name || 'N/A'}</div>
+                    <div><i class="fa fa-file-alt"></i> Nguồn: ${p.origin || 'N/A'}</div>
+                    <div><i class="fa fa-calendar"></i> Ngày: ${p.scheduled_date || 'N/A'}</div>
+                </div>
+            </div>
+        `).join('');
+
+        // Bind click events
+        list.querySelectorAll('.picking-option').forEach(el => {
+            el.addEventListener('click', async () => {
+                const pickingId = parseInt(el.dataset.id);
+                this.closeModal(modal);
+                await this.selectPicking(pickingId);
+            });
+
+            // Hover effect
+            el.addEventListener('mouseenter', () => {
+                el.style.borderColor = 'var(--primary-color)';
+                el.style.background = '#e3f2fd';
+            });
+            el.addEventListener('mouseleave', () => {
+                el.style.borderColor = 'transparent';
+                el.style.background = '#f8f9fa';
+            });
+        });
+
+        this.showModal(modal);
+    }
+
+    async selectPicking(pickingId) {
+        this.currentPickingId = pickingId;
+        this.showMessage('pick-result', 'Đang tải thông tin phiếu...', 'warning');
+        this.playSound('success');
+        await this.loadOutOrderDetails();
+        this.showMessage('pick-result', `Đã chọn phiếu`, 'success');
+        setTimeout(() => this.showStep('step-scan-items'), 500);
+    }
+
 
     async loadOutOrderDetails() {
         if (!this.currentPickingId) return;

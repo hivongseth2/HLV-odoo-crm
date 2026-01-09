@@ -34,31 +34,26 @@ class BarcodeShipperController(http.Controller):
             _logger.warning("Failed to log scan: %s", e)
 
     # ===== Helper: tìm OUT từ PICK – KHÔNG ở model, chỉ ở controller =====
-    def _find_out_picking_by_pick_name(self, pick_name):
+    def _find_out_pickings_by_pick_name(self, pick_name):
+        """
+        Tìm TẤT CẢ phiếu OUT liên quan đến pick_name.
+        Trả về recordset (có thể nhiều phiếu).
+        """
         Picking = request.env["stock.picking"].sudo()
 
         # 0) Thử luôn: có phải đã là phiếu OUT không?
-        out_direct = Picking.search(
-            [
-                ("name", "=", pick_name),
-                ("picking_type_id.code", "=", "outgoing"),
-                ("state", "in", ["assigned", "partially_available"]),
-            ],
-            limit=1,
-        )
+        out_direct = Picking.search([
+            ("name", "=", pick_name),
+            ("picking_type_id.code", "=", "outgoing"),
+            ("state", "in", ["assigned", "partially_available"]),
+        ])
         if out_direct:
             return out_direct
 
         # 1) tìm phiếu PICK theo name (bất kể code gì)
-        pick = Picking.search(
-            [("name", "=", pick_name)],
-            limit=1,
-        )
+        pick = Picking.search([("name", "=", pick_name)], limit=1)
         if not pick:
-            pick = Picking.search(
-                [("name", "ilike", pick_name)],
-                limit=1,
-            )
+            pick = Picking.search([("name", "ilike", pick_name)], limit=1)
 
         if not pick:
             # 1.1) Thử tìm theo Sale Order (Phiếu báo giá)
@@ -69,49 +64,43 @@ class BarcodeShipperController(http.Controller):
                     so = SaleOrder.sudo().search([("name", "ilike", pick_name)], limit=1)
 
                 if so:
-                    # Nếu tìm thấy SO, tìm phiếu OUT liên quan
-                    # Điều kiện: OUT (outgoing), trạng thái sẵn sàng
+                    # Nếu tìm thấy SO, tìm TẤT CẢ phiếu OUT liên quan
                     out_from_so = so.picking_ids.filtered(
                         lambda p: p.picking_type_id.code == "outgoing"
                         and p.state in ["assigned", "partially_available"]
                     )
                     if out_from_so:
-                        return out_from_so[0]  # Lấy phiếu đầu tiên
+                        return out_from_so
                     
-                    # Nếu tìm thấy SO mà không có OUT phù hợp -> Báo lỗi cụ thể
                     raise UserError(
                         f"Phiếu báo giá {so.name} không có phiếu xuất kho (OUT) nào đang sẵn sàng."
                     )
 
             raise UserError(f"Không tìm thấy phiếu {pick_name}")
 
-        # 2) thử theo group_id
-        out = False
+        # 2) thử theo group_id - lấy TẤT CẢ
+        out_pickings = Picking.browse()
         if pick.group_id:
-            out = Picking.search(
-                [
-                    ("group_id", "=", pick.group_id.id),
-                    ("picking_type_id.code", "=", "outgoing"),
-                    ("state", "in", ["assigned", "partially_available"]),
-                ],
-                limit=1,
-            )
+            out_pickings = Picking.search([
+                ("group_id", "=", pick.group_id.id),
+                ("picking_type_id.code", "=", "outgoing"),
+                ("state", "in", ["assigned", "partially_available"]),
+            ])
 
-        # 3) fallback theo origin
-        if not out and pick.origin:
-            out = Picking.search(
-                [
-                    ("origin", "=", pick.origin),
-                    ("picking_type_id.code", "=", "outgoing"),
-                    ("state", "in", ["assigned", "partially_available"]),
-                ],
-                limit=1,
-            )
+        # 3) fallback theo origin - lấy TẤT CẢ
+        if not out_pickings and pick.origin:
+            out_pickings = Picking.search([
+                ("origin", "=", pick.origin),
+                ("picking_type_id.code", "=", "outgoing"),
+                ("state", "in", ["assigned", "partially_available"]),
+            ])
 
-        if not out:
+        if not out_pickings:
             raise UserError(f"Không tìm thấy phiếu xuất kho (OUT) nào liên quan đến {pick_name}")
 
-        return out
+        return out_pickings
+
+
 
     def _get_packages_info(self, picking):
         """
@@ -218,10 +207,14 @@ class BarcodeShipperController(http.Controller):
     )
     def scan_pick_order(self, **kwargs):
         """
-        Scan PICK order barcode and find related OUT order.
+        Scan PICK order barcode and find related OUT order(s).
 
         Payload:
         { "barcode": "PICK00001" }
+        
+        Response:
+        - Nếu có 1 OUT: { success: true, out_picking_id, out_picking_name, ... }
+        - Nếu có nhiều OUT: { success: true, multiple: true, pickings: [...] }
         """
         barcode = ""
         try:
@@ -235,23 +228,50 @@ class BarcodeShipperController(http.Controller):
             if not barcode:
                 return {"success": False, "error": "Vui lòng nhập mã vạch"}
 
-            out_picking = self._find_out_picking_by_pick_name(barcode)
+            out_pickings = self._find_out_pickings_by_pick_name(barcode)
 
-            # Log
-            self._log_scan(
-                barcode=barcode,
-                scan_type="pick",
-                picking_id=out_picking.id,
-                status="success",
-                message=f"Tìm thấy đơn xuất kho {out_picking.name}",
-            )
-
-            return {
-                "success": True,
-                "out_picking_id": out_picking.id,
-                "out_picking_name": out_picking.name,
-                "message": f"Đã tìm thấy đơn giao hàng {out_picking.name}",
-            }
+            if len(out_pickings) == 1:
+                # Chỉ có 1 phiếu -> tự động chọn
+                out_picking = out_pickings[0]
+                self._log_scan(
+                    barcode=barcode,
+                    scan_type="pick",
+                    picking_id=out_picking.id,
+                    status="success",
+                    message=f"Tìm thấy đơn xuất kho {out_picking.name}",
+                )
+                return {
+                    "success": True,
+                    "out_picking_id": out_picking.id,
+                    "out_picking_name": out_picking.name,
+                    "message": f"Đã tìm thấy đơn giao hàng {out_picking.name}",
+                }
+            else:
+                # Có nhiều phiếu -> trả về danh sách để user chọn
+                pickings_list = []
+                for p in out_pickings:
+                    pickings_list.append({
+                        "id": p.id,
+                        "name": p.name,
+                        "partner_name": p.partner_id.name or "",
+                        "origin": p.origin or "",
+                        "state": p.state,
+                        "scheduled_date": p.scheduled_date.strftime("%d/%m/%Y") if p.scheduled_date else "",
+                    })
+                
+                self._log_scan(
+                    barcode=barcode,
+                    scan_type="pick",
+                    status="success",
+                    message=f"Tìm thấy {len(out_pickings)} phiếu OUT",
+                )
+                
+                return {
+                    "success": True,
+                    "multiple": True,
+                    "pickings": pickings_list,
+                    "message": f"Tìm thấy {len(out_pickings)} phiếu xuất kho. Vui lòng chọn một phiếu.",
+                }
 
         except UserError as e:
             self._log_scan(
@@ -270,6 +290,7 @@ class BarcodeShipperController(http.Controller):
                 message=f"Lỗi hệ thống: {e}",
             )
             return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
+
 
     # ===== API: get OUT details =====
     @http.route(
