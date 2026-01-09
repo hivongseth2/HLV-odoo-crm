@@ -254,6 +254,28 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!lineId) {
       lineId = findLineToUpdate(barcode);
     }
+
+    // [NEW] Client-side Over-Quantity Validation
+    if (lineId) {
+      const checkEl = document.querySelector(`[data-line-id="${lineId}"]`);
+      if (checkEl) {
+        const maxQty = parseFloat(checkEl.getAttribute('data-max-qty') || 0);
+        const input = checkEl.querySelector(".done-input");
+        const currentDone = parseFloat(input ? input.value : (checkEl.querySelector(".done")?.innerText || 0));
+
+        // Allow slight floating point tolerance if needed, but strict for > logic
+        if (maxQty > 0 && (currentDone + delta) > maxQty) {
+          toast.warn(`❌ Không được nhập quá số lượng yêu cầu (${maxQty})!`);
+          playError();
+          // Reset input if it was manual change (heuristic)
+          if (input && Math.abs(currentDone - parseFloat(input.value)) > 0.001) {
+            input.value = input.dataset.currentQty || 0;
+          }
+          return;
+        }
+      }
+    }
+
     try {
       const res = await fetch("/pack_scan/scan_item", {
         method: "POST",
