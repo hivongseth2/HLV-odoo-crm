@@ -403,6 +403,18 @@ class CustomBarcodeScanController(http.Controller):
             return {"error": "⚠️ Sản phẩm này đã được quét đủ!"}
         updated_lines = []
         
+        # --- LOGIC MỚI: Xử lý tìm line_id tự động nếu FE gửi lên null ---
+        target_ml = None
+        
+        # Nếu có line_id cụ thể từ FE
+        if line_id:
+            try:
+                target_ml = request.env['stock.move.line'].sudo().browse(int(line_id))
+                if not target_ml.exists():
+                    target_ml = None # Fallback nếu ID sai
+            except:
+                target_ml = None
+
         # [MODIFIED] Check target_ml status
         # Nếu dòng được chỉ định ĐÃ ĐÓNG GÓI, ta không nên cộng thêm vào nó (trừ khi delta < 0 để sửa)
         # Vì nếu cộng vào, item mới sẽ chui vào gói cũ.
