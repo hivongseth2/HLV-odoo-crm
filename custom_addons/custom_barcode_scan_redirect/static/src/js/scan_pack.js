@@ -275,6 +275,8 @@ document.addEventListener("DOMContentLoaded", function () {
       const response = await res.json();
       const result = response.result;
 
+      // [DEBUG ALERT REMOVED]
+
       if (result?.error) {
         toast.error(result.error);
         playError();
@@ -314,6 +316,19 @@ document.addEventListener("DOMContentLoaded", function () {
           const doneEl = el.querySelector('.done');
           if (doneEl) doneEl.innerText = item.done_qty;
         }
+
+        // [NEW] FORCE SYNC PACKED QTY FROM SERVER (Self-Correction)
+        // If server returns packed_qty, overwrite client state to prevent corruption
+        if (typeof item.packed_qty !== 'undefined') {
+          const srvPacked = parseFloat(item.packed_qty);
+          const oldPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
+          if (Math.abs(oldPacked - srvPacked) > 0.001) {
+            console.warn(`[AUTO-SYNC] Correcting Packed Qty: ${oldPacked} -> ${srvPacked}`);
+            el.setAttribute('data-packed-qty', srvPacked);
+          }
+        }
+        // Force update unpacked label
+        updateUnpackedLabel(el);
 
         if (item.done_qty >= required) el.classList.add("completed");
         else el.classList.remove("completed");
@@ -467,6 +482,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const items = [];
       document.querySelectorAll("#product_list .product-item").forEach(el => {
         const lineId = parseInt(el.dataset.lineId);
+        const name = el.querySelector("strong")?.innerText;
 
         const input = el.querySelector(".done-input");
         const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
@@ -476,6 +492,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Tính số lượng trôi nổi (chưa vào gói)
         const qtyToPack = currentDone - alreadyPacked;
+
+        console.log(`[DEBUG_PACK] ${name} | Line: ${lineId} | Done: ${currentDone} | Packed: ${alreadyPacked} | ToPack: ${qtyToPack}`);
 
         // Chỉ lấy nếu còn hàng chưa đóng gói
         if (lineId && qtyToPack > 0) {
@@ -529,27 +547,15 @@ document.addEventListener("DOMContentLoaded", function () {
             // Fallback nếu không có sync_info (Legacy)
             // (Giữ lại logic cũ phòng khi server chưa update kịp code, nhưng nên ưu tiên sync_info)
             if (items && items.length > 0) {
-              // ... (Logic cũ - tạm thời comment hoặc xóa nếu tự tin)
-              // Để an toàn, chỉ chạy nếu ko có sync_info
-              items.forEach(item => {
-                const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
-                if (el) {
-                  const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
-                  const qtyPacked = parseFloat(item.qty || 0);
-                  // Chỉ cộng dồn tạm thời (Optimistic), hy vọng lần sau sync sẽ chuẩn
-                  el.setAttribute('data-packed-qty', currentPacked + qtyPacked);
-                  updateUnpackedLabel(el);
-                }
-              });
+              // Legacy fallback removed to prevent state corruption.
             }
+
+            const pkgId = result.package_id;
+            const pkgName = result.package_name;
+
+            // Render preview (Optimistic)
+            renderNewPackageToPanel(pkgId, pkgName, items);
           }
-
-          const pkgId = result.package_id;
-          const pkgName = result.package_name;
-
-          // Render preview (Optimistic)
-          renderNewPackageToPanel(pkgId, pkgName, items);
-
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
           playError();
