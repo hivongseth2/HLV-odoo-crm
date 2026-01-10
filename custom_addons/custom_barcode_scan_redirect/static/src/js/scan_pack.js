@@ -186,6 +186,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/\s+/g, '')                             // mọi whitespace (kể cả NBSP)
       .trim();
   }
+  window.normalizeCode = normalizeCode;
 
   function findLineToUpdate(barcode) {
     if (!barcode) return null;
