@@ -110,21 +110,28 @@ class ReportDialogController(ReportController):
             try:
                 ids_list = [int(i) for i in docids.split(",")]
                 
-                # --- BẮT ĐẦU SỬA: Xử lý logic map ID từ Product sang Template ---
-                # Kiểm tra: Nếu báo cáo là của Template nhưng dữ liệu gửi lên lại là Product
+                # --- SỬA LỖI: Cập nhật lại ID để in đúng ---
+                # Nếu báo cáo là Template nhưng đang đứng ở Biến thể (Product)
                 if report.model == 'product.template' and request.env.context.get('active_model') == 'product.product':
-                    # Tìm các biến thể trước
-                    products = request.env['product.product'].browse(ids_list)
-                    # Sau đó lấy ra các mẫu (template) tương ứng của biến thể đó
-                    recs = products.mapped('product_tmpl_id')
+                    # 1. Tìm các biến thể từ ID gửi lên
+                    variants = request.env['product.product'].browse(ids_list)
+                    # 2. Lấy ra các Mẫu (Template) cha tương ứng
+                    templates = variants.mapped('product_tmpl_id')
+                    
+                    # 3. QUAN TRỌNG: Gán lại danh sách ID mới (ID của Template) để hàm in bên dưới dùng
+                    ids_list = templates.ids
+                    
+                    # 4. Gán recs theo ID mới để check quyền
+                    recs = templates
                 else:
-                    # Chạy logic bình thường cho các trường hợp khác
+                    # Các trường hợp khác chạy bình thường
                     recs = request.env[report.model].browse(ids_list)
-                # --- KẾT THÚC SỬA ---
+                # ---------------------------------------------
 
                 recs.check_access("read")
             except Exception:
                 return request.not_found()
+
         report_name = self._compose_report_file_name(ids_list, report)
         pdf, _ = report.with_context(**context)._render_qweb_pdf(reportname, ids_list, data=data)
 
