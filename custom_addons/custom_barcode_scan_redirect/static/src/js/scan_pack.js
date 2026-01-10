@@ -1205,13 +1205,16 @@ async function openPackageEditModal(event) {
       result.sync_info.forEach(info => {
         let targetEl = null;
 
-        // 1. Tìm theo Barcode (Ưu tiên cao nhất)
+        // 1. Tìm theo Barcode (Robust)
         if (info.product_barcode) {
-          targetEl = document.querySelector(`#product_list .product-item[data-barcode="${info.product_barcode}"]`);
+          const normCode = normalizeCode(info.product_barcode);
+          targetEl = [...document.querySelectorAll('#product_list .product-item')]
+            .find(el => normalizeCode(el.dataset.barcode) === normCode);
         }
 
-        // 2. Tìm theo SKU (Default Code)
+        // 2. Fallback: Tìm theo SKU
         if (!targetEl && info.product_sku) {
+          // SKU usually matches exactly, but let's be safe
           targetEl = document.querySelector(`#product_list .product-item[data-default-code="${info.product_sku}"]`);
         }
 
