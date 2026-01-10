@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="cap_generate_product_barcode_wizard_manually_form" model="ir.ui.view">
+            <field name="name">cap.generate.product.barcode.wizard.button.form</field>
+            <field name="model">cap.product.generate.barcode.manually</field>
+            <field name="arch" type="xml">
+                <form string="Generate Barcode">
+                    <group>
+                        <field name="type_generate" widget="radio"/>
+                    </group>
+                    <footer>
+                        <button name="generate_barcode_manually" type="object" string="Generate Barcode"
+                                class="oe_highlight"/>
+                        or
+                        <button special="cancel" string="Close" class="oe_link"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_generate_barcode_manually_cap" model="ir.actions.act_window">
+            <field name="name">Generate Barcode</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">cap.product.generate.barcode.manually</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <record model="ir.ui.view" id="cap_inherit_view_product_product_form">
+            <field name="name">cap.inherit.view.product.product.form</field>
+            <field name="model">product.product</field>
+            <field name="inherit_id" ref="product.product_normal_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='group_general']" position="inside">
+                    <label for="image_product">Barcode Image</label>
+                    <div>
+                        <button name="%(action_generate_barcode_manually_cap)d" type="action"
+                                string="Manually Generate Barcode"
+                                class="oe_link" invisible="is_barcode != False"/>
+                        <field name="is_barcode" invisible="1"/>
+                        <field name="image_product" widget='image' style="width:170px; height:160px;"
+                               class="o_field_image o_field_widget"/>
+                    </div>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="cap_generate_product_barcode_wizard" model="ir.ui.view">
+            <field name="name">cap.generate.product.barcode.wizard</field>
+            <field name="model">cap.product.generate.barcode</field>
+            <field name="arch" type="xml">
+                <form>
+                    <group>
+                        <field name="overwrite"/>
+                        <field name="type_generate"/>
+                    </group>
+                    <footer>
+                        <button name="generate_barcode" type="object" string="Generate Barcode"
+                                class="oe_highlight"/>
+                        or
+                        <button special="cancel" string="Cancel" class="oe_link"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="actions_generate_barcode_cap" model="ir.actions.act_window">
+            <field name="name">Generate Barcode</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">cap.product.generate.barcode</field>
+            <field name="binding_model_id" ref="model_product_product"/>
+            <field name="target">new</field>
+            <field name="view_mode">form</field>
+        </record>
+    </data>
+</odoo>
