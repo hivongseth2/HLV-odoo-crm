@@ -259,20 +259,7 @@
         </template>
 
 
-        <!-- Action to open the Shipper Interface -->
-        <record id="action_barcode_shipper_interface" model="ir.actions.act_url">
-            <field name="name">Shipper Barcode</field>
-            <field name="url">/barcode/shipper</field>
-            <field name="target">self</field>
-        </record>
 
-        <!-- Top-level Menu Item -->
-        <menuitem id="menu_barcode_shipper_root"
-            name="Shipper Scan"
-            action="action_barcode_shipper_interface"
-            web_icon="hlv_barcode_shipper,static/description/icon.png"
-            groups="hlv_barcode_shipper.group_shipper"
-            sequence="10"/>
 
     </data>
 </odoo>
