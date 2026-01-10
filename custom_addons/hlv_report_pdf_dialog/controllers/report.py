@@ -109,11 +109,22 @@ class ReportDialogController(ReportController):
         if docids:
             try:
                 ids_list = [int(i) for i in docids.split(",")]
-                recs = request.env[report.model].browse(ids_list)
-                recs.check_access_rule("read")
+                
+                # --- BẮT ĐẦU SỬA: Xử lý logic map ID từ Product sang Template ---
+                # Kiểm tra: Nếu báo cáo là của Template nhưng dữ liệu gửi lên lại là Product
+                if report.model == 'product.template' and request.env.context.get('active_model') == 'product.product':
+                    # Tìm các biến thể trước
+                    products = request.env['product.product'].browse(ids_list)
+                    # Sau đó lấy ra các mẫu (template) tương ứng của biến thể đó
+                    recs = products.mapped('product_tmpl_id')
+                else:
+                    # Chạy logic bình thường cho các trường hợp khác
+                    recs = request.env[report.model].browse(ids_list)
+                # --- KẾT THÚC SỬA ---
+
+                recs.check_access("read")
             except Exception:
                 return request.not_found()
-
         report_name = self._compose_report_file_name(ids_list, report)
         pdf, _ = report.with_context(**context)._render_qweb_pdf(reportname, ids_list, data=data)
 
