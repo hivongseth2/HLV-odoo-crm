@@ -1223,6 +1223,10 @@ async function openPackageEditModal(event) {
           if (Math.abs(oldPacked - serverPacked) > 0.001) {
             console.warn(`[UI SYNC] Correction for ${info.product_sku || info.product_barcode}: Client(${oldPacked}) -> Server(${serverPacked})`);
             targetEl.setAttribute('data-packed-qty', serverPacked);
+            // [FIX] Update visual label immediately
+            if (typeof updateUnpackedLabel === 'function') {
+              updateUnpackedLabel(targetEl);
+            }
           }
         }
       });
