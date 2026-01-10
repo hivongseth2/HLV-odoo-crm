@@ -76,9 +76,15 @@ class cap_generate_product_barcode(models.TransientModel):
     )
 
     def generate_barcode(self):
-        for record in self.env["product.product"].browse(
-            self._context.get("active_ids")
-        ):
+        active_ids = self._context.get("active_ids")
+        active_model = self._context.get("active_model")
+        
+        if active_model == "product.template":
+            products = self.env["product.template"].browse(active_ids).mapped("product_variant_ids")
+        else:
+            products = self.env["product.product"].browse(active_ids)
+
+        for record in products:
             if not self.overwrite and record.barcode:
                 continue
 

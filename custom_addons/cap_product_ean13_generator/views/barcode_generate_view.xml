@@ -73,5 +73,14 @@
             <field name="target">new</field>
             <field name="view_mode">form</field>
         </record>
+
+        <record id="actions_generate_barcode_cap_template" model="ir.actions.act_window">
+            <field name="name">Generate Barcode</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="res_model">cap.product.generate.barcode</field>
+            <field name="binding_model_id" ref="product.model_product_template"/>
+            <field name="target">new</field>
+            <field name="view_mode">form</field>
+        </record>
     </data>
 </odoo>
