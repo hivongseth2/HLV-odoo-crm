@@ -52,7 +52,7 @@ class CapProductGenerateBarcodeManually(models.TransientModel):
                 barcode_str = self.env["barcode.nomenclature"].sanitize_ean(
                     "%s" % (number_random)
                 )
-            # Create a barcode image
+            # Create a barcode image _
             ean = EAN13(barcode_str, writer=ImageWriter())
             image = ean.render()
 
