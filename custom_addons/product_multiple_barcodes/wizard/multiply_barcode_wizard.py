@@ -9,12 +9,12 @@ class MultiplyBarcodeWizard(models.TransientModel):
     _description = 'Update Product Multiply Barcode Wizard'
 
     name = fields.Char(
-        string='New Barcode',
+        string='Mã vạch mới',
         required=True,
     )
 
     remember_previous_barcode = fields.Boolean(
-        string='Remember previous barcode in "Additional Barcodes" field',
+        string='Lưu mã vạch cũ vào danh sách "Mã vạch bổ sung"',
         default=True,
     )
 

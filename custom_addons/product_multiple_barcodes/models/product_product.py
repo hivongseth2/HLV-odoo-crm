@@ -12,7 +12,7 @@ class ProductProduct(models.Model):
     barcode_ids = fields.One2many(
         'product.barcode.multi',
         'product_id',
-        string='Additional Barcodes',
+        string='Mã vạch bổ sung',
     )
 
     # THIS IS OVERRIDE SQL CONSTRAINTS.
@@ -66,8 +66,8 @@ class ProductProduct(models.Model):
         if barcodes_duplicate:
             raise UserError(
                 _(
-                    "The following barcode(s): {0} was found in other active products."
-                    "\nNote that product barcodes should not repeat themselves both in "
-                    '"Barcode" field and "Additional Barcodes" field.'
+                    "Các mã vạch sau: {0} đã được tìm thấy ở các sản phẩm khác đang hoạt động."
+                    "\nLưu ý rằng mã vạch sản phẩm không được trùng lặp trong cả "
+                    'trường "Mã vạch" và trường "Mã vạch bổ sung".'
                 ).format(", ".join(set(barcodes_duplicate)))
             )
