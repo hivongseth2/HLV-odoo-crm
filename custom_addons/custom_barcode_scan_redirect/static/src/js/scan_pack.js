@@ -1545,6 +1545,7 @@ async function addItemToPackage() {
     toast.error("Lỗi kết nối: " + err.message);
   }
 }
+window.addItemToPackage = addItemToPackage;
 
 async function savePackageChanges() {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
