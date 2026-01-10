@@ -46,6 +46,25 @@
             </field>
         </record>
 
+        <record model="ir.ui.view" id="cap_inherit_view_product_template_form">
+            <field name="name">cap.inherit.view.product.template.form</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_only_form_view"/>
+            <field name="arch" type="xml">
+                <field name="barcode" position="after">
+                    <label for="image_product">Barcode Image</label>
+                    <div class="o_row">
+                        <button name="%(action_generate_barcode_manually_cap)d" type="action"
+                                string="Manually Generate Barcode"
+                                class="oe_link" invisible="is_barcode != False"/>
+                        <field name="is_barcode" invisible="1"/>
+                    </div>
+                    <field name="image_product" widget='image' style="width:170px; height:160px;"
+                           class="o_field_image o_field_widget"/>
+                </field>
+            </field>
+        </record>
+
         <record id="cap_generate_product_barcode_wizard" model="ir.ui.view">
             <field name="name">cap.generate.product.barcode.wizard</field>
             <field name="model">cap.product.generate.barcode</field>

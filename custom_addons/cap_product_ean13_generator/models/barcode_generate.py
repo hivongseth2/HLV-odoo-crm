@@ -34,9 +34,15 @@ class CapProductGenerateBarcodeManually(models.TransientModel):
     )
 
     def generate_barcode_manually(self):
-        for record in self.env["product.product"].browse(
-            self._context.get("active_id")
-        ):
+        active_id = self._context.get("active_id")
+        active_model = self._context.get("active_model")
+        
+        if active_model == "product.template":
+            record = self.env["product.template"].browse(active_id).product_variant_ids[:1]
+        else:
+            record = self.env["product.product"].browse(active_id)
+
+        if record:
             if self.type_generate == "date":
                 barcode_str = self.env["barcode.nomenclature"].sanitize_ean(
                     "%s%s" % (record.id, datetime.now().strftime("%d%m%y%H%M"))
