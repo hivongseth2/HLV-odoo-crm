@@ -43,7 +43,7 @@
         <menuitem id="menu_scan_logs"
                   name="📋 Scan Logs"
                   parent="menu_shipper_management"
-                  action="barcode_scan_log_action"
+                  action="action_barcode_scan_log"
                   sequence="10"
                   groups="hlv_barcode_shipper.group_shipper_manager"/>
         
