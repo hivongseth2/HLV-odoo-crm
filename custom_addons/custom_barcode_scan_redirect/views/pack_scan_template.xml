@@ -151,7 +151,7 @@
                     <div class="panel-section-title" style="font-size: 0.75rem; text-transform: uppercase; color: #868e96; margin-bottom: 0.75rem; font-weight: 700;">Đơn hàng cùng Order</div>
                     <ul class="panel-packages-list" style="list-style: none; padding: 0; margin: 0;">
                       <t t-foreach="sibling_packs" t-as="sp">
-                        <li class="sibling-package-item" t-att-data-package-id="sp['id']" style="background: white; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; border: 1px solid #f1f3f5; display: flex; justify-content: space-between; align-items: center;">
+                        <li class="sibling-package-item" t-att-data-package-id="sp['id']" style="background: #fff9db; border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; border: 1px dashed #f0ad4e; display: flex; justify-content: space-between; align-items: center;">
                           <a t-att-href="'/custom_barcode_scan/pack_view/%s' % sp['id']" class="sibling-package-name" style="text-decoration: none; color: #495057; font-weight: 500; font-size: 0.9rem;">
                             <t t-esc="sp['name']"/>
                           </a>

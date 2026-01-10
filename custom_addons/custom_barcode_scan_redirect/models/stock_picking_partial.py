@@ -159,26 +159,33 @@ class StockPickingPartial(models.Model):
         # Tuy nhiên quant_ids có thể chưa cập nhật ngay nếu chưa done? 
         # Dùng move_line_ids của gói thì chuẩn hơn.
         # Nhưng move_line chưa có quan hệ ngược trực tiếp ra gói nhanh?
-        # Search ngược:
-        related_lines = self.env['stock.move.line'].search([
+        # Search ngược (Use SUDO to ensure visibility of changes made by sudo just now)
+        # [FIX] Force flush to ensure DB has the latest move_line updates (result_package_id)
+        self.env['stock.move.line'].flush_model(['result_package_id', 'qty_done'])
+        
+        related_lines = self.env['stock.move.line'].sudo().search([
             ('result_package_id', '=', new_package.id)
         ])
         related_products = related_lines.mapped('product_id')
         
         for product in related_products:
-            # Tính tổng đã đóng gói (Global)
-            packed_qty = sum(self.env['stock.move.line'].search([
+            # Tính tổng đã đóng gói (Global) - Use SUDO
+            packed_qty = sum(self.env['stock.move.line'].sudo().search([
                 ('picking_id', '=', self.id),
                 ('product_id', '=', product.id),
                 ('result_package_id', '!=', False)
             ]).mapped('qty_done'))
             
+            _logger.info(f"[PACK-SYNC] Product {product.display_name} (ID: {product.id}) -> Packed: {packed_qty}")
+
             sync_info.append({
                 'product_id': product.id,
                 'product_barcode': product.barcode,
                 'product_sku': product.default_code,
                 'packed_qty': packed_qty
             })
+
+        _logger.info(f"[PACK-RESULT] Created Package {new_package.name} (ID: {new_package.id}). Sync Info: {sync_info}")
 
         return {
             'package_id': new_package.id,
@@ -677,16 +684,16 @@ class StockPickingPartial(models.Model):
                 dest_line = all_product_lines.filtered(lambda l: l.result_package_id.id == package_id and l.id != ml.id)
                 
                 if dest_line:
-                    # Merge vào dest_line
-                    dest_line[0].with_context(skip_qty_validation=True).write({
-                        'qty_done': dest_line[0].qty_done + take
-                    })
-                    
-                    # Giảm source
+                    # [FIX] Giảm source TRƯỚC khi tăng đích để tránh vượt quá demand (Trigger constraints)
                     if take == available:
                         ml.with_context(skip_qty_validation=True).unlink() # Hết qty -> xóa
                     else:
                         ml.with_context(skip_qty_validation=True).write({'qty_done': ml.qty_done - take})
+                        
+                    # Merge vào dest_line
+                    dest_line[0].with_context(skip_qty_validation=True).write({
+                        'qty_done': dest_line[0].qty_done + take
+                    })
                 else:
                     # Không có dòng đích
                     if take == available:
