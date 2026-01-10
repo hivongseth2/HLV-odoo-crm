@@ -684,16 +684,16 @@ class StockPickingPartial(models.Model):
                 dest_line = all_product_lines.filtered(lambda l: l.result_package_id.id == package_id and l.id != ml.id)
                 
                 if dest_line:
-                    # Merge vào dest_line
-                    dest_line[0].with_context(skip_qty_validation=True).write({
-                        'qty_done': dest_line[0].qty_done + take
-                    })
-                    
-                    # Giảm source
+                    # [FIX] Giảm source TRƯỚC khi tăng đích để tránh vượt quá demand (Trigger constraints)
                     if take == available:
                         ml.with_context(skip_qty_validation=True).unlink() # Hết qty -> xóa
                     else:
                         ml.with_context(skip_qty_validation=True).write({'qty_done': ml.qty_done - take})
+                        
+                    # Merge vào dest_line
+                    dest_line[0].with_context(skip_qty_validation=True).write({
+                        'qty_done': dest_line[0].qty_done + take
+                    })
                 else:
                     # Không có dòng đích
                     if take == available:
