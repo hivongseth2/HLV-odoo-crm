@@ -21,8 +21,8 @@ from barcode.writer import ImageWriter
 class ProductProduct(models.Model):
     _inherit = "product.product"
 
-    is_barcode = fields.Boolean('Check Barcode Setting')
-    image_product = fields.Binary('Barcode Image')
+    is_barcode = fields.Boolean('Kiểm tra cài đặt mã vạch')
+    image_product = fields.Binary('Hình ảnh mã vạch')
 
     @api.model
     def default_get(self,field_lst):

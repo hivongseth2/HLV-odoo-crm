@@ -23,13 +23,13 @@ class CapProductGenerateBarcodeManually(models.TransientModel):
 
     type_generate = fields.Selection(
         [
-            ("date", "Generate Barcode EAN13 through Current Date"),
+            ("date", "Tạo mã EAN13 theo ngày hiện tại"),
             (
                 "random",
-                "Generate Barcode EAN13 through Random Number",
+                "Tạo mã EAN13 ngẫu nhiên",
             ),
         ],
-        string="Barcode generate options",
+        string="Tùy chọn tạo mã vạch",
         default="date",
     )
 
@@ -68,16 +68,16 @@ class CapProductGenerateBarcodeManually(models.TransientModel):
 class cap_generate_product_barcode(models.TransientModel):
     _name = "cap.product.generate.barcode"
 
-    overwrite = fields.Boolean(String="Overwrite Exists Ean13")
+    overwrite = fields.Boolean(String="Ghi đè mã EAN13 đã có")
     type_generate = fields.Selection(
         [
-            ("date", "Generate Barcde EAN13 (through Current date)"),
+            ("date", "Tạo mã EAN13 (theo ngày hiện tại)"),
             (
                 "random",
-                "Generate Barcde EAN13 (through random number)",
+                "Tạo mã EAN13 (theo số ngẫu nhiên)",
             ),
         ],
-        string="Barcode Generate options",
+        string="Tùy chọn tạo mã vạch",
         default="date",
     )
 

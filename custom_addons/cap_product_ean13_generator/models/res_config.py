@@ -5,9 +5,9 @@ from odoo import fields, models, api, _
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
-    barcode_generate = fields.Boolean("Generate Barcode EAN13 From Product")
-    option_generated = fields.Selection([('date', 'Generate Barcode EAN13 through Current Date'),
-                                        ('random', 'Generate Barcode EAN13 through Random Number')],string='Generate Barcode Option',default='date')
+    barcode_generate = fields.Boolean("Tạo mã vạch EAN13 từ sản phẩm")
+    option_generated = fields.Selection([('date', 'Tạo mã EAN13 theo ngày hiện tại'),
+                                        ('random', 'Tạo mã EAN13 ngẫu nhiên')],string='Tùy chọn tạo mã vạch',default='date')
 
     @api.model
     def default_get(self, fields_list):
