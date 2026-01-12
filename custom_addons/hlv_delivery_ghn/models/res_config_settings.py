@@ -2,6 +2,9 @@
 from odoo import fields, models, api
 from odoo.exceptions import UserError
 from ..utils.ghn_api_utils import GHNApiUtils
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
