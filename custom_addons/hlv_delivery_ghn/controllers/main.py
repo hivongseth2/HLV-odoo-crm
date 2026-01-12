@@ -26,7 +26,10 @@ class GHNWebsiteController(http.Controller):
         try:
             body = request.httprequest.data
             params = json.loads(body) if body else {}
+            _logger.info("WordPress GHN Request Body: %s", params)
+            _logger.info("WordPress GHN Request Headers: %s", dict(request.httprequest.headers))
         except Exception:
+            _logger.error("WordPress GHN Request: Invalid JSON body")
             return request.make_response(json.dumps({"success": False, "error": "JSON body không hợp lệ"}), headers=[('Content-Type', 'application/json')])
         
         # 1. Security Check
@@ -105,4 +108,5 @@ class GHNWebsiteController(http.Controller):
             data["from_ward_code"] = warehouse.ghn_ward_id.ward_code
 
         result = client.calculate_fee(data)
+        _logger.info("WordPress GHN Response: %s", result)
         return request.make_response(json.dumps(result), headers=[('Content-Type', 'application/json')])
