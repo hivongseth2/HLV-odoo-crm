@@ -56,40 +56,49 @@ class GHNWebsiteController(http.Controller):
         # District Search
         d_name = params.get('district_name', '')
         d_norm = self._normalize(d_name)
-        district = District.search([('province_id', '=', province.id)]).filtered(lambda x: self._normalize(x.name) == d_norm)
-        if not district and d_name:
-            district = District.search([('name', 'ilike', d_name), ('province_id', '=', province.id)], limit=1)
+        district = False
         
-        if not district:
-            _logger.error("GHN API: District not found for '%s' in %s", d_name, province.name)
-            return request.make_response(json.dumps({"success": False, "error": f"Không tìm thấy Huyện: {d_name}"}), headers=[('Content-Type', 'application/json')])
-
-        # Ward Search
-        w_input = str(params.get('ward_name', ''))
+        if d_norm:
+            district = District.search([('province_id', '=', province.id)]).filtered(lambda x: self._normalize(x.name) == d_norm)
+            if not district and d_name:
+                district = District.search([('name', 'ilike', d_name), ('province_id', '=', province.id)], limit=1)
+        
         ward = False
-        if w_input.isdigit():
-            ward = Ward.search([('ward_code', '=', w_input), ('district_id', '=', district.id)], limit=1)
-        
-        if not ward:
-            w_norm = self._normalize(w_input)
-            ward = Ward.search([('district_id', '=', district.id)]).filtered(lambda x: self._normalize(x.name) == w_norm)
-        
-        if not ward and w_input:
-            # On-demand sync
-            client_temp = GHNApiUtils(company.ghn_api_token, company.ghn_shop_id, company.ghn_environment)
-            ghn_wards = client_temp.get_wards(district.district_id)
-            for w in ghn_wards:
-                if self._normalize(w['WardName']) == self._normalize(w_input) or w['WardCode'] == w_input:
-                    ward = Ward.create({
-                        'ward_code': w['WardCode'],
-                        'name': w['WardName'],
-                        'district_id': district.id
-                    })
-                    break
+        w_input = str(params.get('ward_name', ''))
 
+        # Fallback: If district is missing but we have a Ward Code (numeric)
+        if not district and w_input.isdigit():
+            ward = Ward.search([('ward_code', '=', w_input), ('district_id.province_id', '=', province.id)], limit=1)
+            if ward:
+                district = ward.district_id
+
+        # If still no district, return 0 fee (Don't error out to avoid WP caching failure)
+        if not district:
+            _logger.info("WordPress GHN: District not provided yet. Returning 0.")
+            return request.make_response(json.dumps({"success": True, "message": "Vui lòng chọn Quận/Huyện", "total": 0, "fee": 0}), headers=[('Content-Type', 'application/json')])
+
+        # Normal Ward Search
         if not ward:
-            _logger.error("GHN API: Ward not found for '%s' in %s", w_input, district.name)
-            return request.make_response(json.dumps({"success": False, "error": f"Không tìm thấy Xã: {w_input}"}), headers=[('Content-Type', 'application/json')])
+            if w_input.isdigit():
+                ward = Ward.search([('ward_code', '=', w_input), ('district_id', '=', district.id)], limit=1)
+            
+            if not ward:
+                w_norm = self._normalize(w_input)
+                ward = Ward.search([('district_id', '=', district.id)]).filtered(lambda x: self._normalize(x.name) == w_norm)
+            
+            if not ward and w_input:
+                # On-demand sync
+                client_temp = GHNApiUtils(company.ghn_api_token, company.ghn_shop_id, company.ghn_environment)
+                ghn_wards = client_temp.get_wards(district.district_id)
+                for w in ghn_wards:
+                    if self._normalize(w['WardName']) == self._normalize(w_input) or w['WardCode'] == w_input:
+                        ward = Ward.create({'ward_code': w['WardCode'], 'name': w['WardName'], 'district_id': district.id})
+                        break
+
+        # If no ward, return 0 fee
+        if not ward:
+            _logger.info("WordPress GHN: Ward not provided yet. Returning 0.")
+            return request.make_response(json.dumps({"success": True, "message": "Vui lòng chọn Phường/Xã", "total": 0, "fee": 0}), headers=[('Content-Type', 'application/json')])
 
         # 3. Calculate
         warehouse = company.ghn_default_warehouse_id
