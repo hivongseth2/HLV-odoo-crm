@@ -9,17 +9,17 @@ class ResConfigSettings(models.TransientModel):
     ghn_api_token = fields.Char(
         related="company_id.ghn_api_token",
         readonly=False,
-        string="GHN API Token",
+        string="Mã Token API GHN",
     )
     ghn_shop_id = fields.Char(
         related="company_id.ghn_shop_id",
         readonly=False,
-        string="GHN Shop ID",
+        string="Mã Cửa hàng (Shop ID)",
     )
     ghn_environment = fields.Selection(
         related="company_id.ghn_environment",
         readonly=False,
-        string="GHN Environment",
+        string="Môi trường GHN",
     )
 
     def action_check_ghn_connection(self):

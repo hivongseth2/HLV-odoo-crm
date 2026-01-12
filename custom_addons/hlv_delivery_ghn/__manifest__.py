@@ -1,6 +1,6 @@
 {
-    "name": "HLV Giao Hàng Nhanh (GHN) Integration",
-    "summary": "Calculate shipping fees using GHN API",
+    "name": "HLV - Kết nối Giao Hàng Nhanh (GHN)",
+    "summary": "Tích hợp API Giao Hàng Nhanh để tính phí vận chuyển",
     "version": "1.0",
     "category": "Inventory/Delivery",
     "author": "Antigravity",

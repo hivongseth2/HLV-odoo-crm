@@ -7,16 +7,16 @@
         <field name="arch" type="xml">
             <xpath expr="//block[@name='operations_setting_container']" position="after">
                 <block title="Giao Hàng Nhanh (GHN)" name="ghn_setting_container">
-                    <setting id="ghn_api_token_setting" string="GHN API Token" help="Token provided by GHN">
+                    <setting id="ghn_api_token_setting" string="Mã Token API GHN" help="Token được cấp bởi GHN">
                         <field name="ghn_api_token" password="True"/>
                     </setting>
-                    <setting id="ghn_shop_id_setting" string="GHN Shop ID" help="Manage information for shop/seller">
+                    <setting id="ghn_shop_id_setting" string="Mã Cửa hàng (Shop ID)" help="ID quản lý cửa hàng/người bán">
                         <field name="ghn_shop_id"/>
                     </setting>
-                    <setting id="ghn_environment_setting" string="GHN Environment">
+                    <setting id="ghn_environment_setting" string="Môi trường GHN">
                         <field name="ghn_environment" widget="radio"/>
                     </setting>
-                    <setting id="ghn_sync_location_setting">
+                    <setting id="ghn_sync_location_setting" string="Đồng bộ dữ liệu Tỉnh/Huyện">
                         <button name="action_check_ghn_connection" 
                                 type="object" 
                                 string="Kiểm tra kết nối" 
@@ -27,7 +27,7 @@
                                 class="btn-secondary mr-2"/>
                         <button name="action_sync_ghn_locations" 
                                 type="object" 
-                                string="Sync Provinces &amp; Districts" 
+                                string="Đồng bộ Tỉnh/Huyện" 
                                 class="btn-primary"/>
                     </setting>
                 </block>

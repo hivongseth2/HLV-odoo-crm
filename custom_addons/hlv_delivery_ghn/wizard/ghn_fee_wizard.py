@@ -11,36 +11,36 @@ class GHNFeeWizard(models.TransientModel):
 
     picking_id = fields.Many2one("stock.picking", string="Picking")
     
-    # Sender Address (Optional - GHN uses shop default if blank)
-    from_province_id = fields.Many2one("ghn.province", string="From Province")
-    from_district_id = fields.Many2one("ghn.district", string="From District",
+    # Địa chỉ gửi (Tùy chọn - GHN sẽ dùng địa chỉ mặc định của shop nếu để trống)
+    from_province_id = fields.Many2one("ghn.province", string="Tỉnh/Thành gửi")
+    from_district_id = fields.Many2one("ghn.district", string="Quận/Huyện gửi",
                                      domain="[('province_id', '=', from_province_id)]")
-    from_ward_id = fields.Many2one("ghn.ward", string="From Ward",
+    from_ward_id = fields.Many2one("ghn.ward", string="Phường/Xã gửi",
                                   domain="[('district_id', '=', from_district_id)]")
 
-    # Recipient Address
-    province_id = fields.Many2one("ghn.province", string="To Province", required=True)
-    district_id = fields.Many2one("ghn.district", string="To District", required=True, 
+    # Địa chỉ nhận
+    province_id = fields.Many2one("ghn.province", string="Tỉnh/Thành nhận", required=True)
+    district_id = fields.Many2one("ghn.district", string="Quận/Huyện nhận", required=True, 
                                 domain="[('province_id', '=', province_id)]")
-    ward_id = fields.Many2one("ghn.ward", string="To Ward", required=True,
+    ward_id = fields.Many2one("ghn.ward", string="Phường/Xã nhận", required=True,
                              domain="[('district_id', '=', district_id)]")
     
-    # Package Info (Defaults from picking if available)
-    weight = fields.Integer(string="Weight (gram)", default=1000)
-    length = fields.Integer(string="Length (cm)", default=20)
-    width = fields.Integer(string="Width (cm)", default=20)
-    height = fields.Integer(string="Height (cm)", default=20)
+    # Thông tin kiện hàng
+    weight = fields.Integer(string="Khối lượng (gram)", default=1000)
+    length = fields.Integer(string="Chiều dài (cm)", default=20)
+    width = fields.Integer(string="Chiều rộng (cm)", default=20)
+    height = fields.Integer(string="Chiều cao (cm)", default=20)
     
-    # Other Info
-    insurance_value = fields.Integer(string="Insurance Value", default=0)
-    cod_value = fields.Integer(string="COD Value", default=0)
+    # Thông tin khác
+    insurance_value = fields.Integer(string="Giá trị bảo hiểm", default=0)
+    cod_value = fields.Integer(string="Tiền thu hộ (COD)", default=0)
     
-    # Service
-    service_id = fields.Selection(selection="_get_services", string="Service", required=True)
+    # Dịch vụ
+    service_id = fields.Selection(selection="_get_services", string="Dịch vụ", required=True)
     
-    # Result
-    fee_result = fields.Float(string="Shipping Fee", readonly=True)
-    message = fields.Text(string="Message", readonly=True)
+    # Kết quả
+    fee_result = fields.Float(string="Cước phí vận chuyển", readonly=True)
+    message = fields.Text(string="Thông báo", readonly=True)
 
     def _get_api_client(self):
         company = self.env.company
@@ -109,9 +109,9 @@ class GHNFeeWizard(models.TransientModel):
         result = client.calculate_fee(data)
         if result.get('success'):
             self.fee_result = result['data'].get('total', 0)
-            self.message = "Shipping fee calculated successfully."
+            self.message = "Tính phí vận chuyển thành công."
         else:
-            self.message = f"GHN API Error: {result.get('error')}"
+            self.message = f"Lỗi API GHN: {result.get('error')}"
             
         return {
             "type": "ir.actions.act_window",

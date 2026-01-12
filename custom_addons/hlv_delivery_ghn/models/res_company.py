@@ -4,9 +4,9 @@ from odoo import fields, models
 class ResCompany(models.Model):
     _inherit = "res.company"
 
-    ghn_api_token = fields.Char(string="GHN API Token")
-    ghn_shop_id = fields.Char(string="GHN Shop ID")
+    ghn_api_token = fields.Char(string="Mã Token API GHN")
+    ghn_shop_id = fields.Char(string="Mã Cửa hàng (Shop ID)")
     ghn_environment = fields.Selection([
-        ('test', 'Test / Sandbox'),
-        ('prod', 'Production')
-    ], string="GHN Environment", default='test')
+        ('test', 'Môi trường Thử nghiệm (Sandbox)'),
+        ('prod', 'Môi trường Thực tế (Production)')
+    ], string="Môi trường GHN", default='test')
