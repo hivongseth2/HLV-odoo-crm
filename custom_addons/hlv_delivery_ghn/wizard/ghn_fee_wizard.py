@@ -42,6 +42,28 @@ class GHNFeeWizard(models.TransientModel):
     fee_result = fields.Float(string="Cước phí vận chuyển", readonly=True)
     message = fields.Text(string="Thông báo", readonly=True)
 
+    @api.model
+    def default_get(self, fields_list):
+        res = super(GHNFeeWizard, self).default_get(fields_list)
+        picking_id = res.get('picking_id') or self._context.get('default_picking_id')
+        if picking_id:
+            picking = self.env['stock.picking'].browse(picking_id)
+            warehouse = picking.picking_type_id.warehouse_id
+            if warehouse:
+                if warehouse.ghn_province_id:
+                    res['from_province_id'] = warehouse.ghn_province_id.id
+                if warehouse.ghn_district_id:
+                    res['from_district_id'] = warehouse.ghn_district_id.id
+                if warehouse.ghn_ward_id:
+                    res['from_ward_id'] = warehouse.ghn_ward_id.id
+                    
+            # Auto-populate receiver address from picking partner if available
+            partner = picking.partner_id
+            if partner:
+                # This part is optional but helpful if you want to automate receiver too
+                pass
+        return res
+
     def _get_api_client(self):
         company = self.env.company
         return GHNApiUtils(

@@ -9,6 +9,7 @@
         "security/ir.model.access.csv",
         "views/res_config_settings_views.xml",
         "views/stock_picking_views.xml",
+        "views/stock_warehouse_views.xml",
         "wizard/ghn_fee_wizard_views.xml",
     ],
     "installable": True,
