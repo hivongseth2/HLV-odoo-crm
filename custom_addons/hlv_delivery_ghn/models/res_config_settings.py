@@ -90,9 +90,12 @@ class ResConfigSettings(models.TransientModel):
         ProvinceModel = self.env['ghn.province']
         DistrictModel = self.env['ghn.district']
         
+        _logger.info("GHN Sync: Found %s provinces", len(provinces))
         for p in provinces:
             exist_p = ProvinceModel.search([('province_id', '=', p['ProvinceID'])], limit=1)
-            if not exist_p:
+            if exist_p:
+                exist_p.write({'name': p['ProvinceName']})
+            else:
                 exist_p = ProvinceModel.create({
                     'province_id': p['ProvinceID'],
                     'name': p['ProvinceName']
@@ -101,13 +104,27 @@ class ResConfigSettings(models.TransientModel):
             # Sync Districts for this province
             districts = client.get_districts(p['ProvinceID'])
             if districts:
+                _logger.info("GHN Sync: Found %s districts for province %s", len(districts), p['ProvinceName'])
                 for d in districts:
                     exist_d = DistrictModel.search([('district_id', '=', d['DistrictID'])], limit=1)
-                    if not exist_d:
+                    if exist_d:
+                        exist_d.write({
+                            'name': d['DistrictName'],
+                            'province_id': exist_p.id
+                        })
+                    else:
                         DistrictModel.create({
                             'district_id': d['DistrictID'],
                             'name': d['DistrictName'],
                             'province_id': exist_p.id
                         })
         
+        _logger.info("GHN Sync Completed!")
         return True
+
+    def action_wipe_and_sync_ghn_locations(self):
+        """Wipe all existing records and perform a fresh sync."""
+        self.env['ghn.ward'].sudo().search([]).unlink()
+        self.env['ghn.district'].sudo().search([]).unlink()
+        self.env['ghn.province'].sudo().search([]).unlink()
+        return self.action_sync_ghn_locations()

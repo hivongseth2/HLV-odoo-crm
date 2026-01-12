@@ -31,7 +31,12 @@
                         <button name="action_sync_ghn_locations" 
                                 type="object" 
                                 string="Đồng bộ Tỉnh/Huyện" 
-                                class="btn-primary"/>
+                                class="btn-secondary mr-2"/>
+                        <button name="action_wipe_and_sync_ghn_locations" 
+                                type="object" 
+                                string="Làm mới &amp; Đồng bộ" 
+                                class="btn-primary"
+                                confirm="Hành động này sẽ xóa toàn bộ địa chỉ hiện tại và tải lại từ đầu. Bạn có chắc chắn?"/>
                     </setting>
                 </block>
             </xpath>

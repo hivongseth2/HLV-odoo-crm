@@ -16,10 +16,13 @@ class GHNApiUtils:
         else:
             self.api_base_url = "https://dev-online-gateway.ghn.vn/shiip/public-api"
         
-        # Master data endpoints usually don't have /v2
-        self.master_data_url = f"{self.api_base_url}/master-data"
+        # Master data endpoints always use Production for accuracy (as requested by user)
+        # Note: This requires a Production Token.
+        self.master_data_url = "https://online-gateway.ghn.vn/shiip/public-api/master-data"
         # Shipping and other v2 endpoints
         self.v2_url = f"{self.api_base_url}/v2"
+        _logger.info("GHN API Initialized (%s). Base: %s | Master: %s", 
+                     self.environment, self.api_base_url, self.master_data_url)
 
     def _get_headers(self):
         return {
@@ -31,6 +34,7 @@ class GHNApiUtils:
     def get_provinces(self):
         """Fetch all provinces from GHN."""
         url = f"{self.master_data_url}/province"
+        _logger.info("GHN Fetching Provinces from URL: %s", url)
         try:
             response = requests.get(url, headers={"Token": self.token})
             if response.status_code == 200:
@@ -44,6 +48,7 @@ class GHNApiUtils:
     def get_districts(self, province_id):
         """Fetch districts for a province."""
         url = f"{self.master_data_url}/district"
+        _logger.info("GHN Fetching Districts (Province %s) from URL: %s", province_id, url)
         payload = {"province_id": int(province_id)}
         try:
             response = requests.post(url, headers={"Token": self.token}, json=payload)
@@ -58,6 +63,7 @@ class GHNApiUtils:
     def get_wards(self, district_id):
         """Fetch wards for a district."""
         url = f"{self.master_data_url}/ward"
+        _logger.info("GHN Fetching Wards (District %s) from URL: %s", district_id, url)
         params = {"district_id": int(district_id)}
         try:
             response = requests.get(url, headers={"Token": self.token}, params=params)
