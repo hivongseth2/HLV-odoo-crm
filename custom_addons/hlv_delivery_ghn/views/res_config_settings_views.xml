@@ -17,6 +17,10 @@
                         <field name="ghn_environment" widget="radio"/>
                     </setting>
                     <setting id="ghn_sync_location_setting">
+                        <button name="action_check_ghn_connection" 
+                                type="object" 
+                                string="Kiểm tra kết nối" 
+                                class="btn-secondary mr-2"/>
                         <button name="action_sync_ghn_locations" 
                                 type="object" 
                                 string="Sync Provinces &amp; Districts" 

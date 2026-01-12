@@ -24,7 +24,7 @@ class GHNApiUtils:
         return {
             "Content-Type": "application/json",
             "Token": self.token,
-            "ShopId": str(self.shop_id)
+            "ShopId": int(self.shop_id) if self.shop_id else 0
         }
 
     def get_provinces(self):
@@ -71,19 +71,28 @@ class GHNApiUtils:
     def calculate_fee(self, data):
         """
         Calculate shipping fee.
-        Data keys: from_district_id, from_ward_code, to_district_id, to_ward_code,
-                  weight, length, width, height, service_id, insurance_value, etc.
         """
         url = f"{self.v2_url}/shipping-order/fee"
         headers = self._get_headers()
+        
+        # Ensure shop_id is in the body too
+        if 'shop_id' not in data:
+            data['shop_id'] = int(self.shop_id)
+            
         try:
             response = requests.post(url, headers=headers, json=data)
             res_json = response.json()
             if response.status_code == 200 and res_json.get("code") == 200:
                 return {"success": True, "data": res_json.get("data")}
+            
+            # Specific error handling for "Lỗi lấy thông tin shop"
+            error_msg = res_json.get("message") or f"HTTP {response.status_code}"
+            if "thông tin shop" in error_msg:
+                error_msg += " (Vui lòng kiểm tra lại Shop ID và Token trong Cấu hình)"
+                
             return {
                 "success": False, 
-                "error": res_json.get("message") or f"HTTP {response.status_code}"
+                "error": error_msg
             }
         except Exception as e:
             _logger.exception("GHN calculate_fee exception: %s", e)

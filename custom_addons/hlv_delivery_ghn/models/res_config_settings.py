@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import fields, models, api
+from odoo.exceptions import UserError
 from ..utils.ghn_api_utils import GHNApiUtils
 
 class ResConfigSettings(models.TransientModel):
@@ -20,6 +21,30 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
         string="GHN Environment",
     )
+
+    def action_check_ghn_connection(self):
+        client = GHNApiUtils(
+            token=self.ghn_api_token,
+            shop_id=self.ghn_shop_id,
+            environment=self.ghn_environment
+        )
+        try:
+            provinces = client.get_provinces()
+            if provinces:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Thành công',
+                        'message': 'Kết nối GHN thành công!',
+                        'sticky': False,
+                        'type': 'success',
+                    }
+                }
+            else:
+                raise UserError("Kết nối thất bại. Vui lòng kiểm tra lại Token và Shop ID.")
+        except Exception as e:
+            raise UserError(f"Lỗi kết nối: {str(e)}")
 
     def action_sync_ghn_locations(self):
         client = GHNApiUtils(
