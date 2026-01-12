@@ -24,6 +24,11 @@ registry.category("ir.actions.report handlers").add(
     async (action, options, env) => {
         if (action.type !== "ir.actions.report" || action.report_type !== "qweb-pdf") return false;
 
+        // Skip for POS orders to avoid dialog/iframe issues with IoT box
+        if (action.model === "pos.order" || action.context?.active_model === "pos.order") {
+            return false;
+        }
+
         const { ui, notification } = env.services;
         ui.block(); // show spinner
 
