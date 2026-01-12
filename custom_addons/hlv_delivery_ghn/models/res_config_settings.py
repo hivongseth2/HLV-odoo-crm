@@ -11,7 +11,7 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
         string="GHN API Token",
     )
-    ghn_shop_id = fields.Integer(
+    ghn_shop_id = fields.Char(
         related="company_id.ghn_shop_id",
         readonly=False,
         string="GHN Shop ID",
