@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="ghn_fee_wizard_view_form" model="ir.ui.view">
+        <field name="name">ghn.fee.wizard.view.form</field>
+        <field name="model">ghn.fee.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Tính cước Giao Hàng Nhanh (GHN)">
+                <group>
+                    <group string="Địa chỉ giao hàng">
+                        <field name="province_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="district_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="ward_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="service_id"/>
+                    </group>
+                    <group string="Thông tin kiện hàng">
+                        <field name="weight"/>
+                        <field name="length"/>
+                        <field name="width"/>
+                        <field name="height"/>
+                        <field name="insurance_value"/>
+                        <field name="cod_value"/>
+                    </group>
+                </group>
+                <group string="Kết quả">
+                    <field name="fee_result" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                    <field name="message" nolabel="1" class="text-danger" attrs="{'invisible': [('fee_result', '>', 0)]}"/>
+                    <field name="message" nolabel="1" class="text-success" attrs="{'invisible': [('fee_result', '=', 0)]}"/>
+                </group>
+                <footer>
+                    <button name="action_calculate_fee" string="Tính phí" type="object" class="btn-primary"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
