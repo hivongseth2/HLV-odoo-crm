@@ -19,6 +19,12 @@
                     <setting id="ghn_environment_setting" string="Môi trường GHN">
                         <field name="ghn_environment" widget="radio"/>
                     </setting>
+                    <setting id="ghn_default_warehouse_setting" string="Kho hàng mặc định cho WooCommerce" help="Dùng để lấy địa chỉ gửi khi tính phí cho WordPress">
+                        <field name="ghn_default_warehouse_id"/>
+                    </setting>
+                    <setting id="ghn_wp_api_token_setting" string="Token bảo mật WordPress" help="Mã bí mật để xác thực khi WordPress gọi Odoo">
+                        <field name="ghn_wp_api_token" password="True"/>
+                    </setting>
                     <setting id="ghn_sync_location_setting" string="Đồng bộ dữ liệu Tỉnh/Huyện">
                         <button name="action_check_ghn_connection" 
                                 type="object" 

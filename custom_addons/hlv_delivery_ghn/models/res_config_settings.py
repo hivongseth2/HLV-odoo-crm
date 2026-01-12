@@ -24,6 +24,17 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
         string="Mã Cửa hàng hàng nặng (>10kg)",
     )
+    ghn_default_warehouse_id = fields.Many2one(
+        'stock.warehouse',
+        related="company_id.ghn_default_warehouse_id",
+        readonly=False,
+        string="Kho hàng mặc định cho WooCommerce",
+    )
+    ghn_wp_api_token = fields.Char(
+        related="company_id.ghn_wp_api_token",
+        readonly=False,
+        string="Mã Token bảo mật API WordPress",
+    )
     ghn_environment = fields.Selection(
         related="company_id.ghn_environment",
         readonly=False,
