@@ -43,25 +43,33 @@ class GHNWebsiteController(http.Controller):
         Ward = request.env['ghn.ward'].sudo()
 
         # Province Search
-        p_name = params.get('province_name', '')
-        p_norm = self._normalize(p_name)
-        province = Province.search([]).filtered(lambda x: self._normalize(x.name) == p_norm)
-        if not province:
-            province = Province.search([('name', 'ilike', p_name)], limit=1)
+        p_input = str(params.get('province_name', ''))
+        province = False
+        if p_input.isdigit():
+            province = Province.search([('province_id', '=', int(p_input))], limit=1)
         
         if not province:
-            _logger.error("GHN API: Province not found for '%s'", p_name)
-            return request.make_response(json.dumps({"success": False, "error": f"Không tìm thấy Tỉnh: {p_name}"}), headers=[('Content-Type', 'application/json')])
+            p_norm = self._normalize(p_input)
+            province = Province.search([]).filtered(lambda x: self._normalize(x.name) == p_norm)
+        
+        if not province:
+            province = Province.search([('name', 'ilike', p_input)], limit=1)
+        
+        if not province:
+            _logger.error("GHN API: Province not found for '%s'", p_input)
+            return request.make_response(json.dumps({"success": False, "error": f"Không tìm thấy Tỉnh: {p_input}"}), headers=[('Content-Type', 'application/json')])
 
         # District Search
-        d_name = params.get('district_name', '')
-        d_norm = self._normalize(d_name)
+        d_input = str(params.get('district_name', ''))
         district = False
+        if d_input.isdigit():
+            district = District.search([('district_id', '=', int(d_input)), ('province_id', '=', province.id)], limit=1)
         
-        if d_norm:
+        if not district and d_input:
+            d_norm = self._normalize(d_input)
             district = District.search([('province_id', '=', province.id)]).filtered(lambda x: self._normalize(x.name) == d_norm)
-            if not district and d_name:
-                district = District.search([('name', 'ilike', d_name), ('province_id', '=', province.id)], limit=1)
+            if not district:
+                district = District.search([('name', 'ilike', d_input), ('province_id', '=', province.id)], limit=1)
         
         ward = False
         w_input = str(params.get('ward_name', ''))
@@ -69,14 +77,13 @@ class GHNWebsiteController(http.Controller):
         # Fallback: If district is missing but we have a Ward Code (numeric)
         if not district and w_input.isdigit():
             _logger.info("WordPress GHN: District missing, reverse searching Ward ID: %s", w_input)
-            # Search ward globally within the province to find its district
             target_ward = Ward.search([('ward_code', '=', w_input), ('district_id.province_id', '=', province.id)], limit=1)
             if target_ward:
                 ward = target_ward
                 district = ward.district_id
                 _logger.info("WordPress GHN: Reverse search found District: %s", district.name)
 
-        # If still no district, return 0 fee (Don't error out to avoid WP caching failure)
+        # If still no district, return 0 fee
         if not district:
             _logger.info("WordPress GHN: District not provided yet. Returning 0.")
             return request.make_response(json.dumps({"success": True, "message": "Vui lòng chọn Quận/Huyện", "total": 0, "fee": 0}), headers=[('Content-Type', 'application/json')])
