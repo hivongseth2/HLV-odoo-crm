@@ -99,6 +99,21 @@ class GHNApiUtils:
             _logger.exception("GHN calculate_fee exception: %s", e)
             return {"success": False, "error": str(e)}
 
+    def get_shops(self):
+        """Fetch all shops associated with the token."""
+        url = f"{self.v2_url}/shop/all"
+        headers = {"Token": self.token, "Content-Type": "application/json"}
+        # GHN docs say this is a POST with empty body or some params
+        try:
+            response = requests.post(url, headers=headers, json={})
+            res_json = response.json()
+            if response.status_code == 200 and res_json.get("code") == 200:
+                return {"success": True, "data": res_json.get("data")}
+            return {"success": False, "error": res_json.get("message")}
+        except Exception as e:
+            _logger.exception("GHN get_shops exception: %s", e)
+            return {"success": False, "error": str(e)}
+
     def get_services(self, from_district, to_district):
         """Fetch available services between two districts."""
         url = f"{self.v2_url}/shipping-order/available-services"
@@ -109,11 +124,13 @@ class GHNApiUtils:
             "from_district": int(from_district),
             "to_district": int(to_district)
         }
+        _logger.debug("GHN get_services URL: %s, Payload: %s", url, payload)
         try:
             response = requests.post(url, headers=headers, json=payload)
             res_json = response.json()
             if response.status_code == 200 and res_json.get("code") == 200:
                 return {"success": True, "data": res_json.get("data")}
+            _logger.error("GHN get_services error: %s", response.text)
             return {
                 "success": False, 
                 "error": res_json.get("message") or f"HTTP {response.status_code}"

@@ -21,6 +21,10 @@
                                 type="object" 
                                 string="Kiểm tra kết nối" 
                                 class="btn-secondary mr-2"/>
+                        <button name="action_get_available_shops" 
+                                type="object" 
+                                string="Lấy danh sách Shop ID" 
+                                class="btn-secondary mr-2"/>
                         <button name="action_sync_ghn_locations" 
                                 type="object" 
                                 string="Sync Provinces &amp; Districts" 
