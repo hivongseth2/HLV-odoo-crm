@@ -123,36 +123,43 @@ class GHNWebsiteController(http.Controller):
         from_district_id = warehouse.ghn_district_id.district_id
         to_district_id = district.district_id
 
-        # Determine Service ID
+        # Determine Service IDs
         service_id = params.get('service_id')
+        available_services_list = []
         if not service_id:
             res_services = client.get_services(from_district_id, to_district_id)
             if res_services.get('success'):
-                available_services = res_services.get('data') or []
-                # Ưu tiên lấy dịch vụ Chuẩn (service_type_id = 2), nếu không có thì lấy cái đầu tiên
-                standard_services = [s for s in available_services if isinstance(s, dict) and s.get('service_type_id') == 2]
-                if standard_services:
-                    service_id = standard_services[0]['service_id']
-                elif available_services:
-                    service_id = available_services[0]['service_id']
+                available_services_list = res_services.get('data') or []
+        else:
+            available_services_list = [{'service_id': int(service_id), 'short_name': 'Dịch vụ đã chọn'}]
         
-        if not service_id:
-            # Fallback mặc định nếu không lấy được từ API
-            service_id = 53320
+        calculated_results = []
+        for svc in available_services_list:
+            svc_id = svc.get('service_id')
+            if not svc_id: continue
+            
+            data = {
+                "from_district_id": from_district_id, "to_district_id": to_district_id,
+                "to_ward_code": ward.ward_code, "weight": weight,
+                "length": int(params.get('length', 20)), "width": int(params.get('width', 20)),
+                "height": int(params.get('height', 20)), "service_id": int(svc_id)
+            }
+            if warehouse.ghn_ward_id: data["from_ward_code"] = warehouse.ghn_ward_id.ward_code
 
-        data = {
-            "from_district_id": from_district_id,
-            "to_district_id": to_district_id,
-            "to_ward_code": ward.ward_code,
-            "weight": weight,
-            "length": int(params.get('length', 20)),
-            "width": int(params.get('width', 20)),
-            "height": int(params.get('height', 20)),
-            "service_id": int(service_id)
-        }
-        if warehouse.ghn_ward_id:
-            data["from_ward_code"] = warehouse.ghn_ward_id.ward_code
+            res_fee = client.calculate_fee(data)
+            if res_fee.get('success'):
+                calculated_results.append({
+                    'service_id': svc_id,
+                    'name': svc.get('short_name') or svc.get('name') or "Giao hàng nhanh",
+                    'total': res_fee['data'].get('total', 0)
+                })
 
-        result = client.calculate_fee(data)
-        _logger.info("WordPress GHN Response: %s", result)
-        return request.make_response(json.dumps(result), headers=[('Content-Type', 'application/json')])
+        if not calculated_results:
+            return request.make_response(json.dumps({"success": False, "error": "Không tìm thấy dịch vụ vận chuyển nào phù hợp."}), headers=[('Content-Type', 'application/json')])
+
+        _logger.info("WordPress GHN Results: %s services found", len(calculated_results))
+        return request.make_response(json.dumps({
+            "success": True, 
+            "services": calculated_results,
+            "data": calculated_results[0] # Backward compatibility
+        }), headers=[('Content-Type', 'application/json')])
