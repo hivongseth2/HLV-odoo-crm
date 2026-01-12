@@ -24,7 +24,7 @@ class GHNApiUtils:
         return {
             "Content-Type": "application/json",
             "Token": self.token,
-            "ShopId": int(self.shop_id) if self.shop_id else 0
+            "ShopId": str(self.shop_id) if self.shop_id else "0"
         }
 
     def get_provinces(self):
