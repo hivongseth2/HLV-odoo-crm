@@ -10,8 +10,11 @@
                     <setting id="ghn_api_token_setting" string="Mã Token API GHN" help="Token được cấp bởi GHN">
                         <field name="ghn_api_token" password="True"/>
                     </setting>
-                    <setting id="ghn_shop_id_setting" string="Mã Cửa hàng (Shop ID)" help="ID quản lý cửa hàng/người bán">
+                    <setting id="ghn_shop_id_setting" string="Mã Cửa hàng (Shop ID)" help="ID quản lý cửa hàng cho hàng nhẹ (<=10kg)">
                         <field name="ghn_shop_id"/>
+                    </setting>
+                    <setting id="ghn_shop_id_heavy_setting" string="Mã Cửa hàng hàng nặng" help="ID quản lý cửa hàng cho hàng nặng (>10kg)">
+                        <field name="ghn_shop_id_heavy"/>
                     </setting>
                     <setting id="ghn_environment_setting" string="Môi trường GHN">
                         <field name="ghn_environment" widget="radio"/>

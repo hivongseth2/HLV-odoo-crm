@@ -9,3 +9,6 @@ class StockWarehouse(models.Model):
                                      domain="[('province_id', '=', ghn_province_id)]")
     ghn_ward_id = fields.Many2one("ghn.ward", string="Phường/Xã gửi (GHN)",
                                    domain="[('district_id', '=', ghn_district_id)]")
+    
+    ghn_shop_id = fields.Char(string="Mã Shop ID (GHN)")
+    ghn_shop_id_heavy = fields.Char(string="Mã Shop ID hàng nặng (GHN)")

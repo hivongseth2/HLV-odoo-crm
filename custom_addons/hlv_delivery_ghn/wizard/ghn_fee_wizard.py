@@ -66,9 +66,24 @@ class GHNFeeWizard(models.TransientModel):
 
     def _get_api_client(self):
         company = self.env.company
+        shop_id = company.ghn_shop_id
+        
+        # Determine the correct Shop ID based on weight and warehouse config
+        picking = self.picking_id
+        warehouse = picking.picking_type_id.warehouse_id
+        
+        is_heavy = self.weight > 10000 # 10kg
+        
+        if is_heavy:
+            # Try warehouse heavy shop id, then company heavy shop id
+            shop_id = (warehouse and warehouse.ghn_shop_id_heavy) or company.ghn_shop_id_heavy or shop_id
+        else:
+            # Try warehouse standard shop id, then company standard shop id
+            shop_id = (warehouse and warehouse.ghn_shop_id) or company.ghn_shop_id
+            
         return GHNApiUtils(
             token=company.ghn_api_token,
-            shop_id=company.ghn_shop_id,
+            shop_id=shop_id,
             environment=company.ghn_environment
         )
 

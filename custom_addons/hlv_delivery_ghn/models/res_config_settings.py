@@ -16,6 +16,11 @@ class ResConfigSettings(models.TransientModel):
         readonly=False,
         string="Mã Cửa hàng (Shop ID)",
     )
+    ghn_shop_id_heavy = fields.Char(
+        related="company_id.ghn_shop_id_heavy",
+        readonly=False,
+        string="Mã Cửa hàng hàng nặng (>10kg)",
+    )
     ghn_environment = fields.Selection(
         related="company_id.ghn_environment",
         readonly=False,

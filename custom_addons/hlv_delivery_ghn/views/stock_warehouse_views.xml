@@ -13,6 +13,10 @@
                             <field name="ghn_district_id" options="{'no_create': True, 'no_open': True}"/>
                             <field name="ghn_ward_id" options="{'no_create': True, 'no_open': True}"/>
                         </group>
+                        <group string="Cửa hàng (Shop ID) GHN">
+                            <field name="ghn_shop_id" placeholder="Nếu trống sẽ dùng mặc định của Công ty"/>
+                            <field name="ghn_shop_id_heavy" placeholder="Dùng cho hàng > 10kg"/>
+                        </group>
                     </group>
                 </page>
             </xpath>
