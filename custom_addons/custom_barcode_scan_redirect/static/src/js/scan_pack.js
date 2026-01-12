@@ -165,6 +165,19 @@ document.addEventListener("DOMContentLoaded", function () {
     new Audio("/custom_barcode_scan_redirect/static/src/sound/error.mp3").play();
   }
 
+  // [NEW] Helper to flush manual input before critical actions
+  async function flushActiveInput() {
+    const active = document.activeElement;
+    if (active && active.classList.contains('done-input')) {
+      // Trigger change manually
+      // Note: handleManualQtyChange is attached to window but we can call it directly if scope permits
+      // or rely on the global assignment
+      if (window.handleManualQtyChange) {
+        await window.handleManualQtyChange(active);
+      }
+    }
+  }
+
   function normalizeCode(s) {
     // Bỏ kí tự điều khiển ASCII, khoảng trắng, NBSP, BOM, zero-width, v.v.
     return String(s ?? '')
@@ -173,6 +186,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/\s+/g, '')                             // mọi whitespace (kể cả NBSP)
       .trim();
   }
+  window.normalizeCode = normalizeCode;
 
   function findLineToUpdate(barcode) {
     if (!barcode) return null;
@@ -370,6 +384,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
   completeBtn?.addEventListener("click", async function () {
+    // [FIX] Flush active input before completing
+    await flushActiveInput();
+
     const items = document.querySelectorAll("#product_list .product-item");
     let isValid = true, missingProducts = [];
     items.forEach(item => {
@@ -420,7 +437,10 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Nút Partial Pack - tạo mã barcode tự động (người dùng có thể scan mã này để đóng gói)
-  document.getElementById('btnPartialPack')?.addEventListener('click', function () {
+  document.getElementById('btnPartialPack')?.addEventListener('click', async function () {
+    // [FIX] Flush active input before packing
+    await flushActiveInput();
+
     const autoPackageBarcode = `AUTO-PKG-${Date.now()}`;
     // Put barcode into input (so user can scan it later) and copy to clipboard
     const inputEl = document.getElementById('pack_barcode_input');
@@ -437,7 +457,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
       inputEl.dispatchEvent(enterEvent);
     }
-    toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 4000 });
+    toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 1000 });
   });
 
 
@@ -543,7 +563,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const pkgCode = (barcode === 'CMD-CREATE-PACK') ? `AUTO-PKG-${Date.now()}` : barcode;
 
       if (barcode === 'CMD-CREATE-PACK') {
-        toast.info(`Đang tạo gói hàng tự động...`, { ms: 2000 });
+        toast.info(`Đang tạo gói hàng tự động...`, { ms: 1000 });
       }
 
       isProcessingPack = true; // Lock
@@ -789,7 +809,7 @@ let mediaRecorder = null;
 let isRecording = false;
 let chunkBusy = Promise.resolve();
 
-const MAX_DURATION_MS = 15 * 60 * 1000; // 5 phút
+const MAX_DURATION_MS = 25 * 60 * 1000; // 5 phút
 let stopTimer = null, countdownTimer = null, endAt = 0;
 let overlayCanvas = null, overlayCtx = null, drawRAF = 0;
 
@@ -1186,13 +1206,16 @@ async function openPackageEditModal(event) {
       result.sync_info.forEach(info => {
         let targetEl = null;
 
-        // 1. Tìm theo Barcode (Ưu tiên cao nhất)
+        // 1. Tìm theo Barcode (Robust)
         if (info.product_barcode) {
-          targetEl = document.querySelector(`#product_list .product-item[data-barcode="${info.product_barcode}"]`);
+          const normCode = normalizeCode(info.product_barcode);
+          targetEl = [...document.querySelectorAll('#product_list .product-item')]
+            .find(el => normalizeCode(el.dataset.barcode) === normCode);
         }
 
-        // 2. Tìm theo SKU (Default Code)
+        // 2. Fallback: Tìm theo SKU
         if (!targetEl && info.product_sku) {
+          // SKU usually matches exactly, but let's be safe
           targetEl = document.querySelector(`#product_list .product-item[data-default-code="${info.product_sku}"]`);
         }
 
@@ -1204,6 +1227,10 @@ async function openPackageEditModal(event) {
           if (Math.abs(oldPacked - serverPacked) > 0.001) {
             console.warn(`[UI SYNC] Correction for ${info.product_sku || info.product_barcode}: Client(${oldPacked}) -> Server(${serverPacked})`);
             targetEl.setAttribute('data-packed-qty', serverPacked);
+            // [FIX] Update visual label immediately
+            if (typeof updateUnpackedLabel === 'function') {
+              updateUnpackedLabel(targetEl);
+            }
           }
         }
       });
@@ -1526,6 +1553,7 @@ async function addItemToPackage() {
     toast.error("Lỗi kết nối: " + err.message);
   }
 }
+window.addItemToPackage = addItemToPackage;
 
 async function savePackageChanges() {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
@@ -1999,14 +2027,12 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
             const oldQty = parseFloat(qtyEl.innerText.replace('x', '')) || 0;
             qtyEl.innerText = `x${oldQty + item.qty}`;
           }
-          console.log('1541', foundRow);
 
           // Nháy màu
           foundRow.style.transition = 'background 0.3s';
           foundRow.style.backgroundColor = '#fff3cd';
           setTimeout(() => foundRow.style.backgroundColor = 'transparent', 500);
         } else {
-          console.log('1555', name);
 
           // Nếu chưa có: Thêm mới lên đầu
           const newHtml = `

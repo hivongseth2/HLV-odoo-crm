@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_multiply_barcode_wizard_form" model="ir.ui.view">
+        <field name="name">multiply.barcode.wizard.form</field>
+        <field name="model">multiply.barcode.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Cập nhật mã vạch sản phẩm">
+                <group>
+                    <p colspan="2">Sử dụng cửa sổ này để cập nhật mã vạch cho sản phẩm hiện tại. Nó cũng cho phép bạn tự động lưu mã vạch cũ vào trường "Mã vạch bổ sung",
+                        như vậy bạn vẫn có thể tìm kiếm được bằng mã cũ và đảm bảo mã đó không bị trùng lặp với sản phẩm khác.</p>
+                </group>
+                <group>
+                    <field name="name"/>
+                    <field name="remember_previous_barcode"/>
+                </group>
+                <footer>
+                    <button name="update_barcode" type="object" string="Cập nhật" class="oe_highlight"/>
+                    or
+                    <button string="Hủy bỏ" class="oe_highlight" special="cancel"/>
+                </footer>
+           </form>
+        </field>
+    </record>
+
+    <record id="action_multiply_barcode_wizard" model="ir.actions.act_window">
+        <field name="name">Update Product Barcode</field>
+        <field name="res_model">multiply.barcode.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="view_id" ref="view_multiply_barcode_wizard_form"/>
+        <field name="target">new</field>
+    </record>
+
+</odoo>
