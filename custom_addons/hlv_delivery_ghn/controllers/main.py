@@ -126,13 +126,14 @@ class GHNWebsiteController(http.Controller):
         # Determine Service ID
         service_id = params.get('service_id')
         if not service_id:
-            available_services = client.get_services(from_district_id, to_district_id)
-            if available_services:
+            res_services = client.get_services(from_district_id, to_district_id)
+            if res_services.get('success'):
+                available_services = res_services.get('data') or []
                 # Ưu tiên lấy dịch vụ Chuẩn (service_type_id = 2), nếu không có thì lấy cái đầu tiên
-                standard_services = [s for s in available_services if s.get('service_type_id') == 2]
+                standard_services = [s for s in available_services if isinstance(s, dict) and s.get('service_type_id') == 2]
                 if standard_services:
                     service_id = standard_services[0]['service_id']
-                else:
+                elif available_services:
                     service_id = available_services[0]['service_id']
         
         if not service_id:
