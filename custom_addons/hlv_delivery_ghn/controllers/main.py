@@ -113,18 +113,44 @@ class GHNWebsiteController(http.Controller):
 
         # 3. Calculate
         warehouse = company.ghn_default_warehouse_id
+        if not warehouse or not warehouse.ghn_district_id:
+            return request.make_response(json.dumps({"success": False, "error": "Kho hàng mặc định chưa được cấu hình địa chỉ (Quận/Huyện) trên Odoo."}), headers=[('Content-Type', 'application/json')])
+
         weight = int(params.get('weight', 1000))
         shop_id = (warehouse.ghn_shop_id_heavy if weight > 10000 else warehouse.ghn_shop_id) or company.ghn_shop_id
         
         client = GHNApiUtils(company.ghn_api_token, shop_id, company.ghn_environment)
+        from_district_id = warehouse.ghn_district_id.district_id
+        to_district_id = district.district_id
+
+        # Determine Service ID
+        service_id = params.get('service_id')
+        if not service_id:
+            available_services = client.get_services(from_district_id, to_district_id)
+            if available_services:
+                # Ưu tiên lấy dịch vụ Chuẩn (service_type_id = 2), nếu không có thì lấy cái đầu tiên
+                standard_services = [s for s in available_services if s.get('service_type_id') == 2]
+                if standard_services:
+                    service_id = standard_services[0]['service_id']
+                else:
+                    service_id = available_services[0]['service_id']
+        
+        if not service_id:
+            # Fallback mặc định nếu không lấy được từ API
+            service_id = 53320
+
         data = {
-            "to_district_id": district.district_id, "to_ward_code": ward.ward_code,
-            "weight": weight, "length": int(params.get('length', 20)),
-            "width": int(params.get('width', 20)), "height": int(params.get('height', 20)),
-            "service_id": int(params.get('service_id', 53320))
+            "from_district_id": from_district_id,
+            "to_district_id": to_district_id,
+            "to_ward_code": ward.ward_code,
+            "weight": weight,
+            "length": int(params.get('length', 20)),
+            "width": int(params.get('width', 20)),
+            "height": int(params.get('height', 20)),
+            "service_id": int(service_id)
         }
-        if warehouse.ghn_district_id: data["from_district_id"] = warehouse.ghn_district_id.district_id
-        if warehouse.ghn_ward_id: data["from_ward_code"] = warehouse.ghn_ward_id.ward_code
+        if warehouse.ghn_ward_id:
+            data["from_ward_code"] = warehouse.ghn_ward_id.ward_code
 
         result = client.calculate_fee(data)
         _logger.info("WordPress GHN Response: %s", result)
