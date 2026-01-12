@@ -33,7 +33,8 @@ class GHNApiUtils:
         try:
             response = requests.get(url, headers={"Token": self.token})
             if response.status_code == 200:
-                return response.json().get("data", [])
+                data = response.json().get("data")
+                return data if isinstance(data, list) else []
             _logger.error("GHN get_provinces error: %s", response.text)
         except Exception as e:
             _logger.exception("GHN get_provinces exception: %s", e)
@@ -46,7 +47,8 @@ class GHNApiUtils:
         try:
             response = requests.post(url, headers={"Token": self.token}, json=payload)
             if response.status_code == 200:
-                return response.json().get("data", [])
+                data = response.json().get("data")
+                return data if isinstance(data, list) else []
             _logger.error("GHN get_districts error: %s", response.text)
         except Exception as e:
             _logger.exception("GHN get_districts exception: %s", e)
@@ -59,7 +61,8 @@ class GHNApiUtils:
         try:
             response = requests.get(url, headers={"Token": self.token}, params=params)
             if response.status_code == 200:
-                return response.json().get("data", [])
+                data = response.json().get("data")
+                return data if isinstance(data, list) else []
             _logger.error("GHN get_wards error: %s", response.text)
         except Exception as e:
             _logger.exception("GHN get_wards exception: %s", e)

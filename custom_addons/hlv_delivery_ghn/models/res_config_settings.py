@@ -30,7 +30,12 @@ class ResConfigSettings(models.TransientModel):
         
         # Sync Provinces
         provinces = client.get_provinces()
+        if not provinces:
+            return True
+
         ProvinceModel = self.env['ghn.province']
+        DistrictModel = self.env['ghn.district']
+        
         for p in provinces:
             exist_p = ProvinceModel.search([('province_id', '=', p['ProvinceID'])], limit=1)
             if not exist_p:
@@ -41,14 +46,14 @@ class ResConfigSettings(models.TransientModel):
             
             # Sync Districts for this province
             districts = client.get_districts(p['ProvinceID'])
-            DistrictModel = self.env['ghn.district']
-            for d in districts:
-                exist_d = DistrictModel.search([('district_id', '=', d['DistrictID'])], limit=1)
-                if not exist_d:
-                    DistrictModel.create({
-                        'district_id': d['DistrictID'],
-                        'name': d['DistrictName'],
-                        'province_id': exist_p.id
-                    })
+            if districts:
+                for d in districts:
+                    exist_d = DistrictModel.search([('district_id', '=', d['DistrictID'])], limit=1)
+                    if not exist_d:
+                        DistrictModel.create({
+                            'district_id': d['DistrictID'],
+                            'name': d['DistrictName'],
+                            'province_id': exist_p.id
+                        })
         
         return True
