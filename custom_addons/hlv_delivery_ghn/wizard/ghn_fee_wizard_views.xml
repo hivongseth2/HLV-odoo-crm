@@ -23,8 +23,8 @@
                 </group>
                 <group string="Kết quả">
                     <field name="fee_result" widget="monetary" options="{'currency_field': 'currency_id'}"/>
-                    <field name="message" nolabel="1" class="text-danger" attrs="{'invisible': [('fee_result', '>', 0)]}"/>
-                    <field name="message" nolabel="1" class="text-success" attrs="{'invisible': [('fee_result', '=', 0)]}"/>
+                    <field name="message" nolabel="1" class="text-danger" invisible="fee_result &gt; 0"/>
+                    <field name="message" nolabel="1" class="text-success" invisible="fee_result == 0"/>
                 </group>
                 <footer>
                     <button name="action_calculate_fee" string="Tính phí" type="object" class="btn-primary"/>
