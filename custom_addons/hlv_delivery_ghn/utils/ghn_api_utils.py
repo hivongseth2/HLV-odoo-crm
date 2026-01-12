@@ -11,9 +11,14 @@ class GHNApiUtils:
         self.environment = environment
         
         if environment == 'prod':
-            self.base_url = "https://online-gateway.ghn.vn/shiip/public-api/v2"
+            self.api_base_url = "https://online-gateway.ghn.vn/shiip/public-api"
         else:
-            self.base_url = "https://dev-online-gateway.ghn.vn/shiip/public-api/v2"
+            self.api_base_url = "https://dev-online-gateway.ghn.vn/shiip/public-api"
+        
+        # Master data endpoints usually don't have /v2
+        self.master_data_url = f"{self.api_base_url}/master-data"
+        # Shipping and other v2 endpoints
+        self.v2_url = f"{self.api_base_url}/v2"
 
     def _get_headers(self):
         return {
@@ -24,7 +29,7 @@ class GHNApiUtils:
 
     def get_provinces(self):
         """Fetch all provinces from GHN."""
-        url = f"{self.base_url}/master-data/province"
+        url = f"{self.master_data_url}/province"
         try:
             response = requests.get(url, headers={"Token": self.token})
             if response.status_code == 200:
@@ -36,7 +41,7 @@ class GHNApiUtils:
 
     def get_districts(self, province_id):
         """Fetch districts for a province."""
-        url = f"{self.base_url}/master-data/district"
+        url = f"{self.master_data_url}/district"
         payload = {"province_id": int(province_id)}
         try:
             response = requests.post(url, headers={"Token": self.token}, json=payload)
@@ -49,7 +54,7 @@ class GHNApiUtils:
 
     def get_wards(self, district_id):
         """Fetch wards for a district."""
-        url = f"{self.base_url}/master-data/ward"
+        url = f"{self.master_data_url}/ward"
         params = {"district_id": int(district_id)}
         try:
             response = requests.get(url, headers={"Token": self.token}, params=params)
@@ -66,7 +71,7 @@ class GHNApiUtils:
         Data keys: from_district_id, from_ward_code, to_district_id, to_ward_code,
                   weight, length, width, height, service_id, insurance_value, etc.
         """
-        url = f"{self.base_url}/shipping-order/fee"
+        url = f"{self.v2_url}/shipping-order/fee"
         headers = self._get_headers()
         try:
             response = requests.post(url, headers=headers, json=data)
@@ -83,7 +88,7 @@ class GHNApiUtils:
 
     def get_services(self, from_district, to_district):
         """Fetch available services between two districts."""
-        url = f"{self.base_url}/shipping-order/available-services"
+        url = f"{self.v2_url}/shipping-order/available-services"
         payload = {
             "shop_id": int(self.shop_id),
             "from_district": int(from_district),
