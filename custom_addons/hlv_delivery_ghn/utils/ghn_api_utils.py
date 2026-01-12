@@ -7,7 +7,8 @@ _logger = logging.getLogger(__name__)
 class GHNApiUtils:
     def __init__(self, token, shop_id, environment='test'):
         self.token = token
-        self.shop_id = shop_id
+        # Clean shop_id (remove dots/spaces from Odoo formatting)
+        self.shop_id = "".join(filter(str.isdigit, str(shop_id))) if shop_id else "0"
         self.environment = environment
         
         if environment == 'prod':
@@ -24,7 +25,7 @@ class GHNApiUtils:
         return {
             "Content-Type": "application/json",
             "Token": self.token,
-            "ShopId": str(self.shop_id) if self.shop_id else "0"
+            "ShopId": self.shop_id # Now it's always a clean stringof digits
         }
 
     def get_provinces(self):
@@ -102,6 +103,7 @@ class GHNApiUtils:
         """Fetch available services between two districts."""
         url = f"{self.v2_url}/shipping-order/available-services"
         headers = self._get_headers()
+        
         payload = {
             "shop_id": int(self.shop_id),
             "from_district": int(from_district),
@@ -111,8 +113,11 @@ class GHNApiUtils:
             response = requests.post(url, headers=headers, json=payload)
             res_json = response.json()
             if response.status_code == 200 and res_json.get("code") == 200:
-                return res_json.get("data")
-            _logger.error("GHN get_services error: %s", response.text)
+                return {"success": True, "data": res_json.get("data")}
+            return {
+                "success": False, 
+                "error": res_json.get("message") or f"HTTP {response.status_code}"
+            }
         except Exception as e:
             _logger.exception("GHN get_services exception: %s", e)
-        return None
+            return {"success": False, "error": str(e)}

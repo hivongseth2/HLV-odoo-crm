@@ -36,8 +36,8 @@ class ResConfigSettings(models.TransientModel):
             
             # get_services checks both Token and ShopId
             # We use 1442 (HCMC) and 1442 as dummy districts to test
-            services = client.get_services(1442, 1442)
-            if services is not None: # get_services returns empty list if success but no services, or None/Error if fail
+            result = client.get_services(1442, 1442)
+            if result.get('success'):
                 return {
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
@@ -49,7 +49,7 @@ class ResConfigSettings(models.TransientModel):
                     }
                 }
             else:
-                raise UserError("Kết nối tới Shop ID thất bại. Vui lòng kiểm tra lại Shop ID.")
+                raise UserError(f"Kết nối Shop ID thất bại: {result.get('error')}")
         except Exception as e:
             raise UserError(f"Lỗi kết nối: {str(e)}")
 
