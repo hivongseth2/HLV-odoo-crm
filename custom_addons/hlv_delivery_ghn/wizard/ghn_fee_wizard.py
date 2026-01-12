@@ -11,11 +11,18 @@ class GHNFeeWizard(models.TransientModel):
 
     picking_id = fields.Many2one("stock.picking", string="Picking")
     
-    # Destination Address
-    province_id = fields.Many2one("ghn.province", string="Province", required=True)
-    district_id = fields.Many2one("ghn.district", string="District", required=True, 
+    # Sender Address (Optional - GHN uses shop default if blank)
+    from_province_id = fields.Many2one("ghn.province", string="From Province")
+    from_district_id = fields.Many2one("ghn.district", string="From District",
+                                     domain="[('province_id', '=', from_province_id)]")
+    from_ward_id = fields.Many2one("ghn.ward", string="From Ward",
+                                  domain="[('district_id', '=', from_district_id)]")
+
+    # Recipient Address
+    province_id = fields.Many2one("ghn.province", string="To Province", required=True)
+    district_id = fields.Many2one("ghn.district", string="To District", required=True, 
                                 domain="[('province_id', '=', province_id)]")
-    ward_id = fields.Many2one("ghn.ward", string="Ward", required=True,
+    ward_id = fields.Many2one("ghn.ward", string="To Ward", required=True,
                              domain="[('district_id', '=', district_id)]")
     
     # Package Info (Defaults from picking if available)
@@ -43,26 +50,27 @@ class GHNFeeWizard(models.TransientModel):
             environment=company.ghn_environment
         )
 
-    @api.onchange('district_id')
-    def _onchange_district(self):
-        """Fetch wards from GHN when district changes and cache them if not already."""
-        if not self.district_id:
+    @api.onchange('from_district_id', 'district_id')
+    def _onchange_district_any(self):
+        """Fetch wards from GHN when district changes (both sender and receiver)."""
+        district = self.from_district_id or self.district_id
+        if not district:
             return
         
         client = self._get_api_client()
-        wards = client.get_wards(self.district_id.district_id)
+        wards = client.get_wards(district.district_id)
         
         WardModel = self.env['ghn.ward']
         for w in wards:
             exist = WardModel.search([
                 ('ward_code', '=', w['WardCode']),
-                ('district_id', '=', self.district_id.id)
+                ('district_id', '=', district.id)
             ], limit=1)
             if not exist:
                 WardModel.create({
                     'ward_code': w['WardCode'],
                     'name': w['WardName'],
-                    'district_id': self.district_id.id
+                    'district_id': district.id
                 })
 
     def _get_services(self):
@@ -92,6 +100,11 @@ class GHNFeeWizard(models.TransientModel):
             "cod_value": self.cod_value,
             "service_id": service_id
         }
+
+        if self.from_district_id:
+            data["from_district_id"] = self.from_district_id.district_id
+        if self.from_ward_id:
+            data["from_ward_code"] = self.from_ward_id.ward_code
         
         result = client.calculate_fee(data)
         if result.get('success'):

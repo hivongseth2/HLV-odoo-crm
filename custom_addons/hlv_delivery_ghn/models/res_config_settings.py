@@ -29,20 +29,27 @@ class ResConfigSettings(models.TransientModel):
             environment=self.ghn_environment
         )
         try:
+            # get_provinces only checks Token
             provinces = client.get_provinces()
-            if provinces:
+            if not provinces:
+                raise UserError("Token không hợp lệ hoặc không thể lấy dữ liệu tỉnh thành.")
+            
+            # get_services checks both Token and ShopId
+            # We use 1442 (HCMC) and 1442 as dummy districts to test
+            services = client.get_services(1442, 1442)
+            if services is not None: # get_services returns empty list if success but no services, or None/Error if fail
                 return {
                     'type': 'ir.actions.client',
                     'tag': 'display_notification',
                     'params': {
                         'title': 'Thành công',
-                        'message': 'Kết nối GHN thành công!',
+                        'message': 'Kết nối GHN (Token & Shop ID) thành công!',
                         'sticky': False,
                         'type': 'success',
                     }
                 }
             else:
-                raise UserError("Kết nối thất bại. Vui lòng kiểm tra lại Token và Shop ID.")
+                raise UserError("Kết nối tới Shop ID thất bại. Vui lòng kiểm tra lại Shop ID.")
         except Exception as e:
             raise UserError(f"Lỗi kết nối: {str(e)}")
 

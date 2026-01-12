@@ -101,16 +101,18 @@ class GHNApiUtils:
     def get_services(self, from_district, to_district):
         """Fetch available services between two districts."""
         url = f"{self.v2_url}/shipping-order/available-services"
+        headers = self._get_headers()
         payload = {
             "shop_id": int(self.shop_id),
             "from_district": int(from_district),
             "to_district": int(to_district)
         }
         try:
-            response = requests.post(url, headers={"Token": self.token}, json=payload)
-            if response.status_code == 200:
-                return response.json().get("data", [])
+            response = requests.post(url, headers=headers, json=payload)
+            res_json = response.json()
+            if response.status_code == 200 and res_json.get("code") == 200:
+                return res_json.get("data")
             _logger.error("GHN get_services error: %s", response.text)
         except Exception as e:
             _logger.exception("GHN get_services exception: %s", e)
-        return []
+        return None

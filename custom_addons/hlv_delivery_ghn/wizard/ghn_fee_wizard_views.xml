@@ -6,7 +6,12 @@
         <field name="arch" type="xml">
             <form string="Tính cước Giao Hàng Nhanh (GHN)">
                 <group>
-                    <group string="Địa chỉ giao hàng">
+                    <group string="Địa chỉ gửi (Tùy chọn)">
+                        <field name="from_province_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="from_district_id" options="{'no_create': True, 'no_open': True}"/>
+                        <field name="from_ward_id" options="{'no_create': True, 'no_open': True}"/>
+                    </group>
+                    <group string="Địa chỉ nhận">
                         <field name="province_id" options="{'no_create': True, 'no_open': True}"/>
                         <field name="district_id" options="{'no_create': True, 'no_open': True}"/>
                         <field name="ward_id" options="{'no_create': True, 'no_open': True}"/>
