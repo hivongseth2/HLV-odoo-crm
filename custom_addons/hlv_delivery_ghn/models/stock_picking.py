@@ -7,9 +7,18 @@ class StockPicking(models.Model):
     def action_open_ghn_fee_wizard(self):
         self.ensure_one()
         
-        # Simple heuristic for dimensions/weight
-        # In a real scenario, this would sum up product weights
-        total_weight = sum(self.move_line_ids.mapped(lambda ml: ml.product_id.weight * ml.quantity)) * 1000 # Convert to grams
+        # Calculate total weight (prioritizing variant weight, then template weight)
+        total_weight = 0
+        for move in self.move_ids_without_package:
+            # In Odoo, product_id.weight usually falls back to template, 
+            # but we'll follow user's instruction to be explicit.
+            weight = move.product_id.weight
+            if not weight and move.product_id.product_tmpl_id:
+                weight = move.product_id.product_tmpl_id.weight
+            
+            total_weight += (weight or 0) * move.product_uom_qty
+
+        total_weight = total_weight * 1000 # Convert KG to Grams
         if total_weight == 0:
             total_weight = 1000
             
