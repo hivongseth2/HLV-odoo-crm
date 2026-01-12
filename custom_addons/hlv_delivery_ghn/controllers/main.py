@@ -68,9 +68,13 @@ class GHNWebsiteController(http.Controller):
 
         # Fallback: If district is missing but we have a Ward Code (numeric)
         if not district and w_input.isdigit():
-            ward = Ward.search([('ward_code', '=', w_input), ('district_id.province_id', '=', province.id)], limit=1)
-            if ward:
+            _logger.info("WordPress GHN: District missing, reverse searching Ward ID: %s", w_input)
+            # Search ward globally within the province to find its district
+            target_ward = Ward.search([('ward_code', '=', w_input), ('district_id.province_id', '=', province.id)], limit=1)
+            if target_ward:
+                ward = target_ward
                 district = ward.district_id
+                _logger.info("WordPress GHN: Reverse search found District: %s", district.name)
 
         # If still no district, return 0 fee (Don't error out to avoid WP caching failure)
         if not district:
