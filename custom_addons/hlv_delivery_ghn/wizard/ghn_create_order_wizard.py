@@ -150,6 +150,25 @@ class GHNCreateOrderWizard(models.TransientModel):
                         if data.get('to_phone'): res['to_phone'] = data.get('to_phone')
                         if data.get('to_address'): res['to_address'] = data.get('to_address')
                         
+                        # Map Location (District, Ward, Province)
+                        to_district_id = data.get('to_district_id')
+                        to_ward_code = data.get('to_ward_code')
+                        
+                        if to_district_id:
+                            district = self.env['ghn.district'].search([('district_id', '=', to_district_id)], limit=1)
+                            if district:
+                                res['district_id'] = district.id
+                                res['province_id'] = district.province_id.id
+                                
+                                # Only search ward if we found the district (for safer domain)
+                                if to_ward_code:
+                                    ward = self.env['ghn.ward'].search([
+                                        ('ward_code', '=', to_ward_code),
+                                        ('district_id', '=', district.id)
+                                    ], limit=1)
+                                    if ward:
+                                        res['ward_id'] = ward.id
+
                         # Note: GHN API might return IDs that don't match our local DB if not synced, 
                         # but we try our best. For now we trust Odoo's location mapping unless we want to do heavy reverse lookup.
                         # Mapping basic fields that are safe:
