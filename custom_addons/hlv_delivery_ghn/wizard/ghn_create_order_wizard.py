@@ -184,15 +184,15 @@ class GHNCreateOrderWizard(models.TransientModel):
         warehouse = picking.picking_type_id.warehouse_id
         payload = {
             "payment_type_id": int(self.payment_type_id),
-            "note": self.note or "Giao hàng",
-            "required_note": self.required_note,
-            "to_name": self.to_name,
-            "to_phone": self.to_phone,
-            "to_address": self.to_address,
-            "to_ward_code": self.ward_id.ward_code,
-            "to_district_id": self.district_id.district_id,
+            "note": str(self.note or "Giao hàng"),
+            "required_note": str(self.required_note),
+            "to_name": str(self.to_name),
+            "to_phone": str(self.to_phone),
+            "to_address": str(self.to_address),
+            "to_ward_code": str(self.ward_id.ward_code),
+            "to_district_id": int(self.district_id.district_id),
             "cod_amount": int(self.cod_amount),
-            "content": self.content or f"Đơn hàng {picking.name}",
+            "content": str(self.content or f"Đơn hàng {picking.name}"),
             "weight": int(self.weight),
             "length": int(self.length),
             "width": int(self.width),
@@ -201,22 +201,22 @@ class GHNCreateOrderWizard(models.TransientModel):
             "service_id": int(self.service_id),
             "service_type_id": int(self.service_type_id),
             "items": items,
-            "client_order_code": self.client_order_code or picking.name
+            "client_order_code": str(self.client_order_code or picking.name)
         }
 
         # Sender Info
         if warehouse:
-            if warehouse.ghn_province_id: payload["from_province_name"] = warehouse.ghn_province_id.name
-            if warehouse.ghn_district_id: payload["from_district_name"] = warehouse.ghn_district_id.name
-            if warehouse.ghn_ward_id: payload["from_ward_name"] = warehouse.ghn_ward_id.name
+            if warehouse.ghn_province_id: payload["from_province_name"] = str(warehouse.ghn_province_id.name)
+            if warehouse.ghn_district_id: payload["from_district_name"] = str(warehouse.ghn_district_id.name)
+            if warehouse.ghn_ward_id: payload["from_ward_name"] = str(warehouse.ghn_ward_id.name)
             if warehouse.partner_id:
-                payload["from_name"] = warehouse.partner_id.name
-                payload["from_phone"] = warehouse.partner_id.phone or warehouse.partner_id.mobile
-                payload["from_address"] = f"{warehouse.partner_id.street or ''}, {warehouse.partner_id.street2 or ''}"
+                payload["from_name"] = str(warehouse.partner_id.name)
+                payload["from_phone"] = str(warehouse.partner_id.phone or warehouse.partner_id.mobile or '')
+                payload["from_address"] = str(f"{warehouse.partner_id.street or ''}, {warehouse.partner_id.street2 or ''}")
             else:
-                payload["from_name"] = picking.company_id.name
-                payload["from_phone"] = picking.company_id.phone
-                payload["from_address"] = f"{picking.company_id.street or ''}, {picking.company_id.street2 or ''}"
+                payload["from_name"] = str(picking.company_id.name)
+                payload["from_phone"] = str(picking.company_id.phone or '')
+                payload["from_address"] = str(f"{picking.company_id.street or ''}, {picking.company_id.street2 or ''}")
 
         result = client.create_order(payload)
         if result.get("success"):
