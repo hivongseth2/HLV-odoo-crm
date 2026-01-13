@@ -116,7 +116,26 @@ class GHNWebsiteController(http.Controller):
         if not warehouse or not warehouse.ghn_district_id:
             return request.make_response(json.dumps({"success": False, "error": "Kho hàng mặc định chưa được cấu hình địa chỉ (Quận/Huyện) trên Odoo."}), headers=[('Content-Type', 'application/json')])
 
-        weight = int(params.get('weight', 1000))
+        # Calculate weight from Odoo products if items are provided
+        weight = 0
+        items = params.get('items', [])
+        if items:
+            for item in items:
+                sku = item.get('sku')
+                qty = int(item.get('qty', 1))
+                if sku:
+                    product = request.env['product.product'].sudo().search([('default_code', '=', sku)], limit=1)
+                    if product:
+                        # Odoo weight is in kg, convert to grams
+                        weight += (product.weight or 0) * qty
+            
+            if weight > 0:
+                weight = int(weight * 1000)
+
+        # Fallback to WordPress weight if Odoo lookup failed or no items
+        if weight == 0:
+            weight = int(params.get('weight', 1000))
+
         shop_id = (warehouse.ghn_shop_id_heavy if weight > 10000 else warehouse.ghn_shop_id) or company.ghn_shop_id
         
         client = GHNApiUtils(company.ghn_api_token, shop_id, company.ghn_environment)
