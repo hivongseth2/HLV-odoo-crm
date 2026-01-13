@@ -124,7 +124,7 @@ class GHNCreateOrderWizard(models.TransientModel):
                 'content': f"Đơn hàng {picking.name}",
             })
             
-            # Dimensions & Weight
+            # Dimensions & Weight using default logic first
             weight, l, w, h = picking._calculate_ghn_dimensions()
             res.update({
                 'weight': weight,
@@ -132,6 +132,43 @@ class GHNCreateOrderWizard(models.TransientModel):
                 'width': w,
                 'height': h,
             })
+
+            # Check if this is an update, if so fetch data from GHN
+            if picking.ghn_order_code:
+                try:
+                    company = picking.company_id
+                    client = GHNApiUtils(
+                        token=company.ghn_api_token,
+                        shop_id=company.ghn_shop_id,
+                        environment=company.ghn_environment
+                    )
+                    api_res = client.get_order_detail(picking.ghn_order_code)
+                    if api_res.get('success'):
+                        data = api_res.get('data')
+                        # Map API data back to wizard fields
+                        if data.get('to_name'): res['to_name'] = data.get('to_name')
+                        if data.get('to_phone'): res['to_phone'] = data.get('to_phone')
+                        if data.get('to_address'): res['to_address'] = data.get('to_address')
+                        
+                        # Note: GHN API might return IDs that don't match our local DB if not synced, 
+                        # but we try our best. For now we trust Odoo's location mapping unless we want to do heavy reverse lookup.
+                        # Mapping basic fields that are safe:
+                        if data.get('note'): res['note'] = data.get('note')
+                        if data.get('required_note'): res['required_note'] = data.get('required_note')
+                        if data.get('payment_type_id'): res['payment_type_id'] = str(data.get('payment_type_id'))
+                        if data.get('service_type_id'): res['service_type_id'] = str(data.get('service_type_id'))
+                        if data.get('service_id'): res['service_id'] = str(data.get('service_id'))
+                        
+                        if data.get('weight'): res['weight'] = data.get('weight')
+                        if data.get('length'): res['length'] = data.get('length')
+                        if data.get('width'): res['width'] = data.get('width')
+                        if data.get('height'): res['height'] = data.get('height')
+                        
+                        if data.get('cod_amount') is not None: res['cod_amount'] = data.get('cod_amount')
+                        if data.get('insurance_value') is not None: res['insurance_value'] = data.get('insurance_value')
+                        
+                except Exception as e:
+                    _logger.warning("Failed to fetch GHN Order Details for %s: %s", picking.ghn_order_code, e)
             
         return res
 
