@@ -17,9 +17,9 @@ class StockPicking(models.Model):
     ], string="Ghi chú bắt buộc", default='KHONGCHOXEMHANG')
     
     ghn_payment_type_id = fields.Selection([
-        (1, 'Người bán trả phí'),
-        (2, 'Người mua trả phí')
-    ], string="Người trả phí", default=2)
+        ('1', 'Người bán trả phí'),
+        ('2', 'Người mua trả phí')
+    ], string="Người trả phí", default='2')
 
     ghn_shipping_notes = fields.Text(string="Ghi chú vận chuyển")
     ghn_insurance_value = fields.Integer(string="Giá trị bảo hiểm (VNĐ)")
