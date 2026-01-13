@@ -46,24 +46,21 @@ class GHNCreateOrderWizard(models.TransientModel):
     ], string="Ghi chú bắt buộc", default='KHONGCHOXEMHANG', required=True)
     
     service_type_id = fields.Selection([
-        (1, 'Dịch vụ Chuẩn (Truyền thống)'),
-        (2, 'Dịch vụ Thương mại điện tử (E-commerce)'),
-        (3, 'Dịch vụ Tiết kiệm')
-    ], string="Loại dịch vụ", default=2, required=True)
+        ('1', 'Dịch vụ Chuẩn (Truyền thống)'),
+        ('2', 'Dịch vụ Thương mại điện tử (E-commerce)'),
+        ('3', 'Dịch vụ Tiết kiệm')
+    ], string="Loại dịch vụ", default='2', required=True)
     
     service_id = fields.Selection(selection='_get_service_selection', string="Dịch vụ cụ thể", required=True)
     
     def _get_service_selection(self):
         """Fetch available services from GHN based on districts."""
-        # Note: This is called by Odoo to populate the dropdown.
-        # It's tricky because it might be called without a record.
-        # We'll provide some defaults and let onchange handle the rest if needed.
         return [
-            (53320, 'Chuyển phát Chuẩn'),
-            (53321, 'Chuyển phát Nhanh'),
-            (53322, 'Chuyển phát Tiết kiệm'),
-            (53325, 'Chuyển phát Tiết kiệm (Small)'),
-            (0, 'Tự động chọn')
+            ('53320', 'Chuyển phát Chuẩn'),
+            ('53321', 'Chuyển phát Nhanh'),
+            ('53322', 'Chuyển phát Tiết kiệm'),
+            ('53325', 'Chuyển phát Tiết kiệm (Small)'),
+            ('0', 'Tự động chọn')
         ]
 
     @api.onchange('district_id', 'service_type_id')
@@ -77,7 +74,6 @@ class GHNCreateOrderWizard(models.TransientModel):
         from_district = warehouse.ghn_district_id.district_id if warehouse and warehouse.ghn_district_id else None
         
         if not from_district:
-            # Fallback or error? Let's just use the default list if we can't fetch.
             return
             
         client = self._get_ghn_client()
@@ -87,13 +83,10 @@ class GHNCreateOrderWizard(models.TransientModel):
             services = result['data']
             # Filter by service_type_id if selected
             selection = []
+            selected_type = int(self.service_type_id) if self.service_type_id else 0
             for s in services:
-                if s.get('service_type_id') == self.service_type_id or not self.service_type_id:
-                    selection.append((s['service_id'], s['short_name'] or s['name']))
-            
-            # Since we can't easily change the 'selection' attribute of a field on the fly in the UI dropdown 
-            # (unless it's a many2one), we might just update the service_id value.
-            # But the 'Selection' field with a method is the standard way.
+                if s.get('service_type_id') == selected_type or not selected_type:
+                    selection.append((str(s['service_id']), s['short_name'] or s['name']))
             
             if selection and self.service_id not in [s[0] for s in selection]:
                 self.service_id = selection[0][0]
@@ -123,8 +116,8 @@ class GHNCreateOrderWizard(models.TransientModel):
                 'required_note': picking.ghn_required_note or 'KHONGCHOXEMHANG',
                 'cod_amount': picking.ghn_cod_amount,
                 'insurance_value': picking.ghn_insurance_value,
-                'service_id': picking.ghn_service_id,
-                'service_type_id': picking.ghn_service_type_id,
+                'service_id': str(picking.ghn_service_id or 0),
+                'service_type_id': str(picking.ghn_service_type_id or 2),
                 'note': picking.ghn_shipping_notes or 'Giao hàng',
                 'content': f"Đơn hàng {picking.name}",
             })
