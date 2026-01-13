@@ -9,11 +9,11 @@
                 <button name="action_open_ghn_fee_wizard" string="Tính cước GHN" type="object" groups="stock.group_stock_user"/>
                 <button name="action_create_ghn_order" string="Tạo đơn GHN" type="object" 
                         class="oe_highlight" 
-                        attrs="{'invisible': [('picking_type_code', '!=', 'outgoing')]}"
+                        invisible="picking_type_code != 'outgoing'"
                         groups="stock.group_stock_user"/>
             </xpath>
             <xpath expr="//notebook" position="inside">
-                <page string="Giao hàng GHN" name="ghn_delivery" attrs="{'invisible': [('picking_type_code', '!=', 'outgoing')]}">
+                <page string="Giao hàng GHN" name="ghn_delivery" invisible="picking_type_code != 'outgoing'">
                     <group>
                         <group string="Trạng thái &amp; Dự kiến">
                             <field name="ghn_order_code"/>
