@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 from odoo import fields, models, api
 from odoo.exceptions import ValidationError
 from ..utils.ghn_api_utils import GHNApiUtils
 import logging
+import math
 
 _logger = logging.getLogger(__name__)
 
@@ -123,23 +123,13 @@ class GHNCreateOrderWizard(models.TransientModel):
             })
             
             # Dimensions & Weight
-            total_weight = 0
-            p_length = 0
-            p_width = 0
-            p_height = 0
-            for move in picking.move_ids_without_package:
-                product = move.product_id
-                product_weight = int((product.weight or 0) * 1000) or 100
-                qty = int(move.product_uom_qty)
-                total_weight += product_weight * qty
-                p_length = max(p_length, int(product.product_length or 10))
-                p_width = max(p_width, int(product.product_width or 10))
-                p_height += int(product.product_height or 10) * qty
-            
-            res['weight'] = total_weight or 1000
-            res['length'] = p_length or 20
-            res['width'] = p_width or 20
-            res['height'] = p_height or 20
+            weight, l, w, h = picking._calculate_ghn_dimensions()
+            res.update({
+                'weight': weight,
+                'length': l,
+                'width': w,
+                'height': h,
+            })
             
         return res
 

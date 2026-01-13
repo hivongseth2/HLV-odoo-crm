@@ -1,6 +1,7 @@
 from odoo import models, api, fields
 from odoo.exceptions import ValidationError, UserError
 from ..utils.ghn_api_utils import GHNApiUtils
+import math
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -61,6 +62,42 @@ class StockPicking(models.Model):
                     'district_id': self.ghn_receiver_district_id.id
                 })
 
+    def _calculate_ghn_dimensions(self):
+        """
+        Estimate parcel dimensions using a Cubic Box approximation.
+        This avoids 'tower' shapes by distributing volume into a balanced box.
+        """
+        total_weight = 0
+        total_volume = 0
+        max_l = max_w = max_h = 0
+        
+        for move in self.move_ids_without_package:
+            product = move.product_id
+            qty = move.product_uom_qty
+            l = product.product_length or 10
+            w = product.product_width or 10
+            h = product.product_height or 10
+            weight = product.weight or 0.1 # 100g
+            
+            total_weight += weight * qty * 1000 # to gram
+            total_volume += (l * w * h) * qty
+            max_l = max(max_l, l)
+            max_w = max(max_w, w)
+            max_h = max(max_h, h)
+
+        if total_volume <= 0:
+            return 1000, 20, 20, 20
+            
+        # Cubic Box Approximation
+        ideal_side = total_volume ** (1/3.0)
+        final_l = max(max_l, ideal_side)
+        final_w = max(max_w, ideal_side)
+        # Calculate height from remaining volume
+        final_h = total_volume / (final_l * final_w)
+        final_h = max(max_h, final_h)
+        
+        return int(total_weight), math.ceil(final_l), math.ceil(final_w), math.ceil(final_h)
+
     def action_ghn_auto_fill_info(self):
         """Guess GHN locations and calculate dimensions based on Odoo data."""
         self.ensure_one()
@@ -90,17 +127,7 @@ class StockPicking(models.Model):
         # We might skip auto-matching ward or search in street/street2 if needed.
 
         # 4. Auto-calculate dimensions and weight
-        total_weight = 0
-        p_length = 0
-        p_width = 0
-        p_height = 0
-        
-        for move in self.move_ids_without_package:
-            product = move.product_id
-            total_weight += (product.weight or 0) * move.product_uom_qty
-            p_length = max(p_length, product.product_length or 0)
-            p_width = max(p_width, product.product_width or 0)
-            p_height += (product.product_height or 0) * move.product_uom_qty
+        weight, l, w, h = self._calculate_ghn_dimensions()
 
         # Set values to picking fields (assuming we might want to store them or just use them)
         # For now, let's just trigger the dimension logic inside action_open_ghn_fee_wizard logic
@@ -113,23 +140,7 @@ class StockPicking(models.Model):
     def action_open_ghn_fee_wizard(self):
         self.ensure_one()
         # Ensure latest dimensions are mapped
-        total_weight = 0
-        p_length = 0
-        p_width = 0
-        p_height = 0
-        
-        for move in self.move_ids_without_package:
-            product = move.product_id
-            total_weight += (product.weight or 0) * move.product_uom_qty
-            p_length = max(p_length, product.product_length or 0)
-            p_width = max(p_width, product.product_width or 0)
-            p_height += (product.product_height or 0) * move.product_uom_qty
-
-        total_weight = total_weight * 1000 # Convert KG to Grams
-        if total_weight == 0: total_weight = 1000
-        if p_length == 0: p_length = 20
-        if p_width == 0: p_width = 20
-        if p_height == 0: p_height = 20
+        weight, l, w, h = self._calculate_ghn_dimensions()
             
         return {
             "name": "Tính cước GHN",
