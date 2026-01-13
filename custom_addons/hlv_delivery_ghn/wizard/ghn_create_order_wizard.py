@@ -11,6 +11,7 @@ class GHNCreateOrderWizard(models.TransientModel):
     _description = "GHN Create Shipping Order Wizard"
 
     picking_id = fields.Many2one("stock.picking", string="Phiếu xuất kho", required=True)
+    client_order_code = fields.Char(string="Mã đơn hàng khách", help="Sử dụng Số báo giá/Sale Order làm mã tham chiếu sang GHN")
     
     # Receiver Info
     to_name = fields.Char(string="Tên người nhận", required=True)
@@ -44,8 +45,58 @@ class GHNCreateOrderWizard(models.TransientModel):
         ('KHONGCHOXEMHANG', 'Không cho xem hàng')
     ], string="Ghi chú bắt buộc", default='KHONGCHOXEMHANG', required=True)
     
-    service_id = fields.Integer(string="Mã dịch vụ", default=0)
-    service_type_id = fields.Integer(string="Mã loại dịch vụ", default=2)
+    service_type_id = fields.Selection([
+        (1, 'Dịch vụ Chuẩn (Truyền thống)'),
+        (2, 'Dịch vụ Thương mại điện tử (E-commerce)'),
+        (3, 'Dịch vụ Tiết kiệm')
+    ], string="Loại dịch vụ", default=2, required=True)
+    
+    service_id = fields.Selection(selection='_get_service_selection', string="Dịch vụ cụ thể", required=True)
+    
+    def _get_service_selection(self):
+        """Fetch available services from GHN based on districts."""
+        # Note: This is called by Odoo to populate the dropdown.
+        # It's tricky because it might be called without a record.
+        # We'll provide some defaults and let onchange handle the rest if needed.
+        return [
+            (53320, 'Chuyển phát Chuẩn'),
+            (53321, 'Chuyển phát Nhanh'),
+            (53322, 'Chuyển phát Tiết kiệm'),
+            (53325, 'Chuyển phát Tiết kiệm (Small)'),
+            (0, 'Tự động chọn')
+        ]
+
+    @api.onchange('district_id', 'service_type_id')
+    def _onchange_services(self):
+        """Fetch available services from GHN when district or type changes."""
+        if not self.district_id:
+            return
+        
+        # Get sender district from warehouse
+        warehouse = self.picking_id.picking_type_id.warehouse_id
+        from_district = warehouse.ghn_district_id.district_id if warehouse and warehouse.ghn_district_id else None
+        
+        if not from_district:
+            # Fallback or error? Let's just use the default list if we can't fetch.
+            return
+            
+        client = self._get_ghn_client()
+        result = client.get_services(from_district, self.district_id.district_id)
+        
+        if result.get('success'):
+            services = result['data']
+            # Filter by service_type_id if selected
+            selection = []
+            for s in services:
+                if s.get('service_type_id') == self.service_type_id or not self.service_type_id:
+                    selection.append((s['service_id'], s['short_name'] or s['name']))
+            
+            # Since we can't easily change the 'selection' attribute of a field on the fly in the UI dropdown 
+            # (unless it's a many2one), we might just update the service_id value.
+            # But the 'Selection' field with a method is the standard way.
+            
+            if selection and self.service_id not in [s[0] for s in selection]:
+                self.service_id = selection[0][0]
     
     note = fields.Text(string="Ghi chú cho shipper")
     content = fields.Char(string="Nội dung hàng hóa")
@@ -61,6 +112,7 @@ class GHNCreateOrderWizard(models.TransientModel):
             # Auto-fill receiver info
             res.update({
                 'picking_id': picking.id,
+                'client_order_code': (picking.sale_id and picking.sale_id.name) or picking.origin or picking.name,
                 'to_name': partner.name or '',
                 'to_phone': partner.phone or partner.mobile or '',
                 'to_address': f"{partner.street or ''}, {partner.street2 or ''}".strip(', '),
@@ -156,7 +208,7 @@ class GHNCreateOrderWizard(models.TransientModel):
             "service_id": int(self.service_id),
             "service_type_id": int(self.service_type_id),
             "items": items,
-            "client_order_code": picking.name
+            "client_order_code": self.client_order_code or picking.name
         }
 
         # Sender Info

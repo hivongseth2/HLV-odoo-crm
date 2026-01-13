@@ -111,13 +111,11 @@ class GHNFeeWizard(models.TransientModel):
                 })
 
     def _get_services(self):
-        # We need a district_id to get services.
-        # This is a bit tricky for static selection. 
-        # I'll use a hardcoded common services list or fetch dynamically in action.
         return [
-            ('53320', 'Chuyển phát chuẩn'),
-            ('53321', 'Chuyển phát nhanh'),
-            ('53322', 'Chuyển phát tiết kiệm')
+            ('53320', 'Chuyển phát Chuẩn'),
+            ('53321', 'Chuyển phát Nhanh (Thương mại điện tử)'),
+            ('53322', 'Chuyển phát Tiết kiệm'),
+            ('53325', 'Chuyển phát Tiết kiệm (Hàng nhỏ)')
         ]
 
     def action_calculate_fee(self):

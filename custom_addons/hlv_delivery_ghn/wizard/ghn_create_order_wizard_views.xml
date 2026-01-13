@@ -8,6 +8,7 @@
                 <sheet>
                     <group>
                         <group string="Người nhận">
+                            <field name="client_order_code"/>
                             <field name="to_name"/>
                             <field name="to_phone"/>
                             <field name="to_address"/>
@@ -32,8 +33,8 @@
                         <group string="Cấu hình GHN">
                             <field name="payment_type_id"/>
                             <field name="required_note"/>
-                            <field name="service_id"/>
                             <field name="service_type_id"/>
+                            <field name="service_id"/>
                         </group>
                         <group string="Ghi chú">
                             <field name="note"/>
