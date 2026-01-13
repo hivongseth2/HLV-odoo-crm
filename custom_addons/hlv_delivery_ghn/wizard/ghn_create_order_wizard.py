@@ -104,9 +104,14 @@ class GHNCreateOrderWizard(models.TransientModel):
             partner = picking.partner_id
             
             # Auto-fill receiver info
+            # Only treat as existing order if not canceled
+            current_order_code = picking.ghn_order_code
+            if picking.ghn_order_status == 'cancel':
+                current_order_code = False
+
             res.update({
                 'picking_id': picking.id,
-                'ghn_order_code': picking.ghn_order_code,
+                'ghn_order_code': current_order_code,
                 'client_order_code': (picking.sale_id and picking.sale_id.name) or picking.origin or picking.name,
                 'to_name': partner.name or '',
                 'to_phone': partner.phone or partner.mobile or '',
