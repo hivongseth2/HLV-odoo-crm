@@ -237,15 +237,37 @@ class GHNCreateOrderWizard(models.TransientModel):
         if warehouse:
             if warehouse.ghn_province_id: payload["from_province_name"] = str(warehouse.ghn_province_id.name)
             if warehouse.ghn_district_id: payload["from_district_name"] = str(warehouse.ghn_district_id.name)
+        # Sender Info - Only send if we have data (to rely on Shop default or keep existing on Update)
+        if warehouse:
+            if warehouse.ghn_province_id: payload["from_province_name"] = str(warehouse.ghn_province_id.name)
+            if warehouse.ghn_district_id: payload["from_district_name"] = str(warehouse.ghn_district_id.name)
             if warehouse.ghn_ward_id: payload["from_ward_name"] = str(warehouse.ghn_ward_id.name)
-            if warehouse.partner_id:
-                payload["from_name"] = str(warehouse.partner_id.name)
-                payload["from_phone"] = str(warehouse.partner_id.phone or warehouse.partner_id.mobile or '')
-                payload["from_address"] = str(f"{warehouse.partner_id.street or ''}, {warehouse.partner_id.street2 or ''}")
-            else:
-                payload["from_name"] = str(picking.company_id.name)
-                payload["from_phone"] = str(picking.company_id.phone or '')
-                payload["from_address"] = str(f"{picking.company_id.street or ''}, {picking.company_id.street2 or ''}")
+            
+            wh_partner = warehouse.partner_id
+            if wh_partner:
+                if wh_partner.name: payload["from_name"] = str(wh_partner.name)
+                if wh_partner.phone or wh_partner.mobile: 
+                    payload["from_phone"] = str(wh_partner.phone or wh_partner.mobile)
+                
+                addr_parts = [wh_partner.street, wh_partner.street2]
+                full_addr = ", ".join(filter(None, addr_parts))
+                if full_addr: payload["from_address"] = str(full_addr)
+            
+            # Fallback to Company if Warehouse has no partner (unlikely but safe) or specific fields missing? 
+            # Actually, standard Odoo Warehouse usually links to Company's partner if not set specific.
+            # But here we just skip if empty to let GHN defaults take over.
+
+        else:
+            # Fallback to Company (if no specific warehouse logic)
+            # Only send if set, otherwise let GHN use Shop default
+            if picking.company_id.name: payload["from_name"] = str(picking.company_id.name)
+            if picking.company_id.phone: payload["from_phone"] = str(picking.company_id.phone)
+            
+            addr_parts = [picking.company_id.street, picking.company_id.street2]
+            full_addr = ", ".join(filter(None, addr_parts))
+            if full_addr: payload["from_address"] = str(full_addr)
+
+        # Removed strict ValidationError to allow GHN defaults (Shop info) to work
 
         if self.ghn_order_code:
             payload["order_code"] = self.ghn_order_code
