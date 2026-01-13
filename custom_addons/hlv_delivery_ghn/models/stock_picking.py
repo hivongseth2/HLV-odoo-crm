@@ -88,12 +88,17 @@ class StockPicking(models.Model):
         if total_volume <= 0:
             return 1000, 20, 20, 20
             
+        # Apply Packing Efficiency Factor (Buffer for void space)
+        # Rigid items don't pack 100% efficiently. We add 30% buffer.
+        buffered_volume = total_volume * 1.3
+            
         # Cubic Box Approximation
-        ideal_side = total_volume ** (1/3.0)
+        ideal_side = buffered_volume ** (1/3.0)
         final_l = max(max_l, ideal_side)
         final_w = max(max_w, ideal_side)
-        # Calculate height from remaining volume
-        final_h = total_volume / (final_l * final_w)
+        
+        # Calculate height from buffered volume
+        final_h = buffered_volume / (final_l * final_w)
         final_h = max(max_h, final_h)
         
         return int(total_weight), math.ceil(final_l), math.ceil(final_w), math.ceil(final_h)
