@@ -16,11 +16,10 @@ class GHNApiUtils:
         else:
             self.api_base_url = "https://dev-online-gateway.ghn.vn/shiip/public-api"
         
-        # Master data endpoints always use Production for accuracy (as requested by user)
-        # Note: This requires a Production Token.
-        self.master_data_url = "https://online-gateway.ghn.vn/shiip/public-api/master-data"
         # Shipping and other v2 endpoints
         self.v2_url = f"{self.api_base_url}/v2"
+        # Master data endpoints
+        self.master_data_url = f"{self.api_base_url}/master-data"
         _logger.info("GHN API Initialized (%s). Base: %s | Master: %s", 
                      self.environment, self.api_base_url, self.master_data_url)
 
