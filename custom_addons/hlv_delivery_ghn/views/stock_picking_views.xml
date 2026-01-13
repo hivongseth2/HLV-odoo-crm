@@ -7,6 +7,40 @@
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
                 <button name="action_open_ghn_fee_wizard" string="Tính cước GHN" type="object" groups="stock.group_stock_user"/>
+                <button name="action_create_ghn_order" string="Tạo đơn GHN" type="object" 
+                        class="oe_highlight" 
+                        attrs="{'invisible': [('picking_type_code', '!=', 'outgoing')]}"
+                        groups="stock.group_stock_user"/>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Giao hàng GHN" name="ghn_delivery" attrs="{'invisible': [('picking_type_code', '!=', 'outgoing')]}">
+                    <group>
+                        <group string="Trạng thái &amp; Dự kiến">
+                            <field name="ghn_order_code"/>
+                            <field name="ghn_order_status"/>
+                            <field name="ghn_total_fee"/>
+                            <field name="ghn_expected_delivery_time"/>
+                        </group>
+                        <group string="Cấu hình gửi hàng">
+                            <field name="ghn_payment_type_id"/>
+                            <field name="ghn_required_note"/>
+                            <field name="ghn_service_id"/>
+                            <field name="ghn_service_type_id"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Địa chỉ nhận (GHN)">
+                            <field name="ghn_receiver_province_id" options="{'no_create': True}"/>
+                            <field name="ghn_receiver_district_id" options="{'no_create': True}"/>
+                            <field name="ghn_receiver_ward_id" options="{'no_create': True}"/>
+                        </group>
+                        <group string="Chi tiết đơn hàng">
+                            <field name="ghn_insurance_value"/>
+                            <field name="ghn_cod_amount"/>
+                            <field name="ghn_shipping_notes"/>
+                        </group>
+                    </group>
+                </page>
             </xpath>
         </field>
     </record>
