@@ -16,6 +16,7 @@ class ProductTemplate(models.Model):
         related="product_variant_ids.dimensional_uom_id",
         help="UoM for length, height, width",
         readonly=False,
+        default=lambda self: self.env.ref("uom.product_uom_cm"),
     )
     product_length = fields.Float(
         related="product_variant_ids.product_length", readonly=False
