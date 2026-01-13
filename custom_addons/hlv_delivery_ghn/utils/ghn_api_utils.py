@@ -226,3 +226,35 @@ class GHNApiUtils:
         except Exception as e:
             _logger.exception("GHN get_order_detail exception: %s", e)
             return {"success": False, "error": str(e)}
+
+    def cancel_order(self, order_codes):
+        """
+        Cancel shipping orders in GHN.
+        Endpoint: /switch-status/cancel
+        :param order_codes: List of order codes to cancel (e.g. ["CODE1", "CODE2"])
+        """
+        url = f"{self.v2_url}/switch-status/cancel"
+        headers = self._get_headers()
+        
+        payload = {
+            "order_codes": order_codes if isinstance(order_codes, list) else [order_codes],
+            "shop_id": int(self.shop_id)
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            res_json = response.json()
+            if response.status_code == 200 and res_json.get("code") == 200:
+                data = res_json.get("data")
+                # Data is a list of results: [{"order_code": "...", "result": true, "message": "OK"}]
+                return {"success": True, "data": data}
+            
+            error_msg = res_json.get("message") or f"HTTP {response.status_code}"
+            _logger.error("GHN cancel_order error: %s", response.text)
+            return {
+                "success": False, 
+                "error": error_msg
+            }
+        except Exception as e:
+            _logger.exception("GHN cancel_order exception: %s", e)
+            return {"success": False, "error": str(e)}

@@ -327,3 +327,39 @@ class GHNCreateOrderWizard(models.TransientModel):
             }
         else:
             raise ValidationError(f"Lỗi từ GHN: {result.get('error')}")
+
+    def action_cancel(self):
+        """
+        Cancel the GHN order.
+        """
+        self.ensure_one()
+        picking = self.picking_id
+        if not self.ghn_order_code:
+            raise ValidationError("Đơn hàng chưa có mã GHN, không thể hủy!")
+
+        company = picking.company_id
+        client = GHNApiUtils(
+            token=company.ghn_api_token,
+            shop_id=company.ghn_shop_id,
+            environment=company.ghn_environment
+        )
+
+        result = client.cancel_order(self.ghn_order_code)
+        if result.get("success"):
+            # Update Odoo status
+            picking.write({
+                "ghn_order_status": "cancel"
+            })
+            
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Thành công',
+                    'message': f'Đã HỦY đơn GHN: {self.ghn_order_code}',
+                    'sticky': False,
+                    'type': 'success',
+                }
+            }
+        else:
+            raise ValidationError(f"Lỗi hủy đơn GHN: {result.get('error')}")
