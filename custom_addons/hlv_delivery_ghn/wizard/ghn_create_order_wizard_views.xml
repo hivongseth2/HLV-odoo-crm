@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="ghn_create_order_wizard_view_form" model="ir.ui.view">
+        <field name="name">ghn.create.order.wizard.view.form</field>
+        <field name="model">ghn.create.order.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Kiểm tra và Tạo đơn GHN">
+                <sheet>
+                    <group>
+                        <group string="Người nhận">
+                            <field name="to_name"/>
+                            <field name="to_phone"/>
+                            <field name="to_address"/>
+                            <field name="province_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="district_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="ward_id" options="{'no_create': True, 'no_open': True}"/>
+                        </group>
+                        <group string="Thông tin hàng hóa">
+                            <field name="content"/>
+                            <field name="weight"/>
+                            <label for="length" string="Kích thước (LxWxH)"/>
+                            <div class="o_row">
+                                <field name="length"/> x 
+                                <field name="width"/> x 
+                                <field name="height"/> (cm)
+                            </div>
+                            <field name="cod_amount"/>
+                            <field name="insurance_value"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Cấu hình GHN">
+                            <field name="payment_type_id"/>
+                            <field name="required_note"/>
+                            <field name="service_id"/>
+                            <field name="service_type_id"/>
+                        </group>
+                        <group string="Ghi chú">
+                            <field name="note"/>
+                            <field name="picking_id" invisible="1"/>
+                        </group>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_confirm" string="Xác nhận và Tạo đơn" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_ghn_create_order_wizard" model="ir.actions.act_window">
+        <field name="name">Tạo đơn GHN</field>
+        <field name="res_model">ghn.create.order.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

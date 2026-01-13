@@ -14,6 +14,9 @@
             </xpath>
             <xpath expr="//notebook" position="inside">
                 <page string="Giao hàng GHN" name="ghn_delivery" invisible="picking_type_code != 'outgoing'">
+                    <header>
+                        <button name="action_ghn_auto_fill_info" type="object" string="Lấy thông tin GHN" class="btn-secondary"/>
+                    </header>
                     <group>
                         <group string="Trạng thái &amp; Dự kiến">
                             <field name="ghn_order_code"/>

@@ -61,9 +61,35 @@ class StockPicking(models.Model):
                     'district_id': self.ghn_receiver_district_id.id
                 })
 
-    def action_open_ghn_fee_wizard(self):
+    def action_ghn_auto_fill_info(self):
+        """Guess GHN locations and calculate dimensions based on Odoo data."""
         self.ensure_one()
-        # Calculate total weight and dimensions
+        partner = self.partner_id
+        if not partner:
+            return
+
+        # 1. Try to match Province
+        if not self.ghn_receiver_province_id and partner.state_id:
+            province = self.env['ghn.province'].search([
+                ('name', 'ilike', partner.state_id.name)
+            ], limit=1)
+            if province:
+                self.ghn_receiver_province_id = province
+
+        # 2. Try to match District
+        if self.ghn_receiver_province_id and not self.ghn_receiver_district_id and partner.city:
+            district = self.env['ghn.district'].search([
+                ('province_id', '=', self.ghn_receiver_province_id.id),
+                ('name', 'ilike', partner.city)
+            ], limit=1)
+            if district:
+                self.ghn_receiver_district_id = district
+
+        # 3. Try to match Ward
+        # Note: Ward is harder because it's rarely a separate field in standard Odoo.
+        # We might skip auto-matching ward or search in street/street2 if needed.
+
+        # 4. Auto-calculate dimensions and weight
         total_weight = 0
         p_length = 0
         p_width = 0
@@ -72,8 +98,29 @@ class StockPicking(models.Model):
         for move in self.move_ids_without_package:
             product = move.product_id
             total_weight += (product.weight or 0) * move.product_uom_qty
+            p_length = max(p_length, product.product_length or 0)
+            p_width = max(p_width, product.product_width or 0)
+            p_height += (product.product_height or 0) * move.product_uom_qty
+
+        # Set values to picking fields (assuming we might want to store them or just use them)
+        # For now, let's just trigger the dimension logic inside action_open_ghn_fee_wizard logic
+        # and ensure COD matches order total if 0
+        if self.ghn_cod_amount == 0 and self.sale_id:
+            self.ghn_cod_amount = int(self.sale_id.amount_total)
             
-            # Aggregate dimensions (Sum height, max length/width)
+        return True
+
+    def action_open_ghn_fee_wizard(self):
+        self.ensure_one()
+        # Ensure latest dimensions are mapped
+        total_weight = 0
+        p_length = 0
+        p_width = 0
+        p_height = 0
+        
+        for move in self.move_ids_without_package:
+            product = move.product_id
+            total_weight += (product.weight or 0) * move.product_uom_qty
             p_length = max(p_length, product.product_length or 0)
             p_width = max(p_width, product.product_width or 0)
             p_height += (product.product_height or 0) * move.product_uom_qty
@@ -104,124 +151,20 @@ class StockPicking(models.Model):
             }
         }
 
-    def _get_ghn_client(self):
-        company = self.env.company
-        warehouse = self.picking_type_id.warehouse_id
-        
-        # Calculate total weight to decide Shop ID
-        total_weight = sum((move.product_id.weight or 0) * move.product_uom_qty for move in self.move_ids_without_package) * 1000
-        is_heavy = total_weight > 10000
-        
-        shop_id = company.ghn_shop_id
-        if is_heavy:
-            shop_id = (warehouse and warehouse.ghn_shop_id_heavy) or company.ghn_shop_id_heavy or shop_id
-        else:
-            shop_id = (warehouse and warehouse.ghn_shop_id) or company.ghn_shop_id
-            
-        return GHNApiUtils(
-            token=company.ghn_api_token,
-            shop_id=shop_id,
-            environment=company.ghn_environment
-        )
-
     def action_create_ghn_order(self):
+        """Open the wizard to review and create GHN order."""
         self.ensure_one()
-        client = self._get_ghn_client()
-        
-        # Validation
-        if not self.ghn_receiver_province_id or not self.ghn_receiver_district_id or not self.ghn_receiver_ward_id:
-            raise ValidationError("Vui lòng điền đầy đủ thông tin địa chỉ nhận (Tỉnh/Huyện/Xã) của GHN.")
-        
-        if not self.partner_id.phone:
-            raise ValidationError("Vui lòng điền số điện thoại của khách hàng.")
-
-        # Prepare items
-        items = []
-        total_weight = 0
-        p_length = 0
-        p_width = 0
-        p_height = 0
-        
-        for move in self.move_ids_without_package:
-            product = move.product_id
-            weight = int((product.weight or 0) * 1000) or 100 # Default 100g if 0
-            qty = int(move.product_uom_qty)
+        # Initial auto-fill if nothing mapped yet
+        if not self.ghn_receiver_province_id:
+            self.action_ghn_auto_fill_info()
             
-            items.append({
-                "name": product.name[:100],
-                "code": product.default_code or str(product.id),
-                "quantity": qty,
-                "price": int(product.lst_price),
-                "weight": weight,
-                "length": int(product.product_length or 10),
-                "width": int(product.product_width or 10),
-                "height": int(product.product_height or 10),
-            })
-            
-            total_weight += weight * qty
-            p_length = max(p_length, int(product.product_length or 10))
-            p_width = max(p_width, int(product.product_width or 10))
-            p_height += int(product.product_height or 10) * qty
-
-        # Fallback values
-        if total_weight == 0: total_weight = 1000
-        if p_length == 0: p_length = 20
-        if p_width == 0: p_width = 20
-        if p_height == 0: p_height = 20
-
-        warehouse = self.picking_type_id.warehouse_id
-        
-        payload = {
-            "payment_type_id": int(self.ghn_payment_type_id),
-            "note": self.ghn_shipping_notes or "Giao hàng",
-            "required_note": self.ghn_required_note,
-            "to_name": self.partner_id.name,
-            "to_phone": self.partner_id.phone,
-            "to_address": f"{self.partner_id.street or ''}, {self.partner_id.street2 or ''}",
-            "to_ward_code": self.ghn_receiver_ward_id.ward_code,
-            "to_district_id": self.ghn_receiver_district_id.district_id,
-            "cod_amount": self.ghn_cod_amount,
-            "content": f"Đơn hàng {self.name}",
-            "weight": int(total_weight),
-            "length": int(p_length),
-            "width": int(p_width),
-            "height": int(p_height),
-            "insurance_value": self.ghn_insurance_value,
-            "service_id": int(self.ghn_service_id),
-            "service_type_id": int(self.ghn_service_type_id),
-            "items": items,
-            "client_order_code": self.name
-        }
-
-        # Sender Info from Warehouse if available
-        if warehouse:
-            if warehouse.ghn_province_id: payload["from_province_name"] = warehouse.ghn_province_id.name
-            if warehouse.ghn_district_id: payload["from_district_name"] = warehouse.ghn_district_id.name
-            if warehouse.ghn_ward_id: payload["from_ward_name"] = warehouse.ghn_ward_id.name
-            # If warehouse has a partner address, use it
-            if warehouse.partner_id:
-                payload["from_name"] = warehouse.partner_id.name
-                payload["from_phone"] = warehouse.partner_id.phone or warehouse.partner_id.mobile
-                payload["from_address"] = f"{warehouse.partner_id.street or ''}, {warehouse.partner_id.street2 or ''}"
-
-        result = client.create_order(payload)
-        if result.get("success"):
-            data = result["data"]
-            self.write({
-                "ghn_order_code": data.get("order_code"),
-                "ghn_total_fee": data.get("total_fee"),
-                "ghn_expected_delivery_time": data.get("expected_delivery_time"),
-                "ghn_order_status": "ready_to_pick" # GHN initial status
-            })
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Thành công',
-                    'message': f'Đã tạo đơn GHN: {data.get("order_code")}',
-                    'sticky': False,
-                    'type': 'success',
-                }
+        return {
+            "name": "Kiểm tra và Tạo đơn GHN",
+            "type": "ir.actions.act_window",
+            "res_model": "ghn.create.order.wizard",
+            "view_mode": "form",
+            "target": "new",
+            "context": {
+                "default_picking_id": self.id,
             }
-        else:
-            raise ValidationError(f"Lỗi từ GHN: {result.get('error')}")
+        }
