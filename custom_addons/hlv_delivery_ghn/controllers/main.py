@@ -116,8 +116,12 @@ class GHNWebsiteController(http.Controller):
         if not warehouse or not warehouse.ghn_district_id:
             return request.make_response(json.dumps({"success": False, "error": "Kho hàng mặc định chưa được cấu hình địa chỉ (Quận/Huyện) trên Odoo."}), headers=[('Content-Type', 'application/json')])
 
-        # Calculate weight from Odoo products if items are provided
+        # Calculate weight and dimensions from Odoo products if items are provided
         weight = 0
+        p_length = 0
+        p_width = 0
+        p_height = 0
+        
         items = params.get('items', [])
         if items:
             for item in items:
@@ -128,13 +132,28 @@ class GHNWebsiteController(http.Controller):
                     if product:
                         # Odoo weight is in kg, convert to grams
                         weight += (product.weight or 0) * qty
+                        # Aggregate dimensions (Simple logic: Sum height, max length/width)
+                        p_length = max(p_length, product.product_length or 0)
+                        p_width = max(p_width, product.product_width or 0)
+                        p_height += (product.product_height or 0) * qty
             
             if weight > 0:
                 weight = int(weight * 1000)
 
-        # Fallback to WordPress weight if Odoo lookup failed or no items
+        # Fallback to WordPress values if Odoo lookup failed or no items
         if weight == 0:
             weight = int(params.get('weight', 1000))
+        if p_length == 0:
+            p_length = int(params.get('length', 20))
+        if p_width == 0:
+            p_width = int(params.get('width', 20))
+        if p_height == 0:
+            p_height = int(params.get('height', 20))
+
+        # GHN minimum requirement is usually 1cm, ensrue no 0 values
+        p_length = max(p_length, 1)
+        p_width = max(p_width, 1)
+        p_height = max(p_height, 1)
 
         shop_id = (warehouse.ghn_shop_id_heavy if weight > 10000 else warehouse.ghn_shop_id) or company.ghn_shop_id
         
@@ -160,8 +179,8 @@ class GHNWebsiteController(http.Controller):
             data = {
                 "from_district_id": from_district_id, "to_district_id": to_district_id,
                 "to_ward_code": ward.ward_code, "weight": weight,
-                "length": int(params.get('length', 20)), "width": int(params.get('width', 20)),
-                "height": int(params.get('height', 20)), "service_id": int(svc_id)
+                "length": int(p_length), "width": int(p_width),
+                "height": int(p_height), "service_id": int(svc_id)
             }
             if warehouse.ghn_ward_id: data["from_ward_code"] = warehouse.ghn_ward_id.ward_code
 

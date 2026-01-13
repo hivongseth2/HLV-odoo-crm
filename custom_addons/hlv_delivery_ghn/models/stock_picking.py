@@ -6,21 +6,26 @@ class StockPicking(models.Model):
 
     def action_open_ghn_fee_wizard(self):
         self.ensure_one()
-        
-        # Calculate total weight (prioritizing variant weight, then template weight)
+        # Calculate total weight and dimensions
         total_weight = 0
+        p_length = 0
+        p_width = 0
+        p_height = 0
+        
         for move in self.move_ids_without_package:
-            # In Odoo, product_id.weight usually falls back to template, 
-            # but we'll follow user's instruction to be explicit.
-            weight = move.product_id.weight
-            if not weight and move.product_id.product_tmpl_id:
-                weight = move.product_id.product_tmpl_id.weight
+            product = move.product_id
+            total_weight += (product.weight or 0) * move.product_uom_qty
             
-            total_weight += (weight or 0) * move.product_uom_qty
+            # Aggregate dimensions (Sum height, max length/width)
+            p_length = max(p_length, product.product_length or 0)
+            p_width = max(p_width, product.product_width or 0)
+            p_height += (product.product_height or 0) * move.product_uom_qty
 
         total_weight = total_weight * 1000 # Convert KG to Grams
-        if total_weight == 0:
-            total_weight = 1000
+        if total_weight == 0: total_weight = 1000
+        if p_length == 0: p_length = 20
+        if p_width == 0: p_width = 20
+        if p_height == 0: p_height = 20
             
         return {
             "name": "Tính cước GHN",
@@ -31,5 +36,8 @@ class StockPicking(models.Model):
             "context": {
                 "default_picking_id": self.id,
                 "default_weight": int(total_weight),
+                "default_length": int(p_length),
+                "default_width": int(p_width),
+                "default_height": int(p_height),
             }
         }
