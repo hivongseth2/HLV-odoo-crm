@@ -109,8 +109,26 @@ class ReportDialogController(ReportController):
         if docids:
             try:
                 ids_list = [int(i) for i in docids.split(",")]
-                recs = request.env[report.model].browse(ids_list)
-                recs.check_access_rule("read")
+                
+                # --- SỬA LỖI: Cập nhật lại ID để in đúng ---
+                # Nếu báo cáo là Template nhưng đang đứng ở Biến thể (Product)
+                if report.model == 'product.template' and request.env.context.get('active_model') == 'product.product':
+                    # 1. Tìm các biến thể từ ID gửi lên
+                    variants = request.env['product.product'].browse(ids_list)
+                    # 2. Lấy ra các Mẫu (Template) cha tương ứng
+                    templates = variants.mapped('product_tmpl_id')
+                    
+                    # 3. QUAN TRỌNG: Gán lại danh sách ID mới (ID của Template) để hàm in bên dưới dùng
+                    ids_list = templates.ids
+                    
+                    # 4. Gán recs theo ID mới để check quyền
+                    recs = templates
+                else:
+                    # Các trường hợp khác chạy bình thường
+                    recs = request.env[report.model].browse(ids_list)
+                # ---------------------------------------------
+
+                recs.check_access("read")
             except Exception:
                 return request.not_found()
 

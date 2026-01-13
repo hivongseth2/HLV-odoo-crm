@@ -1,0 +1,118 @@
+
+import base64
+import logging
+import os
+import random
+
+from barcode.ean import EAN13
+
+from datetime import datetime
+
+from io import BytesIO
+
+from odoo import api, fields, models
+
+_logger = logging.getLogger(__name__)
+
+from barcode.writer import ImageWriter
+
+
+
+class CapProductGenerateBarcodeManually(models.TransientModel):
+    _name = "cap.product.generate.barcode.manually"
+
+    type_generate = fields.Selection(
+        [
+            ("date", "Tạo mã EAN13 theo ngày hiện tại"),
+            (
+                "random",
+                "Tạo mã EAN13 ngẫu nhiên",
+            ),
+        ],
+        string="Tùy chọn tạo mã vạch",
+        default="date",
+    )
+
+    def generate_barcode_manually(self):
+        active_id = self._context.get("active_id")
+        active_model = self._context.get("active_model")
+        
+        if active_model == "product.template":
+            record = self.env["product.template"].browse(active_id).product_variant_ids[:1]
+        else:
+            record = self.env["product.product"].browse(active_id)
+
+        if record:
+            if self.type_generate == "date":
+                barcode_str = self.env["barcode.nomenclature"].sanitize_ean(
+                    "%s%s" % (record.id, datetime.now().strftime("%d%m%y%H%M"))
+                )
+            else:
+                number_random = int("%0.13d" % random.randint(0, 999999999999))
+                barcode_str = self.env["barcode.nomenclature"].sanitize_ean(
+                    "%s" % (number_random)
+                )
+            # Create a barcode image _
+            ean = EAN13(barcode_str, writer=ImageWriter())
+            image = ean.render()
+
+            # Convert the image to base64
+            image_buffer = BytesIO()
+
+            image.save(image_buffer, format="PNG")
+            image_data = base64.b64encode(image_buffer.getvalue()).decode('utf-8')
+            record.write({"barcode": barcode_str, "image_product": image_data})
+        return True
+
+
+class cap_generate_product_barcode(models.TransientModel):
+    _name = "cap.product.generate.barcode"
+
+    overwrite = fields.Boolean(String="Ghi đè mã EAN13 đã có")
+    type_generate = fields.Selection(
+        [
+            ("date", "Tạo mã EAN13 (theo ngày hiện tại)"),
+            (
+                "random",
+                "Tạo mã EAN13 (theo số ngẫu nhiên)",
+            ),
+        ],
+        string="Tùy chọn tạo mã vạch",
+        default="date",
+    )
+
+    def generate_barcode(self):
+        active_ids = self._context.get("active_ids")
+        active_model = self._context.get("active_model")
+        
+        if active_model == "product.template":
+            products = self.env["product.template"].browse(active_ids).mapped("product_variant_ids")
+        else:
+            products = self.env["product.product"].browse(active_ids)
+
+        for record in products:
+            if not self.overwrite and record.barcode:
+                continue
+
+            if self.type_generate == "date":
+                barcode_str = self.env["barcode.nomenclature"].sanitize_ean(
+                    "%s%s" % (record.id, datetime.now().strftime("%d%m%y%H%M"))
+                )
+            else:
+                number_random = int("%0.13d" % random.randint(0, 999999999999))
+                barcode_str = self.env["barcode.nomenclature"].sanitize_ean(
+                    "%s" % (number_random)
+                )
+
+            # Create a barcode image
+            ean = EAN13(barcode_str, writer=ImageWriter())
+            image = ean.render()
+
+            # Convert the image to base64
+            image_buffer = BytesIO()
+
+            image.save(image_buffer, format="PNG")
+            image_data = base64.b64encode(image_buffer.getvalue()).decode('utf-8')
+            record.write({"barcode": barcode_str,"image_product": image_data})
+        return True
+

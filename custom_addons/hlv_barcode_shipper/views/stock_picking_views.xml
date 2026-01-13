@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- List view cho shipper (KHÔNG thêm field custom) -->
+        <record id="stock_picking_list_shipper" model="ir.ui.view">
+            <field name="name">stock.picking.list.shipper</field>
+            <field name="model">stock.picking</field>
+            <field name="arch" type="xml">
+                <list string="Delivery Orders" default_order="scheduled_date desc">
+                    <field name="name"/>
+                    <field name="partner_id"/>
+                    <field name="scheduled_date"/>
+                    <field name="origin"/>
+                    <field name="state"
+                           decoration-info="state == 'draft'"
+                           decoration-warning="state in ('waiting', 'confirmed')"
+                           decoration-success="state == 'assigned'"
+                           decoration-muted="state in ('done','cancel')"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- Action riêng cho shipper (không thay thế action stock mặc định) -->
+        <record id="stock_picking_action_shipper" model="ir.actions.act_window">
+            <field name="name">Delivery Orders (Shipper)</field>
+            <field name="res_model">stock.picking</field>
+            <field name="view_mode">list,form</field>
+            <field name="view_id" ref="stock_picking_list_shipper"/>
+            <field name="domain">[('picking_type_id.code', '=', 'outgoing')]</field>
+            <field name="context">{}</field>
+        </record>
+
+
+    </data>
+</odoo>

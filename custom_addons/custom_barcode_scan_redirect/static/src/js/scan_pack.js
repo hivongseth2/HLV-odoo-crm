@@ -165,6 +165,19 @@ document.addEventListener("DOMContentLoaded", function () {
     new Audio("/custom_barcode_scan_redirect/static/src/sound/error.mp3").play();
   }
 
+  // [NEW] Helper to flush manual input before critical actions
+  async function flushActiveInput() {
+    const active = document.activeElement;
+    if (active && active.classList.contains('done-input')) {
+      // Trigger change manually
+      // Note: handleManualQtyChange is attached to window but we can call it directly if scope permits
+      // or rely on the global assignment
+      if (window.handleManualQtyChange) {
+        await window.handleManualQtyChange(active);
+      }
+    }
+  }
+
   function normalizeCode(s) {
     // Bỏ kí tự điều khiển ASCII, khoảng trắng, NBSP, BOM, zero-width, v.v.
     return String(s ?? '')
@@ -173,6 +186,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .replace(/\s+/g, '')                             // mọi whitespace (kể cả NBSP)
       .trim();
   }
+  window.normalizeCode = normalizeCode;
 
   function findLineToUpdate(barcode) {
     if (!barcode) return null;
@@ -254,6 +268,28 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!lineId) {
       lineId = findLineToUpdate(barcode);
     }
+
+    // [NEW] Client-side Over-Quantity Validation
+    if (lineId) {
+      const checkEl = document.querySelector(`[data-line-id="${lineId}"]`);
+      if (checkEl) {
+        const maxQty = parseFloat(checkEl.getAttribute('data-max-qty') || 0);
+        const input = checkEl.querySelector(".done-input");
+        const currentDone = parseFloat(input ? input.value : (checkEl.querySelector(".done")?.innerText || 0));
+
+        // Allow slight floating point tolerance if needed, but strict for > logic
+        if (maxQty > 0 && (currentDone + delta) > maxQty) {
+          toast.warn(`❌ Không được nhập quá số lượng yêu cầu (${maxQty})!`);
+          playError();
+          // Reset input if it was manual change (heuristic)
+          if (input && Math.abs(currentDone - parseFloat(input.value)) > 0.001) {
+            input.value = input.dataset.currentQty || 0;
+          }
+          return;
+        }
+      }
+    }
+
     try {
       const res = await fetch("/pack_scan/scan_item", {
         method: "POST",
@@ -274,6 +310,8 @@ document.addEventListener("DOMContentLoaded", function () {
       });
       const response = await res.json();
       const result = response.result;
+
+      // [DEBUG ALERT REMOVED]
 
       if (result?.error) {
         toast.error(result.error);
@@ -315,6 +353,19 @@ document.addEventListener("DOMContentLoaded", function () {
           if (doneEl) doneEl.innerText = item.done_qty;
         }
 
+        // [NEW] FORCE SYNC PACKED QTY FROM SERVER (Self-Correction)
+        // If server returns packed_qty, overwrite client state to prevent corruption
+        if (typeof item.packed_qty !== 'undefined') {
+          const srvPacked = parseFloat(item.packed_qty);
+          const oldPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
+          if (Math.abs(oldPacked - srvPacked) > 0.001) {
+            console.warn(`[AUTO-SYNC] Correcting Packed Qty: ${oldPacked} -> ${srvPacked}`);
+            el.setAttribute('data-packed-qty', srvPacked);
+          }
+        }
+        // Force update unpacked label
+        updateUnpackedLabel(el);
+
         if (item.done_qty >= required) el.classList.add("completed");
         else el.classList.remove("completed");
 
@@ -333,6 +384,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
 
   completeBtn?.addEventListener("click", async function () {
+    // [FIX] Flush active input before completing
+    await flushActiveInput();
+
     const items = document.querySelectorAll("#product_list .product-item");
     let isValid = true, missingProducts = [];
     items.forEach(item => {
@@ -383,7 +437,10 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Nút Partial Pack - tạo mã barcode tự động (người dùng có thể scan mã này để đóng gói)
-  document.getElementById('btnPartialPack')?.addEventListener('click', function () {
+  document.getElementById('btnPartialPack')?.addEventListener('click', async function () {
+    // [FIX] Flush active input before packing
+    await flushActiveInput();
+
     const autoPackageBarcode = `AUTO-PKG-${Date.now()}`;
     // Put barcode into input (so user can scan it later) and copy to clipboard
     const inputEl = document.getElementById('pack_barcode_input');
@@ -400,7 +457,7 @@ document.addEventListener("DOMContentLoaded", function () {
       });
       inputEl.dispatchEvent(enterEvent);
     }
-    toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 4000 });
+    toast.info(`Mã barcode tạo: ${autoPackageBarcode}`, { ms: 1000 });
   });
 
 
@@ -454,6 +511,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     // ------------------------------------------
 
+    // ------------------------------------------
+
     // C. LOGIC MỚI: Xử lý mã lệnh tạo gói (CMD-CREATE-PACK hoặc AUTO-PKG-...)
     if (barcode === 'CMD-CREATE-PACK' || barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
 
@@ -467,6 +526,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const items = [];
       document.querySelectorAll("#product_list .product-item").forEach(el => {
         const lineId = parseInt(el.dataset.lineId);
+        const name = el.querySelector("strong")?.innerText;
 
         const input = el.querySelector(".done-input");
         const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
@@ -477,9 +537,18 @@ document.addEventListener("DOMContentLoaded", function () {
         // Tính số lượng trôi nổi (chưa vào gói)
         const qtyToPack = currentDone - alreadyPacked;
 
+        console.log(`[DEBUG_PACK] ${name} | Line: ${lineId} | Done: ${currentDone} | Packed: ${alreadyPacked} | ToPack: ${qtyToPack}`);
+
+        const barcode = el.dataset.barcode || "";
         // Chỉ lấy nếu còn hàng chưa đóng gói
         if (lineId && qtyToPack > 0) {
-          items.push({ move_line_id: lineId, qty: qtyToPack });
+          items.push({
+            move_line_id: lineId,
+            qty: qtyToPack,
+            // [FIX] Enrich data for UI rendering
+            name: name,
+            barcode: barcode
+          });
         }
       });
 
@@ -494,7 +563,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const pkgCode = (barcode === 'CMD-CREATE-PACK') ? `AUTO-PKG-${Date.now()}` : barcode;
 
       if (barcode === 'CMD-CREATE-PACK') {
-        toast.info(`Đang tạo gói hàng tự động...`, { ms: 2000 });
+        toast.info(`Đang tạo gói hàng tự động...`, { ms: 1000 });
       }
 
       isProcessingPack = true; // Lock
@@ -523,33 +592,49 @@ document.addEventListener("DOMContentLoaded", function () {
           // ============================================================
           // [FIX] Cập nhật lại UI danh sách chính (Mới: Dùng SyncInfo từ Server)
           // ============================================================
-          if (result.sync_info) {
+          // ============================================================
+          // [FIX FINAL] LOGIC CẬP NHẬT UI TOÀN DIỆN
+          // ============================================================
+
+          // 1. Luôn hiển thị gói mới bên phải
+          const pkgId = result.package_id;
+          const pkgName = result.package_name;
+          renderNewPackageToPanel(pkgId, pkgName, items);
+
+          // 2. Cập nhật thông tin "Đã đóng gói" (Sync vs Optimistic)
+          if (result.sync_info && result.sync_info.length > 0) {
+            console.log("[PACK UI] Using Server Sync Info");
             applyServerSyncInfo(result.sync_info);
           } else {
-            // Fallback nếu không có sync_info (Legacy)
-            // (Giữ lại logic cũ phòng khi server chưa update kịp code, nhưng nên ưu tiên sync_info)
+            console.warn("[PACK UI] No Sync Info from Server -> Using Optimistic Update");
+            // Fallback: Tự cộng dồn data-packed-qty từ danh sách items vừa gửi đi
             if (items && items.length > 0) {
-              // ... (Logic cũ - tạm thời comment hoặc xóa nếu tự tin)
-              // Để an toàn, chỉ chạy nếu ko có sync_info
               items.forEach(item => {
-                const el = document.querySelector(`.product-item[data-line-id="${item.move_line_id}"]`);
+                const lineId = item.move_line_id;
+                const qty = parseFloat(item.qty || 0);
+                let el = document.querySelector(`#product_list .product-item[data-line-id="${lineId}"]`);
+
+                // Fallback finding logic (borrowed from findLineToUpdate)
+                if (!el && item.barcode) {
+                  const code = normalizeCode(item.barcode).toUpperCase();
+                  el = document.querySelector(`#product_list .product-item[data-barcode="${CSS.escape(code)}"]`) ||
+                    document.querySelector(`#product_list .product-item[data-barcode="${code}"]`);
+                }
+
                 if (el) {
-                  const currentPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
-                  const qtyPacked = parseFloat(item.qty || 0);
-                  // Chỉ cộng dồn tạm thời (Optimistic), hy vọng lần sau sync sẽ chuẩn
-                  el.setAttribute('data-packed-qty', currentPacked + qtyPacked);
+                  const oldPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
+                  const newPacked = oldPacked + qty;
+                  el.setAttribute('data-packed-qty', newPacked);
+
+                  // Visual flash
+                  highlightElement(el, "#dbe4ff");
+
+                  // IMPORTANT: Update label
                   updateUnpackedLabel(el);
                 }
               });
             }
           }
-
-          const pkgId = result.package_id;
-          const pkgName = result.package_name;
-
-          // Render preview (Optimistic)
-          renderNewPackageToPanel(pkgId, pkgName, items);
-
         } else {
           toast.error(result?.error || "Lỗi tạo gói hàng");
           playError();
@@ -650,19 +735,29 @@ function applyServerSyncInfo(syncInfoList) {
   syncInfoList.forEach(info => {
     let targetEl = null;
 
-    // 1. Tìm theo Barcode (Ưu tiên cao nhất)
-    if (info.product_barcode) {
-      const code = normalizeCode(info.product_barcode).toUpperCase();
-      // [Fix] Selector cần quote nếu barcode chứa kí tự đặc biệt
-      targetEl = document.querySelector(`#product_list .product-item[data-barcode="${CSS.escape(code)}"]`) ||
-        document.querySelector(`#product_list .product-item[data-barcode="${code}"]`);
-    }
+    // [FIX IMPROVED] Use strict Loop matching to ensure we find the element even if querySelector fails
+    const allItems = document.querySelectorAll('#product_list .product-item');
+    for (const item of allItems) {
+      const itemBar = normalizeCode(item.dataset.barcode || '').toUpperCase();
+      const itemSku = normalizeCode(item.dataset.defaultCode || '').toUpperCase();
+      const sBarcode = normalizeCode(info.product_barcode || '').toUpperCase();
+      const sSku = normalizeCode(info.product_sku || '').toUpperCase();
 
-    // 2. Tìm theo SKU (Default Code)
-    if (!targetEl && info.product_sku) {
-      const code = normalizeCode(info.product_sku).toUpperCase();
-      targetEl = document.querySelector(`#product_list .product-item[data-default-code="${CSS.escape(code)}"]`) ||
-        document.querySelector(`#product_list .product-item[data-default-code="${code}"]`);
+      // [DEBUG LOG] Print comparison
+      // console.log(`[SYNC CHECK] Item: ${itemBar}/${itemSku} vs Info: ${sBarcode}/${sSku}`);
+
+      // Match by Barcode (Fuzzy: endsWith)
+      if (sBarcode && (itemBar === sBarcode || itemBar.endsWith(sBarcode) || sBarcode.endsWith(itemBar))) {
+        console.log(`[SYNC MATCH] Matched by Barcode: ${itemBar} ~= ${sBarcode}`);
+        targetEl = item;
+        break;
+      }
+      // Match by SKU (Fuzzy: endsWith)
+      if (!targetEl && sSku && (itemSku === sSku || itemSku.endsWith(sSku) || sSku.endsWith(itemSku))) {
+        console.log(`[SYNC MATCH] Matched by SKU: ${itemSku} ~= ${sSku}`);
+        targetEl = item;
+        break;
+      }
     }
 
     // 3. Update nếu tìm thấy
@@ -714,7 +809,7 @@ let mediaRecorder = null;
 let isRecording = false;
 let chunkBusy = Promise.resolve();
 
-const MAX_DURATION_MS = 15 * 60 * 1000; // 5 phút
+const MAX_DURATION_MS = 25 * 60 * 1000; // 5 phút
 let stopTimer = null, countdownTimer = null, endAt = 0;
 let overlayCanvas = null, overlayCtx = null, drawRAF = 0;
 
@@ -1111,13 +1206,16 @@ async function openPackageEditModal(event) {
       result.sync_info.forEach(info => {
         let targetEl = null;
 
-        // 1. Tìm theo Barcode (Ưu tiên cao nhất)
+        // 1. Tìm theo Barcode (Robust)
         if (info.product_barcode) {
-          targetEl = document.querySelector(`#product_list .product-item[data-barcode="${info.product_barcode}"]`);
+          const normCode = normalizeCode(info.product_barcode);
+          targetEl = [...document.querySelectorAll('#product_list .product-item')]
+            .find(el => normalizeCode(el.dataset.barcode) === normCode);
         }
 
-        // 2. Tìm theo SKU (Default Code)
+        // 2. Fallback: Tìm theo SKU
         if (!targetEl && info.product_sku) {
+          // SKU usually matches exactly, but let's be safe
           targetEl = document.querySelector(`#product_list .product-item[data-default-code="${info.product_sku}"]`);
         }
 
@@ -1129,6 +1227,10 @@ async function openPackageEditModal(event) {
           if (Math.abs(oldPacked - serverPacked) > 0.001) {
             console.warn(`[UI SYNC] Correction for ${info.product_sku || info.product_barcode}: Client(${oldPacked}) -> Server(${serverPacked})`);
             targetEl.setAttribute('data-packed-qty', serverPacked);
+            // [FIX] Update visual label immediately
+            if (typeof updateUnpackedLabel === 'function') {
+              updateUnpackedLabel(targetEl);
+            }
           }
         }
       });
@@ -1451,6 +1553,7 @@ async function addItemToPackage() {
     toast.error("Lỗi kết nối: " + err.message);
   }
 }
+window.addItemToPackage = addItemToPackage;
 
 async function savePackageChanges() {
   const pickingId = parseInt(window.location.pathname.split("/").pop());
@@ -1853,25 +1956,26 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
   const newItemsQty = itemsData.reduce((sum, i) => sum + i.qty, 0);
 
   // ============================================================
-  // HELPER: Hàm lấy tên chuẩn [Barcode] Tên và cập nhật data ẩn
+  // HELPER: Hàm lấy tên chuẩn [Barcode] Tên (KHÔNG update data-packed-qty nữa)
   // ============================================================
   const getProductInfo = (item) => {
-    const lineEl = document.querySelector(`[data-line-id="${item.move_line_id}"]`);
-    let finalName = 'Sản phẩm...';
+    // Ưu tiên lấy tên từ item đã enriched
+    let finalName = item.name || 'Sản phẩm...';
 
-    if (lineEl) {
-      // Cập nhật packed-qty ẩn
-      const currentPacked = parseFloat(lineEl.getAttribute('data-packed-qty') || 0);
-      lineEl.setAttribute('data-packed-qty', currentPacked + item.qty);
+    // Nếu có barcode, ghép vào theo chuẩn
+    if (item.barcode && !finalName.startsWith('[')) {
+      finalName = `[${item.barcode}] ${finalName}`;
+    }
 
-      // Logic lấy tên và barcode
-      const rawName = lineEl.querySelector('strong')?.innerText.trim() || '';
-      const barcode = lineEl.getAttribute('data-barcode') || '';
-
-      if (rawName && !rawName.startsWith('[') && barcode) {
-        finalName = `[${barcode}] ${rawName}`;
-      } else {
-        finalName = rawName || finalName;
+    // Fallback: Nếu không có name/barcode trong item, thử tìm DOM (Legacy)
+    if ((!item.name || !item.barcode) && item.move_line_id) {
+      const lineEl = document.querySelector(`[data-line-id="${item.move_line_id}"]`);
+      if (lineEl) {
+        const rawName = lineEl.querySelector('strong')?.innerText.trim() || '';
+        const barcode = lineEl.getAttribute('data-barcode') || '';
+        if (rawName) {
+          finalName = (barcode && !rawName.startsWith('[')) ? `[${barcode}] ${rawName}` : rawName;
+        }
       }
     }
     return finalName;
@@ -1923,14 +2027,12 @@ function renderNewPackageToPanel(pkgId, pkgName, itemsData) {
             const oldQty = parseFloat(qtyEl.innerText.replace('x', '')) || 0;
             qtyEl.innerText = `x${oldQty + item.qty}`;
           }
-          console.log('1541', foundRow);
 
           // Nháy màu
           foundRow.style.transition = 'background 0.3s';
           foundRow.style.backgroundColor = '#fff3cd';
           setTimeout(() => foundRow.style.backgroundColor = 'transparent', 500);
         } else {
-          console.log('1555', name);
 
           // Nếu chưa có: Thêm mới lên đầu
           const newHtml = `

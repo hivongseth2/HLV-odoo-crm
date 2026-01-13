@@ -236,7 +236,7 @@ class HlvChatgptSession(models.Model):
         # API Responses không dùng ThreadRun stateful như Assistant/Threads API cũ.
         # Ta cần tự quản lý loop tool calls.
         
-        MAX_STEPS = 5 # Tránh loop vô tận
+        MAX_STEPS = 40 # Tránh loop vô tận
         step_count = 0
         final_response_text = "..."
 

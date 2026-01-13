@@ -23,6 +23,9 @@ registry.category("ir.actions.report handlers").add(
     "hlv_direct_print_iframe_fast_with_loading",
     async (action, options, env) => {
         if (action.type !== "ir.actions.report" || action.report_type !== "qweb-pdf") return false;
+        if (action.model === "pos.order" || action.context?.active_model === "pos.order") {
+            return false;
+        }
 
         const { ui, notification } = env.services;
         ui.block(); // show spinner

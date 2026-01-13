@@ -250,6 +250,20 @@ class CustomBarcodeScanController(http.Controller):
                 return (2, p.id)
 
             packs_sorted = sorted(packs, key=_priority)
+            
+            # [NEW] Nếu có nhiều phiếu -> Trả về danh sách để user chọn
+            if len(packs_sorted) > 1:
+                return {
+                    'type': 'custom_pack_selection',
+                    'title': f"Tìm thấy {len(packs_sorted)} phiếu PACK cho {picking.name}",
+                    'items': [{
+                        'id': p.id,
+                        'name': p.name,
+                        'state': dict(p._fields['state'].selection).get(p.state, p.state),
+                        'date': p.scheduled_date and p.scheduled_date.strftime('%d/%m') or ''
+                    } for p in packs_sorted]
+                }
+
             next_picking = packs_sorted and packs_sorted[0] or False
 
             if next_picking:
@@ -390,6 +404,7 @@ class CustomBarcodeScanController(http.Controller):
         delta = float(kwargs.get("delta", 1))
         line_id = kwargs.get("line_id")
         _logger = logging.getLogger(__name__)
+        _logger.info(f"SCAN_ITEM START: barcode={barcode}, delta={delta}, line_id={line_id}")
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         # Tìm move dựa trên barcode
         moves = picking.move_ids_without_package.filtered(lambda m: m.product_id.barcode == barcode)
@@ -407,40 +422,81 @@ class CustomBarcodeScanController(http.Controller):
         
         # Nếu có line_id cụ thể từ FE
         if line_id:
-            target_ml = request.env['stock.move.line'].sudo().browse(int(line_id))
-            if not target_ml.exists():
-                target_ml = None # Fallback nếu ID sai
-        # Nếu chưa xác định được target_ml (do line_id null hoặc sai), tự động tìm dòng phù hợp
+            try:
+                target_ml = request.env['stock.move.line'].sudo().browse(int(line_id))
+                if not target_ml.exists():
+                    target_ml = None # Fallback nếu ID sai
+            except:
+                target_ml = None
+
+        if target_ml:
+            # Force read-ahead/prefetch
+            is_packed = target_ml.sudo().result_package_id
+            _logger.info(f"Target Line {target_ml.id} Check. Packed: {is_packed.id if is_packed else 'False'}")
+            
+            if delta > 0 and is_packed:
+                _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}). Switching to find a loose line.")
+                target_ml = None # Force finding a loose line
+
+        # Nếu chưa xác định được target_ml (do line_id null hoặc sai hoặc đã bị packed), tự động tìm dòng phù hợp
         if not target_ml:
             # Chiến lược tìm kiếm mới (delta > 0):
-            # 1. Tìm dòng CHƯA đóng gói (Unpacked) mà còn chỗ trống (qty_done < uom_qty)
-            # 2. Tìm dòng ĐÃ đóng gói (Packed) mà còn chỗ trống (qty_done < uom_qty)
-            # 3. Nếu không dòng nào khớp, tạo dòng mới (nếu move cho phép - logic này phức tạp, tạm thời dùng dòng có sẵn)
+            # 1. Tìm dòng CHƯA đóng gói (Unpacked) còn chỗ hoặc đã done (cộng dồn)
+            # 2. Nếu không có dòng loose nào -> TẠO DÒNG MỚI (Loose)
             
             if delta > 0:
-                candidates = []
-                for move in moves:
-                    for ml in move.move_line_ids:
-                        # Check if there's still capacity in this move line
-                        # We need to check against the move's product_uom_qty, as move lines often don't have their own product_uom_qty
-                        # The sum of qty_done across all move lines for a move should not exceed move.product_uom_qty
-                        current_move_total_done = sum(l.qty_done for l in move.move_line_ids)
-                        if current_move_total_done < move.product_uom_qty:
-                            candidates.append(ml)
-                            
-                # Ưu tiên dòng chưa đóng gói
-                loose_candidates = [ml for ml in candidates if not ml.result_package_id]
+                # 1. Tìm dòng loose có sẵn
+                # Tìm tất cả loose lines của sản phẩm này
+                product_movies = moves.mapped('product_id')
+                _logger.info(f"Searching loose line for product {product_movies.ids} in picking {picking.id}")
+
+                loose_candidates = request.env['stock.move.line'].sudo().search([
+                    ('picking_id', '=', picking.id),
+                    ('product_id', 'in', product_movies.ids),
+                    ('result_package_id', '=', False)
+                ], limit=1)
+
                 if loose_candidates:
                     target_ml = loose_candidates[0]
-                elif candidates:
-                     # Nếu chỉ còn dòng đã đóng gói thì cộng vào đó (hoặc báo lỗi tùy logic)
-                     # HIỆN TẠI: Cho phép cộng vào, nhưng user có thể muốn tách ra?
-                     # Tốt nhất là cộng vào dòng loose nếu được. 
-                     # Nếu candidates chỉ toàn packed, có nghĩa là user đang scan thêm vào pack đó?
-                     # Hoặc user muốn scan hàng lẻ mới?
-                     # Để an toàn: Lấy dòng packed đó.
-                    target_ml = candidates[0]
+                    _logger.info(f"Found existing loose line: {target_ml.id}")
+                else:
+                    _logger.info("No loose line found. Creating new...")
+                    sample_ml = None
+                    # Try to find a sample from existing moves
+                    for m in moves:
+                        if m.move_line_ids:
+                            sample_ml = m.move_line_ids[0]
+                            break
                     
+                    if sample_ml:
+                        # Copy ra dòng mới, reset qty_done = 0, package = False
+                        target_ml = sample_ml.copy({
+                            'qty_done': 0,
+                            'result_package_id': False,
+                        })
+                        _logger.info(f"Created new from sample: {target_ml.id}")
+                    else:
+                         # Trường hợp move chưa có line nào? (Ít gặp vì thường Odoo tạo sẵn)
+                         # Tạo line từ move
+                        if moves:
+                             _logger.info("Creating from moves[0]...")
+                             try:
+                                 target_ml = request.env['stock.move.line'].sudo().create({
+                                     'picking_id': picking.id,
+                                     'move_id': moves[0].id,
+                                     'product_id': moves[0].product_id.id,
+                                     'product_uom_id': moves[0].product_uom.id,
+                                     'location_id': moves[0].location_id.id,
+                                     'location_dest_id': moves[0].location_dest_id.id,
+                                     'qty_done': 0,
+                                 })
+                                 _logger.info(f"Created new from scratch: {target_ml.id}")
+                             except Exception as e:
+                                 _logger.error(f"Failed to create move line: {e}")
+                                 return {"error": "❌ Lỗi hệ thống: Không thể tạo dòng sản phẩm mới."}
+                        else:
+                             return {"error": "❌ Không tìm thấy move phù hợp."}
+
             # Nếu đang trừ: tìm dòng có qty_done > 0
             elif delta < 0:
                 for move in moves:
@@ -474,25 +530,61 @@ class CustomBarcodeScanController(http.Controller):
             
             # Tính toán lại giới hạn trên move cha của line này
             move = ml.move_id
+            
+            # [FIX] Move total done nên tính cả các line khác của move này
+            # Lưu ý: move.move_line_ids có thể chứa cả target_ml
             move_total_done = sum(l.qty_done for l in move.move_line_ids)
+            
             move_remain = max(0, move.product_uom_qty - move_total_done)
+            
+            _logger.info(f"Updating line {ml.id}. Current: {current_qty}. Move Total: {move_total_done}. Remain: {move_remain}")
+
             if delta > 0:
                 # Chỉ cộng phần còn thiếu của move này
-                add_qty = min(delta, move_remain) if delta > 0 else 0.0
+                # [LOGIC] Thực ra user muốn scan bao nhiêu cũng được, miễn là tổng không quá demand?
+                # Nhưng code cũ có logic: if delta > 0 and total_done >= total_required: return error
+                # Nên ở đây ta cứ cộng, nhưng cẩn thận move_remain.
+                
+                # Nếu move_remain = 0 mà user vẫn scan -> Có cho phép dư không?
+                # Code cũ chặn ở đầu hàm: total_done >= total_required.
+                # Tuy nhiên, ta vẫn nên cho phép cộng vào target_ml (loose)
+                
+                add_qty = delta # Cứ cộng delta, việc check max đã làm ở đầu hàm (hoặc user chấp nhận dư)
+                # Tuy nhiên, nếu muốn strict theo move_remain?
+                # add_qty = min(delta, move_remain) if delta > 0 else 0.0 
+                # -> Nếu strict thì không scan dư được. Thường barcode app cho phép warning dư.
+                # Giữ nguyên logic cũ:
+                # add_qty = min(delta, move_remain) if delta > 0 else 0.0
                 
                 if add_qty > 0:
                     new_qty = current_qty + add_qty
                     ml.write({'qty_done': new_qty})
                     
-                    # Tính lại tổng done để trả về FE
-                    new_total_done = move_total_done - current_qty + new_qty
+                    # Tính lại hiển thị
+                    # move_total_done_new = move_total_done + add_qty (nhưng phải cẩn thận vì qty_done đã update vào DB chưa?)
+                    # write() đã update DB.
                     
+                    # [FIX] Calculate GLOBAL Total Done for this product in the Picking
+                    # Frontend expects the cumulative 'Done' quantity, not just for this specific move (if split)
+                    # moves variable was filtered by product barcode at start of function
+                    global_total_done = sum(sum(ml.qty_done for ml in m.move_line_ids) for m in moves)
+                    
+                    # [NEW] Calculate Global Packed Qty to force sync Frontend
+                    global_packed_qty = sum(request.env['stock.move.line'].sudo().search([
+                        ('picking_id', '=', picking.id),
+                        ('product_id', '=', move.product_id.id),
+                        ('result_package_id', '!=', False)
+                    ]).mapped('qty_done'))
+                    
+                    _logger.info(f"Updated Done Qty: {new_qty}. New Global Total: {global_total_done}. Packed: {global_packed_qty}")
+
                     updated_lines.append({
                         "line_id": ml.id,
                         "product": move.product_id.display_name,
-                        "done_qty": new_total_done,
-                        "required_qty": move.product_uom_qty,
-                        "barcode": move.product_id.barcode # Trả về barcode để FE map lại nếu cần
+                        "done_qty": global_total_done, # Return GLOBAL total
+                        "packed_qty": global_packed_qty, # Return GLOBAL packed (Force sync FE)
+                        "required_qty": sum(m.product_uom_qty for m in moves), # Return GLOBAL required (lines 400 already calcs this but we re-sum or use var)
+                        "barcode": move.product_id.barcode 
                     })
             
             elif delta < 0:
@@ -501,15 +593,17 @@ class CustomBarcodeScanController(http.Controller):
                     new_qty = current_qty - reduce_qty
                     ml.write({'qty_done': new_qty})
                     
-                    new_total_done = move_total_done - current_qty + new_qty
+                    new_total_done_all = sum(l.qty_done for l in move.move_line_ids)
                     
                     updated_lines.append({
                         "line_id": ml.id,
                         "product": move.product_id.display_name,
-                        "done_qty": new_total_done,
+                        "done_qty": new_total_done_all,
                         "required_qty": move.product_uom_qty,
                         "barcode": move.product_id.barcode
                     })
+        
+        _logger.info(f"Returning updated_lines: {len(updated_lines)}")
         if not updated_lines:
             # Trường hợp delta > 0 nhưng không tìm thấy dòng nào còn thiếu (dù check tổng ở trên đã pass)
             # Có thể do logic phân bổ move_line phức tạp, ta báo lỗi hoặc ignore
