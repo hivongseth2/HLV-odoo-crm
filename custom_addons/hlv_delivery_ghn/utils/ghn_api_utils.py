@@ -170,3 +170,31 @@ class GHNApiUtils:
         except Exception as e:
             _logger.exception("GHN create_order exception: %s", e)
             return {"success": False, "error": str(e)}
+
+    def update_order(self, data):
+        """
+        Update an existing shipping order in GHN.
+        Endpoint: /shipping-order/update
+        """
+        url = f"{self.v2_url}/shipping-order/update"
+        headers = self._get_headers()
+        
+        # Ensure shop_id is in the body too
+        if 'shop_id' not in data:
+            data['shop_id'] = int(self.shop_id)
+            
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            res_json = response.json()
+            if response.status_code == 200 and res_json.get("code") == 200:
+                return {"success": True, "data": res_json.get("data")}
+            
+            error_msg = res_json.get("message") or f"HTTP {response.status_code}"
+            _logger.error("GHN update_order error: %s", response.text)
+            return {
+                "success": False, 
+                "error": error_msg
+            }
+        except Exception as e:
+            _logger.exception("GHN update_order exception: %s", e)
+            return {"success": False, "error": str(e)}

@@ -12,6 +12,7 @@ class GHNCreateOrderWizard(models.TransientModel):
 
     picking_id = fields.Many2one("stock.picking", string="Phiếu xuất kho", required=True)
     client_order_code = fields.Char(string="Mã đơn hàng khách", help="Sử dụng Số báo giá/Sale Order làm mã tham chiếu sang GHN")
+    ghn_order_code = fields.Char(string="Mã đơn GHN")
     
     # Receiver Info
     to_name = fields.Char(string="Tên người nhận", required=True)
@@ -105,6 +106,7 @@ class GHNCreateOrderWizard(models.TransientModel):
             # Auto-fill receiver info
             res.update({
                 'picking_id': picking.id,
+                'ghn_order_code': picking.ghn_order_code,
                 'client_order_code': (picking.sale_id and picking.sale_id.name) or picking.origin or picking.name,
                 'to_name': partner.name or '',
                 'to_phone': partner.phone or partner.mobile or '',
@@ -208,26 +210,39 @@ class GHNCreateOrderWizard(models.TransientModel):
                 payload["from_phone"] = str(picking.company_id.phone or '')
                 payload["from_address"] = str(f"{picking.company_id.street or ''}, {picking.company_id.street2 or ''}")
 
-        result = client.create_order(payload)
+        if self.ghn_order_code:
+            payload["order_code"] = self.ghn_order_code
+            result = client.update_order(payload)
+            action_type = "Cập nhật"
+        else:
+            result = client.create_order(payload)
+            action_type = "Tạo"
+
         if result.get("success"):
             data = result["data"]
             # Convert ISO 8601 (2026-01-15T16:59:59Z) to Odoo format (2026-01-15 16:59:59)
-            expected_time = data.get("expected_delivery_time")
-            if expected_time and isinstance(expected_time, str):
-                expected_time = expected_time.replace('T', ' ').replace('Z', '')
-
-            picking.write({
-                "ghn_order_code": data.get("order_code"),
-                "ghn_total_fee": data.get("total_fee"),
-                "ghn_expected_delivery_time": expected_time,
+            # Note: Update API might not return expected_delivery_time or total_fee depending on what changed
+            vals = {
                 "ghn_order_status": "ready_to_pick"
-            })
+            }
+            
+            if data:
+                if data.get("order_code"): vals["ghn_order_code"] = data.get("order_code")
+                if data.get("total_fee"): vals["ghn_total_fee"] = data.get("total_fee")
+                
+                expected_time = data.get("expected_delivery_time")
+                if expected_time and isinstance(expected_time, str):
+                    expected_time = expected_time.replace('T', ' ').replace('Z', '')
+                    vals["ghn_expected_delivery_time"] = expected_time
+            
+            picking.write(vals)
+            
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': 'Thành công',
-                    'message': f'Đã tạo đơn GHN: {data.get("order_code")}',
+                    'message': f'Đã {action_type} đơn GHN thành công!',
                     'sticky': False,
                     'type': 'success',
                 }
