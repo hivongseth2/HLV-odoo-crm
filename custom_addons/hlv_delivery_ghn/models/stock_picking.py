@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
-from odoo import models, api
+from odoo import models, api, fields
+from odoo.exceptions import ValidationError, UserError
+from ..utils.ghn_api_utils import GHNApiUtils
 
 class StockPicking(models.Model):
     _inherit = "stock.picking"
@@ -129,10 +130,10 @@ class StockPicking(models.Model):
         
         # Validation
         if not self.ghn_receiver_province_id or not self.ghn_receiver_district_id or not self.ghn_receiver_ward_id:
-            raise models.ValidationError("Vui lòng điền đầy đủ thông tin địa chỉ nhận (Tỉnh/Huyện/Xã) của GHN.")
+            raise ValidationError("Vui lòng điền đầy đủ thông tin địa chỉ nhận (Tỉnh/Huyện/Xã) của GHN.")
         
         if not self.partner_id.phone:
-            raise models.ValidationError("Vui lòng điền số điện thoại của khách hàng.")
+            raise ValidationError("Vui lòng điền số điện thoại của khách hàng.")
 
         # Prepare items
         items = []
@@ -223,4 +224,4 @@ class StockPicking(models.Model):
                 }
             }
         else:
-            raise models.ValidationError(f"Lỗi từ GHN: {result.get('error')}")
+            raise ValidationError(f"Lỗi từ GHN: {result.get('error')}")
