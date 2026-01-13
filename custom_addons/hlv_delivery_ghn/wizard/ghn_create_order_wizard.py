@@ -221,10 +221,15 @@ class GHNCreateOrderWizard(models.TransientModel):
         result = client.create_order(payload)
         if result.get("success"):
             data = result["data"]
+            # Convert ISO 8601 (2026-01-15T16:59:59Z) to Odoo format (2026-01-15 16:59:59)
+            expected_time = data.get("expected_delivery_time")
+            if expected_time and isinstance(expected_time, str):
+                expected_time = expected_time.replace('T', ' ').replace('Z', '')
+
             picking.write({
                 "ghn_order_code": data.get("order_code"),
                 "ghn_total_fee": data.get("total_fee"),
-                "ghn_expected_delivery_time": data.get("expected_delivery_time"),
+                "ghn_expected_delivery_time": expected_time,
                 "ghn_order_status": "ready_to_pick"
             })
             return {
