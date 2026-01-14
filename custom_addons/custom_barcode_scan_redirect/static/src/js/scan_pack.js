@@ -349,6 +349,15 @@ document.addEventListener("DOMContentLoaded", function () {
           let emptyMatch = null;
 
           for (const c of candidates) {
+            // [FIX] ID RECOVERY: If we find the exact line ID in candidates, use it immediately.
+            // This handles cases where querySelector failed but the element exists.
+            if (String(c.dataset.lineId) === String(item.line_id)) {
+              console.log(`[SCAN] Recovered line ${item.line_id} from candidates list.`);
+              activeMatch = c;
+              emptyMatch = null;
+              break;
+            }
+
             const mMax = parseFloat(c.dataset.maxQty || 0);
             const mPacked = parseFloat(c.dataset.packedQty || 0);
             const mDoneInput = c.querySelector('.done-input');
