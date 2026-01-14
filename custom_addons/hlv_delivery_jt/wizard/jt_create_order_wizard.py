@@ -14,14 +14,14 @@ class JTCreateOrderWizard(models.TransientModel):
     
     # J&T Specific Fields
     order_type = fields.Selection([
-        (1, 'Đơn bình thường'),
-        (2, 'Đơn chuyển hoàn')
-    ], string="Loại đơn đặt", default=1, required=True)
+        ('1', 'Đơn bình thường'),
+        ('2', 'Đơn chuyển hoàn')
+    ], string="Loại đơn đặt", default='1', required=True)
     
     service_type = fields.Selection([
-        (1, 'Pickup'),
-        (6, 'Drop off')
-    ], string="Loại dịch vụ", default=1, required=True)
+        ('1', 'Pickup'),
+        ('6', 'Drop off')
+    ], string="Loại dịch vụ", default='1', required=True)
     
     pay_type = fields.Selection([
         ('PP_PM', 'Thanh toán cuối tháng'),
@@ -42,9 +42,9 @@ class JTCreateOrderWizard(models.TransientModel):
     ], string="Mã loại hàng hóa", default='bm000010', required=True)
 
     delivery_type = fields.Selection([
-        (1, 'Phát bình thường'),
-        (2, 'Khách hàng tự đến lấy')
-    ], string="Loại phát hàng", default=1, required=True)
+        ('1', 'Phát bình thường'),
+        ('2', 'Khách hàng tự đến lấy')
+    ], string="Loại phát hàng", default='1', required=True)
 
     is_insured = fields.Boolean(string="Khai giá?", default=False)
     goods_value = fields.Float(string="Giá trị hàng hóa (VND)")
@@ -106,9 +106,9 @@ class JTCreateOrderWizard(models.TransientModel):
             "customerCode": company.jt_customer_code or "",
             "password": company.jt_password or "",
             "txlogisticId": self.picking_id.name,
-            "orderType": self.order_type,
-            "serviceType": self.service_type,
-            "deliveryType": self.delivery_type,
+            "orderType": int(self.order_type),
+            "serviceType": int(self.service_type),
+            "deliveryType": int(self.delivery_type),
             "selfAddress": 0, # Use J&T addresses or administrative? Documentation says 0 for J&T
             "payType": self.pay_type,
             "productType": self.product_type,
