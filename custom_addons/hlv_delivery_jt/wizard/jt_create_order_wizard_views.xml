@@ -19,7 +19,7 @@
                         <group string="Phí &amp; Ghi chú">
                             <field name="cod_money"/>
                             <field name="is_insured"/>
-                            <field name="goods_value" attrs="{'invisible': [('is_insured', '=', False)], 'required': [('is_insured', '=', True)]}"/>
+                            <field name="goods_value" invisible="not is_insured" required="is_insured"/>
                             <field name="remark"/>
                         </group>
                     </group>
