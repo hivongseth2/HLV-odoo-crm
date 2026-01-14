@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_picking_form_inherit_jt" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit.jt</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_open_jt_wizard" string="Tạo đơn J&amp;T" type="object" class="oe_highlight" attrs="{'invisible': ['|', ('picking_type_code', '!=', 'outgoing'), ('jt_bill_code', '!=', False)]}"/>
+            </xpath>
+            <xpath expr="//page[@name='extra']" position="after">
+                <page string="J&amp;T Express" attrs="{'invisible': [('jt_bill_code', '=', False)]}">
+                    <group>
+                        <group string="Thông tin vận đơn">
+                            <field name="jt_bill_code" readonly="1"/>
+                            <field name="jt_sort_line" readonly="1"/>
+                            <field name="jt_order_status" readonly="1"/>
+                        </group>
+                        <group string="Chi phí">
+                            <field name="jt_cod_fee" readonly="1"/>
+                            <field name="jt_insurance_fee" readonly="1"/>
+                            <field name="jt_total_fee" readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

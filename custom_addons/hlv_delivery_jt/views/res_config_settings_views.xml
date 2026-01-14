@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_jt" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.jt</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="30"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('settings')]" position="inside">
+                <div class="app_settings_block" data-string="J&amp;T Express" string="J&amp;T Express" data-key="hlv_delivery_jt">
+                    <h2>Cấu hình J&amp;T Express</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <label for="jt_environment"/>
+                                <div class="text-muted">
+                                    Chọn môi trường Test hoặc Production
+                                </div>
+                                <field name="jt_environment"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <label for="jt_customer_code"/>
+                                <field name="jt_customer_code"/>
+                                <label for="jt_password"/>
+                                <field name="jt_password" password="True"/>
+                            </div>
+                        </div>
+                    </div>
+                    <h2>Thông tin Xác thực (System Parameters)</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <label for="jt_api_account_display"/>
+                                <field name="jt_api_account_display" readonly="1"/>
+                                <br/>
+                                <label for="jt_private_key_display"/>
+                                <field name="jt_private_key_display" readonly="1"/>
+                                <div class="text-muted">
+                                    Thông tin này được lấy từ <code>jnt_apiAccount</code> và <code>jnt_privateKey</code> trong System Parameters.
+                                </div>
+                                <div class="mt8">
+                                    <button name="action_check_jt_connection" type="object" string="Kiểm tra kết nối" class="btn-primary"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>
