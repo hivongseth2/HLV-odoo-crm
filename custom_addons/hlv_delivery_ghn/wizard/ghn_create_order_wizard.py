@@ -325,7 +325,7 @@ class GHNCreateOrderWizard(models.TransientModel):
                 'tag': 'display_notification',
                 'params': {
                     'title': 'Thành công',
-                    'message': f'Đã {action_type} đơn GHN thành công!',
+                    'message': f'Đã {action_type} đơn GHN thành công! Mã đơn: {data.get("order_code")}',
                     'sticky': False,
                     'type': 'success',
                 }

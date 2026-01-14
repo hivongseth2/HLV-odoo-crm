@@ -35,7 +35,66 @@ class StockPicking(models.Model):
     ghn_service_id = fields.Integer(string="Mã dịch vụ GHN", default=0)
     ghn_service_type_id = fields.Integer(string="Mã loại dịch vụ GHN", default=2)
 
-    @api.onchange('ghn_receiver_district_id')
+    ghn_tracking_ids = fields.One2many("ghn.tracking.log", "picking_id", string="Lịch sử hành trình")
+    ghn_tracking_timeline = fields.Html(string="Hành trình đơn hàng", compute="_compute_ghn_timeline")
+
+    @api.model
+    def _get_ghn_status_map(self):
+        """Map GHN status code to Vietnamese description."""
+        return {
+            'ready_to_pick': 'Mới tạo đơn',
+            'picking': 'Nhân viên đang lấy hàng',
+            'cancel': 'Hủy đơn hàng',
+            'money_collect_picking': 'Đang thu tiền người gửi',
+            'picked': 'Nhân viên đã lấy hàng',
+            'storing': 'Hàng đang nằm ở kho',
+            'transporting': 'Đang luân chuyển hàng',
+            'sorting': 'Đang phân loại',
+            'delivering': 'Nhân viên đang giao cho khách',
+            'money_collect_delivering': 'Nhân viên đang thu tiền người nhận',
+            'delivered': 'Giao hàng thành công',
+            'delivery_fail': 'Giao hàng thất bại',
+            'waiting_to_return': 'Chờ trả hàng',
+            'return': 'Trả hàng',
+            'return_transporting': 'Đang luân chuyển hàng trả',
+            'return_sorting': 'Đang phân loại hàng trả',
+            'returning': 'Nhân viên đang đi trả hàng',
+            'return_fail': 'Trả hàng thất bại',
+            'returned': 'Nhân viên trả hàng thành công',
+            'exception': 'Đơn hàng ngoại lệ',
+            'damage': 'Hàng bị hư hỏng',
+            'lost': 'Hàng bị mất'
+        }
+
+    @api.depends('ghn_tracking_ids')
+    def _compute_ghn_timeline(self):
+        for record in self:
+            html = '<div class="o_ghn_timeline" style="margin-left: 10px; border-left: 2px solid #ddd; padding-left: 20px;">'
+            if not record.ghn_tracking_ids:
+                html = '<div class="text-muted">Chưa có thông tin hành trình.</div>'
+            else:
+                for log in record.ghn_tracking_ids:
+                    time_str = log.time_log.strftime("%d/%m/%Y %H:%M") if log.time_log else ""
+                    status_vn = log.status_name or log.status_code
+                    desc = log.description or ""
+                    
+                    # Color based on status keyword
+                    color = "#17a2b8" # Info blue
+                    if 'delivered' in (log.status_code or ''): color = "#28a745" # Success
+                    elif 'cancel' in (log.status_code or ''): color = "#dc3545" # Danger
+                    elif 'fail' in (log.status_code or ''): color = "#dc3545"
+                    elif 'pick' in (log.status_code or ''): color = "#ffc107" # Warning
+                    
+                    html += f'''
+                    <div style="position: relative; margin-bottom: 20px;">
+                        <div style="position: absolute; left: -26px; top: 0; width: 12px; height: 12px; border-radius: 50%; background: {color}; border: 2px solid white; box-shadow: 0 0 0 1px {color};"></div>
+                        <div style="font-weight: bold; color: {color}">{status_vn} <span style="font-weight: normal; color: #666; font-size: 0.9em;">- {time_str}</span></div>
+                        <div style="font-size: 0.9em; color: #333; margin-top: 4px;">{desc}</div>
+                    </div>
+                    '''
+            
+            html += '</div>'
+            record.ghn_tracking_timeline = html
     def _onchange_ghn_receiver_district_id(self):
         """Fetch wards from GHN when receiver district changes."""
         if not self.ghn_receiver_district_id:

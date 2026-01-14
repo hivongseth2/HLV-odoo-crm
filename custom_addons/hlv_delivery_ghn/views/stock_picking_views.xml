@@ -43,6 +43,9 @@
                             <field name="ghn_shipping_notes"/>
                         </group>
                     </group>
+                    <group string="Hành trình vận đơn">
+                        <field name="ghn_tracking_timeline" nolabel="1"/>
+                    </group>
                 </page>
             </xpath>
         </field>

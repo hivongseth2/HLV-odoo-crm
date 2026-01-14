@@ -12,6 +12,7 @@
         "views/stock_warehouse_views.xml",
         "wizard/ghn_fee_wizard_views.xml",
         "wizard/ghn_create_order_wizard_views.xml",
+        "views/ghn_monitor_views.xml",
     ],
     "installable": True,
     "application": False,

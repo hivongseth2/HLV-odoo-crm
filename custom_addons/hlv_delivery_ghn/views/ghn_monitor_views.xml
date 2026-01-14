@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Tree View for GHN Monitor -->
+        <record id="view_picking_tree_ghn" model="ir.ui.view">
+            <field name="name">stock.picking.tree.ghn</field>
+            <field name="model">stock.picking</field>
+            <field name="arch" type="xml">
+                <tree string="GHN Shipments" create="0" decoration-muted="ghn_order_status == 'cancel'" decoration-info="ghn_order_status == 'ready_to_pick'" decoration-success="ghn_order_status == 'delivered'">
+                    <field name="name"/>
+                    <field name="partner_id"/>
+                    <field name="origin"/>
+                    <field name="ghn_order_code" widget="badge"/>
+                    <field name="ghn_order_status" widget="badge" 
+                        decoration-success="ghn_order_status == 'delivered'"
+                        decoration-info="ghn_order_status == 'ready_to_pick'"
+                        decoration-danger="ghn_order_status == 'cancel'"
+                        decoration-warning="ghn_order_status == 'return'"/>
+                    <field name="ghn_total_fee" sum="Total Fee"/>
+                    <field name="ghn_cod_amount" sum="Total COD"/>
+                    <field name="ghn_expected_delivery_time"/>
+                    <field name="state" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Search View for GHN Monitor -->
+        <record id="view_picking_search_ghn" model="ir.ui.view">
+            <field name="name">stock.picking.search.ghn</field>
+            <field name="model">stock.picking</field>
+            <field name="arch" type="xml">
+                <search string="Search GHN Shipments">
+                    <field name="name"/>
+                    <field name="ghn_order_code"/>
+                    <field name="partner_id"/>
+                    <filter string="Ready to Pick" name="status_ready" domain="[('ghn_order_status', '=', 'ready_to_pick')]"/>
+                    <filter string="Delivered" name="status_delivered" domain="[('ghn_order_status', '=', 'delivered')]"/>
+                    <filter string="Canceled" name="status_cancel" domain="[('ghn_order_status', '=', 'cancel')]"/>
+                    <group expand="0" string="Group By">
+                        <filter string="Status" name="group_by_status" context="{'group_by': 'ghn_order_status'}"/>
+                        <filter string="Expected Delivery" name="group_by_date" context="{'group_by': 'ghn_expected_delivery_time:day'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- Action -->
+        <record id="action_ghn_tracking" model="ir.actions.act_window">
+            <field name="name">Quản lý Vận đơn GHN</field>
+            <field name="res_model">stock.picking</field>
+            <field name="view_mode">tree,form</field>
+            <field name="domain">[('ghn_order_code', '!=', False)]</field>
+            <field name="view_id" ref="view_picking_tree_ghn"/>
+            <field name="search_view_id" ref="view_picking_search_ghn"/>
+            <field name="context">{'search_default_group_by_status': 1}</field>
+            <field name="help" type="html">
+              <p class="o_view_nocontent_smiling_face">
+                Chưa có đơn hàng GHN nào được tạo.
+              </p>
+            </field>
+        </record>
+
+        <!-- Menu Item -->
+        <menuitem id="menu_ghn_tracking"
+                  name="Quản lý GHN"
+                  parent="stock.menu_stock_warehouse_mgmt"
+                  action="action_ghn_tracking"
+                  sequence="30"/>
+    </data>
+</odoo>
