@@ -330,15 +330,61 @@ document.addEventListener("DOMContentLoaded", function () {
         // cố gắng tìm theo line_id
         let el = document.querySelector(`[data-line-id="${item.line_id}"]`);
 
-        // [FIX] If server returns a line_id that is NOT in the DOM, we must create it dynamically.
-        // We clone an existing line of the same product to use as a template.
+        // [FIX] If server returns a line_id that is NOT in the DOM, we must create/update dynamically.
         if (!el && item.barcode) {
           const code = normalizeCode(item.barcode).toUpperCase();
-          // Find any existing line with same barcode to copy style/structure
-          const templateEl = [...document.querySelectorAll('#product_list li.product-item')]
-            .find(e => normalizeCode(e.dataset.barcode).toUpperCase() === code);
+          const candidates = [...document.querySelectorAll('#product_list li.product-item')]
+            .filter(e => normalizeCode(e.dataset.barcode).toUpperCase() === code);
 
-          if (templateEl) {
+          // SMART HEURISTIC: Check if we can UPDATE an existing row instead of cloning.
+          // This handles cases where backend switches line_id for the SAME move (e.g. partial packing)
+          // vs creating a truly NEW move.
+          let match = null;
+          const newMax = parseFloat(item.required_qty || 0);
+          const newDone = parseFloat(item.done_qty || 0);
+
+          for (const c of candidates) {
+            const oldMax = parseFloat(c.dataset.maxQty || 0);
+            const oldDoneInput = c.querySelector('.done-input');
+            const oldDone = parseFloat(oldDoneInput ? oldDoneInput.value : (c.querySelector('.done')?.innerText || 0));
+
+            // 1. Demand must match (otherwise it's a different move size)
+            if (Math.abs(oldMax - newMax) < 0.01) {
+              // 2. Logic:
+              // - If old row is NOT full (e.g. 6/10), we assume this new line (e.g. 9/10) is continuation.
+              // - If newDone > oldDone (e.g. 11/10 vs 10/10), it's over-scan continuation.
+              if (oldDone < oldMax || newDone > oldDone) {
+                match = c;
+                break;
+              }
+            }
+          }
+
+          if (match) {
+            // === UPDATE EXISTING ROW ===
+            console.log(`[SCAN] Updating existing row ${match.dataset.lineId} -> ${item.line_id}`);
+            el = match;
+
+            // Update Identity
+            el.setAttribute('data-line-id', item.line_id);
+            el.dataset.lineId = String(item.line_id);
+
+            // Update Stats
+            el.setAttribute('data-packed-qty', item.packed_qty || 0);
+            el.dataset.packedQty = item.packed_qty || 0;
+
+            // Input value will be updated by common logic below
+            const input = el.querySelector(".done-input");
+            if (input) {
+              input.dataset.lineId = String(item.line_id); // sync input dataset
+            }
+
+            // Visual Feedback
+            highlightElement(el, "#dbe4ff");
+
+          } else if (candidates.length > 0) {
+            // === CLONE NEW ROW (True New Move) ===
+            const templateEl = candidates[0];
             console.log(`[SCAN] Creating new DOM element for line ${item.line_id} from template.`);
 
             // 1. Clone
@@ -347,51 +393,41 @@ document.addEventListener("DOMContentLoaded", function () {
             // 2. Update Attributes
             el.setAttribute('data-line-id', item.line_id);
             el.dataset.lineId = String(item.line_id);
-
-            // Backend returns 'required_qty' for the specific move
-            const maxQty = item.required_qty || 0;
-            el.setAttribute('data-max-qty', maxQty);
-            el.dataset.maxQty = maxQty;
-
+            el.setAttribute('data-max-qty', newMax);
+            el.dataset.maxQty = newMax;
             el.setAttribute('data-packed-qty', item.packed_qty || 0);
             el.dataset.packedQty = item.packed_qty || 0;
 
             // 3. Update Visuals
-            // Reset input/done value
             const input = el.querySelector(".done-input");
             if (input) {
-              input.value = 0;
+              input.value = 0; // Will be set later
               input.dataset.currentQty = 0;
               input.dataset.lineId = item.line_id;
-              input.dataset.maxQty = maxQty;
+              input.dataset.maxQty = newMax;
               input.readOnly = false;
-              // IMPORTANT: Remove any "readonly" attribute if it was copied from a full line
               input.removeAttribute('readonly');
             } else {
               const doneSpan = el.querySelector(".done");
               if (doneSpan) doneSpan.innerText = "0";
             }
 
-            // Update Required Qty Label (format: / 10.0)
-            // Structure usually: input -> span(/) -> span(qty)
+            // Update Required Qty Label
             const qtyDisplayEl = input ? input.nextElementSibling.nextElementSibling : el.querySelectorAll("span")[1];
-            if (qtyDisplayEl) {
-              qtyDisplayEl.innerText = maxQty;
+            if (qtyDisplayEl) qtyDisplayEl.innerText = newMax;
+
+            // Reset classes
+            el.classList.remove("completed");
+            el.style.backgroundColor = "transparent";
+
+            // 4. Append
+            const list = document.getElementById('product_list');
+            if (list) {
+              list.appendChild(el);
+              setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
             }
 
-            // Remove "completed" class if present
-            el.classList.remove("completed");
-            el.style.backgroundColor = "transparent"; // reset highlight
-
-            // 4. Append to list
-            const list = document.getElementById('product_list');
-            if (list) list.appendChild(el);
-
             toast.info("Đã thêm dòng sản phẩm mới.", { ms: 1000 });
-
-            // Scroll to new element
-            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
-
           } else {
             console.warn("Cannot find template to clone for new line.");
           }
