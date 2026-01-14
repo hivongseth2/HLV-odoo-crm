@@ -473,7 +473,7 @@ class CustomBarcodeScanController(http.Controller):
                 for m in moves:
                      # Tính current done cho move này
                      # [DEBUG] Force re-read of move_line_ids to ensure no caching issues
-                     m.invalidate_cache(['move_line_ids']) 
+                     # m.invalidate_cache(['move_line_ids'])      <-- REMOVED to fix crash
                      current_done = sum(ml.qty_done for ml in m.move_line_ids)
                      remaining = m.product_uom_qty - current_done
                      
