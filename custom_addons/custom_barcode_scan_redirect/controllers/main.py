@@ -476,18 +476,21 @@ class CustomBarcodeScanController(http.Controller):
                      _logger.info(f"CHECK MOVE {m.id}: Demand={m.product_uom_qty}, Done={current_done}, Remain={remaining}")
                      
                      if remaining > 0:
-                         # Move này còn chỗ -> Kiểm tra xem có loose line không
+                         # [FIX] STRICT PRIORITY: This is the first move with space.
+                         # We MUST fill this move before looking at any subsequent moves.
+                         
                          loose_line = m.move_line_ids.filtered(lambda l: not l.result_package_id)
                          if loose_line:
-                             target_ml = loose_line[0] # Lấy loose line hiện có
-                             _logger.info(f"Found existing loose line in Move {m.id} (Remain: {remaining}): {target_ml.id}")
+                             target_ml = loose_line[0] 
+                             _logger.info(f"Found existing loose line in First Available Move {m.id} (Remain: {remaining}): {target_ml.id}")
                              found_target = True
-                             break
                          else:
-                             # Move còn chỗ nhưng chưa có loose line -> Đây là ứng viên sáng giá số 2 (sau loose line có sẵn)
-                             if not candidate_open_move:
-                                 _logger.info(f"Candidate Open Move Found: {m.id}")
-                                 candidate_open_move = m
+                             # No loose line, but this is the move we MUST use.
+                             candidate_open_move = m
+                             _logger.info(f"First Available Move is {m.id} (Remain: {remaining}). Will create new line.")
+                         
+                         # CRITICAL: Stop searching. Do not skip this move to find a "better" loose line later.
+                         break
                      else:
                          # Move đã full -> Lưu làm fallback (nếu user muốn scan dư)
                          if not fallback_full_move:
