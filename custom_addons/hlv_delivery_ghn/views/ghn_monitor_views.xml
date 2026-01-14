@@ -6,7 +6,7 @@
             <field name="name">stock.picking.tree.ghn</field>
             <field name="model">stock.picking</field>
             <field name="arch" type="xml">
-                <tree string="GHN Shipments" create="0" decoration-muted="ghn_order_status == 'cancel'" decoration-info="ghn_order_status == 'ready_to_pick'" decoration-success="ghn_order_status == 'delivered'">
+                <list string="GHN Shipments" create="0" decoration-muted="ghn_order_status == 'cancel'" decoration-info="ghn_order_status == 'ready_to_pick'" decoration-success="ghn_order_status == 'delivered'">
                     <field name="name"/>
                     <field name="partner_id"/>
                     <field name="origin"/>
@@ -20,7 +20,7 @@
                     <field name="ghn_cod_amount" sum="Total COD"/>
                     <field name="ghn_expected_delivery_time"/>
                     <field name="state" invisible="1"/>
-                </tree>
+                </list>
             </field>
         </record>
 
@@ -48,7 +48,7 @@
         <record id="action_ghn_tracking" model="ir.actions.act_window">
             <field name="name">Quản lý Vận đơn GHN</field>
             <field name="res_model">stock.picking</field>
-            <field name="view_mode">tree,form</field>
+            <field name="view_mode">list,form</field>
             <field name="domain">[('ghn_order_code', '!=', False)]</field>
             <field name="view_id" ref="view_picking_tree_ghn"/>
             <field name="search_view_id" ref="view_picking_search_ghn"/>
