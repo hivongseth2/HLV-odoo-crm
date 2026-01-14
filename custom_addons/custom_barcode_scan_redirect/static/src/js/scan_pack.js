@@ -339,34 +339,29 @@ document.addEventListener("DOMContentLoaded", function () {
           // SMART HEURISTIC: Check if we can UPDATE an existing row instead of cloning.
           // This handles cases where backend switches line_id for the SAME move (e.g. partial packing)
           // vs creating a truly NEW move.
-          // PRIORITIZED HEURISTIC:
-          // 1. Priority 1: "Active Line" (In-Progress) -> 0 < Done < Max
-          // 2. Priority 2: "Empty Line" (Available) -> Done == 0 && Max > 0
-          // 3. Fallback: Last Line (Over-scan or Full)
+          // STRICT ACTIVE HEURISTIC:
+          // We ONLY update a row if it is explicitly "Active" (In-Progress).
+          // Active = (0 < Done < Max) AND (Not Packed).
+          // In ALL other cases (Empty, Full, Packed), we create a NEW row to avoid confusion.
 
           let activeMatch = null;
-          let emptyMatch = null;
 
           for (const c of candidates) {
             const mMax = parseFloat(c.dataset.maxQty || 0);
+            const mPacked = parseFloat(c.dataset.packedQty || 0);
             const mDoneInput = c.querySelector('.done-input');
             const mDone = parseFloat(mDoneInput ? mDoneInput.value : (c.querySelector('.done')?.innerText || 0));
 
-            if (mDone > 0 && mDone < mMax) {
+            // Strict Check: Must be partially full and NOT packed.
+            if (mDone > 0 && mDone < mMax && mPacked === 0) {
               activeMatch = c;
-              break; // Found best candidate (Active)
-            }
-            if (mDone === 0 && mMax > 0 && !emptyMatch) {
-              emptyMatch = c; // Found backup candidate (Empty)
+              break; // Found the one true active line.
             }
           }
 
-          let match = activeMatch || emptyMatch;
-
-          // Fallback: If no "open" row found, update the last match (e.g. over-scanning)
-          if (!match && candidates.length > 0) {
-            match = candidates[candidates.length - 1];
-          }
+          // Only update if we found a strictly active line.
+          // Otherwise, match is null -> triggers Clone below.
+          let match = activeMatch;
 
           if (match) {
             // === UPDATE EXISTING ROW ===
