@@ -337,12 +337,13 @@ class PickingExportWizard(models.TransientModel):
         
         if sol:
             don_gia = sol.price_unit or 0.0
-            thanh_tien = sol.price_subtotal or 0.0
             ty_le_ck = sol.discount or 0.0
             
-            # Tính tiền chiết khấu
-            if ty_le_ck > 0:
-                tien_chiet_khau = (don_gia * qty * ty_le_ck) / 100
+            # Tính tiền chiết khấu dựa trên số lượng của Picking
+            tien_chiet_khau = (don_gia * qty * ty_le_ck) / 100
+            
+            # Thành tiền = (Đơn giá * Số lượng) - Chiết khấu
+            thanh_tien = (don_gia * qty) - tien_chiet_khau
             
             # Thuế GTGT
             if sol.tax_id:
@@ -350,11 +351,16 @@ class PickingExportWizard(models.TransientModel):
                     ty_le_thue_gtgt = tax.amount or 0.0
                     break
             
+            # Tiền thuế = (Thành tiền sau chiết khấu) * % thuế
             tien_thue_gtgt = (thanh_tien * ty_le_thue_gtgt) / 100
         else:
             # Fallback: lấy từ product
             don_gia = prod.list_price or 0.0
             thanh_tien = don_gia * qty
+            tien_chiet_khau = 0.0
+            ty_le_ck = 0.0
+            ty_le_thue_gtgt = 0.0
+            tien_thue_gtgt = 0.0
         
         # Đơn giá vốn và tiền vốn
         don_gia_von = prod.standard_price or 0.0
@@ -828,20 +834,19 @@ class PickingExportWizard(models.TransientModel):
             if sol:
                 price_unit = sol.price_unit
                 discount = sol.discount
-                price_subtotal = sol.price_subtotal
-                # Tax calculation rudimentary
                 if sol.tax_id:
                     tax_amount = sol.tax_id[0].amount
             else:
                  # Fallback to product list price if no SOL
                  price_unit = prod.list_price
-                 price_subtotal = price_unit * qty
+                 discount = 0.0
 
-            # Computed fields
-            tien_ck = (price_unit * qty * discount / 100) if discount else 0
-            thanh_tien = price_subtotal # Excludes tax usually
-            # Or manually: (price_unit * qty) - tien_ck
+            # Computed fields dựa trên số lượng của Picking
+            tien_ck = (price_unit * qty * discount / 100)
+            # Thành tiền = (Đơn giá * Số lượng) - Chiết khấu
+            thanh_tien = (price_unit * qty) - tien_ck
             
+            # Tiền thuế = (Thành tiền sau chiết khấu) * % thuế
             tien_thue = (thanh_tien * tax_amount / 100) if tax_amount else 0
             
             # Mapping logic based on warehouse and payment method
@@ -920,7 +925,7 @@ class PickingExportWizard(models.TransientModel):
                 'don_gia': price_unit,
                 'thanh_tien': thanh_tien,
                 'ty_le_ck': '',
-                'tien_chiet_khau': string_tien_ck if 'string_tien_ck' in locals() else tien_ck, # Fixed if needed, but original used tien_ck
+                'tien_chiet_khau': tien_ck,
                 'tk_chiet_khau': '',
                 
                 'gia_tinh_thue_xk': '',
