@@ -671,6 +671,26 @@ document.addEventListener("DOMContentLoaded", function () {
       toast.error(result?.error || 'Không thể in nhãn', { ms: 2000 });
     }
   });
+  // Nút In nhãn 80x80
+  document.getElementById('btnPrintLabel80x80')?.addEventListener('click', async function () {
+    const res = await fetch('/pack_scan/print_label_80x80', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'call',
+        params: { picking_id: pickingId }
+      })
+    });
+    const response = await res.json();
+    const result = response.result || response;
+    if (result?.success) {
+      toast.success(result.message, { ms: 1500 });
+      window.open(result.report_url, '_blank');
+    } else {
+      toast.error(result?.error || 'Không thể in nhãn 80x80', { ms: 2000 });
+    }
+  });
 
   setFocus();
   diag();
