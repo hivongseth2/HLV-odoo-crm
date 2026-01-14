@@ -468,12 +468,16 @@ class CustomBarcodeScanController(http.Controller):
                 candidate_open_move = None
                 fallback_full_move = None
                 
+                _logger.info(f"DEBUG_MOVES: Found {len(moves)} moves for barcode {barcode}. IDs: {moves.ids}")
+                
                 for m in moves:
                      # Tính current done cho move này
+                     # [DEBUG] Force re-read of move_line_ids to ensure no caching issues
+                     m.invalidate_cache(['move_line_ids']) 
                      current_done = sum(ml.qty_done for ml in m.move_line_ids)
                      remaining = m.product_uom_qty - current_done
                      
-                     _logger.info(f"CHECK MOVE {m.id}: Demand={m.product_uom_qty}, Done={current_done}, Remain={remaining}")
+                     _logger.info(f"CHECK MOVE {m.id}: Demand={m.product_uom_qty}, Done={current_done}, Remain={remaining}. Lines: {m.move_line_ids.ids}")
                      
                      if remaining > 0:
                          # [FIX] STRICT PRIORITY: This is the first move with space.
