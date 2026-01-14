@@ -49,6 +49,7 @@
                 <footer>
                     <button name="action_confirm" string="Xác nhận và Tạo đơn" type="object" class="btn-primary" invisible="ghn_order_code"/>
                     <button name="action_confirm" string="Cập nhật đơn GHN" type="object" class="btn-warning" invisible="not ghn_order_code"/>
+                    <button name="action_return" string="Trả hàng GHN" type="object" class="btn-secondary" invisible="not ghn_order_code" confirm="Bạn có chắc chắn muốn chuyển trạng thái đơn hàng này sang TRẢ HÀNG (Return) không?"/>
                     <button name="action_cancel" string="Hủy đơn GHN" type="object" class="btn-danger" invisible="not ghn_order_code" confirm="Bạn có chắc chắn muốn HỦY đơn hàng này trên GHN không?"/>
                     <button string="Hủy" class="btn-secondary" special="cancel"/>
                 </footer>

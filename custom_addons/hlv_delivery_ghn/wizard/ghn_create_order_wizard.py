@@ -363,3 +363,28 @@ class GHNCreateOrderWizard(models.TransientModel):
         }
         else:
             raise ValidationError(f"Lỗi hủy đơn GHN: {result.get('error')}")
+
+    def action_return(self):
+        """
+        Switch GHN order status to Return.
+        """
+        self.ensure_one()
+        picking = self.picking_id
+        if not self.ghn_order_code:
+            raise ValidationError("Đơn hàng chưa có mã GHN, không thể trả hàng!")
+
+        client = self._get_ghn_client()
+        result = client.return_order(self.ghn_order_code)
+        
+        if result.get("success"):
+            # Update Odoo status to returning 
+            picking.write({
+                "ghn_order_status": "return_transporting" # Or 'return' or wait for webhook
+            })
+            
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'reload',
+            }
+        else:
+            raise ValidationError(f"Lỗi trả hàng GHN: {result.get('error')}")
