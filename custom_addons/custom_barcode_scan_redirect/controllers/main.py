@@ -407,7 +407,9 @@ class CustomBarcodeScanController(http.Controller):
         _logger.info(f"SCAN_ITEM START: barcode={barcode}, delta={delta}, line_id={line_id}")
         picking = request.env['stock.picking'].sudo().browse(picking_id)
         # Tìm move dựa trên barcode
-        moves = picking.move_ids_without_package.filtered(lambda m: m.product_id.barcode == barcode)
+        # [FIX] Use move_ids instead of move_ids_without_package to ensure we see ALL moves
+        # move_ids_without_package is a UI helper field that might hide some moves depending on context
+        moves = picking.move_ids.filtered(lambda m: m.product_id.barcode == barcode)
         if not moves:
             return {"error": "❌ Mã sản phẩm không khớp trong phiếu!"}
         # Tính tổng quát để check xem đã đủ hết chưa
@@ -463,6 +465,8 @@ class CustomBarcodeScanController(http.Controller):
                      current_done = sum(ml.qty_done for ml in m.move_line_ids)
                      remaining = m.product_uom_qty - current_done
                      
+                     _logger.info(f"CHECK MOVE {m.id}: Demand={m.product_uom_qty}, Done={current_done}, Remain={remaining}")
+                     
                      if remaining > 0:
                          # Move này còn chỗ -> Kiểm tra xem có loose line không
                          loose_line = m.move_line_ids.filtered(lambda l: not l.result_package_id)
@@ -474,6 +478,7 @@ class CustomBarcodeScanController(http.Controller):
                          else:
                              # Move còn chỗ nhưng chưa có loose line -> Đây là ứng viên sáng giá số 2 (sau loose line có sẵn)
                              if not candidate_open_move:
+                                 _logger.info(f"Candidate Open Move Found: {m.id}")
                                  candidate_open_move = m
                      else:
                          # Move đã full -> Lưu làm fallback (nếu user muốn scan dư)
