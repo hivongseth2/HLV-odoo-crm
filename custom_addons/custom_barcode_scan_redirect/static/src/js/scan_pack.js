@@ -344,6 +344,7 @@ document.addEventListener("DOMContentLoaded", function () {
           // Active = (0 < Done < Max) AND (Not Packed).
           // In ALL other cases (Empty, Full, Packed), we create a NEW row to avoid confusion.
 
+          const newMax = parseFloat(item.required_qty || 0);
           let activeMatch = null;
 
           for (const c of candidates) {
