@@ -288,3 +288,33 @@ class GHNApiUtils:
         except Exception as e:
             _logger.exception("GHN return_order exception: %s", e)
             return {"success": False, "error": str(e)}
+
+    def get_print_token(self, order_codes):
+        """
+        Generate token for printing GHN orders.
+        Endpoint: /v2/a5/gen-token
+        :param order_codes: List of order codes
+        """
+        url = f"{self.v2_url}/a5/gen-token"
+        headers = self._get_headers() # Docs say 'Token', header helper uses 'Token'
+        
+        payload = {
+            "order_codes": order_codes if isinstance(order_codes, list) else [order_codes]
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            res_json = response.json()
+            if response.status_code == 200 and res_json.get("code") == 200:
+                data = res_json.get("data")
+                return {"success": True, "token": data.get("token")}
+            
+            error_msg = res_json.get("message") or f"HTTP {response.status_code}"
+            _logger.error("GHN get_print_token error: %s", response.text)
+            return {
+                "success": False, 
+                "error": error_msg
+            }
+        except Exception as e:
+            _logger.exception("GHN get_print_token exception: %s", e)
+            return {"success": False, "error": str(e)}

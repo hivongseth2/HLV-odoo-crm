@@ -16,6 +16,9 @@
                 <page string="Giao hàng GHN" name="ghn_delivery" invisible="picking_type_code != 'outgoing'">
                     <header>
                         <button name="action_ghn_auto_fill_info" type="object" string="Lấy thông tin GHN" class="btn-secondary"/>
+                        <!-- Print Label Button -->
+                        <button name="action_print_ghn_label_80x80" type="object" string="In Tem GHN (80x80)" class="btn-primary" 
+                                invisible="not ghn_order_code"/>
                     </header>
                     <group>
                         <group string="Trạng thái &amp; Dự kiến">

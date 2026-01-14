@@ -362,3 +362,38 @@ class StockPicking(models.Model):
                 "default_picking_id": self.id,
             }
         }
+
+    def action_print_ghn_label_80x80(self):
+        """
+        Generate print token and open GHN print URL (80x80/A5).
+        """
+        self.ensure_one()
+        if not self.ghn_order_code:
+            raise ValidationError("Đơn hàng chưa có mã GHN, không thể in!")
+            
+        company = self.company_id or self.env.company
+        client = GHNApiUtils(
+            token=company.ghn_api_token,
+            shop_id=company.ghn_shop_id,
+            environment=company.ghn_environment
+        )
+        
+        result = client.get_print_token(self.ghn_order_code)
+        if result.get("success"):
+            token = result.get("token")
+            
+            # Construct URL based on environment
+            base_url = "https://online-gateway.ghn.vn/a5/public-api"
+            if company.ghn_environment == 'test':
+                base_url = "https://dev-online-gateway.ghn.vn/a5/public-api"
+            
+            # print80x80 or printA5 depending on needs, user asked for 80x80
+            print_url = f"{base_url}/print80x80?token={token}"
+            
+            return {
+                'type': 'ir.actions.act_url',
+                'url': print_url,
+                'target': 'new',
+            }
+        else:
+            raise ValidationError(f"Lỗi lấy token in GHN: {result.get('error')}")
