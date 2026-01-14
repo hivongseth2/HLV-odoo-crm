@@ -81,8 +81,20 @@ class StockPicking(models.Model):
             if not record.ghn_tracking_ids:
                 html = '<div class="text-muted">Chưa có thông tin hành trình.</div>'
             else:
+                user_tz = self.env.user.tz or 'Asia/Ho_Chi_Minh'
+                import pytz
                 for log in record.ghn_tracking_ids:
-                    time_str = log.time_log.strftime("%d/%m/%Y %H:%M") if log.time_log else ""
+                    time_str = ""
+                    if log.time_log:
+                        # Convert UTC to User TZ (or VN default)
+                        try:
+                            utc = pytz.UTC
+                            dest_tz = pytz.timezone(user_tz)
+                            # time_log is naive UTC in Odoo
+                            local_dt = utc.localize(log.time_log).astimezone(dest_tz)
+                            time_str = local_dt.strftime("%d/%m/%Y %H:%M")
+                        except:
+                            time_str = log.time_log.strftime("%d/%m/%Y %H:%M") # Fallback
                     status_vn = log.status_name or log.status_code
                     desc = log.description or ""
                     
@@ -252,13 +264,7 @@ class StockPicking(models.Model):
                 self.message_post(body="Đã đồng bộ thông tin mới nhất từ GHN.")
                 return {
                     'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Thành công',
-                        'message': 'Đã cập nhật thông tin đơn hàng GHN.',
-                        'type': 'success',
-                        'sticky': False,
-                    }
+                    'tag': 'reload',
                 }
             else:
                  raise ValidationError(f"Không lấy được thông tin từ GHN: {result.get('error')}")

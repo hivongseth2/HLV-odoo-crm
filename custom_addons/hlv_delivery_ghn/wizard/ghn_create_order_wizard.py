@@ -326,15 +326,10 @@ class GHNCreateOrderWizard(models.TransientModel):
             if data and data.get("order_code"):
                 final_order_code = data.get("order_code")
 
+            # Return reload to close wizard and refresh Picking view
             return {
                 'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Thành công',
-                    'message': f'Đã {action_type} đơn GHN thành công! Mã đơn: {final_order_code}',
-                    'sticky': False,
-                    'type': 'success',
-                }
+                'tag': 'reload',
             }
         else:
             raise ValidationError(f"Lỗi từ GHN: {result.get('error')}")
@@ -363,14 +358,8 @@ class GHNCreateOrderWizard(models.TransientModel):
             })
             
             return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Thành công',
-                    'message': f'Đã HỦY đơn GHN: {self.ghn_order_code}',
-                    'sticky': False,
-                    'type': 'success',
-                }
-            }
+            'type': 'ir.actions.client',
+            'tag': 'reload',
+        }
         else:
             raise ValidationError(f"Lỗi hủy đơn GHN: {result.get('error')}")
