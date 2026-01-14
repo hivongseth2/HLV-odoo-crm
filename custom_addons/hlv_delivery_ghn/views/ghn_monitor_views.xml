@@ -11,11 +11,12 @@
                     <field name="partner_id"/>
                     <field name="origin"/>
                     <field name="ghn_order_code" widget="badge"/>
-                    <field name="ghn_order_status" widget="badge" 
+                    <field name="ghn_order_status_display" widget="badge" 
                         decoration-success="ghn_order_status == 'delivered'"
                         decoration-info="ghn_order_status == 'ready_to_pick'"
                         decoration-danger="ghn_order_status == 'cancel'"
                         decoration-warning="ghn_order_status == 'return'"/>
+                    <field name="ghn_order_status" invisible="1"/>
                     <field name="ghn_total_fee" sum="Total Fee"/>
                     <field name="ghn_cod_amount" sum="Total COD"/>
                     <field name="ghn_expected_delivery_time"/>

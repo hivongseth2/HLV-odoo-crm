@@ -20,7 +20,7 @@
                     <group>
                         <group string="Trạng thái &amp; Dự kiến">
                             <field name="ghn_order_code"/>
-                            <field name="ghn_order_status"/>
+                            <field name="ghn_order_status_display"/>
                             <field name="ghn_total_fee"/>
                             <field name="ghn_expected_delivery_time"/>
                         </group>

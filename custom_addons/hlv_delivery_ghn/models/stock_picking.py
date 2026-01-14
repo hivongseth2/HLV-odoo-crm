@@ -37,6 +37,14 @@ class StockPicking(models.Model):
 
     ghn_tracking_ids = fields.One2many("ghn.tracking.log", "picking_id", string="Lịch sử hành trình")
     ghn_tracking_timeline = fields.Html(string="Hành trình đơn hàng", compute="_compute_ghn_timeline")
+    
+    ghn_order_status_display = fields.Char(string="Trạng thái GHN (VN)", compute="_compute_ghn_status_display", store=False)
+
+    @api.depends('ghn_order_status')
+    def _compute_ghn_status_display(self):
+        status_map = self._get_ghn_status_map()
+        for record in self:
+            record.ghn_order_status_display = status_map.get(record.ghn_order_status, record.ghn_order_status)
 
     @api.model
     def _get_ghn_status_map(self):
