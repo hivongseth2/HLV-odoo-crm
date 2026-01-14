@@ -327,15 +327,18 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       result.scanned.forEach(item => {
-        // cố gắng tìm theo line_id, nếu không có thì rớt về tìm theo barcode
+        // cố gắng tìm theo line_id
         let el = document.querySelector(`[data-line-id="${item.line_id}"]`);
-        if (!el && item.barcode) {
-          const code = normalizeCode(item.barcode);
-          el = [...document.querySelectorAll('#product_list li.product-item')]
-            .find(e => normalizeCode(e.dataset.barcode) === code) || null;
-          if (el && item.line_id) el.dataset.lineId = String(item.line_id); // gắn lại cho những lần sau
+
+        // [FIX] If server returns a line_id that is NOT in the DOM, it means a new line was created.
+        // We MUST reload to render this new line correctly.
+        // DO NOT fallback to searching by barcode, as it will overwrite existing lines.
+        if (!el) {
+          console.warn(`[SCAN] New line ${item.line_id} created by server. Reloading to sync...`);
+          toast.info("Đã tạo dòng mới. Đang tải lại dữ liệu...", { ms: 1500 });
+          setTimeout(() => window.location.reload(), 500);
+          return;
         }
-        if (!el) { console.warn('No DOM line for', item); return; }
 
         const requiredEl = el.querySelectorAll('span')[1];
         const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
@@ -755,28 +758,30 @@ function applyServerSyncInfo(syncInfoList) {
   syncInfoList.forEach(info => {
     let targetEl = null;
 
-    // [FIX IMPROVED] Use strict Loop matching to ensure we find the element even if querySelector fails
-    const allItems = document.querySelectorAll('#product_list .product-item');
-    for (const item of allItems) {
-      const itemBar = normalizeCode(item.dataset.barcode || '').toUpperCase();
-      const itemSku = normalizeCode(item.dataset.defaultCode || '').toUpperCase();
-      const sBarcode = normalizeCode(info.product_barcode || '').toUpperCase();
-      const sSku = normalizeCode(info.product_sku || '').toUpperCase();
+    // [FIX] Prioritize lookup by Line ID if available in sync info
+    if (info.line_id) {
+      targetEl = document.querySelector(`[data-line-id="${info.line_id}"]`);
+    }
 
-      // [DEBUG LOG] Print comparison
-      // console.log(`[SYNC CHECK] Item: ${itemBar}/${itemSku} vs Info: ${sBarcode}/${sSku}`);
+    // Only use fuzzy matching if no line_id or line_id not found (and fallback needed? Prefer strict)
+    if (!targetEl) {
+      const allItems = document.querySelectorAll('#product_list .product-item');
+      for (const item of allItems) {
+        const itemBar = normalizeCode(item.dataset.barcode || '').toUpperCase();
+        const itemSku = normalizeCode(item.dataset.defaultCode || '').toUpperCase();
+        const sBarcode = normalizeCode(info.product_barcode || '').toUpperCase();
+        const sSku = normalizeCode(info.product_sku || '').toUpperCase();
 
-      // Match by Barcode (Fuzzy: endsWith)
-      if (sBarcode && (itemBar === sBarcode || itemBar.endsWith(sBarcode) || sBarcode.endsWith(itemBar))) {
-        console.log(`[SYNC MATCH] Matched by Barcode: ${itemBar} ~= ${sBarcode}`);
-        targetEl = item;
-        break;
-      }
-      // Match by SKU (Fuzzy: endsWith)
-      if (!targetEl && sSku && (itemSku === sSku || itemSku.endsWith(sSku) || sSku.endsWith(itemSku))) {
-        console.log(`[SYNC MATCH] Matched by SKU: ${itemSku} ~= ${sSku}`);
-        targetEl = item;
-        break;
+        // Match by Barcode (Fuzzy: endsWith)
+        if (sBarcode && (itemBar === sBarcode || itemBar.endsWith(sBarcode) || sBarcode.endsWith(itemBar))) {
+          targetEl = item;
+          break;
+        }
+        // Match by SKU (Fuzzy: endsWith)
+        if (!targetEl && sSku && (itemSku === sSku || itemSku.endsWith(sSku) || sSku.endsWith(itemSku))) {
+          targetEl = item;
+          break;
+        }
       }
     }
 
