@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="paperformat_package_label_80x80" model="report.paperformat">
+        <field name="name">Label 80x80</field>
+        <field name="format">custom</field>
+        <field name="page_width">80</field>
+        <field name="page_height">80</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">0</field>
+        <field name="margin_bottom">0</field>
+        <field name="margin_left">0</field>
+        <field name="margin_right">0</field>
+        <field name="disable_shrinking">True</field>
+    </record>
+
     <record id="action_report_package_labels" model="ir.actions.report">
         <field name="name">Package Labels</field>
         <field name="model">stock.picking</field>
@@ -8,5 +21,6 @@
         <field name="print_report_name">'Package Labels - %s' % (object.name)</field>
         <field name="binding_model_id" ref="stock.model_stock_picking"/>
         <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="hlv_pack_sequence.paperformat_package_label_80x80"/>
     </record>
 </odoo>

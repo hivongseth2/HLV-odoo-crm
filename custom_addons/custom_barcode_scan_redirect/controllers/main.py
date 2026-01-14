@@ -904,6 +904,27 @@ class CustomBarcodeScanController(http.Controller):
             _logger.exception("PRINT_LABEL error")
             return {"error": str(e)}
 
+    @http.route('/pack_scan/print_label_80x80', type='json', auth='user', csrf=False)
+    def print_label_80x80(self, **kwargs):
+        """
+        In nhãn dán cho package format 80x80
+        """
+        picking_id = kwargs.get("picking_id")
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        try:
+            return {
+                "success": True,
+                "report_url": f"/report/pdf/hlv_pack_sequence.report_package_label_document/{picking_id}",
+                "message": "✅ Đang chuẩn bị in nhãn 80x80..."
+            }
+        except Exception as e:
+            _logger.exception("PRINT_LABEL_80X80 error")
+            return {"error": str(e)}
+
     # ===================== PACKAGE EDIT MANAGEMENT =====================
     @http.route('/pack_scan/get_package_details', type='json', auth='user', csrf=False)
     def get_package_details(self, **kwargs):
