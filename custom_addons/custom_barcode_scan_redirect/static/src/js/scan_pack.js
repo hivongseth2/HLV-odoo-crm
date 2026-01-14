@@ -197,6 +197,10 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
+    // [FIX] Priority Logic: Active (Partial) > Empty > First
+    let activeMatchId = null;
+    let emptyMatchId = null;
+
     for (const el of elements) {
       // Changed: Support done-input or fallback to .done
       const input = el.querySelector(".done-input");
@@ -208,12 +212,21 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const required = parseFloat(requiredEl?.innerText || 0);
 
-      // Ưu tiên dòng chưa hoàn thành
-      if (done < required) {
-        return el.dataset.lineId;
+      // Prioritize "Active" (Partially Full) lines
+      if (done > 0 && done < required) {
+        return el.dataset.lineId; // Priority 1: Return immediately
+      }
+
+      // Store "Empty" line as fallback
+      if (done === 0 && done < required && !emptyMatchId) {
+        emptyMatchId = el.dataset.lineId;
       }
     }
 
+    // Priority 2: Empty Line
+    if (emptyMatchId) return emptyMatchId;
+
+    // Priority 3: Fallback to first line (even if full, usually implies overflow)
     if (elements.length > 0) return elements[0].dataset.lineId;
 
     return null;
