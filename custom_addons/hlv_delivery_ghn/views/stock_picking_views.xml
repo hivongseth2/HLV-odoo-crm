@@ -24,13 +24,16 @@
                             <field name="ghn_total_fee"/>
                             <field name="ghn_expected_delivery_time"/>
                         </group>
+                        <!-- 
                         <group string="Cấu hình gửi hàng">
                             <field name="ghn_payment_type_id"/>
                             <field name="ghn_required_note"/>
                             <field name="ghn_service_id"/>
                             <field name="ghn_service_type_id"/>
                         </group>
+                         -->
                     </group>
+                    <!-- 
                     <group>
                         <group string="Địa chỉ nhận (GHN)">
                             <field name="ghn_receiver_province_id" options="{'no_create': True}"/>
@@ -43,6 +46,7 @@
                             <field name="ghn_shipping_notes"/>
                         </group>
                     </group>
+                     -->
                     <group string="Hành trình vận đơn">
                         <field name="ghn_tracking_timeline" nolabel="1"/>
                     </group>
