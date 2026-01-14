@@ -50,28 +50,28 @@ class StockPicking(models.Model):
     def _get_ghn_status_map(self):
         """Map GHN status code to Vietnamese description."""
         return {
-            'ready_to_pick': 'Mới tạo đơn',
-            'picking': 'Nhân viên đang lấy hàng',
-            'cancel': 'Hủy đơn hàng',
-            'money_collect_picking': 'Đang thu tiền người gửi',
-            'picked': 'Nhân viên đã lấy hàng',
-            'storing': 'Hàng đang nằm ở kho',
-            'transporting': 'Đang luân chuyển hàng',
+            'ready_to_pick': 'Chờ lấy hàng',
+            'picking': 'Đang lấy hàng',
+            'cancel': 'Đơn hủy',
+            'money_collect_picking': 'Đang tương tác với người gửi',
+            'picked': 'Lấy hàng thành công',
+            'storing': 'Nhập kho',
+            'transporting': 'Đang trung chuyển',
             'sorting': 'Đang phân loại',
-            'delivering': 'Nhân viên đang giao cho khách',
-            'money_collect_delivering': 'Nhân viên đang thu tiền người nhận',
+            'delivering': 'Đang giao hàng',
+            'money_collect_delivering': 'Đang tương tác với người nhận',
             'delivered': 'Giao hàng thành công',
-            'delivery_fail': 'Giao hàng thất bại',
-            'waiting_to_return': 'Chờ trả hàng',
-            'return': 'Trả hàng',
-            'return_transporting': 'Đang luân chuyển hàng trả',
-            'return_sorting': 'Đang phân loại hàng trả',
-            'returning': 'Nhân viên đang đi trả hàng',
-            'return_fail': 'Trả hàng thất bại',
-            'returned': 'Nhân viên trả hàng thành công',
+            'delivery_fail': 'Giao hàng không thành công',
+            'waiting_to_return': 'Chờ xác nhận giao lại',
+            'return': 'Chuyển hoàn',
+            'return_transporting': 'Đang trung chuyển hàng hoàn',
+            'return_sorting': 'Đang phân loại hàng hoàn',
+            'returning': 'Đang hoàn hàng',
+            'return_fail': 'Hoàn hàng không thành công',
+            'returned': 'Hoàn hàng thành công',
             'exception': 'Đơn hàng ngoại lệ',
-            'damage': 'Hàng bị hư hỏng',
-            'lost': 'Hàng bị mất'
+            'damage': 'Đơn hàng bị hư hỏng',
+            'lost': 'Đơn hàng thất lạc'
         }
 
     @api.depends('ghn_tracking_ids')
@@ -171,8 +171,99 @@ class StockPicking(models.Model):
         return int(total_weight), math.ceil(final_l), math.ceil(final_w), math.ceil(final_h)
 
     def action_ghn_auto_fill_info(self):
-        """Guess GHN locations and calculate dimensions based on Odoo data."""
+        """
+        - If Order Code exists: Sync status, fees, timeline from GHN API.
+        - If No Order Code: Guess locations and calculate dimensions from Odoo data.
+        """
         self.ensure_one()
+        
+        # --- CASE 1: Sync Live Data from GHN ---
+        if self.ghn_order_code:
+            company = self.company_id or self.env.company
+            client = GHNApiUtils(
+                token=company.ghn_api_token,
+                shop_id=company.ghn_shop_id,
+                environment=company.ghn_environment
+            )
+            result = client.get_order_detail(self.ghn_order_code)
+            
+            if result.get("success"):
+                data = result.get("data", {})
+                if not data: return True
+                
+                vals = {}
+                if data.get("status"):
+                    vals["ghn_order_status"] = data.get("status")
+                if data.get("total_fee"):
+                    vals["ghn_total_fee"] = data.get("total_fee")
+                if data.get("cod_amount"):
+                    vals["ghn_cod_amount"] = data.get("cod_amount")
+                
+                expected_time = data.get("expected_delivery_time")
+                if expected_time and isinstance(expected_time, str):
+                    try:
+                        expected_time = expected_time.replace('T', ' ').replace('Z', '')
+                        vals["ghn_expected_delivery_time"] = expected_time
+                    except: pass
+                
+                # Update fields
+                if vals:
+                    self.write(vals)
+                
+                # Sync Timeline/Logs
+                logs = data.get("log") or []
+                if logs:
+                    # Clear old logs to avoid duplicates or merge? 
+                    # Re-creating is safer to ensure order/updates. 
+                    # But if we rely on webhook, we might duplicate. 
+                    # Strategy: Check if log exists by timestamp + status, formatted safely.
+                    
+                    TrackingModel = self.env['ghn.tracking.log']
+                    status_map = self._get_ghn_status_map()
+                    
+                    for l in logs:
+                        status_code = l.get("status")
+                        updated_date = l.get("updated_date") # "2021-11-11T03:52:50.158Z"
+                        
+                        log_time = fields.Datetime.now()
+                        if updated_date:
+                            try:
+                                t_str = updated_date.replace('T', ' ').replace('Z', '').split('.')[0]
+                                log_time = fields.Datetime.from_string(t_str)
+                            except: pass
+                            
+                        # Check exist
+                        exist = TrackingModel.search([
+                            ('picking_id', '=', self.id),
+                            ('status_code', '=', status_code),
+                            ('time_log', '=', log_time)
+                        ], limit=1)
+                        
+                        if not exist:
+                            status_vn = status_map.get(status_code, status_code)
+                            TrackingModel.create({
+                                'picking_id': self.id,
+                                'status_code': status_code,
+                                'status_name': status_vn,
+                                'description': l.get("payment_type_ids") or "Cập nhật từ hệ thống GHN", # Log info is sparse in API usually
+                                'time_log': log_time
+                            })
+                            
+                self.message_post(body="Đã đồng bộ thông tin mới nhất từ GHN.")
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Thành công',
+                        'message': 'Đã cập nhật thông tin đơn hàng GHN.',
+                        'type': 'success',
+                        'sticky': False,
+                    }
+                }
+            else:
+                 raise ValidationError(f"Không lấy được thông tin từ GHN: {result.get('error')}")
+
+        # --- CASE 2: Guess Local Data (If not yet created) ---
         partner = self.partner_id
         if not partner:
             return
@@ -194,16 +285,9 @@ class StockPicking(models.Model):
             if district:
                 self.ghn_receiver_district_id = district
 
-        # 3. Try to match Ward
-        # Note: Ward is harder because it's rarely a separate field in standard Odoo.
-        # We might skip auto-matching ward or search in street/street2 if needed.
-
-        # 4. Auto-calculate dimensions and weight
+        # 3. Auto-calculate dimensions and weight (Refresh)
         weight, l, w, h = self._calculate_ghn_dimensions()
 
-        # Set values to picking fields (assuming we might want to store them or just use them)
-        # For now, let's just trigger the dimension logic inside action_open_ghn_fee_wizard logic
-        # and ensure COD matches order total if 0
         if self.ghn_cod_amount == 0 and self.sale_id:
             self.ghn_cod_amount = int(self.sale_id.amount_total)
             
