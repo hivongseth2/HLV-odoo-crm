@@ -341,7 +341,15 @@ document.addEventListener("DOMContentLoaded", function () {
               break;
             }
 
-            const mMax = parseFloat(c.dataset.maxQty || 0);
+            let mMax = parseFloat(c.dataset.maxQty || 0);
+
+            // [FIX] Fallback read from UI if dataset is missing/zero
+            if (mMax === 0) {
+              const doneInp = c.querySelector('.done-input');
+              const reqEl = doneInp ? doneInp.nextElementSibling.nextElementSibling : c.querySelectorAll("span")[1];
+              if (reqEl) mMax = parseFloat(reqEl.innerText.replace(',', '.') || 0);
+            }
+
             const mPacked = parseFloat(c.dataset.packedQty || 0);
             const mDoneInput = c.querySelector('.done-input');
             const mDone = parseFloat(mDoneInput ? mDoneInput.value : (c.querySelector('.done')?.innerText || 0));
