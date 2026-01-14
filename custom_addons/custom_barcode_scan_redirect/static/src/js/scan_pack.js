@@ -339,25 +339,20 @@ document.addEventListener("DOMContentLoaded", function () {
           // SMART HEURISTIC: Check if we can UPDATE an existing row instead of cloning.
           // This handles cases where backend switches line_id for the SAME move (e.g. partial packing)
           // vs creating a truly NEW move.
-          let match = null;
-          const newMax = parseFloat(item.required_qty || 0);
-          const newDone = parseFloat(item.done_qty || 0);
+          // RELAXED HEURISTIC: Prioritize updating the "Last Active Row" for this product.
+          // Strategy:
+          // 1. Find any row that is NOT FULL (Done < Max). This is the most likely candidate for continuation.
+          // 2. If all are full (or Over-Scanning), default to the LAST row (chronologically newest).
+          let match = candidates.find(c => {
+            const mMax = parseFloat(c.dataset.maxQty || 0);
+            const mDoneInput = c.querySelector('.done-input');
+            const mDone = parseFloat(mDoneInput ? mDoneInput.value : (c.querySelector('.done')?.innerText || 0));
+            return mDone < mMax;
+          });
 
-          for (const c of candidates) {
-            const oldMax = parseFloat(c.dataset.maxQty || 0);
-            const oldDoneInput = c.querySelector('.done-input');
-            const oldDone = parseFloat(oldDoneInput ? oldDoneInput.value : (c.querySelector('.done')?.innerText || 0));
-
-            // 1. Demand must match (otherwise it's a different move size)
-            if (Math.abs(oldMax - newMax) < 0.01) {
-              // 2. Logic:
-              // - If old row is NOT full (e.g. 6/10), we assume this new line (e.g. 9/10) is continuation.
-              // - If newDone > oldDone (e.g. 11/10 vs 10/10), it's over-scan continuation.
-              if (oldDone < oldMax || newDone > oldDone) {
-                match = c;
-                break;
-              }
-            }
+          // Fallback: If no "open" row found, update the last one (e.g. over-scanning or full->new split)
+          if (!match && candidates.length > 0) {
+            match = candidates[candidates.length - 1];
           }
 
           if (match) {
