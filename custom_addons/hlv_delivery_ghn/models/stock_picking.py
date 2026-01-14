@@ -129,7 +129,7 @@ class StockPicking(models.Model):
                     html += f'''
                     <div style="position: relative; margin-bottom: 20px;">
                         <div style="position: absolute; left: -26px; top: 0; width: 12px; height: 12px; border-radius: 50%; background: {bg_dot}; border: 2px solid white; box-shadow: 0 0 0 1px {bg_dot};"></div>
-                        <div style="font-weight: bold; color: {color}">{status_vn} {badge_html} <span style="font-weight: normal; color: #666; font-size: 0.9em;">- {time_str}</span></div>
+                        <div style="font-weight: bold; color: {color}">{status_vn} <span style="font-weight: normal; color: #666; font-size: 0.9em;">- {time_str}</span> {badge_html}</div>
                         <div style="font-size: 0.9em; color: #555; margin-top: 4px;">{desc}</div>
                     </div>
                     '''
