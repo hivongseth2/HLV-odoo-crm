@@ -81,35 +81,65 @@ class StockPicking(models.Model):
             if not record.ghn_tracking_ids:
                 html = '<div class="text-muted">Chưa có thông tin hành trình.</div>'
             else:
-                user_tz = self.env.user.tz or 'Asia/Ho_Chi_Minh'
                 import pytz
-                for log in record.ghn_tracking_ids:
+                user_tz = self.env.user.tz or 'Asia/Ho_Chi_Minh'
+                
+                logs = record.ghn_tracking_ids
+                for index, log in enumerate(logs):
                     time_str = ""
                     if log.time_log:
-                        # Convert UTC to User TZ (or VN default)
                         try:
                             utc = pytz.UTC
                             dest_tz = pytz.timezone(user_tz)
-                            # time_log is naive UTC in Odoo
                             local_dt = utc.localize(log.time_log).astimezone(dest_tz)
                             time_str = local_dt.strftime("%d/%m/%Y %H:%M")
                         except:
-                            time_str = log.time_log.strftime("%d/%m/%Y %H:%M") # Fallback
+                            time_str = log.time_log.strftime("%d/%m/%Y %H:%M")
+                    
                     status_vn = log.status_name or log.status_code
                     desc = log.description or ""
                     
                     # Color based on status keyword
-                    color = "#17a2b8" # Info blue
-                    if 'delivered' in (log.status_code or ''): color = "#28a745" # Success
-                    elif 'cancel' in (log.status_code or ''): color = "#dc3545" # Danger
-                    elif 'fail' in (log.status_code or ''): color = "#dc3545"
-                    elif 'pick' in (log.status_code or ''): color = "#ffc107" # Warning
+                    color = "#0056b3"
+                    bg_dot = "#0d6efd" 
+                    pulse_rgba = "rgba(13, 110, 253, 0.7)"
                     
+                    if 'delivered' in (log.status_code or ''): 
+                        color = "#0f5132"
+                        bg_dot = "#198754"
+                        pulse_rgba = "rgba(25, 135, 84, 0.7)"
+                    elif 'cancel' in (log.status_code or ''): 
+                        color = "#842029"
+                        bg_dot = "#dc3545"
+                        pulse_rgba = "rgba(220, 53, 69, 0.7)"
+                    elif 'fail' in (log.status_code or ''): 
+                        color = "#842029" 
+                        bg_dot = "#dc3545"
+                        pulse_rgba = "rgba(220, 53, 69, 0.7)"
+                    elif 'pick' in (log.status_code or ''): 
+                        color = "#664d03"
+                        bg_dot = "#ffc107"
+                        pulse_rgba = "rgba(255, 193, 7, 0.7)"
+                    
+                    # Animation for latest item
+                    anim_style = ""
+                    if index == 0:
+                        anim_style = f"animation: ghn_pulse_{index} 2s infinite;"
+                        html += f'''
+                        <style>
+                            @keyframes ghn_pulse_{index} {{
+                                0% {{ box-shadow: 0 0 0 0 {pulse_rgba}; }}
+                                70% {{ box-shadow: 0 0 0 6px {pulse_rgba.replace('0.7', '0')}; }}
+                                100% {{ box-shadow: 0 0 0 0 {pulse_rgba.replace('0.7', '0')}; }}
+                            }}
+                        </style>
+                        '''
+
                     html += f'''
                     <div style="position: relative; margin-bottom: 20px;">
-                        <div style="position: absolute; left: -26px; top: 0; width: 12px; height: 12px; border-radius: 50%; background: {color}; border: 2px solid white; box-shadow: 0 0 0 1px {color};"></div>
+                        <div style="position: absolute; left: -26px; top: 0; width: 12px; height: 12px; border-radius: 50%; background: {bg_dot}; border: 2px solid white; box-shadow: 0 0 0 1px {bg_dot}; {anim_style}"></div>
                         <div style="font-weight: bold; color: {color}">{status_vn} <span style="font-weight: normal; color: #666; font-size: 0.9em;">- {time_str}</span></div>
-                        <div style="font-size: 0.9em; color: #333; margin-top: 4px;">{desc}</div>
+                        <div style="font-size: 0.9em; color: #555; margin-top: 4px;">{desc}</div>
                     </div>
                     '''
             
