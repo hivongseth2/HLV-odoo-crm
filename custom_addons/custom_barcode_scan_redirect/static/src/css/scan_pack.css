@@ -44,6 +44,7 @@
 
 /* Topbar action buttons - original design */
 #btnPrintLabel,
+#btnPrintLabel80x80,
 #btnPartialPack,
 #btnDriveSwitch {
   padding: 10px 20px;
@@ -61,6 +62,7 @@
 }
 
 #btnPrintLabel:hover,
+#btnPrintLabel80x80:hover,
 #btnPartialPack:hover,
 #btnDriveSwitch:hover {
   transform: translateY(-1px);
@@ -70,6 +72,11 @@
 
 #btnPrintLabel {
   background: #0b69d7;
+  color: #fff;
+}
+
+#btnPrintLabel80x80 {
+  background: #3c2bb3;
   color: #fff;
 }
 
