@@ -455,6 +455,8 @@ class CustomBarcodeScanController(http.Controller):
                 # Nếu không, ưu tiên move còn demand (sẽ tạo loose line mới)
                 
                 found_target = False
+                candidate_open_move = None
+                fallback_full_move = None
                 
                 for m in moves:
                      # Tính current done cho move này
@@ -470,32 +472,41 @@ class CustomBarcodeScanController(http.Controller):
                              found_target = True
                              break
                          else:
-                             # Move còn chỗ nhưng chưa có loose line -> Sẽ tạo mới, nhưng lưu lại selected_move để dùng sau
-                             if not selected_move:
-                                 selected_move = m
+                             # Move còn chỗ nhưng chưa có loose line -> Đây là ứng viên sáng giá số 2 (sau loose line có sẵn)
+                             if not candidate_open_move:
+                                 candidate_open_move = m
+                     else:
+                         # Move đã full -> Lưu làm fallback (nếu user muốn scan dư)
+                         if not fallback_full_move:
+                             fallback_full_move = m
                 
-                # Nếu chưa tìm thấy target_ml nhưng có selected_move (move còn demand) -> Tạo loose line mới cho move đó
-                if not found_target and selected_move:
-                    _logger.info(f"Move {selected_move.id} has remaining but no loose line. Creating new...")
-                    try:
-                         # Tạo line từ move (selected_move)
-                         target_ml = request.env['stock.move.line'].sudo().create({
-                             'picking_id': picking.id,
-                             'move_id': selected_move.id,
-                             'product_id': selected_move.product_id.id,
-                             'product_uom_id': selected_move.product_uom.id,
-                             'location_id': selected_move.location_id.id,
-                             'location_dest_id': selected_move.location_dest_id.id,
-                             'qty_done': 0,
-                         })
-                         _logger.info(f"Created new from scratch for Move {selected_move.id}: {target_ml.id}")
-                         found_target = True
-                    except Exception as e:
-                         _logger.error(f"Failed to create move line: {e}")
-                         return {"error": "❌ Lỗi hệ thống: Không thể tạo dòng sản phẩm mới."}
+                # Quyết định chọn target_ml từ các candidate nếu chưa tìm thấy loose line có sẵn
+                if not found_target:
+                    # Ưu tiên 1: Move còn chỗ (nhưng chưa có line lẻ)
+                     selected_move_to_create = candidate_open_move or fallback_full_move
+                     
+                     if selected_move_to_create:
+                        _logger.info(f"Creating new line for Move {selected_move_to_create.id} (Open: {bool(candidate_open_move)})")
+                        try:
+                             # Tạo line từ move selected_move_to_create
+                             target_ml = request.env['stock.move.line'].sudo().create({
+                                 'picking_id': picking.id,
+                                 'move_id': selected_move_to_create.id,
+                                 'product_id': selected_move_to_create.product_id.id,
+                                 'product_uom_id': selected_move_to_create.product_uom.id,
+                                 'location_id': selected_move_to_create.location_id.id,
+                                 'location_dest_id': selected_move_to_create.location_dest_id.id,
+                                 'qty_done': 0,
+                             })
+                             # [Add] found_target = True để logic bên dưới biết là đã có
+                             found_target = True
+                             _logger.info(f"Created new from scratch for Move {selected_move_to_create.id}: {target_ml.id}")
+                        except Exception as e:
+                             _logger.error(f"Failed to create move line: {e}")
+                             return {"error": "❌ Lỗi hệ thống: Không thể tạo dòng sản phẩm mới."}
 
-                # Fallback: Nếu tất cả moves đều đã FULL, nhưng user vẫn scan tiếp (Over-scan)
-                # Thì lấy loose line của move cuối cùng hoặc tạo mới cho move cuối
+                # Fallback cuối cùng: Nếu tất cả moves đều đã FULL, nhưng user vẫn scan tiếp (Over-scan)
+                # Và bước trên không tạo được (selected_move_to_create rỗng - trường hợp hy hữu nếu moves rỗng?)
                 if not found_target:
                     _logger.info("All moves are full. Fallback to over-scan logic implies picking ANY loose line or creating one.")
                     # Lấy đại loose line bất kỳ
