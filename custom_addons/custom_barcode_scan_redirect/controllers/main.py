@@ -436,9 +436,17 @@ class CustomBarcodeScanController(http.Controller):
             is_packed = target_ml.sudo().result_package_id
             _logger.info(f"Target Line {target_ml.id} Check. Packed: {is_packed.id if is_packed else 'False'}")
             
-            if delta > 0 and is_packed:
-                _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}). Switching to find a loose line.")
-                target_ml = None # Force finding a loose line
+            if delta > 0:
+                if is_packed:
+                    _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}). Switching to find a loose line.")
+                    target_ml = None # Force finding a loose line
+                else:
+                    # [FIX] Check if move is full. If so, don't use this line, find another move.
+                    mv = target_ml.move_id
+                    mv_done = sum(l.qty_done for l in mv.move_line_ids)
+                    if mv_done >= mv.product_uom_qty:
+                        _logger.info(f"Target line {target_ml.id} belongs to FULL Move {mv.id} ({mv_done}/{mv.product_uom_qty}). Switching to find another move...")
+                        target_ml = None
 
         # Nếu chưa xác định được target_ml (do line_id null hoặc sai hoặc đã bị packed), tự động tìm dòng phù hợp
         if not target_ml:
