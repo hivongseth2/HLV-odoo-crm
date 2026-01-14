@@ -121,24 +121,15 @@ class StockPicking(models.Model):
                         bg_dot = "#ffc107"
                         pulse_rgba = "rgba(255, 193, 7, 0.7)"
                     
-                    # Animation for latest item
-                    anim_style = ""
+                    # Text badge for latest item (first in list)
+                    badge_html = ""
                     if index == 0:
-                        anim_style = f"animation: ghn_pulse_{index} 2s infinite;"
-                        html += f'''
-                        <style>
-                            @keyframes ghn_pulse_{index} {{
-                                0% {{ box-shadow: 0 0 0 0 {pulse_rgba}; }}
-                                70% {{ box-shadow: 0 0 0 6px {pulse_rgba.replace('0.7', '0')}; }}
-                                100% {{ box-shadow: 0 0 0 0 {pulse_rgba.replace('0.7', '0')}; }}
-                            }}
-                        </style>
-                        '''
+                        badge_html = f'<span style="color: #adb5bd; font-size: 0.8em; margin-left: 8px; font-weight: normal; font-style: italic;">(Hiện tại)</span>'
 
                     html += f'''
                     <div style="position: relative; margin-bottom: 20px;">
-                        <div style="position: absolute; left: -26px; top: 0; width: 12px; height: 12px; border-radius: 50%; background: {bg_dot}; border: 2px solid white; box-shadow: 0 0 0 1px {bg_dot}; {anim_style}"></div>
-                        <div style="font-weight: bold; color: {color}">{status_vn} <span style="font-weight: normal; color: #666; font-size: 0.9em;">- {time_str}</span></div>
+                        <div style="position: absolute; left: -26px; top: 0; width: 12px; height: 12px; border-radius: 50%; background: {bg_dot}; border: 2px solid white; box-shadow: 0 0 0 1px {bg_dot};"></div>
+                        <div style="font-weight: bold; color: {color}">{status_vn} {badge_html} <span style="font-weight: normal; color: #666; font-size: 0.9em;">- {time_str}</span></div>
                         <div style="font-size: 0.9em; color: #555; margin-top: 4px;">{desc}</div>
                     </div>
                     '''
