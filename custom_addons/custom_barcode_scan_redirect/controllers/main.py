@@ -445,57 +445,85 @@ class CustomBarcodeScanController(http.Controller):
             # 2. Nếu không có dòng loose nào -> TẠO DÒNG MỚI (Loose)
             
             if delta > 0:
-                # 1. Tìm dòng loose có sẵn
-                # Tìm tất cả loose lines của sản phẩm này
-                product_movies = moves.mapped('product_id')
-                _logger.info(f"Searching loose line for product {product_movies.ids} in picking {picking.id}")
+                # 1. Tìm move còn chỗ trống (remaining demand > 0)
+                # Sắp xếp moves: ưu tiên move có loose line trước, rồi đến move chưa hoàn thành
+                # Tuy nhiên đơn giản nhất là loop qua moves, tính toán remaining.
+                
+                selected_move = None
+                
+                # Chiến lược: Ưu tiên move có loose line và còn demand
+                # Nếu không, ưu tiên move còn demand (sẽ tạo loose line mới)
+                
+                found_target = False
+                
+                for m in moves:
+                     # Tính current done cho move này
+                     current_done = sum(ml.qty_done for ml in m.move_line_ids)
+                     remaining = m.product_uom_qty - current_done
+                     
+                     if remaining > 0:
+                         # Move này còn chỗ -> Kiểm tra xem có loose line không
+                         loose_line = m.move_line_ids.filtered(lambda l: not l.result_package_id)
+                         if loose_line:
+                             target_ml = loose_line[0] # Lấy loose line hiện có
+                             _logger.info(f"Found existing loose line in Move {m.id} (Remain: {remaining}): {target_ml.id}")
+                             found_target = True
+                             break
+                         else:
+                             # Move còn chỗ nhưng chưa có loose line -> Sẽ tạo mới, nhưng lưu lại selected_move để dùng sau
+                             if not selected_move:
+                                 selected_move = m
+                
+                # Nếu chưa tìm thấy target_ml nhưng có selected_move (move còn demand) -> Tạo loose line mới cho move đó
+                if not found_target and selected_move:
+                    _logger.info(f"Move {selected_move.id} has remaining but no loose line. Creating new...")
+                    try:
+                         # Tạo line từ move (selected_move)
+                         target_ml = request.env['stock.move.line'].sudo().create({
+                             'picking_id': picking.id,
+                             'move_id': selected_move.id,
+                             'product_id': selected_move.product_id.id,
+                             'product_uom_id': selected_move.product_uom.id,
+                             'location_id': selected_move.location_id.id,
+                             'location_dest_id': selected_move.location_dest_id.id,
+                             'qty_done': 0,
+                         })
+                         _logger.info(f"Created new from scratch for Move {selected_move.id}: {target_ml.id}")
+                         found_target = True
+                    except Exception as e:
+                         _logger.error(f"Failed to create move line: {e}")
+                         return {"error": "❌ Lỗi hệ thống: Không thể tạo dòng sản phẩm mới."}
 
-                loose_candidates = request.env['stock.move.line'].sudo().search([
-                    ('picking_id', '=', picking.id),
-                    ('product_id', 'in', product_movies.ids),
-                    ('result_package_id', '=', False)
-                ], limit=1)
-
-                if loose_candidates:
-                    target_ml = loose_candidates[0]
-                    _logger.info(f"Found existing loose line: {target_ml.id}")
-                else:
-                    _logger.info("No loose line found. Creating new...")
-                    sample_ml = None
-                    # Try to find a sample from existing moves
-                    for m in moves:
-                        if m.move_line_ids:
-                            sample_ml = m.move_line_ids[0]
-                            break
+                # Fallback: Nếu tất cả moves đều đã FULL, nhưng user vẫn scan tiếp (Over-scan)
+                # Thì lấy loose line của move cuối cùng hoặc tạo mới cho move cuối
+                if not found_target:
+                    _logger.info("All moves are full. Fallback to over-scan logic implies picking ANY loose line or creating one.")
+                    # Lấy đại loose line bất kỳ
+                    loose_candidates = request.env['stock.move.line'].sudo().search([
+                        ('picking_id', '=', picking.id),
+                        ('product_id', 'in', moves.mapped('product_id').ids),
+                        ('result_package_id', '=', False)
+                    ], limit=1)
                     
-                    if sample_ml:
-                        # Copy ra dòng mới, reset qty_done = 0, package = False
-                        target_ml = sample_ml.copy({
-                            'qty_done': 0,
-                            'result_package_id': False,
-                        })
-                        _logger.info(f"Created new from sample: {target_ml.id}")
-                    else:
-                         # Trường hợp move chưa có line nào? (Ít gặp vì thường Odoo tạo sẵn)
-                         # Tạo line từ move
-                        if moves:
-                             _logger.info("Creating from moves[0]...")
-                             try:
-                                 target_ml = request.env['stock.move.line'].sudo().create({
-                                     'picking_id': picking.id,
-                                     'move_id': moves[0].id,
-                                     'product_id': moves[0].product_id.id,
-                                     'product_uom_id': moves[0].product_uom.id,
-                                     'location_id': moves[0].location_id.id,
-                                     'location_dest_id': moves[0].location_dest_id.id,
-                                     'qty_done': 0,
-                                 })
-                                 _logger.info(f"Created new from scratch: {target_ml.id}")
-                             except Exception as e:
-                                 _logger.error(f"Failed to create move line: {e}")
-                                 return {"error": "❌ Lỗi hệ thống: Không thể tạo dòng sản phẩm mới."}
-                        else:
-                             return {"error": "❌ Không tìm thấy move phù hợp."}
+                    if loose_candidates:
+                        target_ml = loose_candidates[0]
+                        _logger.info(f"Fallback: Found generic loose line: {target_ml.id}")
+                    elif moves:
+                         # Tạo bừa cho move đầu tiên
+                         m = moves[0]
+                         try:
+                             target_ml = request.env['stock.move.line'].sudo().create({
+                                 'picking_id': picking.id,
+                                 'move_id': m.id,
+                                 'product_id': m.product_id.id,
+                                 'product_uom_id': m.product_uom.id,
+                                 'location_id': m.location_id.id,
+                                 'location_dest_id': m.location_dest_id.id,
+                                 'qty_done': 0,
+                             })
+                             _logger.info(f"Fallback: Created new line for Move {m.id}: {target_ml.id}")
+                         except:
+                             return {"error": "❌ Cannot create fallback line."}
 
             # Nếu đang trừ: tìm dòng có qty_done > 0
             elif delta < 0:
