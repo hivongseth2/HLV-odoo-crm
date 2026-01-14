@@ -330,15 +330,74 @@ document.addEventListener("DOMContentLoaded", function () {
         // cố gắng tìm theo line_id
         let el = document.querySelector(`[data-line-id="${item.line_id}"]`);
 
-        // [FIX] If server returns a line_id that is NOT in the DOM, it means a new line was created.
-        // We MUST reload to render this new line correctly.
-        // DO NOT fallback to searching by barcode, as it will overwrite existing lines.
-        if (!el) {
-          console.warn(`[SCAN] New line ${item.line_id} created by server. Reloading to sync...`);
-          toast.info("Đã tạo dòng mới. Đang tải lại dữ liệu...", { ms: 1500 });
-          setTimeout(() => window.location.reload(), 500);
-          return;
+        // [FIX] If server returns a line_id that is NOT in the DOM, we must create it dynamically.
+        // We clone an existing line of the same product to use as a template.
+        if (!el && item.barcode) {
+          const code = normalizeCode(item.barcode).toUpperCase();
+          // Find any existing line with same barcode to copy style/structure
+          const templateEl = [...document.querySelectorAll('#product_list li.product-item')]
+            .find(e => normalizeCode(e.dataset.barcode).toUpperCase() === code);
+
+          if (templateEl) {
+            console.log(`[SCAN] Creating new DOM element for line ${item.line_id} from template.`);
+
+            // 1. Clone
+            el = templateEl.cloneNode(true);
+
+            // 2. Update Attributes
+            el.setAttribute('data-line-id', item.line_id);
+            el.dataset.lineId = String(item.line_id);
+
+            // Backend returns 'required_qty' for the specific move
+            const maxQty = item.required_qty || 0;
+            el.setAttribute('data-max-qty', maxQty);
+            el.dataset.maxQty = maxQty;
+
+            el.setAttribute('data-packed-qty', item.packed_qty || 0);
+            el.dataset.packedQty = item.packed_qty || 0;
+
+            // 3. Update Visuals
+            // Reset input/done value
+            const input = el.querySelector(".done-input");
+            if (input) {
+              input.value = 0;
+              input.dataset.currentQty = 0;
+              input.dataset.lineId = item.line_id;
+              input.dataset.maxQty = maxQty;
+              input.readOnly = false;
+              // IMPORTANT: Remove any "readonly" attribute if it was copied from a full line
+              input.removeAttribute('readonly');
+            } else {
+              const doneSpan = el.querySelector(".done");
+              if (doneSpan) doneSpan.innerText = "0";
+            }
+
+            // Update Required Qty Label (format: / 10.0)
+            // Structure usually: input -> span(/) -> span(qty)
+            const qtyDisplayEl = input ? input.nextElementSibling.nextElementSibling : el.querySelectorAll("span")[1];
+            if (qtyDisplayEl) {
+              qtyDisplayEl.innerText = maxQty;
+            }
+
+            // Remove "completed" class if present
+            el.classList.remove("completed");
+            el.style.backgroundColor = "transparent"; // reset highlight
+
+            // 4. Append to list
+            const list = document.getElementById('product_list');
+            if (list) list.appendChild(el);
+
+            toast.info("Đã thêm dòng sản phẩm mới.", { ms: 1000 });
+
+            // Scroll to new element
+            setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
+
+          } else {
+            console.warn("Cannot find template to clone for new line.");
+          }
         }
+
+        if (!el) { console.warn('No DOM line for', item); return; }
 
         const requiredEl = el.querySelectorAll('span')[1];
         const required = parseFloat((requiredEl?.innerText || '0').replace(',', '.')) || 0;
