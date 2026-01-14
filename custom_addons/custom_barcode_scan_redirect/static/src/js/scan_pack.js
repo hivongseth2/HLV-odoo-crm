@@ -339,13 +339,14 @@ document.addEventListener("DOMContentLoaded", function () {
           // SMART HEURISTIC: Check if we can UPDATE an existing row instead of cloning.
           // This handles cases where backend switches line_id for the SAME move (e.g. partial packing)
           // vs creating a truly NEW move.
-          // STRICT ACTIVE HEURISTIC:
-          // We ONLY update a row if it is explicitly "Active" (In-Progress).
-          // Active = (0 < Done < Max) AND (Not Packed).
-          // In ALL other cases (Empty, Full, Packed), we create a NEW row to avoid confusion.
+          // UNPACKED PRIORITY HEURISTIC:
+          // 1. Priority 1: "Active Unpacked" (0 < Done < Max, Not Packed).
+          // 2. Priority 2: "Empty Unpacked" (Done == 0, Not Packed).
+          // 3. Fallback: Clone new line (if all existing are full/packed).
 
           const newMax = parseFloat(item.required_qty || 0);
           let activeMatch = null;
+          let emptyMatch = null;
 
           for (const c of candidates) {
             const mMax = parseFloat(c.dataset.maxQty || 0);
@@ -353,16 +354,18 @@ document.addEventListener("DOMContentLoaded", function () {
             const mDoneInput = c.querySelector('.done-input');
             const mDone = parseFloat(mDoneInput ? mDoneInput.value : (c.querySelector('.done')?.innerText || 0));
 
-            // Strict Check: Must be partially full and NOT packed.
-            if (mDone > 0 && mDone < mMax && mPacked === 0) {
-              activeMatch = c;
-              break; // Found the one true active line.
+            // Strict Check: Must be UNPACKED.
+            if (mPacked === 0) {
+              if (mDone > 0 && mDone < mMax && !activeMatch) {
+                activeMatch = c; // Found Active Candidate
+              } else if (mDone === 0 && !emptyMatch) {
+                emptyMatch = c;  // Found Empty Candidate
+              }
             }
           }
 
-          // Only update if we found a strictly active line.
-          // Otherwise, match is null -> triggers Clone below.
-          let match = activeMatch;
+          // Use Active first, then Empty. If neither, match is null -> Clone.
+          let match = activeMatch || emptyMatch;
 
           if (match) {
             // === UPDATE EXISTING ROW ===
