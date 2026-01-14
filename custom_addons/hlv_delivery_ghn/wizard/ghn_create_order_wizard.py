@@ -318,14 +318,20 @@ class GHNCreateOrderWizard(models.TransientModel):
                     expected_time = expected_time.replace('T', ' ').replace('Z', '')
                     vals["ghn_expected_delivery_time"] = expected_time
             
+            
             picking.write(vals)
             
+            # Determine order code to show
+            final_order_code = self.ghn_order_code
+            if data and data.get("order_code"):
+                final_order_code = data.get("order_code")
+
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': 'Thành công',
-                    'message': f'Đã {action_type} đơn GHN thành công! Mã đơn: {data.get("order_code")}',
+                    'message': f'Đã {action_type} đơn GHN thành công! Mã đơn: {final_order_code}',
                     'sticky': False,
                     'type': 'success',
                 }
