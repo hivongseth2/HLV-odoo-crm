@@ -342,8 +342,11 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             const mMax = parseFloat(c.dataset.maxQty || 0);
+            const mPacked = parseFloat(c.dataset.packedQty || 0);
             const mDoneInput = c.querySelector('.done-input');
             const mDone = parseFloat(mDoneInput ? mDoneInput.value : (c.querySelector('.done')?.innerText || 0));
+
+            console.log(`[DEBUG_HEURISTIC] Candidate ${c.dataset.lineId}: Done=${mDone}, Max=${mMax}, Packed=${mPacked}`);
 
             // Priority 1: Active/Partial Line (Not Full)
             if (mDone < mMax) {
