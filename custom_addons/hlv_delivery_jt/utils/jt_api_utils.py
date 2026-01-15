@@ -45,7 +45,8 @@ class JTApiUtils:
             'Content-Type': 'application/x-www-form-urlencoded',
             'apiAccount': str(self.api_account),
             'digest': digest,
-            'timestamp': str(timestamp)
+            'timestamp': str(timestamp),
+            'privateKey': self.private_key  # Required by J&T API
         }
 
         # J&T uses form-encoded body for bizContent
@@ -54,6 +55,9 @@ class JTApiUtils:
         }
 
         _logger.info("J&T API Request to %s | Account: %s", self.api_url, self.api_account)
+        _logger.info("J&T API Headers: apiAccount=%s, digest=%s, timestamp=%s, privateKey=%s...", 
+                     self.api_account, digest, timestamp, self.private_key[:8] if self.private_key else 'None')
+        _logger.info("J&T API bizContent: %s", biz_content[:500] if len(biz_content) > 500 else biz_content)
         try:
             response = requests.post(self.api_url, data=payload, headers=headers)
             if response.status_code == 200:
