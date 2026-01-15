@@ -131,7 +131,8 @@ class JTCreateOrderWizard(models.TransientModel):
         if not api_account or not private_key or not jnt_customer_code:
             raise UserError(_("Thiếu thông tin cấu hình J&T (apiAccount, privateKey, customerCode) trong System Parameters!"))
 
-        password_hashed = hashlib.md5(jnt_password_raw.encode('utf-8')).hexdigest().upper() if jnt_password_raw else ""
+        _logger.info("J&T Auth Check | Account: %s | Customer: %s | Env: %s", 
+                     api_account, jnt_customer_code, company.jt_environment)
 
         client = JTApiUtils(
             api_account=api_account,
@@ -150,8 +151,10 @@ class JTCreateOrderWizard(models.TransientModel):
 
         # J&T requires prov, city, area. Odoo has state_id, city, and maybe street2 as area.
         # This will need mapping if the address structure is different.
-        jnt_password_raw = get_param('jnt_password') or ""
-        password_hashed = hashlib.md5(jnt_password_raw.encode('utf-8')).hexdigest().upper() if jnt_password_raw else ""
+        jnt_password_raw = (get_param('jnt_password') or "").strip()
+
+        _logger.info("J&T Create Order | Account: %s | Customer: %s | Env: %s | Pass: %s***", 
+                     api_account, jnt_customer_code, company.jt_environment, jnt_password_raw[:2] if jnt_password_raw else "")
 
         def sanitize_name(name, length=40):
             return (name or "")[:length]
@@ -163,7 +166,7 @@ class JTCreateOrderWizard(models.TransientModel):
 
         biz_params = {
             "customerCode": jnt_customer_code,
-            "password": password_hashed,
+            "password": jnt_password_raw,
             "txlogisticId": self.picking_id.name,
             "orderType": str(self.order_type),
             "serviceType": str(self.service_type),
