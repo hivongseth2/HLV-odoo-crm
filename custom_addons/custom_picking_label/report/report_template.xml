@@ -7,29 +7,29 @@
                     .label-container {
                         width: 40mm;
                         height: 30mm;
-                        padding: 2px;
                         margin: 0;
-                        overflow: hidden;
+                        padding: 0;
                         page-break-inside: avoid;
                         font-family: Arial, sans-serif;
-                        font-size: 10px;
                         text-align: center;
-                        border: 1px solid black; /* Remove this if you don't want a border */
                         display: flex;
                         flex-direction: column;
-                        justify-content: center;
                         align-items: center;
+                        justify-content: center;
                     }
                     .product-name {
                         font-weight: bold;
+                        font-size: 10px;
                         max-height: 12px;
                         overflow: hidden;
                         white-space: nowrap; 
                         text-overflow: ellipsis;
-                        width: 100%;
+                        width: 95%;
+                        margin-bottom: 2px;
                     }
                     .product-code {
                         font-size: 9px;
+                        font-weight: bold;
                     }
                 </style>
                 <t t-foreach="docs" t-as="wizard">
@@ -38,9 +38,10 @@
                             <div class="product-name">
                                 <span t-field="product.name"/>
                             </div>
+                            
                             <!-- Barcode Section -->
                             <t t-if="wizard.print_type == 'barcode' and product.barcode">
-                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 600, 'height': 150, 'img_style': 'width:100%; height:12mm; margin-top:2px;'}"/>
+                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 600, 'height': 150, 'img_style': 'width:38mm; height:12mm; display:block; margin:0 auto;'}"/>
                                 <div class="product-code">
                                     <span t-field="product.barcode"/>
                                 </div>
@@ -48,7 +49,8 @@
 
                             <!-- QR Code Section -->
                             <t t-if="wizard.print_type == 'qr' and product.barcode">
-                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 100, 'height': 100, 'img_style': 'width:15mm; height:15mm; margin-top:2px;'}"/>
+                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 100, 'height': 100, 'img_style': 'width:15mm; height:15mm; display:block; margin:0 auto;'}"/>
+                                <!-- <div class="product-code"><span t-field="product.barcode"/></div> --> 
                             </t>
                             
                             <t t-if="not product.barcode">
