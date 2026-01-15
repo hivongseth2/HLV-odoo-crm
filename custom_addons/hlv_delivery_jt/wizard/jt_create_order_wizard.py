@@ -154,10 +154,10 @@ class JTCreateOrderWizard(models.TransientModel):
             "customerCode": company.jt_customer_code or "",
             "password": password_hashed,
             "txlogisticId": self.picking_id.name,
-            "orderType": int(self.order_type),
-            "serviceType": int(self.service_type),
-            "deliveryType": int(self.delivery_type),
-            "selfAddress": 1, 
+            "orderType": str(self.order_type),
+            "serviceType": str(self.service_type),
+            "deliveryType": str(self.delivery_type),
+            "selfAddress": 0, 
             "payType": self.pay_type,
             "productType": self.product_type,
             "goodsType": self.goods_type,
@@ -182,6 +182,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "length": int(max(1, self.length)),
                 "width": int(max(1, self.width)),
                 "height": int(max(1, self.height)),
+                "volume": str(int(self.length * self.width * self.height))
             },
             "isInsured": 1 if self.is_insured else 0,
             "goodsValue": str(max(1, int(self.goods_value))),
@@ -198,7 +199,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "itemName": move.product_id.name[:80],
                 "englishName": move.product_id.name[:80],
                 "number": str(int(move.product_uom_qty)),
-                "itemValue": str(int(move.product_id.list_price))
+                "itemValue": int(move.product_id.list_price)
             })
 
         _logger.info("J&T Creating Order for %s", self.picking_id.name)
