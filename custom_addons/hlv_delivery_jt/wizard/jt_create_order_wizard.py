@@ -117,7 +117,8 @@ class JTCreateOrderWizard(models.TransientModel):
         api_account = get_param('jnt_apiAccount')
         private_key = get_param('jnt_privateKey')
         jnt_customer_code = get_param('jnt_customerCode')
-        jnt_password_raw = get_param('jnt_password')
+        # jnt_password is the 32-char MD5 password string provided by J&T
+        jnt_password = get_param('jnt_password')
 
         if api_account:
             api_account = api_account.strip()
@@ -125,11 +126,11 @@ class JTCreateOrderWizard(models.TransientModel):
             private_key = private_key.strip()
         if jnt_customer_code:
             jnt_customer_code = jnt_customer_code.strip()
-        if jnt_password_raw:
-            jnt_password_raw = jnt_password_raw.strip()
+        if jnt_password:
+            jnt_password = jnt_password.strip()
 
-        if not api_account or not private_key or not jnt_customer_code:
-            raise UserError(_("Thiếu thông tin cấu hình J&T (apiAccount, privateKey, customerCode) trong System Parameters!"))
+        if not api_account or not private_key or not jnt_customer_code or not jnt_password:
+            raise UserError(_("Thiếu thông tin cấu hình J&T (apiAccount, privateKey, customerCode, password) trong System Parameters!"))
 
         _logger.info("J&T Auth Check | Account: %s | Customer: %s | Env: %s", 
                      api_account, jnt_customer_code, company.jt_environment)
@@ -151,10 +152,11 @@ class JTCreateOrderWizard(models.TransientModel):
 
         # J&T requires prov, city, area. Odoo has state_id, city, and maybe street2 as area.
         # This will need mapping if the address structure is different.
-        jnt_password_raw = (get_param('jnt_password') or "").strip()
-        # The user has confirmed they were provided with the final 32-char MD5 password string.
-        # We send it raw as stored in System Parameters.
-        password_to_send = jnt_password_raw
+        
+        # Use the 32-char MD5 password string provided by J&T directly, ensure uppercase
+        password_to_send = jnt_password.upper()
+        
+        _logger.info("J&T Password | customerCode: %s | password: %s", jnt_customer_code, password_to_send)
 
         _logger.info("J&T Create Order | Account: %s | Customer: %s | Env: %s", 
                      api_account, jnt_customer_code, company.jt_environment)
