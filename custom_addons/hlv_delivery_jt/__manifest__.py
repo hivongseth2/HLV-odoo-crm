@@ -17,7 +17,6 @@
         'data/ir_config_parameter_data.xml',
         'views/res_config_settings_views.xml',
         'views/stock_picking_views.xml',
-        'views/ghn_location_views.xml',
         'wizard/jt_create_order_wizard_views.xml',
     ],
     'installable': True,
