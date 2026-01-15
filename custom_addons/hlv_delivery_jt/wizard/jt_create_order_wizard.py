@@ -152,9 +152,12 @@ class JTCreateOrderWizard(models.TransientModel):
         # J&T requires prov, city, area. Odoo has state_id, city, and maybe street2 as area.
         # This will need mapping if the address structure is different.
         jnt_password_raw = (get_param('jnt_password') or "").strip()
+        # Common J&T formula: MD5(password + privateKey).upper()
+        password_combined = jnt_password_raw + private_key
+        password_hashed = hashlib.md5(password_combined.encode('utf-8')).hexdigest().upper()
 
-        _logger.info("J&T Create Order | Account: %s | Customer: %s | Env: %s | Pass: %s***", 
-                     api_account, jnt_customer_code, company.jt_environment, jnt_password_raw[:2] if jnt_password_raw else "")
+        _logger.info("J&T Create Order | Account: %s | Customer: %s | Env: %s", 
+                     api_account, jnt_customer_code, company.jt_environment)
 
         def sanitize_name(name, length=40):
             return (name or "")[:length]
@@ -166,7 +169,7 @@ class JTCreateOrderWizard(models.TransientModel):
 
         biz_params = {
             "customerCode": jnt_customer_code,
-            "password": jnt_password_raw,
+            "password": password_hashed,
             "txlogisticId": self.picking_id.name,
             "orderType": str(self.order_type),
             "serviceType": str(self.service_type),
