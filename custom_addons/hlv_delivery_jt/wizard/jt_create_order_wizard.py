@@ -268,14 +268,18 @@ class JTCreateOrderWizard(models.TransientModel):
             def get_jnt_ids(prov_name, dist_name, ward_name):
                 p = JntProvince.search([('name', 'ilike', self._normalize_name(prov_name))], limit=1)
                 if not p:
-                    # Fallback to loose name search
                     p = JntProvince.search([('name', 'ilike', prov_name.strip())], limit=1)
                 
-                d = JntDistrict.search([('province_id', '=', p.id), ('name', 'ilike', self._normalize_name(dist_name))], limit=1) if p else False
-                if not d and p:
-                    d = JntDistrict.search([('province_id', '=', p.id), ('name', 'ilike', dist_name.strip())], limit=1)
+                d = JntDistrict.browse()
+                if p:
+                    d = JntDistrict.search([('province_id', '=', p.id), ('name', 'ilike', self._normalize_name(dist_name))], limit=1)
+                    if not d:
+                        d = JntDistrict.search([('province_id', '=', p.id), ('name', 'ilike', dist_name.strip())], limit=1)
                 
-                w = JntWard.search([('district_id', '=', d.id), ('name', 'ilike', ward_name.strip())], limit=1) if d else False
+                w = JntWard.browse()
+                if d:
+                    w = JntWard.search([('district_id', '=', d.id), ('name', 'ilike', ward_name.strip())], limit=1)
+                
                 return p.id, d.id, w.id
 
             # Receiver Address from Picking/Partner
