@@ -43,7 +43,7 @@ class BarcodeShipperController(http.Controller):
 
         # 0) Thử luôn: có phải đã là phiếu OUT không?
         out_direct = Picking.search([
-            ("name", "=", pick_name),
+            "|", ("name", "=", pick_name), ("name", "ilike", pick_name),
             ("picking_type_id.code", "=", "outgoing"),
             ("state", "in", ["assigned", "partially_available"]),
         ])
