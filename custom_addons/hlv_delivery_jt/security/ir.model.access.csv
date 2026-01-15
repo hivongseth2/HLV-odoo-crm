@@ -1,2 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_jt_create_order_wizard,jt.create.order.wizard,model_jt_create_order_wizard,,1,1,1,1
+access_choose_delivery_carrier_wizard,choose.delivery.carrier.wizard,model_choose_delivery_carrier_wizard,,1,1,1,1
