@@ -61,10 +61,27 @@ class JTCreateOrderWizard(models.TransientModel):
     # Sender Info (Editable)
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
-    sender_prov = fields.Char(string="Tỉnh/Thành gửi", required=True)
-    sender_city = fields.Char(string="Quận/Huyện gửi", required=True)
-    sender_area = fields.Char(string="Phường/Xã gửi", required=True)
+    sender_prov_id = fields.Many2one("ghn.province", string="Tỉnh/Thành gửi", required=True)
+    sender_city_id = fields.Many2one("ghn.district", string="Quận/Huyện gửi", required=True,
+                                    domain="[('province_id', '=', sender_prov_id)]")
+    sender_area_id = fields.Many2one("ghn.ward", string="Phường/Xã gửi", required=True,
+                                    domain="[('district_id', '=', sender_city_id)]")
     sender_address = fields.Char(string="Địa chỉ gửi", required=True)
+
+    @api.onchange('sender_prov_id')
+    def _onchange_sender_prov_id(self):
+        if self.sender_prov_id:
+            return {'domain': {'sender_city_id': [('province_id', '=', self.sender_prov_id.id)]}}
+        else:
+            return {'domain': {'sender_city_id': []}}
+
+    @api.onchange('sender_city_id')
+    def _onchange_sender_city_id(self):
+        if self.sender_city_id:
+            self._fetch_ghn_wards(self.sender_city_id)
+            return {'domain': {'sender_area_id': [('district_id', '=', self.sender_city_id.id)]}}
+        else:
+            return {'domain': {'sender_area_id': []}}
 
     # Receiver Info (Editable)
     receiver_name = fields.Char(string="Tên người nhận", required=True)
@@ -134,10 +151,29 @@ class JTCreateOrderWizard(models.TransientModel):
             sender_partner = warehouse.partner_id or company.partner_id
             receiver_partner = picking.partner_id
 
-            # Try to get Many2one records from GHN identification on picking
+            # Try to get labels from GHN identification on picking/company/warehouse
+            # Receiver
             receiver_prov_id = picking.ghn_receiver_province_id.id if hasattr(picking, 'ghn_receiver_province_id') and picking.ghn_receiver_province_id else False
             receiver_city_id = picking.ghn_receiver_district_id.id if hasattr(picking, 'ghn_receiver_district_id') and picking.ghn_receiver_district_id else False
             receiver_area_id = picking.ghn_receiver_ward_id.id if hasattr(picking, 'ghn_receiver_ward_id') and picking.ghn_receiver_ward_id else False
+
+            # Sender (Guess from company/warehouse address if possible)
+            sender_prov_id = False
+            sender_city_id = False
+            sender_area_id = False
+
+            if sender_partner.state_id:
+                sender_prov_id = self.env['ghn.province'].search([('name', 'ilike', sender_partner.state_id.name)], limit=1).id
+            if sender_prov_id and sender_partner.city:
+                sender_city_id = self.env['ghn.district'].search([
+                    ('province_id', '=', sender_prov_id),
+                    ('name', 'ilike', sender_partner.city)
+                ], limit=1).id
+            if sender_city_id and sender_partner.street2:
+                sender_area_id = self.env['ghn.ward'].search([
+                    ('district_id', '=', sender_city_id),
+                    ('name', 'ilike', sender_partner.street2)
+                ], limit=1).id
 
             res.update({
                 'picking_id': picking.id,
@@ -146,9 +182,9 @@ class JTCreateOrderWizard(models.TransientModel):
                 
                 'sender_name': sender_partner.name or '',
                 'sender_mobile': (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0'),
-                'sender_prov': sender_partner.state_id.name or '',
-                'sender_city': sender_partner.city or '',
-                'sender_area': sender_partner.street2 or '',
+                'sender_prov_id': sender_prov_id,
+                'sender_city_id': sender_city_id,
+                'sender_area_id': sender_area_id,
                 'sender_address': sender_partner.street or '',
 
                 'receiver_name': receiver_partner.name or '',
@@ -241,9 +277,9 @@ class JTCreateOrderWizard(models.TransientModel):
             "sender": {
                 "name": sanitize_name(self.sender_name),
                 "mobile": self.sender_mobile or "",
-                "prov": (self.sender_prov or "").strip(),
-                "city": (self.sender_city or "").strip(),
-                "area": (self.sender_area or "").strip(),
+                "prov": (self.sender_prov_id.name or "").strip(),
+                "city": (self.sender_city_id.name or "").strip(),
+                "area": (self.sender_area_id.name or "").strip(),
                 "address": sanitize_address(self.sender_address)
             },
             "receiver": {
