@@ -23,7 +23,7 @@
                     .label-container {
                         width: 38mm; /* Reduced to provide buffer */
                         height: 28mm; /* Reduced to provide buffer */
-                        margin: 0 auto; /* Center in the 40x30 page */
+                        margin: 1mm auto; /* Vertically center (1mm top + 28mm content + 1mm bottom = 30mm) */
                         padding: 0;
                         page-break-inside: avoid;
                         position: relative;
@@ -37,16 +37,16 @@
                     }
                     .product-name {
                         font-weight: bold;
-                        font-size: 8px; /* Reduced from 10px */
-                        max-height: 10px;
+                        font-size: 9px; /* Slightly larger for better fill */
+                        max-height: 11px;
                         overflow: hidden;
                         white-space: nowrap; 
                         text-overflow: ellipsis;
                         width: 95%;
-                        margin-bottom: 2px;
+                        margin-bottom: 1px;
                     }
                     .product-code {
-                        font-size: 8px; /* Reduced from 9px */
+                        font-size: 9px;
                         font-weight: bold;
                     }
                 </style>
@@ -59,7 +59,7 @@
                             
                             <!-- Barcode Section -->
                             <t t-if="wizard.print_type == 'barcode' and product.barcode">
-                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 600, 'height': 150, 'img_style': 'width:38mm; height:12mm; display:block; margin:0 auto;'}"/>
+                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 600, 'height': 150, 'img_style': 'width:38mm; height:14mm; display:block; margin:0 auto;'}"/>
                                 <div class="product-code">
                                     <span t-field="product.barcode"/>
                                 </div>
@@ -67,7 +67,7 @@
 
                             <!-- QR Code Section -->
                             <t t-if="wizard.print_type == 'qr' and product.barcode">
-                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 100, 'height': 100, 'img_style': 'width:15mm; height:15mm; display:block; margin:0 auto;'}"/>
+                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 100, 'height': 100, 'img_style': 'width:18mm; height:18mm; display:block; margin:0 auto;'}"/>
                                 <!-- <div class="product-code"><span t-field="product.barcode"/></div> --> 
                             </t>
                             
