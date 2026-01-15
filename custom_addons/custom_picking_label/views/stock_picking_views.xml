@@ -10,7 +10,7 @@
                         string="In Tem Nhãn" 
                         type="object" 
                         class="oe_highlight"
-                        invisible="state != 'done'"/> </xpath>
+                        /> </xpath>
         </field>
     </record>
 </odoo>
