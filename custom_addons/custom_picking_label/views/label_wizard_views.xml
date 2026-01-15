@@ -8,6 +8,7 @@
                 <sheet>
                     <group>
                         <field name="picking_id" readonly="1"/>
+                        <field name="print_type" widget="radio" options="{'horizontal': true}"/>
                     </group>
                     <field name="line_ids">
                         <list editable="bottom">

@@ -8,5 +8,5 @@
         <field name="report_file">custom_picking_label.report_label_template</field>
         <field name="print_report_name">'Tem_San_Pham_%s' % object.picking_id.name</field>
         <field name="binding_model_id" ref="model_stock_picking_label_wizard"/>
-        <field name="paperformat_id" ref="base.paperformat_euro"/> </record>
+        <field name="paperformat_id" ref="paperformat_custom_label_dymo_40x30"/> </record>
 </odoo>
