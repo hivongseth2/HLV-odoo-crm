@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_report_custom_label" model="ir.actions.report">
+        <field name="name">Tem Sản Phẩm (Tùy chỉnh)</field>
+        <field name="model">stock.picking.label.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">custom_picking_label.report_label_template</field>
+        <field name="report_file">custom_picking_label.report_label_template</field>
+        <field name="print_report_name">'Tem_San_Pham_%s' % object.picking_id.name</field>
+        <field name="binding_model_id" ref="model_stock_picking_label_wizard"/>
+        <field name="paperformat_id" ref="base.paperformat_euro"/> </record>
+</odoo>
