@@ -22,10 +22,11 @@
                     /* Custom Label Styling */
                     .label-container {
                         width: 40mm;
-                        height: 30mm;
+                        height: 29.5mm; /* Slightly less than 30mm to prevent overflow/drift */
                         margin: 0;
                         padding: 0;
                         page-break-inside: avoid;
+                        page-break-after: always;
                         position: relative;
                         font-family: Arial, sans-serif;
                         text-align: center;
@@ -37,8 +38,8 @@
                     }
                     .product-name {
                         font-weight: bold;
-                        font-size: 10px;
-                        max-height: 12px;
+                        font-size: 8px; /* Reduced from 10px */
+                        max-height: 10px;
                         overflow: hidden;
                         white-space: nowrap; 
                         text-overflow: ellipsis;
@@ -46,7 +47,7 @@
                         margin-bottom: 2px;
                     }
                     .product-code {
-                        font-size: 9px;
+                        font-size: 8px; /* Reduced from 9px */
                         font-weight: bold;
                     }
                 </style>
