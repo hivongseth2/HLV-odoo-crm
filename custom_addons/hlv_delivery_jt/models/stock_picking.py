@@ -21,3 +21,14 @@ class StockPicking(models.Model):
             'target': 'new',
             'context': {'default_picking_id': self.id}
         }
+
+    def action_open_carrier_selector(self):
+        self.ensure_one()
+        return {
+            'name': 'Chọn đơn vị vận chuyển',
+            'type': 'ir.actions.act_window',
+            'res_model': 'choose.delivery.carrier.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_picking_id': self.id}
+        }

@@ -39,6 +39,11 @@
                             <field name="required_note"/>
                             <field name="service_type_id"/>
                             <field name="service_id"/>
+                            <label for="estimated_fee"/>
+                            <div class="o_row">
+                                <field name="estimated_fee"/>
+                                <button name="action_calculate_fee" type="object" string="Tính phí" class="btn-link" invisible="ghn_order_code"/>
+                            </div>
                         </group>
                         <group string="Ghi chú">
                             <field name="note"/>
