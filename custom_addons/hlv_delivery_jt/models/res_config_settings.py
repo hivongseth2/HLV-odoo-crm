@@ -5,16 +5,6 @@ from ..utils.jt_api_utils import JTApiUtils
 class ResConfigSettings(models.TransientModel):
     _inherit = "res.config.settings"
 
-    jt_customer_code = fields.Char(
-        related="company_id.jt_customer_code",
-        readonly=False,
-        string="Mã khách hàng J&T (Customer Code)",
-    )
-    jt_password = fields.Char(
-        related="company_id.jt_password",
-        readonly=False,
-        string="Mật khẩu J&T (Password)",
-    )
     jt_environment = fields.Selection(
         related="company_id.jt_environment",
         readonly=False,
@@ -23,11 +13,19 @@ class ResConfigSettings(models.TransientModel):
 
     # Read-only display fields for credentials from System Parameters
     jt_api_account_display = fields.Char(
-        string="J&T apiAccount (từ System Param)",
+        string="J&T apiAccount",
         compute="_compute_jt_credentials",
     )
     jt_private_key_display = fields.Char(
-        string="J&T privateKey (từ System Param)",
+        string="J&T privateKey",
+        compute="_compute_jt_credentials",
+    )
+    jt_customer_code_display = fields.Char(
+        string="J&T customerCode",
+        compute="_compute_jt_credentials",
+    )
+    jt_password_display = fields.Char(
+        string="J&T password",
         compute="_compute_jt_credentials",
     )
 
@@ -36,20 +34,24 @@ class ResConfigSettings(models.TransientModel):
         for record in self:
             record.jt_api_account_display = get_param('jnt_apiAccount') or 'Chưa cấu hình jnt_apiAccount'
             record.jt_private_key_display = get_param('jnt_privateKey') or 'Chưa cấu hình jnt_privateKey'
+            record.jt_customer_code_display = get_param('jnt_customerCode') or 'Chưa cấu hình jnt_customerCode'
+            record.jt_password_display = get_param('jnt_password') or 'Chưa cấu hình jnt_password'
 
     def action_check_jt_connection(self):
         """Test connection to J&T API"""
         get_param = self.env['ir.config_parameter'].sudo().get_param
         api_account = get_param('jnt_apiAccount')
         private_key = get_param('jnt_privateKey')
+        customer_code = get_param('jnt_customerCode')
+        password = get_param('jnt_password')
 
-        if not api_account or not private_key:
+        if not api_account or not private_key or not customer_code or not password:
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': 'Lỗi',
-                    'message': 'Thiếu jnt_apiAccount hoặc jnt_privateKey trong System Parameters!',
+                    'message': 'Thiếu jnt_apiAccount, jnt_privateKey, jnt_customerCode hoặc jnt_password trong System Parameters!',
                     'type': 'danger',
                 }
             }

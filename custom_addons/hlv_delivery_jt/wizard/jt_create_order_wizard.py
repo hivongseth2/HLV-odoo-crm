@@ -116,14 +116,22 @@ class JTCreateOrderWizard(models.TransientModel):
         get_param = self.env['ir.config_parameter'].sudo().get_param
         api_account = get_param('jnt_apiAccount')
         private_key = get_param('jnt_privateKey')
+        jnt_customer_code = get_param('jnt_customerCode')
+        jnt_password_raw = get_param('jnt_password')
 
         if api_account:
             api_account = api_account.strip()
         if private_key:
             private_key = private_key.strip()
+        if jnt_customer_code:
+            jnt_customer_code = jnt_customer_code.strip()
+        if jnt_password_raw:
+            jnt_password_raw = jnt_password_raw.strip()
 
-        if not api_account or not private_key:
-            raise UserError(_("Thiếu jnt_apiAccount hoặc jnt_privateKey trong System Parameters!"))
+        if not api_account or not private_key or not jnt_customer_code:
+            raise UserError(_("Thiếu thông tin cấu hình J&T (apiAccount, privateKey, customerCode) trong System Parameters!"))
+
+        password_hashed = hashlib.md5(jnt_password_raw.encode('utf-8')).hexdigest().upper() if jnt_password_raw else ""
 
         client = JTApiUtils(
             api_account=api_account,
@@ -144,14 +152,11 @@ class JTCreateOrderWizard(models.TransientModel):
         # This will need mapping if the address structure is different.
         # For now, let's use the partner fields.
         
-        password_raw = company.jt_password or ""
-        password_hashed = hashlib.md5(password_raw.encode('utf-8')).hexdigest().upper()
-
         def sanitize_name(name):
             return (name or "")[:30]
 
         biz_params = {
-            "customerCode": company.jt_customer_code or "",
+            "customerCode": jnt_customer_code,
             "password": password_hashed,
             "txlogisticId": self.picking_id.name,
             "orderType": str(self.order_type),
