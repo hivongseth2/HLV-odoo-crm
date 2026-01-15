@@ -2,6 +2,7 @@
 from odoo import fields, models, api, _
 from odoo.exceptions import UserError
 from ..utils.jt_api_utils import JTApiUtils
+import hashlib
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -80,6 +81,11 @@ class JTCreateOrderWizard(models.TransientModel):
         api_account = get_param('jnt_apiAccount')
         private_key = get_param('jnt_privateKey')
 
+        if api_account:
+            api_account = api_account.strip()
+        if private_key:
+            private_key = private_key.strip()
+
         if not api_account or not private_key:
             raise UserError(_("Thiếu jnt_apiAccount hoặc jnt_privateKey trong System Parameters!"))
 
@@ -102,14 +108,17 @@ class JTCreateOrderWizard(models.TransientModel):
         # This will need mapping if the address structure is different.
         # For now, let's use the partner fields.
         
+        password_raw = company.jt_password or ""
+        password_hashed = hashlib.md5(password_raw.encode('utf-8')).hexdigest().upper()
+
         biz_params = {
             "customerCode": company.jt_customer_code or "",
-            "password": company.jt_password or "",
+            "password": password_hashed,
             "txlogisticId": self.picking_id.name,
             "orderType": int(self.order_type),
             "serviceType": int(self.service_type),
             "deliveryType": int(self.delivery_type),
-            "selfAddress": 0, # Use J&T addresses or administrative? Documentation says 0 for J&T
+            "selfAddress": 0,
             "payType": self.pay_type,
             "productType": self.product_type,
             "goodsType": self.goods_type,
@@ -118,7 +127,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "mobile": sender_partner.mobile or sender_partner.phone or "",
                 "prov": sender_partner.state_id.name or "",
                 "city": sender_partner.city or "",
-                "area": sender_partner.street2 or "", # Often used for ward/area in VN Odoo
+                "area": sender_partner.street2 or "",
                 "address": sender_partner.street or ""
             },
             "receiver": {
@@ -136,19 +145,21 @@ class JTCreateOrderWizard(models.TransientModel):
                 "height": int(self.height),
             },
             "isInsured": 1 if self.is_insured else 0,
-            "goodsValue": str(self.goods_value),
-            "codMoney": str(self.cod_money) if self.pay_type == 'CC_CASH' or self.cod_money > 0 else "0",
+            "goodsValue": str(int(self.goods_value)),
+            "codMoney": str(int(self.cod_money)) if self.pay_type == 'CC_CASH' or self.cod_money > 0 else "0",
             "remark": self.remark or "",
-            "items": []
+            "items": [],
+            "itemsValue": str(int(sum(move.product_id.list_price * move.product_uom_qty for move in self.picking_id.move_ids))),
+            "totalQuantity": int(sum(move.product_uom_qty for move in self.picking_id.move_ids))
         }
 
         # Add items
         for move in self.picking_id.move_ids:
             biz_params["items"].append({
                 "itemName": move.product_id.name[:80],
-                "englishName": move.product_id.name[:80], # J&T requires englishName
+                "englishName": move.product_id.name[:80],
                 "number": str(int(move.product_uom_qty)),
-                "itemValue": str(move.product_id.list_price)
+                "itemValue": str(int(move.product_id.list_price))
             })
 
         _logger.info("J&T Creating Order for %s", self.picking_id.name)

@@ -33,7 +33,8 @@ class JTApiUtils:
         """
         Send Add Order request to J&T
         """
-        biz_content = json.dumps(biz_params)
+        # J&T often requires compact JSON without spaces for digest verification
+        biz_content = json.dumps(biz_params, separators=(',', ':'), ensure_ascii=False)
         timestamp = int(time.time() * 1000)
         digest = self._generate_digest(biz_content)
 
