@@ -61,10 +61,10 @@ class JTCreateOrderWizard(models.TransientModel):
     # Sender Info (Editable)
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
-    sender_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành gửi", required=True)
-    sender_city_id = fields.Many2one("jnt.district", string="Quận/Huyện gửi", required=True,
+    sender_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành gửi", ondelete='cascade')
+    sender_city_id = fields.Many2one("jnt.district", string="Quận/Huyện gửi", ondelete='cascade',
                                     domain="[('province_id', '=', sender_prov_id)]")
-    sender_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi", required=True,
+    sender_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi", ondelete='cascade',
                                     domain="[('district_id', '=', sender_city_id)]")
     sender_address = fields.Char(string="Địa chỉ gửi", required=True)
 
@@ -86,10 +86,10 @@ class JTCreateOrderWizard(models.TransientModel):
     # Receiver Info (Editable)
     receiver_name = fields.Char(string="Tên người nhận", required=True)
     receiver_mobile = fields.Char(string="SĐT người nhận", required=True)
-    receiver_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành nhận", required=True)
-    receiver_city_id = fields.Many2one("jnt.district", string="Quận/Huyện nhận", required=True, 
+    receiver_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành nhận", ondelete='cascade')
+    receiver_city_id = fields.Many2one("jnt.district", string="Quận/Huyện nhận", ondelete='cascade', 
                                       domain="[('province_id', '=', receiver_prov_id)]")
-    receiver_area_id = fields.Many2one("jnt.ward", string="Phường/Xã nhận", required=True,
+    receiver_area_id = fields.Many2one("jnt.ward", string="Phường/Xã nhận", ondelete='cascade',
                                       domain="[('district_id', '=', receiver_city_id)]")
     receiver_address = fields.Char(string="Địa chỉ nhận", required=True)
 
@@ -329,11 +329,7 @@ class JTCreateOrderWizard(models.TransientModel):
 
     def action_create_jt_order(self):
         self.ensure_one()
-        # Save J&T codes back to the location records if they've changed
-        if self.sender_area_id and self.sender_area_jnt_code != self.sender_area_id.jnt_code:
-            self.sender_area_id.write({'jnt_code': self.sender_area_jnt_code})
-        if self.receiver_area_id and self.receiver_area_jnt_code != self.receiver_area_id.jnt_code:
-            self.receiver_area_id.write({'jnt_code': self.receiver_area_jnt_code})
+        # Locations are now dedicated records, no need to save codes back to GHN/Partner
 
         company = self.picking_id.company_id
         get_param = self.env['ir.config_parameter'].sudo().get_param
@@ -372,6 +368,9 @@ class JTCreateOrderWizard(models.TransientModel):
         receiver_partner = self.picking_id.partner_id
         if not receiver_partner:
             raise UserError(_("Vui lòng chọn khách hàng cho Phiếu xuất kho này."))
+
+        if not self.sender_area_id or not self.receiver_area_id:
+            raise UserError(_("Vui lòng chọn đầy đủ Tỉnh/Thành, Quận/Huyện, Phường/Xã cho cả người gửi và người nhận."))
 
         # J&T requires prov, city, area. Odoo has state_id, city, and maybe street2 as area.
         # This will need mapping if the address structure is different.
