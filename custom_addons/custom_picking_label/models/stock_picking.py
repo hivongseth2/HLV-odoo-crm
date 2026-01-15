@@ -7,7 +7,7 @@ class StockPicking(models.Model):
         self.ensure_one()
         # Tạo dòng dữ liệu cho wizard dựa trên các dòng trong phiếu kho
         wizard_lines = []
-        for line in self.move_ids_without_package:
+        for line in self.move_ids:
             # Mặc định lấy số lượng hoàn tất (quantity), nếu = 0 thì lấy nhu cầu
             qty = line.quantity if line.quantity > 0 else line.product_uom_qty
             if qty > 0:

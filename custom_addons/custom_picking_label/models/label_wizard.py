@@ -5,6 +5,8 @@ class StockPickingLabelWizard(models.TransientModel):
     _description = 'Wizard in tem từ phiếu kho'
 
     picking_id = fields.Many2one('stock.picking', string='Phiếu kho')
+    print_type = fields.Selection([('barcode', 'Mã vạch'), ('qr', 'QR Code')], string='Kiểu in', default='barcode', required=True)
+
     line_ids = fields.One2many('stock.picking.label.wizard.line', 'wizard_id', string='Sản phẩm')
 
     def action_print_labels(self):

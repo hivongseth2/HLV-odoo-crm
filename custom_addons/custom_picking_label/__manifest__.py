@@ -8,6 +8,7 @@
         'security/ir.model.access.csv', # Bạn nhớ tạo file này để cấp quyền truy cập
         'views/label_wizard_views.xml',
         'views/stock_picking_views.xml',
+        'data/paper_format.xml',
         'report/report_action.xml',
         'report/report_template.xml',
     ],
