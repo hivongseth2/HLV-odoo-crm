@@ -21,12 +21,12 @@ class JTApiUtils:
 
     def _generate_digest(self, biz_content):
         """
-        Generate J&T API digest: base64(md5(bizContent + privateKey).hexdigest())
-        Note: J&T documentation says md5(bizContent + privateKey)
+        Generate J&T API digest: base64(md5(bizContent + privateKey).digest())
+        Note: Many J&T APIs use the binary digest for Base64 encoding, not the hex string.
         """
         data_to_hash = biz_content + self.private_key
-        md5_hash = hashlib.md5(data_to_hash.encode('utf-8')).hexdigest()
-        digest = base64.b64encode(md5_hash.encode('utf-8')).decode('utf-8')
+        md5_binary = hashlib.md5(data_to_hash.encode('utf-8')).digest()
+        digest = base64.b64encode(md5_binary).decode('utf-8')
         return digest
 
     def add_order(self, biz_params):
