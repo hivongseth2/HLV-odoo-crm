@@ -85,23 +85,28 @@ class JTCreateOrderWizard(models.TransientModel):
             sender_partner = warehouse.partner_id or company.partner_id
             receiver_partner = picking.partner_id
 
+            # Try to get labels from GHN location fields if they exist on picking
+            receiver_prov_name = picking.ghn_receiver_province_id.name if hasattr(picking, 'ghn_receiver_province_id') and picking.ghn_receiver_province_id else (receiver_partner.state_id.name or '')
+            receiver_city_name = picking.ghn_receiver_district_id.name if hasattr(picking, 'ghn_receiver_district_id') and picking.ghn_receiver_district_id else (receiver_partner.city or '')
+            receiver_area_name = picking.ghn_receiver_ward_id.name if hasattr(picking, 'ghn_receiver_ward_id') and picking.ghn_receiver_ward_id else (receiver_partner.street2 or '')
+
             res.update({
                 'picking_id': picking.id,
                 'cod_money': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 'goods_value': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 
                 'sender_name': sender_partner.name or '',
-                'sender_mobile': sender_partner.mobile or sender_partner.phone or '',
+                'sender_mobile': (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0'),
                 'sender_prov': sender_partner.state_id.name or '',
                 'sender_city': sender_partner.city or '',
                 'sender_area': sender_partner.street2 or '',
                 'sender_address': sender_partner.street or '',
 
                 'receiver_name': receiver_partner.name or '',
-                'receiver_mobile': receiver_partner.mobile or receiver_partner.phone or '',
-                'receiver_prov': receiver_partner.state_id.name or '',
-                'receiver_city': receiver_partner.city or '',
-                'receiver_area': receiver_partner.street2 or '',
+                'receiver_mobile': (receiver_partner.mobile or receiver_partner.phone or '').replace(' ', '').replace('+84', '0'),
+                'receiver_prov': receiver_prov_name,
+                'receiver_city': receiver_city_name,
+                'receiver_area': receiver_area_name,
                 'receiver_address': receiver_partner.street or '',
             })
             # Try to get weight from picking/move lines if possible
