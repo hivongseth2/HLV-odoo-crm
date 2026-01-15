@@ -22,11 +22,10 @@
                     /* Custom Label Styling */
                     .label-container {
                         width: 40mm;
-                        height: 29.5mm; /* Slightly less than 30mm to prevent overflow/drift */
+                        height: 30mm;
                         margin: 0;
                         padding: 0;
                         page-break-inside: avoid;
-                        page-break-after: always;
                         position: relative;
                         font-family: Arial, sans-serif;
                         text-align: center;
