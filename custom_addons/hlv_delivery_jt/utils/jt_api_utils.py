@@ -21,35 +21,43 @@ class JTApiUtils:
 
     def _generate_digest(self, biz_content):
         """
-        Generate J&T API digest: base64(md5(bizContent + privateKey).hexdigest())
-        Note: J&T documentation says md5(bizContent + privateKey)
+        Generate J&T API digest: base64(md5(bizContent + privateKey).digest())
+        Note: Many J&T APIs use the binary digest for Base64 encoding, not the hex string.
         """
         data_to_hash = biz_content + self.private_key
-        md5_hash = hashlib.md5(data_to_hash.encode('utf-8')).hexdigest()
-        digest = base64.b64encode(md5_hash.encode('utf-8')).decode('utf-8')
+        _logger.debug("J&T Digest Check | bizContent: %s", biz_content)
+        _logger.debug("J&T Digest Check | Hashing bizContent + PrivateKey(masked: %s...)", self.private_key[:4])
+        
+        md5_binary = hashlib.md5(data_to_hash.encode('utf-8')).digest()
+        digest = base64.b64encode(md5_binary).decode('utf-8')
         return digest
 
     def add_order(self, biz_params):
         """
         Send Add Order request to J&T
         """
-        biz_content = json.dumps(biz_params)
+        # J&T often requires compact JSON without spaces for digest verification
+        biz_content = json.dumps(biz_params, separators=(',', ':'), ensure_ascii=False)
         timestamp = int(time.time() * 1000)
         digest = self._generate_digest(biz_content)
 
         headers = {
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'apiAccount': str(self.api_account),
+            'digest': digest,
+            'timestamp': str(timestamp)
+            # Note: privateKey is used for digest calculation, not sent in headers
         }
 
-        # J&T uses form-encoded body for bizContent, apiAccount, digest, timestamp
+        # J&T uses form-encoded body for bizContent
         payload = {
-            'bizContent': biz_content,
-            'apiAccount': self.api_account,
-            'digest': digest,
-            'timestamp': timestamp
+            'bizContent': biz_content
         }
 
         _logger.info("J&T API Request to %s | Account: %s", self.api_url, self.api_account)
+        _logger.info("J&T API Headers: apiAccount=%s, digest=%s, timestamp=%s, privateKey=%s...", 
+                     self.api_account, digest, timestamp, self.private_key[:8] if self.private_key else 'None')
+        _logger.info("J&T API bizContent: %s", biz_content[:500] if len(biz_content) > 500 else biz_content)
         try:
             response = requests.post(self.api_url, data=payload, headers=headers)
             if response.status_code == 200:
