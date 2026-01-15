@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_stock_picking_label_wizard,stock.picking.label.wizard,model_stock_picking_label_wizard,base.group_user,1,1,1,1
+access_stock_picking_label_wizard_line,stock.picking.label.wizard.line,model_stock_picking_label_wizard_line,base.group_user,1,1,1,1
