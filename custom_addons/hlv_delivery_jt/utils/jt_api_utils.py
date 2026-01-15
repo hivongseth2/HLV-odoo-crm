@@ -25,6 +25,9 @@ class JTApiUtils:
         Note: Many J&T APIs use the binary digest for Base64 encoding, not the hex string.
         """
         data_to_hash = biz_content + self.private_key
+        _logger.debug("J&T Digest Check | bizContent: %s", biz_content)
+        _logger.debug("J&T Digest Check | Hashing bizContent + PrivateKey(masked: %s...)", self.private_key[:4])
+        
         md5_binary = hashlib.md5(data_to_hash.encode('utf-8')).digest()
         digest = base64.b64encode(md5_binary).decode('utf-8')
         return digest

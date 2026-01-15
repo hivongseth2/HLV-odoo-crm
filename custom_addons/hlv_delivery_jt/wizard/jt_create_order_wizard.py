@@ -167,10 +167,13 @@ class JTCreateOrderWizard(models.TransientModel):
 
         volumetric_weight = (self.length * self.width * self.height) / 6000.0
 
+        # Sanitize txlogisticId (remove / to avoid potential errors)
+        txlogistic_id = (self.picking_id.name or "").replace("/", "-")
+
         biz_params = {
             "customerCode": jnt_customer_code,
             "password": password_to_send,
-            "txlogisticId": self.picking_id.name,
+            "txlogisticId": txlogistic_id,
             "orderType": str(self.order_type),
             "serviceType": str(self.service_type),
             "deliveryType": str(self.delivery_type),
@@ -214,9 +217,9 @@ class JTCreateOrderWizard(models.TransientModel):
         for move in self.picking_id.move_ids:
             biz_params["items"].append({
                 "itemName": move.product_id.name[:80],
-                "englishName": move.product_id.name[:80],
+                "englishName": (move.product_id.name or "Goods")[:80],
                 "number": str(int(move.product_uom_qty)),
-                "itemValue": int(move.product_id.list_price)
+                "itemValue": str(int(move.product_id.list_price))
             })
 
         _logger.info("J&T Creating Order for %s", self.picking_id.name)
