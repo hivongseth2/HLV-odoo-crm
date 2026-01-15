@@ -21,10 +21,11 @@
                     }
                     /* Custom Label Styling */
                     .label-container {
-                        width: 38mm; /* Reduced to provide buffer */
-                        height: 28mm; /* Reduced to provide buffer */
-                        margin: 1mm auto; /* Vertically center (1mm top + 28mm content + 1mm bottom = 30mm) */
-                        padding: 0;
+                        width: 100%;
+                        height: 100%;
+                        padding: 1mm 1mm 0 1mm; /* Safety padding */
+                        box-sizing: border-box;
+                        margin: 0;
                         page-break-inside: avoid;
                         position: relative;
                         font-family: Arial, sans-serif;
@@ -32,22 +33,27 @@
                         display: flex;
                         flex-direction: column;
                         align-items: center;
-                        justify-content: center;
+                        justify-content: flex-start; /* STart from top to avoid pushing out */
                         overflow: hidden;
                     }
                     .product-name {
                         font-weight: bold;
-                        font-size: 9px; /* Slightly larger for better fill */
-                        max-height: 11px;
+                        font-size: 10px;
+                        line-height: 10px;
+                        max-height: 20px; /* Allow 2 lines */
                         overflow: hidden;
-                        white-space: nowrap; 
-                        text-overflow: ellipsis;
-                        width: 95%;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 2;
+                        -webkit-box-orient: vertical;
+                        width: 100%;
                         margin-bottom: 1px;
+                        white-space: normal; /* Allow wrapping */
                     }
                     .product-code {
                         font-size: 9px;
                         font-weight: bold;
+                        margin-top: 1px;
+                        width: 100%;
                     }
                 </style>
                 <t t-foreach="docs" t-as="wizard">
@@ -59,7 +65,7 @@
                             
                             <!-- Barcode Section -->
                             <t t-if="wizard.print_type == 'barcode' and product.barcode">
-                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 600, 'height': 150, 'img_style': 'width:38mm; height:14mm; display:block; margin:0 auto;'}"/>
+                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 600, 'height': 150, 'img_style': 'width:95%; height:13mm; display:block; margin:0 auto;'}"/>
                                 <div class="product-code">
                                     <span t-field="product.barcode"/>
                                 </div>
@@ -67,7 +73,7 @@
 
                             <!-- QR Code Section -->
                             <t t-if="wizard.print_type == 'qr' and product.barcode">
-                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 100, 'height': 100, 'img_style': 'width:18mm; height:18mm; display:block; margin:0 auto;'}"/>
+                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 300, 'height': 300, 'img_style': 'width:18mm; height:18mm; display:block; margin:0 auto;'}"/>
                                 <!-- <div class="product-code"><span t-field="product.barcode"/></div> --> 
                             </t>
                             
