@@ -53,7 +53,8 @@ class GHNCreateOrderWizard(models.TransientModel):
     ], string="Loại dịch vụ", default='2', required=True)
     
     service_id = fields.Selection(selection='_get_service_selection', string="Dịch vụ cụ thể", required=True)
-    
+    estimated_fee = fields.Float(string="Phí dự kiến (VNĐ)", readonly=True)
+
     def _get_service_selection(self):
         """Fetch available services from GHN based on districts."""
         return [
@@ -212,6 +213,48 @@ class GHNCreateOrderWizard(models.TransientModel):
             shop_id=shop_id,
             environment=company.ghn_environment
         )
+            
+    def action_calculate_fee(self):
+        """Calculate estimated fee from GHN API."""
+        self.ensure_one()
+        client = self._get_ghn_client()
+        
+        # We need service_id and locations
+        if not self.district_id or not self.ward_id or not self.service_id or self.service_id == '0':
+            raise ValidationError("Vui lòng chọn Quận/Huyện, Phường/Xã và Dịch vụ cụ thể trước khi tính phí.")
+
+        warehouse = self.picking_id.picking_type_id.warehouse_id
+        from_district = warehouse.ghn_district_id.district_id if warehouse and warehouse.ghn_district_id else None
+        
+        if not from_district:
+            raise ValidationError("Kho chưa được cấu hình Quận/Huyện GHN.")
+
+        payload = {
+            "from_district_id": int(from_district),
+            "to_district_id": int(self.district_id.district_id),
+            "to_ward_code": str(self.ward_id.ward_code),
+            "service_id": int(self.service_id),
+            "height": int(self.height),
+            "length": int(self.length),
+            "weight": int(self.weight),
+            "width": int(self.width),
+            "insurance_value": int(self.insurance_value),
+            "cod_value": int(self.cod_amount)
+        }
+        
+        result = client.get_fee(payload)
+        if result.get('success'):
+            self.estimated_fee = result['data'].get('total', 0)
+        else:
+            raise ValidationError(f"Lỗi tính phí từ GHN: {result.get('error')}")
+            
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": "ghn.create.order.wizard",
+            "view_mode": "form",
+            "res_id": self.id,
+            "target": "new",
+        }
 
     def action_confirm(self):
         self.ensure_one()
