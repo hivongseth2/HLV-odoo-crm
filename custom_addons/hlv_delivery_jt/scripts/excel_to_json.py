@@ -41,8 +41,10 @@ try:
         if code:
             data.append({
                 'p': normalize(prov),
+                'pn': str(prov).strip(),
                 'd': normalize(dist),
-                'w': normalize(ward_clean),
+                'dn': str(dist).strip(),
+                'w': str(ward_raw).strip(), # User wants the name with code
                 'c': code
             })
     

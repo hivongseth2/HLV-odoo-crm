@@ -6,7 +6,7 @@
         <field name="arch" type="xml">
             <form string="Tạo đơn J&amp;T Express">
                 <header>
-                    <button name="action_sync_jnt_codes" type="object" string="Cập nhật mã J&amp;T" class="btn-secondary" icon="fa-refresh" help="Cập nhật mã Phường/Xã J&amp;T từ file dữ liệu hệ thống"/>
+                    <button name="action_sync_jnt_codes" type="object" string="Đồng bộ mã J&amp;T (Toàn hệ thống)" class="btn-secondary" icon="fa-refresh" help="Cập nhật mã Phường/Xã J&amp;T cho toàn bộ hệ thống từ file dữ liệu"/>
                 </header>
                 <sheet>
                     <group>
@@ -33,7 +33,6 @@
                             <field name="sender_prov_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="sender_city_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="sender_area_id" options="{'no_open': True, 'no_create': True}"/>
-                            <field name="sender_area_jnt_code" placeholder="Mã J&amp;T (Ví dụ: 028QQ107)"/>
                             <field name="sender_address"/>
                         </group>
                         <group string="Người nhận (Khách hàng)">
@@ -42,7 +41,6 @@
                             <field name="receiver_prov_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="receiver_city_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="receiver_area_id" options="{'no_open': True, 'no_create': True}"/>
-                            <field name="receiver_area_jnt_code" placeholder="Mã J&amp;T (Ví dụ: 028QQ107)"/>
                             <field name="receiver_address"/>
                         </group>
                     </group>

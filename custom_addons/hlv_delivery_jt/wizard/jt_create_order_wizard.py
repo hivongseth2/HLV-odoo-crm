@@ -61,10 +61,10 @@ class JTCreateOrderWizard(models.TransientModel):
     # Sender Info (Editable)
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
-    sender_prov_id = fields.Many2one("ghn.province", string="Tỉnh/Thành gửi", required=True)
-    sender_city_id = fields.Many2one("ghn.district", string="Quận/Huyện gửi", required=True,
+    sender_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành gửi", required=True)
+    sender_city_id = fields.Many2one("jnt.district", string="Quận/Huyện gửi", required=True,
                                     domain="[('province_id', '=', sender_prov_id)]")
-    sender_area_id = fields.Many2one("ghn.ward", string="Phường/Xã gửi", required=True,
+    sender_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi", required=True,
                                     domain="[('district_id', '=', sender_city_id)]")
     sender_address = fields.Char(string="Địa chỉ gửi", required=True)
 
@@ -86,25 +86,20 @@ class JTCreateOrderWizard(models.TransientModel):
     # Receiver Info (Editable)
     receiver_name = fields.Char(string="Tên người nhận", required=True)
     receiver_mobile = fields.Char(string="SĐT người nhận", required=True)
-    receiver_prov_id = fields.Many2one("ghn.province", string="Tỉnh/Thành nhận", required=True)
-    receiver_city_id = fields.Many2one("ghn.district", string="Quận/Huyện nhận", required=True, 
+    receiver_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành nhận", required=True)
+    receiver_city_id = fields.Many2one("jnt.district", string="Quận/Huyện nhận", required=True, 
                                       domain="[('province_id', '=', receiver_prov_id)]")
-    receiver_area_id = fields.Many2one("ghn.ward", string="Phường/Xã nhận", required=True,
+    receiver_area_id = fields.Many2one("jnt.ward", string="Phường/Xã nhận", required=True,
                                       domain="[('district_id', '=', receiver_city_id)]")
-    receiver_area_jnt_code = fields.Char(string="Mã J&T Phường nhận")
     receiver_address = fields.Char(string="Địa chỉ nhận", required=True)
-
-    sender_area_jnt_code = fields.Char(string="Mã J&T Phường gửi")
 
     @api.onchange('sender_area_id')
     def _onchange_sender_area_id(self):
-        if self.sender_area_id:
-            self.sender_area_jnt_code = self.sender_area_id.jnt_code
+        pass
 
     @api.onchange('receiver_area_id')
     def _onchange_receiver_area_id(self):
-        if self.receiver_area_id:
-            self.receiver_area_jnt_code = self.receiver_area_id.jnt_code
+        pass
 
     @api.onchange('receiver_prov_id')
     def _onchange_receiver_prov_id(self):
@@ -165,11 +160,17 @@ class JTCreateOrderWizard(models.TransientModel):
                 name = name[len(p):]
         return name.strip()
 
+    @api.model
     def action_sync_jnt_codes(self):
-        """Sync J&T codes from the local JSON data file."""
+        """Sync J&T dedicated locations from the local JSON data file."""
         import json
         import os
+        import logging
+        from odoo import _
+        from odoo.exceptions import UserError
         from odoo.modules.module import get_module_resource
+
+        _logger = logging.getLogger(__name__)
 
         json_path = get_module_resource('hlv_delivery_jt', 'data', 'jnt_mapping.json')
         if not json_path or not os.path.exists(json_path):
@@ -181,52 +182,80 @@ class JTCreateOrderWizard(models.TransientModel):
         except Exception as e:
             raise UserError(_("Lỗi đọc file mapping: %s") % e)
 
-        Province = self.env['ghn.province']
-        District = self.env['ghn.district']
-        Ward = self.env['ghn.ward']
+        Province = self.env['jnt.province']
+        District = self.env['jnt.district']
+        Ward = self.env['jnt.ward']
 
-        # Cache for performance
-        provinces = Province.search([])
-        prov_map = {self._normalize_name(p.name): p for p in provinces}
-        dist_cache = {}
+        # Clear existing data to avoid duplicates/confusion if re-syncing
+        # self.env.cr.execute('TRUNCATE jnt_ward, jnt_district, jnt_province CASCADE')
+        # However, TRUNCATE might be too aggressive if there are Many2one references.
+        # Let's use unlink if not too many, otherwise just search and update.
+        
+        existing_provinces = {p.name: p.id for p in Province.search([])}
+        existing_districts = {(d.province_id.id, d.name): d.id for d in District.search([])}
+        existing_wards = {(w.district_id.id, w.name): w.id for w in Ward.search([])}
 
-        updated_count = 0
+        created_p = 0
+        created_d = 0
+        created_w = 0
+
         for item in mapping_data:
-            p_name = item['p']
-            d_name = item['d']
-            w_name = item['w']
+            # item format from our converter: {'p': 'norm_p', 'd': 'norm_d', 'w': 'full_ward_name', 'c': 'code'}
+            # Wait, the converter used normalize for prov and dist too. 
+            # I should probably use the raw names for the records.
+            pass
+
+        # RE-IMPLEMENTING SYNC TO USE NEW MODELS PROPERLY
+        # I'll need to re-read the Excel or update the JSON converter to include raw names.
+        # Actually, let's just use the normalized for now or better, re-read JSON if I update it.
+        # Let's update the JSON converter first to be more robust.
+        return self._sync_from_mapping_data(mapping_data)
+
+    def _sync_from_mapping_data(self, mapping_data):
+        Province = self.env['jnt.province']
+        District = self.env['jnt.district']
+        Ward = self.env['jnt.ward']
+
+        prov_map = {p.name: p.id for p in Province.search([])}
+        dist_map = {} # (prov_id, name): id
+        for d in District.search([]):
+            dist_map[(d.province_id.id, d.name)] = d.id
+        
+        ward_map = {} # (dist_id, name): id
+        for w in Ward.search([]):
+            ward_map[(w.district_id.id, w.name)] = w.id
+
+        updated = 0
+        for item in mapping_data:
+            p_name = item.get('pn', item['p']) # Use 'pn' for raw name if I update converter
+            d_name = item.get('dn', item['d'])
+            w_name = item['w'] # This is "Phường...-code"
             code = item['c']
 
-            province = prov_map.get(p_name)
-            if not province: continue
-
-            if province.id not in dist_cache:
-                districts = District.search([('province_id', '=', province.id)])
-                dist_cache[province.id] = {self._normalize_name(d.name): d for d in districts}
+            p_id = prov_map.get(p_name)
+            if not p_id:
+                p_id = Province.create({'name': p_name}).id
+                prov_map[p_name] = p_id
             
-            district = dist_cache[province.id].get(d_name)
-            if not district: continue
-
-            ward = Ward.search([
-                ('district_id', '=', district.id),
-                '|',
-                ('name', 'ilike', w_name),
-                ('name', '=', w_name) # Exact match fallback if needed covered by ilike usually
-            ], limit=1)
-
-            if ward and not ward.jnt_code:
-                ward.write({'jnt_code': code})
-                updated_count += 1
-            # Also update Province/District if they don't have codes? 
-            # The Excel MAPPING sheet seems focused on Wards. 
+            d_id = dist_map.get((p_id, d_name))
+            if not d_id:
+                d_id = District.create({'name': d_name, 'province_id': p_id}).id
+                dist_map[(p_id, d_name)] = d_id
+            
+            w_id = ward_map.get((d_id, w_name))
+            if not w_id:
+                Ward.create({'name': w_name, 'jnt_code': code, 'district_id': d_id})
+                updated += 1
+                ward_map[(d_id, w_name)] = True # Just mark as exists
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': 'Thành công',
-                'message': f'Đã cập nhật mã J&T cho {updated_count} phường xã.',
+                'message': f'Đã đồng bộ {updated} Phường/Xã vào danh mục J&T.',
                 'type': 'success',
+                'sticky': True,
             }
         }
 
@@ -241,29 +270,37 @@ class JTCreateOrderWizard(models.TransientModel):
             sender_partner = warehouse.partner_id or company.partner_id
             receiver_partner = picking.partner_id
 
-            # Try to get labels from GHN identification on picking/company/warehouse
-            # Receiver
-            receiver_prov_id = picking.ghn_receiver_province_id.id if hasattr(picking, 'ghn_receiver_province_id') and picking.ghn_receiver_province_id else False
-            receiver_city_id = picking.ghn_receiver_district_id.id if hasattr(picking, 'ghn_receiver_district_id') and picking.ghn_receiver_district_id else False
-            receiver_area_id = picking.ghn_receiver_ward_id.id if hasattr(picking, 'ghn_receiver_ward_id') and picking.ghn_receiver_ward_id else False
+            # Cache Jnt records for faster mapping
+            JntProvince = self.env['jnt.province']
+            JntDistrict = self.env['jnt.district']
+            JntWard = self.env['jnt.ward']
 
-            # Sender (Guess from company/warehouse address if possible)
-            sender_prov_id = False
-            sender_city_id = False
-            sender_area_id = False
+            def get_jnt_ids(prov_name, dist_name, ward_name):
+                p = JntProvince.search([('name', 'ilike', self._normalize_name(prov_name))], limit=1)
+                if not p:
+                    # Fallback to loose name search
+                    p = JntProvince.search([('name', 'ilike', prov_name.strip())], limit=1)
+                
+                d = JntDistrict.search([('province_id', '=', p.id), ('name', 'ilike', self._normalize_name(dist_name))], limit=1) if p else False
+                if not d and p:
+                    d = JntDistrict.search([('province_id', '=', p.id), ('name', 'ilike', dist_name.strip())], limit=1)
+                
+                w = JntWard.search([('district_id', '=', d.id), ('name', 'ilike', ward_name.strip())], limit=1) if d else False
+                return p.id, d.id, w.id
 
-            if sender_partner.state_id:
-                sender_prov_id = self.env['ghn.province'].search([('name', 'ilike', sender_partner.state_id.name)], limit=1).id
-            if sender_prov_id and sender_partner.city:
-                sender_city_id = self.env['ghn.district'].search([
-                    ('province_id', '=', sender_prov_id),
-                    ('name', 'ilike', sender_partner.city)
-                ], limit=1).id
-            if sender_city_id and sender_partner.street2:
-                sender_area_id = self.env['ghn.ward'].search([
-                    ('district_id', '=', sender_city_id),
-                    ('name', 'ilike', sender_partner.street2)
-                ], limit=1).id
+            # Receiver Address from Picking/Partner
+            r_prov_name = picking.ghn_receiver_province_id.name if hasattr(picking, 'ghn_receiver_province_id') and picking.ghn_receiver_province_id else (receiver_partner.state_id.name or '')
+            r_dist_name = picking.ghn_receiver_district_id.name if hasattr(picking, 'ghn_receiver_district_id') and picking.ghn_receiver_district_id else (receiver_partner.city or '')
+            r_ward_name = picking.ghn_receiver_ward_id.name if hasattr(picking, 'ghn_receiver_ward_id') and picking.ghn_receiver_ward_id else (receiver_partner.street2 or '')
+            
+            r_p, r_d, r_w = get_jnt_ids(r_prov_name, r_dist_name, r_ward_name)
+
+            # Sender Address from Company/Warehouse
+            s_prov_name = sender_partner.state_id.name or ''
+            s_dist_name = sender_partner.city or ''
+            s_ward_name = sender_partner.street2 or ''
+            
+            s_p, s_d, s_w = get_jnt_ids(s_prov_name, s_dist_name, s_ward_name)
 
             res.update({
                 'picking_id': picking.id,
@@ -272,18 +309,16 @@ class JTCreateOrderWizard(models.TransientModel):
                 
                 'sender_name': sender_partner.name or '',
                 'sender_mobile': (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0'),
-                'sender_prov_id': sender_prov_id,
-                'sender_city_id': sender_city_id,
-                'sender_area_id': sender_area_id,
+                'sender_prov_id': s_p,
+                'sender_city_id': s_d,
+                'sender_area_id': s_w,
                 'sender_address': sender_partner.street or '',
 
                 'receiver_name': receiver_partner.name or '',
                 'receiver_mobile': (receiver_partner.mobile or receiver_partner.phone or '').replace(' ', '').replace('+84', '0'),
-                'receiver_prov_id': receiver_prov_id,
-                'receiver_city_id': receiver_city_id,
-                'receiver_area_id': receiver_area_id,
-                'receiver_area_jnt_code': picking.ghn_receiver_ward_id.jnt_code if hasattr(picking.ghn_receiver_ward_id, 'jnt_code') else False,
-                'sender_area_jnt_code': sender_area_id.jnt_code if sender_area_id and hasattr(sender_area_id, 'jnt_code') else False,
+                'receiver_prov_id': r_p,
+                'receiver_city_id': r_d,
+                'receiver_area_id': r_w,
                 'receiver_address': receiver_partner.street or '',
             })
             # Try to get weight from picking/move lines if possible
@@ -379,7 +414,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "mobile": self.sender_mobile or "",
                 "prov": (self.sender_prov_id.name or "").strip(),
                 "city": (self.sender_city_id.name or "").strip(),
-                "area": f"{self.sender_area_id.name}-{self.sender_area_jnt_code or ''}" if self.sender_area_id else "",
+                "area": self.sender_area_id.jnt_code if self.sender_area_id else "",
                 "address": sanitize_address(self.sender_address)
             },
             "receiver": {
@@ -387,7 +422,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "mobile": self.receiver_mobile or "",
                 "prov": (self.receiver_prov_id.name or "").strip(),
                 "city": (self.receiver_city_id.name or "").strip(),
-                "area": f"{self.receiver_area_id.name}-{self.receiver_area_jnt_code or ''}" if self.receiver_area_id else "",
+                "area": self.receiver_area_id.jnt_code if self.receiver_area_id else "",
                 "address": sanitize_address(self.receiver_address)
             },
             "payType": self.pay_type,

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_sync_jnt_codes_global" model="ir.actions.server">
+        <field name="name">Cập nhật toàn bộ mã J&amp;T</field>
+        <field name="model_id" ref="model_jt_create_order_wizard"/>
+        <field name="state">code</field>
+        <field name="code">action = model.action_sync_jnt_codes()</field>
+        <field name="groups_id" eval="[(4, ref('stock.group_stock_manager'))]"/>
+    </record>
+
+    <menuitem id="menu_sync_jnt_codes"
+              name="Đồng bộ mã J&amp;T"
+              parent="stock.menu_stock_config_settings"
+              action="action_sync_jnt_codes_global"
+              groups="stock.group_stock_manager"
+              sequence="100"/>
+</odoo>
