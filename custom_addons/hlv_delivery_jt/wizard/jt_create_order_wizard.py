@@ -58,15 +58,51 @@ class JTCreateOrderWizard(models.TransientModel):
     width = fields.Float(string="Rộng (cm)", default=10)
     height = fields.Float(string="Cao (cm)", default=10)
 
+    # Sender Info (Editable)
+    sender_name = fields.Char(string="Tên người gửi", required=True)
+    sender_mobile = fields.Char(string="SĐT người gửi", required=True)
+    sender_prov = fields.Char(string="Tỉnh/Thành gửi", required=True)
+    sender_city = fields.Char(string="Quận/Huyện gửi", required=True)
+    sender_area = fields.Char(string="Phường/Xã gửi", required=True)
+    sender_address = fields.Char(string="Địa chỉ gửi", required=True)
+
+    # Receiver Info (Editable)
+    receiver_name = fields.Char(string="Tên người nhận", required=True)
+    receiver_mobile = fields.Char(string="SĐT người nhận", required=True)
+    receiver_prov = fields.Char(string="Tỉnh/Thành nhận", required=True)
+    receiver_city = fields.Char(string="Quận/Huyện nhận", required=True)
+    receiver_area = fields.Char(string="Phường/Xã nhận", required=True)
+    receiver_address = fields.Char(string="Địa chỉ nhận", required=True)
+
     @api.model
-    def default_get(self, fields):
-        res = super(JTCreateOrderWizard, self).default_get(fields)
+    def default_get(self, fields_list):
+        res = super(JTCreateOrderWizard, self).default_get(fields_list)
         if self._context.get('active_id'):
             picking = self.env['stock.picking'].browse(self._context.get('active_id'))
+            company = picking.company_id
+            warehouse = picking.picking_type_id.warehouse_id
+            
+            sender_partner = warehouse.partner_id or company.partner_id
+            receiver_partner = picking.partner_id
+
             res.update({
                 'picking_id': picking.id,
-                'cod_money': picking.sale_id.amount_total if picking.sale_id else 0.0,
-                'goods_value': picking.sale_id.amount_total if picking.sale_id else 0.0,
+                'cod_money': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
+                'goods_value': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
+                
+                'sender_name': sender_partner.name or '',
+                'sender_mobile': sender_partner.mobile or sender_partner.phone or '',
+                'sender_prov': sender_partner.state_id.name or '',
+                'sender_city': sender_partner.city or '',
+                'sender_area': sender_partner.street2 or '',
+                'sender_address': sender_partner.street or '',
+
+                'receiver_name': receiver_partner.name or '',
+                'receiver_mobile': receiver_partner.mobile or receiver_partner.phone or '',
+                'receiver_prov': receiver_partner.state_id.name or '',
+                'receiver_city': receiver_partner.city or '',
+                'receiver_area': receiver_partner.street2 or '',
+                'receiver_address': receiver_partner.street or '',
             })
             # Try to get weight from picking/move lines if possible
             total_weight = sum(move.product_id.weight * move.product_uom_qty for move in picking.move_ids)
@@ -111,6 +147,9 @@ class JTCreateOrderWizard(models.TransientModel):
         password_raw = company.jt_password or ""
         password_hashed = hashlib.md5(password_raw.encode('utf-8')).hexdigest().upper()
 
+        def sanitize_name(name):
+            return (name or "")[:30]
+
         biz_params = {
             "customerCode": company.jt_customer_code or "",
             "password": password_hashed,
@@ -118,39 +157,39 @@ class JTCreateOrderWizard(models.TransientModel):
             "orderType": int(self.order_type),
             "serviceType": int(self.service_type),
             "deliveryType": int(self.delivery_type),
-            "selfAddress": 0,
+            "selfAddress": 1, 
             "payType": self.pay_type,
             "productType": self.product_type,
             "goodsType": self.goods_type,
             "sender": {
-                "name": sender_partner.name,
-                "mobile": sender_partner.mobile or sender_partner.phone or "",
-                "prov": sender_partner.state_id.name or "",
-                "city": sender_partner.city or "",
-                "area": sender_partner.street2 or "",
-                "address": sender_partner.street or ""
+                "name": sanitize_name(self.sender_name),
+                "mobile": self.sender_mobile or "",
+                "prov": self.sender_prov or "",
+                "city": self.sender_city or "",
+                "area": self.sender_area or "",
+                "address": self.sender_address or ""
             },
             "receiver": {
-                "name": receiver_partner.name,
-                "mobile": receiver_partner.mobile or receiver_partner.phone or "",
-                "prov": receiver_partner.state_id.name or "",
-                "city": receiver_partner.city or "",
-                "area": receiver_partner.street2 or "",
-                "address": receiver_partner.street or ""
+                "name": sanitize_name(self.receiver_name),
+                "mobile": self.receiver_mobile or "",
+                "prov": self.receiver_prov or "",
+                "city": self.receiver_city or "",
+                "area": self.receiver_area or "",
+                "address": self.receiver_address or ""
             },
             "packageInfo": {
-                "weight": str(self.weight),
-                "length": int(self.length),
-                "width": int(self.width),
-                "height": int(self.height),
+                "weight": str(max(0.01, self.weight)),
+                "length": int(max(1, self.length)),
+                "width": int(max(1, self.width)),
+                "height": int(max(1, self.height)),
             },
             "isInsured": 1 if self.is_insured else 0,
-            "goodsValue": str(int(self.goods_value)),
-            "codMoney": str(int(self.cod_money)) if self.pay_type == 'CC_CASH' or self.cod_money > 0 else "0",
+            "goodsValue": str(max(1, int(self.goods_value))),
+            "codMoney": str(max(0, int(self.cod_money))) if self.pay_type == 'CC_CASH' or self.cod_money > 0 else "0",
             "remark": self.remark or "",
             "items": [],
-            "itemsValue": str(int(sum(move.product_id.list_price * move.product_uom_qty for move in self.picking_id.move_ids))),
-            "totalQuantity": int(sum(move.product_uom_qty for move in self.picking_id.move_ids))
+            "itemsValue": str(max(1, int(sum(move.product_id.list_price * move.product_uom_qty for move in self.picking_id.move_ids)))),
+            "totalQuantity": max(1, int(sum(move.product_uom_qty for move in self.picking_id.move_ids)))
         }
 
         # Add items

@@ -23,7 +23,25 @@
                             <field name="remark"/>
                         </group>
                     </group>
-                    <group string="Kích thước &amp; Khối lượng">
+                    <group>
+                        <group string="Người gửi (Kho/Cửa hàng)">
+                            <field name="sender_name"/>
+                            <field name="sender_mobile"/>
+                            <field name="sender_prov"/>
+                            <field name="sender_city"/>
+                            <field name="sender_area"/>
+                            <field name="sender_address"/>
+                        </group>
+                        <group string="Người nhận (Khách hàng)">
+                            <field name="receiver_name"/>
+                            <field name="receiver_mobile"/>
+                            <field name="receiver_prov"/>
+                            <field name="receiver_city"/>
+                            <field name="receiver_area"/>
+                            <field name="receiver_address"/>
+                        </group>
+                    </group>
+                    <group string="Thông số kiện hàng">
                         <group>
                             <field name="weight"/>
                             <field name="length"/>
