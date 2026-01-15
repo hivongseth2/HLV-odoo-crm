@@ -30,6 +30,7 @@
                             <field name="sender_prov_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="sender_city_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="sender_area_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="sender_area_jnt_code" placeholder="Mã J&amp;T (Ví dụ: 028QQ107)"/>
                             <field name="sender_address"/>
                         </group>
                         <group string="Người nhận (Khách hàng)">
@@ -38,6 +39,7 @@
                             <field name="receiver_prov_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="receiver_city_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="receiver_area_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="receiver_area_jnt_code" placeholder="Mã J&amp;T (Ví dụ: 028QQ107)"/>
                             <field name="receiver_address"/>
                         </group>
                     </group>

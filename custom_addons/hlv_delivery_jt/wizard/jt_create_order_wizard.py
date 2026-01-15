@@ -91,7 +91,20 @@ class JTCreateOrderWizard(models.TransientModel):
                                       domain="[('province_id', '=', receiver_prov_id)]")
     receiver_area_id = fields.Many2one("ghn.ward", string="Phường/Xã nhận", required=True,
                                       domain="[('district_id', '=', receiver_city_id)]")
+    receiver_area_jnt_code = fields.Char(string="Mã J&T Phường nhận")
     receiver_address = fields.Char(string="Địa chỉ nhận", required=True)
+
+    sender_area_jnt_code = fields.Char(string="Mã J&T Phường gửi")
+
+    @api.onchange('sender_area_id')
+    def _onchange_sender_area_id(self):
+        if self.sender_area_id:
+            self.sender_area_jnt_code = self.sender_area_id.jnt_code
+
+    @api.onchange('receiver_area_id')
+    def _onchange_receiver_area_id(self):
+        if self.receiver_area_id:
+            self.receiver_area_jnt_code = self.receiver_area_id.jnt_code
 
     @api.onchange('receiver_prov_id')
     def _onchange_receiver_prov_id(self):
@@ -192,6 +205,8 @@ class JTCreateOrderWizard(models.TransientModel):
                 'receiver_prov_id': receiver_prov_id,
                 'receiver_city_id': receiver_city_id,
                 'receiver_area_id': receiver_area_id,
+                'receiver_area_jnt_code': picking.ghn_receiver_ward_id.jnt_code if hasattr(picking.ghn_receiver_ward_id, 'jnt_code') else False,
+                'sender_area_jnt_code': sender_area_id.jnt_code if sender_area_id and hasattr(sender_area_id, 'jnt_code') else False,
                 'receiver_address': receiver_partner.street or '',
             })
             # Try to get weight from picking/move lines if possible
@@ -202,6 +217,12 @@ class JTCreateOrderWizard(models.TransientModel):
 
     def action_create_jt_order(self):
         self.ensure_one()
+        # Save J&T codes back to the location records if they've changed
+        if self.sender_area_id and self.sender_area_jnt_code != self.sender_area_id.jnt_code:
+            self.sender_area_id.write({'jnt_code': self.sender_area_jnt_code})
+        if self.receiver_area_id and self.receiver_area_jnt_code != self.receiver_area_id.jnt_code:
+            self.receiver_area_id.write({'jnt_code': self.receiver_area_jnt_code})
+
         company = self.picking_id.company_id
         get_param = self.env['ir.config_parameter'].sudo().get_param
         api_account = get_param('jnt_apiAccount')
@@ -258,20 +279,22 @@ class JTCreateOrderWizard(models.TransientModel):
         def sanitize_address(addr, length=250):
             return (addr or "")[:length]
 
-        volumetric_weight = (self.length * self.width * self.height) / 6000.0
+        # J&T Vietnam uses specific string formats for many fields
+        goods_val_str = str(int(self.goods_value))
+        cod_money_str = str(int(self.cod_money))
+        weight_str = str(self.weight)
 
-        # Sanitize txlogisticId (remove / to avoid potential errors)
-        txlogistic_id = (self.picking_id.name or "").replace("/", "-")
-
+        # Payload
+        picking = self.picking_id
+        customer_code = jnt_customer_code # Use the already defined jnt_customer_code
         biz_params = {
-            "customerCode": jnt_customer_code,
+            "customerCode": customer_code,
             "password": password_to_send,
-            "txlogisticId": txlogistic_id,
-            "orderType": str(self.order_type),
-            "serviceType": str(self.service_type),
-            "deliveryType": str(self.delivery_type),
-            "selfAddress": 0, 
-            "payType": self.pay_type,
+            "txlogisticId": picking.name.replace("/", "-"),
+            "orderType": self.order_type,
+            "serviceType": self.service_type,
+            "deliveryType": self.delivery_type,
+            "selfAddress": 0,
             "productType": self.product_type,
             "goodsType": self.goods_type,
             "sender": {
@@ -279,7 +302,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "mobile": self.sender_mobile or "",
                 "prov": (self.sender_prov_id.name or "").strip(),
                 "city": (self.sender_city_id.name or "").strip(),
-                "area": (self.sender_area_id.name or "").strip(),
+                "area": f"{self.sender_area_id.name}-{self.sender_area_jnt_code or ''}" if self.sender_area_id else "",
                 "address": sanitize_address(self.sender_address)
             },
             "receiver": {
@@ -287,33 +310,29 @@ class JTCreateOrderWizard(models.TransientModel):
                 "mobile": self.receiver_mobile or "",
                 "prov": (self.receiver_prov_id.name or "").strip(),
                 "city": (self.receiver_city_id.name or "").strip(),
-                "area": (self.receiver_area_id.name or "").strip(),
+                "area": f"{self.receiver_area_id.name}-{self.receiver_area_jnt_code or ''}" if self.receiver_area_id else "",
                 "address": sanitize_address(self.receiver_address)
             },
+            "payType": self.pay_type,
+            "goodsValue": goods_val_str,
+            "codMoney": cod_money_str,
+            "remark": self.remark or "",
             "packageInfo": {
-                "weight": str(round(max(0.01, self.weight), 2)),
-                "length": int(max(1, self.length)),
-                "width": int(max(1, self.width)),
-                "height": int(max(1, self.height)),
-                "volume": str(round(volumetric_weight, 2))
+                "weight": weight_str,
+                "length": int(self.length),
+                "width": int(self.width),
+                "height": int(self.height),
+                "volume": "{:.2f}".format(self.length * self.width * self.height / 6000.0)
             },
-            "isInsured": 1 if self.is_insured else 0,
-            "goodsValue": str(int(max(1, self.goods_value))),
-            "codMoney": str(int(max(0, self.cod_money))) if self.pay_type == 'CC_CASH' or self.cod_money > 0 else "0",
-            "remark": (self.remark or "")[:200],
-            "items": [],
-            "itemsValue": str(int(sum(move.product_id.list_price * move.product_uom_qty for move in self.picking_id.move_ids))),
-            "totalQuantity": int(sum(move.product_uom_qty for move in self.picking_id.move_ids))
+            "itemsValue": goods_val_str,
+            "totalQuantity": len(picking.move_ids_without_package),
+            "items": [{
+                "itemName": line.product_id.name[:100],
+                "englishName": line.product_id.name[:100],
+                "number": str(int(line.product_uom_qty)),
+                "itemValue": str(int(line.product_id.list_price or 0)) # Using list_price or price unit
+            } for line in picking.move_ids_without_package]
         }
-
-        # Add items
-        for move in self.picking_id.move_ids:
-            biz_params["items"].append({
-                "itemName": move.product_id.name[:80],
-                "englishName": (move.product_id.name or "Goods")[:80],
-                "number": str(int(move.product_uom_qty)),
-                "itemValue": str(int(move.product_id.list_price))
-            })
 
         _logger.info("J&T Creating Order for %s", self.picking_id.name)
         result = client.add_order(biz_params)
