@@ -183,7 +183,8 @@ class StockPicking(models.Model):
         
         # lấy thông tin khách
         if self.picking_type_code == 'outgoing' and self.partner_id:
-            message += f"  • Khách hàng: {self.partner_id.name}\n"
+            message += f"  • Khách hàng: {self.partner_id.parent_id.name or self.partner_id.name}\n"
+            
         
         # Lấy mã nhân viên sale từ sale.order (chỉ cho outgoing)
         saler_code = None
