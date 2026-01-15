@@ -21,12 +21,11 @@
                     }
                     /* Custom Label Styling */
                     .label-container {
-                        width: 40mm;
-                        height: 29.5mm; /* Slightly less than 30mm to prevent overflow/drift */
-                        margin: 0;
+                        width: 38mm; /* Reduced to provide buffer */
+                        height: 28mm; /* Reduced to provide buffer */
+                        margin: 0 auto; /* Center in the 40x30 page */
                         padding: 0;
                         page-break-inside: avoid;
-                        page-break-after: always;
                         position: relative;
                         font-family: Arial, sans-serif;
                         text-align: center;
