@@ -38,15 +38,15 @@ class JTApiUtils:
         digest = self._generate_digest(biz_content)
 
         headers = {
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'apiAccount': str(self.api_account),
+            'digest': digest,
+            'timestamp': str(timestamp)
         }
 
-        # J&T uses form-encoded body for bizContent, apiAccount, digest, timestamp
+        # J&T uses form-encoded body for bizContent
         payload = {
-            'bizContent': biz_content,
-            'apiAccount': self.api_account,
-            'digest': digest,
-            'timestamp': timestamp
+            'bizContent': biz_content
         }
 
         _logger.info("J&T API Request to %s | Account: %s", self.api_url, self.api_account)
