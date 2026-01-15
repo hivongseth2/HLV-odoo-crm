@@ -35,9 +35,9 @@
                         <group string="Người nhận (Khách hàng)">
                             <field name="receiver_name"/>
                             <field name="receiver_mobile"/>
-                            <field name="receiver_prov"/>
-                            <field name="receiver_city"/>
-                            <field name="receiver_area"/>
+                            <field name="receiver_prov_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="receiver_city_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="receiver_area_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="receiver_address"/>
                         </group>
                     </group>

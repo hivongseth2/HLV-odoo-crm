@@ -69,10 +69,59 @@ class JTCreateOrderWizard(models.TransientModel):
     # Receiver Info (Editable)
     receiver_name = fields.Char(string="Tên người nhận", required=True)
     receiver_mobile = fields.Char(string="SĐT người nhận", required=True)
-    receiver_prov = fields.Char(string="Tỉnh/Thành nhận", required=True)
-    receiver_city = fields.Char(string="Quận/Huyện nhận", required=True)
-    receiver_area = fields.Char(string="Phường/Xã nhận", required=True)
+    receiver_prov_id = fields.Many2one("ghn.province", string="Tỉnh/Thành nhận", required=True)
+    receiver_city_id = fields.Many2one("ghn.district", string="Quận/Huyện nhận", required=True, 
+                                      domain="[('province_id', '=', receiver_prov_id)]")
+    receiver_area_id = fields.Many2one("ghn.ward", string="Phường/Xã nhận", required=True,
+                                      domain="[('district_id', '=', receiver_city_id)]")
     receiver_address = fields.Char(string="Địa chỉ nhận", required=True)
+
+    @api.onchange('receiver_prov_id')
+    def _onchange_receiver_prov_id(self):
+        if self.receiver_prov_id:
+            return {'domain': {'receiver_city_id': [('province_id', '=', self.receiver_prov_id.id)]}}
+        else:
+            return {'domain': {'receiver_city_id': []}}
+
+    @api.onchange('receiver_city_id')
+    def _onchange_receiver_city_id(self):
+        if self.receiver_city_id:
+            # Also fetch wards from GHN if they don't exist yet (logic borrowed from GHN module)
+            self._fetch_ghn_wards(self.receiver_city_id)
+            return {'domain': {'receiver_area_id': [('district_id', '=', self.receiver_city_id.id)]}}
+        else:
+            return {'domain': {'receiver_area_id': []}}
+
+    def _fetch_ghn_wards(self, district):
+        """Fetch wards from GHN API if not already in local DB."""
+        if not district:
+            return
+        
+        company = self.env.company
+        # We need GHNApiUtils which is already imported in some GHN files, but we can call it here too
+        # To avoid circular import or dependency issues, we check if the module exists
+        try:
+            from odoo.addons.hlv_delivery_ghn.utils.ghn_api_utils import GHNApiUtils
+            client = GHNApiUtils(
+                token=company.ghn_api_token,
+                shop_id=company.ghn_shop_id,
+                environment=company.ghn_environment
+            )
+            wards_data = client.get_wards(district.district_id)
+            WardModel = self.env['ghn.ward']
+            for w in wards_data:
+                exist = WardModel.search([
+                    ('ward_code', '=', w['WardCode']),
+                    ('district_id', '=', district.id)
+                ], limit=1)
+                if not exist:
+                    WardModel.create({
+                        'ward_code': w['WardCode'],
+                        'name': w['WardName'],
+                        'district_id': district.id
+                    })
+        except Exception as e:
+            _logger.warning("Could not fetch GHN wards for dropdown: %s", e)
 
     @api.model
     def default_get(self, fields_list):
@@ -85,10 +134,10 @@ class JTCreateOrderWizard(models.TransientModel):
             sender_partner = warehouse.partner_id or company.partner_id
             receiver_partner = picking.partner_id
 
-            # Try to get labels from GHN location fields if they exist on picking
-            receiver_prov_name = picking.ghn_receiver_province_id.name if hasattr(picking, 'ghn_receiver_province_id') and picking.ghn_receiver_province_id else (receiver_partner.state_id.name or '')
-            receiver_city_name = picking.ghn_receiver_district_id.name if hasattr(picking, 'ghn_receiver_district_id') and picking.ghn_receiver_district_id else (receiver_partner.city or '')
-            receiver_area_name = picking.ghn_receiver_ward_id.name if hasattr(picking, 'ghn_receiver_ward_id') and picking.ghn_receiver_ward_id else (receiver_partner.street2 or '')
+            # Try to get Many2one records from GHN identification on picking
+            receiver_prov_id = picking.ghn_receiver_province_id.id if hasattr(picking, 'ghn_receiver_province_id') and picking.ghn_receiver_province_id else False
+            receiver_city_id = picking.ghn_receiver_district_id.id if hasattr(picking, 'ghn_receiver_district_id') and picking.ghn_receiver_district_id else False
+            receiver_area_id = picking.ghn_receiver_ward_id.id if hasattr(picking, 'ghn_receiver_ward_id') and picking.ghn_receiver_ward_id else False
 
             res.update({
                 'picking_id': picking.id,
@@ -104,9 +153,9 @@ class JTCreateOrderWizard(models.TransientModel):
 
                 'receiver_name': receiver_partner.name or '',
                 'receiver_mobile': (receiver_partner.mobile or receiver_partner.phone or '').replace(' ', '').replace('+84', '0'),
-                'receiver_prov': receiver_prov_name,
-                'receiver_city': receiver_city_name,
-                'receiver_area': receiver_area_name,
+                'receiver_prov_id': receiver_prov_id,
+                'receiver_city_id': receiver_city_id,
+                'receiver_area_id': receiver_area_id,
                 'receiver_address': receiver_partner.street or '',
             })
             # Try to get weight from picking/move lines if possible
@@ -200,9 +249,9 @@ class JTCreateOrderWizard(models.TransientModel):
             "receiver": {
                 "name": sanitize_name(self.receiver_name),
                 "mobile": self.receiver_mobile or "",
-                "prov": (self.receiver_prov or "").strip(),
-                "city": (self.receiver_city or "").strip(),
-                "area": (self.receiver_area or "").strip(),
+                "prov": (self.receiver_prov_id.name or "").strip(),
+                "city": (self.receiver_city_id.name or "").strip(),
+                "area": (self.receiver_area_id.name or "").strip(),
                 "address": sanitize_address(self.receiver_address)
             },
             "packageInfo": {
