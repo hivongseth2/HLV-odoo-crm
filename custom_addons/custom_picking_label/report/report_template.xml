@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_label_template">
+        <t t-call="web.basic_layout">
+            <div class="page">
+                <t t-foreach="docs" t-as="wizard">
+                    <t t-foreach="wizard.get_data_for_report()" t-as="product">
+                        
+                        <div style="width: 100%; page-break-inside: avoid; border: 1px solid black; padding: 10px; margin-bottom: 5px;">
+                            <div class="text-center">
+                                <strong t-field="product.name"/>
+                            </div>
+                            <div class="text-center">
+                                <span t-field="product.default_code"/>
+                            </div>
+                            <div class="text-center">
+                                <img t-if="product.barcode" 
+                                     t-att-src="'/report/barcode/?type=%s&amp;value=%s&amp;width=%s&amp;height=%s' % ('Code128', product.barcode, 600, 100)" 
+                                     style="width:200px;height:50px;"/>
+                            </div>
+                            <div class="text-center">
+                                <span t-field="product.barcode"/>
+                            </div>
+                        </div>
+                        </t>
+                </t>
+            </div>
+        </t>
+    </template>
+</odoo>
