@@ -192,17 +192,17 @@ class JTCreateOrderWizard(models.TransientModel):
             "sender": {
                 "name": sanitize_name(self.sender_name),
                 "mobile": self.sender_mobile or "",
-                "prov": self.sender_prov or "",
-                "city": self.sender_city or "",
-                "area": self.sender_area or "",
+                "prov": (self.sender_prov or "").strip(),
+                "city": (self.sender_city or "").strip(),
+                "area": (self.sender_area or "").strip(),
                 "address": sanitize_address(self.sender_address)
             },
             "receiver": {
                 "name": sanitize_name(self.receiver_name),
                 "mobile": self.receiver_mobile or "",
-                "prov": self.receiver_prov or "",
-                "city": self.receiver_city or "",
-                "area": self.receiver_area or "",
+                "prov": (self.receiver_prov or "").strip(),
+                "city": (self.receiver_city or "").strip(),
+                "area": (self.receiver_area or "").strip(),
                 "address": sanitize_address(self.receiver_address)
             },
             "packageInfo": {
