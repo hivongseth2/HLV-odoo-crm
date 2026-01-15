@@ -40,7 +40,7 @@ class JTCreateOrderWizard(models.TransientModel):
         ('bm000001', 'Document (bm000001)'),
         ('bm000010', 'Goods (bm000010)'),
         ('bm000011', 'Fresh (bm000011)')
-    ], string="Mã loại hàng hóa", default='bm000010', required=True)
+    ], string="Loat hàng hóa", default='bm000010', required=True)
 
     delivery_type = fields.Selection([
         ('1', 'Phát bình thường'),
@@ -150,10 +150,16 @@ class JTCreateOrderWizard(models.TransientModel):
 
         # J&T requires prov, city, area. Odoo has state_id, city, and maybe street2 as area.
         # This will need mapping if the address structure is different.
-        # For now, let's use the partner fields.
-        
-        def sanitize_name(name):
-            return (name or "")[:30]
+        jnt_password_raw = get_param('jnt_password') or ""
+        password_hashed = hashlib.md5(jnt_password_raw.encode('utf-8')).hexdigest().upper() if jnt_password_raw else ""
+
+        def sanitize_name(name, length=40):
+            return (name or "")[:length]
+
+        def sanitize_address(addr, length=250):
+            return (addr or "")[:length]
+
+        volumetric_weight = (self.length * self.width * self.height) / 6000.0
 
         biz_params = {
             "customerCode": jnt_customer_code,
@@ -172,7 +178,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "prov": self.sender_prov or "",
                 "city": self.sender_city or "",
                 "area": self.sender_area or "",
-                "address": self.sender_address or ""
+                "address": sanitize_address(self.sender_address)
             },
             "receiver": {
                 "name": sanitize_name(self.receiver_name),
@@ -180,22 +186,22 @@ class JTCreateOrderWizard(models.TransientModel):
                 "prov": self.receiver_prov or "",
                 "city": self.receiver_city or "",
                 "area": self.receiver_area or "",
-                "address": self.receiver_address or ""
+                "address": sanitize_address(self.receiver_address)
             },
             "packageInfo": {
-                "weight": str(max(0.01, self.weight)),
+                "weight": str(round(max(0.01, self.weight), 2)),
                 "length": int(max(1, self.length)),
                 "width": int(max(1, self.width)),
                 "height": int(max(1, self.height)),
-                "volume": str(int(self.length * self.width * self.height))
+                "volume": str(round(volumetric_weight, 2))
             },
             "isInsured": 1 if self.is_insured else 0,
-            "goodsValue": str(max(1, int(self.goods_value))),
-            "codMoney": str(max(0, int(self.cod_money))) if self.pay_type == 'CC_CASH' or self.cod_money > 0 else "0",
-            "remark": self.remark or "",
+            "goodsValue": str(int(max(1, self.goods_value))),
+            "codMoney": str(int(max(0, self.cod_money))) if self.pay_type == 'CC_CASH' or self.cod_money > 0 else "0",
+            "remark": (self.remark or "")[:200],
             "items": [],
-            "itemsValue": str(max(1, int(sum(move.product_id.list_price * move.product_uom_qty for move in self.picking_id.move_ids)))),
-            "totalQuantity": max(1, int(sum(move.product_uom_qty for move in self.picking_id.move_ids)))
+            "itemsValue": str(int(sum(move.product_id.list_price * move.product_uom_qty for move in self.picking_id.move_ids))),
+            "totalQuantity": int(sum(move.product_uom_qty for move in self.picking_id.move_ids))
         }
 
         # Add items
