@@ -153,9 +153,9 @@ class JTCreateOrderWizard(models.TransientModel):
         # J&T requires prov, city, area. Odoo has state_id, city, and maybe street2 as area.
         # This will need mapping if the address structure is different.
         
-        # Use the 32-char MD5 password string provided by J&T directly
-        # Try lowercase as J&T might require it in lowercase format
-        password_to_send = jnt_password.lower()
+        # Use the 32-char MD5 password string provided by J&T
+        # Must be UPPERCASE as shown in J&T API documentation example
+        password_to_send = jnt_password.upper()
         
         _logger.info("J&T Password | customerCode: %s | password: %s", jnt_customer_code, password_to_send)
 

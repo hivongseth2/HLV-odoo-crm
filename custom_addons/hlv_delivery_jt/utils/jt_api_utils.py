@@ -45,8 +45,8 @@ class JTApiUtils:
             'Content-Type': 'application/x-www-form-urlencoded',
             'apiAccount': str(self.api_account),
             'digest': digest,
-            'timestamp': str(timestamp),
-            'privateKey': self.private_key  # Required by J&T API
+            'timestamp': str(timestamp)
+            # Note: privateKey is used for digest calculation, not sent in headers
         }
 
         # J&T uses form-encoded body for bizContent
