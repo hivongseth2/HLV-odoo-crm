@@ -1,0 +1,414 @@
+{
+  "2 CẤP": {
+    "dimension": "A1:D3320",
+    "max_col": 4,
+    "max_row": 3320,
+    "sample": [
+      [
+        "Mã Tỉnh Thành\nProvince/City Code\n省市代码",
+        "Tên Tỉnh Thành\nProvince/City Name\n省市名称",
+        "Mã Phường Xã \nWard/Commune Code\n乡镇/街道代码",
+        "Tên Phường Xã\nWard/Commune Name\n乡镇/街道名称"
+      ],
+      [
+        "01",
+        "Hà Nội",
+        "00070",
+        "Phường Hoàn Kiếm"
+      ],
+      [
+        "01",
+        "Hà Nội",
+        "00082",
+        "Phường Cửa Nam"
+      ],
+      [
+        "01",
+        "Hà Nội",
+        "00004",
+        "Phường Ba Đình"
+      ],
+      [
+        "01",
+        "Hà Nội",
+        "00008",
+        "Phường Ngọc Hà"
+      ],
+      [
+        "01",
+        "Hà Nội",
+        "00025",
+        "Phường Giảng Võ"
+      ],
+      [
+        "01",
+        "Hà Nội",
+        "00256",
+        "Phường Hai Bà Trưng"
+      ],
+      [
+        "01",
+        "Hà Nội",
+        "00283",
+        "Phường Vĩnh Tuy"
+      ],
+      [
+        "01",
+        "Hà Nội",
+        "00292",
+        "Phường Bạch Mai"
+      ],
+      [
+        "01",
+        "Hà Nội",
+        "00235",
+        "Phường Đống Đa"
+      ]
+    ]
+  },
+  "3 CẤP": {
+    "dimension": "A1:D10594",
+    "max_col": 4,
+    "max_row": 10594,
+    "sample": [
+      [
+        "Tên Tỉnh Thành\nProvince/City Name\n省市名称",
+        "Tên Quận Huyện\nDistrict Name\n区/县名称",
+        "Tên Phường Xã\nWard/Commune Name\n乡镇/街道名称",
+        null
+      ],
+      [
+        "Thành phố Hà Nội",
+        "Quận Ba Đình",
+        "Phường Phúc Xá",
+        null
+      ],
+      [
+        "Thành phố Hà Nội",
+        "Quận Ba Đình",
+        "Phường Trúc Bạch",
+        null
+      ],
+      [
+        "Thành phố Hà Nội",
+        "Quận Ba Đình",
+        "Phường Vĩnh Phúc",
+        null
+      ],
+      [
+        "Thành phố Hà Nội",
+        "Quận Ba Đình",
+        "Phường Cống Vị",
+        null
+      ],
+      [
+        "Thành phố Hà Nội",
+        "Quận Ba Đình",
+        "Phường Liễu Giai",
+        null
+      ],
+      [
+        "Thành phố Hà Nội",
+        "Quận Ba Đình",
+        "Phường Nguyễn Trung Trực",
+        null
+      ],
+      [
+        "Thành phố Hà Nội",
+        "Quận Ba Đình",
+        "Phường Quán Thánh",
+        null
+      ],
+      [
+        "Thành phố Hà Nội",
+        "Quận Ba Đình",
+        "Phường Ngọc Hà",
+        null
+      ],
+      [
+        "Thành phố Hà Nội",
+        "Quận Ba Đình",
+        "Phường Điện Biên",
+        null
+      ]
+    ]
+  },
+  "MAPPING": {
+    "dimension": "A1:F12777",
+    "max_col": 6,
+    "max_row": 12777,
+    "sample": [
+      [
+        "Địa chỉ cũ / Old Address/ 旧地址",
+        null,
+        null,
+        null,
+        "Địa chỉ mới/ New Address/ 新地址",
+        null
+      ],
+      [
+        "Tên Tỉnh Thành\nProvince/City Name\n省市名称",
+        "Tên Quận Huyện\nDistrict Name\n区/县名称",
+        "Tên Phường Xã - Mã JT\nWard/Commune Name - JT CODE\n乡镇/街道名称 - JT 代码",
+        "Tên Phường Xã\nWard/Commune Name\n乡镇/街道名称",
+        "Tên Tỉnh Thành\nProvince/City Name\n省市名称",
+        "Tên Phường Xã\nWard/Commune Name\n乡镇/街道名称"
+      ],
+      [
+        "Hồ Chí Minh",
+        "Thành Phố Thủ Đức",
+        "Phường Long Thạnh Mỹ-028TPT19",
+        "Phường Long Thạnh Mỹ",
+        "Hồ Chí Minh",
+        "Phường Long Bình"
+      ],
+      [
+        "Hồ Chí Minh",
+        "Thành Phố Thủ Đức",
+        "Phường An Khánh-028TPT02",
+        "Phường An Khánh",
+        "Hồ Chí Minh",
+        "Phường An Khánh"
+      ],
+      [
+        "Hồ Chí Minh",
+        "Thành Phố Thủ Đức",
+        "Phường An Phú-028TPT03",
+        "Phường An Phú",
+        "Hồ Chí Minh",
+        "Phường An Khánh"
+      ],
+      [
+        "Hồ Chí Minh",
+        "Thành Phố Thủ Đức",
+        "Phường Long Phước-028TPT21",
+        "Phường Long Phước",
+        "Hồ Chí Minh",
+        "Phường Long Phước"
+      ],
+      [
+        "Hồ Chí Minh",
+        "Thành Phố Thủ Đức",
+        "Phường Trường Thạnh-028TPT15",
+        "Phường Trường Thạnh",
+        "Hồ Chí Minh",
+        "Phường Long Phước"
+      ],
+      [
+        "Hồ Chí Minh",
+        "Thành Phố Thủ Đức",
+        "Phường Bình Trưng Tây-028TPT05",
+        "Phường Bình Trưng Tây",
+        "Hồ Chí Minh",
+        "Phường Bình Trưng"
+      ],
+      [
+        "Hồ Chí Minh",
+        "Thành Phố Thủ Đức",
+        "Phường Tân Phú-028TPT17",
+        "Phường Tân Phú",
+        "Hồ Chí Minh",
+        "Phường Tăng Nhơn Phú"
+      ],
+      [
+        "Hồ Chí Minh",
+        "Thành Phố Thủ Đức",
+        "Phường Phước Long A-028TPT10",
+        "Phường Phước Long A",
+        "Hồ Chí Minh",
+        "Phường Phước Long"
+      ]
+    ]
+  },
+  "Tổng quan": {
+    "dimension": "A1:G23",
+    "max_col": 7,
+    "max_row": 23,
+    "sample": [
+      [
+        "API JnT hỗ trợ lên đơn với 2 cấp hành chính mới và 3 cấp hành chính cũ",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        "1. Tạo đơn hàng bằng địa chỉ mới 2 cấp",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        "Input sử dụng theo danh sách ở sheet [2 CẤP]",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        "\"selfAddress\": có thể nhập \"0\" hoặc \"1\" đều được\n\"prov\": Tỉnh Thành phố, có thể nhập theo Text (cột B) hoặc theo Code (cột A)\n\"city\": null\n\"area\": Phường Xã, có thể nhập theo Text (cột D) hoặc theo Code (cột C)",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        "Ví dụ 1: ",
+        "Ví dụ 2: ",
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        "  \"selfAddress\": 0,\n  \"sender\": {\n    \"prov\": \"Hải Phòng\",\n    \"city\": null,\n    \"area\": \"Đặc khu Bạch Long Vĩ\",\n    \"address\": \"10 Mai Chí Thọ\"\n  },\n  \"receiver\": {\n    \"prov\": \"Lâm Đồng\",\n    \"city\": null,\n    \"area\": \"Phường 2 Bảo Lộc\",\n    \"address\": \"71/28 Phan Đăng Lưu\"",
+        "  \"selfAddress\": 1,\n  \"sender\": {\n    \"prov\": \"37\",\n    \"city\": null,\n    \"area\": \"14389\",\n    \"address\": \"10 Mai Chí Thọ\"\n  },\n  \"receiver\": {\n    \"prov\": \"46\",\n    \"city\": null,\n    \"area\": \"19960\",\n    \"address\": \"71/28 Phan Đăng Lưu\"",
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      [
+        "2. Tạo đơn hàng bằng địa chỉ cũ 3 cấp",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    ]
+  },
+  "Overview": {
+    "dimension": "A1:B23",
+    "max_col": 2,
+    "max_row": 23,
+    "sample": [
+      [
+        "The J&T API supports order creation with both: the new 2-level administrative division and the old 3-level administrative division.",
+        null
+      ],
+      [
+        null,
+        null
+      ],
+      [
+        "1. Create an order using the new 2-level address",
+        null
+      ],
+      [
+        "The input should follow the list in the [2 CẤP] sheet",
+        null
+      ],
+      [
+        "\"selfAddress\": You can enter either \"0\" or \"1\"\n\"prov\": Province/City, can be entered either as Text (Column B) or as Code (Column A)\n\"city\": null\n\"area\": Ward/Commune, can be entered either as Text (Column D) or as Code (Column C)",
+        null
+      ],
+      [
+        null,
+        null
+      ],
+      [
+        "Example 1:",
+        "Example 2:"
+      ],
+      [
+        "  \"selfAddress\": 0,\n  \"sender\": {\n    \"prov\": \"Hải Phòng\",\n    \"city\": null,\n    \"area\": \"Đặc khu Bạch Long Vĩ\",\n    \"address\": \"10 Mai Chí Thọ\"\n  },\n  \"receiver\": {\n    \"prov\": \"Lâm Đồng\",\n    \"city\": null,\n    \"area\": \"Phường 2 Bảo Lộc\",\n    \"address\": \"71/28 Phan Đăng Lưu\"",
+        "  \"selfAddress\": 1,\n  \"sender\": {\n    \"prov\": \"37\",\n    \"city\": null,\n    \"area\": \"14389\",\n    \"address\": \"10 Mai Chí Thọ\"\n  },\n  \"receiver\": {\n    \"prov\": \"46\",\n    \"city\": null,\n    \"area\": \"19960\",\n    \"address\": \"71/28 Phan Đăng Lưu\""
+      ],
+      [
+        null,
+        null
+      ],
+      [
+        "2. Create an order using the old 3-level address",
+        null
+      ]
+    ]
+  },
+  "概况": {
+    "dimension": "A1:B23",
+    "max_col": 2,
+    "max_row": 23,
+    "sample": [
+      [
+        "J&T 的 API 支持使用新的二级行政区划和旧的三级行政区划来创建订单",
+        null
+      ],
+      [
+        null,
+        null
+      ],
+      [
+        "1. 使用新的二级地址创建订单",
+        null
+      ],
+      [
+        "输入需按照 [2 CẤP] 工作表中的列表",
+        null
+      ],
+      [
+        "\"selfAddress\": 可以输入 \"0\" 或 \"1\" 都可以\n\"prov\": 省/市，可以输入文本（列 B）或代码（列 A）\n\"city\": null\n\"area\": 乡/镇/街道，可以输入文本（列 D）或代码（列 C）",
+        null
+      ],
+      [
+        null,
+        null
+      ],
+      [
+        "示例 1:",
+        "示例 2:"
+      ],
+      [
+        "  \"selfAddress\": 0,\n  \"sender\": {\n    \"prov\": \"Hải Phòng\",\n    \"city\": null,\n    \"area\": \"Đặc khu Bạch Long Vĩ\",\n    \"address\": \"10 Mai Chí Thọ\"\n  },\n  \"receiver\": {\n    \"prov\": \"Lâm Đồng\",\n    \"city\": null,\n    \"area\": \"Phường 2 Bảo Lộc\",\n    \"address\": \"71/28 Phan Đăng Lưu\"",
+        "  \"selfAddress\": 1,\n  \"sender\": {\n    \"prov\": \"37\",\n    \"city\": null,\n    \"area\": \"14389\",\n    \"address\": \"10 Mai Chí Thọ\"\n  },\n  \"receiver\": {\n    \"prov\": \"46\",\n    \"city\": null,\n    \"area\": \"19960\",\n    \"address\": \"71/28 Phan Đăng Lưu\""
+      ],
+      [
+        null,
+        null
+      ],
+      [
+        "2. 使用旧的三级地址创建订单",
+        null
+      ]
+    ]
+  }
+}

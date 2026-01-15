@@ -5,6 +5,9 @@
         <field name="model">jt.create.order.wizard</field>
         <field name="arch" type="xml">
             <form string="Tạo đơn J&amp;T Express">
+                <header>
+                    <button name="action_sync_jnt_codes" type="object" string="Cập nhật mã J&amp;T" class="btn-secondary" icon="fa-refresh" help="Cập nhật mã Phường/Xã J&amp;T từ file dữ liệu hệ thống"/>
+                </header>
                 <sheet>
                     <group>
                         <group string="Dịch vụ &amp; Thanh toán">

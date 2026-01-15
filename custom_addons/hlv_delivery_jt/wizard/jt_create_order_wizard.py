@@ -153,6 +153,83 @@ class JTCreateOrderWizard(models.TransientModel):
         except Exception as e:
             _logger.warning("Could not fetch GHN wards for dropdown: %s", e)
 
+    def _normalize_name(self, name):
+        if not name: return ""
+        name = str(name).lower().strip()
+        prefixes = [
+            'tỉnh ', 'thành phố ', 'quận ', 'huyện ', 'thị xã ', 
+            'phường ', 'xã ', 'thị trấn ', 'tp. ', 'tp ', 'q. ', 'h. ', 'p. ', 'x. '
+        ]
+        for p in prefixes:
+            if name.startswith(p):
+                name = name[len(p):]
+        return name.strip()
+
+    def action_sync_jnt_codes(self):
+        """Sync J&T codes from the local JSON data file."""
+        import json
+        import os
+        from odoo.modules.module import get_module_resource
+
+        json_path = get_module_resource('hlv_delivery_jt', 'data', 'jnt_mapping.json')
+        if not json_path or not os.path.exists(json_path):
+            raise UserError(_("Không tìm thấy file dữ liệu mapping J&T!"))
+
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                mapping_data = json.load(f)
+        except Exception as e:
+            raise UserError(_("Lỗi đọc file mapping: %s") % e)
+
+        Province = self.env['ghn.province']
+        District = self.env['ghn.district']
+        Ward = self.env['ghn.ward']
+
+        # Cache for performance
+        provinces = Province.search([])
+        prov_map = {self._normalize_name(p.name): p for p in provinces}
+        dist_cache = {}
+
+        updated_count = 0
+        for item in mapping_data:
+            p_name = item['p']
+            d_name = item['d']
+            w_name = item['w']
+            code = item['c']
+
+            province = prov_map.get(p_name)
+            if not province: continue
+
+            if province.id not in dist_cache:
+                districts = District.search([('province_id', '=', province.id)])
+                dist_cache[province.id] = {self._normalize_name(d.name): d for d in districts}
+            
+            district = dist_cache[province.id].get(d_name)
+            if not district: continue
+
+            ward = Ward.search([
+                ('district_id', '=', district.id),
+                '|',
+                ('name', 'ilike', w_name),
+                ('name', '=', w_name) # Exact match fallback if needed covered by ilike usually
+            ], limit=1)
+
+            if ward and not ward.jnt_code:
+                ward.write({'jnt_code': code})
+                updated_count += 1
+            # Also update Province/District if they don't have codes? 
+            # The Excel MAPPING sheet seems focused on Wards. 
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Thành công',
+                'message': f'Đã cập nhật mã J&T cho {updated_count} phường xã.',
+                'type': 'success',
+            }
+        }
+
     @api.model
     def default_get(self, fields_list):
         res = super(JTCreateOrderWizard, self).default_get(fields_list)
