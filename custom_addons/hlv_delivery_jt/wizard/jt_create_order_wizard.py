@@ -61,10 +61,10 @@ class JTCreateOrderWizard(models.TransientModel):
     # Sender Info (Editable)
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
-    sender_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành gửi", ondelete='cascade')
-    sender_city_id = fields.Many2one("jnt.district", string="Quận/Huyện gửi", ondelete='cascade',
+    sender_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành gửi", ondelete='set null')
+    sender_city_id = fields.Many2one("jnt.district", string="Quận/Huyện gửi", ondelete='set null',
                                     domain="[('province_id', '=', sender_prov_id)]")
-    sender_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi", ondelete='cascade',
+    sender_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi", ondelete='set null',
                                     domain="[('district_id', '=', sender_city_id)]")
     sender_address = fields.Char(string="Địa chỉ gửi", required=True)
 
@@ -86,10 +86,10 @@ class JTCreateOrderWizard(models.TransientModel):
     # Receiver Info (Editable)
     receiver_name = fields.Char(string="Tên người nhận", required=True)
     receiver_mobile = fields.Char(string="SĐT người nhận", required=True)
-    receiver_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành nhận", ondelete='cascade')
-    receiver_city_id = fields.Many2one("jnt.district", string="Quận/Huyện nhận", ondelete='cascade', 
+    receiver_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành nhận", ondelete='set null')
+    receiver_city_id = fields.Many2one("jnt.district", string="Quận/Huyện nhận", ondelete='set null', 
                                       domain="[('province_id', '=', receiver_prov_id)]")
-    receiver_area_id = fields.Many2one("jnt.ward", string="Phường/Xã nhận", ondelete='cascade',
+    receiver_area_id = fields.Many2one("jnt.ward", string="Phường/Xã nhận", ondelete='set null',
                                       domain="[('district_id', '=', receiver_city_id)]")
     receiver_address = fields.Char(string="Địa chỉ nhận", required=True)
 
@@ -182,18 +182,8 @@ class JTCreateOrderWizard(models.TransientModel):
         except Exception as e:
             raise UserError(_("Lỗi đọc file mapping: %s") % e)
 
-        Province = self.env['jnt.province']
-        District = self.env['jnt.district']
-        Ward = self.env['jnt.ward']
-
-        # Clear existing data to avoid duplicates/confusion if re-syncing
-        # self.env.cr.execute('TRUNCATE jnt_ward, jnt_district, jnt_province CASCADE')
-        # However, TRUNCATE might be too aggressive if there are Many2one references.
-        # Let's use unlink if not too many, otherwise just search and update.
-        
-        existing_provinces = {p.name: p.id for p in Province.search([])}
-        existing_districts = {(d.province_id.id, d.name): d.id for d in District.search([])}
-        existing_wards = {(w.district_id.id, w.name): w.id for w in Ward.search([])}
+        # Cleanup old wizards to avoid foreign key constraints blocking sync
+        self.env['jt.create.order.wizard'].sudo().search([]).unlink()
 
         created_p = 0
         created_d = 0
