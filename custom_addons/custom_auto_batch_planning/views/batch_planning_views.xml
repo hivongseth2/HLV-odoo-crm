@@ -1,59 +1,84 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Tree View dành cho Kế hoạch -->
-    <record id="view_picking_batch_planning_tree" model="ir.ui.view">
-        <field name="name">stock.picking.batch.planning.tree</field>
-        <field name="model">stock.picking.batch</field>
+    <!-- View cho stock.batch.planning -->
+    
+    <!-- Tree View -->
+    <record id="view_start_batch_planning_tree" model="ir.ui.view">
+        <field name="name">stock.batch.planning.tree</field>
+        <field name="model">stock.batch.planning</field>
         <field name="arch" type="xml">
-            <list string="Kế hoạch Gom Lô" multi_edit="1">
-                <field name="name" readonly="1"/>
+            <list string="Kế hoạch Gom Lô (Dự kiến)">
+                <field name="name"/>
                 <field name="scheduled_date"/>
-                <field name="user_id" string="Tài xế"/>
+                <field name="user_id"/>
                 <field name="vehicle_id"/>
                 <field name="route_name"/>
-                <field name="state" widget="badge" decoration-success="state == 'done'" decoration-info="state == 'draft'"/>
+                <field name="state" widget="badge" decoration-success="state == 'in_progress'" decoration-info="state == 'draft'"/>
+                <field name="batch_id" widget="many2one"/>
             </list>
         </field>
     </record>
 
-    <!-- Action -->
-    <record id="action_batch_planning" model="ir.actions.act_window">
-        <field name="name">Kế hoạch Gom Lô</field>
-        <field name="res_model">stock.picking.batch</field>
-        <field name="view_mode">list,form</field>
-        <field name="view_id" ref="view_picking_batch_planning_tree"/>
-        <field name="context">{}</field>
-    </record>
-
-    <!-- Form View Inheritance to add Planned Pickings Tab -->
-    <record id="view_picking_batch_form_inherit_planning" model="ir.ui.view">
-        <field name="name">stock.picking.batch.form.inherit.planning</field>
-        <field name="model">stock.picking.batch</field>
-        <field name="inherit_id" ref="stock_picking_batch.stock_picking_batch_form"/>
+    <!-- Form View -->
+    <record id="view_start_batch_planning_form" model="ir.ui.view">
+        <field name="name">stock.batch.planning.form</field>
+        <field name="model">stock.batch.planning</field>
         <field name="arch" type="xml">
-             <xpath expr="//notebook" position="inside">
-                <page string="Phiếu dự kiến (Planning)">
-                    <field name="planned_picking_ids" context="{'default_planned_batch_id': id}">
-                        <list>
-                            <field name="name"/>
-                            <field name="picking_type_id"/>
-                            <field name="partner_id"/>
-                            <field name="state"/>
-                        </list>
-                    </field>
-                </page>
-             </xpath>
-             <xpath expr="//field[@name='user_id']" position="after">
-                <field name="route_name"/>
-                <field name="vehicle_id"/>
-             </xpath>
+            <form string="Kế hoạch Gom Lô">
+                <header>
+                    <button name="action_confirm" type="object" string="Xác nhận" class="oe_highlight" 
+                            invisible="state != 'draft'"/>
+                    <button name="action_create_real_batch" type="object" string="Tạo Lô (Batch) Thật" 
+                            class="oe_highlight" invisible="state == 'done'"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="scheduled_date"/>
+                            <field name="user_id"/>
+                            <field name="vehicle_id"/>
+                        </group>
+                        <group>
+                            <field name="route_name"/>
+                            <field name="batch_id" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Danh sách phiếu (Picking)">
+                            <field name="picking_ids" context="{'default_batch_plan_id': id}">
+                                <list>
+                                    <field name="name"/>
+                                    <field name="picking_type_id"/>
+                                    <field name="partner_id"/>
+                                    <field name="state" widget="badge" decoration-success="state == 'done'"/>
+                                    <field name="batch_id" string="Lô Thật (Nếu có)" optional="show"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
         </field>
     </record>
 
-    <!-- Menu Item (Trong Inventory / Operations) -->
-    <menuitem id="menu_batch_planning"
+    <!-- Action -->
+    <record id="action_start_batch_planning" model="ir.actions.act_window">
+        <field name="name">Kế hoạch Gom Lô (Planning)</field>
+        <field name="res_model">stock.batch.planning</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{}</field>
+    </record>
+
+    <!-- Menu Item (Thay thế menu cũ) -->
+    <menuitem id="menu_batch_planning_new"
               name="Kế hoạch Gom Lô (Planning)"
               parent="stock.menu_stock_warehouse_mgmt"
-              action="action_batch_planning"
+              action="action_start_batch_planning"
               sequence="50"/>
 </odoo>
