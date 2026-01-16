@@ -13,7 +13,7 @@ class StockBatchPlanning(models.Model):
     
     picking_ids = fields.One2many('stock.picking', 'batch_plan_id', string='Các phiếu trong kế hoạch')
     
-    # Link tới Batch thật khi đã convert
+    # Link tới Batch thật khi
     batch_id = fields.Many2one('stock.picking.batch', string='Lô thực tế (Đã tạo)', readonly=True, copy=False)
     
     state = fields.Selection([
