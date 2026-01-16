@@ -9,11 +9,13 @@
                 <button name="action_open_carrier_selector" string="Tạo đơn vận chuyển" type="object" class="oe_highlight" 
                         invisible="picking_type_code != 'outgoing' or (jt_bill_code != False and ghn_order_code != False)"/>
                 <button name="action_open_jt_wizard" string="Tạo đơn J&amp;T" type="object" class="oe_highlight" invisible="1"/>
-                <button name="action_open_jt_cancel_wizard" string="Hủy đơn J&amp;T" type="object" class="btn-danger"
-                        invisible="not jt_bill_code or jt_order_status == 'Cancelled'"/>
             </xpath>
             <xpath expr="//page[@name='extra']" position="after">
                 <page string="J&amp;T Express" invisible="not jt_bill_code">
+                    <header>
+                        <button name="action_open_jt_cancel_wizard" string="Hủy đơn J&amp;T" type="object" class="btn-danger"
+                                invisible="not jt_bill_code or jt_order_status == 'Cancelled'"/>
+                    </header>
                     <group>
                         <group string="Thông tin vận đơn">
                             <field name="jt_bill_code" readonly="1"/>
