@@ -21,8 +21,12 @@
         'wizard/jt_create_order_wizard_views.xml',
         'wizard/choose_delivery_carrier_wizard_views.xml',
         'wizard/jt_cancel_order_wizard_views.xml',
-        'views/jt_print_templates.xml',
     ],
+    'assets': {
+        'web.assets_backend': [
+            'hlv_delivery_jt/static/src/js/jt_print.js',
+        ],
+    },
     'installable': True,
     'application': False,
     'license': 'LGPL-3',
