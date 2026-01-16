@@ -85,13 +85,20 @@ class StockPicking(models.Model):
             if not base64_content:
                 raise UserError("Không nhận được nội dung tem từ J&T.")
 
-            # Decode base64 to get PDF bytes
-            pdf_content = base64.b64decode(base64_content)
+            # Create attachment for the label
+            attachment = self.env['ir.attachment'].create({
+                'name': f'Tem_JT_{self.jt_bill_code}.pdf',
+                'type': 'binary',
+                'datas': base64_content,
+                'res_model': 'stock.picking',
+                'res_id': self.id,
+                'mimetype': 'application/pdf',
+            })
 
-            # Return download action
+            # Return action to open the PDF in a new tab (inline)
             return {
                 'type': 'ir.actions.act_url',
-                'url': f'data:application/pdf;base64,{base64_content}',
+                'url': f'/web/content/{attachment.id}',
                 'target': 'new',
             }
         else:
