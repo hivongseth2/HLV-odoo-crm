@@ -48,6 +48,25 @@ class StockBatchPlanningWizard(models.TransientModel):
                             
         return {'domain': {'picking_ids': domain}}
 
+    @api.onchange('picking_ids')
+    def _onchange_picking_ids(self):
+        """
+        Khi người dùng chọn 1 phiếu:
+        1. Tự động lấy Partner của phiếu đó gán vào search_partner_id.
+        2. Kích hoạt logic lọc để hiển thị toàn bộ phiếu của Partner đó (bất kể ngày tháng)
+           -> Giúp user dễ dàng gom thêm các phiếu tồn đọng hoặc phiếu khác của cùng khách.
+        """
+        # Chỉ trigger nếu chưa chọn Partner Filter và có picking được chọn
+        if not self.search_partner_id and self.picking_ids:
+            # Lấy picking đầu tiên (hoặc mới nhất nếu có thể)
+            # Lưu ý: self.picking_ids có thể chứa nhiều, ta lấy cái đầu tiên để gợi ý
+            target_picking = self.picking_ids[0]
+            
+            if target_picking.partner_id:
+                self.search_partner_id = target_picking.partner_id
+                # Gọi lại hàm lọc để update domain ngay lập tức
+                return self._onchange_search_criteria()
+
     def action_confirm(self):
         if self.mode == 'add_to_plan':
             # Case 1: Từ list Picking -> Chọn Plan
