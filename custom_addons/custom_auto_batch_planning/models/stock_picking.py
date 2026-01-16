@@ -104,7 +104,7 @@ class StockPicking(models.Model):
         ('empty', 'Chưa có hàng')
     ], string='Tình trạng chi tiết', compute='_compute_availability_status_custom')
 
-    @api.depends('move_ids.state', 'move_ids.product_uom_qty', 'move_ids.quantity_reserved')
+    @api.depends('move_ids.state', 'move_ids.product_uom_qty', 'move_ids.reserved_availability')
     def _compute_availability_status_custom(self):
         for picking in self:
             if picking.state in ['done', 'cancel']:
@@ -126,12 +126,11 @@ class StockPicking(models.Model):
             has_some = False
             
             for move in moves:
-                # Dùng product_uom_qty (Demand) và quantity_reserved (Reserved)
-                # Lưu ý xử lý case float rounding nếu cần, nhưng so sánh cơ bản ok
-                if move.quantity_reserved < move.product_uom_qty:
+                # Dùng product_uom_qty (Demand) và reserved_availability (Reserved)
+                if move.reserved_availability < move.product_uom_qty:
                     is_full = False
                 
-                if move.quantity_reserved > 0:
+                if move.reserved_availability > 0:
                     has_some = True
             
             if is_full:
