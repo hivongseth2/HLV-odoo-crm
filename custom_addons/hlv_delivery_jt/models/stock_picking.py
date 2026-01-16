@@ -95,10 +95,10 @@ class StockPicking(models.Model):
                 'mimetype': 'application/pdf',
             })
 
-            # Return download action using the attachment link
+            # Return action to open the PDF in a new tab (inline)
             return {
                 'type': 'ir.actions.act_url',
-                'url': f'/web/content/{attachment.id}?download=true',
+                'url': f'/web/content/{attachment.id}',
                 'target': 'new',
             }
         else:
