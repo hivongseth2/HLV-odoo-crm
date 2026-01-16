@@ -13,6 +13,8 @@
             <xpath expr="//page[@name='extra']" position="after">
                 <page string="J&amp;T Express" invisible="not jt_bill_code">
                     <header>
+                        <button name="action_print_jt_label" string="In tem J&amp;T" type="object" class="btn-primary"
+                                invisible="not jt_bill_code"/>
                         <button name="action_open_jt_cancel_wizard" string="Hủy đơn J&amp;T" type="object" class="btn-danger"
                                 invisible="not jt_bill_code or jt_order_status == 'Cancelled'"/>
                     </header>

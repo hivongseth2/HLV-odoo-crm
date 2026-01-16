@@ -90,3 +90,10 @@ class JTApiUtils:
         Calculate shipping fee from J&T
         """
         return self._send_request('getComCost', biz_params)
+
+    def print_label(self, biz_params):
+        """
+        Print shipping label from J&T
+        Returns base64 encoded PDF content
+        """
+        return self._send_request('printOrder', biz_params)

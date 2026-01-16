@@ -43,3 +43,57 @@ class StockPicking(models.Model):
             'target': 'new',
             'context': {'default_picking_id': self.id}
         }
+
+    def action_print_jt_label(self):
+        """Print J&T shipping label"""
+        self.ensure_one()
+        from odoo.exceptions import UserError
+        from ..utils.jt_api_utils import JTApiUtils
+        import base64
+
+        if not self.jt_bill_code:
+            raise UserError("Đơn hàng chưa có mã vận đơn J&T, không thể in!")
+
+        # Get credentials
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        api_account = get_param('jnt_apiAccount')
+        private_key = get_param('jnt_privateKey')
+        jnt_customer_code = get_param('jnt_customerCode')
+        jnt_password = get_param('jnt_password')
+        company = self.company_id or self.env.company
+
+        if not all([api_account, private_key, jnt_customer_code, jnt_password]):
+            raise UserError("Chưa cấu hình thông tin J&T trong System Parameters.")
+
+        client = JTApiUtils(
+            api_account=api_account,
+            private_key=private_key,
+            environment=company.jt_environment
+        )
+
+        biz_params = {
+            "customerCode": jnt_customer_code,
+            "password": jnt_password.upper(),
+            "txlogisticId": self.name.replace("/", "-")
+        }
+
+        result = client.print_label(biz_params)
+        if result.get('code') == '1' and result.get('data'):
+            data = result['data']
+            base64_content = data.get('base64EncodeContent')
+            
+            if not base64_content:
+                raise UserError("Không nhận được nội dung tem từ J&T.")
+
+            # Decode base64 to get PDF bytes
+            pdf_content = base64.b64decode(base64_content)
+
+            # Return download action
+            return {
+                'type': 'ir.actions.act_url',
+                'url': f'data:application/pdf;base64,{base64_content}',
+                'target': 'new',
+            }
+        else:
+            msg = result.get('msg', 'Lỗi không xác định từ J&T')
+            raise UserError(f"Không thể in tem J&T: {msg}")
