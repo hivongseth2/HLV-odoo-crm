@@ -389,7 +389,9 @@ class JTCreateOrderWizard(models.TransientModel):
         goods_val = max(self.goods_value, 1.0)
         goods_val_str = str(int(goods_val))
         cod_money_str = str(int(self.cod_money))
-        weight_str = str(self.weight)
+        # Ensure weight is at least 0.01 to satisfy J&T requirements
+        weight_val = max(self.weight, 0.01)
+        weight_str = "{:.2f}".format(weight_val)
 
         # Payload
         picking = self.picking_id
@@ -429,7 +431,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "length": int(self.length),
                 "width": int(self.width),
                 "height": int(self.height),
-                "volume": str(int(self.length * self.width * self.height / 6000.0 or 1))
+                "volume": str(int(max(self.length * self.width * self.height / 6000.0, 1.0)))
             },
             "itemsValue": goods_val_str,
             "totalQuantity": len(picking.move_ids_without_package),
