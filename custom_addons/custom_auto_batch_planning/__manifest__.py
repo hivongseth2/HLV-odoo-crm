@@ -28,8 +28,8 @@
 
     # Code của bạn chỉ xử lý logic ngầm (Backend) nên không nhất thiết phải có file XML/View
     'data': [
-        # 'security/ir.model.access.csv', # Bật lên nếu bạn có tạo model mới cần phân quyền
-        # 'views/views.xml',
+        # 'security/ir.model.access.csv', 
+        'views/batch_planning_views.xml',
     ],
     
     'installable': True,
