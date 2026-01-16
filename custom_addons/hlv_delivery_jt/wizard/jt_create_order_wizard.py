@@ -385,7 +385,9 @@ class JTCreateOrderWizard(models.TransientModel):
             return (addr or "")[:length]
 
         # J&T Vietnam uses specific string formats for many fields
-        goods_val_str = str(int(self.goods_value))
+        # Ensure goodsValue is at least 1 as J&T rejects 0
+        goods_val = max(self.goods_value, 1.0)
+        goods_val_str = str(int(goods_val))
         cod_money_str = str(int(self.cod_money))
         weight_str = str(self.weight)
 
@@ -435,7 +437,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "itemName": line.product_id.name[:100],
                 "englishName": line.product_id.name[:100],
                 "number": str(int(line.product_uom_qty)),
-                "itemValue": str(int(line.product_id.list_price or 0)) # Using list_price or price unit
+                "itemValue": str(int(line.product_id.list_price or 1)) # Ensure item value is at least 1
             } for line in picking.move_ids_without_package]
         }
 
