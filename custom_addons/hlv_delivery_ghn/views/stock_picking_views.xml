@@ -14,9 +14,17 @@
                         groups="stock.group_stock_user"/>
             </xpath>
             <xpath expr="//notebook" position="inside">
-                <page string="Giao hàng GHN" name="ghn_delivery" invisible="picking_type_code != 'outgoing'">
+                <page string="Giao hàng GHN" name="ghn_delivery" invisible="not ghn_order_code">
                     <header>
                         <button name="action_ghn_auto_fill_info" type="object" string="Lấy thông tin GHN" class="btn-secondary"/>
+                        <button name="action_create_ghn_order" string="Chỉnh sửa đơn GHN" type="object" class="btn-secondary" 
+                                invisible="not ghn_order_code or ghn_order_status == 'cancel'"/>
+                        <button name="action_cancel_ghn_order" string="Hủy đơn GHN" type="object" class="btn-danger" 
+                                invisible="not ghn_order_code or ghn_order_status == 'cancel'"
+                                confirm="Bạn có chắc chắn muốn HỦY đơn hàng này trên GHN không?"/>
+                        <button name="action_return_ghn_order" string="Trả hàng GHN" type="object" class="btn-warning" 
+                                invisible="not ghn_order_code or ghn_order_status == 'cancel'"
+                                confirm="Bạn có chắc chắn muốn chuyển trạng thái đơn hàng này sang TRẢ HÀNG (Return) không?"/>
                         <!-- Print Label Button -->
                         <button name="action_print_ghn_label_80x80" type="object" string="In Tem GHN (80x80)" class="btn-primary" 
                                 invisible="not ghn_order_code"/>

@@ -12,6 +12,10 @@
             </xpath>
             <xpath expr="//page[@name='extra']" position="after">
                 <page string="J&amp;T Express" invisible="not jt_bill_code">
+                    <header>
+                        <button name="action_open_jt_cancel_wizard" string="Hủy đơn J&amp;T" type="object" class="btn-danger"
+                                invisible="not jt_bill_code or jt_order_status == 'Cancelled'"/>
+                    </header>
                     <group>
                         <group string="Thông tin vận đơn">
                             <field name="jt_bill_code" readonly="1"/>

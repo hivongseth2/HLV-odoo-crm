@@ -372,11 +372,7 @@ class StockPicking(models.Model):
             raise ValidationError("Đơn hàng chưa có mã GHN, không thể in!")
             
         company = self.company_id or self.env.company
-        client = GHNApiUtils(
-            token=company.ghn_api_token,
-            shop_id=company.ghn_shop_id,
-            environment=company.ghn_environment
-        )
+        client = self._get_ghn_client()
         
         result = client.get_print_token(self.ghn_order_code)
         if result.get("success"):
@@ -397,3 +393,70 @@ class StockPicking(models.Model):
             }
         else:
             raise ValidationError(f"Lỗi lấy token in GHN: {result.get('error')}")
+
+    def _get_ghn_client(self):
+        self.ensure_one()
+        company = self.company_id or self.env.company
+        warehouse = self.picking_type_id.warehouse_id
+        
+        # Calculate current weight for shop selection (GHN heavy vs normal)
+        weight, l, w, h = self._calculate_ghn_dimensions()
+        is_heavy = weight > 10000
+        
+        shop_id = company.ghn_shop_id
+        if is_heavy:
+            shop_id = (warehouse and warehouse.ghn_shop_id_heavy) or company.ghn_shop_id_heavy or shop_id
+        else:
+            shop_id = (warehouse and warehouse.ghn_shop_id) or company.ghn_shop_id
+            
+        return GHNApiUtils(
+            token=company.ghn_api_token,
+            shop_id=shop_id,
+            environment=company.ghn_environment
+        )
+
+    def action_cancel_ghn_order(self):
+        """Cancel GHN order directly from Picking."""
+        self.ensure_one()
+        if not self.ghn_order_code:
+            raise UserError("Đơn hàng chưa có mã GHN, không thể hủy!")
+
+        client = self._get_ghn_client()
+        result = client.cancel_order(self.ghn_order_code)
+        if result.get("success"):
+            self.write({"ghn_order_status": "cancel"})
+            self.message_post(body="Đã hủy đơn hàng trên hệ thống GHN.")
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Thành công',
+                    'message': 'Đã hủy đơn GHN thành công!',
+                    'type': 'success',
+                }
+            }
+        else:
+            raise UserError(f"Lỗi hủy đơn GHN: {result.get('error')}")
+
+    def action_return_ghn_order(self):
+        """Switch GHN status to Return directly from Picking."""
+        self.ensure_one()
+        if not self.ghn_order_code:
+            raise UserError("Đơn hàng chưa có mã GHN, không thể chuyển hoàn!")
+
+        client = self._get_ghn_client()
+        result = client.return_order(self.ghn_order_code)
+        if result.get("success"):
+            self.write({"ghn_order_status": "return_transporting"})
+            self.message_post(body="Đã chuyển trạng thái đơn hàng sang TRẢ HÀNG trên hệ thống GHN.")
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Thành công',
+                    'message': 'Đã chuyển hoàn đơn GHN thành công!',
+                    'type': 'success',
+                }
+            }
+        else:
+            raise UserError(f"Lỗi trả hàng GHN: {result.get('error')}")

@@ -15,28 +15,32 @@ class JTApiUtils:
         self.environment = environment
 
         if environment == 'prod':
-            self.api_url = "https://ylopenapi.jtexpress.vn/webopenplatformapi/api/order/addOrder"
+            self.base_url = "https://ylopenapi.jtexpress.vn/webopenplatformapi/api"
         else:
-            self.api_url = "https://demoopenapi.jtexpress.vn/webopenplatformapi/api/order/addOrder"
+            self.base_url = "https://demoopenapi.jtexpress.vn/webopenplatformapi/api"
+
+    def _get_url(self, service_type):
+        """
+        Get URL based on service type.
+        service_type: 'addOrder' or 'cancelOrder'
+        """
+        return f"{self.base_url}/order/{service_type}"
 
     def _generate_digest(self, biz_content):
         """
-        Generate J&T API digest: base64(md5(bizContent + privateKey).digest())
-        Note: Many J&T APIs use the binary digest for Base64 encoding, not the hex string.
+        Generate MD5 digest for J&T API authentication.
+        Formula: md5(bizContent + privateKey)
         """
         data_to_hash = biz_content + self.private_key
-        _logger.debug("J&T Digest Check | bizContent: %s", biz_content)
-        _logger.debug("J&T Digest Check | Hashing bizContent + PrivateKey(masked: %s...)", self.private_key[:4])
-        
-        md5_binary = hashlib.md5(data_to_hash.encode('utf-8')).digest()
-        digest = base64.b64encode(md5_binary).decode('utf-8')
+        md5_hash = hashlib.md5(data_to_hash.encode('utf-8')).digest()
+        digest = base64.b64encode(md5_hash).decode('utf-8')
         return digest
 
-    def add_order(self, biz_params):
+    def _send_request(self, service_type, biz_params):
         """
-        Send Add Order request to J&T
+        Generic method to send requests to J&T
         """
-        # J&T often requires compact JSON without spaces for digest verification
+        url = self._get_url(service_type)
         biz_content = json.dumps(biz_params, separators=(',', ':'), ensure_ascii=False)
         timestamp = int(time.time() * 1000)
         digest = self._generate_digest(biz_content)
@@ -46,20 +50,15 @@ class JTApiUtils:
             'apiAccount': str(self.api_account),
             'digest': digest,
             'timestamp': str(timestamp)
-            # Note: privateKey is used for digest calculation, not sent in headers
         }
 
-        # J&T uses form-encoded body for bizContent
         payload = {
             'bizContent': biz_content
         }
 
-        _logger.info("J&T API Request to %s | Account: %s", self.api_url, self.api_account)
-        _logger.info("J&T API Headers: apiAccount=%s, digest=%s, timestamp=%s, privateKey=%s...", 
-                     self.api_account, digest, timestamp, self.private_key[:8] if self.private_key else 'None')
-        _logger.info("J&T API bizContent: %s", biz_content[:500] if len(biz_content) > 500 else biz_content)
+        _logger.info("J&T API Request to %s | Account: %s", url, self.api_account)
         try:
-            response = requests.post(self.api_url, data=payload, headers=headers)
+            response = requests.post(url, data=payload, headers=headers)
             if response.status_code == 200:
                 res_json = response.json()
                 _logger.info("J&T API Response: %s", res_json)
@@ -70,3 +69,15 @@ class JTApiUtils:
         except Exception as e:
             _logger.exception("J&T API Exception: %s", e)
             return {'code': 'error', 'msg': str(e)}
+
+    def add_order(self, biz_params):
+        """
+        Send Add Order request to J&T
+        """
+        return self._send_request('addOrder', biz_params)
+
+    def cancel_order(self, biz_params):
+        """
+        Send Cancel Order request to J&T
+        """
+        return self._send_request('cancelOrder', biz_params)

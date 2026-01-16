@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_jt_cancel_order_wizard_form" model="ir.ui.view">
+        <field name="name">jt.cancel.order.wizard.form</field>
+        <field name="model">jt.cancel.order.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Hủy đơn J&amp;T Express">
+                <group>
+                    <field name="picking_id" invisible="1"/>
+                    <field name="jt_bill_code" readonly="1"/>
+                    <field name="reason"/>
+                    <field name="other_reason" invisible="reason != 'Khác'" required="reason == 'Khác'"/>
+                </group>
+                <footer>
+                    <button name="action_cancel_jt_order" string="Hủy đơn J&amp;T" type="object" class="btn-danger"/>
+                    <button string="Đóng" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_jt_cancel_order_wizard" model="ir.actions.act_window">
+        <field name="name">Hủy đơn J&amp;T Express</field>
+        <field name="res_model">jt.cancel.order.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

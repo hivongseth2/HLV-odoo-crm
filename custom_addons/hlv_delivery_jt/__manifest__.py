@@ -20,6 +20,7 @@
         'views/stock_picking_views.xml',
         'wizard/jt_create_order_wizard_views.xml',
         'wizard/choose_delivery_carrier_wizard_views.xml',
+        'wizard/jt_cancel_order_wizard_views.xml',
     ],
     'installable': True,
     'application': False,
