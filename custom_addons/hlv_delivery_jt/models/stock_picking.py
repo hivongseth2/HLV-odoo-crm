@@ -22,6 +22,17 @@ class StockPicking(models.Model):
             'context': {'default_picking_id': self.id}
         }
 
+    def action_open_jt_cancel_wizard(self):
+        self.ensure_one()
+        return {
+            'name': 'Hủy đơn J&T Express',
+            'type': 'ir.actions.act_window',
+            'res_model': 'jt.cancel.order.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_picking_id': self.id}
+        }
+
     def action_open_carrier_selector(self):
         self.ensure_one()
         return {
