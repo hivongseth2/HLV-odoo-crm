@@ -58,6 +58,11 @@ class JTCreateOrderWizard(models.TransientModel):
     width = fields.Float(string="Rộng (cm)", default=10)
     height = fields.Float(string="Cao (cm)", default=10)
 
+    # Fee Calculation
+    estimated_fee = fields.Float(string="Phí vận chuyển dự kiến (VND)", readonly=True)
+    estimated_cod_fee = fields.Float(string="Phí COD dự kiến (VND)", readonly=True)
+    estimated_insurance_fee = fields.Float(string="Phí bảo hiểm dự kiến (VND)", readonly=True)
+
     # Sender Info (Editable)
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
@@ -99,7 +104,69 @@ class JTCreateOrderWizard(models.TransientModel):
 
     @api.onchange('receiver_area_id')
     def _onchange_receiver_area_id(self):
-        pass
+        # Auto-calculate fee when location changes
+        self._auto_calculate_fee()
+
+    @api.onchange('weight', 'goods_value', 'cod_money', 'is_insured')
+    def _onchange_fee_params(self):
+        # Auto-calculate fee when weight or values change
+        self._auto_calculate_fee()
+
+    def _auto_calculate_fee(self):
+        """Auto-calculate shipping fee when all required fields are filled"""
+        if not (self.weight and self.sender_area_id and self.receiver_area_id):
+            return
+
+        try:
+            get_param = self.env['ir.config_parameter'].sudo().get_param
+            api_account = get_param('jnt_apiAccount')
+            private_key = get_param('jnt_privateKey')
+            jnt_customer_code = get_param('jnt_customerCode')
+            jnt_password = get_param('jnt_password')
+            company = self.picking_id.company_id if self.picking_id else self.env.company
+
+            if not all([api_account, private_key, jnt_customer_code, jnt_password]):
+                return
+
+            client = JTApiUtils(
+                api_account=api_account,
+                private_key=private_key,
+                environment=company.jt_environment
+            )
+
+            biz_params = {
+                "customerCode": jnt_customer_code,
+                "password": jnt_password.upper(),
+                "weight": self.weight,
+                "productType": self.product_type or 'EXPRESS',
+                "goodsType": self.goods_type or 'bm000010',
+                "goodsValue": max(self.goods_value, 1.0),
+                "codMoney": str(int(self.cod_money)) if self.cod_money else "0",
+                "isInsured": 1 if self.is_insured else 0,
+                "sender": {
+                    "prov": (self.sender_prov_id.name or "").strip(),
+                    "city": (self.sender_city_id.name or "").strip(),
+                    "area": self.sender_area_id.name if self.sender_area_id else ""
+                },
+                "receiver": {
+                    "prov": (self.receiver_prov_id.name or "").strip(),
+                    "city": (self.receiver_city_id.name or "").strip(),
+                    "area": self.receiver_area_id.name if self.receiver_area_id else ""
+                }
+            }
+
+            result = client.calculate_fee(biz_params)
+            if result.get('code') == '1' and result.get('data'):
+                data = result['data']
+                self.estimated_fee = float(data.get('price', 0))
+                self.estimated_cod_fee = float(data.get('codfee', 0) or data.get('codFee', 0))
+                self.estimated_insurance_fee = float(data.get('insurancefee', 0) or data.get('insuranceFee', 0))
+                _logger.info("J&T Fee calculated: %s VND (COD: %s, Insurance: %s)", 
+                            self.estimated_fee, self.estimated_cod_fee, self.estimated_insurance_fee)
+            else:
+                _logger.warning("J&T Fee calculation failed: %s", result.get('msg'))
+        except Exception as e:
+            _logger.error("Error calculating J&T fee: %s", e)
 
     @api.onchange('receiver_prov_id')
     def _onchange_receiver_prov_id(self):

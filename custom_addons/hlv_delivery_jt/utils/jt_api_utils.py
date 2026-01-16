@@ -22,9 +22,12 @@ class JTApiUtils:
     def _get_url(self, service_type):
         """
         Get URL based on service type.
-        service_type: 'addOrder' or 'cancelOrder'
+        service_type: 'addOrder', 'cancelOrder', or 'getComCost'
         """
-        return f"{self.base_url}/order/{service_type}"
+        if service_type == 'getComCost':
+            return f"{self.base_url}/spmComCost/{service_type}"
+        else:
+            return f"{self.base_url}/order/{service_type}"
 
     def _generate_digest(self, biz_content):
         """
@@ -81,3 +84,9 @@ class JTApiUtils:
         Send Cancel Order request to J&T
         """
         return self._send_request('cancelOrder', biz_params)
+
+    def calculate_fee(self, biz_params):
+        """
+        Calculate shipping fee from J&T
+        """
+        return self._send_request('getComCost', biz_params)

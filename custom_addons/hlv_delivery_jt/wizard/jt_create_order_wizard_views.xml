@@ -51,6 +51,15 @@
                             <field name="height"/>
                         </group>
                     </group>
+                    <group string="Phí dự kiến (tự động tính)">
+                        <group>
+                            <field name="estimated_fee"/>
+                            <field name="estimated_cod_fee"/>
+                        </group>
+                        <group>
+                            <field name="estimated_insurance_fee"/>
+                        </group>
+                    </group>
                 </sheet>
                 <footer>
                     <button name="action_create_jt_order" type="object" string="Tạo đơn hàng" class="btn-primary"/>
