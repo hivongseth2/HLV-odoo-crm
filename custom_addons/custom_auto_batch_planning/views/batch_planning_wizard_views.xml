@@ -5,8 +5,23 @@
         <field name="model">stock.batch.planning.wizard</field>
         <field name="arch" type="xml">
             <form string="Chọn Kế hoạch Gom Lô">
-                <group>
-                    <field name="batch_plan_id"/>
+                <field name="mode" invisible="1"/>
+                <group invisible="mode != 'add_to_plan'">
+                    <div class="alert alert-info" role="alert">
+                        Chọn Kế hoạch để gán các phiếu đã chọn vào.
+                    </div>
+                    <field name="batch_plan_id" required="mode == 'add_to_plan'"/>
+                </group>
+                <group invisible="mode != 'select_pickings'">
+                    <field name="picking_ids" widget="many2many" nolabel="1">
+                        <list>
+                            <field name="name"/>
+                            <field name="partner_id"/>
+                            <field name="origin"/>
+                            <field name="state" widget="badge" decoration-success="state == 'assigned'" decoration-info="state == 'confirmed'"/>
+                            <field name="scheduled_date"/>
+                        </list>
+                    </field>
                 </group>
                 <footer>
                     <button name="action_confirm" string="Xác nhận" type="object" class="btn-primary"/>
