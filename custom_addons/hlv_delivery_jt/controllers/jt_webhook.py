@@ -63,52 +63,56 @@ class JTWebhook(http.Controller):
                     scan_time = False
                     if scan_time_str:
                         try:
-                             # Format: 2024-06-21T13:23:56 or 2024-06-05 15:57:04
-                             # Normalize format
-                             scan_time_str = scan_time_str.replace('T', ' ')
-                             scan_dt = datetime.strptime(scan_time_str, "%Y-%m-%d %H:%M:%S")
-                             # Convert to UTC for Odoo storage
-                             # Assuming input is Vietnam Time (UTC+7)
+                             # Try format with T
+                             scan_dt = datetime.strptime(scan_time_str.replace('T', ' '), "%Y-%m-%d %H:%M:%S")
                              local_tz = pytz.timezone('Asia/Ho_Chi_Minh')
                              local_dt = local_tz.localize(scan_dt)
                              utc_dt = local_dt.astimezone(pytz.UTC)
                              scan_time = fields.Datetime.to_string(utc_dt)
                         except ValueError:
-                            pass
+                             _logger.warning("J&T Webhook: Date parse failed for %s", scan_time_str)
+                             scan_time = fields.Datetime.now() # Fallback to now
 
-                    # Create Log
-                    # Check duplicate based on time + type to avoid spamming logs?
-                    # or just create everything.
-                    # Let's check duplicate to be safe.
-                    exist = LogModel.search([
+                    # Check duplicate
+                    # Relaxed check: Same picking, same type, same time (if valid)
+                    domain = [
                         ('picking_id', '=', picking.id),
-                        ('scan_time', '=', scan_time),
                         ('scan_type_name', '=', det.get('scanTypeName'))
-                    ], limit=1)
+                    ]
+                    if scan_time:
+                         domain.append(('scan_time', '=', scan_time))
+                    
+                    exist = LogModel.search(domain, limit=1)
                     
                     if not exist:
+                        _logger.info("J&T Webhook: Creating log %s for %s", det.get('scanTypeName'), bill_code)
                         LogModel.create({
                             'picking_id': picking.id,
                             'scan_time': scan_time,
                             'scan_type_name': det.get('scanTypeName'),
-                            'desc': det.get('desc') or det.get('scanTypeName'), # Fallback desc
+                            'desc': det.get('desc') or det.get('scanTypeName'),
                             'scan_network_name': det.get('scanNetworkName'),
                             'staff_name': det.get('staffName') or det.get('scanByName'),
                             'staff_contact': det.get('staffContact') or det.get('scanByContact'),
                         })
                         
-                        # Update Picking Status from the latest log in this batch
-                        # Mapped status based on scanTypeCode
+                        # Update Picking Status
                         scan_type_code = det.get('scanTypeCode')
+                        # Ensure int
+                        try:
+                            scan_type_code = int(scan_type_code)
+                        except:
+                            pass
+
                         status_map = {
-                            103: 'Created', # Order Placed
+                            103: 'Created', 
                             104: 'Pickup Failure',
                             105: 'Cancelled',
-                            106: 'Picked', # Picked Up
-                            109: 'Transporting', # Departure
-                            110: 'Arrived', # Arrival
-                            112: 'Delivering', # On Delivery
-                            113: 'Delivered', # Delivered
+                            106: 'Picked', 
+                            109: 'Transporting',
+                            110: 'Arrived',
+                            112: 'Delivering',
+                            113: 'Delivered',
                             116: 'Returning',
                             117: 'Returned',
                             121: 'Finish'
@@ -117,6 +121,8 @@ class JTWebhook(http.Controller):
                         new_status = status_map.get(scan_type_code)
                         if new_status:
                              picking.write({'jt_order_status': new_status})
+                    else:
+                        _logger.info("J&T Webhook: Duplicate log skipped for %s", bill_code)
             
             return json.dumps({'code': '1', 'msg': 'success', 'data': None})
 
