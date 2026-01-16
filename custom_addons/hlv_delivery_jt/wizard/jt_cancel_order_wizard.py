@@ -57,8 +57,7 @@ class JTCancelOrderWizard(models.TransientModel):
 
         if result.get('code') == '1':
             picking.write({
-                'jt_order_status': 'Cancelled',
-                'message_main_attachment_id': False # Optional: clean up etc if needed
+                'jt_order_status': 'Cancelled'
             })
             picking.message_post(body=f"Đã hủy đơn J&T thành công. Lý do: {reason_text}")
             return {
