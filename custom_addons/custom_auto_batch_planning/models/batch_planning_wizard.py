@@ -9,12 +9,16 @@ class StockBatchPlanningWizard(models.TransientModel):
     
     # Mode 2: Chọn Picking cho 1 Plan cụ thể
     mode = fields.Selection([('add_to_plan', 'Thêm vào Plan'), ('select_pickings', 'Chọn Picking cho Plan')], default='add_to_plan')
-    picking_ids = fields.Many2many('stock.picking', string='Chọn Phiếu', 
+    # Danh sách chính (theo bộ lọc ngày)
+    picking_ids = fields.Many2many('stock.picking', 'wizard_picking_rel', 'wizard_id', 'picking_id', string='Chọn Phiếu (Theo Ngày)', 
                                    domain="[('batch_plan_id', '=', False), ('state', 'in', ['confirmed', 'assigned']), ('picking_type_id.sequence_code', '=', 'PICK')]")
+                                   
+    # Danh sách gợi ý (theo Partner của các phiếu đã chọn ở trên)
+    additional_picking_ids = fields.Many2many('stock.picking', 'wizard_additional_picking_rel', 'wizard_id', 'picking_id', string='Gợi ý cùng Khách hàng (Phiếu cũ/Tồn đọng)')
 
     # Smart Filter Fields
     search_date = fields.Date(string='Ngày dự kiến')
-    search_partner_id = fields.Many2one('res.partner', string='Khách hàng (Công ty)')
+    search_partner_id = fields.Many2one('res.partner', string='Lọc Khách hàng')
 
     @api.model
     def default_get(self, fields_list):
@@ -33,39 +37,51 @@ class StockBatchPlanningWizard(models.TransientModel):
                   ('state', 'in', ['confirmed', 'assigned']), 
                   ('picking_type_id.sequence_code', '=', 'PICK')]
         
-        if self.search_partner_id:
-            # Lọc theo partner (bao gồm cả công ty mẹ/con)
-            # Logic: Nếu đã chọn Partner -> Bỏ qua lọc ngày để tìm tất cả các phiếu tồn đọng (Backlog)
-            # Theo yêu cầu: "coi công ty đó còn có phiếu nào chưa giao không... chọn thêm"
-            domain += ['|', ('partner_id', 'child_of', self.search_partner_id.id), 
-                            ('partner_id', '=', self.search_partner_id.id)]
-        
-        elif self.search_date:
-            # Nếu chưa chọn Partner -> Lọc theo Ngày
-            # Fix logic ngày: so sánh start of day <= date < start of next day
+        # Filter CHÍNH chỉ tác động vào picking_ids (List trên)
+        if self.search_date:
             domain += [('scheduled_date', '>=', self.search_date), 
                        ('scheduled_date', '<', self.search_date + timedelta(days=1))]
+        
+        if self.search_partner_id:
+            domain += ['|', ('partner_id', 'child_of', self.search_partner_id.id), 
+                            ('partner_id', '=', self.search_partner_id.id)]
                             
         return {'domain': {'picking_ids': domain}}
 
     @api.onchange('picking_ids')
     def _onchange_picking_ids(self):
         """
-        Khi người dùng chọn 1 phiếu:
-        1. Tự động lấy Partner của phiếu đó gán vào search_partner_id.
-        2. Kích hoạt logic lọc để hiển thị toàn bộ phiếu của Partner đó (bất kể ngày tháng)
-           -> Giúp user dễ dàng gom thêm các phiếu tồn đọng hoặc phiếu khác của cùng khách.
+        Khi người dùng chọn phiếu ở List Chính:
+        -> Tìm các phiếu khác CÙNG PARTNER (nhưng không nằm trong list chính) để gợi ý vào List Phụ.
         """
-        # Chỉ trigger nếu chưa chọn Partner Filter và có picking được chọn
-        if not self.search_partner_id and self.picking_ids:
-            # Lấy picking đầu tiên (hoặc mới nhất nếu có thể)
-            # Lưu ý: self.picking_ids có thể chứa nhiều, ta lấy cái đầu tiên để gợi ý
-            target_picking = self.picking_ids[0]
-            
-            if target_picking.partner_id:
-                self.search_partner_id = target_picking.partner_id
-                # Gọi lại hàm lọc để update domain ngay lập tức
-                return self._onchange_search_criteria()
+        if not self.picking_ids:
+            self.additional_picking_ids = [(5, 0, 0)] # Clear list
+            return
+
+        selected_partners = self.picking_ids.mapped('partner_id')
+        if not selected_partners:
+            return
+
+        # Tìm các phiếu:
+        # 1. Thuộc partner đã chọn (hoặc con cái)
+        # 2. Chưa có Plan
+        # 3. Là PICK
+        # 4. KHÔNG nằm trong danh sách picking_ids đang hiển thị (để tránh trùng)
+        
+        # Xây dựng domain partner
+        partner_ids = selected_partners.ids
+        # Mở rộng search con cái nếu cần, nhưng cẩn thận perf. Ở đây search thẳng ID trước.
+        
+        domain_suggestion = [
+            ('batch_plan_id', '=', False),
+            ('state', 'in', ['confirmed', 'assigned']),
+            ('picking_type_id.sequence_code', '=', 'PICK'),
+            ('id', 'not in', self.picking_ids.ids),
+            ('partner_id', 'in', partner_ids)
+        ]
+        
+        suggested = self.env['stock.picking'].search(domain_suggestion)
+        self.additional_picking_ids = [(6, 0, suggested.ids)]
 
     def action_confirm(self):
         if self.mode == 'add_to_plan':
@@ -77,7 +93,10 @@ class StockBatchPlanningWizard(models.TransientModel):
                 
         elif self.mode == 'select_pickings':
              # Case 2: Từ Plan -> Chọn Picking
-             if self.batch_plan_id and self.picking_ids:
-                 self.picking_ids.write({'batch_plan_id': self.batch_plan_id.id})
+             # GỘP CẢ 2 DANH SÁCH
+             all_pickings = self.picking_ids | self.additional_picking_ids
+             
+             if self.batch_plan_id and all_pickings:
+                 all_pickings.write({'batch_plan_id': self.batch_plan_id.id})
                  
         return {'type': 'ir.actions.act_window_close'}

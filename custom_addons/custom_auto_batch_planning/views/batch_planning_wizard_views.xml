@@ -17,6 +17,8 @@
                         <field name="search_date"/>
                         <field name="search_partner_id"/>
                     </group>
+                    
+                    <separator string="Danh sách phiếu theo Kế hoạch (Ngày dự kiến)"/>
                     <field name="picking_ids" widget="many2many" nolabel="1">
                         <list>
                             <field name="name"/>
@@ -24,6 +26,20 @@
                             <field name="origin"/>
                             <field name="state" widget="badge" decoration-success="state == 'assigned'" decoration-info="state == 'confirmed'"/>
                             <field name="scheduled_date"/>
+                        </list>
+                    </field>
+                    
+                    <!-- Separate list for suggestions -->
+                    <separator string="Gợi ý: Các phiếu cũ/tồn đọng cùng Khách Hàng (được chọn ở trên)" 
+                               invisible="not additional_picking_ids"/>
+                    <field name="additional_picking_ids" widget="many2many" nolabel="1" 
+                           invisible="not additional_picking_ids">
+                         <list>
+                            <field name="name"/>
+                            <field name="partner_id"/>
+                            <field name="state" widget="badge" />
+                            <field name="scheduled_date"/>
+                            <!-- Show age in days could be nice but requires field -->
                         </list>
                     </field>
                 </group>
