@@ -95,10 +95,10 @@ class StockPicking(models.Model):
                 'mimetype': 'application/pdf',
             })
 
-            # Return action to open the PDF in a new tab (inline)
+            # Return action to open the print preview page (which triggers print())
             return {
                 'type': 'ir.actions.act_url',
-                'url': f'/web/content/{attachment.id}',
+                'url': f'/hlv_delivery_jt/print_label/{attachment.id}',
                 'target': 'new',
             }
         else:
