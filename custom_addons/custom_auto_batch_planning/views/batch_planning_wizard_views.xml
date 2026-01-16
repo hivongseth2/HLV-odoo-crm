@@ -17,13 +17,32 @@
                         <field name="search_date"/>
                         <field name="search_partner_id"/>
                     </group>
-                    <field name="picking_ids" widget="many2many" nolabel="1">
-                        <list>
-                            <field name="name"/>
-                            <field name="partner_id"/>
-                            <field name="origin"/>
-                            <field name="state" widget="badge" decoration-success="state == 'assigned'" decoration-info="state == 'confirmed'"/>
-                            <field name="scheduled_date"/>
+                    
+                    <separator string="Danh sách phiếu theo Kế hoạch (Ngày dự kiến)"/>
+                    <field name="picking_ids" nolabel="1">
+                        <list string="Phiếu Theo Kế Hoạch">
+                            <field name="name" string="Số phiếu"/>
+                            <field name="partner_id" string="Khách hàng"/>
+                            <field name="state" widget="badge" string="Tình trạng hàng"
+                                   decoration-success="state == 'assigned'" 
+                                   decoration-info="state == 'confirmed'"/>
+                            <field name="scheduled_date" string="Ngày hẹn"/>
+                            <field name="origin" optional="hide"/>
+                        </list>
+                    </field>
+                    
+                    <!-- Separate list for suggestions -->
+                    <separator string="Gợi ý: Các phiếu cũ/tồn đọng cùng Khách Hàng (được chọn ở trên)" 
+                               invisible="not additional_picking_ids"/>
+                    <field name="additional_picking_ids" nolabel="1" 
+                           invisible="not additional_picking_ids">
+                         <list string="Phiếu Gợi Ý" create="0">
+                            <field name="name" string="Số phiếu"/>
+                            <field name="partner_id" string="Khách hàng"/>
+                            <field name="state" widget="badge" string="Tình trạng hàng"
+                                   decoration-success="state == 'assigned'" 
+                                   decoration-info="state == 'confirmed'"/>
+                            <field name="scheduled_date" string="Ngày hẹn"/>
                         </list>
                     </field>
                 </group>
