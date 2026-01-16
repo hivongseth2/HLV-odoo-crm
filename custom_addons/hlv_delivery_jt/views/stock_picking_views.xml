@@ -34,13 +34,6 @@
                     </group>
                     <group string="Hành trình chi tiết">
                         <field name="jt_tracking_timeline" nolabel="1"/>
-                        <field name="jt_tracking_log_ids" readonly="1">
-                            <list default_order="scan_time desc">
-                                <field name="scan_time"/>
-                                <field name="scan_type_name"/>
-                                <field name="desc"/>
-                            </list>
-                        </field>
                     </group>
                 </page>
             </xpath>
