@@ -26,6 +26,16 @@ class JTApiUtils:
         """
         return f"{self.base_url}/order/{service_type}"
 
+    def _generate_digest(self, biz_content):
+        """
+        Generate MD5 digest for J&T API authentication.
+        Formula: md5(bizContent + privateKey)
+        """
+        data_to_hash = biz_content + self.private_key
+        md5_hash = hashlib.md5(data_to_hash.encode('utf-8')).digest()
+        digest = base64.b64encode(md5_hash).decode('utf-8')
+        return digest
+
     def _send_request(self, service_type, biz_params):
         """
         Generic method to send requests to J&T
