@@ -67,6 +67,7 @@ class JTCancelOrderWizard(models.TransientModel):
                     'title': 'Thành công',
                     'message': 'Đã hủy đơn J&T thành công!',
                     'type': 'success',
+                    'next': {'type': 'ir.actions.act_window_close'},
                 }
             }
         else:

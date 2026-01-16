@@ -530,6 +530,7 @@ class JTCreateOrderWizard(models.TransientModel):
                     'title': 'Thành công',
                     'message': f'Đã tạo đơn J&T thành công! Mã vận đơn: {data.get("billCode")}',
                     'type': 'success',
+                    'next': {'type': 'ir.actions.act_window_close'},
                 }
             }
         else:
