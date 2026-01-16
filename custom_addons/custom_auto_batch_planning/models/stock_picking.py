@@ -27,39 +27,46 @@ class StockPicking(models.Model):
                     self._propagate_batch_to_downstream(picking, picking.batch_id)
         return res
 
+    def button_validate(self):
+        # 1. Chạy logic validate gốc (Odoo sẽ tạo/link các phiếu kế tiếp ở đây)
+        res = super(StockPicking, self).button_validate()
+        
+        # 2. Sau khi validate, kiểm tra xem có phiếu con nào mới sinh ra không thì gán Lô luôn
+        for picking in self:
+            if picking.batch_id:
+                self._propagate_batch_to_downstream(picking, picking.batch_id)
+        return res
+
     def _auto_assign_batch(self, picking):
-        # Tìm phiếu cha (Pick/Pack)
-        # Note: Lúc tạo picking, moves có thể chưa được link trọn vẹn nếu tạo tách rời,
-        # nhưng với flow chuẩn Odoo (Pick -> Out), move thường được tạo và assign picking_id ngay.
+        # Logic này đôi khi chạy ở create nhưng picking chưa có move nếu tạo theo luồng chuẩn
+        # Nên cứ giữ để catch các trường hợp có sẵn move.
         source_moves = picking.move_ids.mapped('move_orig_ids')
         if not source_moves:
             return
 
         prev_picking = source_moves[0].picking_id
         
-        # Nếu phiếu cha có Batch -> Con thừa kế ngay
         if prev_picking and prev_picking.batch_id:
-            # Check constraint type trc khi gán
             self._ensure_batch_allows_mixed_types(prev_picking.batch_id, picking.picking_type_id)
             picking.batch_id = prev_picking.batch_id
 
     def _propagate_batch_to_downstream(self, picking, batch):
-        # Tìm các phiếu con (Downstream)
-        # Chỉ cần lan truyền cho con TRỰC TIẾP, sau đó con sẽ tự lan truyền tiếp (nhờ hàm write ở trên)
+        # Tìm phiếu con
+        # Lưu ý: Khi validate xong, move_lines đã được update move_dest_ids
         next_moves = picking.move_ids.move_dest_ids
         next_pickings = next_moves.picking_id
         
-        # Lọc những thằng chưa có batch hoặc khác batch
+        # Filter
         pickings_to_update = next_pickings.filtered(lambda p: p.batch_id != batch)
         
         if pickings_to_update:
-            # Check constraint cho các con
+            # Check type constraint
             if batch.picking_type_id:
                  conflicting = pickings_to_update.filtered(lambda p: p.picking_type_id != batch.picking_type_id)
                  if conflicting:
                      batch.picking_type_id = False
             
-            # Gán (sẽ trigger write -> trigger tiếp recursion)
+            # Gán batch
             pickings_to_update.write({'batch_id': batch.id})
 
     def _ensure_batch_allows_mixed_types(self, batch, picking_type):
