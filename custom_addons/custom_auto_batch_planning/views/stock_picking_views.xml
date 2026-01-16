@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Thêm trường planned_batch_id vào form Picking -->
+    <!-- Thêm trường batch_plan_id vào form Picking -->
     <record id="view_picking_form_inherit_planning" model="ir.ui.view">
         <field name="name">stock.picking.form.inherit.planning</field>
         <field name="model">stock.picking</field>
@@ -11,7 +11,18 @@
             </xpath>
         </field>
     </record>
-    
+
+    <!-- Action: Thêm vào Kế hoạch (Gọi Wizard) -->
+    <record id="action_add_to_batch_plan" model="ir.actions.act_window">
+        <field name="name">Thêm vào Kế hoạch</field>
+        <field name="res_model">stock.batch.planning.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">list</field>
+    </record>
+
+    <!-- List View Inheritance: Add batch_plan_id column -->
     <record id="view_picking_tree_inherit_planning" model="ir.ui.view">
         <field name="name">stock.picking.list.inherit.planning</field>
         <field name="model">stock.picking</field>

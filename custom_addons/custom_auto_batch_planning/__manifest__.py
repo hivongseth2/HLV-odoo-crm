@@ -28,8 +28,9 @@
 
     # Code của bạn chỉ xử lý logic ngầm (Backend) nên không nhất thiết phải có file XML/View
     'data': [
-        # 'security/ir.model.access.csv', 
+        'security/ir.model.access.csv', 
         'views/batch_planning_views.xml',
+        'views/batch_planning_wizard_views.xml',
         'views/stock_picking_views.xml',
     ],
     
