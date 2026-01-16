@@ -104,38 +104,34 @@ class StockPicking(models.Model):
         ('empty', 'Chưa có hàng')
     ], string='Tình trạng chi tiết', compute='_compute_availability_status_custom')
 
-    @api.depends('move_ids.state', 'move_ids.product_uom_qty', 'move_ids.reserved_availability')
+    @api.depends('move_ids.state')
     def _compute_availability_status_custom(self):
         for picking in self:
             if picking.state in ['done', 'cancel']:
                 picking.availability_status_custom = 'full' if picking.state == 'done' else 'empty'
                 continue
             
-            # Chỉ check các move hoạt động (ko dính cancel)
+            # Chỉ check các move hoạt động
             moves = picking.move_ids.filtered(lambda m: m.state not in ['cancel', 'done'])
             if not moves:
                 picking.availability_status_custom = 'empty'
                 continue
-
-            # Check tỷ lệ
-            # Nếu tất cả moves đều có reserved >= demand -> Full
-            # Nếu có ít nhất 1 cái > 0 -> Partial
-            # Còn lại empty
-            
-            is_full = True
-            has_some = False
-            
-            for move in moves:
-                # Dùng product_uom_qty (Demand) và reserved_availability (Reserved)
-                if move.reserved_availability < move.product_uom_qty:
-                    is_full = False
                 
-                if move.reserved_availability > 0:
-                    has_some = True
+            # Logic dựa trên State của Moves (An toàn hơn check qty)
+            # - assigned: Đã giữ đủ hàng
+            # - partially_available: Giữ 1 phần
+            # - confirmed/waiting: Chưa có hàng
             
-            if is_full:
+            states = set(moves.mapped('state'))
+            
+            # 1. Nếu TẤT CẢ đều là assigned -> Full
+            if states.issubset({'assigned'}):
                 picking.availability_status_custom = 'full'
-            elif has_some:
-                picking.availability_status_custom = 'partial'
-            else:
+                
+            # 2. Nếu TẤT CẢ đều là chưa có hàng (confirmed/waiting) -> Empty
+            elif states.issubset({'confirmed', 'waiting', 'draft'}):
                 picking.availability_status_custom = 'empty'
+                
+            # 3. Còn lại (Có mixed hoặc partially_available) -> Partial
+            else:
+                picking.availability_status_custom = 'partial'
