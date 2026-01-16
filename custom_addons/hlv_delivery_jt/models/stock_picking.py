@@ -95,11 +95,13 @@ class StockPicking(models.Model):
                 'mimetype': 'application/pdf',
             })
 
-            # Return action to open the print preview page (which triggers print())
+            # Return client action to trigger silent print from JS
             return {
-                'type': 'ir.actions.act_url',
-                'url': f'/hlv_delivery_jt/print_label/{attachment.id}',
-                'target': 'new',
+                'type': 'ir.actions.client',
+                'tag': 'jt_print_label',
+                'params': {
+                    'attachment_id': attachment.id,
+                }
             }
         else:
             msg = result.get('msg', 'Lỗi không xác định từ J&T')
