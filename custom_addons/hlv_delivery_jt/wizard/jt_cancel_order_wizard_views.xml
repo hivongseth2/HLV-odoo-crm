@@ -9,7 +9,7 @@
                     <field name="picking_id" invisible="1"/>
                     <field name="jt_bill_code" readonly="1"/>
                     <field name="reason"/>
-                    <field name="other_reason" attrs="{'invisible': [('reason', '!=', 'Khác')], 'required': [('reason', '=', 'Khác')]}"/>
+                    <field name="other_reason" invisible="reason != 'Khác'" required="reason == 'Khác'"/>
                 </group>
                 <footer>
                     <button name="action_cancel_jt_order" string="Hủy đơn J&amp;T" type="object" class="btn-danger"/>
