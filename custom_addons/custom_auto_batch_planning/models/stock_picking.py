@@ -93,6 +93,10 @@ class StockPicking(models.Model):
              real_batch.picking_type_id = False
              
         try:
+            picking.write({'batch_id': real_batch.id})
+        except Exception:
+            pass
+
     # Logic hiển thị tình trạng hàng chính xác theo yêu cầu (So Demand vs Reserved)
     availability_status_custom = fields.Selection([
         ('full', 'Đủ hàng'),
