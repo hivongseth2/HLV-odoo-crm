@@ -4,71 +4,95 @@ from datetime import date
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
+    batch_plan_id = fields.Many2one('stock.batch.planning', string='Kế hoạch Gom Lô', help='Liên kết với kế hoạch gom lô')
+
     @api.model_create_multi
     def create(self, vals_list):
-        # 1. Tạo phiếu trước
+        # 1. Tạo phiếu
         pickings = super(StockPicking, self).create(vals_list)
         
-        # 2. Xử lý logic gán batch ngay khi tạo (cho trường hợp Pack -> Out sinh ra sau)
+        # 2. Logic mới: Truyền 'batch_plan_id' từ cha sang con
         for picking in pickings:
-             # Logic cũ: nếu move đã có sẵn (thường Odoo tạo move cùng lúc picking hoặc sau, nhưng check cho chắc)
-             if picking.picking_type_code in ['internal', 'outgoing']:
-                 self._auto_assign_batch(picking)
+            self._propagate_batch_plan(picking)
         return pickings
 
     def write(self, vals):
         # 1. Write bình thường
         res = super(StockPicking, self).write(vals)
         
-        # 2. Nếu có thay đổi Batch -> Lan truyền xuống con cháu
-        if 'batch_id' in vals:
+        # 2. Nếu có gán 'batch_plan_id' -> Lan truyền cho con
+        if 'batch_plan_id' in vals:
             for picking in self:
-                if picking.batch_id:
-                    self._propagate_batch_to_downstream(picking, picking.batch_id)
+                if picking.batch_plan_id:
+                    self._propagate_batch_plan_downstream(picking, picking.batch_plan_id)
         return res
 
     def button_validate(self):
-        # 1. Chạy logic validate gốc (Odoo sẽ tạo/link các phiếu kế tiếp ở đây)
         res = super(StockPicking, self).button_validate()
-        
-        # 2. Sau khi validate, kiểm tra xem có phiếu con nào mới sinh ra không thì gán Lô luôn
+        # Sau khi validate, check lại xem có cần truyền Plan cho con mới sinh ra ko
         for picking in self:
-            if picking.batch_id:
-                self._propagate_batch_to_downstream(picking, picking.batch_id)
+            self._propagate_batch_plan_downstream(picking, picking.batch_plan_id)
         return res
 
-    def _auto_assign_batch(self, picking):
-        # Logic này đôi khi chạy ở create nhưng picking chưa có move nếu tạo theo luồng chuẩn
-        # Nên cứ giữ để catch các trường hợp có sẵn move.
+    def _propagate_batch_plan(self, picking):
+        # 1. Tìm cha
         source_moves = picking.move_ids.mapped('move_orig_ids')
         if not source_moves:
             return
 
         prev_picking = source_moves[0].picking_id
         
-        if prev_picking and prev_picking.batch_id:
-            self._ensure_batch_allows_mixed_types(prev_picking.batch_id, picking.picking_type_id)
-            picking.batch_id = prev_picking.batch_id
+        # 2. Nếu cha có Plan -> Con thừa kế Plan
+        if prev_picking and prev_picking.batch_plan_id:
+            picking.batch_plan_id = prev_picking.batch_plan_id
+            
+            # 3. ĐẶC BIỆT: Nếu con là phiếu OUT (Giao hàng) -> Tự động chui vào Lô Thật (nếu Plan đã có Lô Thật hoặc Auto-create)
+            # Theo yêu cầu: "tự nhảy vào batch đã tạo"
+            if picking.picking_type_code == 'outgoing':
+                 self._check_and_assign_to_real_batch(picking, picking.batch_plan_id)
 
-    def _propagate_batch_to_downstream(self, picking, batch):
-        # Tìm phiếu con
-        # Lưu ý: Khi validate xong, move_lines đã được update move_dest_ids
+    def _propagate_batch_plan_downstream(self, picking, plan):
+        if not plan:
+            return
+            
         next_moves = picking.move_ids.move_dest_ids
         next_pickings = next_moves.picking_id
         
-        # Filter
-        pickings_to_update = next_pickings.filtered(lambda p: p.batch_id != batch)
+        # Chỉ update những thằng chưa có plan hoặc plan khác
+        pickings_to_update = next_pickings.filtered(lambda p: p.batch_plan_id != plan)
         
         if pickings_to_update:
-            # Check type constraint
-            if batch.picking_type_id:
-                 conflicting = pickings_to_update.filtered(lambda p: p.picking_type_id != batch.picking_type_id)
-                 if conflicting:
-                     batch.picking_type_id = False
+            pickings_to_update.write({'batch_plan_id': plan.id})
             
-            # Gán batch
-            pickings_to_update.write({'batch_id': batch.id})
+            # Nếu trong đống con này có phiếu Out -> Check assign
+            for p in pickings_to_update:
+                if p.picking_type_code == 'outgoing':
+                    self._check_and_assign_to_real_batch(p, plan)
 
-    def _ensure_batch_allows_mixed_types(self, batch, picking_type):
-        if batch.picking_type_id and batch.picking_type_id != picking_type:
-            batch.picking_type_id = False
+    def _check_and_assign_to_real_batch(self, picking, plan):
+        """
+        Khi phiếu Out được gán vào Plan:
+        1. Nếu Plan đã có 'batch_id' (Lô thật) -> Gán phiếu OUT vào Lô thật đó.
+        2. Nếu Plan chưa có Lô thật -> Chưa làm gì (chờ user confirm trên Plan hoặc auto trigger khác)
+           Nhưng user nói: "tự nhảy vào batch đã tạo".
+        """
+        if not plan or not plan.batch_id:
+            return
+
+        real_batch = plan.batch_id
+        
+        # Logic gán lô thật (đảm bảo mở lô nếu done)
+        if picking.batch_id == real_batch:
+            return
+
+        if real_batch.state == 'done':
+            real_batch.write({'state': 'in_progress'})
+            
+        # Clear type constraint if needed
+        if real_batch.picking_type_id and real_batch.picking_type_id != picking.picking_type_id:
+             real_batch.picking_type_id = False
+             
+        try:
+            picking.write({'batch_id': real_batch.id})
+        except Exception:
+            pass
