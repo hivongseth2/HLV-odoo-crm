@@ -96,3 +96,42 @@ class StockPicking(models.Model):
             picking.write({'batch_id': real_batch.id})
         except Exception:
             pass
+
+    # Logic hiển thị tình trạng hàng chính xác theo yêu cầu (So Demand vs Reserved)
+    availability_status_custom = fields.Selection([
+        ('full', 'Đủ hàng'),
+        ('partial', 'Thiếu hàng'),
+        ('empty', 'Chưa có hàng')
+    ], string='Tình trạng chi tiết', compute='_compute_availability_status_custom')
+
+    @api.depends('move_ids.state')
+    def _compute_availability_status_custom(self):
+        for picking in self:
+            if picking.state in ['done', 'cancel']:
+                picking.availability_status_custom = 'full' if picking.state == 'done' else 'empty'
+                continue
+            
+            # Chỉ check các move hoạt động
+            moves = picking.move_ids.filtered(lambda m: m.state not in ['cancel', 'done'])
+            if not moves:
+                picking.availability_status_custom = 'empty'
+                continue
+                
+            # Logic dựa trên State của Moves (An toàn hơn check qty)
+            # - assigned: Đã giữ đủ hàng
+            # - partially_available: Giữ 1 phần
+            # - confirmed/waiting: Chưa có hàng
+            
+            states = set(moves.mapped('state'))
+            
+            # 1. Nếu TẤT CẢ đều là assigned -> Full
+            if states.issubset({'assigned'}):
+                picking.availability_status_custom = 'full'
+                
+            # 2. Nếu TẤT CẢ đều là chưa có hàng (confirmed/waiting) -> Empty
+            elif states.issubset({'confirmed', 'waiting', 'draft'}):
+                picking.availability_status_custom = 'empty'
+                
+            # 3. Còn lại (Có mixed hoặc partially_available) -> Partial
+            else:
+                picking.availability_status_custom = 'partial'
