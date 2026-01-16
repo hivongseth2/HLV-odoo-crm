@@ -53,14 +53,24 @@
                         <page string="Danh sách phiếu (Picking)">
                             <button name="action_open_picking_selector" type="object" string="Chọn Phiếu (Add Pickings)" class="btn-primary" 
                                     invisible="state == 'done'" style="margin-bottom: 10px;"/>
-                                    
-                            <field name="picking_ids" context="{'default_batch_plan_id': id}" readonly="1">
-                                <list create="0" delete="1">
-                                    <field name="name"/>
-                                    <field name="picking_type_id"/>
+                            
+                            <!-- Filter: Chỉ hiện phiếu nguồn (Pick) based on name convention -->
+                            <field name="picking_ids" context="{'default_batch_plan_id': id}" readonly="1" 
+                                   domain="[('name', 'ilike', '%PICK%')]">
+                                <list create="0" delete="1" decoration-info="state == 'assigned'" decoration-success="state == 'done'">
+                                    <field name="name" string="Phiếu Lấy Hàng (Pick)"/>
+                                    <field name="match_status" invisible="1"/> 
                                     <field name="partner_id"/>
                                     <field name="state" widget="badge" decoration-success="state == 'done'"/>
-                                    <field name="batch_id" string="Lô Thật (Nếu có)" optional="show"/>
+                                    
+                                    <!-- Cột Pack -->
+                                    <field name="related_pack_ids" widget="many2many_tags" string="Phiếu Gói (Pack)" optional="show"/>
+                                    
+                                    <!-- Cột Out -->
+                                    <field name="related_out_ids" widget="many2many_tags" string="Phiếu Xuất (Out)" optional="show"/>
+                                    
+                                    <!-- Lấy Batch của phiếu Out đầu tiên -->
+                                    <field name="batch_id" string="Lô Thật (Của Pick)" optional="hide"/>
                                 </list>
                             </field>
                         </page>

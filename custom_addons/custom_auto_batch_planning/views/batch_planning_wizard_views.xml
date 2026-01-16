@@ -13,6 +13,10 @@
                     <field name="batch_plan_id" required="mode == 'add_to_plan'"/>
                 </group>
                 <group invisible="mode != 'select_pickings'">
+                    <group col="4">
+                        <field name="search_date"/>
+                        <field name="search_partner_id"/>
+                    </group>
                     <field name="picking_ids" widget="many2many" nolabel="1">
                         <list>
                             <field name="name"/>
