@@ -5,14 +5,14 @@
         <field name="name">stock.picking.batch.planning.tree</field>
         <field name="model">stock.picking.batch</field>
         <field name="arch" type="xml">
-            <tree string="Kế hoạch Gom Lô" multi_edit="1">
+            <list string="Kế hoạch Gom Lô" multi_edit="1">
                 <field name="name" readonly="1"/>
                 <field name="scheduled_date"/>
                 <field name="user_id" string="Tài xế"/>
                 <field name="vehicle_id"/>
                 <field name="route_name"/>
                 <field name="state" widget="badge" decoration-success="state == 'done'" decoration-info="state == 'draft'"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -20,7 +20,7 @@
     <record id="action_batch_planning" model="ir.actions.act_window">
         <field name="name">Kế hoạch Gom Lô</field>
         <field name="res_model">stock.picking.batch</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_picking_batch_planning_tree"/>
         <field name="context">{}</field>
     </record>
