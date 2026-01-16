@@ -13,8 +13,9 @@
                         <field name="generate_type" invisible="not auto_generate_ean13" widget="radio"/>
                     </group>
                     <field name="line_ids">
-                        <list editable="bottom">
+                        <list editable="bottom" decoration-success="barcode" decoration-danger="not barcode">
                             <field name="product_id"/>
+                            <field name="barcode" readonly="1"/> <!-- Show barcode for clarity -->
                             <field name="qty_to_print"/>
                         </list>
                     </field>

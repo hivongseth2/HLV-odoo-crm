@@ -56,3 +56,4 @@ class StockPickingLabelWizardLine(models.TransientModel):
     wizard_id = fields.Many2one('stock.picking.label.wizard')
     product_id = fields.Many2one('product.product', string='Sản phẩm', required=True)
     qty_to_print = fields.Integer(string='SL Tem', default=1)
+    barcode = fields.Char(related='product_id.barcode', string='Mã vạch', readonly=True)
