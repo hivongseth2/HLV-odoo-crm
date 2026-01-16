@@ -5,3 +5,4 @@ access_jnt_province,jnt.province,model_jnt_province,,1,1,1,1
 access_jnt_district,jnt.district,model_jnt_district,,1,1,1,1
 access_jnt_ward,jnt.ward,model_jnt_ward,,1,1,1,1
 access_jt_cancel_order_wizard,jt.cancel.order.wizard,model_jt_cancel_order_wizard,,1,1,1,1
+access_jt_tracking_log,jt.tracking.log,model_jt_tracking_log,,1,1,1,1
