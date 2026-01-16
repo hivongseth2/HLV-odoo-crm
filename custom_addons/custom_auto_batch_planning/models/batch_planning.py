@@ -79,7 +79,7 @@ class StockBatchPlanning(models.Model):
             'type': 'ir.actions.act_window',
             'res_model': 'stock.batch.planning.wizard',
             'view_mode': 'form',
-            'target': 'current',
+            'target': 'new',
             'context': {
                 'default_active_plan_id': self.id,
                 'default_mode': 'select_pickings'
