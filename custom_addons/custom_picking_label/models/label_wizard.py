@@ -25,14 +25,12 @@ class StockPickingLabelWizard(models.TransientModel):
                 if not product.barcode:
                     barcode_str = False
                     if self.generate_type == 'date':
-                        barcode_str = self.env["barcode.nomenclature"].sanitize_ean(
-                            "%s%s" % (product.id, datetime.now().strftime("%d%m%y%H%M"))
-                        )
+                        # Format: HLV + ProductID + DateStr
+                        barcode_str = "HLV%s%s" % (product.id, datetime.now().strftime("%d%m%y%H%M"))
                     else:
+                        # Format: HLV + RandomNumber
                         number_random = int("%0.13d" % random.randint(0, 999999999999))
-                        barcode_str = self.env["barcode.nomenclature"].sanitize_ean(
-                            "%s" % (number_random)
-                        )
+                        barcode_str = "HLV%s" % (number_random)
                     
                     if barcode_str:
                          product.write({"barcode": barcode_str})
