@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Tree View dành cho Kế hoạch -->
+    <record id="view_picking_batch_planning_tree" model="ir.ui.view">
+        <field name="name">stock.picking.batch.planning.tree</field>
+        <field name="model">stock.picking.batch</field>
+        <field name="arch" type="xml">
+            <list string="Kế hoạch Gom Lô" multi_edit="1">
+                <field name="name" readonly="1"/>
+                <field name="scheduled_date"/>
+                <field name="user_id" string="Tài xế"/>
+                <field name="vehicle_id"/>
+                <field name="route_name"/>
+                <field name="state" widget="badge" decoration-success="state == 'done'" decoration-info="state == 'draft'"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_batch_planning" model="ir.actions.act_window">
+        <field name="name">Kế hoạch Gom Lô</field>
+        <field name="res_model">stock.picking.batch</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_picking_batch_planning_tree"/>
+        <field name="context">{}</field>
+    </record>
+
+    <!-- Menu Item (Trong Inventory / Operations) -->
+    <menuitem id="menu_batch_planning"
+              name="Kế hoạch Gom Lô (Planning)"
+              parent="stock.menu_stock_warehouse_mgmt"
+              action="action_batch_planning"
+              sequence="50"/>
+</odoo>
