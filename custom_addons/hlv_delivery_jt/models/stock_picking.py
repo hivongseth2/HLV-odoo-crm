@@ -11,7 +11,75 @@ class StockPicking(models.Model):
     jt_insurance_fee = fields.Float(string="Phí bảo hiểm J&T", copy=False)
     jt_total_fee = fields.Float(string="Tổng phí J&T", copy=False)
     
+    jt_total_fee = fields.Float(string="Tổng phí J&T", copy=False)
+    
     jt_tracking_log_ids = fields.One2many("jt.tracking.log", "picking_id", string="Hành trình J&T")
+    jt_tracking_timeline = fields.Html(string="Hành trình đơn hàng", compute="_compute_jt_timeline")
+
+    @api.depends('jt_tracking_log_ids')
+    def _compute_jt_timeline(self):
+        for record in self:
+            html = '<div class="o_jt_timeline" style="margin-left: 10px; border-left: 2px solid #ddd; padding-left: 20px;">'
+            if not record.jt_tracking_log_ids:
+                html = '<div class="text-muted">Chưa có thông tin hành trình.</div>'
+            else:
+                import pytz
+                user_tz = self.env.user.tz or 'Asia/Ho_Chi_Minh'
+                
+                logs = record.jt_tracking_log_ids
+                for index, log in enumerate(logs):
+                    time_str = ""
+                    if log.scan_time:
+                        try:
+                            # J&T usually returns local time already, but good to ensure format
+                            # Assuming scan_time in DB is UTC
+                            utc = pytz.UTC
+                            dest_tz = pytz.timezone(user_tz)
+                            local_dt = utc.localize(log.scan_time).astimezone(dest_tz)
+                            time_str = local_dt.strftime("%d/%m/%Y %H:%M:%S")
+                        except:
+                            time_str = log.scan_time.strftime("%d/%m/%Y %H:%M:%S")
+                    
+                    status_vn = log.scan_type_name or "N/A"
+                    desc = log.desc or ""
+                    
+                    # Color based on status keywords (J&T specific)
+                    color = "#0056b3"
+                    bg_dot = "#0d6efd" 
+                    
+                    # 106 Picked up, 113 Delivered, 116 Returning, 117 Returned
+                    status_lower = status_vn.lower()
+                    if 'ký nhận' in status_lower or 'delivered' in status_lower: 
+                        color = "#0f5132"
+                        bg_dot = "#198754"
+                    elif 'đang chuyển hoàn' in status_lower or 'returning' in status_lower: 
+                        color = "#842029"
+                        bg_dot = "#dc3545"
+                    elif 'đã ký nhận hoàn trả' in status_lower or 'returned' in status_lower:
+                        color = "#664d03"
+                        bg_dot = "#ffc107"
+                    elif 'nhận hàng' in status_lower or 'picked' in status_lower:
+                        color = "#0d6efd"
+                        bg_dot = "#0d6efd"
+
+                    # Text badge for latest item (first in list)
+                    badge_html = ""
+                    if index == 0:
+                        badge_html = f'<span style="color: #adb5bd; font-size: 0.8em; margin-left: 8px; font-weight: normal; font-style: italic;">(Hiện tại)</span>'
+
+                    html += f'''
+                    <div style="position: relative; margin-bottom: 20px;">
+                        <div style="position: absolute; left: -26px; top: 0; width: 12px; height: 12px; border-radius: 50%; background: {bg_dot}; border: 2px solid white; box-shadow: 0 0 0 1px {bg_dot};"></div>
+                        <div style="font-weight: bold; color: {color}">{status_vn} <span style="font-weight: normal; color: #666; font-size: 0.9em;">- {time_str}</span> {badge_html}</div>
+                        <div style="font-size: 0.9em; color: #555; margin-top: 4px;">{desc}</div>
+                        <div style="font-size: 0.8em; color: #888; margin-top: 2px;">
+                           NV: {log.staff_name or ''} - {log.staff_contact or ''} | {log.scan_network_name or ''}
+                        </div>
+                    </div>
+                    '''
+            
+            html += '</div>'
+            record.jt_tracking_timeline = html
 
     def action_sync_jt_status(self):
         """Sync tracking status from J&T"""

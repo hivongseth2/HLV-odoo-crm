@@ -33,16 +33,7 @@
                         </group>
                     </group>
                     <group string="Hành trình chi tiết">
-                        <field name="jt_tracking_log_ids" readonly="1" nolabel="1">
-                            <list default_order="scan_time desc">
-                                <field name="scan_time"/>
-                                <field name="scan_type_name" widget="badge" decoration-info="1"/>
-                                <field name="desc"/>
-                                <field name="scan_network_name"/>
-                                <field name="staff_name"/>
-                                <field name="staff_contact"/>
-                            </list>
-                        </field>
+                        <field name="jt_tracking_timeline" nolabel="1"/>
                     </group>
                 </page>
             </xpath>
