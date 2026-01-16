@@ -28,6 +28,8 @@ class JTApiUtils:
             return f"{self.base_url}/spmComCost/{service_type}"
         elif service_type == 'printOrders':
             return f"{self.base_url}/print/{service_type}"
+        elif service_type == 'trace':
+            return f"{self.base_url}/logistics/trace"
         else:
             return f"{self.base_url}/order/{service_type}"
 
@@ -106,3 +108,22 @@ class JTApiUtils:
         Returns a URL to the combined PDF
         """
         return self._send_request('printOrders', biz_params)
+
+    def trace_order(self, biz_params):
+        """
+        Trace order status from J&T
+        http://domain/webopenplatformapi/api/logistics/trace
+        """
+        # The URL for trace is slightly different (/logistics/trace instead of /order/...)
+        # We need to handle this URL construction.
+        # Check _get_url implementation or override it locally.
+        # Actually _get_url uses service_type. 
+        # If we pass 'trace', it goes to /order/trace which is WRONG based on docs.
+        # Docs say: /webopenplatformapi/api/logistics/trace
+        
+        # Let's adjust _get_url first if needed, or handle it here.
+        # Looking at _get_url:
+        # return f"{self.base_url}/order/{service_type}"
+        
+        # We should update _get_url to handle 'trace'
+        return self._send_request('trace', biz_params)

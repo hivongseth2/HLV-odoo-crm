@@ -15,6 +15,8 @@
                     <header>
                         <button name="action_print_jt_label" string="In tem J&amp;T" type="object" class="btn-primary"
                                 invisible="not jt_bill_code"/>
+                        <button name="action_sync_jt_status" string="Cập nhật hành trình" type="object" class="btn-info"
+                                invisible="not jt_bill_code"/>
                         <button name="action_open_jt_cancel_wizard" string="Hủy đơn J&amp;T" type="object" class="btn-danger"
                                 invisible="not jt_bill_code or jt_order_status == 'Cancelled'"/>
                     </header>
@@ -27,8 +29,18 @@
                         <group string="Chi phí">
                             <field name="jt_cod_fee" readonly="1"/>
                             <field name="jt_insurance_fee" readonly="1"/>
-                            <field name="jt_total_fee" readonly="1"/>
                         </group>
+                    <group string="Hành trình chi tiết">
+                        <field name="jt_tracking_log_ids" readonly="1" nolabel="1">
+                            <list default_order="scan_time desc">
+                                <field name="scan_time"/>
+                                <field name="scan_type_name" widget="badge" decoration-info="1"/>
+                                <field name="desc"/>
+                                <field name="scan_network_name"/>
+                                <field name="staff_name"/>
+                                <field name="staff_contact"/>
+                            </list>
+                        </field>
                     </group>
                 </page>
             </xpath>

@@ -10,6 +10,79 @@ class StockPicking(models.Model):
     jt_cod_fee = fields.Float(string="Phí COD J&T", copy=False)
     jt_insurance_fee = fields.Float(string="Phí bảo hiểm J&T", copy=False)
     jt_total_fee = fields.Float(string="Tổng phí J&T", copy=False)
+    
+    jt_tracking_log_ids = fields.One2many("jt.tracking.log", "picking_id", string="Hành trình J&T")
+
+    def action_sync_jt_status(self):
+        """Sync tracking status from J&T"""
+        self.ensure_one()
+        from odoo.exceptions import UserError
+        from ..utils.jt_api_utils import JTApiUtils
+
+        if not self.jt_bill_code:
+            raise UserError("Đơn hàng chưa có mã vận đơn J&T!")
+
+        # Get credentials
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        api_account = get_param('jnt_apiAccount')
+        private_key = get_param('jnt_privateKey')
+        jnt_customer_code = get_param('jnt_customerCode')
+        jnt_password = get_param('jnt_password')
+        company = self.company_id or self.env.company
+
+        if not all([api_account, private_key, jnt_customer_code, jnt_password]):
+            raise UserError("Chưa cấu hình thông tin J&T trong System Parameters.")
+
+        client = JTApiUtils(
+            api_account=api_account,
+            private_key=private_key,
+            environment=company.jt_environment
+        )
+
+        biz_params = {
+            "customerCode": jnt_customer_code,
+            "password": jnt_password.upper(),
+            "billCodes": self.jt_bill_code
+        }
+
+        result = client.trace_order(biz_params)
+        
+        if result.get('code') == '1' and result.get('data'):
+            data_list = result['data']
+            if isinstance(data_list, list) and len(data_list) > 0:
+                data = data_list[0] # We only requested one bill code
+                details = data.get('details', [])
+                
+                # Clear old logs to clean update
+                self.jt_tracking_log_ids.unlink()
+                
+                LogModel = self.env['jt.tracking.log']
+                for det in details:
+                    LogModel.create({
+                        'picking_id': self.id,
+                        'scan_time': det.get('scanTime'),
+                        'scan_type_name': det.get('scanTypeName'),
+                        'desc': det.get('desc'),
+                        'scan_network_name': det.get('scanNetworkName'),
+                        'staff_name': det.get('staffName'),
+                        'staff_contact': det.get('staffContact'),
+                    })
+                
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Thành công',
+                        'message': 'Đã cập nhật hành trình đơn hàng J&T!',
+                        'type': 'success',
+                        'sticky': False,
+                    }
+                }
+            else:
+                 raise UserError(f"Không tìm thấy dữ liệu hành trình for {self.jt_bill_code}")
+        else:
+            msg = result.get('msg', 'Lỗi không xác định từ J&T')
+            raise UserError(f"Lỗi cập nhật hành trình: {msg}")
 
     def action_open_jt_wizard(self):
         self.ensure_one()
