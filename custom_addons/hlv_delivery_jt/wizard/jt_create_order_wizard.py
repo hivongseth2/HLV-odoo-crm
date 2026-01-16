@@ -409,7 +409,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "mobile": self.sender_mobile or "",
                 "prov": (self.sender_prov_id.name or "").strip(),
                 "city": (self.sender_city_id.name or "").strip(),
-                "area": self.sender_area_id.jnt_code if self.sender_area_id else "",
+                "area": (self.sender_area_id.name or "").strip(),
                 "address": sanitize_address(self.sender_address)
             },
             "receiver": {
@@ -417,7 +417,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "mobile": self.receiver_mobile or "",
                 "prov": (self.receiver_prov_id.name or "").strip(),
                 "city": (self.receiver_city_id.name or "").strip(),
-                "area": self.receiver_area_id.jnt_code if self.receiver_area_id else "",
+                "area": (self.receiver_area_id.name or "").strip(),
                 "address": sanitize_address(self.receiver_address)
             },
             "payType": self.pay_type,
@@ -429,7 +429,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "length": int(self.length),
                 "width": int(self.width),
                 "height": int(self.height),
-                "volume": "{:.2f}".format(self.length * self.width * self.height / 6000.0)
+                "volume": str(int(self.length * self.width * self.height / 6000.0 or 1))
             },
             "itemsValue": goods_val_str,
             "totalQuantity": len(picking.move_ids_without_package),
@@ -437,7 +437,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "itemName": line.product_id.name[:100],
                 "englishName": line.product_id.name[:100],
                 "number": str(int(line.product_uom_qty)),
-                "itemValue": str(int(line.product_id.list_price or 1)) # Ensure item value is at least 1
+                "itemValue": int(line.product_id.list_price or 1) # Ensure item value is at least 1 and is a number
             } for line in picking.move_ids_without_package]
         }
 
