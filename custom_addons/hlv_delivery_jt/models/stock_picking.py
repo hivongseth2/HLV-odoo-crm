@@ -106,3 +106,49 @@ class StockPicking(models.Model):
         else:
             msg = result.get('msg', 'Lỗi không xác định từ J&T')
             raise UserError(f"Không thể in tem J&T: {msg}")
+
+    def action_jt_bulk_print_labels(self):
+        """J&T Bulk Label Print Action"""
+        from odoo.exceptions import UserError
+        from ..utils.jt_api_utils import JTApiUtils
+
+        pickings = self.filtered(lambda p: p.jt_bill_code)
+        if not pickings:
+            raise UserError("Vui lòng chọn ít nhất một đơn có mã vận đơn J&T!")
+
+        if len(pickings) > 200:
+            raise UserError("J&T chỉ hỗ trợ in tối đa 200 đơn hàng một lần!")
+
+        # Get credentials
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        api_account = get_param('jnt_apiAccount')
+        private_key = get_param('jnt_privateKey')
+        jnt_customer_code = get_param('jnt_customerCode')
+        jnt_password = get_param('jnt_password')
+        company = pickings[0].company_id or self.env.company
+
+        if not all([api_account, private_key, jnt_customer_code, jnt_password]):
+            raise UserError("Chưa cấu hình thông tin J&T trong System Parameters.")
+
+        client = JTApiUtils(
+            api_account=api_account,
+            private_key=private_key,
+            environment=company.jt_environment
+        )
+
+        biz_params = {
+            "customerCode": jnt_customer_code,
+            "password": jnt_password.upper(),
+            "txlogisticIds": [p.name.replace("/", "-") for p in pickings]
+        }
+
+        result = client.print_bulk_labels(biz_params)
+        if result.get('code') == '1' and result.get('data'):
+            return {
+                'type': 'ir.actions.act_url',
+                'url': result['data'],
+                'target': 'new',
+            }
+        else:
+            msg = result.get('msg', 'Lỗi không xác định từ J&T')
+            raise UserError(f"Không thể in hàng loạt J&T: {msg}")

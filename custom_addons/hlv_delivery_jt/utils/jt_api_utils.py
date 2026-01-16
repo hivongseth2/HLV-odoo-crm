@@ -26,6 +26,8 @@ class JTApiUtils:
         """
         if service_type == 'getComCost':
             return f"{self.base_url}/spmComCost/{service_type}"
+        elif service_type == 'printOrders':
+            return f"{self.base_url}/print/{service_type}"
         else:
             return f"{self.base_url}/order/{service_type}"
 
@@ -97,3 +99,10 @@ class JTApiUtils:
         Returns base64 encoded PDF content
         """
         return self._send_request('printOrder', biz_params)
+
+    def print_bulk_labels(self, biz_params):
+        """
+        Print bulk labels from J&T
+        Returns a URL to the combined PDF
+        """
+        return self._send_request('printOrders', biz_params)
