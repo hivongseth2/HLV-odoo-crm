@@ -93,6 +93,46 @@ class StockPicking(models.Model):
              real_batch.picking_type_id = False
              
         try:
-            picking.write({'batch_id': real_batch.id})
-        except Exception:
-            pass
+    # Logic hiển thị tình trạng hàng chính xác theo yêu cầu (So Demand vs Reserved)
+    availability_status_custom = fields.Selection([
+        ('full', 'Đủ hàng'),
+        ('partial', 'Thiếu hàng'),
+        ('empty', 'Chưa có hàng')
+    ], string='Tình trạng chi tiết', compute='_compute_availability_status_custom')
+
+    @api.depends('move_ids.state', 'move_ids.product_uom_qty', 'move_ids.quantity_reserved')
+    def _compute_availability_status_custom(self):
+        for picking in self:
+            if picking.state in ['done', 'cancel']:
+                picking.availability_status_custom = 'full' if picking.state == 'done' else 'empty'
+                continue
+            
+            # Chỉ check các move hoạt động (ko dính cancel)
+            moves = picking.move_ids.filtered(lambda m: m.state not in ['cancel', 'done'])
+            if not moves:
+                picking.availability_status_custom = 'empty'
+                continue
+
+            # Check tỷ lệ
+            # Nếu tất cả moves đều có reserved >= demand -> Full
+            # Nếu có ít nhất 1 cái > 0 -> Partial
+            # Còn lại empty
+            
+            is_full = True
+            has_some = False
+            
+            for move in moves:
+                # Dùng product_uom_qty (Demand) và quantity_reserved (Reserved)
+                # Lưu ý xử lý case float rounding nếu cần, nhưng so sánh cơ bản ok
+                if move.quantity_reserved < move.product_uom_qty:
+                    is_full = False
+                
+                if move.quantity_reserved > 0:
+                    has_some = True
+            
+            if is_full:
+                picking.availability_status_custom = 'full'
+            elif has_some:
+                picking.availability_status_custom = 'partial'
+            else:
+                picking.availability_status_custom = 'empty'

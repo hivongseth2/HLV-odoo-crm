@@ -23,11 +23,13 @@
                         <list string="Phiếu Theo Kế Hoạch">
                             <field name="name" string="Số phiếu"/>
                             <field name="partner_id" string="Khách hàng"/>
-                            <field name="state" widget="badge" string="Tình trạng hàng"
-                                   decoration-success="state == 'assigned'" 
-                                   decoration-info="state == 'confirmed'"/>
+                            <field name="availability_status_custom" widget="badge" string="Tình trạng hàng"
+                                   decoration-success="availability_status_custom == 'full'" 
+                                   decoration-warning="availability_status_custom == 'partial'"
+                                   decoration-danger="availability_status_custom == 'empty'"/>
                             <field name="scheduled_date" string="Ngày hẹn"/>
                             <field name="origin" optional="hide"/>
+                            <field name="state" column_invisible="1"/>
                         </list>
                     </field>
                     
@@ -39,10 +41,12 @@
                          <list string="Phiếu Gợi Ý" create="0">
                             <field name="name" string="Số phiếu"/>
                             <field name="partner_id" string="Khách hàng"/>
-                            <field name="state" widget="badge" string="Tình trạng hàng"
-                                   decoration-success="state == 'assigned'" 
-                                   decoration-info="state == 'confirmed'"/>
+                            <field name="availability_status_custom" widget="badge" string="Tình trạng hàng"
+                                   decoration-success="availability_status_custom == 'full'" 
+                                   decoration-warning="availability_status_custom == 'partial'"
+                                   decoration-danger="availability_status_custom == 'empty'"/>
                             <field name="scheduled_date" string="Ngày hẹn"/>
+                            <field name="state" column_invisible="1"/>
                         </list>
                     </field>
                 </group>
