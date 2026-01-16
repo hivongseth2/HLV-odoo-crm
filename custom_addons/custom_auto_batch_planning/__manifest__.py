@@ -30,6 +30,7 @@
     'data': [
         # 'security/ir.model.access.csv', 
         'views/batch_planning_views.xml',
+        'views/stock_picking_views.xml',
     ],
     
     'installable': True,

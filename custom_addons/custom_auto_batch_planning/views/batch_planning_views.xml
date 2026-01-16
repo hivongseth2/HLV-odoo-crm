@@ -25,6 +25,31 @@
         <field name="context">{}</field>
     </record>
 
+    <!-- Form View Inheritance to add Planned Pickings Tab -->
+    <record id="view_picking_batch_form_inherit_planning" model="ir.ui.view">
+        <field name="name">stock.picking.batch.form.inherit.planning</field>
+        <field name="model">stock.picking.batch</field>
+        <field name="inherit_id" ref="stock_picking_batch.stock_picking_batch_form"/>
+        <field name="arch" type="xml">
+             <xpath expr="//notebook" position="inside">
+                <page string="Phiếu dự kiến (Planning)">
+                    <field name="planned_picking_ids" context="{'default_planned_batch_id': id}">
+                        <list>
+                            <field name="name"/>
+                            <field name="picking_type_id"/>
+                            <field name="partner_id"/>
+                            <field name="state"/>
+                        </list>
+                    </field>
+                </page>
+             </xpath>
+             <xpath expr="//field[@name='user_id']" position="after">
+                <field name="route_name"/>
+                <field name="vehicle_id"/>
+             </xpath>
+        </field>
+    </record>
+
     <!-- Menu Item (Trong Inventory / Operations) -->
     <menuitem id="menu_batch_planning"
               name="Kế hoạch Gom Lô (Planning)"
