@@ -71,3 +71,17 @@ class StockBatchPlanning(models.Model):
             'batch_id': real_batch.id,
             'state': 'done'
         })
+        
+    def action_open_picking_selector(self):
+        self.ensure_one()
+        return {
+            'name': 'Chọn Phiếu Xuất Kho',
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.batch.planning.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_active_plan_id': self.id,
+                'default_mode': 'select_pickings'
+            }
+        }

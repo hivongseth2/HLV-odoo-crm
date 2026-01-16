@@ -51,8 +51,11 @@
                     </group>
                     <notebook>
                         <page string="Danh sách phiếu (Picking)">
-                            <field name="picking_ids" context="{'default_batch_plan_id': id}">
-                                <list>
+                            <button name="action_open_picking_selector" type="object" string="Chọn Phiếu (Add Pickings)" class="btn-primary" 
+                                    invisible="state == 'done'" style="margin-bottom: 10px;"/>
+                                    
+                            <field name="picking_ids" context="{'default_batch_plan_id': id}" readonly="1">
+                                <list create="0" delete="1">
                                     <field name="name"/>
                                     <field name="picking_type_id"/>
                                     <field name="partner_id"/>
