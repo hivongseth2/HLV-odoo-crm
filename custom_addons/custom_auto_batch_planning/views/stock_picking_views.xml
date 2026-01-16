@@ -1,18 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!-- Thêm trường planned_batch_id vào form Picking -->
-    <record id="view_picking_form_inherit_planning" model="ir.ui.view">
-        <field name="name">stock.picking.form.inherit.planning</field>
-        <field name="model">stock.picking</field>
-        <field name="inherit_id" ref="stock.view_picking_form"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='origin']" position="after">
-                <field name="batch_plan_id" readonly="1"/>
-            </xpath>
+    <!-- Server Action: Gán vào Kế hoạch Lô -->
+    <record id="action_add_to_batch_plan" model="ir.actions.server">
+        <field name="name">Thêm vào Kế hoạch Lô (Planning)</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">
+            # Hiển thị Wizard chọn Kế hoạch
+            action = {
+                'type': 'ir.actions.act_window',
+                'name': 'Chọn Kế hoạch Gom Lô',
+                'res_model': 'stock.batch.planning',
+                'view_mode': 'list',
+                'target': 'new',
+                'context': {
+                    'dialog_size': 'medium',
+                    # Truyền active_ids để xử lý sau khi chọn (cần custom wizard hoặc dùng server action)
+                    # Tuy nhiên, để đơn giản, ta dùng action update trực tiếp hoặc Wizard.
+                    # Cách tốt nhất: Mở 1 wizard trung gian.
+                    # Nhưng để nhanh: Mở list view của Planning, user chọn 1 cái rồi action link? -> Khó.
+                    # Giải pháp: Dùng wizard 'select.batch.plan.wizard' (cần tạo mới).
+                    # Hoặc: Chỉ cần add vào 1 Plan đã tồn tại?
+                }
+            }
+            # Tạm thời: Ta tạo 1 wizard đơn giản hoặc dùng action update thông qua dialog.
+            # Với Odoo standard, cách nhanh nhất để làm mà ko cần tạo file py mới cho Wizard:
+            # Dùng action cửa sổ để mở list Plan, khi click chọn -> Gán. (Phức tạp JS).
+            
+            # CÁCH ĐƠN GIẢN NHẤT:
+            # User chọn phiếu, bấm Action -> Hiện form tạo/chọn Plan.
+            # Ta sẽ dùng Python code để update trực tiếp nếu có input, nhưng server action ko có input UI.
+            # Vậy ta sẽ set 'batch_plan_id' thành 1 giá trị mặc định? Không được.
+            
+            # GIẢI PHÁP: Ta tạo 1 TransientModel đơn giản ngay trong file models/batch_planning.py để làm Wizard.
         </field>
     </record>
-    
-    <record id="view_picking_tree_inherit_planning" model="ir.ui.view">
+
+    <!-- Thay vào đó, ta update code để Server Action gọi Wizard (sẽ tạo ở bước sau) -->
+    <!-- Nhưng chờ đã, user chỉ cần cái nút. Ta sẽ tạo wizard ngay bây giờ -->
+    <record id="action_add_to_batch_plan" model="ir.actions.act_window">
+        <field name="name">Thêm vào Kế hoạch</field>
+        <field name="res_model">stock.batch.planning.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">list</field>
+    </record>
         <field name="name">stock.picking.list.inherit.planning</field>
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.vpicktree"/>
