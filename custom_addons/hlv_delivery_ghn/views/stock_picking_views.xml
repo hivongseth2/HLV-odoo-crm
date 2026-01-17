@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="action_print_ghn_label_80x80_server" model="ir.actions.server">
+        <field name="name">In Tem GHN (80x80)</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">form</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_print_ghn_label_80x80()</field>
+    </record>
+
     <record id="view_picking_form_inherit_ghn" model="ir.ui.view">
         <field name="name">stock.picking.form.inherit.ghn</field>
         <field name="model">stock.picking</field>
@@ -16,18 +25,15 @@
             <xpath expr="//notebook" position="inside">
                 <page string="Giao hàng GHN" name="ghn_delivery" invisible="not ghn_order_code">
                     <header>
-                        <button name="action_ghn_auto_fill_info" type="object" string="Lấy thông tin GHN" class="btn-secondary"/>
-                        <button name="action_create_ghn_order" string="Chỉnh sửa đơn GHN" type="object" class="btn-secondary" 
+                        <button name="action_ghn_auto_fill_info" type="object" string="Lấy thông tin GHN"/>
+                        <button name="action_create_ghn_order" string="Chỉnh sửa đơn GHN" type="object"
                                 invisible="not ghn_order_code or ghn_order_status == 'cancel'"/>
-                        <button name="action_cancel_ghn_order" string="Hủy đơn GHN" type="object" class="btn-danger" 
+                        <button name="action_cancel_ghn_order" string="Hủy đơn GHN" type="object"
                                 invisible="not ghn_order_code or ghn_order_status == 'cancel'"
                                 confirm="Bạn có chắc chắn muốn HỦY đơn hàng này trên GHN không?"/>
-                        <button name="action_return_ghn_order" string="Trả hàng GHN" type="object" class="btn-warning" 
+                        <button name="action_return_ghn_order" string="Trả hàng GHN" type="object"
                                 invisible="not ghn_order_code or ghn_order_status == 'cancel'"
                                 confirm="Bạn có chắc chắn muốn chuyển trạng thái đơn hàng này sang TRẢ HÀNG (Return) không?"/>
-                        <!-- Print Label Button -->
-                        <button name="action_print_ghn_label_80x80" type="object" string="In Tem GHN (80x80)" class="btn-primary" 
-                                invisible="not ghn_order_code"/>
                     </header>
                     <group>
                         <group string="Trạng thái &amp; Dự kiến">
