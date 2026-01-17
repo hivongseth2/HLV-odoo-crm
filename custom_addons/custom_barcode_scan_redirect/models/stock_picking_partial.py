@@ -609,10 +609,12 @@ class StockPickingPartial(models.Model):
         move_line.with_context(ctx).write(update_vals)
         
         # Kiểm tra xem sản phẩm có trong package đích không
+        # [FIX] Must match move_id to avoid merging unrelated lines (e.g. merging 10-line into 6-line)
         existing_in_target = self.env['stock.move.line'].sudo().search([
             ('picking_id', '=', self.id),
             ('product_id', '=', move_line.product_id.id),
-            ('result_package_id', '=', to_package_id)
+            ('result_package_id', '=', to_package_id),
+            ('move_id', '=', move_line.move_id.id)
         ], limit=1)
         
         if existing_in_target:
