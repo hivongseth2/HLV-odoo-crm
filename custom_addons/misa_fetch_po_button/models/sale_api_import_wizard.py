@@ -687,6 +687,55 @@ class SaleApiImportWizard(models.TransientModel):
         _logger.info("🆕 Creating new delivery contact (type=%s) with vals: %s", contact_type, vals)
         return Partner.create(vals)
 
+    def _consolidate_misa_lines(self, lines, parent_map):
+        """
+        Gộp các dòng trùng nhau (cùng mã code, giá, uom, combo attributes...)
+        trước khi tạo Sale Order Line.
+        """
+        grouped = {}
+        processed_lines = []
+
+        for line in lines:
+            line_id = line.get("ID")
+            
+            # Resolve combo parent code để đưa vào key grouping
+            parent_code = False
+            if line.get("IsChildProduct"):
+                parent_code = parent_map.get(line_id, False)
+
+            # Key identification
+            key = (
+                (line.get("ProductIDText") or "").strip(),
+                (line.get("UnitIDText") or "").strip(),
+                float(line.get("Price", 0) or 0.0),
+                float(line.get("DiscountPercent", 0) or 0.0),
+                (line.get("DescriptionProduct") or "").strip(), # Note
+                (line.get("CustomField4") or "").strip(),       # Status
+                bool(line.get("IsSetProduct")),
+                bool(line.get("IsChildProduct")),
+                parent_code,
+                # Tax keys
+                (line.get("VATRateHidden") or "").strip(),
+                (line.get("TaxRate") or "").strip(),
+                (line.get("TaxPercentIDText") or "").strip(),
+            )
+            
+            if key in grouped:
+                existing_line = grouped[key]
+                # Accumulate Amount (Qty)
+                current_qty = float(existing_line.get("Amount", 0) or 0.0)
+                add_qty = float(line.get("Amount", 0) or 0.0)
+                existing_line["Amount"] = current_qty + add_qty
+            else:
+                # Clone line để tránh tham chiếu
+                new_line = line.copy()
+                # Ensure Amount is float
+                new_line["Amount"] = float(line.get("Amount", 0) or 0.0)
+                grouped[key] = new_line
+                processed_lines.append(new_line)
+                
+        return processed_lines
+
     def action_import_from_api(self):
         odoo_utils = self.env['odoo.utils']
         misa_utils = self.env['misa.api.utils']
@@ -1139,6 +1188,10 @@ class SaleApiImportWizard(models.TransientModel):
                     
                     _logger.info("🔍 Wizard: Combo map cuối cùng: %s", combo_parent_map)
                     
+                    # ===== GỘP DÒNG TRÙNG NHAU =====
+                    grouped_lines = self._consolidate_misa_lines(grouped_lines, combo_parent_map)
+                    _logger.info("⚡ Đã gộp dòng trùng nhau (Case 1). Còn lại %d dòng", len(grouped_lines))
+
                     # ===== XỬ LÝ TỪNG DÒNG MISA (bao gồm CẢ CHA VÀ CON) =====
                     for line in grouped_lines:
                         product_code = line.get("ProductIDText")
@@ -1428,6 +1481,10 @@ class SaleApiImportWizard(models.TransientModel):
                             sale_vals['tag_ids'] = tag_ids
 
                         sale_order = self.env['sale.order'].create(sale_vals)
+
+                        # ===== GỘP DÒNG TRÙNG NHAU =====
+                        grouped_lines = self._consolidate_misa_lines(grouped_lines, combo_parent_map_global)
+                        _logger.info("⚡ Đã gộp dòng trùng nhau (Case 2 - %s). Còn lại %d dòng", stock_id, len(grouped_lines))
 
                         # ===== XỬ LÝ TỪNG DÒNG MISA (bao gồm CẢ CHA VÀ CON) =====
                         for line in grouped_lines:
