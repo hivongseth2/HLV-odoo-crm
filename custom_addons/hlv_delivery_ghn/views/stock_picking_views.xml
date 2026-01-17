@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_print_ghn_label_80x80_server" model="ir.actions.server">
+        <field name="name">In Tem GHN (80x80)</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_model_id" ref="stock.model_stock_picking"/>
+        <field name="binding_view_types">form</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_print_ghn_label_80x80()</field>
+    </record>
+
+    <record id="view_picking_form_inherit_ghn" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit.ghn</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button name="action_open_ghn_fee_wizard" string="Tính cước GHN" type="object" groups="stock.group_stock_user" invisible="picking_type_code == 'outgoing'"/>
+                <!-- Consolidated in J&T module -->
+                <button name="action_create_ghn_order" string="Tạo đơn GHN" type="object" 
+                        class="oe_highlight" 
+                        invisible="1"
+                        groups="stock.group_stock_user"/>
+            </xpath>
+            <xpath expr="//notebook" position="inside">
+                <page string="Giao hàng GHN" name="ghn_delivery" invisible="not ghn_order_code">
+                    <header>
+                        <button name="action_ghn_auto_fill_info" type="object" string="Lấy thông tin GHN"/>
+                        <button name="action_create_ghn_order" string="Chỉnh sửa đơn GHN" type="object"
+                                invisible="not ghn_order_code or ghn_order_status == 'cancel'"/>
+                        <button name="action_cancel_ghn_order" string="Hủy đơn GHN" type="object"
+                                invisible="not ghn_order_code or ghn_order_status == 'cancel'"
+                                confirm="Bạn có chắc chắn muốn HỦY đơn hàng này trên GHN không?"/>
+                        <button name="action_return_ghn_order" string="Trả hàng GHN" type="object"
+                                invisible="not ghn_order_code or ghn_order_status == 'cancel'"
+                                confirm="Bạn có chắc chắn muốn chuyển trạng thái đơn hàng này sang TRẢ HÀNG (Return) không?"/>
+                    </header>
+                    <group>
+                        <group string="Trạng thái &amp; Dự kiến">
+                            <field name="ghn_order_code"/>
+                            <field name="ghn_order_status_display"/>
+                            <field name="ghn_total_fee"/>
+                            <field name="ghn_expected_delivery_time"/>
+                        </group>
+                        <!-- 
+                        <group string="Cấu hình gửi hàng">
+                            <field name="ghn_payment_type_id"/>
+                            <field name="ghn_required_note"/>
+                            <field name="ghn_service_id"/>
+                            <field name="ghn_service_type_id"/>
+                        </group>
+                         -->
+                    </group>
+                    <!-- 
+                    <group>
+                        <group string="Địa chỉ nhận (GHN)">
+                            <field name="ghn_receiver_province_id" options="{'no_create': True}"/>
+                            <field name="ghn_receiver_district_id" options="{'no_create': True}"/>
+                            <field name="ghn_receiver_ward_id" options="{'no_create': True}"/>
+                        </group>
+                        <group string="Chi tiết đơn hàng">
+                            <field name="ghn_insurance_value"/>
+                            <field name="ghn_cod_amount"/>
+                            <field name="ghn_shipping_notes"/>
+                        </group>
+                    </group>
+                     -->
+                    <group string="Hành trình vận đơn">
+                        <field name="ghn_tracking_timeline" nolabel="1"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

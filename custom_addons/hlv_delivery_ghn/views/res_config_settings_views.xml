@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_ghn" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.ghn</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="stock.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//block[@name='operations_setting_container']" position="after">
+                <block title="Giao Hàng Nhanh (GHN)" name="ghn_setting_container">
+                    <setting id="ghn_api_token_setting" string="Mã Token API GHN" help="Token được cấp bởi GHN">
+                        <field name="ghn_api_token" password="True"/>
+                    </setting>
+                    <setting id="ghn_shop_id_setting" string="Mã Cửa hàng (Shop ID)" help="ID quản lý cửa hàng cho hàng nhẹ (&lt;=10kg)">
+                        <field name="ghn_shop_id"/>
+                    </setting>
+                    <setting id="ghn_shop_id_heavy_setting" string="Mã Cửa hàng hàng nặng" help="ID quản lý cửa hàng cho hàng nặng (>10kg)">
+                        <field name="ghn_shop_id_heavy"/>
+                    </setting>
+                    <setting id="ghn_environment_setting" string="Môi trường GHN">
+                        <field name="ghn_environment" widget="radio"/>
+                    </setting>
+                    <setting id="ghn_default_warehouse_setting" string="Kho hàng mặc định cho WooCommerce" help="Dùng để lấy địa chỉ gửi khi tính phí cho WordPress">
+                        <field name="ghn_default_warehouse_id"/>
+                    </setting>
+                    <setting id="ghn_wp_api_token_setting" string="Token bảo mật WordPress" help="Mã bí mật để xác thực khi WordPress gọi Odoo">
+                        <field name="ghn_wp_api_token" password="True"/>
+                    </setting>
+                    <setting id="ghn_sync_location_setting" string="Đồng bộ dữ liệu Tỉnh/Huyện">
+                        <button name="action_check_ghn_connection" 
+                                type="object" 
+                                string="Kiểm tra kết nối" 
+                                class="btn-secondary mr-2"/>
+                        <button name="action_get_available_shops" 
+                                type="object" 
+                                string="Lấy danh sách Shop ID" 
+                                class="btn-secondary mr-2"/>
+                        <button name="action_sync_ghn_locations" 
+                                type="object" 
+                                string="Đồng bộ Tỉnh/Huyện" 
+                                class="btn-secondary mr-2"/>
+                        <button name="action_wipe_and_sync_ghn_locations" 
+                                type="object" 
+                                string="Làm mới &amp; Đồng bộ" 
+                                class="btn-primary"
+                                confirm="Hành động này sẽ xóa toàn bộ địa chỉ hiện tại và tải lại từ đầu. Bạn có chắc chắn?"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

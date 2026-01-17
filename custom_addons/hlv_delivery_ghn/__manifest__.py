@@ -1,0 +1,20 @@
+{
+    "name": "HLV - Kết nối Giao Hàng Nhanh (GHN)",
+    "summary": "Tích hợp API Giao Hàng Nhanh để tính phí vận chuyển",
+    "version": "1.0",
+    "category": "Inventory/Delivery",
+    "author": "Antigravity",
+    "depends": ["stock", "base"],
+    "data": [
+        "security/ir.model.access.csv",
+        "views/res_config_settings_views.xml",
+        "views/stock_picking_views.xml",
+        "views/stock_warehouse_views.xml",
+        "wizard/ghn_fee_wizard_views.xml",
+        "wizard/ghn_create_order_wizard_views.xml",
+        "views/ghn_monitor_views.xml",
+    ],
+    "installable": True,
+    "application": False,
+    "license": "LGPL-3",
+}

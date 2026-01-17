@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_warehouse_form_ghn_inherit" model="ir.ui.view">
+        <field name="name">stock.warehouse.form.ghn.inherit</field>
+        <field name="model">stock.warehouse</field>
+        <field name="inherit_id" ref="stock.view_warehouse"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Giao Hàng Nhanh (GHN)" name="ghn_config">
+                    <group>
+                        <group string="Địa chỉ gửi mặc định">
+                            <field name="ghn_province_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="ghn_district_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="ghn_ward_id" options="{'no_create': True, 'no_open': True}"/>
+                        </group>
+                        <group string="Cửa hàng (Shop ID) GHN">
+                            <field name="ghn_shop_id" placeholder="Nếu trống sẽ dùng mặc định của Công ty"/>
+                            <field name="ghn_shop_id_heavy" placeholder="Dùng cho hàng > 10kg"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
