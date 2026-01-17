@@ -93,6 +93,49 @@ class GHNCreateOrderWizard(models.TransientModel):
             if selection and self.service_id not in [s[0] for s in selection]:
                 self.service_id = selection[0][0]
     
+    @api.onchange('district_id', 'ward_id', 'service_id', 'weight', 'length', 'width', 'height', 'insurance_value', 'cod_amount')
+    def _onchange_auto_calculate_fee(self):
+        """Automatically calculate shipping fee when all required data is available."""
+        # Reset fee if missing required data
+        if not self.district_id or not self.ward_id or not self.service_id or self.service_id == '0':
+            self.estimated_fee = 0
+            return
+        
+        # Check warehouse district
+        if not self.picking_id:
+            return
+            
+        warehouse = self.picking_id.picking_type_id.warehouse_id
+        from_district = warehouse.ghn_district_id.district_id if warehouse and warehouse.ghn_district_id else None
+        
+        if not from_district:
+            return
+        
+        try:
+            client = self._get_ghn_client()
+            payload = {
+                "from_district_id": int(from_district),
+                "to_district_id": int(self.district_id.district_id),
+                "to_ward_code": str(self.ward_id.ward_code),
+                "service_id": int(self.service_id),
+                "height": int(self.height or 10),
+                "length": int(self.length or 10),
+                "weight": int(self.weight or 100),
+                "width": int(self.width or 10),
+                "insurance_value": int(self.insurance_value or 0),
+                "cod_value": int(self.cod_amount or 0)
+            }
+            
+            result = client.calculate_fee(payload)
+            if result.get('success'):
+                self.estimated_fee = result['data'].get('total', 0)
+            else:
+                self.estimated_fee = 0
+                _logger.warning("Auto fee calculation failed: %s", result.get('error'))
+        except Exception as e:
+            self.estimated_fee = 0
+            _logger.warning("Auto fee calculation error: %s", e)
+    
     note = fields.Text(string="Ghi chú cho shipper")
     content = fields.Char(string="Nội dung hàng hóa")
 
