@@ -205,7 +205,7 @@ document.addEventListener("DOMContentLoaded", function () {
       // Changed: Support done-input or fallback to .done
       const input = el.querySelector(".done-input");
       const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
-      const done = parseFloat(doneVal);
+      const done = parseFloat(doneVal) || 0; // [FIX] Ensure NaN becomes 0
 
       // Attempt to find required element relative to input (if input exists)
       const requiredEl = input ? input.nextElementSibling.nextElementSibling : el.querySelectorAll("span")[1];
