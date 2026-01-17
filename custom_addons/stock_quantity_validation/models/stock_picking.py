@@ -147,6 +147,7 @@ class StockMoveLine(models.Model):
         Bỏ qua phiếu chuyển hàng nội bộ (có 'INT' trong tên) vì demand luôn = 0.
         """
         # Bypass validation nếu được gọi từ packaging context
+        _logger.info(f"DEBUG VALIDATION: Line ID {self.ids} - skip_qty_validation={self.env.context.get('skip_qty_validation')}")
         if self.env.context.get('skip_qty_validation'):
             return
             

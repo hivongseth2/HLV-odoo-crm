@@ -570,6 +570,10 @@ class StockPickingPartial(models.Model):
         """
         self.ensure_one()
         
+        # [FIX] Enforce Skip Validation Context
+        ctx = dict(self.env.context)
+        ctx['skip_qty_validation'] = True
+        
         # Kiểm tra to_package_id khác from_package_id
         if from_package_id == to_package_id:
             raise ValidationError("Gói nguồn và gói đích phải khác nhau!")
@@ -601,7 +605,8 @@ class StockPickingPartial(models.Model):
         update_vals = {'qty_done': new_qty}
         if new_qty == 0:
             update_vals['result_package_id'] = False
-        move_line.with_context(skip_qty_validation=True).write(update_vals)
+            
+        move_line.with_context(ctx).write(update_vals)
         
         # Kiểm tra xem sản phẩm có trong package đích không
         existing_in_target = self.env['stock.move.line'].sudo().search([
@@ -612,12 +617,12 @@ class StockPickingPartial(models.Model):
         
         if existing_in_target:
             # Cộng vào sản phẩm hiện có
-            existing_in_target.with_context(skip_qty_validation=True).write({
+            existing_in_target.with_context(ctx).write({
                 'qty_done': existing_in_target.qty_done + qty
             })
         else:
             # Tạo move_line mới cho package đích
-            new_move_line = move_line.with_context(skip_qty_validation=True).copy({
+            new_move_line = move_line.with_context(ctx).copy({
                 'result_package_id': to_package_id,
                 'qty_done': qty,
             })

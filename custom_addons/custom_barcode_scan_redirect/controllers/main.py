@@ -410,6 +410,13 @@ class CustomBarcodeScanController(http.Controller):
         # [FIX] Use move_ids instead of move_ids_without_package to ensure we see ALL moves
         # move_ids_without_package is a UI helper field that might hide some moves depending on context
         moves = picking.move_ids.filtered(lambda m: m.product_id.barcode == barcode)
+        
+        # [FIX] Sort moves by Size (Demand) DESCENDING to prevent "Small Move First" overflow issues.
+        # e.g. If Moves are [10, 40] and we scan 40.
+        # If we check 10 first -> Update 10 -> 40/10 (Overflow).
+        # If we check 40 first -> Update 40 -> 40/40 (Perfect).
+        moves = moves.sorted(key=lambda m: (m.product_uom_qty, m.id), reverse=True)
+        
         if not moves:
             return {"error": "❌ Mã sản phẩm không khớp trong phiếu!"}
         # Tính tổng quát để check xem đã đủ hết chưa
