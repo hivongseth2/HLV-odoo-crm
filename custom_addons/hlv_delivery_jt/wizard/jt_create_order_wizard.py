@@ -178,42 +178,9 @@ class JTCreateOrderWizard(models.TransientModel):
     @api.onchange('receiver_city_id')
     def _onchange_receiver_city_id(self):
         if self.receiver_city_id:
-            # Also fetch wards from GHN if they don't exist yet (logic borrowed from GHN module)
-            self._fetch_ghn_wards(self.receiver_city_id)
             return {'domain': {'receiver_area_id': [('district_id', '=', self.receiver_city_id.id)]}}
         else:
             return {'domain': {'receiver_area_id': []}}
-
-    def _fetch_ghn_wards(self, district):
-        """Fetch wards from GHN API if not already in local DB."""
-        if not district:
-            return
-        
-        company = self.env.company
-        # We need GHNApiUtils which is already imported in some GHN files, but we can call it here too
-        # To avoid circular import or dependency issues, we check if the module exists
-        try:
-            from odoo.addons.hlv_delivery_ghn.utils.ghn_api_utils import GHNApiUtils
-            client = GHNApiUtils(
-                token=company.ghn_api_token,
-                shop_id=company.ghn_shop_id,
-                environment=company.ghn_environment
-            )
-            wards_data = client.get_wards(district.district_id)
-            WardModel = self.env['ghn.ward']
-            for w in wards_data:
-                exist = WardModel.search([
-                    ('ward_code', '=', w['WardCode']),
-                    ('district_id', '=', district.id)
-                ], limit=1)
-                if not exist:
-                    WardModel.create({
-                        'ward_code': w['WardCode'],
-                        'name': w['WardName'],
-                        'district_id': district.id
-                    })
-        except Exception as e:
-            _logger.warning("Could not fetch GHN wards for dropdown: %s", e)
 
     def _normalize_name(self, name):
         if not name: return ""
@@ -349,10 +316,10 @@ class JTCreateOrderWizard(models.TransientModel):
                 
                 return p.id, d.id, w.id
 
-            # Receiver Address from Picking/Partner
-            r_prov_name = picking.ghn_receiver_province_id.name if hasattr(picking, 'ghn_receiver_province_id') and picking.ghn_receiver_province_id else (receiver_partner.state_id.name or '')
-            r_dist_name = picking.ghn_receiver_district_id.name if hasattr(picking, 'ghn_receiver_district_id') and picking.ghn_receiver_district_id else (receiver_partner.city or '')
-            r_ward_name = picking.ghn_receiver_ward_id.name if hasattr(picking, 'ghn_receiver_ward_id') and picking.ghn_receiver_ward_id else (receiver_partner.street2 or '')
+            # Receiver Address from Picking/Partner - REMOVED GHN MAPPING
+            r_prov_name = receiver_partner.state_id.name or ''
+            r_dist_name = receiver_partner.city or ''
+            r_ward_name = receiver_partner.street2 or ''
             
             r_p, r_d, r_w = get_jnt_ids(r_prov_name, r_dist_name, r_ward_name)
 

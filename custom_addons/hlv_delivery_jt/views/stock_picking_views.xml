@@ -7,7 +7,7 @@
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
                 <button name="action_open_carrier_selector" string="Tạo đơn vận chuyển" type="object" class="oe_highlight" 
-                        invisible="picking_type_code != 'outgoing' or (jt_bill_code != False and ghn_order_code != False)"/>
+                        invisible="picking_type_code != 'outgoing' or jt_bill_code != False"/>
                 <button name="action_open_jt_wizard" string="Tạo đơn J&amp;T" type="object" class="oe_highlight" invisible="1"/>
             </xpath>
             <xpath expr="//page[@name='extra']" position="after">

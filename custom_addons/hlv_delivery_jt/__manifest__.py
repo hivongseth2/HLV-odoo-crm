@@ -11,7 +11,7 @@
         - Webhook status updates
     """,
     'author': 'HLV',
-    'depends': ['stock', 'delivery', 'mail', 'hlv_delivery_ghn'],
+    'depends': ['stock', 'delivery', 'mail'],
     'data': [
         'security/ir.model.access.csv',
         'data/ir_config_parameter_data.xml',
