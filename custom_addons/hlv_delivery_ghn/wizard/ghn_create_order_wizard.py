@@ -242,7 +242,7 @@ class GHNCreateOrderWizard(models.TransientModel):
             "cod_value": int(self.cod_amount)
         }
         
-        result = client.get_fee(payload)
+        result = client.calculate_fee(payload)
         if result.get('success'):
             self.estimated_fee = result['data'].get('total', 0)
         else:
