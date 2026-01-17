@@ -474,6 +474,26 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
+    // [NEW] Kiểm tra có package không, nếu có thì in nhãn trước
+    try {
+      const checkRes = await fetch("/pack_scan/check_and_print_label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { picking_id: pickingId } })
+      });
+      const checkResponse = await checkRes.json();
+      const checkResult = checkResponse.result || checkResponse;
+
+      if (checkResult?.has_package && checkResult?.report_url) {
+        toast.info("🖨️ Đang in nhãn...", { ms: 2000 });
+        window.open(checkResult.report_url, '_blank');
+        // Đợi một chút để người dùng thấy nhãn đang in
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (e) {
+      console.warn("Lỗi kiểm tra package:", e);
+      // Tiếp tục hoàn thành ngay cả khi không check được package
+    }
 
     const res = await fetch("/pack_scan/complete_picking", {
       method: "POST",

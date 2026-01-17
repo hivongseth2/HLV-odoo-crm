@@ -694,6 +694,35 @@ class CustomBarcodeScanController(http.Controller):
         except Exception as e:
             return {"error": str(e)}
 
+    @http.route('/pack_scan/check_and_print_label', type='json', auth='user', csrf=False)
+    def check_and_print_label(self, **kwargs):
+        """
+        Kiểm tra picking có package không, nếu có thì trả về URL in nhãn
+        """
+        picking_id = kwargs.get("picking_id")
+        
+        picking = request.env['stock.picking'].sudo().browse(picking_id)
+        if not picking.exists():
+            return {"error": "Phiếu không tồn tại"}
+        
+        # Kiểm tra xem có package nào không
+        package_ids = picking.move_line_ids.mapped('result_package_id').ids
+        has_package = bool(package_ids)
+        
+        if has_package:
+            return {
+                "success": True,
+                "has_package": True,
+                "report_url": f"/report/pdf/hlv_pack_sequence.report_simple_package_label_document/{picking_id}",
+                "message": "✅ Đang in nhãn trước khi hoàn thành..."
+            }
+        else:
+            return {
+                "success": True,
+                "has_package": False,
+                "message": "Không có package, tiếp tục hoàn thành"
+            }
+
     # ===================== Fallback: upload 1 phát (nếu cần) =====================
     @http.route('/pack_scan/upload_video', type='http', auth='user', methods=['POST'], csrf=False)
     def upload_pack_video(self, **kwargs):
