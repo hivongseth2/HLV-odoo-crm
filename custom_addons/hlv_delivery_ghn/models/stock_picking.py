@@ -40,6 +40,31 @@ class StockPicking(models.Model):
     
     ghn_order_status_display = fields.Char(string="Trạng thái GHN (VN)", compute="_compute_ghn_status_display", store=False)
 
+    def read(self, fields=None, load='_classic_read'):
+        # Auto-update GHN info when opening the form view (singleton)
+        if len(self) == 1 and not self.env.context.get('skip_ghn_update', False):
+            try:
+                # Use SQL to avoid infinite recursion of reads
+                query = """
+                    SELECT sp.ghn_order_code, spt.code 
+                    FROM stock_picking sp
+                    LEFT JOIN stock_picking_type spt ON sp.picking_type_id = spt.id
+                    WHERE sp.id = %s
+                """
+                self.env.cr.execute(query, (self.id,))
+                result = self.env.cr.fetchone()
+                
+                if result:
+                    ghn_code, picking_type_code = result
+                    # Only auto-update if it's an OUT order and has a GHN code
+                    if ghn_code and picking_type_code == 'outgoing':
+                         self.with_context(skip_ghn_update=True).action_ghn_auto_fill_info()
+            except Exception:
+                # Prevent any errors in auto-update from blocking the read
+                pass
+                
+        return super(StockPicking, self).read(fields=fields, load=load)
+
     @api.depends('ghn_order_status')
     def _compute_ghn_status_display(self):
         status_map = self._get_ghn_status_map()
