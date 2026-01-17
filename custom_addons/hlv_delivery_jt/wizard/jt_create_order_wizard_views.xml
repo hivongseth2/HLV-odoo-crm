@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="jt_create_order_wizard_view_form" model="ir.ui.view">
+        <field name="name">jt.create.order.wizard.form</field>
+        <field name="model">jt.create.order.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Tạo đơn J&amp;T Express">
+                <sheet>
+                    <group>
+                        <group string="Dịch vụ &amp; Thanh toán">
+                            <field name="picking_id" readonly="1" force_save="1"/>
+                            <field name="order_type"/>
+                            <field name="product_type"/>
+                            <field name="goods_type"/>
+                            <field name="service_type"/>
+                            <field name="delivery_type"/>
+                            <field name="pay_type"/>
+                        </group>
+                        <group string="Phí &amp; Ghi chú">
+                            <field name="cod_money"/>
+                            <field name="is_insured"/>
+                            <field name="goods_value" invisible="not is_insured" required="is_insured"/>
+                            <field name="remark"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Người gửi (Kho/Cửa hàng)">
+                            <field name="sender_name"/>
+                            <field name="sender_mobile"/>
+                            <field name="sender_prov_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="sender_city_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="sender_area_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="sender_address"/>
+                        </group>
+                        <group string="Người nhận (Khách hàng)">
+                            <field name="receiver_name"/>
+                            <field name="receiver_mobile"/>
+                            <field name="receiver_prov_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="receiver_city_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="receiver_area_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="receiver_address"/>
+                        </group>
+                    </group>
+                    <group string="Thông số kiện hàng">
+                        <group>
+                            <field name="weight"/>
+                            <field name="length"/>
+                        </group>
+                        <group>
+                            <field name="width"/>
+                            <field name="height"/>
+                        </group>
+                    </group>
+                    <group string="Phí dự kiến (tự động tính)">
+                        <group>
+                            <field name="estimated_fee"/>
+                            <field name="estimated_cod_fee"/>
+                        </group>
+                        <group>
+                            <field name="estimated_insurance_fee"/>
+                        </group>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_create_jt_order" type="object" string="Tạo đơn hàng" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Placeholder parameters if not exists, though user says they exist -->
+        <!-- <record id="jnt_api_account_param" model="ir.config_parameter">
+            <field name="key">jnt_apiAccount</field>
+            <field name="value">669375073659916329</field>
+        </record> -->
+    </data>
+</odoo>
