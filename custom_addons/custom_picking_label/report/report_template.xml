@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_label_template">
+        <t t-call="web.basic_layout">
+            <div class="page">
+                <style>
+                    /* Reset Standard Odoo Report Padding/Margins */
+                    body, html {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100%;
+                    }
+                    .page {
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        border: none !important;
+                    }
+                    .container {
+                        padding: 0 !important;
+                        margin: 0 !important;
+                    }
+                    /* Custom Label Styling */
+                    .label-container {
+                        width: 100%;
+                        height: 100%;
+                        padding: 1mm 1mm 0 1mm; /* Safety padding */
+                        box-sizing: border-box;
+                        margin: 0;
+                        page-break-inside: avoid;
+                        page-break-after: always;
+                        position: relative;
+                        font-family: Arial, sans-serif;
+                        text-align: center;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: flex-start; /* STart from top to avoid pushing out */
+                        overflow: hidden;
+                    }
+                    .product-name {
+                        font-weight: bold;
+                        font-size: 10px;
+                        line-height: 10px;
+                        max-height: 20px; /* Allow 2 lines */
+                        overflow: hidden;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 2;
+                        -webkit-box-orient: vertical;
+                        width: 100%;
+                        margin-bottom: 1px;
+                        white-space: normal; /* Allow wrapping */
+                    }
+                    .product-code {
+                        font-size: 9px;
+                        font-weight: bold;
+                        margin-top: 1px;
+                        width: 100%;
+                    }
+                </style>
+                <t t-foreach="docs" t-as="wizard">
+                    <t t-foreach="wizard.get_data_for_report()" t-as="product">
+                        <div class="label-container">
+                            <div class="product-name">
+                                <span t-field="product.name"/>
+                            </div>
+                            
+                            <!-- Barcode Section -->
+                            <t t-if="wizard.print_type == 'barcode' and product.barcode">
+                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'Code128', 'width': 600, 'height': 150, 'img_style': 'width:95%; height:13mm; display:block; margin:0 auto;'}"/>
+                                <div class="product-code">
+                                    <span t-field="product.barcode"/>
+                                </div>
+                            </t>
+
+                            <!-- QR Code Section -->
+                            <t t-if="wizard.print_type == 'qr' and product.barcode">
+                                <span t-field="product.barcode" t-options="{'widget': 'barcode', 'symbology': 'QR', 'width': 300, 'height': 300, 'img_style': 'width:18mm; height:18mm; display:block; margin:0 auto;'}"/>
+                                <!-- <div class="product-code"><span t-field="product.barcode"/></div> --> 
+                            </t>
+                            
+                            <t t-if="not product.barcode">
+                                <div style="margin-top: 5px;">No Barcode</div>
+                            </t>
+                        </div>
+                    </t>
+                </t>
+            </div>
+        </t>
+    </template>
+</odoo>

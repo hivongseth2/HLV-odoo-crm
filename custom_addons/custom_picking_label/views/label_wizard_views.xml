@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_stock_picking_label_wizard_form" model="ir.ui.view">
+        <field name="name">stock.picking.label.wizard.form</field>
+        <field name="model">stock.picking.label.wizard</field>
+        <field name="arch" type="xml">
+            <form string="In Tem Sản Phẩm">
+                <sheet>
+                    <group>
+                        <field name="picking_id" readonly="1"/>
+                        <field name="print_type" widget="radio" options="{'horizontal': true}"/>
+                        <field name="auto_generate_ean13"/>
+                        <field name="generate_type" invisible="not auto_generate_ean13" widget="radio"/>
+                    </group>
+                    <field name="line_ids">
+                        <list editable="bottom" decoration-success="barcode" decoration-danger="not barcode">
+                            <field name="product_id"/>
+                            <field name="barcode" readonly="1"/> <!-- Show barcode for clarity -->
+                            <field name="qty_to_print"/>
+                        </list>
+                    </field>
+                </sheet>
+                <footer>
+                    <button name="action_print_labels" string="In Ngay" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
