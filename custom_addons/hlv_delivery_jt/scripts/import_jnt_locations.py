@@ -27,19 +27,21 @@ def run_import(env, excel_path):
 
     sheet = wb['MAPPING']
     
-    Province = env['ghn.province']
-    District = env['ghn.district']
-    Ward = env['ghn.ward']
+    # CHANGED: Use J&T Models instead of GHN
+    Province = env['jnt.province']
+    District = env['jnt.district']
+    Ward = env['jnt.ward']
     
     updated_count = 0
-    not_found_ward = []
+    created_count = 0
     
+    # Pre-loading might be too heavy if empty, but let's try
     provinces = Province.search([])
     prov_map = {normalize(p.name): p for p in provinces}
     
     print("Starting import from %s rows..." % sheet.max_row)
     
-    # Cache districts once per province to avoid excessive DB calls
+    # Cache districts
     dist_cache = {} # {prov_id: {norm_name: dist_record}}
 
     for row_idx, row in enumerate(sheet.iter_rows(min_row=3), 3):
@@ -61,15 +63,12 @@ def run_import(env, excel_path):
             
         n_prov = normalize(prov_name)
         province = prov_map.get(n_prov)
+        
+        # If province doesn't exist, create it (J&T dedicated data)
         if not province:
-            # Try partial Match if not perfect
-            for k, v in prov_map.items():
-                if n_prov in k or k in n_prov:
-                    province = v
-                    break
-                    
-        if not province:
-            continue
+            province = Province.create({'name': prov_name})
+            prov_map[n_prov] = province
+            print("Created Province: %s" % prov_name)
             
         # Get/Cache Districts for this province
         if province.id not in dist_cache:
@@ -81,22 +80,18 @@ def run_import(env, excel_path):
         district = province_districts.get(n_dist)
         
         if not district:
-            # Try fuzzy/partial in cache
-            for k, v in province_districts.items():
-                if n_dist in k or k in n_dist:
-                    district = v
-                    break
-        
-        if not district:
-            continue
+            # Create District if new
+            district = District.create({'name': dist_name, 'province_id': province.id})
+            province_districts[n_dist] = district
+            # print("Created District: %s" % dist_name)
             
-        # Find Ward
+        # Find or Create Ward
         n_ward = normalize(ward_clean)
+        # Check by code first if possible, or name
         ward = Ward.search([
             ('district_id', '=', district.id),
-             '|',
-            ('name', '=', ward_clean),
-            ('name', 'ilike', n_ward)
+            '|', ('jnt_code', '=', code), 
+            '|', ('name', '=', ward_clean), ('name', 'ilike', n_ward)
         ], limit=1)
         
         if ward:
@@ -104,17 +99,20 @@ def run_import(env, excel_path):
                 ward.write({'jnt_code': code})
                 updated_count += 1
         else:
-             not_found_ward.append("%s > %s > %s" % (prov_name, dist_name, ward_clean))
+            Ward.create({
+                'name': ward_clean,
+                'jnt_code': code,
+                'district_id': district.id
+            })
+            created_count += 1
+            # print("Created Ward: %s" % ward_clean)
 
         if row_idx % 500 == 0:
-            print("Processed %s rows..." % row_idx)
+            print("Processed %s rows... (Updated: %s, Created: %s)" % (row_idx, updated_count, created_count))
 
-    print("Import finished. Updated %s wards." % updated_count)
-    if not_found_ward:
-        print("Wards not found in Odoo: %s" % len(not_found_ward))
-        # Log first 10
-        for m in not_found_ward[:10]:
-            print(" - %s" % m)
+    print("Import finished.") 
+    print("Updated codes: %s" % updated_count)
+    print("Created new wards: %s" % created_count)
     
     env.cr.commit()
     print("Changes committed to database.")

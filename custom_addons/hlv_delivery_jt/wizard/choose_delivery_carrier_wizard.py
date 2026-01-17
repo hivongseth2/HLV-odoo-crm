@@ -20,7 +20,11 @@ class ChooseDeliveryCarrierWizard(models.TransientModel):
             'default_picking_id': self.picking_id.id,
         })
         if self.carrier_type == 'ghn':
-            action = self.picking_id.with_context(res_context).action_create_ghn_order()
+            if hasattr(self.picking_id, 'action_create_ghn_order'):
+                action = self.picking_id.with_context(res_context).action_create_ghn_order()
+            else:
+                from odoo.exceptions import UserError
+                raise UserError("Module Giao Hàng Nhanh chưa được cài đặt!")
         else:
             action = self.picking_id.with_context(res_context).action_open_jt_wizard()
         

@@ -83,7 +83,6 @@ class JTCreateOrderWizard(models.TransientModel):
     @api.onchange('sender_city_id')
     def _onchange_sender_city_id(self):
         if self.sender_city_id:
-            self._fetch_ghn_wards(self.sender_city_id)
             return {'domain': {'sender_area_id': [('district_id', '=', self.sender_city_id.id)]}}
         else:
             return {'domain': {'sender_area_id': []}}
