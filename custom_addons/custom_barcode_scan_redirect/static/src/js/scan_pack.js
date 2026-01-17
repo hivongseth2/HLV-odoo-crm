@@ -330,14 +330,16 @@ document.addEventListener("DOMContentLoaded", function () {
             .filter(e => normalizeCode(e.dataset.barcode).toUpperCase() === code);
 
 
-          const newMax = parseFloat(item.required_qty || 0);
-          let activeMatch = null;
-          let emptyMatch = null;
+          const targetDone = parseFloat(item.done_qty || 0);
+          const targetMax = parseFloat(item.required_qty || 0);
+
+          let bestMatch = null;
+          let minDiff = Infinity;
 
           for (const c of candidates) {
-            // Priority 0: Exact ID Recovery
+            // Priority 0: Exact ID Recovery (Golden Path)
             if (String(c.dataset.lineId) === String(item.line_id)) {
-              activeMatch = c;
+              bestMatch = c;
               break;
             }
 
@@ -350,26 +352,31 @@ document.addEventListener("DOMContentLoaded", function () {
               if (reqEl) mMax = parseFloat(reqEl.innerText.replace(',', '.') || 0);
             }
 
-            const mPacked = parseFloat(c.dataset.packedQty || 0);
             const mDoneInput = c.querySelector('.done-input');
-            const mDone = parseFloat(mDoneInput ? mDoneInput.value : (c.querySelector('.done')?.innerText || 0));
+            const mDone = parseFloat(mDoneInput ? (mDoneInput.value || 0) : (c.querySelector('.done')?.innerText || 0));
 
-            console.log(`[DEBUG_HEURISTIC] Candidate ${c.dataset.lineId}: Done=${mDone}, Max=${mMax}, Packed=${mPacked}`);
+            // Heuristic: Minimize Quantity Difference
+            // e.g. Item=40 matches Line=40 (Diff=0) better than Line=0 (Diff=40)
+            // e.g. Item=1 matches Line=0 (Diff=1) better than Line=10 (Diff=9)
+            const diff = Math.abs(mDone - targetDone);
 
-            // Priority 1: Active/Partial Line (Not Full)
-            if (mDone < mMax) {
-              if (mDone > 0 && !activeMatch) {
-                activeMatch = c;
-              } else if (mDone === 0 && !emptyMatch) {
-                emptyMatch = c;
-              }
+            // console.log(`[DEBUG_HEURISTIC] Candidate ${c.dataset.lineId}: Done=${mDone}, Target=${targetDone}, Diff=${diff}`);
+
+            if (diff < minDiff) {
+              minDiff = diff;
+              bestMatch = c;
+            } else if (diff === minDiff) {
+              // Tie-breaker: Match Capacity?
+              // If one capacity matches exactly, prefer it.
+              if (mMax === targetMax) bestMatch = c;
             }
           }
 
-          // Select Selection: ID/Active -> Empty -> Last(Fallback)
-          let match = activeMatch || emptyMatch;
+          let match = bestMatch;
+
+          // Final Fallback (Unlikely to be needed but safe)
           if (!match && candidates.length > 0) {
-            match = candidates[candidates.length - 1]; // FORCE FALLBACK
+            match = candidates[candidates.length - 1];
           }
 
           if (match) {
