@@ -709,7 +709,7 @@ class SaleApiImportWizard(models.TransientModel):
                 (line.get("UnitIDText") or "").strip(),
                 float(line.get("Price", 0) or 0.0),
                 float(line.get("DiscountPercent", 0) or 0.0),
-                (line.get("DescriptionProduct") or "").strip(), # Note
+                # REMOVED DescriptionProduct from key to allow merging lines with diff notes
                 (line.get("CustomField4") or "").strip(),       # Status
                 bool(line.get("IsSetProduct")),
                 bool(line.get("IsChildProduct")),
