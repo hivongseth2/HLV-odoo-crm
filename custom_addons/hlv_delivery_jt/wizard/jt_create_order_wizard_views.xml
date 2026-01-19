@@ -19,8 +19,25 @@
                         <group string="Phí &amp; Ghi chú">
                             <field name="cod_money"/>
                             <field name="is_insured"/>
-                            <field name="goods_value" invisible="not is_insured" required="is_insured"/>
-                            <field name="remark"/>
+                            <field name="goods_value" attrs="{'invisible': [('is_insured', '=', False)], 'required': [('is_insured', '=', True)]}"/>
+                            <field name="part_sign"/>
+                            <field name="remark" placeholder="Ghi chú tổng hợp..."/>
+                        </group>
+                    </group>
+                    <group string="Mẫu ghi chú">
+                        <group>
+                            <field name="note_thu_hang"/>
+                            <field name="note_xem_hang_khong_thu"/>
+                            <field name="note_de_vo"/>
+                            <field name="note_giao_hang_mot_phan"/>
+                            <field name="note_khong_giao_duoc_lh"/>
+                        </group>
+                        <group>
+                            <field name="note_goi_dien_truoc_khi_giao"/>
+                            <field name="note_giao_gio_hanh_chinh"/>
+                            <field name="note_khong_cho_xem"/>
+                            <field name="note_khac"/>
+                            <field name="note_khac_input" attrs="{'invisible': [('note_khac', '=', False)], 'required': [('note_khac', '=', True)]}"/>
                         </group>
                     </group>
                     <group>

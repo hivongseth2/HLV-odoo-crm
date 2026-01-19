@@ -52,6 +52,48 @@ class JTCreateOrderWizard(models.TransientModel):
     cod_money = fields.Float(string="Tiền thu hộ (COD)")
     remark = fields.Text(string="Ghi chú")
 
+    part_sign = fields.Boolean(string="Ký nhận một phần?", help="0: ký nhận toàn phần, 1: ký nhận một phần")
+
+    # Note Checkboxes
+    note_thu_hang = fields.Boolean(string="Cho khách thử hàng")
+    note_xem_hang_khong_thu = fields.Boolean(string="Cho khách xem hàng, không cho thử")
+    note_de_vo = fields.Boolean(string="Hàng dễ vỡ, vui lòng nhẹ tay")
+    note_giao_hang_mot_phan = fields.Boolean(string="Giao hàng một phần, nhận lại sản phẩm từ khách")
+    note_khong_giao_duoc_lh = fields.Boolean(string="Không giao được liên hệ SĐT shop, không tự ý hủy đơn")
+    note_goi_dien_truoc_khi_giao = fields.Boolean(string="Gọi điện thoại cho khách trước khi giao")
+    note_giao_gio_hanh_chinh = fields.Boolean(string="Giao hàng vào giờ hành chính")
+    note_khong_cho_xem = fields.Boolean(string="Không cho xem hàng")
+    note_khac = fields.Boolean(string="Khác")
+    note_khac_input = fields.Char(string="Nội dung khác")
+
+    @api.onchange('note_thu_hang', 'note_xem_hang_khong_thu', 'note_de_vo', 
+                 'note_giao_hang_mot_phan', 'note_khong_giao_duoc_lh', 
+                 'note_goi_dien_truoc_khi_giao', 'note_giao_gio_hanh_chinh', 
+                 'note_khong_cho_xem', 'note_khac', 'note_khac_input')
+    def _onchange_note_selections(self):
+        notes = []
+        if self.note_thu_hang:
+            notes.append("Cho khách thử hàng")
+        if self.note_xem_hang_khong_thu:
+            notes.append("Cho khách xem hàng, không cho thử")
+        if self.note_de_vo:
+            notes.append("Hàng dễ vỡ, vui lòng nhẹ tay")
+        if self.note_giao_hang_mot_phan:
+            notes.append("Giao hàng một phần, nhận lại sản phẩm từ khách")
+        if self.note_khong_giao_duoc_lh:
+            notes.append("Không giao được liên hệ SĐT shop, không tự ý hủy đơn")
+        if self.note_goi_dien_truoc_khi_giao:
+            notes.append("Gọi điện thoại cho khách trước khi giao")
+        if self.note_giao_gio_hanh_chinh:
+            notes.append("Giao hàng vào giờ hành chính")
+        if self.note_khong_cho_xem:
+            notes.append("Không cho xem hàng")
+        
+        if self.note_khac and self.note_khac_input:
+            notes.append(self.note_khac_input)
+            
+        self.remark = ", ".join(notes)
+
     # Weight and Dimensions
     weight = fields.Float(string="Trọng lượng (kg)", default=0.1)
     length = fields.Float(string="Dài (cm)", default=10)
@@ -456,6 +498,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "address": sanitize_address(self.receiver_address)
             },
             "payType": self.pay_type,
+            "partSign": "1" if self.part_sign else "0",
             "goodsValue": goods_val_str,
             "codMoney": cod_money_str,
             "remark": self.remark or "",
