@@ -713,7 +713,7 @@ class CustomBarcodeScanController(http.Controller):
             return {
                 "success": True,
                 "has_package": True,
-                "report_url": f"/report/pdf/hlv_pack_sequence.report_simple_package_label_document/{picking_id}",
+                "report_url": f"/report/pdf/hlv_pack_sequence.report_package_label_document/{picking_id}",
                 "message": "✅ Đang in nhãn trước khi hoàn thành..."
             }
         else:
