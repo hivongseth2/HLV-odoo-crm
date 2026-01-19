@@ -109,9 +109,8 @@
                     }
                     /* Custom 3-Column Label Styling */
                     .label-wrapper-35x22 {
-                        width: 36mm; /* Approx 110mm / 3 */
+                        width: 35mm; /* Strictly 35mm to fit 3 in 110mm with buffer */
                         height: 22mm;
-                        display: inline-block;
                         float: left;
                         padding: 1mm;
                         margin: 0;
@@ -127,22 +126,23 @@
                         align-items: center;
                         justify-content: center;
                         text-align: center;
+                        overflow: hidden;
                     }
                     .product-name-35x22 {
                         font-weight: bold;
-                        font-size: 8px;
-                        line-height: 9px;
-                        max-height: 18px;
+                        font-size: 7px; /* Reduced to safely fit */
+                        line-height: 8px;
+                        max-height: 16px;
                         overflow: hidden;
                         display: -webkit-box;
                         -webkit-line-clamp: 2;
                         -webkit-box-orient: vertical;
                         width: 100%;
-                        margin-bottom: 1px;
+                        margin-bottom: 0px;
                         white-space: normal;
                     }
                     .product-code-35x22 {
-                        font-size: 8px;
+                        font-size: 7px;
                         font-weight: bold;
                     }
                 </style>
