@@ -190,6 +190,7 @@ class GHNCreateOrderWizard(models.TransientModel):
         if picking_id:
             picking = self.env['stock.picking'].browse(picking_id)
             partner = picking.partner_id
+            warehouse = picking.picking_type_id.warehouse_id
             
             # Auto-fill receiver info
             # Only treat as existing order if not canceled
@@ -219,7 +220,6 @@ class GHNCreateOrderWizard(models.TransientModel):
             })
 
             # Default Sender Info from Warehouse
-            warehouse = picking.picking_type_id.warehouse_id
             if warehouse:
                 s_name = warehouse.ghn_sender_name or (warehouse.partner_id.name if warehouse.partner_id else picking.company_id.name)
                 s_phone = warehouse.ghn_sender_phone or (warehouse.partner_id.phone if warehouse.partner_id else picking.company_id.phone)

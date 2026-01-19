@@ -17,15 +17,6 @@
                             <field name="jnt_area_id" options="{'no_create': True, 'no_open': True}"/>
                         </group>
                     </group>
-                    <separator string="Danh sách Hồ sơ người gửi (Dùng chung J&amp;T &amp; GHN)"/>
-                    <field name="sender_address_ids">
-                        <list editable="bottom">
-                            <field name="name"/>
-                            <field name="sender_name"/>
-                            <field name="sender_mobile"/>
-                            <field name="sender_address"/>
-                        </list>
-                    </field>
                 </page>
             </xpath>
         </field>

@@ -42,7 +42,7 @@
                     </group>
                     <group>
                         <group string="Người gửi (Kho/Cửa hàng)">
-                            <field name="sender_config_id" options="{'no_create': True}"/>
+                            <field name="sender_config_id" string="Kho gửi hàng" options="{'no_create': True}"/>
                             <field name="sender_name"/>
                             <field name="sender_mobile"/>
                             <field name="sender_prov_id" options="{'no_open': True, 'no_create': True}"/>
