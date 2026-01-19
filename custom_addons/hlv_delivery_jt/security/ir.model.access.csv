@@ -1,8 +1,9 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_jt_create_order_wizard,jt.create.order.wizard,model_jt_create_order_wizard,,1,1,1,1
-access_choose_delivery_carrier_wizard,choose.delivery.carrier.wizard,model_choose_delivery_carrier_wizard,,1,1,1,1
-access_jnt_province,jnt.province,model_jnt_province,,1,1,1,1
-access_jnt_district,jnt.district,model_jnt_district,,1,1,1,1
-access_jnt_ward,jnt.ward,model_jnt_ward,,1,1,1,1
-access_jt_cancel_order_wizard,jt.cancel.order.wizard,model_jt_cancel_order_wizard,,1,1,1,1
-access_jt_tracking_log,jt.tracking.log,model_jt_tracking_log,,1,1,1,1
+access_jt_create_order_wizard,jt.create.order.wizard,model_jt_create_order_wizard,base.group_user,1,1,1,1
+access_choose_delivery_carrier_wizard,choose.delivery.carrier.wizard,model_choose_delivery_carrier_wizard,base.group_user,1,1,1,1
+access_jnt_province,jnt.province,model_jnt_province,base.group_user,1,1,1,1
+access_jnt_district,jnt.district,model_jnt_district,base.group_user,1,1,1,1
+access_jnt_ward,jnt.ward,model_jnt_ward,base.group_user,1,1,1,1
+access_jt_cancel_order_wizard,jt.cancel.order.wizard,model_jt_cancel_order_wizard,base.group_user,1,1,1,1
+access_jt_tracking_log,jt.tracking.log,model_jt_tracking_log,base.group_user,1,1,1,1
+access_delivery_sender_address,delivery.sender.address,model_delivery_sender_address,base.group_user,1,1,1,1
