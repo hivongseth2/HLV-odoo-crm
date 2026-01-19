@@ -18,6 +18,7 @@
         'views/jnt_sync_views.xml',
         'views/res_config_settings_views.xml',
         'views/stock_picking_views.xml',
+        'views/stock_warehouse_views.xml',
         'views/jt_monitor_views.xml',
         'views/delivery_sender_address_views.xml',
         'wizard/jt_create_order_wizard_views.xml',

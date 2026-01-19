@@ -385,6 +385,12 @@ class JTCreateOrderWizard(models.TransientModel):
             
             s_p, s_d, s_w = get_jnt_ids(s_prov_name, s_dist_name, s_ward_name)
 
+            # Override with Warehouse J&T specific fields if set
+            if warehouse:
+                if warehouse.jnt_prov_id: s_p = warehouse.jnt_prov_id.id
+                if warehouse.jnt_city_id: s_d = warehouse.jnt_city_id.id
+                if warehouse.jnt_area_id: s_w = warehouse.jnt_area_id.id
+
             res.update({
                 'picking_id': picking.id,
                 'cod_money': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,

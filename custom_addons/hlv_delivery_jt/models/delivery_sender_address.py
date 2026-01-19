@@ -6,6 +6,7 @@ class DeliverySenderAddress(models.Model):
     _description = "Cấu hình địa chỉ người gửi"
 
     name = fields.Char(string="Tên cấu hình", required=True)
+    warehouse_id = fields.Many2one("stock.warehouse", string="Kho hàng")
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
     sender_address = fields.Char(string="Địa chỉ gửi", required=True)

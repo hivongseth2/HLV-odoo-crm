@@ -19,9 +19,9 @@
         <field name="arch" type="xml">
             <form string="Cấu hình địa chỉ người gửi">
                 <sheet>
-                    <group>
-                        <group>
+                        <group string="Thông tin chung">
                             <field name="name"/>
+                            <field name="warehouse_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="sender_name"/>
                             <field name="sender_mobile"/>
                             <field name="sender_address"/>
@@ -31,7 +31,6 @@
                             <field name="jnt_city_id" options="{'no_open': True, 'no_create': True}"/>
                             <field name="jnt_area_id" options="{'no_open': True, 'no_create': True}"/>
                         </group>
-                    </group>
                 </sheet>
             </form>
         </field>
@@ -45,7 +44,7 @@
 
     <menuitem id="menu_delivery_sender_address"
               name="Cấu hình địa chỉ gửi"
-              parent="stock.menu_stock_config_settings"
+              parent="stock.menu_stock_warehouse_mgmt"
               action="delivery_sender_address_action"
-              sequence="100"/>
+              sequence="40"/>
 </odoo>
