@@ -109,8 +109,8 @@
                     }
                     /* Custom 3-Column Label Styling */
                     .label-wrapper-35x22 {
-                        width: 34.5mm; /* Reduced to less than 35mm to fit 3 in 105mm strictly */
-                        height: 22mm;
+                        width: 33mm; /* 33mm * 3 = 99mm (fits in 105mm with margin) */
+                        height: 21mm; /* Reduced to avoid vertical accumulation */
                         float: left;
                         padding: 1mm;
                         margin: 0;
