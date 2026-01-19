@@ -21,8 +21,8 @@ class JTCreateOrderWizard(models.TransientModel):
     ], string="Loại đơn đặt", default='1', required=True)
     
     service_type = fields.Selection([
-        ('1', 'Pickup'),
-        ('6', 'Drop off')
+        ('1', 'Lấy hàng tận nơi (Pickup)'),
+        ('6', 'Gửi hàng tại bưu cục (Drop off)')
     ], string="Loại dịch vụ", default='1', required=True)
     
     pay_type = fields.Selection([
