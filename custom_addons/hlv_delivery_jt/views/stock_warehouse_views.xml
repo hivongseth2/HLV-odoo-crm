@@ -9,6 +9,9 @@
                 <page string="J&amp;T Express" name="jt_config">
                     <group>
                         <group string="Địa chỉ gửi mặc định">
+                            <field name="jnt_sender_name" placeholder="Tên người gửi"/>
+                            <field name="jnt_sender_mobile" placeholder="Số điện thoại"/>
+                            <field name="jnt_sender_address" placeholder="Địa chỉ chi tiết"/>
                             <field name="jnt_prov_id" options="{'no_create': True, 'no_open': True}"/>
                             <field name="jnt_city_id" options="{'no_create': True, 'no_open': True}"/>
                             <field name="jnt_area_id" options="{'no_create': True, 'no_open': True}"/>

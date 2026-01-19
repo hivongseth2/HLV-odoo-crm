@@ -11,11 +11,13 @@ class GHNCreateOrderWizard(models.TransientModel):
     _description = "GHN Create Shipping Order Wizard"
 
     picking_id = fields.Many2one("stock.picking", string="Phiếu xuất kho", required=True)
+    warehouse_id = fields.Many2one('stock.warehouse', string="Kho hàng", related='picking_id.picking_type_id.warehouse_id', readonly=True)
     client_order_code = fields.Char(string="Mã đơn hàng khách", help="Sử dụng Số báo giá/Sale Order làm mã tham chiếu sang GHN")
     ghn_order_code = fields.Char(string="Mã đơn GHN")
     
     # Sender Info (Editable)
-    sender_config_id = fields.Many2one("delivery.sender.address", string="Cấu hình địa chỉ gửi")
+    sender_config_id = fields.Many2one("delivery.sender.address", string="Cấu hình địa chỉ gửi",
+                                      domain="[('warehouse_id', '=', warehouse_id)]")
     sender_name = fields.Char(string="Tên người gửi")
     sender_phone = fields.Char(string="SĐT người gửi")
     sender_address = fields.Char(string="Địa chỉ gửi")
@@ -38,6 +40,21 @@ class GHNCreateOrderWizard(models.TransientModel):
                 self.sender_ward_id = self.sender_config_id.ghn_ward_id
             if self.sender_config_id.ghn_shop_id:
                 self.ghn_shop_id = self.sender_config_id.ghn_shop_id
+        else:
+            # Revert to warehouse defaults if config is cleared
+            warehouse = self.warehouse_id
+            if warehouse:
+                s_name = warehouse.ghn_sender_name or (warehouse.partner_id.name if warehouse.partner_id else self.picking_id.company_id.name)
+                s_phone = warehouse.ghn_sender_phone or (warehouse.partner_id.phone if warehouse.partner_id else self.picking_id.company_id.phone)
+                s_address = warehouse.ghn_sender_address or (warehouse.partner_id.street if warehouse.partner_id else self.picking_id.company_id.street)
+                
+                self.sender_name = s_name
+                self.sender_phone = s_phone
+                self.sender_address = s_address
+                self.sender_province_id = warehouse.ghn_province_id
+                self.sender_district_id = warehouse.ghn_district_id
+                self.sender_ward_id = warehouse.ghn_ward_id
+                self.ghn_shop_id = warehouse.ghn_shop_id
 
     # Receiver Info
     to_name = fields.Char(string="Tên người nhận", required=True)
@@ -201,11 +218,15 @@ class GHNCreateOrderWizard(models.TransientModel):
             # Default Sender Info from Warehouse
             warehouse = picking.picking_type_id.warehouse_id
             if warehouse:
+                s_name = warehouse.ghn_sender_name or (warehouse.partner_id.name if warehouse.partner_id else picking.company_id.name)
+                s_phone = warehouse.ghn_sender_phone or (warehouse.partner_id.phone if warehouse.partner_id else picking.company_id.phone)
+                s_address = warehouse.ghn_sender_address or (warehouse.partner_id.street if warehouse.partner_id else picking.company_id.street)
+
                 res.update({
                     'ghn_shop_id': warehouse.ghn_shop_id,
-                    'sender_name': warehouse.partner_id.name or picking.company_id.name,
-                    'sender_phone': warehouse.partner_id.phone or warehouse.partner_id.mobile or picking.company_id.phone,
-                    'sender_address': warehouse.partner_id.street or picking.company_id.street,
+                    'sender_name': s_name,
+                    'sender_phone': s_phone,
+                    'sender_address': s_address,
                     'sender_province_id': warehouse.ghn_province_id.id,
                     'sender_district_id': warehouse.ghn_district_id.id,
                     'sender_ward_id': warehouse.ghn_ward_id.id,

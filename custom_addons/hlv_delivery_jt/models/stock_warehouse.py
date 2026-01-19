@@ -10,4 +10,8 @@ class StockWarehouse(models.Model):
     jnt_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi (J&T)",
                                  domain="[('district_id', '=', jnt_city_id)]")
     
+    jnt_sender_name = fields.Char(string="Tên người gửi (J&T)")
+    jnt_sender_mobile = fields.Char(string="SĐT người gửi (J&T)")
+    jnt_sender_address = fields.Char(string="Địa chỉ gửi (J&T)")
+    
     sender_address_ids = fields.One2many("delivery.sender.address", "warehouse_id", string="Hồ sơ người gửi")

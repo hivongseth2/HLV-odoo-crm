@@ -14,6 +14,10 @@ class StockWarehouse(models.Model):
     ghn_shop_id = fields.Char(string="Mã Shop ID (GHN)")
     ghn_shop_id_heavy = fields.Char(string="Mã Shop ID hàng nặng (GHN)")
 
+    ghn_sender_name = fields.Char(string="Tên người gửi (GHN)")
+    ghn_sender_phone = fields.Char(string="SĐT người gửi (GHN)")
+    ghn_sender_address = fields.Char(string="Địa chỉ gửi (GHN)")
+
     @api.onchange('ghn_district_id')
     def _onchange_ghn_district_id(self):
         """Fetch wards from GHN when district changes in warehouse config."""

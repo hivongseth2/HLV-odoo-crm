@@ -12,6 +12,7 @@ class JTCreateOrderWizard(models.TransientModel):
     _description = "J&T Create Order Wizard"
 
     picking_id = fields.Many2one('stock.picking', string="Picking", required=True)
+    warehouse_id = fields.Many2one('stock.warehouse', string="Kho hàng", related='picking_id.picking_type_id.warehouse_id', readonly=True)
     
     # J&T Specific Fields
     order_type = fields.Selection([
@@ -106,7 +107,8 @@ class JTCreateOrderWizard(models.TransientModel):
     estimated_insurance_fee = fields.Float(string="Phí bảo hiểm dự kiến (VND)", readonly=True)
 
     # Sender Info (Editable)
-    sender_config_id = fields.Many2one("delivery.sender.address", string="Cấu hình địa chỉ gửi")
+    sender_config_id = fields.Many2one("delivery.sender.address", string="Cấu hình địa chỉ gửi",
+                                      domain="[('warehouse_id', '=', warehouse_id)]")
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
     sender_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành gửi", ondelete='set null')
@@ -128,6 +130,17 @@ class JTCreateOrderWizard(models.TransientModel):
                 self.sender_city_id = self.sender_config_id.jnt_city_id
             if self.sender_config_id.jnt_area_id:
                 self.sender_area_id = self.sender_config_id.jnt_area_id
+        else:
+            # Revert to warehouse defaults if config is cleared
+            warehouse = self.warehouse_id
+            if warehouse:
+                sender_partner = warehouse.partner_id or self.picking_id.company_id.partner_id
+                self.sender_name = warehouse.jnt_sender_name or sender_partner.name
+                self.sender_mobile = warehouse.jnt_sender_mobile or (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0')
+                self.sender_address = warehouse.jnt_sender_address or sender_partner.street
+                self.sender_prov_id = warehouse.jnt_prov_id
+                self.sender_city_id = warehouse.jnt_city_id
+                self.sender_area_id = warehouse.jnt_area_id
 
     @api.onchange('sender_prov_id')
     def _onchange_sender_prov_id(self):
@@ -379,6 +392,10 @@ class JTCreateOrderWizard(models.TransientModel):
             r_p, r_d, r_w = get_jnt_ids(r_prov_name, r_dist_name, r_ward_name)
 
             # Sender Address from Company/Warehouse
+            s_name = sender_partner.name or ''
+            s_mobile = (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0')
+            s_address = sender_partner.street or ''
+            
             s_prov_name = sender_partner.state_id.name or ''
             s_dist_name = sender_partner.city or ''
             s_ward_name = sender_partner.street2 or ''
@@ -387,6 +404,10 @@ class JTCreateOrderWizard(models.TransientModel):
 
             # Override with Warehouse J&T specific fields if set
             if warehouse:
+                if warehouse.jnt_sender_name: s_name = warehouse.jnt_sender_name
+                if warehouse.jnt_sender_mobile: s_mobile = warehouse.jnt_sender_mobile
+                if warehouse.jnt_sender_address: s_address = warehouse.jnt_sender_address
+                
                 if warehouse.jnt_prov_id: s_p = warehouse.jnt_prov_id.id
                 if warehouse.jnt_city_id: s_d = warehouse.jnt_city_id.id
                 if warehouse.jnt_area_id: s_w = warehouse.jnt_area_id.id
@@ -396,12 +417,12 @@ class JTCreateOrderWizard(models.TransientModel):
                 'cod_money': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 'goods_value': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 
-                'sender_name': sender_partner.name or '',
-                'sender_mobile': (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0'),
+                'sender_name': s_name,
+                'sender_mobile': s_mobile,
                 'sender_prov_id': s_p,
                 'sender_city_id': s_d,
                 'sender_area_id': s_w,
-                'sender_address': sender_partner.street or '',
+                'sender_address': s_address,
 
                 'receiver_name': receiver_partner.name or '',
                 'receiver_mobile': (receiver_partner.mobile or receiver_partner.phone or '').replace(' ', '').replace('+84', '0'),
