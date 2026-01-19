@@ -15,7 +15,7 @@
                         </group>
                     </group>
                     <separator string="Danh sách Hồ sơ người gửi (Dùng chung J&amp;T &amp; GHN)"/>
-                    <field name="sender_address_ids" context="{'default_warehouse_id': active_id}">
+                    <field name="sender_address_ids">
                         <list editable="bottom">
                             <field name="name"/>
                             <field name="sender_name"/>
