@@ -45,7 +45,7 @@
 
     <menuitem id="menu_delivery_sender_address"
               name="Cấu hình địa chỉ gửi"
-              parent="delivery.menu_delivery"
+              parent="stock.menu_stock_config_settings"
               action="delivery_sender_address_action"
               sequence="100"/>
 </odoo>
