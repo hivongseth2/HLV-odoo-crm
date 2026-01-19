@@ -1,4 +1,3 @@
-// Toast helper - Global scope để accessible từ mọi nơi
 const toast = (() => {
   let host = document.getElementById('toastHost');
   if (!host) {
@@ -37,11 +36,8 @@ document.addEventListener("DOMContentLoaded", function () {
   const completeBtn = document.getElementById("complete_pack_btn");
   const pickingId = parseInt(window.location.pathname.split("/").pop());
 
-  // === SMART AUTO-FOCUS ===
-  // Always keep focus on Barcode Scanner Input, unless user is typing manually
+
   const enforceFocus = () => {
-    // 1. Check if ANY modal is currently visible (robust check)
-    // We check for .modal-overlay that does NOT have "display: none"
     const visibleModal = document.querySelector('.modal-overlay:not([style*="display: none"])');
     if (visibleModal) return; // Completely disable auto-focus if a modal is open
 
@@ -64,7 +60,6 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   // ========================
 
-  /* --- CUSTOM LOGIC: Scanner Detection & Manual Input Handlers --- */
   let lastKeyTime = 0;
   let fastKeyCount = 0;
   // [NEW] Semaphore to prevent double-packing (race condition)
@@ -90,11 +85,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   };
 
-  /**
-   * [NEW] Validate Manual Input
-   * - Prevent negative
-   * - Prevent reducing below Packed Qty
-   */
   window.handleManualQtyChange = async function (el) {
     const newVal = parseFloat(el.value);
     const oldVal = parseFloat(el.dataset.currentQty || 0); // Value before change (from dataset)
@@ -169,9 +159,7 @@ document.addEventListener("DOMContentLoaded", function () {
   async function flushActiveInput() {
     const active = document.activeElement;
     if (active && active.classList.contains('done-input')) {
-      // Trigger change manually
-      // Note: handleManualQtyChange is attached to window but we can call it directly if scope permits
-      // or rely on the global assignment
+
       if (window.handleManualQtyChange) {
         await window.handleManualQtyChange(active);
       }
@@ -194,15 +182,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // 1. Tìm theo Barcode chính xác (Ưu tiên 1)
     let elements = [...document.querySelectorAll(`[data-barcode="${searchCode}"]`)];
-
-    // 2. Nếu không tìm thấy, tìm theo SKU (Default Code) - Ưu tiên 2
-    // Vì có thể user scan mã SKU thay vì mã vạch
     if (elements.length === 0) {
       elements = [...document.querySelectorAll(`[data-default-code="${searchCode}"]`)];
     }
 
-    // 3. Nếu vẫn không thấy, thử tìm Barcode chứa trong attribute (Fallback) - Ưu tiên 3
-    // Ví dụ barcode scan là "123456" nhưng data-barcode="0123456"
+
     if (elements.length === 0) {
       const allItems = document.querySelectorAll('.product-item');
       for (const item of allItems) {
@@ -213,31 +197,40 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
+    // [FIX] Priority Logic: Active (Partial) > Empty > First
+    let activeMatchId = null;
+    let emptyMatchId = null;
+
     for (const el of elements) {
       // Changed: Support done-input or fallback to .done
       const input = el.querySelector(".done-input");
       const doneVal = input ? input.value : (el.querySelector(".done")?.innerText || 0);
-      const done = parseFloat(doneVal);
+      const done = parseFloat(doneVal) || 0; // [FIX] Ensure NaN becomes 0
 
       // Attempt to find required element relative to input (if input exists)
       const requiredEl = input ? input.nextElementSibling.nextElementSibling : el.querySelectorAll("span")[1];
 
       const required = parseFloat(requiredEl?.innerText || 0);
 
-      // Ưu tiên dòng chưa hoàn thành
-      if (done < required) {
-        return el.dataset.lineId;
+      // Prioritize "Active" (Partially Full) lines
+      if (done > 0 && done < required) {
+        return el.dataset.lineId; // Priority 1: Return immediately
+      }
+
+      // Store "Empty" line as fallback
+      if (done === 0 && done < required && !emptyMatchId) {
+        emptyMatchId = el.dataset.lineId;
       }
     }
 
-    // Nếu tất cả đã đủ, trả về dòng đầu tiên tìm thấy (để cộng dồn warning hoặc dư)
+    // Priority 2: Empty Line
+    if (emptyMatchId) return emptyMatchId;
+
+    // Priority 3: Fallback to first line (even if full, usually implies overflow)
     if (elements.length > 0) return elements[0].dataset.lineId;
 
     return null;
   }
-
-  // Helper to flash element
-  // Helper to flash element (EXPOSED TO WINDOW for global access)
   window.highlightElement = function (el, color = "#ffeb3b") { // Default strong yellow
     if (!el) return;
 
@@ -327,14 +320,91 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       result.scanned.forEach(item => {
-        // cố gắng tìm theo line_id, nếu không có thì rớt về tìm theo barcode
+        // cố gắng tìm theo line_id
         let el = document.querySelector(`[data-line-id="${item.line_id}"]`);
+
+        // [FIX] If server returns a line_id that is NOT in the DOM, we must create/update dynamically.
         if (!el && item.barcode) {
-          const code = normalizeCode(item.barcode);
-          el = [...document.querySelectorAll('#product_list li.product-item')]
-            .find(e => normalizeCode(e.dataset.barcode) === code) || null;
-          if (el && item.line_id) el.dataset.lineId = String(item.line_id); // gắn lại cho những lần sau
+          const code = normalizeCode(item.barcode).toUpperCase();
+          const candidates = [...document.querySelectorAll('#product_list li.product-item')]
+            .filter(e => normalizeCode(e.dataset.barcode).toUpperCase() === code);
+
+
+          const targetDone = parseFloat(item.done_qty || 0);
+          const targetMax = parseFloat(item.required_qty || 0);
+
+          let bestMatch = null;
+          let minDiff = Infinity;
+
+          for (const c of candidates) {
+            // Priority 0: Exact ID Recovery (Golden Path)
+            if (String(c.dataset.lineId) === String(item.line_id)) {
+              bestMatch = c;
+              break;
+            }
+
+            let mMax = parseFloat(c.dataset.maxQty || 0);
+
+            // [FIX] Fallback read from UI if dataset is missing/zero
+            if (mMax === 0) {
+              const doneInp = c.querySelector('.done-input');
+              const reqEl = doneInp ? doneInp.nextElementSibling.nextElementSibling : c.querySelectorAll("span")[1];
+              if (reqEl) mMax = parseFloat(reqEl.innerText.replace(',', '.') || 0);
+            }
+
+            const mDoneInput = c.querySelector('.done-input');
+            const mDone = parseFloat(mDoneInput ? (mDoneInput.value || 0) : (c.querySelector('.done')?.innerText || 0));
+
+            // Heuristic: Minimize Quantity Difference
+            // e.g. Item=40 matches Line=40 (Diff=0) better than Line=0 (Diff=40)
+            // e.g. Item=1 matches Line=0 (Diff=1) better than Line=10 (Diff=9)
+            const diff = Math.abs(mDone - targetDone);
+
+            // console.log(`[DEBUG_HEURISTIC] Candidate ${c.dataset.lineId}: Done=${mDone}, Target=${targetDone}, Diff=${diff}`);
+
+            if (diff < minDiff) {
+              minDiff = diff;
+              bestMatch = c;
+            } else if (diff === minDiff) {
+              // Tie-breaker: Match Capacity?
+              // If one capacity matches exactly, prefer it.
+              if (mMax === targetMax) bestMatch = c;
+            }
+          }
+
+          let match = bestMatch;
+
+          // Final Fallback (Unlikely to be needed but safe)
+          if (!match && candidates.length > 0) {
+            match = candidates[candidates.length - 1];
+          }
+
+          if (match) {
+            // === FORCE UPDATE EXISTING ROW ===
+            console.log(`[SCAN] Force updating row ${match.dataset.lineId} -> ${item.line_id}`);
+            el = match;
+
+            // Update Identity
+            el.setAttribute('data-line-id', item.line_id);
+            el.dataset.lineId = String(item.line_id);
+
+            // Update Stats
+            el.setAttribute('data-packed-qty', item.packed_qty || 0);
+            el.dataset.packedQty = item.packed_qty || 0;
+
+            // Input value will be updated by common logic below
+            const input = el.querySelector(".done-input");
+            if (input) {
+              input.dataset.lineId = String(item.line_id);
+            }
+
+            // Visual Feedback
+            highlightElement(el, "#dbe4ff");
+          } else {
+            console.warn("No candidates found to update for", item.barcode);
+          }
         }
+
         if (!el) { console.warn('No DOM line for', item); return; }
 
         const requiredEl = el.querySelectorAll('span')[1];
@@ -353,8 +423,6 @@ document.addEventListener("DOMContentLoaded", function () {
           if (doneEl) doneEl.innerText = item.done_qty;
         }
 
-        // [NEW] FORCE SYNC PACKED QTY FROM SERVER (Self-Correction)
-        // If server returns packed_qty, overwrite client state to prevent corruption
         if (typeof item.packed_qty !== 'undefined') {
           const srvPacked = parseFloat(item.packed_qty);
           const oldPacked = parseFloat(el.getAttribute('data-packed-qty') || 0);
@@ -380,7 +448,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Listeners for +/- buttons removed as buttons are hidden/removed from UI.
 
 
   completeBtn?.addEventListener("click", async function () {
@@ -407,6 +474,26 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
+    // [NEW] Kiểm tra có package không, nếu có thì in nhãn trước
+    try {
+      const checkRes = await fetch("/pack_scan/check_and_print_label", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { picking_id: pickingId } })
+      });
+      const checkResponse = await checkRes.json();
+      const checkResult = checkResponse.result || checkResponse;
+
+      if (checkResult?.has_package && checkResult?.report_url) {
+        toast.info("🖨️ Đang in nhãn...", { ms: 2000 });
+        window.open(checkResult.report_url, '_blank');
+        // Đợi một chút để người dùng thấy nhãn đang in
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (e) {
+      console.warn("Lỗi kiểm tra package:", e);
+      // Tiếp tục hoàn thành ngay cả khi không check được package
+    }
 
     const res = await fetch("/pack_scan/complete_picking", {
       method: "POST",
@@ -486,11 +573,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Chuẩn hóa barcode
     const barcode = raw;
 
-    // --- CHECK RESTRICTION FOR MANUAL INPUT ---
-    // Kiểm tra nếu là barcode thường (không phải lệnh) và số lượng < 10
     if (barcode !== 'CMD-CREATE-PACK' && !barcode.startsWith("AUTO-PKG-") && !barcode.startsWith("PACK")) {
-      // Tìm dòng sản phẩm tương ứng
-      // Lưu ý: findLineToUpdate trả về lineId (string) hoặc null
+
       const lineId = findLineToUpdate(barcode);
 
       // Nếu tìm thấy dòng cần update (chưa done), kiểm tra required qty
@@ -509,11 +593,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       }
     }
-    // ------------------------------------------
-
-    // ------------------------------------------
-
-    // C. LOGIC MỚI: Xử lý mã lệnh tạo gói (CMD-CREATE-PACK hoặc AUTO-PKG-...)
     if (barcode === 'CMD-CREATE-PACK' || barcode.startsWith("AUTO-PKG-") || barcode.startsWith("PACK")) {
 
       // [Rule] Prevent Double-Submit
@@ -588,14 +667,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (result?.package_id) {
           toast.success(`Tạo gói hàng ${result.package_name} thành công!`);
-
-          // ============================================================
-          // [FIX] Cập nhật lại UI danh sách chính (Mới: Dùng SyncInfo từ Server)
-          // ============================================================
-          // ============================================================
-          // [FIX FINAL] LOGIC CẬP NHẬT UI TOÀN DIỆN
-          // ============================================================
-
           // 1. Luôn hiển thị gói mới bên phải
           const pkgId = result.package_id;
           const pkgName = result.package_name;
@@ -755,28 +826,30 @@ function applyServerSyncInfo(syncInfoList) {
   syncInfoList.forEach(info => {
     let targetEl = null;
 
-    // [FIX IMPROVED] Use strict Loop matching to ensure we find the element even if querySelector fails
-    const allItems = document.querySelectorAll('#product_list .product-item');
-    for (const item of allItems) {
-      const itemBar = normalizeCode(item.dataset.barcode || '').toUpperCase();
-      const itemSku = normalizeCode(item.dataset.defaultCode || '').toUpperCase();
-      const sBarcode = normalizeCode(info.product_barcode || '').toUpperCase();
-      const sSku = normalizeCode(info.product_sku || '').toUpperCase();
+    // [FIX] Prioritize lookup by Line ID if available in sync info
+    if (info.line_id) {
+      targetEl = document.querySelector(`[data-line-id="${info.line_id}"]`);
+    }
 
-      // [DEBUG LOG] Print comparison
-      // console.log(`[SYNC CHECK] Item: ${itemBar}/${itemSku} vs Info: ${sBarcode}/${sSku}`);
+    // Only use fuzzy matching if no line_id or line_id not found (and fallback needed? Prefer strict)
+    if (!targetEl) {
+      const allItems = document.querySelectorAll('#product_list .product-item');
+      for (const item of allItems) {
+        const itemBar = normalizeCode(item.dataset.barcode || '').toUpperCase();
+        const itemSku = normalizeCode(item.dataset.defaultCode || '').toUpperCase();
+        const sBarcode = normalizeCode(info.product_barcode || '').toUpperCase();
+        const sSku = normalizeCode(info.product_sku || '').toUpperCase();
 
-      // Match by Barcode (Fuzzy: endsWith)
-      if (sBarcode && (itemBar === sBarcode || itemBar.endsWith(sBarcode) || sBarcode.endsWith(itemBar))) {
-        console.log(`[SYNC MATCH] Matched by Barcode: ${itemBar} ~= ${sBarcode}`);
-        targetEl = item;
-        break;
-      }
-      // Match by SKU (Fuzzy: endsWith)
-      if (!targetEl && sSku && (itemSku === sSku || itemSku.endsWith(sSku) || sSku.endsWith(itemSku))) {
-        console.log(`[SYNC MATCH] Matched by SKU: ${itemSku} ~= ${sSku}`);
-        targetEl = item;
-        break;
+        // Match by Barcode (Fuzzy: endsWith)
+        if (sBarcode && (itemBar === sBarcode || itemBar.endsWith(sBarcode) || sBarcode.endsWith(itemBar))) {
+          targetEl = item;
+          break;
+        }
+        // Match by SKU (Fuzzy: endsWith)
+        if (!targetEl && sSku && (itemSku === sSku || itemSku.endsWith(sSku) || sSku.endsWith(itemSku))) {
+          targetEl = item;
+          break;
+        }
       }
     }
 
@@ -1166,23 +1239,6 @@ document.addEventListener('click', async function (e) {
     window.location.href = `/custom_barcode_scan/pack_view/${packId}`;
   }
 
-  // COMMENTED OUT: Transfer functionality between sibling packs (tách đơn)
-  // if (transferBtn) {
-  //   const sourcePack = parseInt(transferBtn.dataset.packId);
-  //   const targetPack = pickingId;
-  //   
-  //   createModal(
-  //     '↔️ Chuyển sản phẩm',
-  //     'Tính năng chuyển sản phẩm giữa các pack. Chọn sản phẩm để chuyển.',
-  //     [
-  //       { label: 'Hủy', color: '#999', onclick: () => {} },
-  //       { label: 'Chuyển', color: '#ffa500', onclick: async () => {
-  //           toast.info('Tính năng này sẽ được hoàn thiện trong phiên bản tiếp theo', { ms: 2000 });
-  //         }
-  //       }
-  //     ]
-  //   );
-  // }
 });
 
 // ===================== PACKAGE EDIT MODAL FUNCTIONS =====================
@@ -1256,31 +1312,19 @@ async function openPackageEditModal(event) {
       });
     }
 
-    // Xử lý các trường null/undefined
     if (!Array.isArray(currentPackageData.other_packages)) {
       currentPackageData.other_packages = [];
     }
-
-    // Cập nhật Tiêu đề Modal
     const titleEl = document.getElementById('modalPackageName');
     if (titleEl) titleEl.innerText = result.package_name;
 
-    // ============================================================
-    // BƯỚC 1: KHÔNG GỘP DÒNG (NO AGGREGATION)
-    // Để tránh lỗi cập nhật sai ID khi Odoo tự tách dòng
-    // ============================================================
-
-    // Sử dụng trực tiếp danh sách từ server
     const mergedItems = result.items || [];
 
-    // Cập nhật Badge số lượng loại sản phẩm (Unique products)
     const uniqueProducts = new Set(mergedItems.map(i => i.product_id));
     const badgeEl = document.getElementById('itemCountBadge');
     if (badgeEl) badgeEl.innerText = uniqueProducts.size;
 
-    // ============================================================
-    // BƯỚC 2: RENDER DANH SÁCH ĐÃ GỘP
-    // ============================================================
+
     const itemsList = document.getElementById('packageItemsList');
     if (itemsList) {
       itemsList.innerHTML = ''; // Xóa list cũ
@@ -1299,7 +1343,6 @@ async function openPackageEditModal(event) {
           li.className = 'item-card';
           li.setAttribute('data-move-line-id', item.move_line_id);
 
-          // [FIX NAME] Logic hiển thị tên có [Barcode] trong Modal
           let displayName = item.product_name;
           if (item.product_barcode && !displayName.startsWith('[')) {
             displayName = `[${item.product_barcode}] ${displayName}`;
@@ -1322,9 +1365,9 @@ async function openPackageEditModal(event) {
             </div>
           `;
 
-          // --- GÁN SỰ KIỆN NÚT BẤM (GIỮ NGUYÊN LOGIC CŨ) ---
-
           // 1. Decrease
+          console.log(`[DEBUG_RENDER] Item: ${item.product_name} | ID: ${item.move_line_id} | Qty: ${item.qty_done}`);
+
           li.querySelector('.qty-decrease').addEventListener('click', () => {
             const display = li.querySelector('.qty-display');
             let cur = parseFloat(display.innerText) || 0;
@@ -1479,34 +1522,21 @@ async function removePackageItem(moveLineId) {
 
       // Bước C: Thực hiện cập nhật số liệu nếu tìm thấy dòng tương ứng
       if (mainListEl) {
-        // 1. Giảm số lượng hiển thị (Done)
-        // 1. Giảm số lượng hiển thị (Done)
         const doneInput = mainListEl.querySelector('.done-input');
         const doneEl = mainListEl.querySelector('.done');
 
         const currentDone = parseFloat(doneInput ? doneInput.value : (doneEl?.innerText || 0));
-        // LOGIC CŨ: newDone = currentDone - qtyToRemove; -> Sai vì bây giờ UNPACK chứ không XÓA
-        // LOGIC MỚI: newDone giữ nguyên (vì hàng nhả ra khỏi pack vẫn tính là Done)
-        // Chỉ giảm data-packed-qty
 
         const newDone = currentDone; // Keep done count same
 
 
-        /* 
-           Tuy nhiên, UI cần phản hồi gì?
-           "Đã đóng gói" (data-packed-qty) GIẢM.
-           "Đã quét" (value input) GIỮ NGUYÊN.
-        */
 
-        // 2. Giảm số lượng "Đã đóng gói" (Packed Qty - dữ liệu ẩn)
+
         const currentPacked = parseFloat(mainListEl.getAttribute('data-packed-qty') || 0);
         const newPacked = Math.max(0, currentPacked - qtyToRemove);
         mainListEl.setAttribute('data-packed-qty', newPacked);
 
-        // [OPTIONAL] Nếu muốn hiển thị rõ hơn, có thể flash màu khác
 
-
-        // 3. Cập nhật màu sắc (xanh/đen)
         const requiredEl = mainListEl.querySelectorAll('span')[1];
         const required = parseFloat(requiredEl?.innerText || 0);
         if (newDone >= required && required > 0) {
@@ -1515,12 +1545,9 @@ async function removePackageItem(moveLineId) {
           mainListEl.classList.remove("completed");
         }
 
-        // Highlight nhẹ dòng vừa update để user dễ thấy
         highlightElement(mainListEl, "#ffc9c9"); // Reddish for removal
       }
     }
-
-    // Render lại modal
     if (currentPackageData && currentPackageData.package_id) {
       openPackageEditModal({ currentTarget: { dataset: { packageId: currentPackageData.package_id } }, stopPropagation: () => { } });
     }
@@ -1768,6 +1795,8 @@ async function savePackageChanges() {
 //   toast.info('Tách gói tạm thời chưa khả dụng.', { ms: 2000 });
 // }
 function openTransferModalForItem(moveLineId, currentQty, productName) {
+  console.log(`[DEBUG_TRANSFER_OPEN] Opening for ID: ${moveLineId} | Product: ${productName} | Qty: ${currentQty}`);
+
   // Lấy danh sách các gói khác để chuyển sang
   // const packs = (currentPackageData && currentPackageData.other_packages) || [];
   const packs = [];
@@ -1826,6 +1855,8 @@ function openTransferModalForItem(moveLineId, currentQty, productName) {
         if (!targetPackId) { toast.warn('Vui lòng chọn gói đích'); return; }
         if (!qty || qty <= 0) { toast.warn('Vui lòng nhập số lượng hợp lệ'); return; }
         if (qty > currentQty) { toast.warn(`Số lượng không được vượt quá ${currentQty}`); return; }
+
+        console.log(`[DEBUG_TRANSFER_EXEC] Executing Transfer: LineID=${moveLineId} -> Pack=${targetPackId} | Qty=${qty}`);
 
         try {
           const pickingId = parseInt(window.location.pathname.split("/").pop());
@@ -2216,8 +2247,7 @@ function updateSidePanelUI(pkgData) {
 
     if (!html) {
       html = '<div class="preview-empty" style="font-style: italic; color: #adb5bd;">Gói rỗng</div>';
-      // Nếu gói rỗng, có thể xóa card luôn? 
-      // card.remove(); return; 
+
     }
 
     previewContainer.innerHTML = html;
