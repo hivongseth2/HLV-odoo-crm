@@ -113,7 +113,7 @@
                         height: 21mm; /* Reduced to avoid vertical accumulation */
                         float: left;
                         padding: 1mm;
-                        margin: 0;
+                        margin: 0.5mm 0 0 0; /* Center vertically in 22mm row */
                         box-sizing: border-box;
                         overflow: hidden;
                         page-break-inside: avoid;
@@ -138,12 +138,13 @@
                         -webkit-line-clamp: 2;
                         -webkit-box-orient: vertical;
                         width: 100%;
-                        margin-bottom: 0px;
+                        margin-bottom: 2px; /* Increased spacing */
                         white-space: normal;
                     }
                     .product-code-35x22 {
                         font-size: 7px;
                         font-weight: bold;
+                        margin-top: 2px; /* Added spacing */
                     }
                 </style>
                 <t t-foreach="docs" t-as="wizard">
