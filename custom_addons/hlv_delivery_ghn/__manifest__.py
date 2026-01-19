@@ -4,7 +4,7 @@
     "version": "1.0",
     "category": "Inventory/Delivery",
     "author": "Antigravity",
-    "depends": ["stock", "base"],
+    "depends": ["stock", "base", "hlv_delivery_jt"],
     "data": [
         "security/ir.model.access.csv",
         "views/res_config_settings_views.xml",
@@ -13,6 +13,7 @@
         "wizard/ghn_fee_wizard_views.xml",
         "wizard/ghn_create_order_wizard_views.xml",
         "views/ghn_monitor_views.xml",
+        "views/delivery_sender_address_views.xml",
     ],
     "installable": True,
     "application": False,

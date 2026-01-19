@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="delivery_sender_address_view_tree" model="ir.ui.view">
+        <field name="name">delivery.sender.address.tree</field>
+        <field name="model">delivery.sender.address</field>
+        <field name="arch" type="xml">
+            <tree string="Cấu hình địa chỉ người gửi">
+                <field name="name"/>
+                <field name="sender_name"/>
+                <field name="sender_mobile"/>
+                <field name="sender_address"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="delivery_sender_address_view_form" model="ir.ui.view">
+        <field name="name">delivery.sender.address.form</field>
+        <field name="model">delivery.sender.address</field>
+        <field name="arch" type="xml">
+            <form string="Cấu hình địa chỉ người gửi">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="sender_name"/>
+                            <field name="sender_mobile"/>
+                            <field name="sender_address"/>
+                        </group>
+                        <group string="Cấu hình J&amp;T">
+                            <field name="jnt_prov_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="jnt_city_id" options="{'no_open': True, 'no_create': True}"/>
+                            <field name="jnt_area_id" options="{'no_open': True, 'no_create': True}"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="delivery_sender_address_action" model="ir.actions.act_window">
+        <field name="name">Cấu hình địa chỉ gửi</field>
+        <field name="res_model">delivery.sender.address</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem id="menu_delivery_sender_address"
+              name="Cấu hình địa chỉ gửi"
+              parent="delivery.menu_delivery"
+              action="delivery_sender_address_action"
+              sequence="100"/>
+</odoo>

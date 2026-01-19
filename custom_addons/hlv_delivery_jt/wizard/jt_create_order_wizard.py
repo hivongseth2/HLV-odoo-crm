@@ -37,10 +37,10 @@ class JTCreateOrderWizard(models.TransientModel):
     ], string="Loại hàng hóa (Dịch vụ)", default='EXPRESS', required=True)
     
     goods_type = fields.Selection([
-        ('bm000001', 'Document (bm000001)'),
-        ('bm000010', 'Goods (bm000010)'),
-        ('bm000011', 'Fresh (bm000011)')
-    ], string="Loat hàng hóa", default='bm000010', required=True)
+        ('bm000001', 'Tài liệu (bm000001)'),
+        ('bm000010', 'Hàng hóa (bm000010)'),
+        ('bm000011', 'Đồ tươi sống (bm000011)')
+    ], string="Loại hàng hóa", default='bm000010', required=True)
 
     delivery_type = fields.Selection([
         ('1', 'Phát bình thường'),
@@ -106,6 +106,7 @@ class JTCreateOrderWizard(models.TransientModel):
     estimated_insurance_fee = fields.Float(string="Phí bảo hiểm dự kiến (VND)", readonly=True)
 
     # Sender Info (Editable)
+    sender_config_id = fields.Many2one("delivery.sender.address", string="Cấu hình địa chỉ gửi")
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
     sender_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành gửi", ondelete='set null')
@@ -114,6 +115,19 @@ class JTCreateOrderWizard(models.TransientModel):
     sender_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi", ondelete='set null',
                                     domain="[('district_id', '=', sender_city_id)]")
     sender_address = fields.Char(string="Địa chỉ gửi", required=True)
+
+    @api.onchange('sender_config_id')
+    def _onchange_sender_config_id(self):
+        if self.sender_config_id:
+            self.sender_name = self.sender_config_id.sender_name
+            self.sender_mobile = self.sender_config_id.sender_mobile
+            self.sender_address = self.sender_config_id.sender_address
+            if self.sender_config_id.jnt_prov_id:
+                self.sender_prov_id = self.sender_config_id.jnt_prov_id
+            if self.sender_config_id.jnt_city_id:
+                self.sender_city_id = self.sender_config_id.jnt_city_id
+            if self.sender_config_id.jnt_area_id:
+                self.sender_area_id = self.sender_config_id.jnt_area_id
 
     @api.onchange('sender_prov_id')
     def _onchange_sender_prov_id(self):

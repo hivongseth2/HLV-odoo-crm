@@ -14,6 +14,31 @@ class GHNCreateOrderWizard(models.TransientModel):
     client_order_code = fields.Char(string="Mã đơn hàng khách", help="Sử dụng Số báo giá/Sale Order làm mã tham chiếu sang GHN")
     ghn_order_code = fields.Char(string="Mã đơn GHN")
     
+    # Sender Info (Editable)
+    sender_config_id = fields.Many2one("delivery.sender.address", string="Cấu hình địa chỉ gửi")
+    sender_name = fields.Char(string="Tên người gửi")
+    sender_phone = fields.Char(string="SĐT người gửi")
+    sender_address = fields.Char(string="Địa chỉ gửi")
+    sender_province_id = fields.Many2one("ghn.province", string="Tỉnh/Thành gửi")
+    sender_district_id = fields.Many2one("ghn.district", string="Quận/Huyện gửi", domain="[('province_id', '=', sender_province_id)]")
+    sender_ward_id = fields.Many2one("ghn.ward", string="Phường/Xã gửi", domain="[('district_id', '=', sender_district_id)]")
+    ghn_shop_id = fields.Char(string="GHN Shop ID")
+
+    @api.onchange('sender_config_id')
+    def _onchange_sender_config_id(self):
+        if self.sender_config_id:
+            self.sender_name = self.sender_config_id.sender_name
+            self.sender_phone = self.sender_config_id.sender_mobile
+            self.sender_address = self.sender_config_id.sender_address
+            if self.sender_config_id.ghn_province_id:
+                self.sender_province_id = self.sender_config_id.ghn_province_id
+            if self.sender_config_id.ghn_district_id:
+                self.sender_district_id = self.sender_config_id.ghn_district_id
+            if self.sender_config_id.ghn_ward_id:
+                self.sender_ward_id = self.sender_config_id.ghn_ward_id
+            if self.sender_config_id.ghn_shop_id:
+                self.ghn_shop_id = self.sender_config_id.ghn_shop_id
+
     # Receiver Info
     to_name = fields.Char(string="Tên người nhận", required=True)
     to_phone = fields.Char(string="Số điện thoại", required=True)
@@ -172,6 +197,19 @@ class GHNCreateOrderWizard(models.TransientModel):
                 'note': picking.ghn_shipping_notes or 'Giao hàng',
                 'content': f"Đơn hàng {picking.name}",
             })
+
+            # Default Sender Info from Warehouse
+            warehouse = picking.picking_type_id.warehouse_id
+            if warehouse:
+                res.update({
+                    'ghn_shop_id': warehouse.ghn_shop_id,
+                    'sender_name': warehouse.partner_id.name or picking.company_id.name,
+                    'sender_phone': warehouse.partner_id.phone or warehouse.partner_id.mobile or picking.company_id.phone,
+                    'sender_address': warehouse.partner_id.street or picking.company_id.street,
+                    'sender_province_id': warehouse.ghn_province_id.id,
+                    'sender_district_id': warehouse.ghn_district_id.id,
+                    'sender_ward_id': warehouse.ghn_ward_id.id,
+                })
             
             # Dimensions & Weight using default logic first
             weight, l, w, h = picking._calculate_ghn_dimensions()
@@ -242,14 +280,12 @@ class GHNCreateOrderWizard(models.TransientModel):
 
     def _get_ghn_client(self):
         company = self.env.company
-        warehouse = self.picking_id.picking_type_id.warehouse_id
         is_heavy = self.weight > 10000
         
-        shop_id = company.ghn_shop_id
-        if is_heavy:
+        shop_id = self.ghn_shop_id or company.ghn_shop_id
+        if is_heavy and not self.ghn_shop_id:
+            warehouse = self.picking_id.picking_type_id.warehouse_id
             shop_id = (warehouse and warehouse.ghn_shop_id_heavy) or company.ghn_shop_id_heavy or shop_id
-        else:
-            shop_id = (warehouse and warehouse.ghn_shop_id) or company.ghn_shop_id
             
         return GHNApiUtils(
             token=company.ghn_api_token,
@@ -344,38 +380,20 @@ class GHNCreateOrderWizard(models.TransientModel):
         }
 
         # Sender Info
-        if warehouse:
-            if warehouse.ghn_province_id: payload["from_province_name"] = str(warehouse.ghn_province_id.name)
-            if warehouse.ghn_district_id: payload["from_district_name"] = str(warehouse.ghn_district_id.name)
-        # Sender Info - Only send if we have data (to rely on Shop default or keep existing on Update)
-        if warehouse:
-            if warehouse.ghn_province_id: payload["from_province_name"] = str(warehouse.ghn_province_id.name)
-            if warehouse.ghn_district_id: payload["from_district_name"] = str(warehouse.ghn_district_id.name)
-            if warehouse.ghn_ward_id: payload["from_ward_name"] = str(warehouse.ghn_ward_id.name)
-            
-            wh_partner = warehouse.partner_id
-            if wh_partner:
-                if wh_partner.name: payload["from_name"] = str(wh_partner.name)
-                if wh_partner.phone or wh_partner.mobile: 
-                    payload["from_phone"] = str(wh_partner.phone or wh_partner.mobile)
-                
-                addr_parts = [wh_partner.street, wh_partner.street2]
-                full_addr = ", ".join(filter(None, addr_parts))
-                if full_addr: payload["from_address"] = str(full_addr)
-            
-            # Fallback to Company if Warehouse has no partner (unlikely but safe) or specific fields missing? 
-            # Actually, standard Odoo Warehouse usually links to Company's partner if not set specific.
-            # But here we just skip if empty to let GHN defaults take over.
+        if self.sender_name:
+            payload["from_name"] = str(self.sender_name)
+        if self.sender_phone:
+            payload["from_phone"] = str(self.sender_phone)
+        if self.sender_address:
+            payload["from_address"] = str(self.sender_address)
+        if self.sender_province_id:
+            payload["from_province_name"] = str(self.sender_province_id.name)
+        if self.sender_district_id:
+            payload["from_district_name"] = str(self.sender_district_id.name)
+        if self.sender_ward_id:
+            payload["from_ward_name"] = str(self.sender_ward_id.name)
 
-        else:
-            # Fallback to Company (if no specific warehouse logic)
-            # Only send if set, otherwise let GHN use Shop default
-            if picking.company_id.name: payload["from_name"] = str(picking.company_id.name)
-            if picking.company_id.phone: payload["from_phone"] = str(picking.company_id.phone)
-            
-            addr_parts = [picking.company_id.street, picking.company_id.street2]
-            full_addr = ", ".join(filter(None, addr_parts))
-            if full_addr: payload["from_address"] = str(full_addr)
+        # Removed old warehouse-based sender logic
 
         # Removed strict ValidationError to allow GHN defaults (Shop info) to work
 

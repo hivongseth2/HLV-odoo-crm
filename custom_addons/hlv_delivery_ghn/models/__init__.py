@@ -5,3 +5,4 @@ from . import ghn_location
 from . import stock_picking
 from . import stock_warehouse
 from . import ghn_tracking_log
+from . import delivery_sender_address
