@@ -19,7 +19,7 @@ class ProductTemplate(models.Model):
     def write(self, vals):
         """Override write để auto-sync khi giá thay đổi"""
         # Các field giá cần theo dõi
-        price_fields = ['x_studio_ga_web', 'x_studio_gi_bn_thng_mi']
+        price_fields = ['x_studio_ga_web', 'x_studio_gi_bn_thng_mi', 'x_studio_ga_hng_nim_yt']
         has_price_change = any(field in vals for field in price_fields)
 
         result = super().write(vals)
@@ -148,8 +148,8 @@ class ProductTemplate(models.Model):
 
             body = (
                 f"✓ WordPress Sync thành công\n"
-                f"Regular Price: {regular_price:,.0f} đ\n"
-                f"Sale Price: {sale_price_str}\n"
+                f"Giá Niêm Yết: {regular_price:,.0f} đ\n"
+                f"Giá Web: {sale_price_str}\n"
                 f"Người thực hiện: {self.env.user.name}\n"
                 f"Thời gian: {sync_time}"
             )
