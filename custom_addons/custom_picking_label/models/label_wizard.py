@@ -8,6 +8,10 @@ class StockPickingLabelWizard(models.TransientModel):
 
     picking_id = fields.Many2one('stock.picking', string='Phiếu kho')
     print_type = fields.Selection([('barcode', 'Mã vạch'), ('qr', 'QR Code')], string='Kiểu in', default='barcode', required=True)
+    label_format = fields.Selection([
+        ('40x30', '1 Tem 40x30mm'),
+        ('35x22', '3 Tem 35x22mm')
+    ], string='Khổ giấy', default='40x30', required=True)
     
     auto_generate_ean13 = fields.Boolean(string="Tự động tạo mã vạch", help="Tự động tạo mã EAN13 cho sản phẩm chưa có mã")
     generate_type = fields.Selection([
@@ -36,6 +40,9 @@ class StockPickingLabelWizard(models.TransientModel):
                          product.write({"barcode": barcode_str})
 
         # Gọi hành động in report
+        if self.label_format == '35x22':
+            return self.env.ref('custom_picking_label.action_report_custom_label_35x22').report_action(self)
+        
         return self.env.ref('custom_picking_label.action_report_custom_label').report_action(self)
 
     def get_data_for_report(self):
