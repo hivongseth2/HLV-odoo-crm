@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="delivery_sender_address_view_tree" model="ir.ui.view">
-        <field name="name">delivery.sender.address.tree</field>
+    <record id="delivery_sender_address_view_list" model="ir.ui.view">
+        <field name="name">delivery.sender.address.list</field>
         <field name="model">delivery.sender.address</field>
         <field name="arch" type="xml">
-            <tree string="Cấu hình địa chỉ người gửi">
+            <list string="Cấu hình địa chỉ người gửi">
                 <field name="name"/>
                 <field name="sender_name"/>
                 <field name="sender_mobile"/>
                 <field name="sender_address"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -40,7 +40,7 @@
     <record id="delivery_sender_address_action" model="ir.actions.act_window">
         <field name="name">Cấu hình địa chỉ gửi</field>
         <field name="res_model">delivery.sender.address</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
     </record>
 
     <menuitem id="menu_delivery_sender_address"
