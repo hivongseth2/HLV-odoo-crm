@@ -17,5 +17,22 @@
             <field name="disable_shrinking" eval="True" />
             <field name="dpi">90</field>
         </record>
+
+        <record id="paperformat_custom_label_35x22" model="report.paperformat">
+            <field name="name">Label 35x22mm (3 Tem/Row)</field>
+            <field name="default" eval="True" />
+            <field name="format">custom</field>
+            <field name="page_height">22</field>
+            <field name="page_width">110</field>
+            <field name="orientation">Portrait</field>
+            <field name="margin_top">0</field>
+            <field name="margin_bottom">0</field>
+            <field name="margin_left">0</field>
+            <field name="margin_right">0</field>
+            <field name="header_line" eval="False" />
+            <field name="header_spacing">0</field>
+            <field name="disable_shrinking" eval="True" />
+            <field name="dpi">90</field>
+        </record>
     </data>
 </odoo>
