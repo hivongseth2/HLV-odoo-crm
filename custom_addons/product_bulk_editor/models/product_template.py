@@ -12,3 +12,4 @@ class ProductTemplate(models.Model):
     x_studio_ga_web = fields.Monetary(string="Giá Web")
     x_studio_gi_bn_thng_mi = fields.Monetary(string="Giá Thương Mại")
     x_studio_ga_hng_nim_yt = fields.Monetary(string="Giá Niêm Yết")
+    x_studio_gia_san_tmdt = fields.Monetary(string="Giá Sàn TMĐT")
