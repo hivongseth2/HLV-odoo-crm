@@ -107,8 +107,7 @@ class JTCreateOrderWizard(models.TransientModel):
     estimated_insurance_fee = fields.Float(string="Phí bảo hiểm dự kiến (VND)", readonly=True)
 
     # Sender Info (Editable)
-    sender_config_id = fields.Many2one("delivery.sender.address", string="Cấu hình địa chỉ gửi",
-                                      domain="[('warehouse_id', '=', warehouse_id)]")
+    sender_config_id = fields.Many2one("stock.warehouse", string="Cấu hình gửi/Kho")
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
     sender_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành gửi", ondelete='set null')
@@ -121,15 +120,19 @@ class JTCreateOrderWizard(models.TransientModel):
     @api.onchange('sender_config_id')
     def _onchange_sender_config_id(self):
         if self.sender_config_id:
-            self.sender_name = self.sender_config_id.sender_name
-            self.sender_mobile = self.sender_config_id.sender_mobile
-            self.sender_address = self.sender_config_id.sender_address
-            if self.sender_config_id.jnt_prov_id:
-                self.sender_prov_id = self.sender_config_id.jnt_prov_id
-            if self.sender_config_id.jnt_city_id:
-                self.sender_city_id = self.sender_config_id.jnt_city_id
-            if self.sender_config_id.jnt_area_id:
-                self.sender_area_id = self.sender_config_id.jnt_area_id
+            warehouse = self.sender_config_id
+            sender_partner = warehouse.partner_id or self.picking_id.company_id.partner_id
+            
+            self.sender_name = warehouse.jnt_sender_name or sender_partner.name
+            self.sender_mobile = warehouse.jnt_sender_mobile or (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0')
+            self.sender_address = warehouse.jnt_sender_address or sender_partner.street
+            
+            if warehouse.jnt_prov_id:
+                self.sender_prov_id = warehouse.jnt_prov_id
+            if warehouse.jnt_city_id:
+                self.sender_city_id = warehouse.jnt_city_id
+            if warehouse.jnt_area_id:
+                self.sender_area_id = warehouse.jnt_area_id
         else:
             # Revert to warehouse defaults if config is cleared
             warehouse = self.warehouse_id
@@ -414,6 +417,7 @@ class JTCreateOrderWizard(models.TransientModel):
 
             res.update({
                 'picking_id': picking.id,
+                'sender_config_id': warehouse.id if warehouse else False,
                 'cod_money': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 'goods_value': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 
