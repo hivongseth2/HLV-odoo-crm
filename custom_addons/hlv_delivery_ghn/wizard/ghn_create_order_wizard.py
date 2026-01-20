@@ -115,15 +115,20 @@ class GHNCreateOrderWizard(models.TransientModel):
     service_id = fields.Selection(selection='_get_service_selection', string="Dịch vụ cụ thể", required=True)
     estimated_fee = fields.Float(string="Phí dự kiến (VNĐ)", readonly=True)
     currency_id = fields.Many2one('res.currency', string='Tiền tệ', default=lambda self: self.env.company.currency_id)
-    product_html = fields.Html(compute='_compute_product_html', string="Danh sách sản phẩm")
+    product_html = fields.Html(compute='_compute_product_html', string="Danh sách sản phẩm", sanitize=False, readonly=True)
 
+    @api.depends('picking_id', 'picking_id.move_ids_without_package')
     def _compute_product_html(self):
         for rec in self:
             html = '<div class="ghn-product-list">'
             if rec.picking_id:
-                for move in rec.picking_id.move_ids_without_package:
+                # Use move_ids as fallback if move_ids_without_package is empty
+                moves = rec.picking_id.move_ids_without_package or rec.picking_id.move_ids
+                for move in moves:
+                    if not move.product_id:
+                        continue
                     product = move.product_id
-                    qty = int(move.product_uom_qty)
+                    qty = int(move.product_uom_qty or 0)
                     weight = int((product.weight or 0) * 1000) or 100
                     sku = product.default_code or 'N/A'
                     html += f'''
@@ -139,6 +144,8 @@ class GHNCreateOrderWizard(models.TransientModel):
                             </div>
                         </div>
                     '''
+            if html == '<div class="ghn-product-list">':
+                html += '<div class="text-muted p-3">Không có thông tin sản phẩm.</div>'
             html += '</div>'
             rec.product_html = html
 
