@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import fields, models, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from ..utils.jt_api_utils import JTApiUtils
 import hashlib
 import logging
@@ -139,6 +139,22 @@ class JTCreateOrderWizard(models.TransientModel):
                 html += '<div class="text-muted p-3">Không có thông tin sản phẩm.</div>'
             html += '</div>'
             rec.product_html = html
+
+    @api.onchange('goods_value')
+    def _onchange_goods_value(self):
+        if self.goods_value > 30000000:
+            return {
+                'warning': {
+                    'title': "Cảnh báo giá trị hàng hóa",
+                    'message': "J&T Express giới hạn giá trị hàng hóa tối đa là 30,000,000 VNĐ. Vui lòng kiểm tra lại."
+                }
+            }
+
+    @api.constrains('goods_value')
+    def _check_goods_value(self):
+        for rec in self:
+            if rec.is_insured and rec.goods_value > 30000000:
+                raise ValidationError("J&T Express không nhận đơn hàng có giá trị vượt quá 30,000,000 VNĐ.")
 
     # Sender Info (Editable)
     sender_config_id = fields.Many2one("stock.warehouse", string="Cấu hình gửi/Kho")

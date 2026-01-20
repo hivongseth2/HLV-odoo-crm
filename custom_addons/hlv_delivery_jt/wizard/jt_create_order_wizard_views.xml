@@ -84,6 +84,7 @@
                             <div class="jt-card jt-flex-item">
                                 <div class="jt-header">1. Thông tin người gửi</div>
                                 <group>
+                                    <field name="picking_id" readonly="1" force_save="1"/>
                                     <field name="sender_config_id" options="{'no_create': True}"/>
                                     <field name="sender_name"/>
                                     <field name="sender_mobile"/>
@@ -140,9 +141,20 @@
                                     <field name="cod_money"/>
                                     <field name="is_insured"/>
                                     <field name="goods_value" invisible="not is_insured"/>
-                                    <div class="o_row">
-                                        <span class="text-muted">Phí dự kiến: </span>
+                                    <div invisible="not is_insured" class="alert alert-warning p-2 mt-1" role="alert">
+                                        <i class="fa fa-info-circle mr-1"/> Giới hạn giá trị hàng hóa: 30,000,000 VNĐ
+                                    </div>
+                                    <div class="o_row mt-3">
+                                        <span class="text-muted">Tổng phí: </span>
                                         <field name="estimated_fee" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                                    </div>
+                                    <div class="o_row">
+                                        <span class="text-muted">Phí COD: </span>
+                                        <field name="estimated_cod_fee" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                                    </div>
+                                    <div class="o_row">
+                                        <span class="text-muted">Phí bảo hiểm: </span>
+                                        <field name="estimated_insurance_fee" widget="monetary" options="{'currency_field': 'currency_id'}"/>
                                     </div>
                                 </group>
                             </div>
@@ -156,24 +168,27 @@
                                     <field name="part_sign"/>
                                     <field name="remark" placeholder="Ghi chú tổng hợp cho driver..."/>
                                 </group>
-                                <group string="Các tùy chọn nhanh">
+                                <group string="Tùy chọn nhanh">
                                     <field name="note_thu_hang"/>
                                     <field name="note_xem_hang_khong_thu"/>
                                     <field name="note_de_vo"/>
                                     <field name="note_khong_cho_xem"/>
                                 </group>
                             </group>
-                            <group invisible="1">
-                                <field name="note_giao_hang_mot_phan"/>
-                                <field name="note_khong_giao_duoc_lh"/>
-                                <field name="note_goi_dien_truoc_khi_giao"/>
-                                <field name="note_giao_gio_hanh_chinh"/>
-                                <field name="note_khac"/>
-                                <field name="note_khac_input" invisible="not note_khac"/>
+                            <group string="Tùy chọn bổ sung">
+                                <group>
+                                    <field name="note_giao_hang_mot_phan"/>
+                                    <field name="note_khong_giao_duoc_lh"/>
+                                    <field name="note_goi_dien_truoc_khi_giao"/>
+                                </group>
+                                <group>
+                                    <field name="note_giao_gio_hanh_chinh"/>
+                                    <field name="note_khac"/>
+                                    <field name="note_khac_input" invisible="not note_khac" required="note_khac"/>
+                                </group>
                             </group>
                         </div>
                     </div>
-                    <field name="picking_id" invisible="1"/>
                 </sheet>
                 <footer>
                     <button name="action_create_jt_order" type="object" string="Xác nhận &amp; Tạo đơn J&amp;T" class="btn-primary"/>
