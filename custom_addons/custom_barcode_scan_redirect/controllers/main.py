@@ -446,9 +446,16 @@ class CustomBarcodeScanController(http.Controller):
                 target_ml = None
 
         if target_ml:
-            # [SMART-REDIRECT-2024-V3] Logic chuyển hướng cực mạnh
-            # Nếu FE gửi lên line_id là hàng lẻ, ta tìm kiếm kiện hàng phù hợp trên TOÀN BỘ phiếu
-            if not (target_ml.result_package_id or target_ml.package_id):
+            # [SMART-REDIRECT-2024-V3.3] Logic lấp đầy cân bằng
+            # Cho phép Redirect ngay cả khi target_ml đã gắn package 
+            # (Nếu kiện hiện tại có Reserved=0 và đã có hàng, ưu tiên nhảy sang kiện rỗng khác)
+            is_target_packed = target_ml.result_package_id or target_ml.package_id
+            target_res = getattr(target_ml, 'reserved_qty', 0) or getattr(target_ml, 'reserved_uom_qty', 0) or 0
+            
+            # Chỉ redirect nếu: 
+            # 1. Target là hàng lẻ
+            # 2. HOẶC Target là package nhưng không có giới hạn (Reserved=0) và đã có hàng (Done > 0)
+            if not is_target_packed or (target_res == 0 and target_ml.qty_done > 0):
                 # Tìm tất cả move lines của sản phẩm này có gắn package (nguồn hoặc đích)
                 all_product_mls = picking.move_line_ids.filtered(
                     lambda l: l.product_id.id == target_ml.product_id.id and (l.result_package_id or l.package_id)
