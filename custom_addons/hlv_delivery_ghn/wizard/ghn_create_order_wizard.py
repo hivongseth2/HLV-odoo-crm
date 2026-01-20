@@ -114,6 +114,33 @@ class GHNCreateOrderWizard(models.TransientModel):
     
     service_id = fields.Selection(selection='_get_service_selection', string="Dịch vụ cụ thể", required=True)
     estimated_fee = fields.Float(string="Phí dự kiến (VNĐ)", readonly=True)
+    currency_id = fields.Many2one('res.currency', string='Tiền tệ', default=lambda self: self.env.company.currency_id)
+    product_html = fields.Html(compute='_compute_product_html', string="Danh sách sản phẩm")
+
+    def _compute_product_html(self):
+        for rec in self:
+            html = '<div class="ghn-product-list">'
+            if rec.picking_id:
+                for move in rec.picking_id.move_ids_without_package:
+                    product = move.product_id
+                    qty = int(move.product_uom_qty)
+                    weight = int((product.weight or 0) * 1000) or 100
+                    sku = product.default_code or 'N/A'
+                    html += f'''
+                        <div class="ghn-product-item">
+                            <div class="ghn-product-icon">📦</div>
+                            <div class="ghn-product-details">
+                                <div class="ghn-product-name"><b>{product.name}</b></div>
+                                <div class="ghn-product-meta">
+                                    <span>KL (gram): {weight}</span>
+                                    <span>Số lượng: {qty}</span>
+                                </div>
+                                <div class="ghn-product-sku">Mã SP: {sku}</div>
+                            </div>
+                        </div>
+                    '''
+            html += '</div>'
+            rec.product_html = html
 
     def _get_service_selection(self):
         """Fetch available services from GHN based on districts."""
