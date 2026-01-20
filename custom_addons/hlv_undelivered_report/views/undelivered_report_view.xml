@@ -32,8 +32,9 @@
                 <field name="product_id"/>
                 <field name="order_id"/>
                 <field name="picking_id"/>
-                <filter string="Sẵn sàng" name="ready" domain="[('state', '=', 'assigned')]"/>
-                <filter string="Đang chờ" name="waiting" domain="[('state', 'in', ('confirmed', 'waiting'))]"/>
+                <filter string="Chưa lấy hàng" name="not_picked" domain="[('state', 'in', ('confirmed', 'waiting', 'draft'))]"/>
+                <filter string="Đã lấy hàng" name="picked" domain="[('state', '=', 'assigned')]"/>
+                <separator/>
                 <group expand="1" string="Nhóm theo">
                     <filter string="Khách hàng" name="groupby_partner" context="{'group_by': 'partner_id'}"/>
                     <filter string="Sản phẩm" name="groupby_product" context="{'group_by': 'product_id'}"/>
