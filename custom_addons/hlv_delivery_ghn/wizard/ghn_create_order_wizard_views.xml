@@ -9,6 +9,20 @@
                     <div class="alert alert-info" role="alert" invisible="not ghn_order_code">
                         Đang ở chế độ CẬP NHẬT đơn hàng đã có trên GHN.
                     </div>
+                    <group string="Thông tin người gửi">
+                        <group>
+                            <field name="sender_config_id" string="Kho gửi hàng" options="{'no_create': True}"/>
+                            <field name="sender_name"/>
+                            <field name="sender_phone"/>
+                        </group>
+                        <group>
+                            <field name="sender_address"/>
+                            <field name="sender_province_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="sender_district_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="sender_ward_id" options="{'no_create': True, 'no_open': True}"/>
+                            <field name="ghn_shop_id"/>
+                        </group>
+                    </group>
                     <group>
                         <group string="Người nhận">
                             <field name="ghn_order_code" readonly="1" invisible="not ghn_order_code"/>

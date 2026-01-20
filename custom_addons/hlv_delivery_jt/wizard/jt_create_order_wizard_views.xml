@@ -20,11 +20,29 @@
                             <field name="cod_money"/>
                             <field name="is_insured"/>
                             <field name="goods_value" invisible="not is_insured" required="is_insured"/>
-                            <field name="remark"/>
+                            <field name="part_sign"/>
+                            <field name="remark" placeholder="Ghi chú tổng hợp..."/>
+                        </group>
+                    </group>
+                    <group string="Mẫu ghi chú">
+                        <group>
+                            <field name="note_thu_hang"/>
+                            <field name="note_xem_hang_khong_thu"/>
+                            <field name="note_de_vo"/>
+                            <field name="note_giao_hang_mot_phan"/>
+                            <field name="note_khong_giao_duoc_lh"/>
+                        </group>
+                        <group>
+                            <field name="note_goi_dien_truoc_khi_giao"/>
+                            <field name="note_giao_gio_hanh_chinh"/>
+                            <field name="note_khong_cho_xem"/>
+                            <field name="note_khac"/>
+                            <field name="note_khac_input" invisible="not note_khac" required="note_khac"/>
                         </group>
                     </group>
                     <group>
                         <group string="Người gửi (Kho/Cửa hàng)">
+                            <field name="sender_config_id" string="Kho gửi hàng" options="{'no_create': True}"/>
                             <field name="sender_name"/>
                             <field name="sender_mobile"/>
                             <field name="sender_prov_id" options="{'no_open': True, 'no_create': True}"/>

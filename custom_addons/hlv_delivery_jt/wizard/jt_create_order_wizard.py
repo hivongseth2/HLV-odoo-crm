@@ -12,6 +12,7 @@ class JTCreateOrderWizard(models.TransientModel):
     _description = "J&T Create Order Wizard"
 
     picking_id = fields.Many2one('stock.picking', string="Picking", required=True)
+    warehouse_id = fields.Many2one('stock.warehouse', string="Kho hàng", related='picking_id.picking_type_id.warehouse_id', readonly=True)
     
     # J&T Specific Fields
     order_type = fields.Selection([
@@ -20,8 +21,8 @@ class JTCreateOrderWizard(models.TransientModel):
     ], string="Loại đơn đặt", default='1', required=True)
     
     service_type = fields.Selection([
-        ('1', 'Pickup'),
-        ('6', 'Drop off')
+        ('1', 'Lấy hàng tận nơi (Pickup)'),
+        ('6', 'Gửi hàng tại bưu cục (Drop off)')
     ], string="Loại dịch vụ", default='1', required=True)
     
     pay_type = fields.Selection([
@@ -37,10 +38,10 @@ class JTCreateOrderWizard(models.TransientModel):
     ], string="Loại hàng hóa (Dịch vụ)", default='EXPRESS', required=True)
     
     goods_type = fields.Selection([
-        ('bm000001', 'Document (bm000001)'),
-        ('bm000010', 'Goods (bm000010)'),
-        ('bm000011', 'Fresh (bm000011)')
-    ], string="Loat hàng hóa", default='bm000010', required=True)
+        ('bm000001', 'Tài liệu (bm000001)'),
+        ('bm000010', 'Hàng hóa (bm000010)'),
+        ('bm000011', 'Đồ tươi sống (bm000011)')
+    ], string="Loại hàng hóa", default='bm000010', required=True)
 
     delivery_type = fields.Selection([
         ('1', 'Phát bình thường'),
@@ -51,6 +52,48 @@ class JTCreateOrderWizard(models.TransientModel):
     goods_value = fields.Float(string="Giá trị hàng hóa (VND)")
     cod_money = fields.Float(string="Tiền thu hộ (COD)")
     remark = fields.Text(string="Ghi chú")
+
+    part_sign = fields.Boolean(string="Ký nhận một phần?", help="0: ký nhận toàn phần, 1: ký nhận một phần")
+
+    # Note Checkboxes
+    note_thu_hang = fields.Boolean(string="Cho khách thử hàng")
+    note_xem_hang_khong_thu = fields.Boolean(string="Cho khách xem hàng, không cho thử")
+    note_de_vo = fields.Boolean(string="Hàng dễ vỡ, vui lòng nhẹ tay")
+    note_giao_hang_mot_phan = fields.Boolean(string="Giao hàng một phần, nhận lại sản phẩm từ khách")
+    note_khong_giao_duoc_lh = fields.Boolean(string="Không giao được liên hệ SĐT shop, không tự ý hủy đơn")
+    note_goi_dien_truoc_khi_giao = fields.Boolean(string="Gọi điện thoại cho khách trước khi giao")
+    note_giao_gio_hanh_chinh = fields.Boolean(string="Giao hàng vào giờ hành chính")
+    note_khong_cho_xem = fields.Boolean(string="Không cho xem hàng")
+    note_khac = fields.Boolean(string="Khác")
+    note_khac_input = fields.Char(string="Nội dung khác")
+
+    @api.onchange('note_thu_hang', 'note_xem_hang_khong_thu', 'note_de_vo', 
+                 'note_giao_hang_mot_phan', 'note_khong_giao_duoc_lh', 
+                 'note_goi_dien_truoc_khi_giao', 'note_giao_gio_hanh_chinh', 
+                 'note_khong_cho_xem', 'note_khac', 'note_khac_input')
+    def _onchange_note_selections(self):
+        notes = []
+        if self.note_thu_hang:
+            notes.append("Cho khách thử hàng")
+        if self.note_xem_hang_khong_thu:
+            notes.append("Cho khách xem hàng, không cho thử")
+        if self.note_de_vo:
+            notes.append("Hàng dễ vỡ, vui lòng nhẹ tay")
+        if self.note_giao_hang_mot_phan:
+            notes.append("Giao hàng một phần, nhận lại sản phẩm từ khách")
+        if self.note_khong_giao_duoc_lh:
+            notes.append("Không giao được liên hệ SĐT shop, không tự ý hủy đơn")
+        if self.note_goi_dien_truoc_khi_giao:
+            notes.append("Gọi điện thoại cho khách trước khi giao")
+        if self.note_giao_gio_hanh_chinh:
+            notes.append("Giao hàng vào giờ hành chính")
+        if self.note_khong_cho_xem:
+            notes.append("Không cho xem hàng")
+        
+        if self.note_khac and self.note_khac_input:
+            notes.append(self.note_khac_input)
+            
+        self.remark = ", ".join(notes)
 
     # Weight and Dimensions
     weight = fields.Float(string="Trọng lượng (kg)", default=0.1)
@@ -64,6 +107,7 @@ class JTCreateOrderWizard(models.TransientModel):
     estimated_insurance_fee = fields.Float(string="Phí bảo hiểm dự kiến (VND)", readonly=True)
 
     # Sender Info (Editable)
+    sender_config_id = fields.Many2one("stock.warehouse", string="Cấu hình gửi/Kho")
     sender_name = fields.Char(string="Tên người gửi", required=True)
     sender_mobile = fields.Char(string="SĐT người gửi", required=True)
     sender_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành gửi", ondelete='set null')
@@ -72,6 +116,34 @@ class JTCreateOrderWizard(models.TransientModel):
     sender_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi", ondelete='set null',
                                     domain="[('district_id', '=', sender_city_id)]")
     sender_address = fields.Char(string="Địa chỉ gửi", required=True)
+
+    @api.onchange('sender_config_id')
+    def _onchange_sender_config_id(self):
+        if self.sender_config_id:
+            warehouse = self.sender_config_id
+            sender_partner = warehouse.partner_id or self.picking_id.company_id.partner_id
+            
+            self.sender_name = warehouse.jnt_sender_name or sender_partner.name
+            self.sender_mobile = warehouse.jnt_sender_mobile or (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0')
+            self.sender_address = warehouse.jnt_sender_address or sender_partner.street
+            
+            if warehouse.jnt_prov_id:
+                self.sender_prov_id = warehouse.jnt_prov_id
+            if warehouse.jnt_city_id:
+                self.sender_city_id = warehouse.jnt_city_id
+            if warehouse.jnt_area_id:
+                self.sender_area_id = warehouse.jnt_area_id
+        else:
+            # Revert to warehouse defaults if config is cleared
+            warehouse = self.warehouse_id
+            if warehouse:
+                sender_partner = warehouse.partner_id or self.picking_id.company_id.partner_id
+                self.sender_name = warehouse.jnt_sender_name or sender_partner.name
+                self.sender_mobile = warehouse.jnt_sender_mobile or (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0')
+                self.sender_address = warehouse.jnt_sender_address or sender_partner.street
+                self.sender_prov_id = warehouse.jnt_prov_id
+                self.sender_city_id = warehouse.jnt_city_id
+                self.sender_area_id = warehouse.jnt_area_id
 
     @api.onchange('sender_prov_id')
     def _onchange_sender_prov_id(self):
@@ -323,23 +395,38 @@ class JTCreateOrderWizard(models.TransientModel):
             r_p, r_d, r_w = get_jnt_ids(r_prov_name, r_dist_name, r_ward_name)
 
             # Sender Address from Company/Warehouse
+            s_name = sender_partner.name or ''
+            s_mobile = (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0')
+            s_address = sender_partner.street or ''
+            
             s_prov_name = sender_partner.state_id.name or ''
             s_dist_name = sender_partner.city or ''
             s_ward_name = sender_partner.street2 or ''
             
             s_p, s_d, s_w = get_jnt_ids(s_prov_name, s_dist_name, s_ward_name)
 
+            # Override with Warehouse J&T specific fields if set
+            if warehouse:
+                if warehouse.jnt_sender_name: s_name = warehouse.jnt_sender_name
+                if warehouse.jnt_sender_mobile: s_mobile = warehouse.jnt_sender_mobile
+                if warehouse.jnt_sender_address: s_address = warehouse.jnt_sender_address
+                
+                if warehouse.jnt_prov_id: s_p = warehouse.jnt_prov_id.id
+                if warehouse.jnt_city_id: s_d = warehouse.jnt_city_id.id
+                if warehouse.jnt_area_id: s_w = warehouse.jnt_area_id.id
+
             res.update({
                 'picking_id': picking.id,
+                'sender_config_id': warehouse.id if warehouse else False,
                 'cod_money': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 'goods_value': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 
-                'sender_name': sender_partner.name or '',
-                'sender_mobile': (sender_partner.mobile or sender_partner.phone or '').replace(' ', '').replace('+84', '0'),
+                'sender_name': s_name,
+                'sender_mobile': s_mobile,
                 'sender_prov_id': s_p,
                 'sender_city_id': s_d,
                 'sender_area_id': s_w,
-                'sender_address': sender_partner.street or '',
+                'sender_address': s_address,
 
                 'receiver_name': receiver_partner.name or '',
                 'receiver_mobile': (receiver_partner.mobile or receiver_partner.phone or '').replace(' ', '').replace('+84', '0'),
@@ -456,6 +543,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "address": sanitize_address(self.receiver_address)
             },
             "payType": self.pay_type,
+            "partSign": "1" if self.part_sign else "0",
             "goodsValue": goods_val_str,
             "codMoney": cod_money_str,
             "remark": self.remark or "",
