@@ -20,7 +20,7 @@
                             <field name="sender_province_id" options="{'no_create': True, 'no_open': True}"/>
                             <field name="sender_district_id" options="{'no_create': True, 'no_open': True}"/>
                             <field name="sender_ward_id" options="{'no_create': True, 'no_open': True}"/>
-                            <field name="ghn_shop_id"/>
+                            <field name="ghn_shop_id" string="Mã Cửa hàng (Shop ID)" options="{'no_create': True}"/>
                         </group>
                     </group>
                     <group>

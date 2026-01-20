@@ -59,6 +59,15 @@ class JTApiUtils:
             'timestamp': str(timestamp)
         }
 
+        # Secure logging for diagnostics
+        safe_headers = headers.copy()
+        if 'digest' in safe_headers:
+            val = safe_headers['digest']
+            safe_headers['digest'] = f"{val[:5]}...{val[-5:]}" if len(val) > 10 else "***"
+        
+        _logger.info("J&T API Request | URL: %s | Headers: %s", url, safe_headers)
+        _logger.debug("J&T API Payload: %s", biz_content)
+
         payload = {
             'bizContent': biz_content
         }
