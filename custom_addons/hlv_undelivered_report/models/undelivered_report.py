@@ -17,6 +17,7 @@ class HlvUndeliveredReport(models.Model):
     product_uom = fields.Many2one('uom.uom', 'Đơn vị tính', readonly=True)
     
     product_uom_qty = fields.Float('Nhu cầu', readonly=True)
+    original_demand = fields.Float('Nhu cầu gốc (SO)', readonly=True)
     qty_reserved = fields.Float('Đã giữ', readonly=True)
     qty_delivered_line = fields.Float('Đã giao (Dòng)', readonly=True, help="Tổng số lượng đã giao cho dòng đơn hàng này")
     
@@ -57,6 +58,7 @@ class HlvUndeliveredReport(models.Model):
                     sm.product_id,
                     sm.product_uom,
                     sm.product_uom_qty,
+                    sol.product_uom_qty as original_demand,
                     COALESCE((SELECT SUM(sml.quantity) FROM stock_move_line sml WHERE sml.move_id = sm.id), 0.0) as qty_reserved,
                     sol.qty_delivered as qty_delivered_line,
                     sm.state as state,
