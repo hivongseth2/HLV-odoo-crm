@@ -102,24 +102,21 @@ class StockPicking(models.Model):
 
     def read(self, fields=None, load='_classic_read'):
         """
-        Override read để đảm bảo location_id hiển thị đúng cho phiếu transit.
-        Nếu phát hiện sai, tự động fix DB luôn.
+        Override read để tự động fix location_id trong DB cho phiếu transit bước 2.
+        Chỉ fix DB, không modify result để tránh format issues.
         """
-        result = super().read(fields=fields, load=load)
-        
-        # Duyệt qua từng record trong result
-        for res in result:
-            picking_id = res.get('id')
-            if not picking_id:
+        # Trước khi read, kiểm tra và fix DB nếu cần
+        for picking in self:
+            if not picking.id:
                 continue
-                
-            # Check trực tiếp từ DB xem phiếu có source_transfer_id không
+            
+            # Check trực tiếp từ DB
             self.env.cr.execute("""
                 SELECT sp.source_transfer_id, sp.location_id, sp_src.location_dest_id
                 FROM stock_picking sp
                 LEFT JOIN stock_picking sp_src ON sp.source_transfer_id = sp_src.id
                 WHERE sp.id = %s
-            """, (picking_id,))
+            """, (picking.id,))
             db_row = self.env.cr.fetchone()
             
             if db_row and db_row[0]:  # Có source_transfer_id
@@ -127,29 +124,29 @@ class StockPicking(models.Model):
                 db_location_id = db_row[1]
                 correct_location_id = db_row[2]  # location_dest_id của phiếu nguồn = Transit
                 
-                _logger.warning(f"READ: Phiếu {picking_id}, source_transfer_id={source_transfer_id}, current location_id={db_location_id}, correct should be={correct_location_id}")
-                
-                # Nếu location_id hiện tại KHÔNG PHẢI là location đúng (transit từ phiếu nguồn)
+                # Nếu location_id hiện tại KHÔNG PHẢI là location đúng
                 if correct_location_id and db_location_id != correct_location_id:
-                    _logger.warning(f"READ AUTO-FIX: Sửa location_id từ {db_location_id} về {correct_location_id}")
+                    _logger.warning(f"READ AUTO-FIX: Phiếu {picking.id}, sửa location_id từ {db_location_id} về {correct_location_id}")
                     
                     # Auto-fix DB
                     self.env.cr.execute("""
                         UPDATE stock_picking SET location_id = %s WHERE id = %s
-                    """, (correct_location_id, picking_id))
+                    """, (correct_location_id, picking.id))
                     self.env.cr.execute("""
                         UPDATE stock_move SET location_id = %s WHERE picking_id = %s
-                    """, (correct_location_id, picking_id))
+                    """, (correct_location_id, picking.id))
                     self.env.cr.execute("""
                         UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
-                    """, (correct_location_id, picking_id))
+                    """, (correct_location_id, picking.id))
                     
-                    # Update result để hiển thị đúng
-                    correct_location = self.env['stock.location'].browse(correct_location_id)
-                    res['location_id'] = (correct_location_id, correct_location.display_name)
-                    _logger.warning(f"READ AUTO-FIX: Đã sửa DB và result cho phiếu {picking_id}")
+                    # Invalidate cache để Odoo đọc lại từ DB
+                    picking.invalidate_recordset(['location_id'])
+                    picking.move_ids.invalidate_recordset(['location_id'])
+                    if picking.move_line_ids:
+                        picking.move_line_ids.invalidate_recordset(['location_id'])
         
-        return result
+        # Gọi super để Odoo đọc từ DB đã được fix
+        return super().read(fields=fields, load=load)
 
     # ---------------- Helper ----------------
     def _is_inter_warehouse_transit(self, location):
