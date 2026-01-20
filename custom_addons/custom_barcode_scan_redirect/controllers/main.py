@@ -482,23 +482,29 @@ class CustomBarcodeScanController(http.Controller):
                     _logger.info(f"REDIRECT V3 EXECUTE: Loose ML {target_ml.id} -> Package ML {candidate.id}")
                     target_ml = candidate
 
-            is_packed = target_ml.sudo().result_package_id
             if delta > 0:
-                # [FIX-2024] Kiểm tra nếu dòng trong pack VẪN CÒN CHỖ (qty_done < reserved)
+                # [FIX-2024] Kiểm tra nếu dòng trong pack VẪN CÒN CHỖ
+                # Nếu reserved_qty = 0 (trường hợp pre-configured từ PICK), ta coi như chưa giới hạn chỗ trong pack
+                # nhưng vẫn phải tôn trọng tổng demand của Move.
                 mv = target_ml.move_id
                 mv_done = sum(l.qty_done for l in mv.move_line_ids)
                 
                 # Check reserved qty của chính line này
                 reserved_qty = getattr(target_ml, 'reserved_qty', 0) or getattr(target_ml, 'reserved_uom_qty', 0) or getattr(target_ml, 'product_uom_qty', 0) or 0
                 
+                # Cả package_id (từ PICK) và result_package_id (đóng gói mới) đều được coi là "hàng trong pack"
+                is_packed = target_ml.result_package_id or target_ml.package_id
+                
                 if mv_done >= mv.product_uom_qty:
-                    _logger.info(f"Target line {target_ml.id} belongs to FULL Move {mv.id}. Switching to find another.")
+                    _logger.info(f"Target line {target_ml.id} belongs to FULL Move {mv.id} ({mv_done}/{mv.product_uom_qty}). Switching to find another.")
                     target_ml = None
-                elif is_packed and target_ml.qty_done >= reserved_qty:
-                    _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) and FULL. Skipping.")
+                elif is_packed and reserved_qty > 0 and target_ml.qty_done >= reserved_qty:
+                    # Chỉ coi là FULL nếu có đặt reservation (>0) và đã đạt mức đó.
+                    # Nếu reservation = 0, ta cho phép điền vào (vì logic Redirect đã chọn nó làm ứng viên).
+                    _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) and reaches Reserved Qty ({reserved_qty}). Skipping.")
                     target_ml = None
                 else:
-                    _logger.info(f"Target line {target_ml.id} is valid (Space: {target_ml.qty_done}/{reserved_qty}). Keeping it.")
+                    _logger.info(f"Target line {target_ml.id} is valid (Space: {target_ml.qty_done}/{reserved_qty} | Move: {mv_done}/{mv.product_uom_qty}). Keeping it.")
 
         # Nếu chưa xác định được target_ml (do line_id null hoặc sai hoặc đã bị packed), tự động tìm dòng phù hợp
         if not target_ml:
