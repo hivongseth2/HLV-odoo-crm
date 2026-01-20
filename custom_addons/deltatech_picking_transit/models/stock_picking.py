@@ -61,6 +61,45 @@ class StockPicking(models.Model):
         
         return result
 
+    # ---------------- Override write để bảo vệ location_id ----------------
+    def write(self, vals):
+        """
+        Override write để ngăn việc ghi đè location_id khi phiếu là bước 2 của transit transfer.
+        Nếu location_id bị thay đổi từ transit sang non-transit, sẽ restore lại.
+        """
+        for picking in self:
+            # Chỉ bảo vệ phiếu có source_transfer_id (phiếu bước 2)
+            if picking.source_transfer_id and 'location_id' in vals:
+                current_location = picking.location_id
+                new_location_id = vals.get('location_id')
+                
+                # Nếu location hiện tại là transit và đang bị thay đổi
+                if current_location and current_location.usage == 'transit':
+                    new_location = self.env['stock.location'].browse(new_location_id) if new_location_id else False
+                    
+                    # Nếu location mới KHÔNG phải transit, ngăn việc thay đổi
+                    if new_location and new_location.usage != 'transit':
+                        _logger.warning(f"WRITE PROTECTION: Ngăn thay đổi location_id từ Transit ({current_location.id}) sang {new_location.id}")
+                        # Xóa location_id khỏi vals để không ghi đè
+                        vals = dict(vals)  # Copy để không ảnh hưởng original
+                        del vals['location_id']
+        
+        return super().write(vals)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        """
+        Override create để đảm bảo location_id được set đúng cho phiếu có source_transfer_id.
+        """
+        result = super().create(vals_list)
+        
+        # Sau khi tạo, kiểm tra và log
+        for picking in result:
+            if picking.source_transfer_id:
+                _logger.warning(f"CREATE: Phiếu {picking.name} có source_transfer_id={picking.source_transfer_id.id}, location_id={picking.location_id.id}")
+        
+        return result
+
     # ---------------- Helper ----------------
     def _is_inter_warehouse_transit(self, location):
         """Chỉ nhận 'Physical Locations/Inter-warehouse transit'.
