@@ -446,9 +446,8 @@ class CustomBarcodeScanController(http.Controller):
                 target_ml = None
 
         if target_ml:
-            # [SMART-REDIRECT-2024-V3.3] Logic lấp đầy cân bằng
+            # [SMART-REDIRECT-2024-V3.4] Logic lấp đầy toàn diện (Universal Balanced)
             # Cho phép Redirect ngay cả khi target_ml đã gắn package 
-            # (Nếu kiện hiện tại có Reserved=0 và đã có hàng, ưu tiên nhảy sang kiện rỗng khác)
             is_target_packed = target_ml.result_package_id or target_ml.package_id
             target_res = getattr(target_ml, 'reserved_qty', 0) or getattr(target_ml, 'reserved_uom_qty', 0) or 0
             
@@ -456,44 +455,51 @@ class CustomBarcodeScanController(http.Controller):
             # 1. Target là hàng lẻ
             # 2. HOẶC Target là package nhưng không có giới hạn (Reserved=0) và đã có hàng (Done > 0)
             if not is_target_packed or (target_res == 0 and target_ml.qty_done > 0):
-                # Tìm tất cả move lines của sản phẩm này có gắn package (nguồn hoặc đích)
+                # Tìm TẤT CẢ move lines của sản phẩm này (bao gồm cả LOOSE LINES và PACKAGE LINES)
                 all_product_mls = picking.move_line_ids.filtered(
-                    lambda l: l.product_id.id == target_ml.product_id.id and (l.result_package_id or l.package_id)
+                    lambda l: l.product_id.id == target_ml.product_id.id
                 )
                 
-                # Thứ tự ưu tiên V3.2:
-                # 1. Dòng package CÒN CHỖ (qty_done < reserved_qty) -> Để lấp đầy theo kế hoạch
-                # 2. Dòng package RỖNG (qty_done == 0) -> Để phân bổ đều ra các kiện định sẵn
+                # Thứ tự ưu tiên V3.4:
+                # 1. Dòng PACKAGE còn chỗ (qty_done < reserved)
+                # 2. Dòng PACKAGE rỗng (qty_done == 0)
+                # 3. Dòng HÀNG LẺ (Loose) còn chỗ hoặc rỗng
                 
-                # Sắp xếp các dòng package:
-                # - Ưu tiên dòng có package_id (từ PICK) lên trước.
-                # - Tiếp theo là các dòng có reserved_qty > 0.
-                sorted_pkg_mls = all_product_mls.sorted(key=lambda l: (
-                    bool(l.package_id), 
-                    (getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or 0) > 0,
-                    l.id
-                ), reverse=True)
+                # Sắp xếp các dòng để tìm ứng viên tốt nhất:
+                # - Ưu tiên hàng có GẮN PACKAGE (package_id hoặc result_package_id) trước hàng lẻ
+                # - Ưu tiên dòng có RESERVED_QTY > 0
+                # - Ưu tiên dòng rỗng DONE == 0
+                def get_prio(l):
+                    is_pkg = bool(l.package_id or l.result_package_id)
+                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or 0
+                    is_empty = (l.qty_done == 0)
+                    # Trả về tuple (is_pkg, res_exists, is_empty, id) để sort
+                    return (is_pkg, res > 0, is_empty, -l.id)
+
+                sorted_mls = sorted(all_product_mls, key=get_prio, reverse=True)
                 
                 candidate = None
-                # Bước 1: Tìm dòng CÒN CHỖ (theo Reserved Qty)
-                for l in sorted_pkg_mls:
-                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or getattr(l, 'product_uom_qty', 0) or 0
-                    if l.qty_done < res and res > 0:
-                        candidate = l
-                        _logger.info(f"REDIRECT V3.2 FOUND (Space): ML {l.id} | Space {l.qty_done}/{res} | Package: {l.package_id.name or l.result_package_id.name}")
-                        break
-                
-                # Bước 2: Nếu không thấy dòng "còn chỗ", tìm dòng RỖNG (Done == 0)
-                # Điều này cực kỳ quan trọng khi Reserved = 0 cho tất cả các kiện.
-                if not candidate:
-                    for l in sorted_pkg_mls:
-                        if l.qty_done == 0:
+                # Bước 1: Tìm dòng PACKAGE còn chỗ hoặc rỗng
+                for l in sorted_mls:
+                    is_pkg = bool(l.package_id or l.result_package_id)
+                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or 0
+                    if is_pkg:
+                        if (res > 0 and l.qty_done < res) or (res == 0 and l.qty_done == 0):
                             candidate = l
-                            _logger.info(f"REDIRECT V3.2 FOUND (Filling Empty): ML {l.id} | Package: {l.package_id.name or l.result_package_id.name}")
+                            _logger.info(f"REDIRECT V3.4 FOUND (Package Match): ML {l.id} | Package: {l.package_id.name or l.result_package_id.name}")
                             break
                 
+                # Bước 2: Nếu các kiện đã "tạm đủ" (mỗi kiện ít nhất 1 cái), tìm dòng HÀNG LẺ
+                if not candidate:
+                    for l in sorted_mls:
+                        is_pkg = bool(l.package_id or l.result_package_id)
+                        if not is_pkg: # Hàng lẻ
+                             candidate = l
+                             _logger.info(f"REDIRECT V3.4 FOUND (Loose Line Match): ML {l.id} | No Package")
+                             break
+                
                 if candidate:
-                    _logger.info(f"REDIRECT V3.2 EXECUTE: Loose ML {target_ml.id} -> Package ML {candidate.id}")
+                    _logger.info(f"REDIRECT V3.4 EXECUTE: ML {target_ml.id} -> ML {candidate.id}")
                     target_ml = candidate
 
             if delta > 0:
