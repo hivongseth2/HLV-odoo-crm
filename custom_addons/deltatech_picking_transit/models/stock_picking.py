@@ -220,29 +220,13 @@ class StockPicking(models.Model):
                 """, (original_src_location.id if original_src_location else None, picking_type_id.id))
                 picking_type_id.invalidate_recordset(['default_location_src_id'])
                 
-                # Đảm bảo chắc chắn location_id của picking là transit
-                _logger.warning(f"EXECUTING SQL UPDATE với transit_location.id = {transit_location.id}")
+                # đánh dấu để tránh tự đẻ thêm - SỬ DỤNG SQL ĐỂ TRÁNH TRIGGER ONCHANGE
                 self.env.cr.execute("""
-                    UPDATE stock_picking SET location_id = %s WHERE id = %s
-                """, (transit_location.id, new_picking.id))
+                    UPDATE stock_picking SET second_transfer_created = TRUE WHERE id = %s
+                """, (new_picking.id,))
                 self.env.cr.execute("""
-                    UPDATE stock_move SET location_id = %s WHERE picking_id = %s
-                """, (transit_location.id, new_picking.id))
-                self.env.cr.execute("""
-                    UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
-                """, (transit_location.id, new_picking.id))
-                
-                new_picking.invalidate_recordset(['location_id'])
-                new_picking.move_ids.invalidate_recordset(['location_id'])
-                if new_picking.move_line_ids:
-                    new_picking.move_line_ids.invalidate_recordset(['location_id'])
-                
-                _logger.warning(f"New picking location_id AFTER SQL UPDATE: {new_picking.location_id.id} - {new_picking.location_id.complete_name}")
-                _logger.warning("TRANSIT TRANSFER DEBUG - KẾT THÚC")
-                _logger.warning("="*50)
-                # đánh dấu để tránh tự đẻ thêm
-                new_picking.second_transfer_created = True
-                self.second_transfer_created = True
+                    UPDATE stock_picking SET second_transfer_created = TRUE WHERE id = %s
+                """, (picking.id,))
 
                 origin_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
                     picking.id, picking.name
@@ -267,6 +251,28 @@ class StockPicking(models.Model):
                 # Đồng bộ Liên hệ giữa 2 phiếu theo kho
                 picking.write({"partner_id": picking_type_id.warehouse_id.partner_id.id})
                 new_picking.write({"partner_id": picking.picking_type_id.warehouse_id.partner_id.id})
+                
+                # ========= FINAL FIX: SQL UPDATE Ở CUỐI CÙNG =========
+                # Đặt SAU tất cả write operations để tránh bị onchange ghi đè
+                _logger.warning(f"FINAL SQL UPDATE với transit_location.id = {transit_location.id}")
+                self.env.cr.execute("""
+                    UPDATE stock_picking SET location_id = %s WHERE id = %s
+                """, (transit_location.id, new_picking.id))
+                self.env.cr.execute("""
+                    UPDATE stock_move SET location_id = %s WHERE picking_id = %s
+                """, (transit_location.id, new_picking.id))
+                self.env.cr.execute("""
+                    UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
+                """, (transit_location.id, new_picking.id))
+                
+                # Verify in DB
+                self.env.cr.execute("SELECT location_id FROM stock_picking WHERE id = %s", (new_picking.id,))
+                db_check = self.env.cr.fetchone()
+                _logger.warning(f"VERIFY DB: Phiếu {new_picking.id} có location_id = {db_check[0] if db_check else 'NULL'}")
+                
+                _logger.warning("TRANSIT TRANSFER DEBUG - KẾT THÚC")
+                _logger.warning("="*50)
+                
                 return new_picking
 
     def copy_move_lines(self, source_picking, target_picking):
