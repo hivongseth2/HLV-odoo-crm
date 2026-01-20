@@ -8,32 +8,32 @@ class HlvUndeliveredReport(models.Model):
     _rec_name = 'product_id'
     _order = 'move_date desc'
 
-    move_id = fields.Many2one('stock.move', 'Move', readonly=True)
-    picking_id = fields.Many2one('stock.picking', 'Picking', readonly=True)
-    sale_line_id = fields.Many2one('sale.order.line', 'Sale Line', readonly=True)
-    order_id = fields.Many2one('sale.order', 'Order', readonly=True)
-    partner_id = fields.Many2one('res.partner', 'Customer', readonly=True)
-    product_id = fields.Many2one('product.product', 'Product', readonly=True)
-    product_uom = fields.Many2one('uom.uom', 'Unit of Measure', readonly=True)
+    move_id = fields.Many2one('stock.move', 'Dịch chuyển', readonly=True)
+    picking_id = fields.Many2one('stock.picking', 'Phiếu kho', readonly=True)
+    sale_line_id = fields.Many2one('sale.order.line', 'Dòng đơn hàng', readonly=True)
+    order_id = fields.Many2one('sale.order', 'Đơn hàng', readonly=True)
+    partner_id = fields.Many2one('res.partner', 'Khách hàng', readonly=True)
+    product_id = fields.Many2one('product.product', 'Sản phẩm', readonly=True)
+    product_uom = fields.Many2one('uom.uom', 'Đơn vị tính', readonly=True)
     
-    product_uom_qty = fields.Float('Demand', readonly=True)
-    qty_reserved = fields.Float('Reserved', readonly=True)
-    qty_delivered_line = fields.Float('Delivered (Line)', readonly=True, help="Total delivered quantity for the sale order line")
+    product_uom_qty = fields.Float('Nhu cầu', readonly=True)
+    qty_reserved = fields.Float('Đã giữ', readonly=True)
+    qty_delivered_line = fields.Float('Đã giao (Dòng)', readonly=True, help="Tổng số lượng đã giao cho dòng đơn hàng này")
     
     state = fields.Selection([
-        ('draft', 'New'),
-        ('waiting', 'Waiting Another Move'),
-        ('confirmed', 'Waiting'),
-        ('assigned', 'Ready'),
-        ('done', 'Done'),
-        ('cancel', 'Cancelled'),
-    ], string='Status', readonly=True)
+        ('draft', 'Mới'),
+        ('waiting', 'Chờ dịch chuyển khác'),
+        ('confirmed', 'Đang chờ'),
+        ('assigned', 'Sẵn sàng'),
+        ('done', 'Hoàn thành'),
+        ('cancel', 'Đã hủy'),
+    ], string='Trạng thái', readonly=True)
     
-    warehouse_id = fields.Many2one('stock.warehouse', 'Warehouse', readonly=True)
-    move_date = fields.Datetime('Date', readonly=True)
+    warehouse_id = fields.Many2one('stock.warehouse', 'Kho', readonly=True)
+    move_date = fields.Datetime('Ngày', readonly=True)
     
     # Computed fields
-    qty_on_hand = fields.Float('On Hand (Warehouse)', compute='_compute_qty_on_hand')
+    qty_on_hand = fields.Float('Tồn kho (Tại kho)', compute='_compute_qty_on_hand')
 
     @api.depends('product_id', 'warehouse_id')
     def _compute_qty_on_hand(self):
