@@ -106,6 +106,40 @@ class JTCreateOrderWizard(models.TransientModel):
     estimated_cod_fee = fields.Float(string="Phí COD dự kiến (VND)", readonly=True)
     estimated_insurance_fee = fields.Float(string="Phí bảo hiểm dự kiến (VND)", readonly=True)
 
+    currency_id = fields.Many2one('res.currency', string='Tiền tệ', default=lambda self: self.env.company.currency_id)
+    product_html = fields.Html(compute='_compute_product_html', string="Danh sách sản phẩm", sanitize=False, readonly=True)
+
+    @api.depends('picking_id', 'picking_id.move_ids_without_package')
+    def _compute_product_html(self):
+        for rec in self:
+            html = '<div class="jt-product-list">'
+            if rec.picking_id:
+                moves = rec.picking_id.move_ids_without_package or rec.picking_id.move_ids
+                for move in moves:
+                    if not move.product_id:
+                        continue
+                    product = move.product_id
+                    qty = int(move.product_uom_qty or 0)
+                    weight = int((product.weight or 0) * 1000) or 500
+                    sku = product.default_code or 'N/A'
+                    html += f'''
+                        <div class="jt-product-item">
+                            <div class="jt-product-icon">📦</div>
+                            <div class="jt-product-details">
+                                <div class="jt-product-name"><b>{product.name}</b></div>
+                                <div class="jt-product-meta">
+                                    <span>KL (gram): {weight}</span>
+                                    <span>Số lượng: {qty}</span>
+                                </div>
+                                <div class="jt-product-sku">Mã SP: {sku}</div>
+                            </div>
+                        </div>
+                    '''
+            if html == '<div class="jt-product-list">':
+                html += '<div class="text-muted p-3">Không có thông tin sản phẩm.</div>'
+            html += '</div>'
+            rec.product_html = html
+
     # Sender Info (Editable)
     sender_config_id = fields.Many2one("stock.warehouse", string="Cấu hình gửi/Kho")
     sender_name = fields.Char(string="Tên người gửi", required=True)
