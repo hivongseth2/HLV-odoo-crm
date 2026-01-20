@@ -62,14 +62,58 @@ class ResConfigSettings(models.TransientModel):
             environment=self.jt_environment
         )
         
-        # We don't have a simple 'ping' API, so we try a request with minimal data or just validate credentials logic
-        # For now, just show success if parameters exist, or we could try to get something if J&T has a query API.
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Thông tin',
-                'message': f'Cấu hình System Parameters đã sẵn sàng (Account: {api_account}). Thử tạo đơn để kiểm tra kết nối thực tế.',
-                'type': 'success',
+        # Perform a real connection test using calculate_fee with dummy data
+        biz_params = {
+            "customerCode": customer_code,
+            "password": password.upper(),
+            "weight": 0.5,
+            "productType": 'EXPRESS',
+            "goodsType": 'bm000010',
+            "goodsValue": 100000,
+            "codMoney": "0",
+            "isInsured": 0,
+            "sender": {
+                "prov": "Hồ Chí Minh",
+                "city": "Quận 1",
+                "area": "Phường Tân Định"
+            },
+            "receiver": {
+                "prov": "Hà Nội",
+                "city": "Quận Hoàn Kiếm",
+                "area": "Phường Cửa Đông"
             }
         }
+        
+        try:
+            result = client.calculate_fee(biz_params)
+            if result.get('code') == '1':
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Thành công',
+                        'message': f'Kết nối J&T ({self.jt_environment}) thành công!',
+                        'type': 'success',
+                    }
+                }
+            else:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Thất bại',
+                        'message': f"Lỗi từ J&T: {result.get('msg', 'Unknown Error')}",
+                        'type': 'danger',
+                        'sticky': True,
+                    }
+                }
+        except Exception as e:
+             return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Lỗi ngoại lệ',
+                    'message': str(e),
+                    'type': 'danger',
+                }
+            }

@@ -23,7 +23,33 @@ class GHNCreateOrderWizard(models.TransientModel):
     sender_province_id = fields.Many2one("ghn.province", string="Tỉnh/Thành gửi")
     sender_district_id = fields.Many2one("ghn.district", string="Quận/Huyện gửi", domain="[('province_id', '=', sender_province_id)]")
     sender_ward_id = fields.Many2one("ghn.ward", string="Phường/Xã gửi", domain="[('district_id', '=', sender_district_id)]")
-    ghn_shop_id = fields.Char(string="GHN Shop ID")
+    ghn_shop_id = fields.Selection(selection='_get_shop_selection', string="Mã Shop ID (GHN)")
+
+    def _get_shop_selection(self):
+        """Build selection from warehouse and company configs."""
+        selection = []
+        warehouse = self.sender_config_id or self.warehouse_id
+        company = self.env.company
+        
+        shops = [] # List of (ID, Label)
+        
+        # Priority: Warehouse Specific > Company Default
+        if warehouse:
+            if warehouse.ghn_shop_id:
+                shops.append((warehouse.ghn_shop_id, f"{warehouse.ghn_shop_id} - {warehouse.name} (Hàng nhẹ)"))
+            if warehouse.ghn_shop_id_heavy:
+                shops.append((warehouse.ghn_shop_id_heavy, f"{warehouse.ghn_shop_id_heavy} - {warehouse.name} (Hàng nặng)"))
+        
+        # Fallback to company settings if not already added or to provide options
+        if company.ghn_shop_id:
+            # Avoid duplicates if warehouse matches company
+            if not any(s[0] == company.ghn_shop_id for s in shops):
+                shops.append((company.ghn_shop_id, f"{company.ghn_shop_id} - Mặc định (Hàng nhẹ)"))
+        if company.ghn_shop_id_heavy:
+            if not any(s[0] == company.ghn_shop_id_heavy for s in shops):
+                shops.append((company.ghn_shop_id_heavy, f"{company.ghn_shop_id_heavy} - Mặc định (Hàng nặng)"))
+        
+        return shops
 
     @api.onchange('sender_config_id')
     def _onchange_sender_config_id(self):
@@ -41,22 +67,12 @@ class GHNCreateOrderWizard(models.TransientModel):
             self.sender_province_id = warehouse.ghn_province_id
             self.sender_district_id = warehouse.ghn_district_id
             self.sender_ward_id = warehouse.ghn_ward_id
-            self.ghn_shop_id = warehouse.ghn_shop_id
-        else:
-            # Revert to warehouse defaults if config is cleared
-            warehouse = self.warehouse_id
-            if warehouse:
-                s_name = warehouse.ghn_sender_name or (warehouse.partner_id.name if warehouse.partner_id else self.picking_id.company_id.name)
-                s_phone = warehouse.ghn_sender_phone or (warehouse.partner_id.phone if warehouse.partner_id else self.picking_id.company_id.phone)
-                s_address = warehouse.ghn_sender_address or (warehouse.partner_id.street if warehouse.partner_id else self.picking_id.company_id.street)
-                
-                self.sender_name = s_name
-                self.sender_phone = s_phone
-                self.sender_address = s_address
-                self.sender_province_id = warehouse.ghn_province_id
-                self.sender_district_id = warehouse.ghn_district_id
-                self.sender_ward_id = warehouse.ghn_ward_id
-                self.ghn_shop_id = warehouse.ghn_shop_id
+            
+            # Default to heavy shop if weight is high, else normal
+            if self.weight > 10000 and warehouse.ghn_shop_id_heavy:
+                self.ghn_shop_id = warehouse.ghn_shop_id_heavy
+            else:
+                self.ghn_shop_id = warehouse.ghn_shop_id or self.env.company.ghn_shop_id
 
     # Receiver Info
     to_name = fields.Char(string="Tên người nhận", required=True)
@@ -198,11 +214,14 @@ class GHNCreateOrderWizard(models.TransientModel):
             if picking.ghn_order_status == 'cancel':
                 current_order_code = False
 
+            # Prioritize SO name
+            order_ref = (picking.sale_id and picking.sale_id.name) or picking.origin or picking.name
+
             res.update({
                 'picking_id': picking.id,
                 'sender_config_id': warehouse.id if warehouse else False,
                 'ghn_order_code': current_order_code,
-                'client_order_code': (picking.sale_id and picking.sale_id.name) or picking.origin or picking.name,
+                'client_order_code': order_ref,
                 'to_name': partner.name or '',
                 'to_phone': partner.phone or partner.mobile or '',
                 'to_address': f"{partner.street or ''}, {partner.street2 or ''}".strip(', '),
@@ -216,7 +235,7 @@ class GHNCreateOrderWizard(models.TransientModel):
                 'service_id': str(picking.ghn_service_id or 0),
                 'service_type_id': str(picking.ghn_service_type_id or 2),
                 'note': picking.ghn_shipping_notes or 'Giao hàng',
-                'content': f"Đơn hàng {picking.name}",
+                'content': f"Đơn hàng {order_ref}",
             })
 
             # Default Sender Info from Warehouse
@@ -225,8 +244,16 @@ class GHNCreateOrderWizard(models.TransientModel):
                 s_phone = warehouse.ghn_sender_phone or (warehouse.partner_id.phone if warehouse.partner_id else picking.company_id.phone)
                 s_address = warehouse.ghn_sender_address or (warehouse.partner_id.street if warehouse.partner_id else picking.company_id.street)
 
+                # Determine default shop based on weight
+                weight, l, w, h = picking._calculate_ghn_dimensions()
+                shop_id = warehouse.ghn_shop_id or picking.company_id.ghn_shop_id
+                if weight > 10000 and warehouse.ghn_shop_id_heavy:
+                    shop_id = warehouse.ghn_shop_id_heavy
+                elif weight > 10000 and picking.company_id.ghn_shop_id_heavy:
+                    shop_id = picking.company_id.ghn_shop_id_heavy
+
                 res.update({
-                    'ghn_shop_id': warehouse.ghn_shop_id,
+                    'ghn_shop_id': shop_id,
                     'sender_name': s_name,
                     'sender_phone': s_phone,
                     'sender_address': s_address,
@@ -304,12 +331,16 @@ class GHNCreateOrderWizard(models.TransientModel):
 
     def _get_ghn_client(self):
         company = self.env.company
-        is_heavy = self.weight > 10000
         
+        # Priority: Selected ghn_shop_id in wizard > Company default based on weight
         shop_id = self.ghn_shop_id or company.ghn_shop_id
-        if is_heavy and not self.ghn_shop_id:
-            warehouse = self.picking_id.picking_type_id.warehouse_id
-            shop_id = (warehouse and warehouse.ghn_shop_id_heavy) or company.ghn_shop_id_heavy or shop_id
+        
+        # If ghn_shop_id is NOT explicitly selected but we are in calculate_fee logic before shop selection is populated/updated
+        if not self.ghn_shop_id:
+            is_heavy = self.weight > 10000
+            if is_heavy:
+                warehouse = self.picking_id.picking_type_id.warehouse_id
+                shop_id = (warehouse and warehouse.ghn_shop_id_heavy) or company.ghn_shop_id_heavy or shop_id
             
         return GHNApiUtils(
             token=company.ghn_api_token,
@@ -381,6 +412,10 @@ class GHNCreateOrderWizard(models.TransientModel):
             })
 
         warehouse = picking.picking_type_id.warehouse_id
+        
+        # Prioritize SO name
+        order_ref = (picking.sale_id and picking.sale_id.name) or picking.origin or picking.name
+        
         payload = {
             "payment_type_id": int(self.payment_type_id),
             "note": str(self.note or "Giao hàng"),
@@ -391,7 +426,7 @@ class GHNCreateOrderWizard(models.TransientModel):
             "to_ward_code": str(self.ward_id.ward_code),
             "to_district_id": int(self.district_id.district_id),
             "cod_amount": int(self.cod_amount),
-            "content": str(self.content or f"Đơn hàng {picking.name}"),
+            "content": str(self.content or f"Đơn hàng {order_ref}"),
             "weight": int(self.weight),
             "length": int(self.length),
             "width": int(self.width),
@@ -400,7 +435,7 @@ class GHNCreateOrderWizard(models.TransientModel):
             "service_id": int(self.service_id),
             "service_type_id": int(self.service_type_id),
             "items": items,
-            "client_order_code": str(self.client_order_code or picking.name)
+            "client_order_code": str(self.client_order_code or order_ref)
         }
 
         # Sender Info
