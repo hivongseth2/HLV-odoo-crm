@@ -404,6 +404,8 @@ class JTCreateOrderWizard(models.TransientModel):
             }
         }
 
+    client_order_code = fields.Char(string="Mã đơn hàng khách", help="Ưu tiên lấy mã SO, nếu không có lấy mã phiếu xuất")
+
     @api.model
     def default_get(self, fields_list):
         res = super(JTCreateOrderWizard, self).default_get(fields_list)
@@ -468,6 +470,7 @@ class JTCreateOrderWizard(models.TransientModel):
             res.update({
                 'picking_id': picking.id,
                 'sender_config_id': warehouse.id if warehouse else False,
+                'client_order_code': (picking.sale_id.name or picking.name) if picking else '',
                 'cod_money': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 'goods_value': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 
@@ -569,7 +572,7 @@ class JTCreateOrderWizard(models.TransientModel):
         biz_params = {
             "customerCode": customer_code,
             "password": password_to_send,
-            "txlogisticId": picking.name.replace("/", "-"),
+            "txlogisticId": self.client_order_code.replace("/", "-"),
             "orderType": self.order_type,
             "serviceType": self.service_type,
             "deliveryType": self.delivery_type,

@@ -85,6 +85,7 @@
                                 <div class="jt-header">1. Thông tin người gửi</div>
                                 <group>
                                     <field name="picking_id" readonly="1" force_save="1"/>
+                                    <field name="client_order_code"/>
                                     <field name="sender_config_id" options="{'no_create': True}"/>
                                     <field name="sender_name"/>
                                     <field name="sender_mobile"/>
