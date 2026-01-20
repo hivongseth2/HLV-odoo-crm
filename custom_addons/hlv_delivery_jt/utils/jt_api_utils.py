@@ -36,19 +36,41 @@ class JTApiUtils:
     def _generate_digest(self, biz_content):
         """
         Generate MD5 digest for J&T API authentication.
-        Formula: md5(bizContent + privateKey)
         """
+        # --- LOGGING ---
+        logger.info(f"J&T DEBUG - biz_content: {biz_content}")
+        logger.info(f"J&T DEBUG - private_key: {self.private_key}") 
+        # ---------------
+
         data_to_hash = biz_content + self.private_key
+        
+        # Log chuỗi trước khi hash để đảm bảo không sai encoding
+        logger.debug(f"J&T DEBUG - String to hash: {data_to_hash}")
+
         md5_hash = hashlib.md5(data_to_hash.encode('utf-8')).digest()
         digest = base64.b64encode(md5_hash).decode('utf-8')
+        
         return digest
-
+    
     def _send_request(self, service_type, biz_params):
         """
         Generic method to send requests to J&T
         """
         url = self._get_url(service_type)
+        
+        # --- THÊM LOG BIZ_PARAMS TẠI ĐÂY ---
+        _logger.info("========== J&T REQUEST START ==========")
+        _logger.info("J&T biz_params (Dict input): %s", biz_params)
+        # -------------------------------------
+
+        # Tạo biz_content (JSON string minified)
         biz_content = json.dumps(biz_params, separators=(',', ':'), ensure_ascii=False)
+        
+        # --- LOG BIZ_CONTENT ĐỂ DEBUG DIGEST ---
+        # Nên log cái này để check xem có bị lỗi font tiếng Việt hay thứ tự key không
+        _logger.info("J&T biz_content (String to Hash): %s", biz_content)
+        # ---------------------------------------
+
         timestamp = int(time.time() * 1000)
         digest = self._generate_digest(biz_content)
 
@@ -64,11 +86,17 @@ class JTApiUtils:
         }
 
         _logger.info("J&T API Request to %s | Account: %s", url, self.api_account)
+        
         try:
+            # Mình cũng log luôn cái digest và timestamp phòng khi J&T báo lỗi xác thực
+            _logger.debug(f"DEBUG HEADER - Digest: {digest} | Timestamp: {timestamp}")
+
             response = requests.post(url, data=payload, headers=headers)
+            
             if response.status_code == 200:
                 res_json = response.json()
                 _logger.info("J&T API Response: %s", res_json)
+                _logger.info("========== J&T REQUEST END ==========")
                 return res_json
             else:
                 _logger.error("J&T API Error %s: %s", response.status_code, response.text)
@@ -76,7 +104,6 @@ class JTApiUtils:
         except Exception as e:
             _logger.exception("J&T API Exception: %s", e)
             return {'code': 'error', 'msg': str(e)}
-
     def add_order(self, biz_params):
         """
         Send Add Order request to J&T
