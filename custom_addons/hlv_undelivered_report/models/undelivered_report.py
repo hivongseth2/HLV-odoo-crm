@@ -16,7 +16,7 @@ class HlvUndeliveredReport(models.Model):
     product_id = fields.Many2one('product.product', 'Sản phẩm', readonly=True)
     product_uom = fields.Many2one('uom.uom', 'Đơn vị tính', readonly=True)
     
-    product_uom_qty = fields.Float('Nhu cầu', readonly=True)
+    product_uom_qty = fields.Float('Nhu cầu hiện tại', readonly=True)
     original_demand = fields.Float('Nhu cầu gốc (SO)', readonly=True)
     qty_reserved = fields.Float('Đã giữ', readonly=True)
     qty_delivered_line = fields.Float('Đã giao (Dòng)', readonly=True, help="Tổng số lượng đã giao cho dòng đơn hàng này")
