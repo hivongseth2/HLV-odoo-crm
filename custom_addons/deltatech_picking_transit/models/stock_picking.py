@@ -48,15 +48,26 @@ class StockPicking(models.Model):
         """Tạo phiếu nhận (bước 2) và ghi chú 2 chiều có kèm liên kết."""
         for picking in self:
             if picking.picking_type_id.code == "internal":
+                # Lưu lại transit location (đích của phiếu 1 = nguồn của phiếu 2)
+                transit_location_id = picking.location_dest_id.id
+                
                 new_picking_vals = {
                     "picking_type_id": picking_type_id.id,
-                    "location_id": picking.location_dest_id.id,       # nguồn = transit (đích phiếu 1)
+                    "location_id": transit_location_id,                # nguồn = transit (đích phiếu 1)
                     "location_dest_id": final_dest_location_id.id,     # đích cuối (kho nhận)
                     "move_ids_without_package": [],
                 }
                 new_picking = self.env["stock.picking"].create(new_picking_vals)
                 self.copy_move_lines(picking, new_picking)
                 new_picking.action_confirm()
+                
+                # Fix: action_confirm có thể ghi đè location_id từ picking_type.default_location_src_id
+                # Cần đảm bảo location_id của picking và moves vẫn là transit
+                if new_picking.location_id.id != transit_location_id:
+                    new_picking.write({'location_id': transit_location_id})
+                    # Cập nhật cả các move để đồng bộ
+                    new_picking.move_ids.write({'location_id': transit_location_id})
+                    new_picking.move_line_ids.write({'location_id': transit_location_id})
                 # đánh dấu để tránh tự đẻ thêm
                 new_picking.second_transfer_created = True
                 self.second_transfer_created = True
