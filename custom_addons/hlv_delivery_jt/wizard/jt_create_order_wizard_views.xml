@@ -25,7 +25,7 @@
                         font-size: 1.25rem;
                         font-weight: 600;
                         margin-bottom: 15px;
-                        color: #dc3545; /* J&T Red */
+                        color: #dc3545; /* J&amp;T Red */
                         border-bottom: 2px solid #f0f0f0;
                         padding-bottom: 8px;
                     }
