@@ -369,22 +369,30 @@ class CustomBarcodeScanController(http.Controller):
             'state_label': state_label.get(s.state, s.state),
         } for s in siblings_sorted]
 
-        # Lấy danh sách packages của picking hiện tại
+        # Lấy danh sách packages của picking hiện tại (bao gồm cả package từ PICK và package tạo mới)
         picking_packages = []
-        MoveLine = request.env['stock.move.line']
-        package_ids = picking.move_line_ids.mapped('result_package_id').ids
-        if package_ids:
-            packages = request.env['stock.quant.package'].sudo().browse(package_ids)
-            picking_packages = [{
-                'id': pkg.id,
-                'name': pkg.name,
-                'qty': sum(ml.qty_done for ml in picking.move_line_ids.filtered(lambda ml: ml.result_package_id.id == pkg.id)),
-                'package_lines': [{
-                    'product_name': ml.product_id.display_name,
-                    'product_qty': ml.qty_done,
-                    'product_uom': ml.product_uom_id.name,
-                } for ml in picking.move_line_ids.filtered(lambda ml: ml.result_package_id.id == pkg.id)],
-            } for pkg in packages]
+        # Gộp cả result_package_id và package_id
+        all_pkgs = (picking.move_line_ids.mapped('result_package_id') | picking.move_line_ids.mapped('package_id'))
+        
+        if all_pkgs:
+            for pkg in all_pkgs:
+                # Lọc các dòng thuộc package này (nguồn hoặc đích)
+                pkg_mls = picking.move_line_ids.filtered(lambda ml: ml.result_package_id.id == pkg.id or ml.package_id.id == pkg.id)
+                if not pkg_mls:
+                    continue
+                
+                picking_packages.append({
+                    'id': pkg.id,
+                    'name': pkg.name,
+                    'qty': sum(ml.qty_done for ml in pkg_mls),
+                    'package_lines': [{
+                        'product_name': ml.product_id.display_name,
+                        'product_qty': ml.qty_done,
+                        'product_uom': ml.product_uom_id.name,
+                        # Hiển thị reservation để user biết "yêu cầu" của kiện
+                        'reserved_qty': getattr(ml, 'reserved_qty', 0) or getattr(ml, 'reserved_uom_qty', 0) or getattr(ml, 'product_uom_qty', 0) or 0,
+                    } for ml in pkg_mls],
+                })
 
         return request.render("custom_barcode_scan_redirect.pack_scan_template", {
             'picking': picking,
@@ -438,18 +446,41 @@ class CustomBarcodeScanController(http.Controller):
                 target_ml = None
 
         if target_ml:
-            # [SMART-REDIRECT-2024] Logic chuyển hướng thông minh cho UI gộp
-            # Nếu FE gửi lên line_id là một dòng LẺ (không có package), nhưng move này có các dòng KIỆN còn chỗ
-            # thì ta tự động chuyển hướng target_ml sang dòng kiện đó để ưu tiên điền đầy kiện trước.
-            if not target_ml.result_package_id:
-                mv = target_ml.move_id
-                # Tìm dòng có package còn chỗ trong cùng move
-                candidate_pkg_line = mv.move_line_ids.filtered(
-                    lambda l: l.result_package_id and l.product_id.id == target_ml.product_id.id and l.qty_done < (getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or getattr(l, 'product_uom_qty', 0) or 0)
+            # [SMART-REDIRECT-2024-V3] Logic chuyển hướng cực mạnh
+            # Nếu FE gửi lên line_id là hàng lẻ, ta tìm kiếm kiện hàng phù hợp trên TOÀN BỘ phiếu
+            if not (target_ml.result_package_id or target_ml.package_id):
+                # Tìm tất cả move lines của sản phẩm này có gắn package (nguồn hoặc đích)
+                all_product_mls = picking.move_line_ids.filtered(
+                    lambda l: l.product_id.id == target_ml.product_id.id and (l.result_package_id or l.package_id)
                 )
-                if candidate_pkg_line:
-                    _logger.info(f"REDIRECT: Target was loose line {target_ml.id}, redirecting to package line {candidate_pkg_line[0].id} ({candidate_pkg_line[0].result_package_id.name})")
-                    target_ml = candidate_pkg_line[0]
+                
+                candidate = None
+                # Thứ tự ưu tiên V3:
+                # 1. Ưu tiên các dòng ĐẾN TỪ PICK (package_id) - Đây là các kiện pre-configured
+                # 2. Sau đó mới đến các dòng result_package_id (đã đóng gói ở OUT)
+                
+                # Sắp xếp các dòng package: Ưu tiên dòng có package_id (nguồn từ PICK) lên trước
+                sorted_pkg_mls = all_product_mls.sorted(key=lambda l: (bool(l.package_id), l.id), reverse=True)
+
+                # Ưu tiên 1: Dòng package CÒN CHỖ (qty_done < reserved_qty)
+                for l in sorted_pkg_mls:
+                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or getattr(l, 'product_uom_qty', 0) or 0
+                    if l.qty_done < res:
+                        candidate = l
+                        _logger.info(f"REDIRECT V3 FOUND (Space): ML {l.id} | Space {l.qty_done}/{res} | Package: {l.package_id.name or l.result_package_id.name}")
+                        break
+                
+                # Ưu tiên 2: Dòng package RỖNG (qty_done == 0) - Chấp nhận cả khi reserved = 0
+                if not candidate:
+                    for l in sorted_pkg_mls:
+                        if l.qty_done == 0:
+                            candidate = l
+                            _logger.info(f"REDIRECT V3 FOUND (Empty): ML {l.id} | Package: {l.package_id.name or l.result_package_id.name}")
+                            break
+                
+                if candidate:
+                    _logger.info(f"REDIRECT V3 EXECUTE: Loose ML {target_ml.id} -> Package ML {candidate.id}")
+                    target_ml = candidate
 
             is_packed = target_ml.sudo().result_package_id
             if delta > 0:
