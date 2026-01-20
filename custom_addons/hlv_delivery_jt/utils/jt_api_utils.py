@@ -38,14 +38,14 @@ class JTApiUtils:
         Generate MD5 digest for J&T API authentication.
         """
         # --- LOGGING ---
-        logger.info(f"J&T DEBUG - biz_content: {biz_content}")
-        logger.info(f"J&T DEBUG - private_key: {self.private_key}") 
+        _logger.info(f"J&T DEBUG - biz_content: {biz_content}")
+        _logger.info(f"J&T DEBUG - private_key: {self.private_key}") 
         # ---------------
 
         data_to_hash = biz_content + self.private_key
         
         # Log chuỗi trước khi hash để đảm bảo không sai encoding
-        logger.debug(f"J&T DEBUG - String to hash: {data_to_hash}")
+        _logger.debug(f"J&T DEBUG - String to hash: {data_to_hash}")
 
         md5_hash = hashlib.md5(data_to_hash.encode('utf-8')).digest()
         digest = base64.b64encode(md5_hash).decode('utf-8')
