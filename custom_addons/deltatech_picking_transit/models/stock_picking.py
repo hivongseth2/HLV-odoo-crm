@@ -61,12 +61,12 @@ class StockPicking(models.Model):
                 self.copy_move_lines(picking, new_picking)
                 new_picking.action_confirm()
                 
-                # Fix: action_confirm có thể ghi đè location_id từ picking_type.default_location_src_id
-                # Cần đảm bảo location_id của picking và moves vẫn là transit
-                if new_picking.location_id.id != transit_location_id:
-                    new_picking.write({'location_id': transit_location_id})
-                    # Cập nhật cả các move để đồng bộ
-                    new_picking.move_ids.write({'location_id': transit_location_id})
+                # Fix: action_confirm GHI ĐÈ location_id từ picking_type.default_location_src_id
+                # Luôn đảm bảo location_id của picking và moves là transit (đích của phiếu 1)
+                new_picking.write({'location_id': transit_location_id})
+                # Cập nhật cả các move và move_line để đồng bộ
+                new_picking.move_ids.write({'location_id': transit_location_id})
+                if new_picking.move_line_ids:
                     new_picking.move_line_ids.write({'location_id': transit_location_id})
                 # đánh dấu để tránh tự đẻ thêm
                 new_picking.second_transfer_created = True
