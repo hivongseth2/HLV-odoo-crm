@@ -4,7 +4,7 @@
         <field name="name">hlv.undelivered.report.tree</field>
         <field name="model">hlv.undelivered.report</field>
         <field name="arch" type="xml">
-            <tree string="Undelivered Orders" create="false" edit="false" delete="false">
+            <list string="Undelivered Orders" create="false" edit="false" delete="false">
                 <field name="move_date"/>
                 <field name="warehouse_id" optional="hide"/>
                 <field name="partner_id"/>
@@ -17,7 +17,7 @@
                 <field name="qty_on_hand"/>
                 <field name="product_uom" groups="uom.group_uom"/>
                 <field name="state" widget="badge" decoration-success="state == 'assigned'" decoration-info="state == 'confirmed'" decoration-warning="state == 'waiting'"/>
-            </tree>
+            </list>
         </field>
     </record>
 
