@@ -24,8 +24,6 @@
         'stock', 
         'stock_picking_batch', # Để dùng model stock.picking.batch
         'fleet',               # Để dùng thông tin xe (vehicle_id)
-        'sale',                # Để dùng sale.order
-        'crm',                 # Để dùng crm.tag (Tuyến)
     ],
 
     # Code của bạn chỉ xử lý logic ngầm (Backend) nên không nhất thiết phải có file XML/View
@@ -33,7 +31,6 @@
         'security/ir.model.access.csv', 
         'views/batch_planning_views.xml',
         'views/batch_planning_wizard_views.xml',
-        'views/batch_planning_so_wizard_views.xml',
         'views/stock_picking_views.xml',
     ],
     
