@@ -12,8 +12,8 @@ class StockPicking(models.Model):
 
     is_transit_transfer = fields.Boolean(default=False, compute="_compute_is_transit_transfer")
     sub_location_existent = fields.Boolean(default=False, compute="_compute_sub_location_existent")
-    second_transfer_created = fields.Boolean(default=False)
-    source_transfer_id = fields.Many2one("stock.picking")
+    second_transfer_created = fields.Boolean(default=False, copy=False)  # Không copy khi nhân bản
+    source_transfer_id = fields.Many2one("stock.picking", copy=False)  # Không copy khi nhân bản
 
     # giữ để không vỡ view cũ (không còn phụ thuộc)
     create_second_transfer_automatically = fields.Boolean(
@@ -242,17 +242,50 @@ class StockPicking(models.Model):
                 new_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
                     new_picking.id, new_picking.name
                 )
+                
+                # Lấy thông tin kho để hiển thị
+                src_warehouse = picking.picking_type_id.warehouse_id.name if picking.picking_type_id.warehouse_id else "N/A"
+                dest_warehouse = picking_type_id.warehouse_id.name if picking_type_id.warehouse_id else "N/A"
 
+                # Message cho phiếu 2 (phiếu nhận)
+                new_picking_msg = Markup("""
+                    <div style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border-left: 4px solid #4caf50; padding: 12px; border-radius: 8px; margin: 8px 0;">
+                        <div style="font-weight: bold; color: #2e7d32; font-size: 14px; margin-bottom: 8px;">
+                            📦 Phiếu nhận hàng từ Transit
+                        </div>
+                        <div style="color: #333; font-size: 13px;">
+                            <div>🔗 <b>Phiếu nguồn:</b> %s</div>
+                            <div>🏢 <b>Từ kho:</b> %s</div>
+                            <div>📍 <b>Vị trí nguồn:</b> %s</div>
+                            <div>📍 <b>Vị trí đích:</b> %s</div>
+                        </div>
+                    </div>
+                """) % (origin_link, src_warehouse, transit_location.display_name, final_dest_location_id.display_name)
+                
                 new_picking.message_post(
-                    body=Markup("Phiếu này được tạo từ %s.") % origin_link,
-                    message_type="comment",
+                    body=new_picking_msg,
+                    message_type="notification",
                     subtype_xmlid="mail.mt_note",
                 )
                 new_picking.source_transfer_id = picking.id
 
+                # Message cho phiếu 1 (phiếu xuất)
+                picking_msg = Markup("""
+                    <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-left: 4px solid #2196f3; padding: 12px; border-radius: 8px; margin: 8px 0;">
+                        <div style="font-weight: bold; color: #1565c0; font-size: 14px; margin-bottom: 8px;">
+                            🚚 Chuyển kho 2 bước hoàn tất
+                        </div>
+                        <div style="color: #333; font-size: 13px;">
+                            <div>📦 <b>Phiếu nhận đã tạo:</b> %s</div>
+                            <div>🏢 <b>Kho nhận:</b> %s</div>
+                            <div>📍 <b>Transit:</b> %s</div>
+                        </div>
+                    </div>
+                """) % (new_link, dest_warehouse, transit_location.display_name)
+                
                 picking.message_post(
-                    body=Markup("Đã tạo phiếu %s.") % new_link,
-                    message_type="comment",
+                    body=picking_msg,
+                    message_type="notification",
                     subtype_xmlid="mail.mt_note",
                 )
 
