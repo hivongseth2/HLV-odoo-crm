@@ -51,6 +51,9 @@ class StockPicking(models.Model):
                     LEFT JOIN stock_picking_type spt ON sp.picking_type_id = spt.id
                     WHERE sp.id = %s
                 """
+                if not isinstance(self.id, int):
+                    return super(StockPicking, self).read(fields=fields, load=load)
+
                 self.env.cr.execute(query, (self.id,))
                 result = self.env.cr.fetchone()
                 

@@ -474,8 +474,9 @@ class CustomBarcodeScanController(http.Controller):
                 for m in moves:
                     all_move_lines |= m.move_line_ids
                 
-                # Sắp xếp theo ID (thứ tự tự nhiên = thứ tự hiển thị)
-                all_move_lines = all_move_lines.sorted(key=lambda ml: ml.id)
+                # [FIX-2024] Sắp xếp: Ưu tiên các dòng đã được liên kết với package (nguồn hoặc đích)
+                # Điều này giúp điền đầy các dòng "pre-configured" trước khi tìm đến dòng lẻ.
+                all_move_lines = all_move_lines.sorted(key=lambda ml: (bool(ml.result_package_id or ml.package_id), ml.id), reverse=True)
                 
                 _logger.info(f"DEBUG_MOVE_LINES: Found {len(all_move_lines)} move_lines for barcode {barcode}. IDs: {all_move_lines.ids}")
                 
