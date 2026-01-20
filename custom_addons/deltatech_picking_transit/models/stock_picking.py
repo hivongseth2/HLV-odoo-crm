@@ -76,19 +76,29 @@ class StockPicking(models.Model):
                 # Lưu lại transit location (đích của phiếu 1 = nguồn của phiếu 2)
                 transit_location = picking.location_dest_id
                 
-                # Tạo picking với context để skip các onchange tự động
+                # =========== FIX QUAN TRỌNG ===========
+                # Lưu lại default_location_src_id gốc của picking_type
+                original_src_location = picking_type_id.default_location_src_id
+                
+                # Tạm thời thay đổi default_location_src_id thành transit
+                # Dùng sudo và SQL để bypass mọi restriction
+                self.env.cr.execute("""
+                    UPDATE stock_picking_type 
+                    SET default_location_src_id = %s 
+                    WHERE id = %s
+                """, (transit_location.id, picking_type_id.id))
+                picking_type_id.invalidate_recordset(['default_location_src_id'])
+                
+                # Tạo picking - bây giờ sẽ dùng transit làm nguồn mặc định
                 new_picking_vals = {
                     "picking_type_id": picking_type_id.id,
-                    "location_id": transit_location.id,                # nguồn = transit (đích phiếu 1)
-                    "location_dest_id": final_dest_location_id.id,     # đích cuối (kho nhận)
+                    "location_id": transit_location.id,
+                    "location_dest_id": final_dest_location_id.id,
                     "move_ids_without_package": [],
+                    "source_transfer_id": picking.id,  # Đánh dấu ngay từ đầu
                 }
                 
-                # Tạo picking trong context đặc biệt
-                new_picking = self.env["stock.picking"].with_context(
-                    default_location_id=transit_location.id,
-                    force_location_id=transit_location.id,
-                ).create(new_picking_vals)
+                new_picking = self.env["stock.picking"].create(new_picking_vals)
                 
                 # Copy move lines với location nguồn là transit
                 self.copy_move_lines(picking, new_picking)
@@ -96,32 +106,29 @@ class StockPicking(models.Model):
                 # Confirm picking
                 new_picking.action_confirm()
                 
-                # FIX QUAN TRỌNG: Dùng SQL để bypass ORM và force update location_id
-                # Vì write() có thể bị override bởi compute/onchange
+                # Khôi phục default_location_src_id gốc
                 self.env.cr.execute("""
-                    UPDATE stock_picking 
-                    SET location_id = %s 
+                    UPDATE stock_picking_type 
+                    SET default_location_src_id = %s 
                     WHERE id = %s
-                """, (transit_location.id, new_picking.id))
+                """, (original_src_location.id if original_src_location else None, picking_type_id.id))
+                picking_type_id.invalidate_recordset(['default_location_src_id'])
                 
-                # Update stock.move
+                # Đảm bảo chắc chắn location_id của picking là transit
                 self.env.cr.execute("""
-                    UPDATE stock_move 
-                    SET location_id = %s 
-                    WHERE picking_id = %s
+                    UPDATE stock_picking SET location_id = %s WHERE id = %s
                 """, (transit_location.id, new_picking.id))
-                
-                # Update stock.move.line 
                 self.env.cr.execute("""
-                    UPDATE stock_move_line 
-                    SET location_id = %s 
-                    WHERE picking_id = %s
+                    UPDATE stock_move SET location_id = %s WHERE picking_id = %s
+                """, (transit_location.id, new_picking.id))
+                self.env.cr.execute("""
+                    UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
                 """, (transit_location.id, new_picking.id))
                 
-                # Invalidate cache để Odoo load lại từ DB
                 new_picking.invalidate_recordset(['location_id'])
                 new_picking.move_ids.invalidate_recordset(['location_id'])
-                new_picking.move_line_ids.invalidate_recordset(['location_id'])
+                if new_picking.move_line_ids:
+                    new_picking.move_line_ids.invalidate_recordset(['location_id'])
                 # đánh dấu để tránh tự đẻ thêm
                 new_picking.second_transfer_created = True
                 self.second_transfer_created = True
