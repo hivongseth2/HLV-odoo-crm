@@ -58,18 +58,16 @@ class JTApiUtils:
         """
         url = self._get_url(service_type)
         
-        # --- THÊM LOG BIZ_PARAMS TẠI ĐÂY ---
+        # --- 1. LOG INPUT RAW ---
         _logger.info("========== J&T REQUEST START ==========")
-        _logger.info("J&T biz_params (Dict input): %s", biz_params)
-        # -------------------------------------
+        _logger.info("Step 1 - biz_params (Dict): %s", biz_params)
 
         # Tạo biz_content (JSON string minified)
         biz_content = json.dumps(biz_params, separators=(',', ':'), ensure_ascii=False)
         
-        # --- LOG BIZ_CONTENT ĐỂ DEBUG DIGEST ---
-        # Nên log cái này để check xem có bị lỗi font tiếng Việt hay thứ tự key không
-        _logger.info("J&T biz_content (String to Hash): %s", biz_content)
-        # ---------------------------------------
+        # --- 2. LOG STRING TO HASH ---
+        # Quan trọng: Kiểm tra chuỗi này xem có đúng là chuỗi được dùng để tạo digest không
+        _logger.info("Step 2 - biz_content (For Digest): %s", biz_content)
 
         timestamp = int(time.time() * 1000)
         digest = self._generate_digest(biz_content)
@@ -85,12 +83,25 @@ class JTApiUtils:
             'bizContent': biz_content
         }
 
-        _logger.info("J&T API Request to %s | Account: %s", url, self.api_account)
-        
+        # --- 3. LOG FULL REQUEST (HEADERS & PAYLOAD) ---
+        # Log chi tiết để kiểm tra lần cuối trước khi bắn request
         try:
-            # Mình cũng log luôn cái digest và timestamp phòng khi J&T báo lỗi xác thực
-            _logger.debug(f"DEBUG HEADER - Digest: {digest} | Timestamp: {timestamp}")
+            _logger.info("----------- FINAL REQUEST DETAILS -----------")
+            _logger.info(f"Target URL: {url}")
+            
+            # Dùng json.dumps indent=2 để in ra cho đẹp, dễ đọc
+            _logger.info("HEADERS Sent:\n%s", json.dumps(headers, indent=2))
+            
+            # Lưu ý: Trong payload, 'bizContent' là một chuỗi JSON (string), không phải dict
+            _logger.info("PAYLOAD Sent:\n%s", json.dumps(payload, indent=2))
+            _logger.info("---------------------------------------------")
+        except Exception:
+            # Fallback nếu không json dump được (tránh lỗi làm dừng chương trình)
+            _logger.info("HEADERS Sent: %s", headers)
+            _logger.info("PAYLOAD Sent: %s", payload)
+        # -----------------------------------------------
 
+        try:
             response = requests.post(url, data=payload, headers=headers)
             
             if response.status_code == 200:
