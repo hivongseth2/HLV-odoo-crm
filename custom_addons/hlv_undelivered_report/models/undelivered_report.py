@@ -57,7 +57,7 @@ class HlvUndeliveredReport(models.Model):
                     sm.product_id,
                     sm.product_uom,
                     sm.product_uom_qty,
-                    sm.reserved_availability as qty_reserved,
+                    COALESCE((SELECT SUM(sml.quantity) FROM stock_move_line sml WHERE sml.move_id = sm.id), 0.0) as qty_reserved,
                     sol.qty_delivered as qty_delivered_line,
                     sm.state as state,
                     sm.warehouse_id,
@@ -71,3 +71,4 @@ class HlvUndeliveredReport(models.Model):
                     AND so.state IN ('sale', 'done')
             )
         """)
+
