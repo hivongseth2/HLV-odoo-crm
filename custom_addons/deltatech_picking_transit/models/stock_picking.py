@@ -19,6 +19,31 @@ class StockPicking(models.Model):
         store=True,
     )
 
+    # ---------------- Override onchange để bảo vệ location_id ----------------
+    @api.onchange('picking_type_id', 'partner_id')
+    def _onchange_picking_type(self):
+        """
+        Override để ngăn Odoo ghi đè location_id khi phiếu là bước 2 của transit transfer.
+        Odoo core sẽ set location_id = picking_type_id.default_location_src_id,
+        nhưng với phiếu nhận từ transit, ta cần giữ nguồn là Transit location.
+        """
+        # Lưu lại location_id hiện tại nếu phiếu này là phiếu bước 2 (có source_transfer_id)
+        # hoặc nguồn là transit location
+        preserve_location = False
+        saved_location_id = self.location_id
+        
+        if self.source_transfer_id or self._is_inter_warehouse_transit(self.location_id):
+            preserve_location = True
+        
+        # Gọi super để Odoo xử lý normal logic
+        result = super()._onchange_picking_type()
+        
+        # Khôi phục location_id nếu cần bảo vệ
+        if preserve_location and saved_location_id:
+            self.location_id = saved_location_id
+        
+        return result
+
     # ---------------- Helper ----------------
     def _is_inter_warehouse_transit(self, location):
         """Chỉ nhận 'Physical Locations/Inter-warehouse transit'.
