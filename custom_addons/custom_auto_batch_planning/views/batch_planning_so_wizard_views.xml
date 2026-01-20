@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Form View for SO Selector Wizard -->
+    <record id="view_stock_batch_planning_so_wizard_form" model="ir.ui.view">
+        <field name="name">stock.batch.planning.so.wizard.form</field>
+        <field name="model">stock.batch.planning.so.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Chọn Đơn Hàng (Sale Order)">
+                <field name="batch_plan_id" invisible="1"/>
+                
+                <!-- Bộ lọc -->
+                <group string="Bộ lọc">
+                    <group>
+                        <field name="tag_ids" widget="many2many_tags" placeholder="Chọn Tuyến..."/>
+                        <field name="parent_partner_id" placeholder="Chọn Công ty mẹ..."/>
+                    </group>
+                    <group>
+                        <field name="commitment_date_from"/>
+                        <field name="commitment_date_to"/>
+                    </group>
+                </group>
+                
+                <!-- Danh sách SO chính -->
+                <separator string="Danh sách Đơn hàng (Theo bộ lọc)"/>
+                <field name="sale_order_ids" nolabel="1">
+                    <list string="Đơn hàng" create="0">
+                        <field name="name" string="Mã ĐH"/>
+                        <field name="partner_id" string="Khách hàng"/>
+                        <field name="tag_ids" widget="many2many_tags" string="Tuyến"/>
+                        <field name="commitment_date" string="Ngày giao"/>
+                        <field name="amount_total" string="Tổng tiền"/>
+                        <field name="state" widget="badge" 
+                               decoration-info="state in ('draft', 'sent')"
+                               decoration-success="state == 'sale'"/>
+                    </list>
+                </field>
+                
+                <!-- Danh sách gợi ý -->
+                <separator string="Gợi ý: Đơn hàng cùng Công ty mẹ" invisible="not suggested_order_ids"/>
+                <field name="suggested_order_ids" nolabel="1" invisible="not suggested_order_ids">
+                    <list string="Đơn hàng gợi ý" create="0">
+                        <field name="name" string="Mã ĐH"/>
+                        <field name="partner_id" string="Khách hàng"/>
+                        <field name="tag_ids" widget="many2many_tags" string="Tuyến"/>
+                        <field name="commitment_date" string="Ngày giao"/>
+                        <field name="amount_total" string="Tổng tiền"/>
+                        <field name="state" widget="badge"/>
+                    </list>
+                </field>
+                
+                <footer>
+                    <button name="action_confirm" string="Xác nhận" type="object" class="btn-primary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>
