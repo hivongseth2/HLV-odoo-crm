@@ -389,14 +389,21 @@ class StockPicking(models.Model):
         result = super().button_validate()
 
         # SAU KHI đã validate và tách kiện (nếu có), mới tạo phiếu bước 2
+        _logger.warning(f"POST-VALIDATE: pickings_need_second_transfer count = {len(pickings_need_second_transfer)}")
         for info in pickings_need_second_transfer:
             picking = info['picking']
+            # Refresh để lấy state mới nhất từ DB
+            picking.invalidate_recordset(['state'])
+            _logger.warning(f"POST-VALIDATE: Picking {picking.id} state = {picking.state}")
             # Chỉ tạo phiếu bước 2 cho phiếu đã validate (state = done)
             # Nếu có tách kiện, picking gốc là phiếu đã validate, backorder là phiếu chờ
             if picking.state == 'done':
+                _logger.warning(f"POST-VALIDATE: Tạo phiếu 2 cho picking {picking.id}")
                 picking.create_second_transfer_wizard(
                     info['final_dest_location_id'],
                     info['next_operation']
                 )
+            else:
+                _logger.warning(f"POST-VALIDATE: SKIP - Picking {picking.id} không phải state=done")
 
         return result
