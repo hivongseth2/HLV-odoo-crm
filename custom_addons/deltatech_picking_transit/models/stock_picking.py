@@ -1,7 +1,10 @@
 # models/stock_picking.py
+import logging
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 from markupsafe import Markup
+
+_logger = logging.getLogger(__name__)
 
 
 class StockPicking(models.Model):
@@ -76,6 +79,13 @@ class StockPicking(models.Model):
                 # Lưu lại transit location (đích của phiếu 1 = nguồn của phiếu 2)
                 transit_location = picking.location_dest_id
                 
+                _logger.warning("="*50)
+                _logger.warning("TRANSIT TRANSFER DEBUG - BẮT ĐẦU TẠO PHIẾU 2")
+                _logger.warning(f"Transit location ID: {transit_location.id}")
+                _logger.warning(f"Transit location name: {transit_location.complete_name}")
+                _logger.warning(f"Picking type ID: {picking_type_id.id}")
+                _logger.warning(f"Picking type default_location_src_id BEFORE: {picking_type_id.default_location_src_id.id if picking_type_id.default_location_src_id else None}")
+                
                 # =========== FIX QUAN TRỌNG ===========
                 # Lưu lại default_location_src_id gốc của picking_type
                 original_src_location = picking_type_id.default_location_src_id
@@ -99,12 +109,15 @@ class StockPicking(models.Model):
                 }
                 
                 new_picking = self.env["stock.picking"].create(new_picking_vals)
+                _logger.warning(f"New picking ID: {new_picking.id}, Name: {new_picking.name}")
+                _logger.warning(f"New picking location_id AFTER CREATE: {new_picking.location_id.id} - {new_picking.location_id.complete_name}")
                 
                 # Copy move lines với location nguồn là transit
                 self.copy_move_lines(picking, new_picking)
                 
                 # Confirm picking
                 new_picking.action_confirm()
+                _logger.warning(f"New picking location_id AFTER CONFIRM: {new_picking.location_id.id} - {new_picking.location_id.complete_name}")
                 
                 # Khôi phục default_location_src_id gốc
                 self.env.cr.execute("""
@@ -115,6 +128,7 @@ class StockPicking(models.Model):
                 picking_type_id.invalidate_recordset(['default_location_src_id'])
                 
                 # Đảm bảo chắc chắn location_id của picking là transit
+                _logger.warning(f"EXECUTING SQL UPDATE với transit_location.id = {transit_location.id}")
                 self.env.cr.execute("""
                     UPDATE stock_picking SET location_id = %s WHERE id = %s
                 """, (transit_location.id, new_picking.id))
@@ -129,6 +143,10 @@ class StockPicking(models.Model):
                 new_picking.move_ids.invalidate_recordset(['location_id'])
                 if new_picking.move_line_ids:
                     new_picking.move_line_ids.invalidate_recordset(['location_id'])
+                
+                _logger.warning(f"New picking location_id AFTER SQL UPDATE: {new_picking.location_id.id} - {new_picking.location_id.complete_name}")
+                _logger.warning("TRANSIT TRANSFER DEBUG - KẾT THÚC")
+                _logger.warning("="*50)
                 # đánh dấu để tránh tự đẻ thêm
                 new_picking.second_transfer_created = True
                 self.second_transfer_created = True
