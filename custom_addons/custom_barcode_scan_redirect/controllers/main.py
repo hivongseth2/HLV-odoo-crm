@@ -427,38 +427,47 @@ class CustomBarcodeScanController(http.Controller):
         updated_lines = []
         
         # --- LOGIC MỚI: Xử lý tìm line_id tự động nếu FE gửi lên null ---
+        # Lấy line_id cụ thể từ FE nếu có
         target_ml = None
-        
-        # Nếu có line_id cụ thể từ FE
         if line_id:
             try:
                 target_ml = request.env['stock.move.line'].sudo().browse(int(line_id))
                 if not target_ml.exists():
-                    target_ml = None # Fallback nếu ID sai
+                    target_ml = None
             except:
                 target_ml = None
 
         if target_ml:
-            # Force read-ahead/prefetch
+            # [SMART-REDIRECT-2024] Logic chuyển hướng thông minh cho UI gộp
+            # Nếu FE gửi lên line_id là một dòng LẺ (không có package), nhưng move này có các dòng KIỆN còn chỗ
+            # thì ta tự động chuyển hướng target_ml sang dòng kiện đó để ưu tiên điền đầy kiện trước.
+            if not target_ml.result_package_id:
+                mv = target_ml.move_id
+                # Tìm dòng có package còn chỗ trong cùng move
+                candidate_pkg_line = mv.move_line_ids.filtered(
+                    lambda l: l.result_package_id and l.product_id.id == target_ml.product_id.id and l.qty_done < (getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or getattr(l, 'product_uom_qty', 0) or 0)
+                )
+                if candidate_pkg_line:
+                    _logger.info(f"REDIRECT: Target was loose line {target_ml.id}, redirecting to package line {candidate_pkg_line[0].id} ({candidate_pkg_line[0].result_package_id.name})")
+                    target_ml = candidate_pkg_line[0]
+
             is_packed = target_ml.sudo().result_package_id
-            _logger.info(f"Target Line {target_ml.id} Check. Packed: {is_packed.id if is_packed else 'False'}")
-            
             if delta > 0:
-                # [FIX-2024] Check if move is full regardless of packed status
+                # [FIX-2024] Kiểm tra nếu dòng trong pack VẪN CÒN CHỖ (qty_done < reserved)
                 mv = target_ml.move_id
                 mv_done = sum(l.qty_done for l in mv.move_line_ids)
+                
+                # Check reserved qty của chính line này
+                reserved_qty = getattr(target_ml, 'reserved_qty', 0) or getattr(target_ml, 'reserved_uom_qty', 0) or getattr(target_ml, 'product_uom_qty', 0) or 0
+                
                 if mv_done >= mv.product_uom_qty:
-                    _logger.info(f"Target line {target_ml.id} belongs to FULL Move {mv.id} ({mv_done}/{mv.product_uom_qty}). Switching to find another move...")
+                    _logger.info(f"Target line {target_ml.id} belongs to FULL Move {mv.id}. Switching to find another.")
                     target_ml = None
-                elif is_packed:
-                    # [FIX-2024] Dòng đã trong package NHƯNG move và line này vẫn còn chỗ (pre-defined package)
-                    # Check reserved qty của chính line này
-                    reserved_qty = getattr(target_ml, 'reserved_qty', 0) or getattr(target_ml, 'reserved_uom_qty', 0) or getattr(target_ml, 'product_uom_qty', 0) or 0
-                    if target_ml.qty_done < reserved_qty:
-                        _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) but line has space ({target_ml.qty_done}/{reserved_qty}). Keeping it.")
-                    else:
-                        _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) and line is FULL. Skipping.")
-                        target_ml = None
+                elif is_packed and target_ml.qty_done >= reserved_qty:
+                    _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) and FULL. Skipping.")
+                    target_ml = None
+                else:
+                    _logger.info(f"Target line {target_ml.id} is valid (Space: {target_ml.qty_done}/{reserved_qty}). Keeping it.")
 
         # Nếu chưa xác định được target_ml (do line_id null hoặc sai hoặc đã bị packed), tự động tìm dòng phù hợp
         if not target_ml:
