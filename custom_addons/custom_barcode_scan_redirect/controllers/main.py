@@ -471,7 +471,8 @@ class CustomBarcodeScanController(http.Controller):
                 # - Ưu tiên dòng rỗng DONE == 0
                 def get_prio(l):
                     is_pkg = bool(l.package_id or l.result_package_id)
-                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or 0
+                    # [V3.5] res bao gồm cả product_uom_qty để nhận diện đúng nhu cầu của kiện từ PICK
+                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or getattr(l, 'product_uom_qty', 0) or 0
                     is_empty = (l.qty_done == 0)
                     # Trả về tuple (is_pkg, res_exists, is_empty, id) để sort
                     return (is_pkg, res > 0, is_empty, -l.id)
@@ -482,7 +483,8 @@ class CustomBarcodeScanController(http.Controller):
                 # Bước 1: Tìm dòng PACKAGE còn chỗ hoặc rỗng
                 for l in sorted_mls:
                     is_pkg = bool(l.package_id or l.result_package_id)
-                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or 0
+                    # [V3.5] res bao gồm cả product_uom_qty
+                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or getattr(l, 'product_uom_qty', 0) or 0
                     if is_pkg:
                         if (res > 0 and l.qty_done < res) or (res == 0 and l.qty_done == 0):
                             candidate = l
