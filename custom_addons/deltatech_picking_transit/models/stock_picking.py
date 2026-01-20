@@ -103,11 +103,9 @@ class StockPicking(models.Model):
     def read(self, fields=None, load='_classic_read'):
         """
         Override read để đảm bảo location_id hiển thị đúng cho phiếu transit.
+        Nếu phát hiện sai, tự động fix DB luôn.
         """
         result = super().read(fields=fields, load=load)
-        
-        # Log để debug
-        _logger.warning(f"READ called on picking IDs: {self.ids}, fields: {fields}")
         
         # Duyệt qua từng record trong result
         for res in result:
@@ -117,26 +115,39 @@ class StockPicking(models.Model):
                 
             # Check trực tiếp từ DB xem phiếu có source_transfer_id không
             self.env.cr.execute("""
-                SELECT source_transfer_id, location_id 
-                FROM stock_picking WHERE id = %s
+                SELECT sp.source_transfer_id, sp.location_id, sp_src.location_dest_id
+                FROM stock_picking sp
+                LEFT JOIN stock_picking sp_src ON sp.source_transfer_id = sp_src.id
+                WHERE sp.id = %s
             """, (picking_id,))
             db_row = self.env.cr.fetchone()
             
             if db_row and db_row[0]:  # Có source_transfer_id
                 source_transfer_id = db_row[0]
                 db_location_id = db_row[1]
+                correct_location_id = db_row[2]  # location_dest_id của phiếu nguồn = Transit
                 
-                _logger.warning(f"READ: Phiếu {picking_id} có source_transfer_id={source_transfer_id}, DB location_id={db_location_id}")
+                _logger.warning(f"READ: Phiếu {picking_id}, source_transfer_id={source_transfer_id}, current location_id={db_location_id}, correct should be={correct_location_id}")
                 
-                # Kiểm tra xem location_id trong result có khác với DB không
-                current_location = res.get('location_id')
-                current_location_id = current_location[0] if isinstance(current_location, (list, tuple)) else current_location
-                
-                if db_location_id and current_location_id != db_location_id:
-                    # Lấy thông tin location để hiển thị
-                    db_location = self.env['stock.location'].browse(db_location_id)
-                    _logger.warning(f"READ OVERRIDE: Force location_id từ {current_location_id} về {db_location_id} ({db_location.complete_name})")
-                    res['location_id'] = (db_location_id, db_location.display_name)
+                # Nếu location_id hiện tại KHÔNG PHẢI là location đúng (transit từ phiếu nguồn)
+                if correct_location_id and db_location_id != correct_location_id:
+                    _logger.warning(f"READ AUTO-FIX: Sửa location_id từ {db_location_id} về {correct_location_id}")
+                    
+                    # Auto-fix DB
+                    self.env.cr.execute("""
+                        UPDATE stock_picking SET location_id = %s WHERE id = %s
+                    """, (correct_location_id, picking_id))
+                    self.env.cr.execute("""
+                        UPDATE stock_move SET location_id = %s WHERE picking_id = %s
+                    """, (correct_location_id, picking_id))
+                    self.env.cr.execute("""
+                        UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
+                    """, (correct_location_id, picking_id))
+                    
+                    # Update result để hiển thị đúng
+                    correct_location = self.env['stock.location'].browse(correct_location_id)
+                    res['location_id'] = (correct_location_id, correct_location.display_name)
+                    _logger.warning(f"READ AUTO-FIX: Đã sửa DB và result cho phiếu {picking_id}")
         
         return result
 
@@ -220,29 +231,13 @@ class StockPicking(models.Model):
                 """, (original_src_location.id if original_src_location else None, picking_type_id.id))
                 picking_type_id.invalidate_recordset(['default_location_src_id'])
                 
-                # Đảm bảo chắc chắn location_id của picking là transit
-                _logger.warning(f"EXECUTING SQL UPDATE với transit_location.id = {transit_location.id}")
+                # đánh dấu để tránh tự đẻ thêm - SỬ DỤNG SQL ĐỂ TRÁNH TRIGGER ONCHANGE
                 self.env.cr.execute("""
-                    UPDATE stock_picking SET location_id = %s WHERE id = %s
-                """, (transit_location.id, new_picking.id))
+                    UPDATE stock_picking SET second_transfer_created = TRUE WHERE id = %s
+                """, (new_picking.id,))
                 self.env.cr.execute("""
-                    UPDATE stock_move SET location_id = %s WHERE picking_id = %s
-                """, (transit_location.id, new_picking.id))
-                self.env.cr.execute("""
-                    UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
-                """, (transit_location.id, new_picking.id))
-                
-                new_picking.invalidate_recordset(['location_id'])
-                new_picking.move_ids.invalidate_recordset(['location_id'])
-                if new_picking.move_line_ids:
-                    new_picking.move_line_ids.invalidate_recordset(['location_id'])
-                
-                _logger.warning(f"New picking location_id AFTER SQL UPDATE: {new_picking.location_id.id} - {new_picking.location_id.complete_name}")
-                _logger.warning("TRANSIT TRANSFER DEBUG - KẾT THÚC")
-                _logger.warning("="*50)
-                # đánh dấu để tránh tự đẻ thêm
-                new_picking.second_transfer_created = True
-                self.second_transfer_created = True
+                    UPDATE stock_picking SET second_transfer_created = TRUE WHERE id = %s
+                """, (picking.id,))
 
                 origin_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
                     picking.id, picking.name
@@ -267,6 +262,28 @@ class StockPicking(models.Model):
                 # Đồng bộ Liên hệ giữa 2 phiếu theo kho
                 picking.write({"partner_id": picking_type_id.warehouse_id.partner_id.id})
                 new_picking.write({"partner_id": picking.picking_type_id.warehouse_id.partner_id.id})
+                
+                # ========= FINAL FIX: SQL UPDATE Ở CUỐI CÙNG =========
+                # Đặt SAU tất cả write operations để tránh bị onchange ghi đè
+                _logger.warning(f"FINAL SQL UPDATE với transit_location.id = {transit_location.id}")
+                self.env.cr.execute("""
+                    UPDATE stock_picking SET location_id = %s WHERE id = %s
+                """, (transit_location.id, new_picking.id))
+                self.env.cr.execute("""
+                    UPDATE stock_move SET location_id = %s WHERE picking_id = %s
+                """, (transit_location.id, new_picking.id))
+                self.env.cr.execute("""
+                    UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
+                """, (transit_location.id, new_picking.id))
+                
+                # Verify in DB
+                self.env.cr.execute("SELECT location_id FROM stock_picking WHERE id = %s", (new_picking.id,))
+                db_check = self.env.cr.fetchone()
+                _logger.warning(f"VERIFY DB: Phiếu {new_picking.id} có location_id = {db_check[0] if db_check else 'NULL'}")
+                
+                _logger.warning("TRANSIT TRANSFER DEBUG - KẾT THÚC")
+                _logger.warning("="*50)
+                
                 return new_picking
 
     def copy_move_lines(self, source_picking, target_picking):
