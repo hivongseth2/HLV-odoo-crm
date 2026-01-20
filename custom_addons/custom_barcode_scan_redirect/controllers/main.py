@@ -211,6 +211,33 @@ def _bg_upload_to_drive(dbname, picking_id, filepath, mimetype):
             except: pass
 
 class CustomBarcodeScanController(http.Controller):
+    
+    def _get_ml_demand(self, ml):
+        """
+        [V3.6] Helper lấy số lượng yêu cầu (planned) cho một move_line.
+        Khi quét phiếu PICK để vào phiếu PACK, Odoo thường để reserved_qty = 0 ở phiếu PACK.
+        Ta phải tìm ngược lại quantity ở dòng tương ứng của phiếu PICK.
+        """
+        # 1. Ưu tiên lấy từ reservation trực tiếp của dòng (nếu có)
+        res = getattr(ml, 'reserved_qty', 0) or getattr(ml, 'reserved_uom_qty', 0) or getattr(ml, 'product_uom_qty', 0) or 0
+        if res > 0:
+            return res
+            
+        # 2. Nếu là dòng có package_id (kiện hàng từ bước trước chuyển sang)
+        if ml.package_id:
+            # Truy vết qua move_orig_ids (các phiếu nguồn, thường là PICK)
+            orig_mls = ml.move_id.move_orig_ids.mapped('move_line_ids').filtered(
+                lambda l: l.result_package_id.id == ml.package_id.id and l.product_id.id == ml.product_id.id
+            )
+            if orig_mls:
+                total = 0.0
+                for ol in orig_mls:
+                    # Odoo 17 dùng quantity, Odoo cũ dùng qty_done (ta lấy cả 2 cho chắc)
+                    total += getattr(ol, 'quantity', 0) or getattr(ol, 'qty_done', 0) or 0
+                return total
+                
+        return 0
+
 
     # ===================== UI & SCAN luồng sẵn có =====================
     @http.route(['/custom_barcode_scan/ui'], type='http', auth='user')
@@ -389,8 +416,8 @@ class CustomBarcodeScanController(http.Controller):
                         'product_name': ml.product_id.display_name,
                         'product_qty': ml.qty_done,
                         'product_uom': ml.product_uom_id.name,
-                        # Hiển thị reservation để user biết "yêu cầu" của kiện
-                        'reserved_qty': getattr(ml, 'reserved_qty', 0) or getattr(ml, 'reserved_uom_qty', 0) or getattr(ml, 'product_uom_qty', 0) or 0,
+                        # [V3.6] Hiển thị reservation thông minh (truy vết từ PICK nếu cần)
+                        'reserved_qty': self._get_ml_demand(ml),
                     } for ml in pkg_mls],
                 })
 
@@ -471,8 +498,8 @@ class CustomBarcodeScanController(http.Controller):
                 # - Ưu tiên dòng rỗng DONE == 0
                 def get_prio(l):
                     is_pkg = bool(l.package_id or l.result_package_id)
-                    # [V3.5] res bao gồm cả product_uom_qty để nhận diện đúng nhu cầu của kiện từ PICK
-                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or getattr(l, 'product_uom_qty', 0) or 0
+                    # [V3.6] Dùng _get_ml_demand để nhận diện đúng nhu cầu của kiện từ PICK
+                    res = self._get_ml_demand(l)
                     is_empty = (l.qty_done == 0)
                     # Trả về tuple (is_pkg, res_exists, is_empty, id) để sort
                     return (is_pkg, res > 0, is_empty, -l.id)
@@ -483,12 +510,12 @@ class CustomBarcodeScanController(http.Controller):
                 # Bước 1: Tìm dòng PACKAGE còn chỗ hoặc rỗng
                 for l in sorted_mls:
                     is_pkg = bool(l.package_id or l.result_package_id)
-                    # [V3.5] res bao gồm cả product_uom_qty
-                    res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or getattr(l, 'product_uom_qty', 0) or 0
+                    # [V3.6] Dùng _get_ml_demand
+                    res = self._get_ml_demand(l)
                     if is_pkg:
                         if (res > 0 and l.qty_done < res) or (res == 0 and l.qty_done == 0):
                             candidate = l
-                            _logger.info(f"REDIRECT V3.4 FOUND (Package Match): ML {l.id} | Package: {l.package_id.name or l.result_package_id.name}")
+                            _logger.info(f"REDIRECT V3.6 FOUND (Package Match): ML {l.id} | Package: {l.package_id.name or l.result_package_id.name}")
                             break
                 
                 # Bước 2: Nếu các kiện đã "tạm đủ" (mỗi kiện ít nhất 1 cái), tìm dòng HÀNG LẺ
@@ -511,8 +538,8 @@ class CustomBarcodeScanController(http.Controller):
                 mv = target_ml.move_id
                 mv_done = sum(l.qty_done for l in mv.move_line_ids)
                 
-                # Check reserved qty của chính line này
-                reserved_qty = getattr(target_ml, 'reserved_qty', 0) or getattr(target_ml, 'reserved_uom_qty', 0) or getattr(target_ml, 'product_uom_qty', 0) or 0
+                # [V3.6] Check reserved qty của chính line này
+                reserved_qty = self._get_ml_demand(target_ml)
                 
                 # Cả package_id (từ PICK) và result_package_id (đóng gói mới) đều được coi là "hàng trong pack"
                 is_packed = target_ml.result_package_id or target_ml.package_id
