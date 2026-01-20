@@ -30,19 +30,33 @@ class StockPicking(models.Model):
         Odoo core sẽ set location_id = picking_type_id.default_location_src_id,
         nhưng với phiếu nhận từ transit, ta cần giữ nguồn là Transit location.
         """
-        # Lưu lại location_id hiện tại nếu phiếu này là phiếu bước 2 (có source_transfer_id)
-        # hoặc nguồn là transit location
-        preserve_location = False
+        # Lưu lại location_id hiện tại
         saved_location_id = self.location_id
         
-        if self.source_transfer_id or self._is_inter_warehouse_transit(self.location_id):
+        # Kiểm tra nếu phiếu này là phiếu bước 2 hoặc nguồn là transit
+        # Dùng _origin để lấy giá trị từ database (record đã lưu)
+        preserve_location = False
+        
+        # Check source_transfer_id từ _origin (record đã lưu trong DB)
+        if hasattr(self, '_origin') and self._origin:
+            origin_source_transfer = self._origin.source_transfer_id
+            if origin_source_transfer:
+                preserve_location = True
+                _logger.warning(f"ONCHANGE: Phiếu có source_transfer_id={origin_source_transfer.id}, sẽ bảo vệ location_id")
+        
+        # Hoặc check nếu location_id hiện tại là transit
+        if saved_location_id and (saved_location_id.usage == 'transit' or self._is_inter_warehouse_transit(saved_location_id)):
             preserve_location = True
+            _logger.warning(f"ONCHANGE: Location hiện tại là Transit ({saved_location_id.id}), sẽ bảo vệ")
+        
+        _logger.warning(f"ONCHANGE: preserve_location={preserve_location}, saved_location_id={saved_location_id.id if saved_location_id else None}")
         
         # Gọi super để Odoo xử lý normal logic
         result = super()._onchange_picking_type()
         
         # Khôi phục location_id nếu cần bảo vệ
         if preserve_location and saved_location_id:
+            _logger.warning(f"ONCHANGE: Khôi phục location_id từ {self.location_id.id if self.location_id else None} về {saved_location_id.id}")
             self.location_id = saved_location_id
         
         return result
