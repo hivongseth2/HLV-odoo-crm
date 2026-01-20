@@ -444,15 +444,20 @@ class CustomBarcodeScanController(http.Controller):
             _logger.info(f"Target Line {target_ml.id} Check. Packed: {is_packed.id if is_packed else 'False'}")
             
             if delta > 0:
-                if is_packed:
-                    _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}). Switching to find a loose line.")
-                    target_ml = None # Force finding a loose line
-                else:
-                    # [FIX] Check if move is full. If so, don't use this line, find another move.
-                    mv = target_ml.move_id
-                    mv_done = sum(l.qty_done for l in mv.move_line_ids)
-                    if mv_done >= mv.product_uom_qty:
-                        _logger.info(f"Target line {target_ml.id} belongs to FULL Move {mv.id} ({mv_done}/{mv.product_uom_qty}). Switching to find another move...")
+                # [FIX-2024] Check if move is full regardless of packed status
+                mv = target_ml.move_id
+                mv_done = sum(l.qty_done for l in mv.move_line_ids)
+                if mv_done >= mv.product_uom_qty:
+                    _logger.info(f"Target line {target_ml.id} belongs to FULL Move {mv.id} ({mv_done}/{mv.product_uom_qty}). Switching to find another move...")
+                    target_ml = None
+                elif is_packed:
+                    # [FIX-2024] Dòng đã trong package NHƯNG move và line này vẫn còn chỗ (pre-defined package)
+                    # Check reserved qty của chính line này
+                    reserved_qty = getattr(target_ml, 'reserved_qty', 0) or getattr(target_ml, 'reserved_uom_qty', 0) or getattr(target_ml, 'product_uom_qty', 0) or 0
+                    if target_ml.qty_done < reserved_qty:
+                        _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) but line has space ({target_ml.qty_done}/{reserved_qty}). Keeping it.")
+                    else:
+                        _logger.info(f"Target line {target_ml.id} is packed ({is_packed.name}) and line is FULL. Skipping.")
                         target_ml = None
 
         # Nếu chưa xác định được target_ml (do line_id null hoặc sai hoặc đã bị packed), tự động tìm dòng phù hợp
@@ -485,10 +490,11 @@ class CustomBarcodeScanController(http.Controller):
                     
                     _logger.info(f"CHECK MOVE_LINE {ml.id}: Move={ml.move_id.id}, Reserved={reserved_qty}, Done={ml.qty_done}, Remain={remaining_in_line}, PackageId={ml.package_id.id if ml.package_id else 'None'}, ResultPkg={ml.result_package_id.id if ml.result_package_id else 'None'}")
                     
-                    # Điều kiện: move_line còn chỗ VÀ chưa được đóng gói (result_package_id = False)
-                    if remaining_in_line > 0 and not ml.result_package_id:
+                    # [FIX-2024] Điều kiện: move_line còn chỗ. 
+                    # Không check result_package_id để hỗ trợ các dòng được gán package sẵn (pre-configured)
+                    if remaining_in_line > 0:
                         target_ml = ml
-                        _logger.info(f"Selected move_line {ml.id} with remaining {remaining_in_line}")
+                        _logger.info(f"Selected move_line {ml.id} (Packed: {bool(ml.result_package_id)}) with remaining {remaining_in_line}")
                         found_target = True
                         break
                     
