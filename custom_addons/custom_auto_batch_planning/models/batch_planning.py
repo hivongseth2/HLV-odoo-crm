@@ -13,6 +13,22 @@ class StockBatchPlanning(models.Model):
     
     picking_ids = fields.One2many('stock.picking', 'batch_plan_id', string='Các phiếu trong kế hoạch')
     
+    # NEW: Liên kết trực tiếp với Sale Order
+    sale_order_ids = fields.Many2many('sale.order', 'batch_planning_sale_order_rel', 
+                                       'plan_id', 'order_id', string='Đơn hàng trong kế hoạch')
+    
+    # NEW: Bộ lọc theo Tag (Tuyến) - Many2many vì SO có nhiều tag
+    tag_ids = fields.Many2many('crm.tag', 'batch_planning_tag_rel',
+                               'plan_id', 'tag_id', string='Lọc theo Tuyến (Tag)')
+    filter_parent_partner_id = fields.Many2one('res.partner', string='Lọc theo Công ty mẹ',
+                                                domain="[('is_company', '=', True)]")
+    commitment_date_from = fields.Date(string='Ngày giao từ')
+    commitment_date_to = fields.Date(string='Ngày giao đến')
+    
+    # NEW: Computed counts
+    sale_order_count = fields.Integer(compute='_compute_counts', string='Số đơn hàng')
+    picking_count = fields.Integer(compute='_compute_counts', string='Số phiếu')
+    
     # Link tới Batch thật khi
     batch_id = fields.Many2one('stock.picking.batch', string='Lô thực tế (Đã tạo)', readonly=True, copy=False)
     
@@ -23,6 +39,12 @@ class StockBatchPlanning(models.Model):
         ('done', 'Đã tạo Lô'),
         ('cancel', 'Hủy')
     ], string='Trạng thái', default='draft', tracking=True)
+
+    @api.depends('sale_order_ids', 'picking_ids')
+    def _compute_counts(self):
+        for record in self:
+            record.sale_order_count = len(record.sale_order_ids)
+            record.picking_count = len(record.picking_ids)
 
     @api.model
     def create(self, vals):
@@ -85,3 +107,34 @@ class StockBatchPlanning(models.Model):
                 'default_mode': 'select_pickings'
             }
         }
+
+    def action_add_sale_orders(self):
+        """Mở wizard để chọn Sale Order vào kế hoạch"""
+        self.ensure_one()
+        return {
+            'name': 'Chọn Đơn Hàng (SO)',
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.batch.planning.so.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_batch_plan_id': self.id,
+                'default_tag_ids': [(6, 0, self.tag_ids.ids)] if self.tag_ids else False,
+                'default_parent_partner_id': self.filter_parent_partner_id.id if self.filter_parent_partner_id else False,
+                'default_commitment_date_from': self.commitment_date_from,
+                'default_commitment_date_to': self.commitment_date_to,
+            }
+        }
+
+    def _sync_pickings_from_sale_orders(self):
+        """Đồng bộ Picking từ các Sale Order trong kế hoạch"""
+        for plan in self:
+            for so in plan.sale_order_ids:
+                # Tìm các picking liên quan từ SO
+                pickings = self.env['stock.picking'].search([
+                    ('origin', '=', so.name),
+                    ('batch_plan_id', '=', False),
+                    ('state', 'not in', ['cancel', 'done'])
+                ])
+                if pickings:
+                    pickings.write({'batch_plan_id': plan.id})

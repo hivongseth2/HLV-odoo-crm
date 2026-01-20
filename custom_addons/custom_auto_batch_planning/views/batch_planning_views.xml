@@ -33,43 +33,75 @@
                     <field name="state" widget="statusbar"/>
                 </header>
                 <sheet>
+                    <!-- Smart Buttons -->
+                    <div class="oe_button_box" name="button_box">
+                        <button class="oe_stat_button" type="object" name="action_add_sale_orders" icon="fa-shopping-cart"
+                                invisible="state == 'done'">
+                            <field name="sale_order_count" widget="statinfo" string="Đơn hàng"/>
+                        </button>
+                        <button class="oe_stat_button" type="object" name="action_open_picking_selector" icon="fa-truck"
+                                invisible="state == 'done'">
+                            <field name="picking_count" widget="statinfo" string="Phiếu"/>
+                        </button>
+                    </div>
+                    
                     <div class="oe_title">
                         <h1>
                             <field name="name" readonly="1"/>
                         </h1>
                     </div>
                     <group>
-                        <group>
+                        <group string="Thông tin chung">
                             <field name="scheduled_date"/>
                             <field name="user_id"/>
                             <field name="vehicle_id"/>
-                        </group>
-                        <group>
                             <field name="route_name"/>
+                        </group>
+                        <group string="Bộ lọc (Gợi ý cho chọn SO)">
+                            <field name="tag_ids" widget="many2many_tags" placeholder="Tuyến..."/>
+                            <field name="filter_parent_partner_id" placeholder="Công ty mẹ..."/>
+                            <field name="commitment_date_from"/>
+                            <field name="commitment_date_to"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group>
                             <field name="batch_id" readonly="1"/>
                         </group>
                     </group>
                     <notebook>
-                        <page string="Danh sách phiếu (Picking)">
+                        <!-- Tab Đơn hàng (SO) -->
+                        <page string="Đơn hàng (Sale Order)">
+                            <button name="action_add_sale_orders" type="object" string="Thêm Đơn Hàng (SO)" 
+                                    class="btn-primary" invisible="state == 'done'" style="margin-bottom: 10px;"/>
+                            
+                            <field name="sale_order_ids" readonly="1">
+                                <list create="0" delete="1" 
+                                      decoration-info="state in ('draft', 'sent')" 
+                                      decoration-success="state == 'sale'">
+                                    <field name="name" string="Mã ĐH"/>
+                                    <field name="partner_id" string="Khách hàng"/>
+                                    <field name="tag_ids" widget="many2many_tags" string="Tuyến"/>
+                                    <field name="commitment_date" string="Ngày giao"/>
+                                    <field name="amount_total" string="Tổng tiền"/>
+                                    <field name="state" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
+                        
+                        <!-- Tab Phiếu (Picking) -->
+                        <page string="Phiếu Xuất Kho (Picking)">
                             <button name="action_open_picking_selector" type="object" string="Chọn Phiếu (Add Pickings)" class="btn-primary" 
                                     invisible="state == 'done'" style="margin-bottom: 10px;"/>
                             
-                            <!-- Filter: Chỉ hiện phiếu nguồn (Pick) based on name convention -->
-                            <field name="picking_ids" context="{'default_batch_plan_id': id}" readonly="1" 
-                                   domain="[('name', 'ilike', '%PICK%')]">
+                            <field name="picking_ids" context="{'default_batch_plan_id': id}" readonly="1">
                                 <list create="0" delete="1" decoration-info="state == 'assigned'" decoration-success="state == 'done'">
-                                    <field name="name" string="Phiếu Lấy Hàng (Pick)"/>
+                                    <field name="name" string="Số phiếu"/>
                                     <field name="partner_id"/>
+                                    <field name="picking_type_id" string="Loại"/>
+                                    <field name="scheduled_date" string="Ngày hẹn"/>
                                     <field name="state" widget="badge" decoration-success="state == 'done'"/>
-                                    
-                                    <!-- Cột Pack -->
-                                    <!-- <field name="related_pack_ids" widget="many2many_tags" string="Phiếu Gói (Pack)" optional="show"/> -->
-                                    
-                                    <!-- Cột Out -->
-                                    <!-- <field name="related_out_ids" widget="many2many_tags" string="Phiếu Xuất (Out)" optional="show"/> -->
-                                    
-                                    <!-- Lấy Batch của phiếu Out đầu tiên -->
-                                    <field name="batch_id" string="Lô Thật (Của Pick)" optional="hide"/>
+                                    <field name="batch_id" string="Lô Thật" optional="hide"/>
                                 </list>
                             </field>
                         </page>
