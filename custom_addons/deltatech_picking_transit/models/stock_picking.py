@@ -15,7 +15,7 @@ class StockPicking(models.Model):
     second_transfer_created = fields.Boolean(default=False, copy=False)  # Không copy khi nhân bản
     source_transfer_id = fields.Many2one("stock.picking", copy=False)  # Không copy khi nhân bản
 
-    # giữ để không vỡ view cũ (không còn phụ thuộc)
+   
     create_second_transfer_automatically = fields.Boolean(
         string="Tự động tạo phiếu nhận (bước 2)",
         related="picking_type_id.auto_second_transfer",
