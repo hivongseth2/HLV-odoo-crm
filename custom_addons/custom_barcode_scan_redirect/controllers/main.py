@@ -467,6 +467,7 @@ class CustomBarcodeScanController(http.Controller):
                     l.id
                 ), reverse=True)
                 
+                candidate = None
                 # Bước 1: Tìm dòng CÒN CHỖ (theo Reserved Qty)
                 for l in sorted_pkg_mls:
                     res = getattr(l, 'reserved_qty', 0) or getattr(l, 'reserved_uom_qty', 0) or getattr(l, 'product_uom_qty', 0) or 0
