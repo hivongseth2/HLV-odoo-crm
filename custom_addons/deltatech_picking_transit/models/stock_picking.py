@@ -1,7 +1,10 @@
 # models/stock_picking.py
+import logging
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 from markupsafe import Markup
+
+_logger = logging.getLogger(__name__)
 
 
 class StockPicking(models.Model):
@@ -9,15 +12,141 @@ class StockPicking(models.Model):
 
     is_transit_transfer = fields.Boolean(default=False, compute="_compute_is_transit_transfer")
     sub_location_existent = fields.Boolean(default=False, compute="_compute_sub_location_existent")
-    second_transfer_created = fields.Boolean(default=False)
-    source_transfer_id = fields.Many2one("stock.picking")
+    second_transfer_created = fields.Boolean(default=False, copy=False)  # Không copy khi nhân bản
+    source_transfer_id = fields.Many2one("stock.picking", copy=False)  # Không copy khi nhân bản
 
-    # giữ để không vỡ view cũ (không còn phụ thuộc)
+   
     create_second_transfer_automatically = fields.Boolean(
         string="Tự động tạo phiếu nhận (bước 2)",
         related="picking_type_id.auto_second_transfer",
         store=True,
     )
+
+    # ---------------- Override onchange để bảo vệ location_id ----------------
+    @api.onchange('picking_type_id', 'partner_id')
+    def _onchange_picking_type(self):
+        """
+        Override để ngăn Odoo ghi đè location_id khi phiếu là bước 2 của transit transfer.
+        Odoo core sẽ set location_id = picking_type_id.default_location_src_id,
+        nhưng với phiếu nhận từ transit, ta cần giữ nguồn là Transit location.
+        """
+        # Lưu lại location_id hiện tại
+        saved_location_id = self.location_id
+        
+        # Kiểm tra nếu phiếu này là phiếu bước 2 hoặc nguồn là transit
+        # Dùng _origin để lấy giá trị từ database (record đã lưu)
+        preserve_location = False
+        
+        # Check source_transfer_id từ _origin (record đã lưu trong DB)
+        if hasattr(self, '_origin') and self._origin:
+            origin_source_transfer = self._origin.source_transfer_id
+            if origin_source_transfer:
+                preserve_location = True
+                _logger.warning(f"ONCHANGE: Phiếu có source_transfer_id={origin_source_transfer.id}, sẽ bảo vệ location_id")
+        
+        # Hoặc check nếu location_id hiện tại là transit
+        if saved_location_id and (saved_location_id.usage == 'transit' or self._is_inter_warehouse_transit(saved_location_id)):
+            preserve_location = True
+            _logger.warning(f"ONCHANGE: Location hiện tại là Transit ({saved_location_id.id}), sẽ bảo vệ")
+        
+        _logger.warning(f"ONCHANGE: preserve_location={preserve_location}, saved_location_id={saved_location_id.id if saved_location_id else None}")
+        
+        # Gọi super để Odoo xử lý normal logic
+        result = super()._onchange_picking_type()
+        
+        # Khôi phục location_id nếu cần bảo vệ
+        if preserve_location and saved_location_id:
+            _logger.warning(f"ONCHANGE: Khôi phục location_id từ {self.location_id.id if self.location_id else None} về {saved_location_id.id}")
+            self.location_id = saved_location_id
+        
+        return result
+
+    # ---------------- Override write để bảo vệ location_id ----------------
+    def write(self, vals):
+        """
+        Override write để ngăn việc ghi đè location_id khi phiếu là bước 2 của transit transfer.
+        Nếu location_id bị thay đổi từ transit sang non-transit, sẽ restore lại.
+        """
+        for picking in self:
+            # Chỉ bảo vệ phiếu có source_transfer_id (phiếu bước 2)
+            if picking.source_transfer_id and 'location_id' in vals:
+                current_location = picking.location_id
+                new_location_id = vals.get('location_id')
+                
+                # Nếu location hiện tại là transit và đang bị thay đổi
+                if current_location and current_location.usage == 'transit':
+                    new_location = self.env['stock.location'].browse(new_location_id) if new_location_id else False
+                    
+                    # Nếu location mới KHÔNG phải transit, ngăn việc thay đổi
+                    if new_location and new_location.usage != 'transit':
+                        _logger.warning(f"WRITE PROTECTION: Ngăn thay đổi location_id từ Transit ({current_location.id}) sang {new_location.id}")
+                        # Xóa location_id khỏi vals để không ghi đè
+                        vals = dict(vals)  # Copy để không ảnh hưởng original
+                        del vals['location_id']
+        
+        return super().write(vals)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        """
+        Override create để đảm bảo location_id được set đúng cho phiếu có source_transfer_id.
+        """
+        result = super().create(vals_list)
+        
+        # Sau khi tạo, kiểm tra và log
+        for picking in result:
+            if picking.source_transfer_id:
+                _logger.warning(f"CREATE: Phiếu {picking.name} có source_transfer_id={picking.source_transfer_id.id}, location_id={picking.location_id.id}")
+        
+        return result
+
+    def read(self, fields=None, load='_classic_read'):
+        """
+        Override read để tự động fix location_id trong DB cho phiếu transit bước 2.
+        Chỉ fix DB, không modify result để tránh format issues.
+        """
+        # Trước khi read, kiểm tra và fix DB nếu cần
+        for picking in self:
+            if not picking.id:
+                continue
+            
+            # Check trực tiếp từ DB
+            self.env.cr.execute("""
+                SELECT sp.source_transfer_id, sp.location_id, sp_src.location_dest_id
+                FROM stock_picking sp
+                LEFT JOIN stock_picking sp_src ON sp.source_transfer_id = sp_src.id
+                WHERE sp.id = %s
+            """, (picking.id,))
+            db_row = self.env.cr.fetchone()
+            
+            if db_row and db_row[0]:  # Có source_transfer_id
+                source_transfer_id = db_row[0]
+                db_location_id = db_row[1]
+                correct_location_id = db_row[2]  # location_dest_id của phiếu nguồn = Transit
+                
+                # Nếu location_id hiện tại KHÔNG PHẢI là location đúng
+                if correct_location_id and db_location_id != correct_location_id:
+                    _logger.warning(f"READ AUTO-FIX: Phiếu {picking.id}, sửa location_id từ {db_location_id} về {correct_location_id}")
+                    
+                    # Auto-fix DB
+                    self.env.cr.execute("""
+                        UPDATE stock_picking SET location_id = %s WHERE id = %s
+                    """, (correct_location_id, picking.id))
+                    self.env.cr.execute("""
+                        UPDATE stock_move SET location_id = %s WHERE picking_id = %s
+                    """, (correct_location_id, picking.id))
+                    self.env.cr.execute("""
+                        UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
+                    """, (correct_location_id, picking.id))
+                    
+                    # Invalidate cache để Odoo đọc lại từ DB
+                    picking.invalidate_recordset(['location_id'])
+                    picking.move_ids.invalidate_recordset(['location_id'])
+                    if picking.move_line_ids:
+                        picking.move_line_ids.invalidate_recordset(['location_id'])
+        
+        # Gọi super để Odoo đọc từ DB đã được fix
+        return super().read(fields=fields, load=load)
 
     # ---------------- Helper ----------------
     def _is_inter_warehouse_transit(self, location):
@@ -48,18 +177,64 @@ class StockPicking(models.Model):
         """Tạo phiếu nhận (bước 2) và ghi chú 2 chiều có kèm liên kết."""
         for picking in self:
             if picking.picking_type_id.code == "internal":
+                # Lưu lại transit location (đích của phiếu 1 = nguồn của phiếu 2)
+                transit_location = picking.location_dest_id
+                
+                _logger.warning("="*50)
+                _logger.warning("TRANSIT TRANSFER DEBUG - BẮT ĐẦU TẠO PHIẾU 2")
+                _logger.warning(f"Transit location ID: {transit_location.id}")
+                _logger.warning(f"Transit location name: {transit_location.complete_name}")
+                _logger.warning(f"Picking type ID: {picking_type_id.id}")
+                _logger.warning(f"Picking type default_location_src_id BEFORE: {picking_type_id.default_location_src_id.id if picking_type_id.default_location_src_id else None}")
+                
+                # =========== FIX QUAN TRỌNG ===========
+                # Lưu lại default_location_src_id gốc của picking_type
+                original_src_location = picking_type_id.default_location_src_id
+                
+                # Tạm thời thay đổi default_location_src_id thành transit
+                # Dùng sudo và SQL để bypass mọi restriction
+                self.env.cr.execute("""
+                    UPDATE stock_picking_type 
+                    SET default_location_src_id = %s 
+                    WHERE id = %s
+                """, (transit_location.id, picking_type_id.id))
+                picking_type_id.invalidate_recordset(['default_location_src_id'])
+                
+                # Tạo picking - bây giờ sẽ dùng transit làm nguồn mặc định
                 new_picking_vals = {
                     "picking_type_id": picking_type_id.id,
-                    "location_id": picking.location_dest_id.id,       # nguồn = transit (đích phiếu 1)
-                    "location_dest_id": final_dest_location_id.id,     # đích cuối (kho nhận)
+                    "location_id": transit_location.id,
+                    "location_dest_id": final_dest_location_id.id,
                     "move_ids_without_package": [],
+                    "source_transfer_id": picking.id,  # Đánh dấu ngay từ đầu
                 }
+                
                 new_picking = self.env["stock.picking"].create(new_picking_vals)
+                _logger.warning(f"New picking ID: {new_picking.id}, Name: {new_picking.name}")
+                _logger.warning(f"New picking location_id AFTER CREATE: {new_picking.location_id.id} - {new_picking.location_id.complete_name}")
+                
+                # Copy move lines với location nguồn là transit
                 self.copy_move_lines(picking, new_picking)
+                
+                # Confirm picking
                 new_picking.action_confirm()
-                # đánh dấu để tránh tự đẻ thêm
-                new_picking.second_transfer_created = True
-                self.second_transfer_created = True
+                _logger.warning(f"New picking location_id AFTER CONFIRM: {new_picking.location_id.id} - {new_picking.location_id.complete_name}")
+                
+                # Khôi phục default_location_src_id gốc
+                self.env.cr.execute("""
+                    UPDATE stock_picking_type 
+                    SET default_location_src_id = %s 
+                    WHERE id = %s
+                """, (original_src_location.id if original_src_location else None, picking_type_id.id))
+                picking_type_id.invalidate_recordset(['default_location_src_id'])
+                
+                # đánh dấu để tránh tự đẻ thêm - SỬ DỤNG SQL ĐỂ TRÁNH TRIGGER ONCHANGE
+                self.env.cr.execute("""
+                    UPDATE stock_picking SET second_transfer_created = TRUE WHERE id = %s
+                """, (new_picking.id,))
+                self.env.cr.execute("""
+                    UPDATE stock_picking SET second_transfer_created = TRUE WHERE id = %s
+                """, (picking.id,))
 
                 origin_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
                     picking.id, picking.name
@@ -67,23 +242,78 @@ class StockPicking(models.Model):
                 new_link = Markup('<a href="#" data-oe-model="stock.picking" data-oe-id="%d">%s</a>') % (
                     new_picking.id, new_picking.name
                 )
+                
+                # Lấy thông tin kho để hiển thị
+                src_warehouse = picking.picking_type_id.warehouse_id.name if picking.picking_type_id.warehouse_id else "N/A"
+                dest_warehouse = picking_type_id.warehouse_id.name if picking_type_id.warehouse_id else "N/A"
 
+                # Message cho phiếu 2 (phiếu nhận)
+                new_picking_msg = Markup("""
+                    <div style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); border-left: 4px solid #4caf50; padding: 12px; border-radius: 8px; margin: 8px 0;">
+                        <div style="font-weight: bold; color: #2e7d32; font-size: 14px; margin-bottom: 8px;">
+                            📦 Phiếu nhận hàng từ Transit
+                        </div>
+                        <div style="color: #333; font-size: 13px;">
+                            <div>🔗 <b>Phiếu nguồn:</b> %s</div>
+                            <div>🏢 <b>Từ kho:</b> %s</div>
+                            <div>📍 <b>Vị trí nguồn:</b> %s</div>
+                            <div>📍 <b>Vị trí đích:</b> %s</div>
+                        </div>
+                    </div>
+                """) % (origin_link, src_warehouse, transit_location.display_name, final_dest_location_id.display_name)
+                
                 new_picking.message_post(
-                    body=Markup("Phiếu này được tạo từ %s.") % origin_link,
-                    message_type="comment",
+                    body=new_picking_msg,
+                    message_type="notification",
                     subtype_xmlid="mail.mt_note",
                 )
                 new_picking.source_transfer_id = picking.id
 
+                # Message cho phiếu 1 (phiếu xuất)
+                picking_msg = Markup("""
+                    <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-left: 4px solid #2196f3; padding: 12px; border-radius: 8px; margin: 8px 0;">
+                        <div style="font-weight: bold; color: #1565c0; font-size: 14px; margin-bottom: 8px;">
+                            🚚 Chuyển kho 2 bước hoàn tất
+                        </div>
+                        <div style="color: #333; font-size: 13px;">
+                            <div>📦 <b>Phiếu nhận đã tạo:</b> %s</div>
+                            <div>🏢 <b>Kho nhận:</b> %s</div>
+                            <div>📍 <b>Transit:</b> %s</div>
+                        </div>
+                    </div>
+                """) % (new_link, dest_warehouse, transit_location.display_name)
+                
                 picking.message_post(
-                    body=Markup("Đã tạo phiếu %s.") % new_link,
-                    message_type="comment",
+                    body=picking_msg,
+                    message_type="notification",
                     subtype_xmlid="mail.mt_note",
                 )
 
                 # Đồng bộ Liên hệ giữa 2 phiếu theo kho
                 picking.write({"partner_id": picking_type_id.warehouse_id.partner_id.id})
                 new_picking.write({"partner_id": picking.picking_type_id.warehouse_id.partner_id.id})
+                
+                # ========= FINAL FIX: SQL UPDATE Ở CUỐI CÙNG =========
+                # Đặt SAU tất cả write operations để tránh bị onchange ghi đè
+                _logger.warning(f"FINAL SQL UPDATE với transit_location.id = {transit_location.id}")
+                self.env.cr.execute("""
+                    UPDATE stock_picking SET location_id = %s WHERE id = %s
+                """, (transit_location.id, new_picking.id))
+                self.env.cr.execute("""
+                    UPDATE stock_move SET location_id = %s WHERE picking_id = %s
+                """, (transit_location.id, new_picking.id))
+                self.env.cr.execute("""
+                    UPDATE stock_move_line SET location_id = %s WHERE picking_id = %s
+                """, (transit_location.id, new_picking.id))
+                
+                # Verify in DB
+                self.env.cr.execute("SELECT location_id FROM stock_picking WHERE id = %s", (new_picking.id,))
+                db_check = self.env.cr.fetchone()
+                _logger.warning(f"VERIFY DB: Phiếu {new_picking.id} có location_id = {db_check[0] if db_check else 'NULL'}")
+                
+                _logger.warning("TRANSIT TRANSFER DEBUG - KẾT THÚC")
+                _logger.warning("="*50)
+                
                 return new_picking
 
     def copy_move_lines(self, source_picking, target_picking):
@@ -192,14 +422,21 @@ class StockPicking(models.Model):
         result = super().button_validate()
 
         # SAU KHI đã validate và tách kiện (nếu có), mới tạo phiếu bước 2
+        _logger.warning(f"POST-VALIDATE: pickings_need_second_transfer count = {len(pickings_need_second_transfer)}")
         for info in pickings_need_second_transfer:
             picking = info['picking']
+            # Refresh để lấy state mới nhất từ DB
+            picking.invalidate_recordset(['state'])
+            _logger.warning(f"POST-VALIDATE: Picking {picking.id} state = {picking.state}")
             # Chỉ tạo phiếu bước 2 cho phiếu đã validate (state = done)
             # Nếu có tách kiện, picking gốc là phiếu đã validate, backorder là phiếu chờ
             if picking.state == 'done':
+                _logger.warning(f"POST-VALIDATE: Tạo phiếu 2 cho picking {picking.id}")
                 picking.create_second_transfer_wizard(
                     info['final_dest_location_id'],
                     info['next_operation']
                 )
+            else:
+                _logger.warning(f"POST-VALIDATE: SKIP - Picking {picking.id} không phải state=done")
 
         return result
