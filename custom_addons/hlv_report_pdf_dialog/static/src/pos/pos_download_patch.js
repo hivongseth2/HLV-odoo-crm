@@ -33,7 +33,7 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
                         const safeFilename = encodeURIComponent(decodedFilename);
                         const disposition = value.startsWith('attachment') ? 'attachment' : 'inline';
                         const newValue = `${disposition}; filename="${safeFilename}"`;
-                        console.log("POS Download: Sanitized Content-Disposition header", { original: value, sanitized: newValue });
+                        console.log("App/POS Download: Sanitized Content-Disposition header", { original: value, sanitized: newValue });
                         return newValue;
                     } catch (decodeError) {
                         // If decode fails, use a fallback filename
@@ -51,7 +51,7 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
                         const safeFilename = encodeURIComponent(decodedFilename);
                         const disposition = value.startsWith('attachment') ? 'attachment' : 'inline';
                         const newValue = `${disposition}; filename="${safeFilename}"`;
-                        console.log("POS Download: Sanitized Content-Disposition header (RFC2231)", { original: value, sanitized: newValue });
+                        console.log("App/POS Download: Sanitized Content-Disposition header (RFC2231)", { original: value, sanitized: newValue });
                         return newValue;
                     } catch (decodeError) {
                         const disposition = value.startsWith('attachment') ? 'attachment' : 'inline';
@@ -60,7 +60,7 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
                 }
             }
         } catch (error) {
-            console.warn("POS Download: Error sanitizing Content-Disposition header", error);
+            console.warn("App/POS Download: Error sanitizing Content-Disposition header", error);
             // Return a safe fallback
             return 'attachment; filename="report.pdf"';
         }
@@ -69,4 +69,4 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
     return value;
 };
 
-console.log("POS Download: Content-Disposition header sanitization patch loaded");
+console.log("App/POS Download: Content-Disposition header sanitization patch loaded");
