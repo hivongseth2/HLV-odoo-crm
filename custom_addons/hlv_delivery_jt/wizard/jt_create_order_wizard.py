@@ -269,243 +269,92 @@ class JTCreateOrderWizard(models.TransientModel):
     @api.onchange('receiver_address')
     def _onchange_receiver_address_parse(self):
         """
-        Auto-parse Vietnamese address with proper 3-level/2-level detection.
-        
-        Vietnam has 2 address formats:
-        - 3-level (old): Ward, District, Province (e.g., "Tân Quý, Tân Phú, TP.HCM")
-        - 2-level (new): Ward, Province (e.g., "Tân Phú, TP.HCM" - Tân Phú is Ward, not District)
-        
-        Algorithm:
-        1. Find Province -> Remove from address
-        2. Split remaining by comma, take rightmost geographic part
-        3. Check if it's a District name:
-           - YES -> 3-level address: Find Ward in that District
-           - NO -> Check if it's a Ward name (2-level address)
+        Auto-parse address using J&T API.
+        Calls getAreaStreetBySearchKey API to get Province/District/Ward info.
         """
-        if not self.receiver_address:
+        if not self.receiver_address or len(self.receiver_address) < 10:
             return
 
-        addr = self.receiver_address
-        addr_lower = addr.lower()
+        # Get authToken from System Parameters
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        auth_token = get_param('jnt_authToken')
         
-        def clean_name(n):
-            return self._normalize_name(n)
-        
-        def name_matches(text, name, clean):
-            """Check if name or its cleaned version exists in text"""
-            name_lower = name.lower()
-            return name_lower in text or (clean and clean in text)
-
-        # 1. Find Province (longest name first)
-        provinces = self.env['jnt.province'].search_read([], ['id', 'name'])
-        provinces.sort(key=lambda x: len(x['name']), reverse=True)
-
-        found_prov = None
-        remaining_addr = addr_lower
-        
-        for p in provinces:
-            p_name = p['name'].lower()
-            p_clean = clean_name(p['name'])
-            if p_name in remaining_addr:
-                found_prov = p
-                remaining_addr = remaining_addr.replace(p_name, '', 1)
-                break
-            elif p_clean in remaining_addr:
-                found_prov = p
-                remaining_addr = remaining_addr.replace(p_clean, '', 1)
-                break
-        
-        if not found_prov:
+        if not auth_token:
+            _logger.warning("J&T authToken not configured. Cannot auto-parse address.")
             return
+        
+        try:
+            # Call J&T API
+            result = JTApiUtils.search_address(auth_token, self.receiver_address)
             
-        self.receiver_prov_id = found_prov['id']
-        
-        # 2. Split remaining address by comma to analyze structure
-        # Remove "việt nam" and clean up
-        remaining_addr = remaining_addr.replace('việt nam', '').replace('vietnam', '')
-        parts = [p.strip() for p in remaining_addr.split(',') if p.strip()]
-        
-        # Filter out parts that look like street addresses (contain numbers or "đ.", "đường", etc.)
-        street_indicators = ['đ.', 'đường', 'số', 'ngõ', 'ngách', 'hẻm', 'khu', 'tổ', 'ấp']
-        geo_parts = []
-        for part in parts:
-            is_street = any(ind in part for ind in street_indicators)
-            # Also check if part starts with a number (likely house number)
-            if not is_street and not (part and part[0].isdigit()):
-                geo_parts.append(part)
-            elif not is_street:
-                # Part has number but might still be geo (e.g., "Phường 1")
-                geo_parts.append(part)
-        
-        # Load all districts and wards in this province
-        districts = self.env['jnt.district'].search_read(
-            [('province_id', '=', found_prov['id'])], ['id', 'name']
-        )
-        wards = self.env['jnt.ward'].search_read(
-            [('district_id.province_id', '=', found_prov['id'])], ['id', 'name', 'district_id']
-        )
-        
-        # Create lookup dicts for faster matching
-        dist_by_name = {}
-        for d in districts:
-            dist_by_name[d['name'].lower()] = d
-            dist_by_name[clean_name(d['name'])] = d
-        
-        ward_by_name = {}
-        for w in wards:
-            ward_by_name[w['name'].lower()] = w
-            ward_by_name[clean_name(w['name'])] = w
-        
-        # 3. Analyze from RIGHT to LEFT (after province)
-        # The rightmost geo part (closest to province) determines if it's 3-level or 2-level
-        found_dist = None
-        found_ward = None
-        
-        # Ward prefixes indicate this part is explicitly a Ward, not a District
-        ward_prefixes = ['p.', 'p ', 'phường ', 'phường', 'x.', 'x ', 'xã ', 'xã', 'thị trấn ', 'tt.', 'tt ']
-        # District prefixes indicate this part is explicitly a District
-        dist_prefixes = ['q.', 'q ', 'quận ', 'quận', 'h.', 'h ', 'huyện ', 'huyện', 'tx.', 'tx ', 'thị xã ']
-        
-        def has_ward_prefix(text):
-            """Check if text starts with a ward prefix"""
-            text_lower = text.lower().strip()
-            return any(text_lower.startswith(p) for p in ward_prefixes)
-        
-        def has_dist_prefix(text):
-            """Check if text starts with a district prefix"""
-            text_lower = text.lower().strip()
-            return any(text_lower.startswith(p) for p in dist_prefixes)
-        
-        if geo_parts:
-            # Check the rightmost part first - this is the key to determining address type
-            rightmost_part = geo_parts[-1] if geo_parts else ""
-            rightmost_clean = clean_name(rightmost_part) if rightmost_part else ""
-            
-            # PRIORITY CHECK: If rightmost part has Ward prefix, it's 2-level address
-            if has_ward_prefix(rightmost_part):
-                # Explicit Ward prefix found -> 2-LEVEL ADDRESS
-                if rightmost_part in ward_by_name:
-                    found_ward = ward_by_name[rightmost_part]
-                elif rightmost_clean in ward_by_name:
-                    found_ward = ward_by_name[rightmost_clean]
+            if result.get('code') == 1 and result.get('data'):
+                data = result['data'][0]  # Take first result
                 
-                if found_ward:
-                    self.receiver_area_id = found_ward['id']
-                    self.receiver_city_id = False  # 2-level: no district
-                else:
-                    self.receiver_area_id = False
-                    self.receiver_city_id = False
-                    
-            elif has_dist_prefix(rightmost_part):
-                # Explicit District prefix found -> 3-LEVEL ADDRESS
-                if rightmost_part in dist_by_name:
-                    found_dist = dist_by_name[rightmost_part]
-                elif rightmost_clean in dist_by_name:
-                    found_dist = dist_by_name[rightmost_clean]
+                # Extract data from API response
+                province_name = data.get('provinceName', '')
+                province_id_api = data.get('provinceId')
+                district_name = data.get('cityName', '')
+                district_id_api = data.get('cityId')
+                ward_name = data.get('areaName', '')  # Format: "Phường Tân Quý-028QTP04"
+                ward_id_api = data.get('areaId')
                 
-                if found_dist:
-                    self.receiver_city_id = found_dist['id']
-                    # Find Ward in remaining parts (within this district)
-                    district_wards = {w['name'].lower(): w for w in wards 
-                                     if (w['district_id'][0] if isinstance(w['district_id'], (list, tuple)) else w['district_id']) == found_dist['id']}
-                    for w in wards:
-                        w_clean = clean_name(w['name'])
-                        if w_clean:
-                            w_dist_id = w['district_id']
-                            if isinstance(w_dist_id, (list, tuple)):
-                                w_dist_id = w_dist_id[0]
-                            if w_dist_id == found_dist['id']:
-                                district_wards[w_clean] = w
-                    
-                    found_ward = None
-                    for part in geo_parts[:-1]:
-                        part_clean = clean_name(part)
-                        if part in district_wards:
-                            found_ward = district_wards[part]
-                            break
-                        elif part_clean in district_wards:
-                            found_ward = district_wards[part_clean]
-                            break
-                    
-                    if found_ward:
-                        self.receiver_area_id = found_ward['id']
-                    else:
-                        self.receiver_area_id = False
-                else:
-                    self.receiver_city_id = False
-                    self.receiver_area_id = False
-                    
-            else:
-                # No explicit prefix - use original logic: check District first
-                if rightmost_part in dist_by_name:
-                    found_dist = dist_by_name[rightmost_part]
-                elif rightmost_clean in dist_by_name:
-                    found_dist = dist_by_name[rightmost_clean]
+                # Find or create Province
+                province = self.env['jnt.province'].search([('name', '=ilike', province_name)], limit=1)
+                if not province and province_name:
+                    province = self.env['jnt.province'].create({'name': province_name})
                 
-                if found_dist:
-                    # 3-LEVEL ADDRESS: District found at rightmost position
-                    self.receiver_city_id = found_dist['id']
+                if province:
+                    self.receiver_prov_id = province.id
                     
-                    # Now find Ward in the remaining parts (should be to the LEFT of district)
-                    # Search only within this district's wards
-                    district_wards = {w['name'].lower(): w for w in wards 
-                                     if (w['district_id'][0] if isinstance(w['district_id'], (list, tuple)) else w['district_id']) == found_dist['id']}
-                    for w in wards:
-                        w_clean = clean_name(w['name'])
-                        if w_clean:
-                            w_dist_id = w['district_id']
-                            if isinstance(w_dist_id, (list, tuple)):
-                                w_dist_id = w_dist_id[0]
-                            if w_dist_id == found_dist['id']:
-                                district_wards[w_clean] = w
+                    # Find or create District
+                    district = self.env['jnt.district'].search([
+                        ('province_id', '=', province.id),
+                        ('name', '=ilike', district_name)
+                    ], limit=1)
+                    if not district and district_name:
+                        district = self.env['jnt.district'].create({
+                            'name': district_name,
+                            'province_id': province.id
+                        })
                     
-                    # Check remaining parts (excluding the district part)
-                    for part in geo_parts[:-1]:  # All parts except the rightmost (district)
-                        part_clean = clean_name(part)
-                        if part in district_wards:
-                            found_ward = district_wards[part]
-                            break
-                        elif part_clean in district_wards:
-                            found_ward = district_wards[part_clean]
-                            break
-                    
-                    if found_ward:
-                        self.receiver_area_id = found_ward['id']
-                    else:
-                        self.receiver_area_id = False
+                    if district:
+                        self.receiver_city_id = district.id
                         
-                else:
-                    # Check if rightmost part is a Ward (2-level address)
-                    if rightmost_part in ward_by_name:
-                        found_ward = ward_by_name[rightmost_part]
-                    elif rightmost_clean in ward_by_name:
-                        found_ward = ward_by_name[rightmost_clean]
-                    
-                    if found_ward:
-                        # 2-LEVEL ADDRESS: Ward found, District should be empty
-                        self.receiver_area_id = found_ward['id']
-                        self.receiver_city_id = False  # Explicitly empty for 2-level
-                    else:
-                        # Fallback: Try to find any matching ward in remaining text
-                        for part in geo_parts:
-                            part_clean = clean_name(part)
-                            if part in ward_by_name:
-                                found_ward = ward_by_name[part]
-                                break
-                            elif part_clean in ward_by_name:
-                                found_ward = ward_by_name[part_clean]
-                                break
+                        # Find or create Ward
+                        ward = self.env['jnt.ward'].search([
+                            ('district_id', '=', district.id),
+                            ('name', '=ilike', ward_name)
+                        ], limit=1)
+                        if not ward and ward_name:
+                            # Extract code from ward name (e.g., "Phường Tân Quý-028QTP04" -> "028QTP04")
+                            jnt_code = ''
+                            if '-' in ward_name:
+                                jnt_code = ward_name.split('-')[-1]
+                            ward = self.env['jnt.ward'].create({
+                                'name': ward_name,
+                                'district_id': district.id,
+                                'jnt_code': jnt_code
+                            })
                         
-                        if found_ward:
-                            self.receiver_area_id = found_ward['id']
-                            self.receiver_city_id = False
+                        if ward:
+                            self.receiver_area_id = ward.id
                         else:
                             self.receiver_area_id = False
-                            self.receiver_city_id = False
-        else:
-            # No geographic parts found, only province
-            self.receiver_city_id = False
-            self.receiver_area_id = False
+                    else:
+                        self.receiver_city_id = False
+                        self.receiver_area_id = False
+                else:
+                    self.receiver_prov_id = False
+                    self.receiver_city_id = False
+                    self.receiver_area_id = False
+                    
+                _logger.info("J&T Address parsed: Province=%s, District=%s, Ward=%s", 
+                            province_name, district_name, ward_name)
+            else:
+                _logger.warning("J&T Address Search returned no results for: %s", self.receiver_address)
+                
+        except Exception as e:
+            _logger.error("Error parsing address via J&T API: %s", e)
             
 
 

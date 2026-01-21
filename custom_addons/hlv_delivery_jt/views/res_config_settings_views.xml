@@ -19,6 +19,8 @@
                         <field name="jt_customer_code_display" readonly="1"/>
                         <label for="jt_password_display" string="password (jnt_password)"/>
                         <field name="jt_password_display" readonly="1"/>
+                        <label for="jt_auth_token_display" string="authToken (jnt_authToken) - Để tìm kiếm địa chỉ"/>
+                        <field name="jt_auth_token_display" readonly="1"/>
                         <div class="mt-2">
                             <button name="action_check_jt_connection" type="object" string="Kiểm tra kết nối" class="btn-primary" style="margin-right: 10px;"/>
                             <button name="%(hlv_delivery_jt.action_sync_jnt_codes_global)d" type="action" string="Cập nhật mã J&amp;T (Toàn hệ thống)" class="btn-secondary"/>
