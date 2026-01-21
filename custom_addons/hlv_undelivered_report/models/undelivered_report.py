@@ -25,6 +25,7 @@ class HlvUndeliveredReport(models.Model):
         ('draft', 'Mới'),
         ('waiting', 'Chờ dịch chuyển khác'),
         ('confirmed', 'Đang chờ'),
+        ('partially_available', 'Có sẵn một phần'),
         ('assigned', 'Sẵn sàng'),
         ('done', 'Hoàn thành'),
         ('cancel', 'Đã hủy'),

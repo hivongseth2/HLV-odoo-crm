@@ -17,7 +17,7 @@
                 <field name="qty_delivered_line" optional="hide"/>
                 <field name="qty_on_hand"/>
                 <field name="product_uom" groups="uom.group_uom"/>
-                <field name="state" widget="badge" decoration-success="state == 'assigned'" decoration-info="state == 'confirmed'" decoration-warning="state == 'waiting'"/>
+                <field name="state" widget="badge" decoration-success="state == 'assigned'" decoration-info="state == 'confirmed'" decoration-warning="state in ('waiting', 'partially_available')"/>
             </list>
         </field>
     </record>
