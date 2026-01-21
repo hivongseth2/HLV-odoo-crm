@@ -269,14 +269,18 @@ class JTCreateOrderWizard(models.TransientModel):
     @api.onchange('receiver_address')
     def _onchange_receiver_address_parse(self):
         """
-        Auto-parse address following strict priority:
-        1. Match Province (Unique) -> Remove from string
-        2. With remaining text:
-           - Search all Wards in Prov
-           - Search all Districts in Prov
-        3. Priority:
-           - If Ward found -> Select Ward (Backfill District)
-           - Else if District found -> Select District (Ward empty)
+        Auto-parse Vietnamese address with proper 3-level/2-level detection.
+        
+        Vietnam has 2 address formats:
+        - 3-level (old): Ward, District, Province (e.g., "Tân Quý, Tân Phú, TP.HCM")
+        - 2-level (new): Ward, Province (e.g., "Tân Phú, TP.HCM" - Tân Phú is Ward, not District)
+        
+        Algorithm:
+        1. Find Province -> Remove from address
+        2. Split remaining by comma, take rightmost geographic part
+        3. Check if it's a District name:
+           - YES -> 3-level address: Find Ward in that District
+           - NO -> Check if it's a Ward name (2-level address)
         """
         if not self.receiver_address:
             return
@@ -286,8 +290,13 @@ class JTCreateOrderWizard(models.TransientModel):
         
         def clean_name(n):
             return self._normalize_name(n)
+        
+        def name_matches(text, name, clean):
+            """Check if name or its cleaned version exists in text"""
+            name_lower = name.lower()
+            return name_lower in text or (clean and clean in text)
 
-        # 1. Find Province
+        # 1. Find Province (longest name first)
         provinces = self.env['jnt.province'].search_read([], ['id', 'name'])
         provinces.sort(key=lambda x: len(x['name']), reverse=True)
 
@@ -297,7 +306,6 @@ class JTCreateOrderWizard(models.TransientModel):
         for p in provinces:
             p_name = p['name'].lower()
             p_clean = clean_name(p['name'])
-            # Check matches. If matched, remove from remaining_addr
             if p_name in remaining_addr:
                 found_prov = p
                 remaining_addr = remaining_addr.replace(p_name, '', 1)
@@ -307,108 +315,197 @@ class JTCreateOrderWizard(models.TransientModel):
                 remaining_addr = remaining_addr.replace(p_clean, '', 1)
                 break
         
-        if found_prov:
-            self.receiver_prov_id = found_prov['id']
+        if not found_prov:
+            return
             
-            # Search ALL Districts and Wards in this Province
-            districts = self.env['jnt.district'].search_read([('province_id', '=', found_prov['id'])], ['id', 'name'])
-            wards = self.env['jnt.ward'].search_read([('district_id.province_id', '=', found_prov['id'])], ['id', 'name', 'district_id'])
+        self.receiver_prov_id = found_prov['id']
+        
+        # 2. Split remaining address by comma to analyze structure
+        # Remove "việt nam" and clean up
+        remaining_addr = remaining_addr.replace('việt nam', '').replace('vietnam', '')
+        parts = [p.strip() for p in remaining_addr.split(',') if p.strip()]
+        
+        # Filter out parts that look like street addresses (contain numbers or "đ.", "đường", etc.)
+        street_indicators = ['đ.', 'đường', 'số', 'ngõ', 'ngách', 'hẻm', 'khu', 'tổ', 'ấp']
+        geo_parts = []
+        for part in parts:
+            is_street = any(ind in part for ind in street_indicators)
+            # Also check if part starts with a number (likely house number)
+            if not is_street and not (part and part[0].isdigit()):
+                geo_parts.append(part)
+            elif not is_street:
+                # Part has number but might still be geo (e.g., "Phường 1")
+                geo_parts.append(part)
+        
+        # Load all districts and wards in this province
+        districts = self.env['jnt.district'].search_read(
+            [('province_id', '=', found_prov['id'])], ['id', 'name']
+        )
+        wards = self.env['jnt.ward'].search_read(
+            [('district_id.province_id', '=', found_prov['id'])], ['id', 'name', 'district_id']
+        )
+        
+        # Create lookup dicts for faster matching
+        dist_by_name = {}
+        for d in districts:
+            dist_by_name[d['name'].lower()] = d
+            dist_by_name[clean_name(d['name'])] = d
+        
+        ward_by_name = {}
+        for w in wards:
+            ward_by_name[w['name'].lower()] = w
+            ward_by_name[clean_name(w['name'])] = w
+        
+        # 3. Analyze from RIGHT to LEFT (after province)
+        # The rightmost geo part (closest to province) determines if it's 3-level or 2-level
+        found_dist = None
+        found_ward = None
+        
+        # Ward prefixes indicate this part is explicitly a Ward, not a District
+        ward_prefixes = ['p.', 'p ', 'phường ', 'phường', 'x.', 'x ', 'xã ', 'xã', 'thị trấn ', 'tt.', 'tt ']
+        # District prefixes indicate this part is explicitly a District
+        dist_prefixes = ['q.', 'q ', 'quận ', 'quận', 'h.', 'h ', 'huyện ', 'huyện', 'tx.', 'tx ', 'thị xã ']
+        
+        def has_ward_prefix(text):
+            """Check if text starts with a ward prefix"""
+            text_lower = text.lower().strip()
+            return any(text_lower.startswith(p) for p in ward_prefixes)
+        
+        def has_dist_prefix(text):
+            """Check if text starts with a district prefix"""
+            text_lower = text.lower().strip()
+            return any(text_lower.startswith(p) for p in dist_prefixes)
+        
+        if geo_parts:
+            # Check the rightmost part first - this is the key to determining address type
+            rightmost_part = geo_parts[-1] if geo_parts else ""
+            rightmost_clean = clean_name(rightmost_part) if rightmost_part else ""
             
-            districts.sort(key=lambda x: len(x['name']), reverse=True)
-            wards.sort(key=lambda x: len(x['name']), reverse=True)
-            
-            # 2. Find ALL Candidates in REMAINING text
-            found_dist_candidates = []
-            found_ward_candidates = []
-            
-            for w in wards:
-                w_name = w['name'].lower()
-                w_clean = clean_name(w['name'])
-                if w_name in remaining_addr or (w_clean and w_clean in remaining_addr):
-                    found_ward_candidates.append(w)
-            
-            for d in districts:
-                d_name = d['name'].lower()
-                d_clean = clean_name(d['name'])
-                if d_name in remaining_addr or (d_clean and d_clean in remaining_addr):
-                    found_dist_candidates.append(d)
-            
-            # 3. PRIORITY 1: Hierarchy Match (Valid 3-Level)
-            # Check if any found Ward belongs to any found District
-            valid_hierarchy_matches = [] # List of (dist, ward, score)
-            
-            if found_dist_candidates and found_ward_candidates:
-                for d in found_dist_candidates:
-                    # Find District position
-                    d_name = d['name'].lower()
-                    d_clean = clean_name(d['name'])
-                    d_index = -1
-                    if d_name in remaining_addr:
-                        d_index = remaining_addr.find(d_name)
-                    elif d_clean in remaining_addr:
-                         d_index = remaining_addr.find(d_clean)
-                         
-                    for w in found_ward_candidates:
-                        # Check parent-child
-                        w_dist_id = w['district_id']
-                        if isinstance(w_dist_id, (list, tuple)):
-                            w_dist_id = w_dist_id[0]
-                        
-                        if w_dist_id == d['id']:
-                             # Valid Parent-Child. Now score it.
-                             w_name = w['name'].lower()
-                             w_clean = clean_name(w['name'])
-                             w_index = -1
-                             if w_name in remaining_addr:
-                                 w_index = remaining_addr.find(w_name)
-                             elif w_clean in remaining_addr:
-                                 w_index = remaining_addr.find(w_clean)
-                             
-                             # SCORING:
-                             # 1. Ward should be BEFORE District (w_index < d_index)
-                             # 2. Ward should NOT be same index as District (Avoid "Tân Phú" matching both Ward and Dist)
-                             score = 0
-                             if w_index != -1 and d_index != -1:
-                                 if w_index < d_index:
-                                     score += 10 # Good order
-                                 elif w_index == d_index:
-                                     score -= 5 # Overlapping/Ambiguous
-                                 
-                                 # Tie breaking: Length of ward name (specificity)
-                                 score += len(w['name']) * 0.1
-                                 
-                             valid_hierarchy_matches.append({
-                                 'dist': d,
-                                 'ward': w,
-                                 'score': score
-                             })
-
-            # Sort best matches first
-            valid_hierarchy_matches.sort(key=lambda x: x['score'], reverse=True)
-            
-            # DECISION LOGIC
-            if valid_hierarchy_matches:
-                # Priority 1: Best Valid 3-Level Match found
-                # Use the hierarchy match to identify the CORRECT WARD (disambiguation).
-                # But per user strict request: Clear District field to avoid "mixing".
-                best = valid_hierarchy_matches[0]
-                self.receiver_area_id = best['ward']['id']
-                self.receiver_city_id = False 
-
-            elif found_ward_candidates:
-                 # Priority 2A: Fallback - Ward Found (No valid hierarchy)
-                 self.receiver_area_id = found_ward_candidates[0]['id']
-                 self.receiver_city_id = False 
-            
-            elif found_dist_candidates:
-                # Priority 2B: Fallback - Only District Found
-                self.receiver_city_id = found_dist_candidates[0]['id']
-                self.receiver_area_id = False
-            
+            # PRIORITY CHECK: If rightmost part has Ward prefix, it's 2-level address
+            if has_ward_prefix(rightmost_part):
+                # Explicit Ward prefix found -> 2-LEVEL ADDRESS
+                if rightmost_part in ward_by_name:
+                    found_ward = ward_by_name[rightmost_part]
+                elif rightmost_clean in ward_by_name:
+                    found_ward = ward_by_name[rightmost_clean]
+                
+                if found_ward:
+                    self.receiver_area_id = found_ward['id']
+                    self.receiver_city_id = False  # 2-level: no district
+                else:
+                    self.receiver_area_id = False
+                    self.receiver_city_id = False
+                    
+            elif has_dist_prefix(rightmost_part):
+                # Explicit District prefix found -> 3-LEVEL ADDRESS
+                if rightmost_part in dist_by_name:
+                    found_dist = dist_by_name[rightmost_part]
+                elif rightmost_clean in dist_by_name:
+                    found_dist = dist_by_name[rightmost_clean]
+                
+                if found_dist:
+                    self.receiver_city_id = found_dist['id']
+                    # Find Ward in remaining parts (within this district)
+                    district_wards = {w['name'].lower(): w for w in wards 
+                                     if (w['district_id'][0] if isinstance(w['district_id'], (list, tuple)) else w['district_id']) == found_dist['id']}
+                    for w in wards:
+                        w_clean = clean_name(w['name'])
+                        if w_clean:
+                            w_dist_id = w['district_id']
+                            if isinstance(w_dist_id, (list, tuple)):
+                                w_dist_id = w_dist_id[0]
+                            if w_dist_id == found_dist['id']:
+                                district_wards[w_clean] = w
+                    
+                    found_ward = None
+                    for part in geo_parts[:-1]:
+                        part_clean = clean_name(part)
+                        if part in district_wards:
+                            found_ward = district_wards[part]
+                            break
+                        elif part_clean in district_wards:
+                            found_ward = district_wards[part_clean]
+                            break
+                    
+                    if found_ward:
+                        self.receiver_area_id = found_ward['id']
+                    else:
+                        self.receiver_area_id = False
+                else:
+                    self.receiver_city_id = False
+                    self.receiver_area_id = False
+                    
             else:
-                # Priority 2C: Only Province found
-                self.receiver_city_id = False
-                self.receiver_area_id = False
+                # No explicit prefix - use original logic: check District first
+                if rightmost_part in dist_by_name:
+                    found_dist = dist_by_name[rightmost_part]
+                elif rightmost_clean in dist_by_name:
+                    found_dist = dist_by_name[rightmost_clean]
+                
+                if found_dist:
+                    # 3-LEVEL ADDRESS: District found at rightmost position
+                    self.receiver_city_id = found_dist['id']
+                    
+                    # Now find Ward in the remaining parts (should be to the LEFT of district)
+                    # Search only within this district's wards
+                    district_wards = {w['name'].lower(): w for w in wards 
+                                     if (w['district_id'][0] if isinstance(w['district_id'], (list, tuple)) else w['district_id']) == found_dist['id']}
+                    for w in wards:
+                        w_clean = clean_name(w['name'])
+                        if w_clean:
+                            w_dist_id = w['district_id']
+                            if isinstance(w_dist_id, (list, tuple)):
+                                w_dist_id = w_dist_id[0]
+                            if w_dist_id == found_dist['id']:
+                                district_wards[w_clean] = w
+                    
+                    # Check remaining parts (excluding the district part)
+                    for part in geo_parts[:-1]:  # All parts except the rightmost (district)
+                        part_clean = clean_name(part)
+                        if part in district_wards:
+                            found_ward = district_wards[part]
+                            break
+                        elif part_clean in district_wards:
+                            found_ward = district_wards[part_clean]
+                            break
+                    
+                    if found_ward:
+                        self.receiver_area_id = found_ward['id']
+                    else:
+                        self.receiver_area_id = False
+                        
+                else:
+                    # Check if rightmost part is a Ward (2-level address)
+                    if rightmost_part in ward_by_name:
+                        found_ward = ward_by_name[rightmost_part]
+                    elif rightmost_clean in ward_by_name:
+                        found_ward = ward_by_name[rightmost_clean]
+                    
+                    if found_ward:
+                        # 2-LEVEL ADDRESS: Ward found, District should be empty
+                        self.receiver_area_id = found_ward['id']
+                        self.receiver_city_id = False  # Explicitly empty for 2-level
+                    else:
+                        # Fallback: Try to find any matching ward in remaining text
+                        for part in geo_parts:
+                            part_clean = clean_name(part)
+                            if part in ward_by_name:
+                                found_ward = ward_by_name[part]
+                                break
+                            elif part_clean in ward_by_name:
+                                found_ward = ward_by_name[part_clean]
+                                break
+                        
+                        if found_ward:
+                            self.receiver_area_id = found_ward['id']
+                            self.receiver_city_id = False
+                        else:
+                            self.receiver_area_id = False
+                            self.receiver_city_id = False
+        else:
+            # No geographic parts found, only province
+            self.receiver_city_id = False
+            self.receiver_area_id = False
             
 
 
