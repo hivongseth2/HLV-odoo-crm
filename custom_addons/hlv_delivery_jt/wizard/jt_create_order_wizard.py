@@ -608,7 +608,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "volume": str(int(max(self.length * self.width * self.height / 6000.0, 1.0)))
             },
             "itemsValue": goods_val_str,
-            "totalQuantity": len(picking.move_ids_without_package),
+            "totalQuantity": len(picking.move_line_ids.mapped('result_package_id')) or 1,
             "items": [{
                 "itemName": line.product_id.name[:100],
                 "englishName": line.product_id.name[:100],

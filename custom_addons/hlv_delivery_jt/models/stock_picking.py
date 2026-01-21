@@ -215,7 +215,7 @@ class StockPicking(models.Model):
         biz_params = {
             "customerCode": jnt_customer_code,
             "password": jnt_password.upper(),
-            "txlogisticId": self.name.replace("/", "-")
+            "txlogisticId": (self.sale_id.name or self.name).replace("/", "-")
         }
 
         result = client.print_label(biz_params)
@@ -280,7 +280,7 @@ class StockPicking(models.Model):
         biz_params = {
             "customerCode": jnt_customer_code,
             "password": jnt_password.upper(),
-            "txlogisticIds": [p.name.replace("/", "-") for p in pickings]
+            "txlogisticIds": [(p.sale_id.name or p.name).replace("/", "-") for p in pickings]
         }
 
         result = client.print_bulk_labels(biz_params)
