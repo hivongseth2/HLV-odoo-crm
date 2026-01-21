@@ -36,19 +36,39 @@ class JTApiUtils:
     def _generate_digest(self, biz_content):
         """
         Generate MD5 digest for J&T API authentication.
-        Formula: md5(bizContent + privateKey)
         """
+        # --- LOGGING ---
+        _logger.info(f"J&T DEBUG - biz_content: {biz_content}")
+        _logger.info(f"J&T DEBUG - private_key: {self.private_key}") 
+        # ---------------
+
         data_to_hash = biz_content + self.private_key
+        
+        # Log chuỗi trước khi hash để đảm bảo không sai encoding
+        _logger.debug(f"J&T DEBUG - String to hash: {data_to_hash}")
+
         md5_hash = hashlib.md5(data_to_hash.encode('utf-8')).digest()
         digest = base64.b64encode(md5_hash).decode('utf-8')
+        
         return digest
-
+    
     def _send_request(self, service_type, biz_params):
         """
         Generic method to send requests to J&T
         """
         url = self._get_url(service_type)
+        
+        # --- 1. LOG INPUT RAW ---
+        _logger.info("========== J&T REQUEST START ==========")
+        _logger.info("Step 1 - biz_params (Dict): %s", biz_params)
+
+        # Tạo biz_content (JSON string minified)
         biz_content = json.dumps(biz_params, separators=(',', ':'), ensure_ascii=False)
+        
+        # --- 2. LOG STRING TO HASH ---
+        # Quan trọng: Kiểm tra chuỗi này xem có đúng là chuỗi được dùng để tạo digest không
+        _logger.info("Step 2 - biz_content (For Digest): %s", biz_content)
+
         timestamp = int(time.time() * 1000)
         digest = self._generate_digest(biz_content)
 
@@ -59,25 +79,35 @@ class JTApiUtils:
             'timestamp': str(timestamp)
         }
 
-        # Secure logging for diagnostics
-        safe_headers = headers.copy()
-        if 'digest' in safe_headers:
-            val = safe_headers['digest']
-            safe_headers['digest'] = f"{val[:5]}...{val[-5:]}" if len(val) > 10 else "***"
-        
-        _logger.info("J&T API Request | URL: %s | Headers: %s", url, safe_headers)
-        _logger.debug("J&T API Payload: %s", biz_content)
-
         payload = {
             'bizContent': biz_content
         }
 
-        _logger.info("J&T API Request to %s | Account: %s", url, self.api_account)
+        # --- 3. LOG FULL REQUEST (HEADERS & PAYLOAD) ---
+        # Log chi tiết để kiểm tra lần cuối trước khi bắn request
+        try:
+            _logger.info("----------- FINAL REQUEST DETAILS -----------")
+            _logger.info(f"Target URL: {url}")
+            
+            # Dùng json.dumps indent=2 để in ra cho đẹp, dễ đọc
+            _logger.info("HEADERS Sent:\n%s", json.dumps(headers, indent=2))
+            
+            # Lưu ý: Trong payload, 'bizContent' là một chuỗi JSON (string), không phải dict
+            _logger.info("PAYLOAD Sent:\n%s", json.dumps(payload, indent=2))
+            _logger.info("---------------------------------------------")
+        except Exception:
+            # Fallback nếu không json dump được (tránh lỗi làm dừng chương trình)
+            _logger.info("HEADERS Sent: %s", headers)
+            _logger.info("PAYLOAD Sent: %s", payload)
+        # -----------------------------------------------
+
         try:
             response = requests.post(url, data=payload, headers=headers)
+            
             if response.status_code == 200:
                 res_json = response.json()
                 _logger.info("J&T API Response: %s", res_json)
+                _logger.info("========== J&T REQUEST END ==========")
                 return res_json
             else:
                 _logger.error("J&T API Error %s: %s", response.status_code, response.text)
@@ -85,7 +115,6 @@ class JTApiUtils:
         except Exception as e:
             _logger.exception("J&T API Exception: %s", e)
             return {'code': 'error', 'msg': str(e)}
-
     def add_order(self, biz_params):
         """
         Send Add Order request to J&T
