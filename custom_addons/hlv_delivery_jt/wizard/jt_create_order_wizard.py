@@ -63,7 +63,17 @@ class JTCreateOrderWizard(models.TransientModel):
     note_khong_giao_duoc_lh = fields.Boolean(string="Không giao được liên hệ SĐT shop, không tự ý hủy đơn")
     
     # Package Quantity Control
-    manual_package_qty = fields.Integer(string="Số lượng kiện hàng", default=0, help="Nhập số lượng kiện hàng thực tế. Nếu để 0, hệ thống sẽ tự động tính toán.")
+    manual_package_qty = fields.Integer(string="Số lượng kiện hàng", compute='_compute_manual_package_qty', store=True, readonly=False, help="Nhập số lượng kiện hàng thực tế. Nếu để 0, hệ thống sẽ tự động tính toán.")
+    
+    @api.depends('picking_id', 'picking_id.move_line_ids', 'picking_id.move_line_ids.result_package_id')
+    def _compute_manual_package_qty(self):
+        for rec in self:
+            if rec.picking_id:
+                # Count unique packages
+                package_ids = rec.picking_id.move_line_ids.mapped('result_package_id')
+                rec.manual_package_qty = len(package_ids) if package_ids else 1
+            else:
+                rec.manual_package_qty = 1
     note_goi_dien_truoc_khi_giao = fields.Boolean(string="Gọi điện thoại cho khách trước khi giao")
     note_giao_gio_hanh_chinh = fields.Boolean(string="Giao hàng vào giờ hành chính")
     note_khong_cho_xem = fields.Boolean(string="Không cho xem hàng")
@@ -260,7 +270,7 @@ class JTCreateOrderWizard(models.TransientModel):
     def _onchange_receiver_address_parse(self):
         """
         Auto-parse address following strict priority:
-        1. Match Province (Unique)
+        1. Match Province (Unique) -> Remove from string
         2. With remaining text:
            - Search all Wards in Prov
            - Search all Districts in Prov
@@ -279,7 +289,6 @@ class JTCreateOrderWizard(models.TransientModel):
 
         # 1. Find Province
         provinces = self.env['jnt.province'].search_read([], ['id', 'name'])
-        # Sort by length descending to match longest first
         provinces.sort(key=lambda x: len(x['name']), reverse=True)
 
         found_prov = None
@@ -287,12 +296,15 @@ class JTCreateOrderWizard(models.TransientModel):
         
         for p in provinces:
             p_name = p['name'].lower()
-            if p_name in addr_lower or clean_name(p['name']) in addr_lower:
+            p_clean = clean_name(p['name'])
+            # Check matches. If matched, remove from remaining_addr
+            if p_name in remaining_addr:
                 found_prov = p
-                # Remove province from address text to search for Dist/Ward in "remaining" part
-                # Note: Simply checking existence in full string is usually safer for loose input, 
-                # but user asked for "With remaining part". 
-                # We will just continue to search the full string but we limit candidates to this Province.
+                remaining_addr = remaining_addr.replace(p_name, '', 1)
+                break
+            elif p_clean in remaining_addr:
+                found_prov = p
+                remaining_addr = remaining_addr.replace(p_clean, '', 1)
                 break
         
         if found_prov:
@@ -308,19 +320,19 @@ class JTCreateOrderWizard(models.TransientModel):
             found_ward = None
             found_dist = None
             
-            # Check for Ward Match First (Priority)
+            # Check for Ward Match First (Priority) in REMAINING text
             for w in wards:
                 w_name = w['name'].lower()
                 w_clean = clean_name(w['name'])
-                if w_name in addr_lower or (w_clean and w_clean in addr_lower):
+                if w_name in remaining_addr or (w_clean and w_clean in remaining_addr):
                     found_ward = w
                     break
             
-            # Check for District Match
+            # Check for District Match in REMAINING text
             for d in districts:
                 d_name = d['name'].lower()
                 d_clean = clean_name(d['name'])
-                if d_name in addr_lower or (d_clean and d_clean in addr_lower):
+                if d_name in remaining_addr or (d_clean and d_clean in remaining_addr):
                     found_dist = d
                     break
             
