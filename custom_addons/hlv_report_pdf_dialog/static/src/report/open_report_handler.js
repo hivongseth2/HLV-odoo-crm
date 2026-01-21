@@ -23,7 +23,19 @@ registry.category("ir.actions.report handlers").add(
     "hlv_direct_print_iframe_fast_with_loading",
     async (action, options, env) => {
         if (action.type !== "ir.actions.report" || action.report_type !== "qweb-pdf") return false;
+
+        // Skip for POS orders to avoid dialog/iframe issues with IoT box
         if (action.model === "pos.order" || action.context?.active_model === "pos.order") {
+            return false;
+        }
+
+        // Skip for specific label reports to use default printing (IoT)
+        const IGNORED_REPORTS = [
+            "custom_picking_label.report_label_35x22_template",
+            "custom_picking_label.report_label_template",
+            "product.report_producttemplatelabel_dymo",
+        ];
+        if (IGNORED_REPORTS.includes(action.report_name)) {
             return false;
         }
 
@@ -47,19 +59,29 @@ registry.category("ir.actions.report handlers").add(
                 width: "0", height: "0", border: "0"
             });
 
-            // cleanup chỉ lo gỡ iframe + listeners (KHÔNG tắt loading)
+            // cleanup chỉ lo gỡ iframe + listeners
             let cleanupTimer;
+            let safetyTimeout;
             let cleaned = false;
             const MAX_WAIT_MS = 120000; // 2 phút - rộng rãi
+            const SAFETY_TIMEOUT_MS = 30000; // 30 giây safety timeout
             const listeners = [];
 
             const cleanupFrameOnly = () => {
                 if (cleaned) return;
                 cleaned = true;
                 clearTimeout(cleanupTimer);
+                clearTimeout(safetyTimeout);
                 listeners.forEach(({ target, type, fn }) => target.removeEventListener(type, fn));
                 iframe.remove();
             };
+
+            // Safety timeout: đảm bảo unblock UI sau 30 giây nếu có lỗi
+            safetyTimeout = setTimeout(() => {
+                console.warn("PDF loading safety timeout reached");
+                ui.unblock();
+                cleanupFrameOnly();
+            }, SAFETY_TIMEOUT_MS);
 
             iframe.onload = () => {
                 try {
@@ -102,6 +124,13 @@ registry.category("ir.actions.report handlers").add(
                     cleanupFrameOnly();
                     notification.add("Không thể tự động in: " + (e.message || e), { type: "warning" });
                 }
+            };
+
+            // Thêm onerror handler để bắt lỗi load
+            iframe.onerror = (e) => {
+                ui.unblock();
+                cleanupFrameOnly();
+                notification.add("Không thể tải PDF: " + (e.message || e), { type: "danger" });
             };
 
             iframe.src = url; // tải trực tiếp PDF (không fetch + blob)

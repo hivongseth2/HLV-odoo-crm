@@ -24,20 +24,16 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
             if (value.includes("filename*=")) {
                 // Try to convert to simple format
                 // RFC5987 format: filename*=charset'language'encoded_value
-                const rfc5987Match = value.match(/filename\*=([^']+)'([^']*)'([^;,]+)/);
+                const rfc5987Match = value.match(/filename\*=([^']+)'([^']*)'([^;]+)/);
                 if (rfc5987Match) {
                     const encodedFilename = rfc5987Match[3];
                     try {
                         const decodedFilename = decodeURIComponent(encodedFilename);
                         // Create a simple ASCII-safe filename
-                        const safeFilename = decodedFilename
-                            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
-                            .replace(/[^\x20-\x7E]/g, "_") // Replace other non-ASCII
-                            .replace(/[,;]/g, "_") // Replace separators
-                            .replace(/"/g, '\\"'); // Escape quotes
+                        const safeFilename = encodeURIComponent(decodedFilename);
                         const disposition = value.startsWith('attachment') ? 'attachment' : 'inline';
                         const newValue = `${disposition}; filename="${safeFilename}"`;
-                        console.log("POS Download: Sanitized Content-Disposition header", { original: value, sanitized: newValue });
+                        console.log("App/POS Download: Sanitized Content-Disposition header", { original: value, sanitized: newValue });
                         return newValue;
                     } catch (decodeError) {
                         // If decode fails, use a fallback filename
@@ -47,19 +43,15 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
                 }
 
                 // Try another RFC2231 format: filename*=utf-8''encoded
-                const rfc2231Match = value.match(/filename\*=([^']*'')?([^;,]+)/);
+                const rfc2231Match = value.match(/filename\*=([^']*'')?([^;]+)/);
                 if (rfc2231Match) {
                     const encodedFilename = rfc2231Match[2];
                     try {
                         const decodedFilename = decodeURIComponent(encodedFilename);
-                        const safeFilename = decodedFilename
-                            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                            .replace(/[^\x20-\x7E]/g, "_")
-                            .replace(/[,;]/g, "_")
-                            .replace(/"/g, '\\"');
+                        const safeFilename = encodeURIComponent(decodedFilename);
                         const disposition = value.startsWith('attachment') ? 'attachment' : 'inline';
                         const newValue = `${disposition}; filename="${safeFilename}"`;
-                        console.log("POS Download: Sanitized Content-Disposition header (RFC2231)", { original: value, sanitized: newValue });
+                        console.log("App/POS Download: Sanitized Content-Disposition header (RFC2231)", { original: value, sanitized: newValue });
                         return newValue;
                     } catch (decodeError) {
                         const disposition = value.startsWith('attachment') ? 'attachment' : 'inline';
@@ -68,7 +60,7 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
                 }
             }
         } catch (error) {
-            console.warn("POS Download: Error sanitizing Content-Disposition header", error);
+            console.warn("App/POS Download: Error sanitizing Content-Disposition header", error);
             // Return a safe fallback
             return 'attachment; filename="report.pdf"';
         }
@@ -77,4 +69,4 @@ XMLHttpRequest.prototype.getResponseHeader = function (name) {
     return value;
 };
 
-console.log("POS Download: Content-Disposition header sanitization patch loaded");
+console.log("App/POS Download: Content-Disposition header sanitization patch loaded");
