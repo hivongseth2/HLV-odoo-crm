@@ -12,6 +12,7 @@ const ENABLED_MODELS = [
     'purchase.order',
     'stock.picking',
     'sale.order',
+    'hlv.undelivered.report'
 ];
 
 function toUTCDateTime(dateStr, timeStr) {
@@ -46,6 +47,14 @@ const SELECTION_FIELDS = {
             { value: 'confirmed', label: 'Đang chờ', color: '#17a2b8' },
             { value: 'assigned', label: 'Sẵn sàng', color: '#28a745' },
             { value: 'done', label: 'Hoàn tất', color: '#714B67' },
+            { value: 'cancel', label: 'Đã hủy', color: '#dc3545' },
+        ],
+        'hlv.undelivered.report': [
+            { value: 'draft', label: 'Mới', color: '#6c757d' },
+            { value: 'waiting', label: 'Chờ dịch chuyển khác', color: '#ffc107' },
+            { value: 'confirmed', label: 'Đang chờ', color: '#17a2b8' },
+            { value: 'assigned', label: 'Sẵn sàng', color: '#28a745' },
+            { value: 'done', label: 'Hoàn thành', color: '#714B67' },
             { value: 'cancel', label: 'Đã hủy', color: '#dc3545' },
         ],
         'sale.order': [
@@ -1248,7 +1257,7 @@ patch(ListRenderer.prototype, {
     /**
      * Apply date range filter
      */
-    
+
     async _hlvApplyDateFilter(fieldName, label, fromValue, toValue) {
         console.log('[HLV Filter] Date:', fieldName, fromValue, toValue);
 
