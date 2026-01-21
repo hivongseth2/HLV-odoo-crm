@@ -339,20 +339,9 @@ class JTCreateOrderWizard(models.TransientModel):
             # DECISION LOGIC
             if found_ward:
                  # Case A: Found Ward (Higher Priority)
-                 # Even if District was also found, we trust the Ward because it implies the District.
-                 # E.g. "Phường A, Quận B" -> Found Ward A (in Dist B). Good.
-                 # E.g. "Phường A" (New) is same name as "Quận A".
-                 # If input is "Phường A", we match Ward "Phường A". 
-                 # We also match Dist "Quận A".
-                 # Algorithm says: "If Ward found -> Select Ward".
+                 # Per user request: DO NOT auto-fill District to avoid 2-level/3-level mixing.
                  self.receiver_area_id = found_ward['id']
-                 
-                 # Backfill District
-                 dist_val = found_ward['district_id']
-                 if isinstance(dist_val, (list, tuple)):
-                     self.receiver_city_id = dist_val[0]
-                 else:
-                     self.receiver_city_id = dist_val
+                 self.receiver_city_id = False # Explicitly clear District if Ward is found (2-level assumption)
             
             elif found_dist:
                 # Case B: No Ward found, but District found
@@ -363,6 +352,8 @@ class JTCreateOrderWizard(models.TransientModel):
                 # Case C: Only Province found
                 self.receiver_city_id = False
                 self.receiver_area_id = False
+            
+
 
     @api.onchange('receiver_area_id')
     def _onchange_receiver_area_id(self):
