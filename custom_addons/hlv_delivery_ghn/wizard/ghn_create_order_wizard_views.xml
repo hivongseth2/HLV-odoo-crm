@@ -7,7 +7,7 @@
             <form string="Kiểm tra và Tạo đơn GHN">
                 <style>
                     .modal-dialog {
-                        max-width: 1200px !important;
+                        max-width: 1400px !important;
                     }
                     .ghn-wizard-container {
                         background-color: #f8f9fa;

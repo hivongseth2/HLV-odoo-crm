@@ -7,7 +7,7 @@
             <form string="Tạo đơn J&amp;T Express">
                 <style>
                     .modal-dialog {
-                        max-width: 1200px !important;
+                        max-width: 1400px !important;
                     }
                     .jt-wizard-container {
                         background-color: #f8f9fa;
