@@ -25,31 +25,65 @@ try:
     sheet = wb['MAPPING']
     
     data = []
+    seen = set()
+
     for row in sheet.iter_rows(min_row=3):
+        # 3-Level Address (Old)
+        # Col 0: Prov, 1: Dist, 2: Ward+Code, 3: Ward Name
         prov = row[0].value
         dist = row[1].value
-        ward_raw = row[2].value
-        ward_clean = row[3].value
+        ward_raw_3 = row[2].value
         
+        # 2-Level Address (New)
+        # Col 4: Prov (New), 5: Ward (New)
+        # Note: District is assumed same as Col 1
+        prov_new = row[4].value
+        ward_new = row[5].value
+
         if not prov or not dist:
             continue
             
-        code = None
-        if ward_raw and '-' in str(ward_raw):
-            code = str(ward_raw).split('-')[-1].strip()
+        # Process 3-Level Entry
+        code_3 = None
+        if ward_raw_3 and '-' in str(ward_raw_3):
+            code_3 = str(ward_raw_3).split('-')[-1].strip()
         
-        # Include if we have code OR if we want to allow 2-level addresses (Prov/Dist only)
-        # Assuming the goal is to import everything. 
-        # If no ward, we still export p/d/pn/dn. 'w' might be empty or None.
-        
-        data.append({
-            'p': normalize(prov),
-            'pn': str(prov).strip(),
-            'd': normalize(dist),
-            'dn': str(dist).strip(),
-            'w': str(ward_raw).strip() if ward_raw else "", 
-            'c': code if code else ""
-        })
+        # Key to avoid dupes: (prov, dist, ward, code)
+        key_3 = (normalize(prov), normalize(dist), normalize(ward_raw_3) if ward_raw_3 else "", code_3)
+        if key_3 not in seen:
+            data.append({
+                'p': normalize(prov),
+                'pn': str(prov).strip(),
+                'd': normalize(dist),
+                'dn': str(dist).strip(),
+                'w': str(ward_raw_3).strip() if ward_raw_3 else "", 
+                'c': code_3 if code_3 else ""
+            })
+            seen.add(key_3)
+
+        # Process 2-Level Entry (Treat as receiving generic ward name)
+        # Only if we have a "New Address" ward
+        if ward_new:
+            # Determining Prov/Dist for 2-level. 
+            # Usually Prov New is same as Old, but let's use New if present, else Old.
+            p_use = prov_new if prov_new else prov
+            d_use = dist # District is shared
+            
+            # 2-level usually doesn't have a code in the name, or uses the same code?
+            # In the dump: "Phường Phước Long" (No code).
+            # We treat it as a valid ward name to allow matching.
+            
+            key_2 = (normalize(p_use), normalize(d_use), normalize(ward_new), "")
+            if key_2 not in seen:
+                 data.append({
+                    'p': normalize(p_use),
+                    'pn': str(p_use).strip(),
+                    'd': normalize(d_use),
+                    'dn': str(d_use).strip(),
+                    'w': str(ward_new).strip(),
+                    'c': "" # No code for 2-level usually, or we lookup later.
+                })
+                 seen.add(key_2)
     
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)
