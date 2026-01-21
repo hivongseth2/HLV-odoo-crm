@@ -31,22 +31,25 @@ try:
         ward_raw = row[2].value
         ward_clean = row[3].value
         
-        if not prov or not dist or not ward_raw:
+        if not prov or not dist:
             continue
             
         code = None
-        if '-' in str(ward_raw):
+        if ward_raw and '-' in str(ward_raw):
             code = str(ward_raw).split('-')[-1].strip()
         
-        if code:
-            data.append({
-                'p': normalize(prov),
-                'pn': str(prov).strip(),
-                'd': normalize(dist),
-                'dn': str(dist).strip(),
-                'w': str(ward_raw).strip(), # User wants the name with code
-                'c': code
-            })
+        # Include if we have code OR if we want to allow 2-level addresses (Prov/Dist only)
+        # Assuming the goal is to import everything. 
+        # If no ward, we still export p/d/pn/dn. 'w' might be empty or None.
+        
+        data.append({
+            'p': normalize(prov),
+            'pn': str(prov).strip(),
+            'd': normalize(dist),
+            'dn': str(dist).strip(),
+            'w': str(ward_raw).strip() if ward_raw else "", 
+            'c': code if code else ""
+        })
     
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)

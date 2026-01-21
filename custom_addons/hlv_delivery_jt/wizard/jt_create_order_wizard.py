@@ -226,6 +226,69 @@ class JTCreateOrderWizard(models.TransientModel):
     def _onchange_sender_area_id(self):
         pass
 
+    @api.onchange('receiver_address')
+    def _onchange_receiver_address_parse(self):
+        """Auto-parse address to fill 3 levels or 2 levels"""
+        if not self.receiver_address:
+            return
+
+        addr = self.receiver_address
+        addr_lower = addr.lower()
+        
+        # Helper to strip prefixes for better matching
+        def clean_name(n):
+            return self._normalize_name(n)
+
+        # 1. Find Province
+        provinces = self.env['jnt.province'].search_read([], ['id', 'name'])
+        # Sort by length descending to match longest first (e.g. Ba Ria - Vung Tau vs Vung Tau)
+        provinces.sort(key=lambda x: len(x['name']), reverse=True)
+
+        found_prov = None
+        for p in provinces:
+            p_name = p['name'].lower()
+            if p_name in addr_lower or clean_name(p['name']) in addr_lower:
+                found_prov = p
+                break
+        
+        if found_prov:
+            self.receiver_prov_id = found_prov['id']
+            
+            # 2. Find District
+            districts = self.env['jnt.district'].search_read([('province_id', '=', found_prov['id'])], ['id', 'name'])
+            districts.sort(key=lambda x: len(x['name']), reverse=True)
+            
+            found_dist = None
+            for d in districts:
+                d_name = d['name'].lower()
+                d_clean = clean_name(d['name'])
+                if d_name in addr_lower or (d_clean and d_clean in addr_lower):
+                    found_dist = d
+                    break
+            
+            if found_dist:
+                self.receiver_city_id = found_dist['id']
+                
+                # 3. Find Ward
+                wards = self.env['jnt.ward'].search_read([('district_id', '=', found_dist['id'])], ['id', 'name'])
+                wards.sort(key=lambda x: len(x['name']), reverse=True)
+                
+                found_ward = None
+                for w in wards:
+                    w_name = w['name'].lower()
+                    w_clean = clean_name(w['name'])
+                    if w_name in addr_lower or (w_clean and w_clean in addr_lower):
+                        found_ward = w
+                        break
+                
+                if found_ward:
+                    self.receiver_area_id = found_ward['id']
+                else:
+                    self.receiver_area_id = False
+            else:
+                self.receiver_city_id = False
+                self.receiver_area_id = False
+
     @api.onchange('receiver_area_id')
     def _onchange_receiver_area_id(self):
         # Auto-calculate fee when location changes
