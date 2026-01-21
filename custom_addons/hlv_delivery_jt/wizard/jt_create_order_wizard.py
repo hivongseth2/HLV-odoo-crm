@@ -269,7 +269,7 @@ class JTCreateOrderWizard(models.TransientModel):
             if found_dist:
                 self.receiver_city_id = found_dist['id']
                 
-                # 3. Find Ward
+                # 3. Find Ward within District
                 wards = self.env['jnt.ward'].search_read([('district_id', '=', found_dist['id'])], ['id', 'name'])
                 wards.sort(key=lambda x: len(x['name']), reverse=True)
                 
@@ -286,8 +286,36 @@ class JTCreateOrderWizard(models.TransientModel):
                 else:
                     self.receiver_area_id = False
             else:
-                self.receiver_city_id = False
-                self.receiver_area_id = False
+                # District NOT found in string (Case: 2-level address "Ward, Province" or implicit District)
+                # Attempt to find Ward across ALL districts of this province
+                self.receiver_city_id = False 
+                
+                # Search wards where district's province is found_prov
+                # Note: Odoo search_read with relational domain
+                wards = self.env['jnt.ward'].search_read([('district_id.province_id', '=', found_prov['id'])], ['id', 'name', 'district_id'])
+                wards.sort(key=lambda x: len(x['name']), reverse=True)
+                
+                found_ward = None
+                for w in wards:
+                    w_name = w['name'].lower()
+                    w_clean = clean_name(w['name'])
+                    if w_name in addr_lower or (w_clean and w_clean in addr_lower):
+                        found_ward = w
+                        break
+                
+                if found_ward:
+                     self.receiver_area_id = found_ward['id']
+                     # Back-fill the District from the found Ward
+                     if found_ward.get('district_id'):
+                         # buffer district_id is (id, name) tuple in search_read usually? 
+                         # No, search_read returns m2o as (id, name).
+                         dist_val = found_ward['district_id']
+                         if isinstance(dist_val, (list, tuple)):
+                             self.receiver_city_id = dist_val[0]
+                         else:
+                             self.receiver_city_id = dist_val
+                else:
+                     self.receiver_area_id = False
 
     @api.onchange('receiver_area_id')
     def _onchange_receiver_area_id(self):
