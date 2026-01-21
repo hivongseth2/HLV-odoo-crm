@@ -389,9 +389,11 @@ class JTCreateOrderWizard(models.TransientModel):
             # DECISION LOGIC
             if valid_hierarchy_matches:
                 # Priority 1: Best Valid 3-Level Match found
+                # Use the hierarchy match to identify the CORRECT WARD (disambiguation).
+                # But per user strict request: Clear District field to avoid "mixing".
                 best = valid_hierarchy_matches[0]
-                self.receiver_city_id = best['dist']['id']
                 self.receiver_area_id = best['ward']['id']
+                self.receiver_city_id = False 
 
             elif found_ward_candidates:
                  # Priority 2A: Fallback - Ward Found (No valid hierarchy)
