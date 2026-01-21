@@ -216,6 +216,8 @@ class JTCreateOrderWizard(models.TransientModel):
     receiver_name = fields.Char(string="Tên người nhận", required=True)
     receiver_mobile = fields.Char(string="SĐT người nhận", required=True)
     receiver_prov_id = fields.Many2one("jnt.province", string="Tỉnh/Thành nhận", ondelete='set null')
+    receiver_city_id = fields.Many2one("jnt.district", string="Quận/Huyện nhận", ondelete='set null', 
+                                      domain="[('province_id', '=', receiver_prov_id)]")
     receiver_area_id = fields.Many2one("jnt.ward", string="Phường/Xã nhận", ondelete='set null',
                                       domain="[('district_id.province_id', '=', receiver_prov_id)]")
     # Note: Domain needs to be dynamic. Simplified above might not work in XM/Python mix well.
