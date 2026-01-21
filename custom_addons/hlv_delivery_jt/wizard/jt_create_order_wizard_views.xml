@@ -5,83 +5,195 @@
         <field name="model">jt.create.order.wizard</field>
         <field name="arch" type="xml">
             <form string="Tạo đơn J&amp;T Express">
+                <style>
+                    .modal-dialog {
+                        max-width: 1400px !important;
+                    }
+                    .jt-wizard-container {
+                        background-color: #f8f9fa;
+                        padding: 15px;
+                    }
+                    .jt-card {
+                        background: #ffffff;
+                        border-radius: 12px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                        margin-bottom: 20px;
+                        padding: 20px;
+                        border: 1px solid #e9ecef;
+                    }
+                    .jt-header {
+                        font-size: 1.25rem;
+                        font-weight: 600;
+                        margin-bottom: 15px;
+                        color: #dc3545; /* J&amp;T Red */
+                        border-bottom: 2px solid #f0f0f0;
+                        padding-bottom: 8px;
+                    }
+                    .jt-product-item {
+                        display: flex;
+                        align-items: center;
+                        padding: 12px;
+                        margin-bottom: 10px;
+                        border: 1px solid #f0f0f0;
+                        border-radius: 8px;
+                        background: #fdfdfd;
+                    }
+                    .jt-product-icon {
+                        font-size: 24px;
+                        margin-right: 15px;
+                        background: #e9ecef;
+                        width: 48px;
+                        height: 48px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 8px;
+                    }
+                    .jt-product-details {
+                        flex: 1;
+                    }
+                    .jt-product-name {
+                        font-weight: 600;
+                        color: #212529;
+                    }
+                    .jt-product-meta {
+                        display: flex;
+                        gap: 20px;
+                        font-size: 0.85rem;
+                        color: #495057;
+                        margin-top: 4px;
+                    }
+                    .jt-product-sku {
+                        font-size: 0.8rem;
+                        color: #adb5bd;
+                    }
+                    .jt-flex-row {
+                        display: flex;
+                        gap: 20px;
+                        flex-wrap: wrap;
+                    }
+                    .jt-flex-item {
+                        flex: 1;
+                        min-width: 300px;
+                    }
+                </style>
                 <sheet>
-                    <group>
-                        <group string="Dịch vụ &amp; Thanh toán">
-                            <field name="picking_id" readonly="1" force_save="1"/>
-                            <field name="order_type"/>
-                            <field name="product_type"/>
-                            <field name="goods_type"/>
-                            <field name="service_type"/>
-                            <field name="delivery_type"/>
-                            <field name="pay_type"/>
-                        </group>
-                        <group string="Phí &amp; Ghi chú">
-                            <field name="cod_money"/>
-                            <field name="is_insured"/>
-                            <field name="goods_value" invisible="not is_insured" required="is_insured"/>
-                            <field name="part_sign"/>
-                            <field name="remark" placeholder="Ghi chú tổng hợp..."/>
-                        </group>
-                    </group>
-                    <group string="Mẫu ghi chú">
-                        <group>
-                            <field name="note_thu_hang"/>
-                            <field name="note_xem_hang_khong_thu"/>
-                            <field name="note_de_vo"/>
-                            <field name="note_giao_hang_mot_phan"/>
-                            <field name="note_khong_giao_duoc_lh"/>
-                        </group>
-                        <group>
-                            <field name="note_goi_dien_truoc_khi_giao"/>
-                            <field name="note_giao_gio_hanh_chinh"/>
-                            <field name="note_khong_cho_xem"/>
-                            <field name="note_khac"/>
-                            <field name="note_khac_input" invisible="not note_khac" required="note_khac"/>
-                        </group>
-                    </group>
-                    <group>
-                        <group string="Người gửi (Kho/Cửa hàng)">
-                            <field name="sender_config_id" string="Kho gửi hàng" options="{'no_create': True}"/>
-                            <field name="sender_name"/>
-                            <field name="sender_mobile"/>
-                            <field name="sender_prov_id" options="{'no_open': True, 'no_create': True}"/>
-                            <field name="sender_city_id" options="{'no_open': True, 'no_create': True}"/>
-                            <field name="sender_area_id" options="{'no_open': True, 'no_create': True}"/>
-                            <field name="sender_address"/>
-                        </group>
-                        <group string="Người nhận (Khách hàng)">
-                            <field name="receiver_name"/>
-                            <field name="receiver_mobile"/>
-                            <field name="receiver_prov_id" options="{'no_open': True, 'no_create': True}"/>
-                            <field name="receiver_city_id" options="{'no_open': True, 'no_create': True}"/>
-                            <field name="receiver_area_id" options="{'no_open': True, 'no_create': True}"/>
-                            <field name="receiver_address"/>
-                        </group>
-                    </group>
-                    <group string="Thông số kiện hàng">
-                        <group>
-                            <field name="weight"/>
-                            <field name="length"/>
-                        </group>
-                        <group>
-                            <field name="width"/>
-                            <field name="height"/>
-                        </group>
-                    </group>
-                    <group string="Phí dự kiến (tự động tính)">
-                        <group>
-                            <field name="estimated_fee"/>
-                            <field name="estimated_cod_fee"/>
-                        </group>
-                        <group>
-                            <field name="estimated_insurance_fee"/>
-                        </group>
-                    </group>
+                    <div class="jt-wizard-container">
+                        <div class="jt-flex-row">
+                            <!-- Người gửi -->
+                            <div class="jt-card jt-flex-item">
+                                <div class="jt-header">1. Thông tin người gửi</div>
+                                <group>
+                                    <field name="picking_id" readonly="1" force_save="1"/>
+                                    <field name="client_order_code"/>
+                                    <field name="sender_config_id" options="{'no_create': True}"/>
+                                    <field name="sender_name"/>
+                                    <field name="sender_mobile"/>
+                                    <field name="sender_prov_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="sender_city_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="sender_area_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="sender_address"/>
+                                </group>
+                            </div>
+
+                            <!-- Người nhận -->
+                            <div class="jt-card jt-flex-item">
+                                <div class="jt-header">2. Thông tin người nhận</div>
+                                <group>
+                                    <field name="receiver_mobile" string="Số điện thoại *"/>
+                                    <field name="receiver_name" string="Họ tên *"/>
+                                    <field name="receiver_prov_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="receiver_city_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="receiver_area_id" options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="receiver_address" string="Địa chỉ chi tiết *"/>
+                                </group>
+                            </div>
+                        </div>
+
+                        <!-- Thông tin sản phẩm -->
+                        <div class="jt-card">
+                            <div class="jt-header">3. Thông tin sản phẩm</div>
+                            <field name="product_html" nolabel="1"/>
+                        </div>
+
+                        <div class="jt-flex-row">
+                            <!-- Dịch vụ & Thanh toán -->
+                            <div class="jt-card jt-flex-item">
+                                <div class="jt-header">4. Dịch vụ &amp; Thanh toán</div>
+                                <group>
+                                    <field name="service_type" widget="radio" options="{'horizontal': True}"/>
+                                    <field name="order_type"/>
+                                    <field name="product_type"/>
+                                    <field name="goods_type"/>
+                                    <field name="delivery_type"/>
+                                    <field name="pay_type" widget="radio"/>
+                                </group>
+                            </div>
+
+                            <!-- Thông số kiện hàng & Phí -->
+                            <div class="jt-card jt-flex-item">
+                                <div class="jt-header">5. Kiện hàng &amp; Phí</div>
+                                <group>
+                                    <field name="weight"/>
+                                    <label for="length" string="Kích thước (cm)"/>
+                                    <div class="o_row">
+                                        <field name="length"/> x <field name="width"/> x <field name="height"/>
+                                    </div>
+                                    <field name="cod_money"/>
+                                    <field name="is_insured"/>
+                                    <field name="goods_value" invisible="not is_insured"/>
+                                    <div invisible="not is_insured" class="alert alert-warning p-2 mt-1" role="alert">
+                                        <i class="fa fa-info-circle mr-1"/> Giới hạn giá trị hàng hóa: 30,000,000 VNĐ
+                                    </div>
+                                    <div class="o_row mt-3">
+                                        <span class="text-muted">Tổng phí: </span>
+                                        <field name="estimated_fee" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                                    </div>
+                                    <div class="o_row">
+                                        <span class="text-muted">Phí COD: </span>
+                                        <field name="estimated_cod_fee" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                                    </div>
+                                    <div class="o_row">
+                                        <span class="text-muted">Phí bảo hiểm: </span>
+                                        <field name="estimated_insurance_fee" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                                    </div>
+                                </group>
+                            </div>
+                        </div>
+
+                        <!-- Ghi chú bổ sung -->
+                        <div class="jt-card">
+                            <div class="jt-header">6. Ghi chú &amp; Tùy chọn</div>
+                            <group>
+                                <group>
+                                    <field name="part_sign"/>
+                                    <field name="remark" placeholder="Ghi chú tổng hợp"/>
+                                </group>
+                                <group string="Tùy chọn nhanh">
+                                    <field name="note_thu_hang"/>
+                                    <field name="note_xem_hang_khong_thu"/>
+                                    <field name="note_de_vo"/>
+                                    <field name="note_khong_cho_xem"/>
+                                </group>
+                            </group>
+                            <group string="Tùy chọn bổ sung">
+                                <group>
+                                    <field name="note_giao_hang_mot_phan"/>
+                                    <field name="note_khong_giao_duoc_lh"/>
+                                    <field name="note_goi_dien_truoc_khi_giao"/>
+                                </group>
+                                <group>
+                                    <field name="note_giao_gio_hanh_chinh"/>
+                                    <field name="note_khac"/>
+                                    <field name="note_khac_input" invisible="not note_khac" required="note_khac"/>
+                                </group>
+                            </group>
+                        </div>
+                    </div>
                 </sheet>
                 <footer>
-                    <button name="action_create_jt_order" type="object" string="Tạo đơn hàng" class="btn-primary"/>
-                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                    <button name="action_create_jt_order" type="object" string="Xác nhận &amp; Tạo đơn J&amp;T" class="btn-primary"/>
+                    <button string="Hủy bỏ" class="btn-secondary" special="cancel"/>
                 </footer>
             </form>
         </field>

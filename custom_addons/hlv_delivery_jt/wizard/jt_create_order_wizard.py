@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import fields, models, api, _
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from ..utils.jt_api_utils import JTApiUtils
 import hashlib
 import logging
@@ -105,6 +105,56 @@ class JTCreateOrderWizard(models.TransientModel):
     estimated_fee = fields.Float(string="Phí vận chuyển dự kiến (VND)", readonly=True)
     estimated_cod_fee = fields.Float(string="Phí COD dự kiến (VND)", readonly=True)
     estimated_insurance_fee = fields.Float(string="Phí bảo hiểm dự kiến (VND)", readonly=True)
+
+    currency_id = fields.Many2one('res.currency', string='Tiền tệ', default=lambda self: self.env.company.currency_id)
+    product_html = fields.Html(compute='_compute_product_html', string="Danh sách sản phẩm", sanitize=False, readonly=True)
+
+    @api.depends('picking_id', 'picking_id.move_ids_without_package')
+    def _compute_product_html(self):
+        for rec in self:
+            html = '<div class="jt-product-list">'
+            if rec.picking_id:
+                moves = rec.picking_id.move_ids_without_package or rec.picking_id.move_ids
+                for move in moves:
+                    if not move.product_id:
+                        continue
+                    product = move.product_id
+                    qty = int(move.product_uom_qty or 0)
+                    weight = int((product.weight or 0) * 1000) or 500
+                    sku = product.default_code or 'N/A'
+                    html += f'''
+                        <div class="jt-product-item">
+                            <div class="jt-product-icon">📦</div>
+                            <div class="jt-product-details">
+                                <div class="jt-product-name"><b>{product.name}</b></div>
+                                <div class="jt-product-meta">
+                                    <span>KL (gram): {weight}</span>
+                                    <span>Số lượng: {qty}</span>
+                                </div>
+                                <div class="jt-product-sku">Mã SP: {sku}</div>
+                            </div>
+                        </div>
+                    '''
+            if html == '<div class="jt-product-list">':
+                html += '<div class="text-muted p-3">Không có thông tin sản phẩm.</div>'
+            html += '</div>'
+            rec.product_html = html
+
+    @api.onchange('goods_value')
+    def _onchange_goods_value(self):
+        if self.goods_value > 30000000:
+            return {
+                'warning': {
+                    'title': "Cảnh báo giá trị hàng hóa",
+                    'message': "J&T Express giới hạn giá trị hàng hóa tối đa là 30,000,000 VNĐ. Vui lòng kiểm tra lại."
+                }
+            }
+
+    @api.constrains('goods_value')
+    def _check_goods_value(self):
+        for rec in self:
+            if rec.is_insured and rec.goods_value > 30000000:
+                raise ValidationError("J&T Express không nhận đơn hàng có giá trị vượt quá 30,000,000 VNĐ.")
 
     # Sender Info (Editable)
     sender_config_id = fields.Many2one("stock.warehouse", string="Cấu hình gửi/Kho")
@@ -354,6 +404,8 @@ class JTCreateOrderWizard(models.TransientModel):
             }
         }
 
+    client_order_code = fields.Char(string="Mã đơn hàng khách", help="Ưu tiên lấy mã SO, nếu không có lấy mã phiếu xuất")
+
     @api.model
     def default_get(self, fields_list):
         res = super(JTCreateOrderWizard, self).default_get(fields_list)
@@ -418,6 +470,7 @@ class JTCreateOrderWizard(models.TransientModel):
             res.update({
                 'picking_id': picking.id,
                 'sender_config_id': warehouse.id if warehouse else False,
+                'client_order_code': (picking.sale_id.name or picking.name) if picking else '',
                 'cod_money': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 'goods_value': picking.sale_id.amount_total if (picking.sale_id and picking.sale_id.amount_total > 0) else 0.0,
                 
@@ -519,7 +572,7 @@ class JTCreateOrderWizard(models.TransientModel):
         biz_params = {
             "customerCode": customer_code,
             "password": password_to_send,
-            "txlogisticId": picking.name.replace("/", "-"),
+            "txlogisticId": self.client_order_code.replace("/", "-"),
             "orderType": self.order_type,
             "serviceType": self.service_type,
             "deliveryType": self.delivery_type,

@@ -5,65 +5,179 @@
         <field name="model">ghn.create.order.wizard</field>
         <field name="arch" type="xml">
             <form string="Kiểm tra và Tạo đơn GHN">
+                <style>
+                    .modal-dialog {
+                        max-width: 1400px !important;
+                    }
+                    .ghn-wizard-container {
+                        background-color: #f8f9fa;
+                        padding: 15px;
+                    }
+                    .ghn-card {
+                        background: #ffffff;
+                        border-radius: 12px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                        margin-bottom: 20px;
+                        padding: 20px;
+                        border: 1px solid #e9ecef;
+                    }
+                    .ghn-header {
+                        font-size: 1.25rem;
+                        font-weight: 600;
+                        margin-bottom: 15px;
+                        color: #212529;
+                        border-bottom: 2px solid #f0f0f0;
+                        padding-bottom: 8px;
+                    }
+                    .ghn-sub-header {
+                        color: #6c757d;
+                        font-size: 0.9rem;
+                        margin-bottom: 15px;
+                    }
+                    .ghn-product-item {
+                        display: flex;
+                        align-items: center;
+                        padding: 12px;
+                        margin-bottom: 10px;
+                        border: 1px solid #f0f0f0;
+                        border-radius: 8px;
+                        background: #fdfdfd;
+                    }
+                    .ghn-product-icon {
+                        font-size: 24px;
+                        margin-right: 15px;
+                        background: #e9ecef;
+                        width: 48px;
+                        height: 48px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 8px;
+                    }
+                    .ghn-product-details {
+                        flex: 1;
+                    }
+                    .ghn-product-meta {
+                        display: flex;
+                        gap: 20px;
+                        font-size: 0.85rem;
+                        color: #495057;
+                        margin-top: 4px;
+                    }
+                    .ghn-product-sku {
+                        font-size: 0.8rem;
+                        color: #adb5bd;
+                    }
+                    .o_horizontal_separator {
+                        display: none !important;
+                    }
+                    .ghn-flex-row {
+                        display: flex;
+                        gap: 20px;
+                        flex-wrap: wrap;
+                    }
+                    .ghn-flex-item {
+                        flex: 1;
+                        min-width: 300px;
+                    }
+                    .ghn-badge-info {
+                        background: #e7f3ff;
+                        color: #007bff;
+                        padding: 4px 12px;
+                        border-radius: 20px;
+                        font-size: 0.8rem;
+                        font-weight: 500;
+                    }
+                    /* Radio widget custom styling if possible or just layout */
+                </style>
                 <sheet>
-                    <div class="alert alert-info" role="alert" invisible="not ghn_order_code">
-                        Đang ở chế độ CẬP NHẬT đơn hàng đã có trên GHN.
+                    <div class="ghn-wizard-container">
+                        <div class="alert alert-info" role="alert" invisible="not ghn_order_code">
+                            Đang ở chế độ CẬP NHẬT đơn hàng đã có trên GHN.
+                        </div>
+
+                        <div class="ghn-flex-row">
+                            <!-- Bên gửi -->
+                            <div class="ghn-card ghn-flex-item">
+                                <div class="ghn-header">Bên gửi</div>
+                                <group>
+                                    <field name="sender_config_id" options="{'no_create': True}"/>
+                                    <field name="ghn_shop_id"/>
+                                    <field name="sender_name"/>
+                                    <field name="sender_phone"/>
+                                    <field name="sender_address"/>
+                                    <field name="sender_province_id" invisible="1"/>
+                                    <field name="sender_district_id" invisible="1"/>
+                                    <field name="sender_ward_id" invisible="1"/>
+                                </group>
+                            </div>
+
+                            <!-- Bên nhận -->
+                            <div class="ghn-card ghn-flex-item">
+                                <div class="ghn-header">Bên nhận</div>
+                                <group>
+                                    <field name="to_phone" string="Số điện thoại *"/>
+                                    <field name="to_name" string="Họ tên *"/>
+                                    <field name="to_address" string="Địa chỉ chi tiết *"/>
+                                    <field name="province_id" options="{'no_create': True, 'no_open': True}"/>
+                                    <field name="district_id" options="{'no_create': True, 'no_open': True}"/>
+                                    <field name="ward_id" options="{'no_create': True, 'no_open': True}"/>
+                                </group>
+                            </div>
+                        </div>
+
+                        <!-- Thông tin sản phẩm -->
+                        <div class="ghn-card">
+                            <div class="ghn-header">Thông tin sản phẩm</div>
+                            <field name="product_html" nolabel="1"/>
+                        </div>
+
+                        <!-- Thông tin đơn hàng -->
+                        <div class="ghn-card">
+                            <div class="ghn-header">Thông tin đơn hàng</div>
+                            <div class="ghn-flex-row">
+                                <group class="ghn-flex-item">
+                                    <field name="weight"/>
+                                    <label for="length" string="Kích thước (cm)"/>
+                                    <div class="o_row">
+                                        <field name="length"/> x <field name="width"/> x <field name="height"/>
+                                    </div>
+                                    <field name="client_order_code"/>
+                                </group>
+                                <group class="ghn-flex-item">
+                                    <field name="cod_amount"/>
+                                    <field name="insurance_value"/>
+                                    <field name="content"/>
+                                </group>
+                            </div>
+                        </div>
+
+                        <!-- Gói dịch vụ & Ghi chú -->
+                        <div class="ghn-flex-row">
+                            <div class="ghn-card ghn-flex-item">
+                                <div class="ghn-header">Gói dịch vụ</div>
+                                <group>
+                                    <field name="payment_type_id" widget="radio" options="{'horizontal': True}"/>
+                                    <field name="service_type_id"/>
+                                    <field name="service_id"/>
+                                    <div class="o_row">
+                                        <span class="text-muted">Phí dự kiến: </span>
+                                        <field name="estimated_fee" widget="monetary" options="{'currency_field': 'currency_id'}"/>
+                                        <button name="action_calculate_fee" type="object" string="Tính phí" class="btn-link" invisible="ghn_order_code"/>
+                                    </div>
+                                </group>
+                            </div>
+                            <div class="ghn-card ghn-flex-item">
+                                <div class="ghn-header">Lưu ý - Ghi chú</div>
+                                <group>
+                                    <field name="required_note" widget="radio"/>
+                                    <field name="note" placeholder="Nhập ghi chú cho shipper..."/>
+                                </group>
+                            </div>
+                        </div>
                     </div>
-                    <group string="Thông tin người gửi">
-                        <group>
-                            <field name="sender_config_id" string="Kho gửi hàng" options="{'no_create': True}"/>
-                            <field name="sender_name"/>
-                            <field name="sender_phone"/>
-                        </group>
-                        <group>
-                            <field name="sender_address"/>
-                            <field name="sender_province_id" options="{'no_create': True, 'no_open': True}"/>
-                            <field name="sender_district_id" options="{'no_create': True, 'no_open': True}"/>
-                            <field name="sender_ward_id" options="{'no_create': True, 'no_open': True}"/>
-                            <field name="ghn_shop_id"/>
-                        </group>
-                    </group>
-                    <group>
-                        <group string="Người nhận">
-                            <field name="ghn_order_code" readonly="1" invisible="not ghn_order_code"/>
-                            <field name="client_order_code"/>
-                            <field name="to_name"/>
-                            <field name="to_phone"/>
-                            <field name="to_address"/>
-                            <field name="province_id" options="{'no_create': True, 'no_open': True}"/>
-                            <field name="district_id" options="{'no_create': True, 'no_open': True}"/>
-                            <field name="ward_id" options="{'no_create': True, 'no_open': True}"/>
-                        </group>
-                        <group string="Thông tin hàng hóa">
-                            <field name="content"/>
-                            <field name="weight"/>
-                            <label for="length" string="Kích thước (LxWxH)"/>
-                            <div class="o_row">
-                                <field name="length"/> x 
-                                <field name="width"/> x 
-                                <field name="height"/> (cm)
-                            </div>
-                            <field name="cod_amount"/>
-                            <field name="insurance_value"/>
-                        </group>
-                    </group>
-                    <group>
-                        <group string="Cấu hình GHN">
-                            <field name="payment_type_id"/>
-                            <field name="required_note"/>
-                            <field name="service_type_id"/>
-                            <field name="service_id"/>
-                            <label for="estimated_fee"/>
-                            <div class="o_row">
-                                <field name="estimated_fee"/>
-                                <button name="action_calculate_fee" type="object" string="Tính phí" class="btn-link" invisible="ghn_order_code"/>
-                            </div>
-                        </group>
-                        <group string="Ghi chú">
-                            <field name="note"/>
-                            <field name="picking_id" invisible="1"/>
-                        </group>
-                    </group>
+                    <field name="picking_id" invisible="1"/>
+                    <field name="ghn_order_code" invisible="1"/>
                 </sheet>
                 <footer>
                     <button name="action_confirm" string="Xác nhận và Tạo đơn" type="object" class="btn-primary" invisible="ghn_order_code"/>
