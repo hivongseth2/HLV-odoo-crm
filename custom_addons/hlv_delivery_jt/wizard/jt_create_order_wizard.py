@@ -167,7 +167,7 @@ class JTCreateOrderWizard(models.TransientModel):
     sender_city_id = fields.Many2one("jnt.district", string="Quận/Huyện gửi", ondelete='set null',
                                     domain="[('province_id', '=', sender_prov_id)]")
     sender_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi", ondelete='set null',
-                                    domain="[('district_id', '=', sender_city_id)]")
+                                    domain="[('district_id.province_id', '=', sender_prov_id)]")
     sender_address = fields.Char(string="Địa chỉ gửi", required=True)
 
     @api.onchange('sender_config_id')
@@ -201,14 +201,19 @@ class JTCreateOrderWizard(models.TransientModel):
     @api.onchange('sender_prov_id')
     def _onchange_sender_prov_id(self):
         if self.sender_prov_id:
-            return {'domain': {'sender_city_id': [('province_id', '=', self.sender_prov_id.id)]}}
+            return {'domain': {
+                'sender_city_id': [('province_id', '=', self.sender_prov_id.id)],
+                'sender_area_id': [('district_id.province_id', '=', self.sender_prov_id.id)]
+            }}
         else:
-            return {'domain': {'sender_city_id': []}}
+            return {'domain': {'sender_city_id': [], 'sender_area_id': []}}
 
     @api.onchange('sender_city_id')
     def _onchange_sender_city_id(self):
         if self.sender_city_id:
             return {'domain': {'sender_area_id': [('district_id', '=', self.sender_city_id.id)]}}
+        elif self.sender_prov_id:
+             return {'domain': {'sender_area_id': [('district_id.province_id', '=', self.sender_prov_id.id)]}}
         else:
             return {'domain': {'sender_area_id': []}}
 
@@ -222,6 +227,11 @@ class JTCreateOrderWizard(models.TransientModel):
                                       domain="[('district_id.province_id', '=', receiver_prov_id)]")
     # Note: Domain needs to be dynamic. Simplified above might not work in XM/Python mix well.
     # Better to control via Onchange returns.
+    receiver_address = fields.Char(string="Địa chỉ nhận", required=True)
+
+    @api.onchange('sender_area_id')
+    def _onchange_sender_area_id(self):
+        pass
     
     @api.onchange('receiver_prov_id')
     def _onchange_receiver_prov_id(self):
