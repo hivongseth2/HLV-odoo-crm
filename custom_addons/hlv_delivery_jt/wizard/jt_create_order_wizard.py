@@ -335,37 +335,66 @@ class JTCreateOrderWizard(models.TransientModel):
             
             # 3. PRIORITY 1: Hierarchy Match (Valid 3-Level)
             # Check if any found Ward belongs to any found District
-            hierarchy_match = None # (dist, ward)
+            valid_hierarchy_matches = [] # List of (dist, ward, score)
             
             if found_dist_candidates and found_ward_candidates:
                 for d in found_dist_candidates:
+                    # Find District position
+                    d_name = d['name'].lower()
+                    d_clean = clean_name(d['name'])
+                    d_index = -1
+                    if d_name in remaining_addr:
+                        d_index = remaining_addr.find(d_name)
+                    elif d_clean in remaining_addr:
+                         d_index = remaining_addr.find(d_clean)
+                         
                     for w in found_ward_candidates:
-                        # Check parent-child relationship
-                        # district_id in Ward can be ID or (ID, Name) tuple depending on read() or environment. 
-                        # search_read usually returns tuple for Many2one if not raw. 
-                        # But here 'district_id' in search_read results is usually (id, name).
-                        
+                        # Check parent-child
                         w_dist_id = w['district_id']
                         if isinstance(w_dist_id, (list, tuple)):
                             w_dist_id = w_dist_id[0]
                         
                         if w_dist_id == d['id']:
-                            hierarchy_match = (d, w)
-                            break
-                    if hierarchy_match:
-                        break
+                             # Valid Parent-Child. Now score it.
+                             w_name = w['name'].lower()
+                             w_clean = clean_name(w['name'])
+                             w_index = -1
+                             if w_name in remaining_addr:
+                                 w_index = remaining_addr.find(w_name)
+                             elif w_clean in remaining_addr:
+                                 w_index = remaining_addr.find(w_clean)
+                             
+                             # SCORING:
+                             # 1. Ward should be BEFORE District (w_index < d_index)
+                             # 2. Ward should NOT be same index as District (Avoid "Tân Phú" matching both Ward and Dist)
+                             score = 0
+                             if w_index != -1 and d_index != -1:
+                                 if w_index < d_index:
+                                     score += 10 # Good order
+                                 elif w_index == d_index:
+                                     score -= 5 # Overlapping/Ambiguous
+                                 
+                                 # Tie breaking: Length of ward name (specificity)
+                                 score += len(w['name']) * 0.1
+                                 
+                             valid_hierarchy_matches.append({
+                                 'dist': d,
+                                 'ward': w,
+                                 'score': score
+                             })
+
+            # Sort best matches first
+            valid_hierarchy_matches.sort(key=lambda x: x['score'], reverse=True)
             
             # DECISION LOGIC
-            if hierarchy_match:
-                # Priority 1: Valid 3-Level Match found
-                # Solves "Tân Quý, Tân Phú" case -> Selects Dist Tân Phú, Ward Tân Quý
-                self.receiver_city_id = hierarchy_match[0]['id']
-                self.receiver_area_id = hierarchy_match[1]['id']
+            if valid_hierarchy_matches:
+                # Priority 1: Best Valid 3-Level Match found
+                best = valid_hierarchy_matches[0]
+                self.receiver_city_id = best['dist']['id']
+                self.receiver_area_id = best['ward']['id']
 
             elif found_ward_candidates:
                  # Priority 2A: Fallback - Ward Found (No valid hierarchy)
-                 # Assume 2-Level Address -> Select Ward, Clear District
-                 # Takes the best match (first one found by length/sort)
                  self.receiver_area_id = found_ward_candidates[0]['id']
                  self.receiver_city_id = False 
             
