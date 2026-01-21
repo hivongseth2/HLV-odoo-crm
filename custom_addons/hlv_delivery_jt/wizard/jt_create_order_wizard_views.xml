@@ -167,7 +167,7 @@
                             <group>
                                 <group>
                                     <field name="part_sign"/>
-                                    <field name="remark" placeholder="Ghi chú tổng hợp cho driver..."/>
+                                    <field name="remark" placeholder="Ghi chú tổng hợp"/>
                                 </group>
                                 <group string="Tùy chọn nhanh">
                                     <field name="note_thu_hang"/>
