@@ -317,39 +317,65 @@ class JTCreateOrderWizard(models.TransientModel):
             districts.sort(key=lambda x: len(x['name']), reverse=True)
             wards.sort(key=lambda x: len(x['name']), reverse=True)
             
-            found_ward = None
-            found_dist = None
+            # 2. Find ALL Candidates in REMAINING text
+            found_dist_candidates = []
+            found_ward_candidates = []
             
-            # Check for Ward Match First (Priority) in REMAINING text
             for w in wards:
                 w_name = w['name'].lower()
                 w_clean = clean_name(w['name'])
                 if w_name in remaining_addr or (w_clean and w_clean in remaining_addr):
-                    found_ward = w
-                    break
+                    found_ward_candidates.append(w)
             
-            # Check for District Match in REMAINING text
             for d in districts:
                 d_name = d['name'].lower()
                 d_clean = clean_name(d['name'])
                 if d_name in remaining_addr or (d_clean and d_clean in remaining_addr):
-                    found_dist = d
-                    break
+                    found_dist_candidates.append(d)
+            
+            # 3. PRIORITY 1: Hierarchy Match (Valid 3-Level)
+            # Check if any found Ward belongs to any found District
+            hierarchy_match = None # (dist, ward)
+            
+            if found_dist_candidates and found_ward_candidates:
+                for d in found_dist_candidates:
+                    for w in found_ward_candidates:
+                        # Check parent-child relationship
+                        # district_id in Ward can be ID or (ID, Name) tuple depending on read() or environment. 
+                        # search_read usually returns tuple for Many2one if not raw. 
+                        # But here 'district_id' in search_read results is usually (id, name).
+                        
+                        w_dist_id = w['district_id']
+                        if isinstance(w_dist_id, (list, tuple)):
+                            w_dist_id = w_dist_id[0]
+                        
+                        if w_dist_id == d['id']:
+                            hierarchy_match = (d, w)
+                            break
+                    if hierarchy_match:
+                        break
             
             # DECISION LOGIC
-            if found_ward:
-                 # Case A: Found Ward (Higher Priority)
-                 # Per user request: DO NOT auto-fill District to avoid 2-level/3-level mixing.
-                 self.receiver_area_id = found_ward['id']
-                 self.receiver_city_id = False # Explicitly clear District if Ward is found (2-level assumption)
+            if hierarchy_match:
+                # Priority 1: Valid 3-Level Match found
+                # Solves "Tân Quý, Tân Phú" case -> Selects Dist Tân Phú, Ward Tân Quý
+                self.receiver_city_id = hierarchy_match[0]['id']
+                self.receiver_area_id = hierarchy_match[1]['id']
+
+            elif found_ward_candidates:
+                 # Priority 2A: Fallback - Ward Found (No valid hierarchy)
+                 # Assume 2-Level Address -> Select Ward, Clear District
+                 # Takes the best match (first one found by length/sort)
+                 self.receiver_area_id = found_ward_candidates[0]['id']
+                 self.receiver_city_id = False 
             
-            elif found_dist:
-                # Case B: No Ward found, but District found
-                self.receiver_city_id = found_dist['id']
+            elif found_dist_candidates:
+                # Priority 2B: Fallback - Only District Found
+                self.receiver_city_id = found_dist_candidates[0]['id']
                 self.receiver_area_id = False
             
             else:
-                # Case C: Only Province found
+                # Priority 2C: Only Province found
                 self.receiver_city_id = False
                 self.receiver_area_id = False
             
