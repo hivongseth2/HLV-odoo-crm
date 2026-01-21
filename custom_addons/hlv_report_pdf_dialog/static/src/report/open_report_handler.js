@@ -29,6 +29,16 @@ registry.category("ir.actions.report handlers").add(
             return false;
         }
 
+        // Skip for specific label reports to use default printing (IoT)
+        const IGNORED_REPORTS = [
+            "custom_picking_label.report_label_35x22_template",
+            "custom_picking_label.report_label_template",
+            "product.report_producttemplatelabel_dymo",
+        ];
+        if (IGNORED_REPORTS.includes(action.report_name)) {
+            return false;
+        }
+
         const { ui, notification } = env.services;
         ui.block(); // show spinner
 
