@@ -15,6 +15,7 @@
             "hlv_report_pdf_dialog/static/src/widgets/print_preview_dialog.js",
             "hlv_report_pdf_dialog/static/src/widgets/print_preview_dialog.xml",
             "hlv_report_pdf_dialog/static/src/widgets/print_preview_dialog.scss",
+            "hlv_report_pdf_dialog/static/src/pos/pos_download_patch.js",
         ],
         "point_of_sale._assets_pos": [
             "hlv_report_pdf_dialog/static/src/pos/pos_download_patch.js",
