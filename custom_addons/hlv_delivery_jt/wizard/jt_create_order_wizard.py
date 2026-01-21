@@ -258,7 +258,16 @@ class JTCreateOrderWizard(models.TransientModel):
 
     @api.onchange('receiver_address')
     def _onchange_receiver_address_parse(self):
-        """Auto-parse address with priority: 3-Level > 2-Level"""
+        """
+        Auto-parse address following strict priority:
+        1. Match Province (Unique)
+        2. With remaining text:
+           - Search all Wards in Prov
+           - Search all Districts in Prov
+        3. Priority:
+           - If Ward found -> Select Ward (Backfill District)
+           - Else if District found -> Select District (Ward empty)
+        """
         if not self.receiver_address:
             return
 
@@ -270,85 +279,78 @@ class JTCreateOrderWizard(models.TransientModel):
 
         # 1. Find Province
         provinces = self.env['jnt.province'].search_read([], ['id', 'name'])
+        # Sort by length descending to match longest first
         provinces.sort(key=lambda x: len(x['name']), reverse=True)
 
         found_prov = None
+        remaining_addr = addr_lower
+        
         for p in provinces:
             p_name = p['name'].lower()
             if p_name in addr_lower or clean_name(p['name']) in addr_lower:
                 found_prov = p
+                # Remove province from address text to search for Dist/Ward in "remaining" part
+                # Note: Simply checking existence in full string is usually safer for loose input, 
+                # but user asked for "With remaining part". 
+                # We will just continue to search the full string but we limit candidates to this Province.
                 break
         
         if found_prov:
             self.receiver_prov_id = found_prov['id']
             
-            # Search all Districts in Province
+            # Search ALL Districts and Wards in this Province
             districts = self.env['jnt.district'].search_read([('province_id', '=', found_prov['id'])], ['id', 'name'])
-            districts.sort(key=lambda x: len(x['name']), reverse=True)
+            wards = self.env['jnt.ward'].search_read([('district_id.province_id', '=', found_prov['id'])], ['id', 'name', 'district_id'])
             
-            # Identify Potential Districts (Candidates)
-            dist_candidates = []
+            districts.sort(key=lambda x: len(x['name']), reverse=True)
+            wards.sort(key=lambda x: len(x['name']), reverse=True)
+            
+            found_ward = None
+            found_dist = None
+            
+            # Check for Ward Match First (Priority)
+            for w in wards:
+                w_name = w['name'].lower()
+                w_clean = clean_name(w['name'])
+                if w_name in addr_lower or (w_clean and w_clean in addr_lower):
+                    found_ward = w
+                    break
+            
+            # Check for District Match
             for d in districts:
                 d_name = d['name'].lower()
                 d_clean = clean_name(d['name'])
                 if d_name in addr_lower or (d_clean and d_clean in addr_lower):
-                    dist_candidates.append(d)
+                    found_dist = d
+                    break
             
-            # STRATEGY: Try to validate candidates by checking if a Ward also exists
-            best_match = None # (dist, ward)
+            # DECISION LOGIC
+            if found_ward:
+                 # Case A: Found Ward (Higher Priority)
+                 # Even if District was also found, we trust the Ward because it implies the District.
+                 # E.g. "Phường A, Quận B" -> Found Ward A (in Dist B). Good.
+                 # E.g. "Phường A" (New) is same name as "Quận A".
+                 # If input is "Phường A", we match Ward "Phường A". 
+                 # We also match Dist "Quận A".
+                 # Algorithm says: "If Ward found -> Select Ward".
+                 self.receiver_area_id = found_ward['id']
+                 
+                 # Backfill District
+                 dist_val = found_ward['district_id']
+                 if isinstance(dist_val, (list, tuple)):
+                     self.receiver_city_id = dist_val[0]
+                 else:
+                     self.receiver_city_id = dist_val
             
-            if dist_candidates:
-                for d in dist_candidates:
-                    wards = self.env['jnt.ward'].search_read([('district_id', '=', d['id'])], ['id', 'name'])
-                    wards.sort(key=lambda x: len(x['name']), reverse=True)
-                    for w in wards:
-                         w_name = w['name'].lower()
-                         w_clean = clean_name(w['name'])
-                         # Check if Ward name is in address AND not effectively overlapping the District name check
-                         # (To avoid "District Name" == "Ward Name" confusion, though standard inclusion check usually handles this if strings are separate)
-                         if w_name in addr_lower or (w_clean and w_clean in addr_lower):
-                             # We found a valid 3-Level Match (Prov + Dist + Ward)
-                             best_match = (d, w)
-                             break
-                    if best_match:
-                        break
+            elif found_dist:
+                # Case B: No Ward found, but District found
+                self.receiver_city_id = found_dist['id']
+                self.receiver_area_id = False
             
-            if best_match:
-                # Case 1: Strong 3-Level Match
-                self.receiver_city_id = best_match[0]['id']
-                self.receiver_area_id = best_match[1]['id']
             else:
-                # Case 2: No full 3-level match found.
-                # Could be 2-Level (Missing District or District Name implied)
-                # Search all Wards in Province to see if we match a Ward Name directly
-                
-                wards = self.env['jnt.ward'].search_read([('district_id.province_id', '=', found_prov['id'])], ['id', 'name', 'district_id'])
-                wards.sort(key=lambda x: len(x['name']), reverse=True)
-                
-                found_ward_2lvl = None
-                for w in wards:
-                    w_name = w['name'].lower()
-                    w_clean = clean_name(w['name'])
-                    if w_name in addr_lower or (w_clean and w_clean in addr_lower):
-                        found_ward_2lvl = w
-                        break
-                
-                if found_ward_2lvl:
-                    self.receiver_area_id = found_ward_2lvl['id']
-                    # Backfill District
-                    dist_val = found_ward_2lvl['district_id']
-                    if isinstance(dist_val, (list, tuple)):
-                         self.receiver_city_id = dist_val[0]
-                    else:
-                         self.receiver_city_id = dist_val
-                else:
-                    # Final Fallback: If we had district candidates but no ward, maybe just select the district?
-                    if dist_candidates:
-                        self.receiver_city_id = dist_candidates[0]['id']
-                        self.receiver_area_id = False
-                    else:
-                        self.receiver_city_id = False
-                        self.receiver_area_id = False
+                # Case C: Only Province found
+                self.receiver_city_id = False
+                self.receiver_area_id = False
 
     @api.onchange('receiver_area_id')
     def _onchange_receiver_area_id(self):
