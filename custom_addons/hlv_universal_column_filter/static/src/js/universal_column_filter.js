@@ -46,6 +46,7 @@ const SELECTION_FIELDS = {
             { value: 'draft', label: 'Mới', color: '#6c757d' },
             { value: 'waiting', label: 'Chờ dịch chuyển khác', color: '#ffc107' },
             { value: 'confirmed', label: 'Đang chờ', color: '#17a2b8' },
+            { value: 'partially_available', label: 'Có sẵn một phần', color: '#fd7e14' },
             { value: 'assigned', label: 'Sẵn sàng', color: '#28a745' },
             { value: 'done', label: 'Hoàn thành', color: '#714B67' },
             { value: 'cancel', label: 'Đã hủy', color: '#dc3545' },
