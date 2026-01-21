@@ -61,6 +61,18 @@ class JTCreateOrderWizard(models.TransientModel):
     note_de_vo = fields.Boolean(string="Hàng dễ vỡ, vui lòng nhẹ tay")
     note_giao_hang_mot_phan = fields.Boolean(string="Giao hàng một phần, nhận lại sản phẩm từ khách")
     note_khong_giao_duoc_lh = fields.Boolean(string="Không giao được liên hệ SĐT shop, không tự ý hủy đơn")
+    # Package Quantity Control
+    manual_package_qty = fields.Integer(string="Số lượng kiện hàng", compute='_compute_manual_package_qty', store=True, readonly=False, help="Nhập số lượng kiện hàng thực tế. Nếu để 0, hệ thống sẽ tự động tính toán.")
+    
+    @api.depends('picking_id', 'picking_id.move_line_ids', 'picking_id.move_line_ids.result_package_id')
+    def _compute_manual_package_qty(self):
+        for rec in self:
+            if rec.picking_id:
+                # Count unique packages
+                package_ids = rec.picking_id.move_line_ids.mapped('result_package_id')
+                rec.manual_package_qty = len(package_ids) if package_ids else 1
+            else:
+                rec.manual_package_qty = 1
     note_goi_dien_truoc_khi_giao = fields.Boolean(string="Gọi điện thoại cho khách trước khi giao")
     note_giao_gio_hanh_chinh = fields.Boolean(string="Giao hàng vào giờ hành chính")
     note_khong_cho_xem = fields.Boolean(string="Không cho xem hàng")
@@ -723,7 +735,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 "volume": str(int(max(self.length * self.width * self.height / 6000.0, 1.0)))
             },
             "itemsValue": goods_val_str,
-            "totalQuantity": len(picking.move_line_ids.mapped('result_package_id')) or 1,
+            "totalQuantity": self.manual_package_qty if self.manual_package_qty > 0 else (len(picking.move_line_ids.mapped('result_package_id')) or 1),
             "items": [{
                 "itemName": line.product_id.name[:100],
                 "englishName": line.product_id.name[:100],

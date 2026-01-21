@@ -114,6 +114,9 @@
                         <div class="jt-card">
                             <div class="jt-header">3. Thông tin sản phẩm</div>
                             <field name="product_html" nolabel="1"/>
+                            <group>
+                                <field name="manual_package_qty"/>
+                            </group>
                         </div>
 
                         <div class="jt-flex-row">
