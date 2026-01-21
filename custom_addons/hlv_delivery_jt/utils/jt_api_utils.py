@@ -165,3 +165,65 @@ class JTApiUtils:
         
         # We should update _get_url to handle 'trace'
         return self._send_request('trace', biz_params)
+
+    @staticmethod
+    def search_address(auth_token, search_key, data_type=3):
+        """
+        Search address using J&T VIP API.
+        This API uses different authentication (authToken header instead of digest).
+        
+        Args:
+            auth_token: The authToken from J&T VIP portal
+            search_key: The address string to search
+            data_type: 3 = search all levels (province, district, ward, street)
+        
+        Returns:
+            dict: API response with matched addresses
+            
+        Response format:
+        {
+            "code": 1,
+            "msg": "请求成功",
+            "data": [{
+                "provinceName": "Hồ Chí Minh",
+                "provinceId": 74,
+                "cityName": "Quận Tân Phú",
+                "cityId": 768,
+                "areaName": "Phường Tân Quý-028QTP04",
+                "areaId": 1679,
+                "streetName": "...",
+                "streetId": null
+            }],
+            "succ": true
+        }
+        """
+        url = "https://ylvipapi.jtexpress.vn/api/region/getAreaStreetBySearchKey"
+        
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json',
+            'authToken': auth_token,
+            'langType': 'VN',
+            'routeName': 'OrderCreate'
+        }
+        
+        params = {
+            'searchKey': search_key,
+            'dataType': data_type
+        }
+        
+        try:
+            _logger.info("J&T Address Search | URL: %s | searchKey: %s", url, search_key)
+            response = requests.get(url, params=params, headers=headers)
+            
+            if response.status_code == 200:
+                res_json = response.json()
+                _logger.info("J&T Address Search Response: %s", res_json)
+                return res_json
+            else:
+                _logger.error("J&T Address Search Error %s: %s", response.status_code, response.text)
+                return {'code': 'error', 'msg': f"HTTP Error {response.status_code}", 'data': []}
+        except Exception as e:
+            _logger.exception("J&T Address Search Exception: %s", e)
+            return {'code': 'error', 'msg': str(e), 'data': []}
+

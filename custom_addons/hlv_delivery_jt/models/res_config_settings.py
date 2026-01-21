@@ -28,6 +28,10 @@ class ResConfigSettings(models.TransientModel):
         string="J&T password",
         compute="_compute_jt_credentials",
     )
+    jt_auth_token_display = fields.Char(
+        string="J&T authToken (Address Search)",
+        compute="_compute_jt_credentials",
+    )
 
     def _compute_jt_credentials(self):
         get_param = self.env['ir.config_parameter'].sudo().get_param
@@ -36,6 +40,7 @@ class ResConfigSettings(models.TransientModel):
             record.jt_private_key_display = get_param('jnt_privateKey') or 'Chưa cấu hình jnt_privateKey'
             record.jt_customer_code_display = get_param('jnt_customerCode') or 'Chưa cấu hình jnt_customerCode'
             record.jt_password_display = get_param('jnt_password') or 'Chưa cấu hình jnt_password'
+            record.jt_auth_token_display = get_param('jnt_authToken') or 'Chưa cấu hình jnt_authToken'
 
     def action_check_jt_connection(self):
         """Test connection to J&T API"""

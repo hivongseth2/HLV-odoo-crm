@@ -222,6 +222,121 @@ class JTCreateOrderWizard(models.TransientModel):
     @api.onchange('sender_area_id')
     def _onchange_sender_area_id(self):
         pass
+    
+    @api.onchange('receiver_prov_id')
+    def _onchange_receiver_prov_id(self):
+        if self.receiver_prov_id:
+            # If prov selected, filter dists. Also reset ward.
+            return {'domain': {
+                'receiver_city_id': [('province_id', '=', self.receiver_prov_id.id)],
+                'receiver_area_id': [('district_id.province_id', '=', self.receiver_prov_id.id)] # Allow searching all wards in prov initially?
+            }}
+        else:
+            return {'domain': {'receiver_city_id': [], 'receiver_area_id': []}}
+
+    @api.onchange('receiver_city_id')
+    def _onchange_receiver_city_id(self):
+        if self.receiver_city_id:
+            return {'domain': {'receiver_area_id': [('district_id', '=', self.receiver_city_id.id)]}}
+        elif self.receiver_prov_id:
+            # If Dist cleared but Prov remains, show all Wards in Prov (for 2-level manual selection)
+            return {'domain': {'receiver_area_id': [('district_id.province_id', '=', self.receiver_prov_id.id)]}}
+        else:
+            return {'domain': {'receiver_area_id': []}}
+
+    # ... (fields def) ...
+
+    @api.onchange('receiver_address')
+    def _onchange_receiver_address_parse(self):
+        """
+        Auto-parse address using J&T API.
+        Calls getAreaStreetBySearchKey API to get Province/District/Ward info.
+        """
+        if not self.receiver_address or len(self.receiver_address) < 10:
+            return
+
+        # Get authToken from System Parameters
+        get_param = self.env['ir.config_parameter'].sudo().get_param
+        auth_token = get_param('jnt_authToken')
+        
+        if not auth_token:
+            _logger.warning("J&T authToken not configured. Cannot auto-parse address.")
+            return
+        
+        try:
+            # Call J&T API
+            result = JTApiUtils.search_address(auth_token, self.receiver_address)
+            
+            if result.get('code') == 1 and result.get('data'):
+                data = result['data'][0]  # Take first result
+                
+                # Extract data from API response
+                province_name = data.get('provinceName', '')
+                province_id_api = data.get('provinceId')
+                district_name = data.get('cityName', '')
+                district_id_api = data.get('cityId')
+                ward_name = data.get('areaName', '')  # Format: "Phường Tân Quý-028QTP04"
+                ward_id_api = data.get('areaId')
+                
+                # Find or create Province
+                province = self.env['jnt.province'].search([('name', '=ilike', province_name)], limit=1)
+                if not province and province_name:
+                    province = self.env['jnt.province'].create({'name': province_name})
+                
+                if province:
+                    self.receiver_prov_id = province.id
+                    
+                    # Find or create District
+                    district = self.env['jnt.district'].search([
+                        ('province_id', '=', province.id),
+                        ('name', '=ilike', district_name)
+                    ], limit=1)
+                    if not district and district_name:
+                        district = self.env['jnt.district'].create({
+                            'name': district_name,
+                            'province_id': province.id
+                        })
+                    
+                    if district:
+                        self.receiver_city_id = district.id
+                        
+                        # Find or create Ward
+                        ward = self.env['jnt.ward'].search([
+                            ('district_id', '=', district.id),
+                            ('name', '=ilike', ward_name)
+                        ], limit=1)
+                        if not ward and ward_name:
+                            # Extract code from ward name (e.g., "Phường Tân Quý-028QTP04" -> "028QTP04")
+                            jnt_code = ''
+                            if '-' in ward_name:
+                                jnt_code = ward_name.split('-')[-1]
+                            ward = self.env['jnt.ward'].create({
+                                'name': ward_name,
+                                'district_id': district.id,
+                                'jnt_code': jnt_code
+                            })
+                        
+                        if ward:
+                            self.receiver_area_id = ward.id
+                        else:
+                            self.receiver_area_id = False
+                    else:
+                        self.receiver_city_id = False
+                        self.receiver_area_id = False
+                else:
+                    self.receiver_prov_id = False
+                    self.receiver_city_id = False
+                    self.receiver_area_id = False
+                    
+                _logger.info("J&T Address parsed: Province=%s, District=%s, Ward=%s", 
+                            province_name, district_name, ward_name)
+            else:
+                _logger.warning("J&T Address Search returned no results for: %s", self.receiver_address)
+                
+        except Exception as e:
+            _logger.error("Error parsing address via J&T API: %s", e)
+            
+
 
     @api.onchange('receiver_area_id')
     def _onchange_receiver_area_id(self):
