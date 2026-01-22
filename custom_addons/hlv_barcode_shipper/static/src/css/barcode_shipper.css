@@ -595,137 +595,146 @@ body {
    NEW STYLES FOR SO GROUPING & ACCORDION
    ========================================= */
 
-/* Customer Header */
-.customer-header {
-  background: var(--primary-color);
-  color: white;
-  padding: 12px 15px;
-  border-radius: 8px;
-  margin-bottom: 15px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  box-shadow: var(--shadow-sm);
+/* Customer Info in Header */
+.customer-info {
+  margin-top: 5px;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* Accordion Container */
 .accordion-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 15px;
+  margin-bottom: 25px;
 }
 
 /* SO Group (Level 1) */
 .so-group {
-  border: 1px solid var(--border-color);
+  border: 1px solid #e0e0e0;
   border-radius: 8px;
   background: #fff;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .so-group-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 15px;
+  padding: 15px;
+  /* Larger touch target */
   background: #f8f9fa;
   cursor: pointer;
   user-select: none;
   border-bottom: 1px solid transparent;
-  transition: all 0.2s;
 }
 
-.so-group-header:hover {
+/* Add active state for touch feedback instead of hover */
+.so-group-header:active {
   background: #e9ecef;
 }
 
 .so-group.expanded .so-group-header {
-  border-bottom-color: var(--border-color);
-  background: #eef2f5;
+  border-bottom-color: #eee;
+  background: #fff;
+  color: var(--primary-color);
 }
 
 .so-name {
   font-weight: 700;
+  font-size: 1.05rem;
+  color: #333;
+}
+
+.so-group.expanded .so-name {
   color: var(--primary-color);
-  font-size: 1rem;
 }
 
 .so-count {
-  background: var(--secondary-color);
+  background: #6c757d;
   color: white;
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 4px 10px;
+  border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 600;
 }
 
+.so-group.expanded .so-count {
+  background: var(--primary-color);
+}
+
 .so-group-content {
   display: none;
-  padding: 10px;
+  padding: 10px 15px 15px 15px;
   background: #fff;
+  border-top: 1px solid #eee;
 }
 
 .so-group.expanded .so-group-content {
-  display: block;
-  animation: slideDown 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Removed animation for better performance on low-end devices */
 }
 
 /* OUT Item (Level 2) */
 .out-item {
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  margin-bottom: 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: #fff;
   overflow: hidden;
-  transition: all 0.2s;
-}
-
-.out-item:last-child {
-  margin-bottom: 0;
+  position: relative;
 }
 
 .out-item-header {
-  padding: 10px 12px;
+  padding: 12px 15px;
   background: #fff;
   cursor: pointer;
   user-select: none;
 }
 
-.out-item-header:hover {
-  background: #fafafa;
+.out-item-header:active {
+  background: #f1f3f5;
 }
 
+/* Active Styling - High Contrast */
 .out-item.active {
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 1px var(--primary-color), var(--shadow-sm);
+  box-shadow: 0 0 0 1px var(--primary-color);
 }
 
 .out-item.active .out-item-header {
   background: #e3f2fd;
-  color: var(--primary-color);
+  /* Clear active background */
 }
 
 .out-info-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .out-name {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  color: #495057;
+}
+
+.out-item.active .out-name {
+  color: var(--primary-color);
 }
 
 .out-status-badge {
   font-size: 0.75rem;
-  padding: 2px 6px;
+  text-transform: uppercase;
+  padding: 4px 8px;
   border-radius: 4px;
   background: #eee;
   color: #666;
+  font-weight: 600;
 }
 
 .out-status-badge.done {
@@ -736,15 +745,16 @@ body {
 /* Mini Progress in OUT header */
 .out-mini-progress {
   width: 100%;
-  height: 4px;
+  height: 6px;
   background: #e9ecef;
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .out-mini-progress-fill {
   height: 100%;
-  background: var(--success-color);
+  background: #28a745;
+  /* Simple solid color */
   width: 0%;
   transition: width 0.3s ease;
 }
@@ -752,8 +762,7 @@ body {
 /* Content inside OUT (Level 3 - Items List) */
 .out-item-content {
   display: none;
-  padding: 0;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid #e3f2fd;
   background: #fff;
 }
 
@@ -763,16 +772,18 @@ body {
 
 /* Checkbox style for picking selection modal */
 .picking-checkbox {
-  width: 20px;
-  height: 20px;
-  margin-right: 12px;
+  width: 24px;
+  /* Larger for touch */
+  height: 24px;
+  margin-right: 15px;
   cursor: pointer;
 }
 
 .picking-line {
   display: flex;
   align-items: center;
-  padding: 10px;
+  padding: 15px;
+  /* Larger touch target */
   border-bottom: 1px solid #eee;
 }
 
@@ -785,31 +796,33 @@ body {
   position: sticky;
   bottom: 0;
   background: white;
-  padding: 15px;
-  border-top: 1px solid var(--border-color);
-  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.05);
+  /* No transparency for performance */
+  padding: 15px 20px;
+  border-top: 1px solid #dee2e6;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
   z-index: 100;
   margin: 0 -20px -20px -20px;
-  /* Compensate padding of card-box */
   border-radius: 0 0 12px 12px;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Override existing items-list style to fit inside OUT content */
+/* Override existing items-list style */
 .out-item-content .items-list {
   max-height: none;
-  /* Let the container handle height or scroll */
   margin-top: 0;
   padding: 10px;
+}
+
+/* Cleaner Item Cards inside OUT */
+.out-item-content .item-card {
+  border: 1px solid #f0f0f0;
+  margin-bottom: 10px;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: none;
+  background: #fafafa;
+}
+
+.out-item-content .item-card.scanned {
+  background: #f6ffed;
+  border-color: #b7eb8f;
 }

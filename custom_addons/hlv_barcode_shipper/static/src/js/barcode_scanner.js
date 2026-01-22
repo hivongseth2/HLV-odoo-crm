@@ -397,7 +397,7 @@ class BarcodeShipper {
 
                 // Show Step 2
                 document.getElementById('customer-name').textContent = this.customerName;
-                document.getElementById('customer-header').style.display = 'flex';
+                document.getElementById('customer-info').style.display = 'block';
                 this.showStep('step-scan-items');
                 this.showMessage('pick-result', 'Đã tải xong dữ liệu.', 'success');
             } else {
@@ -725,7 +725,7 @@ class BarcodeShipper {
         document.getElementById('item-barcode-input').value = '';
         document.getElementById('global-progress-fill').style.width = '0%';
         document.getElementById('global-progress-text').textContent = '0 / 0';
-        document.getElementById('customer-header').style.display = 'none';
+        document.getElementById('customer-info').style.display = 'none';
 
         this.showStep('step-scan-pick');
     }
