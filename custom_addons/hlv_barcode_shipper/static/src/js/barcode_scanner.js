@@ -242,8 +242,23 @@ class BarcodeShipper {
                 this.customerName = res.customer_name || 'Khách hàng';
                 // Show modal with SO groups
                 if (res.so_groups && res.so_groups.length > 0) {
-                    this.showPickingSelectionModal(res.so_groups);
-                    this.showMessage('pick-result', res.message, 'success');
+                    // Check total number of pickings
+                    let totalPickings = 0;
+                    let singlePickingId = null;
+                    res.so_groups.forEach(g => {
+                        if (g.pickings) {
+                            totalPickings += g.pickings.length;
+                            if (g.pickings.length > 0) singlePickingId = g.pickings[0].id;
+                        }
+                    });
+
+                    if (totalPickings === 1 && singlePickingId) {
+                        this.showMessage('pick-result', 'Đã tìm thấy 1 phiếu, đang tải...', 'success');
+                        this.loadMultipleOutDetails([singlePickingId]);
+                    } else {
+                        this.showPickingSelectionModal(res.so_groups);
+                        this.showMessage('pick-result', res.message, 'success');
+                    }
                 } else {
                     this.showMessage('pick-result', 'Không tìm thấy nhóm phiếu nào.', 'danger');
                 }
