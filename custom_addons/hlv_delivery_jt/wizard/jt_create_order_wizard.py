@@ -61,7 +61,6 @@ class JTCreateOrderWizard(models.TransientModel):
     note_de_vo = fields.Boolean(string="Hàng dễ vỡ, vui lòng nhẹ tay")
     note_giao_hang_mot_phan = fields.Boolean(string="Giao hàng một phần, nhận lại sản phẩm từ khách")
     note_khong_giao_duoc_lh = fields.Boolean(string="Không giao được liên hệ SĐT shop, không tự ý hủy đơn")
-    
     # Package Quantity Control
     manual_package_qty = fields.Integer(string="Số lượng kiện hàng", compute='_compute_manual_package_qty', store=True, readonly=False, help="Nhập số lượng kiện hàng thực tế. Nếu để 0, hệ thống sẽ tự động tính toán.")
     
@@ -177,7 +176,7 @@ class JTCreateOrderWizard(models.TransientModel):
     sender_city_id = fields.Many2one("jnt.district", string="Quận/Huyện gửi", ondelete='set null',
                                     domain="[('province_id', '=', sender_prov_id)]")
     sender_area_id = fields.Many2one("jnt.ward", string="Phường/Xã gửi", ondelete='set null',
-                                    domain="[('district_id.province_id', '=', sender_prov_id)]")
+                                    domain="[('district_id', '=', sender_city_id)]")
     sender_address = fields.Char(string="Địa chỉ gửi", required=True)
 
     @api.onchange('sender_config_id')
@@ -211,19 +210,14 @@ class JTCreateOrderWizard(models.TransientModel):
     @api.onchange('sender_prov_id')
     def _onchange_sender_prov_id(self):
         if self.sender_prov_id:
-            return {'domain': {
-                'sender_city_id': [('province_id', '=', self.sender_prov_id.id)],
-                'sender_area_id': [('district_id.province_id', '=', self.sender_prov_id.id)]
-            }}
+            return {'domain': {'sender_city_id': [('province_id', '=', self.sender_prov_id.id)]}}
         else:
-            return {'domain': {'sender_city_id': [], 'sender_area_id': []}}
+            return {'domain': {'sender_city_id': []}}
 
     @api.onchange('sender_city_id')
     def _onchange_sender_city_id(self):
         if self.sender_city_id:
             return {'domain': {'sender_area_id': [('district_id', '=', self.sender_city_id.id)]}}
-        elif self.sender_prov_id:
-             return {'domain': {'sender_area_id': [('district_id.province_id', '=', self.sender_prov_id.id)]}}
         else:
             return {'domain': {'sender_area_id': []}}
 
@@ -234,9 +228,7 @@ class JTCreateOrderWizard(models.TransientModel):
     receiver_city_id = fields.Many2one("jnt.district", string="Quận/Huyện nhận", ondelete='set null', 
                                       domain="[('province_id', '=', receiver_prov_id)]")
     receiver_area_id = fields.Many2one("jnt.ward", string="Phường/Xã nhận", ondelete='set null',
-                                      domain="[('district_id.province_id', '=', receiver_prov_id)]")
-    # Note: Domain needs to be dynamic. Simplified above might not work in XM/Python mix well.
-    # Better to control via Onchange returns.
+                                      domain="[('district_id', '=', receiver_city_id)]")
     receiver_address = fields.Char(string="Địa chỉ nhận", required=True)
 
     @api.onchange('sender_area_id')
@@ -293,7 +285,7 @@ class JTCreateOrderWizard(models.TransientModel):
                 # Extract data from API response
                 province_name = data.get('provinceName', '')
                 province_id_api = data.get('provinceId')
-                district_name = data.get('cityName', '')
+                district_name = data.get('cityName', '') or ''
                 district_id_api = data.get('cityId')
                 ward_name = data.get('areaName', '')  # Format: "Phường Tân Quý-028QTP04"
                 ward_id_api = data.get('areaId')
@@ -306,27 +298,42 @@ class JTCreateOrderWizard(models.TransientModel):
                 if province:
                     self.receiver_prov_id = province.id
                     
+                    # ---------------------------------------------------------
+                    # HANDLE 2-LEVEL ADDRESS LOGIC (J&T Quirk)
+                    # If API returns Ward in 'cityName' field and 'areaName' is empty for 2-level addresses.
+                    # ---------------------------------------------------------
+                    if not ward_name and district_name:
+                        # Check if district_name looks like a Ward (starts with Phường, Xã, Thị trấn)
+                        # to avoid shifting actual Districts (e.g., "Quận 1") to Ward.
+                        d_lower = district_name.lower()
+                        ward_prefixes = ['phường', 'xã', 'thị trấn', 'p.', 'x.']
+                        if any(d_lower.strip().startswith(p) for p in ward_prefixes):
+                            ward_name = district_name
+                            district_name = ""
+                    
                     # Find or create District
-                    district = self.env['jnt.district'].search([
-                        ('province_id', '=', province.id),
-                        ('name', '=ilike', district_name)
-                    ], limit=1)
-                    if not district and district_name:
-                        district = self.env['jnt.district'].create({
-                            'name': district_name,
-                            'province_id': province.id
-                        })
+                    district = False
+                    if district_name:
+                        district = self.env['jnt.district'].search([
+                            ('province_id', '=', province.id),
+                            ('name', '=ilike', district_name)
+                        ], limit=1)
+                        if not district:
+                            district = self.env['jnt.district'].create({
+                                'name': district_name,
+                                'province_id': province.id
+                            })
                     
                     if district:
                         self.receiver_city_id = district.id
                         
-                        # Find or create Ward
+                        # Find or create Ward logic (standard 3-level)
                         ward = self.env['jnt.ward'].search([
                             ('district_id', '=', district.id),
                             ('name', '=ilike', ward_name)
                         ], limit=1)
                         if not ward and ward_name:
-                            # Extract code from ward name (e.g., "Phường Tân Quý-028QTP04" -> "028QTP04")
+                            # Extract code from ward name
                             jnt_code = ''
                             if '-' in ward_name:
                                 jnt_code = ward_name.split('-')[-1]
@@ -340,9 +347,48 @@ class JTCreateOrderWizard(models.TransientModel):
                             self.receiver_area_id = ward.id
                         else:
                             self.receiver_area_id = False
+                            
                     else:
+                        # District is empty (2-level case) or not found
                         self.receiver_city_id = False
-                        self.receiver_area_id = False
+                        
+                        if ward_name:
+                            # 2-level case: Ward exists but no District
+                            # Try to find if this ward exists in this province (via any district? NO, we don't know the district)
+                            # Or just create a Ward with NO District?
+                            # Search for existing orphan ward or ward in this province?
+                            # Searching by name in DB is risky if duplicates exist across districts. 
+                            # But if it's 2-level, maybe it doesn't have a district.
+                            
+                            # Let's try to find a ward with this name in the province if possible
+                            # This is complex because jnt.ward doesn't link to province directly.
+                            
+                            # Simple approach: Create/Use an orphan ward (district_id=False)
+                            # Or check if we can find it via name in the province logic?
+                            # For simplicity and correctness of "saving what we have":
+                            
+                            ward = self.env['jnt.ward'].search([
+                                ('name', '=ilike', ward_name),
+                                ('district_id', '=', False) 
+                            ], limit=1)
+                            
+                            if not ward:
+                                # Fallback: if we can't find an orphan, maybe we find one attached to a district but we don't know which one?
+                                # Better to create a new one or use orphan to distinguish.
+                                jnt_code = ''
+                                if '-' in ward_name:
+                                    jnt_code = ward_name.split('-')[-1]
+                                    
+                                ward = self.env['jnt.ward'].create({
+                                    'name': ward_name,
+                                    'district_id': False, # Orphan ward for 2-level address
+                                    'jnt_code': jnt_code
+                                })
+                                
+                            self.receiver_area_id = ward.id
+                        else:
+                             self.receiver_area_id = False
+
                 else:
                     self.receiver_prov_id = False
                     self.receiver_city_id = False

@@ -50,15 +50,16 @@ def run_import(env, excel_path):
         ward_raw = row[2].value # e.g. "Phường An Khánh-028TPT02"
         ward_clean = row[3].value # e.g. "Phường An Khánh"
         
-        if not prov_name or not dist_name:
+        if not prov_name or not dist_name or not ward_raw:
             continue
             
-        # Extract J&T code if available
+        # Extract J&T code
         code = None
-        if ward_raw and '-' in str(ward_raw):
+        if '-' in str(ward_raw):
             code = str(ward_raw).split('-')[-1].strip()
         
-        # We process even if no code/ward (2-level address)
+        if not code:
+            continue
             
         n_prov = normalize(prov_name)
         province = prov_map.get(n_prov)
@@ -84,9 +85,6 @@ def run_import(env, excel_path):
             province_districts[n_dist] = district
             # print("Created District: %s" % dist_name)
             
-        if not ward_clean:
-            continue
-            
         # Find or Create Ward
         n_ward = normalize(ward_clean)
         # Check by code first if possible, or name
@@ -97,7 +95,7 @@ def run_import(env, excel_path):
         ], limit=1)
         
         if ward:
-            if code and ward.jnt_code != code:
+            if ward.jnt_code != code:
                 ward.write({'jnt_code': code})
                 updated_count += 1
         else:
