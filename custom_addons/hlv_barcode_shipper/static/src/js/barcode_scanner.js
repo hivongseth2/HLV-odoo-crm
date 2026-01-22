@@ -270,9 +270,9 @@ class BarcodeShipper {
                         <h3>Chọn phiếu xuất kho</h3>
                         <button class="modal-close">&times;</button>
                     </div>
-                    <div id="picking-selection-list" class="modal-body" style="padding: 10px;"></div>
-                    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee;">
-                         <button id="confirm-selection-btn" class="btn btn-primary btn-block">
+                    <div id="picking-selection-list" class="modal-body" style="padding: 10px; background: #f5f6f8;"></div>
+                    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee; background: #fff;">
+                         <button id="confirm-selection-btn" class="btn btn-primary btn-block btn-lg">
                             Xác nhận chọn (<span id="selected-count">0</span>)
                          </button>
                     </div>
@@ -287,49 +287,93 @@ class BarcodeShipper {
         const list = modal.querySelector('#picking-selection-list');
         list.innerHTML = '';
 
-        let totalPickings = 0;
+        // Add "Select All" Option
+        const selectAllDiv = document.createElement('div');
+        selectAllDiv.style.display = 'flex';
+        selectAllDiv.style.justifyContent = 'space-between';
+        selectAllDiv.style.alignItems = 'center';
+        selectAllDiv.style.padding = '15px';
+        selectAllDiv.style.marginBottom = '10px';
+        selectAllDiv.style.background = '#fff';
+        selectAllDiv.style.borderRadius = '12px';
+        selectAllDiv.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+
+        selectAllDiv.innerHTML = `
+            <label for="select-all-checkbox" style="font-weight: 700; font-size: 1rem; margin:0; color: #333;">Chọn tất cả</label>
+            <input type="checkbox" id="select-all-checkbox" style="width: 24px; height: 24px;">
+        `;
+        list.appendChild(selectAllDiv);
+
+        let allItemCheckboxes = [];
 
         soGroups.forEach(group => {
-            const groupDiv = document.createElement('div');
-            groupDiv.className = 'so-group-modal';
-            groupDiv.style.marginBottom = '15px';
-            groupDiv.innerHTML = `
-                <div style="background: #f8f9fa; padding: 10px; font-weight: bold; border-left: 4px solid var(--primary-color);">
-                    ${group.so_name}
-                </div>
-            `;
+            if (group.so_name) {
+                const groupTitle = document.createElement('div');
+                groupTitle.className = 'selection-group-title';
+                groupTitle.textContent = group.so_name;
+                list.appendChild(groupTitle);
+            }
 
             group.pickings.forEach(p => {
-                totalPickings++;
-                const line = document.createElement('div');
-                line.className = 'picking-line';
-                // Default check if 'is_related' is true
-                const checked = p.is_related ? 'checked' : '';
-                line.innerHTML = `
-                    <input type="checkbox" class="picking-checkbox" value="${p.id}" ${checked}>
-                    <div style="flex: 1;">
-                        <div style="font-weight: 600;">${p.name}</div>
-                        <div style="font-size: 0.85rem; color: #666;">
-                           ${p.scheduled_date || ''} - ${p.state}
+                const card = document.createElement('div');
+                card.className = 'picking-select-card';
+                if (p.is_related) card.classList.add('selected');
+                card.dataset.id = p.id;
+
+                card.innerHTML = `
+                    <div class="card-info" style="flex: 1;">
+                        <div class="card-name">${p.name}</div>
+                        <div class="card-meta">
+                           <i class="fa fa-calendar"></i> ${p.scheduled_date || ''} 
+                           <span class="badge badge-info" style="margin-left: 5px;">${p.state}</span>
                         </div>
                     </div>
+                    <div class="check-circle">
+                         <i class="fa fa-check"></i>
+                    </div>
+                    <input type="checkbox" class="picking-checkbox" value="${p.id}" ${p.is_related ? 'checked' : ''} style="display: none;">
                 `;
-                groupDiv.appendChild(line);
+
+                // Card Click Event
+                card.addEventListener('click', () => {
+                    const cb = card.querySelector('.picking-checkbox');
+                    cb.checked = !cb.checked;
+                    if (cb.checked) card.classList.add('selected');
+                    else card.classList.remove('selected');
+                    updateCount();
+                });
+
+                list.appendChild(card);
+                allItemCheckboxes.push(card.querySelector('.picking-checkbox'));
             });
-            list.appendChild(groupDiv);
         });
 
-        // Update count
+        // Select All Logic
+        const selectAllCb = selectAllDiv.querySelector('#select-all-checkbox');
+
+        selectAllCb.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            allItemCheckboxes.forEach(cb => {
+                cb.checked = isChecked;
+                const card = cb.closest('.picking-select-card');
+                if (isChecked) card.classList.add('selected');
+                else card.classList.remove('selected');
+            });
+            updateCount();
+        });
+
         const updateCount = () => {
-            const count = modal.querySelectorAll('.picking-checkbox:checked').length;
-            modal.querySelector('#selected-count').textContent = count;
+            const checkedCbs = modal.querySelectorAll('.picking-checkbox:checked');
+            modal.querySelector('#selected-count').textContent = checkedCbs.length;
+
+            // Update Select All state logic
+            if (allItemCheckboxes.length > 0) {
+                selectAllCb.checked = checkedCbs.length === allItemCheckboxes.length;
+                selectAllCb.indeterminate = checkedCbs.length > 0 && checkedCbs.length < allItemCheckboxes.length;
+            }
         };
 
-        modal.querySelectorAll('.picking-checkbox').forEach(cb => {
-            cb.addEventListener('change', updateCount);
-        });
         updateCount();
-
         this.showModal(modal);
     }
 

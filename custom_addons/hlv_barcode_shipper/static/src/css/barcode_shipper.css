@@ -781,40 +781,46 @@ body {
 }
 
 /* Picking Selection Card */
+/* Picking Selection Card */
 .picking-select-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
+  padding: 18px;
+  /* Larger padding for touch */
   background: #fff;
-  border: 2px solid #f0f0f0;
+  border: 2px solid #eef0f3;
   border-radius: 12px;
   margin-bottom: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  min-height: 70px;
+  /* Ensure minimum click height */
 }
 
 .picking-select-card:active {
   background-color: #f9f9f9;
-  transform: scale(0.98);
+  transform: scale(0.99);
 }
 
 .picking-select-card.selected {
   border-color: var(--primary-color);
   background-color: #f0f7ff;
-  /* Very light blue */
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.15);
+  /* Soft glow */
 }
 
 .card-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .card-name {
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.15rem;
+  /* Larger text */
   color: #333;
 }
 
@@ -823,22 +829,17 @@ body {
 }
 
 .card-meta {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #888;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.dot-separator {
-  font-size: 0.5rem;
-  color: #ccc;
-}
-
-/* Check Circle Indicator */
+/* Check Circle Indicator - Larger for mobile */
 .check-circle {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 2px solid #ddd;
   display: flex;
@@ -847,10 +848,14 @@ body {
   color: white;
   transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   background: #fff;
+  flex-shrink: 0;
+  /* Prevent shrinking */
+  margin-left: 15px;
 }
 
 .check-circle i {
-  font-size: 0.8rem;
+  font-size: 1.1rem;
+  /* Larger check icon */
   opacity: 0;
   transform: scale(0);
   transition: all 0.2s;
@@ -859,7 +864,7 @@ body {
 .picking-select-card.selected .check-circle {
   background: var(--primary-color);
   border-color: var(--primary-color);
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
 
 .picking-select-card.selected .check-circle i {
