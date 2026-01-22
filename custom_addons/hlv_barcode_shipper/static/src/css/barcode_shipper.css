@@ -770,25 +770,101 @@ body {
   display: block;
 }
 
-/* Checkbox style for picking selection modal */
-.picking-checkbox {
-  width: 24px;
-  /* Larger for touch */
-  height: 24px;
-  margin-right: 15px;
-  cursor: pointer;
+/* Selection Group Title in Modal */
+.selection-group-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 15px 0 8px 0;
 }
 
-.picking-line {
+/* Picking Selection Card */
+.picking-select-card {
   display: flex;
   align-items: center;
-  padding: 15px;
-  /* Larger touch target */
-  border-bottom: 1px solid #eee;
+  justify-content: space-between;
+  padding: 16px;
+  background: #fff;
+  border: 2px solid #f0f0f0;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
-.picking-line:last-child {
-  border-bottom: none;
+.picking-select-card:active {
+  background-color: #f9f9f9;
+  transform: scale(0.98);
+}
+
+.picking-select-card.selected {
+  border-color: var(--primary-color);
+  background-color: #f0f7ff;
+  /* Very light blue */
+}
+
+.card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #333;
+}
+
+.picking-select-card.selected .card-name {
+  color: var(--primary-color);
+}
+
+.card-meta {
+  font-size: 0.85rem;
+  color: #888;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot-separator {
+  font-size: 0.5rem;
+  color: #ccc;
+}
+
+/* Check Circle Indicator */
+.check-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  background: #fff;
+}
+
+.check-circle i {
+  font-size: 0.8rem;
+  opacity: 0;
+  transform: scale(0);
+  transition: all 0.2s;
+}
+
+.picking-select-card.selected .check-circle {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.picking-select-card.selected .check-circle i {
+  opacity: 1;
+  transform: scale(1);
 }
 
 /* Global Progress */
