@@ -1,12 +1,16 @@
 // hlv_barcode_shipper/static/src/js/barcode_scanner.js
 /**
- * HLV Barcode Shipper JavaScript
+ * HLV Barcode Shipper JavaScript (Refactored for SO Grouping)
  */
 
 class BarcodeShipper {
     constructor() {
-        this.currentPickingId = null;
-        this.currentItems = [];
+        // Multi-picking state
+        this.pickingDataMap = {};       // Map: pickingId -> { info, items, progress, so_name }
+        this.soGroups = [];             // List of SO groups for rendering
+        this.activePickingId = null;    // Current focused picking
+        this.customerName = '';
+
         this.scannedBarcodes = new Set();
         this.html5QrCode = null;
         this.isCameraRunning = false;
@@ -27,8 +31,8 @@ class BarcodeShipper {
 
         // Reload warning
         window.addEventListener('beforeunload', (e) => {
-            if (this.currentPickingId) {
-                const msg = '⚠️ CẢNH BÁO: Bạn đang có đơn hàng chưa hoàn tất!\n\nNếu tải lại trang, tiến độ quét sẽ bị MẤT.\nBạn có chắc chắn muốn rời đi không?';
+            if (Object.keys(this.pickingDataMap).length > 0) {
+                const msg = '⚠️ CẢNH BÁO: Tiến độ quét sẽ bị MẤT nếu bạn tải lại trang!';
                 e.preventDefault();
                 e.returnValue = msg;
                 return msg;
@@ -40,7 +44,7 @@ class BarcodeShipper {
         // Buttons
         document.getElementById('scan-pick-btn')?.addEventListener('click', () => this.scanPickOrder());
         document.getElementById('scan-item-btn')?.addEventListener('click', () => this.scanItem());
-        document.getElementById('complete-delivery-btn')?.addEventListener('click', () => this.completeDelivery());
+        document.getElementById('complete-all-btn')?.addEventListener('click', () => this.completeAllDelivery());
         document.getElementById('reset-scan-btn')?.addEventListener('click', () => this.resetScan());
         document.getElementById('new-delivery-btn')?.addEventListener('click', () => this.startNewDelivery());
         document.getElementById('show-history-btn')?.addEventListener('click', () => this.showHistory());
@@ -119,7 +123,7 @@ class BarcodeShipper {
         const el = document.getElementById(id);
         if (!el) return;
         el.textContent = message;
-        el.className = `alert show alert-${type}`; // Use Bootstrap-like classes
+        el.className = `alert show alert-${type}`;
         if (type === 'success') {
             setTimeout(() => el.classList.remove('show'), 4000);
         }
@@ -143,14 +147,9 @@ class BarcodeShipper {
 
     // --- Camera Logic ---
     async startCamera(sectionId, readerId, mode) {
-        // If already running for the same section, do nothing
-        if (this.isCameraRunning && this.currentCameraSection === sectionId) {
-            return;
-        }
+        if (this.isCameraRunning && this.currentCameraSection === sectionId) return;
 
-        if (this.isCameraRunning) {
-            await this.stopCamera();
-        }
+        if (this.isCameraRunning) await this.stopCamera();
 
         const section = document.getElementById(sectionId);
         if (section) section.classList.add('active');
@@ -168,36 +167,21 @@ class BarcodeShipper {
         this.html5QrCode = new Html5Qrcode(readerId);
         const config = { fps: 10, qrbox: { width: 280, height: 150 } };
 
-        // Support Code 128 and QR Code
-        const formatsToSupport = [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.EAN_13
-        ];
-
         try {
             await this.html5QrCode.start(
                 { facingMode: "environment" },
                 config,
-                (decodedText, decodedResult) => {
-                    // Success callback
-                    this.onScanSuccess(decodedText, mode);
-                },
-                (errorMessage) => {
-                    // parse error, ignore
-                }
+                (decodedText, decodedResult) => this.onScanSuccess(decodedText, mode),
+                (errorMessage) => { }
             );
             this.isCameraRunning = true;
         } catch (err) {
             console.error("Error starting camera", err);
             // Show manual button if camera fails
             if (mode === 'pick') {
-                const btn = document.getElementById('btn-open-camera-pick');
-                if (btn) btn.style.display = 'block';
+                document.getElementById('btn-open-camera-pick').style.display = 'block';
             } else if (mode === 'item') {
-                const btn = document.getElementById('btn-open-camera-item');
-                if (btn) btn.style.display = 'block';
+                document.getElementById('btn-open-camera-item').style.display = 'block';
             }
             section.classList.remove('active');
         }
@@ -216,7 +200,6 @@ class BarcodeShipper {
         }
         document.querySelectorAll('.camera-section').forEach(el => el.classList.remove('active'));
 
-        // Restore buttons
         const btnPick = document.getElementById('btn-open-camera-pick');
         const btnItem = document.getElementById('btn-open-camera-item');
         if (btnPick) btnPick.style.display = 'block';
@@ -229,7 +212,6 @@ class BarcodeShipper {
             if (input) {
                 input.value = decodedText;
                 this.scanPickOrder();
-                // For pick, we stop camera because we switch steps
                 this.stopCamera();
             }
         } else if (mode === 'item') {
@@ -237,16 +219,13 @@ class BarcodeShipper {
             if (input) {
                 input.value = decodedText;
                 this.scanItem();
-
-                // Continuous scanning: DO NOT stop camera.
-                // Just pause briefly to avoid double scans
                 this.html5QrCode.pause();
                 setTimeout(() => this.html5QrCode.resume(), 1500);
             }
         }
     }
 
-    // --- API Calls ---
+    // --- API & Logic ---
 
     async scanPickOrder() {
         const input = document.getElementById('pick-barcode-input');
@@ -260,17 +239,13 @@ class BarcodeShipper {
         try {
             const res = await this.apiCall('/api/barcode/scan_pick', { barcode });
             if (res.success) {
-                if (res.multiple && res.pickings && res.pickings.length > 1) {
-                    // Nhiều phiếu OUT -> hiển thị modal chọn
-                    this.showPickingSelectionModal(res.pickings);
-                    this.showMessage('pick-result', res.message, 'warning');
-                } else {
-                    // Chỉ 1 phiếu -> tự động chọn
-                    this.currentPickingId = res.out_picking_id;
+                this.customerName = res.customer_name || 'Khách hàng';
+                // Show modal with SO groups
+                if (res.so_groups && res.so_groups.length > 0) {
+                    this.showPickingSelectionModal(res.so_groups);
                     this.showMessage('pick-result', res.message, 'success');
-                    this.playSound('success');
-                    await this.loadOutOrderDetails();
-                    setTimeout(() => this.showStep('step-scan-items'), 1000);
+                } else {
+                    this.showMessage('pick-result', 'Không tìm thấy nhóm phiếu nào.', 'danger');
                 }
             } else {
                 this.showMessage('pick-result', res.error || 'Không tìm thấy', 'danger');
@@ -283,8 +258,7 @@ class BarcodeShipper {
         }
     }
 
-    showPickingSelectionModal(pickings) {
-        // Tạo hoặc lấy modal
+    showPickingSelectionModal(soGroups) {
         let modal = document.getElementById('picking-selection-modal');
         if (!modal) {
             modal = document.createElement('div');
@@ -296,353 +270,467 @@ class BarcodeShipper {
                         <h3>Chọn phiếu xuất kho</h3>
                         <button class="modal-close">&times;</button>
                     </div>
-                    <div id="picking-selection-list" class="modal-body"></div>
+                    <div id="picking-selection-list" class="modal-body" style="padding: 10px;"></div>
+                    <div class="modal-footer" style="padding: 15px; border-top: 1px solid #eee;">
+                         <button id="confirm-selection-btn" class="btn btn-primary btn-block">
+                            Xác nhận chọn (<span id="selected-count">0</span>)
+                         </button>
+                    </div>
                 </div>
             `;
             document.body.appendChild(modal);
 
-            // Bind close event
             modal.querySelector('.modal-close').addEventListener('click', () => this.closeModal(modal));
-            modal.addEventListener('click', e => {
-                if (e.target === modal) this.closeModal(modal);
-            });
+            modal.querySelector('#confirm-selection-btn').addEventListener('click', () => this.confirmSelection(modal));
         }
 
-        // Render danh sách
         const list = modal.querySelector('#picking-selection-list');
-        list.innerHTML = pickings.map(p => `
-            <div class="picking-option" data-id="${p.id}" style="
-                padding: 15px;
-                margin: 10px 0;
-                background: #f8f9fa;
-                border-radius: 8px;
-                cursor: pointer;
-                border: 2px solid transparent;
-                transition: all 0.2s;
-            ">
-                <div style="font-weight: bold; font-size: 1.1rem; color: var(--primary-color);">
-                    ${p.name}
-                </div>
-                <div style="font-size: 0.9rem; color: #666; margin-top: 5px;">
-                    <div><i class="fa fa-user"></i> ${p.partner_name || 'N/A'}</div>
-                    <div><i class="fa fa-file-alt"></i> Nguồn: ${p.origin || 'N/A'}</div>
-                    <div><i class="fa fa-calendar"></i> Ngày: ${p.scheduled_date || 'N/A'}</div>
-                </div>
-            </div>
-        `).join('');
+        list.innerHTML = '';
 
-        // Bind click events
-        list.querySelectorAll('.picking-option').forEach(el => {
-            el.addEventListener('click', async () => {
-                const pickingId = parseInt(el.dataset.id);
-                this.closeModal(modal);
-                await this.selectPicking(pickingId);
-            });
+        let totalPickings = 0;
 
-            // Hover effect
-            el.addEventListener('mouseenter', () => {
-                el.style.borderColor = 'var(--primary-color)';
-                el.style.background = '#e3f2fd';
+        soGroups.forEach(group => {
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'so-group-modal';
+            groupDiv.style.marginBottom = '15px';
+            groupDiv.innerHTML = `
+                <div style="background: #f8f9fa; padding: 10px; font-weight: bold; border-left: 4px solid var(--primary-color);">
+                    ${group.so_name}
+                </div>
+            `;
+
+            group.pickings.forEach(p => {
+                totalPickings++;
+                const line = document.createElement('div');
+                line.className = 'picking-line';
+                // Default check if 'is_related' is true
+                const checked = p.is_related ? 'checked' : '';
+                line.innerHTML = `
+                    <input type="checkbox" class="picking-checkbox" value="${p.id}" ${checked}>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600;">${p.name}</div>
+                        <div style="font-size: 0.85rem; color: #666;">
+                           ${p.scheduled_date || ''} - ${p.state}
+                        </div>
+                    </div>
+                `;
+                groupDiv.appendChild(line);
             });
-            el.addEventListener('mouseleave', () => {
-                el.style.borderColor = 'transparent';
-                el.style.background = '#f8f9fa';
-            });
+            list.appendChild(groupDiv);
         });
+
+        // Update count
+        const updateCount = () => {
+            const count = modal.querySelectorAll('.picking-checkbox:checked').length;
+            modal.querySelector('#selected-count').textContent = count;
+        };
+
+        modal.querySelectorAll('.picking-checkbox').forEach(cb => {
+            cb.addEventListener('change', updateCount);
+        });
+        updateCount();
 
         this.showModal(modal);
     }
 
-    async selectPicking(pickingId) {
-        this.currentPickingId = pickingId;
-        this.showMessage('pick-result', 'Đang tải thông tin phiếu...', 'warning');
-        this.playSound('success');
-        await this.loadOutOrderDetails();
-        this.showMessage('pick-result', `Đã chọn phiếu`, 'success');
-        setTimeout(() => this.showStep('step-scan-items'), 500);
+    async confirmSelection(modal) {
+        const checkboxes = modal.querySelectorAll('.picking-checkbox:checked');
+        const selectedIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+        if (selectedIds.length === 0) {
+            alert('Vui lòng chọn ít nhất một phiếu OUT!');
+            return;
+        }
+
+        this.closeModal(modal);
+        await this.loadMultipleOutDetails(selectedIds);
     }
 
-
-    async loadOutOrderDetails() {
-        if (!this.currentPickingId) return;
+    async loadMultipleOutDetails(pickingIds) {
+        this.showMessage('pick-result', 'Đang tải thông tin...', 'warning');
         try {
-            const res = await this.apiCall('/api/barcode/get_out', {
-                picking_id: this.currentPickingId,
+            const res = await this.apiCall('/api/barcode/get_multiple_outs', {
+                picking_ids: pickingIds
             });
-            if (!res.success) {
-                this.showMessage('item-result', res.error || 'Không tải được dữ liệu', 'danger');
-                return;
+
+            if (res.success) {
+                this.pickingDataMap = {};
+                this.soGroups = [];
+                // Group response by SO again for the UI
+                const soMap = {};
+
+                res.data.forEach(d => {
+                    const p = d.picking;
+                    const items = (d.items || []).map(i => ({
+                        ...i,
+                        scanned_qty: i.scanned ? (i.qty || 0) : 0
+                    }));
+
+                    // Store details
+                    this.pickingDataMap[p.id] = {
+                        info: p,
+                        items: items,
+                        so_name: p.origin || 'Khác',
+                        progress: this.calculateProgress(items)
+                    };
+
+                    // Group logic
+                    const soName = p.origin || 'Khác';
+                    if (!soMap[soName]) soMap[soName] = [];
+                    soMap[soName].push(p.id);
+                });
+
+                this.soGroups = Object.keys(soMap).map(key => ({
+                    name: key,
+                    pickingIds: soMap[key]
+                }));
+                // Sort Groups
+                this.soGroups.sort((a, b) => a.name.localeCompare(b.name));
+
+                // Focus first picking
+                if (pickingIds.length > 0) {
+                    this.activePickingId = pickingIds[0];
+                }
+
+                this.renderAccordion();
+                this.updateGlobalProgress();
+
+                // Show Step 2
+                document.getElementById('customer-name').textContent = this.customerName;
+                document.getElementById('customer-header').style.display = 'flex';
+                this.showStep('step-scan-items');
+                this.showMessage('pick-result', 'Đã tải xong dữ liệu.', 'success');
+            } else {
+                this.showMessage('pick-result', res.error || 'Lỗi tải dữ liệu', 'danger');
             }
-
-            // Initialize items with scanned_qty based on 'scanned' flag from API
-            // If scanned=true (item was skipped by setting), set scanned_qty = qty (fully scanned)
-            this.currentItems = (res.items || []).map(item => {
-                const preScanned = item.scanned === true;
-                return {
-                    ...item,
-                    scanned_qty: preScanned ? (item.qty || 0) : 0
-                };
-            });
-
-            this.updateOrderInfo(res.picking);
-
-            const totalQty = this.currentItems.reduce((sum, i) => sum + (i.qty || 0), 0);
-            const scannedQty = this.currentItems.reduce((sum, i) => sum + (i.scanned_qty || 0), 0);
-            const allScanned = this.currentItems.every(i => (i.scanned_qty || 0) >= (i.qty || 0));
-
-            this.updateItemsList(this.currentItems);
-            this.updateProgress({
-                total_qty: totalQty,
-                scanned_qty: scannedQty,
-                all_scanned: allScanned,
-            });
         } catch (e) {
             console.error(e);
-            this.showMessage('item-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
+            this.showMessage('pick-result', 'Lỗi kết nối server', 'danger');
         }
     }
 
-    updateOrderInfo(p) {
-        const el = document.getElementById('order-info');
-        if (!el || !p) return;
-        el.innerHTML = `
-            <div class="order-details">
-                <div class="detail-row">
-                    <span class="detail-label">Mã đơn:</span>
-                    <span class="detail-value">${p.name}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Khách hàng:</span>
-                    <span class="detail-value">${p.partner_name || 'N/A'}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Nguồn:</span>
-                    <span class="detail-value">${p.origin || 'N/A'}</span>
-                </div>
-            </div>
-        `;
+    calculateProgress(items) {
+        const total = items.reduce((s, i) => s + (i.qty || 0), 0);
+        const scanned = items.reduce((s, i) => s + (i.scanned_qty || 0), 0);
+        return { total, scanned, percent: total ? (scanned / total * 100) : 0, isDone: scanned >= total && total > 0 };
     }
 
-    updateItemsList(items) {
-        const list = document.getElementById('items-list');
-        if (!list) return;
-        list.innerHTML = '';
-        (items || []).forEach(item => {
-            const div = document.createElement('div');
-            const isFullyScanned = (item.scanned_qty || 0) >= (item.qty || 0);
-            div.className = `item-card ${isFullyScanned ? 'scanned' : ''}`;
+    renderAccordion() {
+        const container = document.getElementById('so-accordion');
+        if (!container) return;
+        container.innerHTML = '';
 
-            // Determine icon
-            let icon = '';
-            if (isFullyScanned) {
-                icon = '<i class="fa fa-check-circle" style="color: var(--success-color);"></i>';
-            } else {
-                icon = item.type === 'package'
-                    ? '<i class="fa fa-box" style="color: var(--secondary-color);"></i>'
-                    : '<i class="fa fa-cube" style="color: var(--secondary-color);"></i>';
+        this.soGroups.forEach(group => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'so-group';
+            // Auto expand if contains active picking
+            if (group.pickingIds.includes(this.activePickingId)) {
+                groupEl.classList.add('expanded');
             }
+
+            // SO Header
+            groupEl.innerHTML = `
+                <div class="so-group-header">
+                    <span class="so-name">${group.name}</span>
+                    <span class="so-count">${group.pickingIds.length} phiếu</span>
+                </div>
+                <div class="so-group-content"></div>
+            `;
+
+            // Toggle Logic
+            groupEl.querySelector('.so-group-header').addEventListener('click', () => {
+                groupEl.classList.toggle('expanded');
+            });
+
+            const contentDiv = groupEl.querySelector('.so-group-content');
+
+            group.pickingIds.forEach(pid => {
+                const data = this.pickingDataMap[pid];
+                const isDone = data.progress.isDone;
+                const isActive = (pid === this.activePickingId);
+
+                const outItem = document.createElement('div');
+                outItem.className = `out-item ${isActive ? 'active' : ''}`;
+                outItem.id = `out-${pid}`;
+
+                outItem.innerHTML = `
+                    <div class="out-item-header">
+                        <div class="out-info-top">
+                             <div class="out-name">${data.info.name}</div>
+                             <div class="out-status-badge ${isDone ? 'done' : ''}">
+                                ${isDone ? '<i class="fa fa-check"></i> Xong' : 'Đang chờ'}
+                             </div>
+                        </div>
+                        <div class="out-mini-progress">
+                             <div class="out-mini-progress-fill" style="width: ${data.progress.percent}%"></div>
+                        </div>
+                    </div>
+                    <div class="out-item-content">
+                        <!-- Items rendered here only if active -->
+                    </div>
+                `;
+
+                // Click to activate
+                outItem.querySelector('.out-item-header').addEventListener('click', (e) => {
+                    e.stopPropagation(); // prevent closing SO group
+                    this.setActivePicking(pid);
+                });
+
+                // Render items if active
+                if (isActive) {
+                    const itemContainer = outItem.querySelector('.out-item-content');
+                    this.renderItemsList(itemContainer, data.items);
+                }
+
+                contentDiv.appendChild(outItem);
+            });
+
+            container.appendChild(groupEl);
+        });
+    }
+
+    renderItemsList(container, items) {
+        container.innerHTML = `<div id="items-list-${Date.now()}" class="items-list"></div>`;
+        const listDiv = container.querySelector('.items-list');
+
+        items.forEach(item => {
+            const div = document.createElement('div');
+            const isFull = (item.scanned_qty || 0) >= (item.qty || 0);
+            div.className = `item-card ${isFull ? 'scanned' : ''}`;
+
+            let icon = isFull
+                ? '<i class="fa fa-check-circle" style="color: var(--success-color);"></i>'
+                : (item.type === 'package' ? '<i class="fa fa-box"></i>' : '<i class="fa fa-cube"></i>');
 
             div.innerHTML = `
                 <div class="item-info">
                     <div class="item-name">${item.name || ''}</div>
-                    <div class="item-details" style="display: flex; gap: 15px; font-size: 0.85rem; color: #6c757d; margin-top: 4px;">
-                        <span class="item-barcode"><i class="fa fa-barcode"></i> ${item.barcode || ''}</span>
-                        <span class="item-qty"><i class="fa fa-layer-group"></i> SL: ${item.scanned_qty || 0} / ${item.qty || 0}</span>
+                    <div class="item-details" style="display: flex; gap: 10px; font-size: 0.8rem; color: #666;">
+                        <span><i class="fa fa-barcode"></i> ${item.barcode}</span>
+                        <span>SL: <b>${item.scanned_qty}/${item.qty}</b></span>
                     </div>
                 </div>
-                <div class="item-status-icon" style="font-size: 1.5rem;">${icon}</div>
+                <div class="item-status-icon">${icon}</div>
             `;
-            list.appendChild(div);
+            listDiv.appendChild(div);
         });
     }
 
-    updateProgress(summary) {
-        const fill = document.getElementById('progress-fill');
-        const text = document.getElementById('progress-text');
-        const btn = document.getElementById('complete-delivery-btn');
+    setActivePicking(pickingId) {
+        if (this.activePickingId === pickingId) return;
+        this.activePickingId = pickingId;
+        this.renderAccordion();
 
-        const total = summary?.total_qty || 0;
-        const scanned = summary?.scanned_qty || 0;
+        // Auto scroll to view (simple version)
+        setTimeout(() => {
+            const el = document.getElementById(`out-${pickingId}`);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    }
 
-        const percent = total ? (scanned / total) * 100 : 0;
-        if (fill) fill.style.width = `${percent}%`;
-        if (text) text.textContent = `${scanned} / ${total} sản phẩm`;
-        if (btn) btn.style.display = summary?.all_scanned && total ? 'block' : 'none';
+    updateGlobalProgress() {
+        let totalQty = 0;
+        let scannedQty = 0;
+        let allDone = true;
+
+        Object.values(this.pickingDataMap).forEach(d => {
+            totalQty += d.progress.total;
+            scannedQty += d.progress.scanned;
+            if (!d.progress.isDone) allDone = false;
+        });
+
+        const percent = totalQty ? (scannedQty / totalQty * 100) : 0;
+        document.getElementById('global-progress-text').textContent = `${scannedQty} / ${totalQty}`;
+        document.getElementById('global-progress-fill').style.width = `${percent}%`;
+
+        const btn = document.getElementById('complete-all-btn');
+        if (btn) btn.style.display = (allDone && totalQty > 0) ? 'block' : 'none';
     }
 
     async scanItem() {
         const input = document.getElementById('item-barcode-input');
         const barcode = (input?.value || '').trim();
         if (!barcode) {
-            this.showMessage('item-result', 'Vui lòng nhập mã kiện / sản phẩm', 'danger');
-            return;
-        }
-        if (!this.currentPickingId) {
-            this.showMessage('item-result', 'Chưa có đơn hoạt động. Hãy quét PICK trước.', 'danger');
+            this.showMessage('item-result', 'Vui lòng nhập mã', 'danger');
             return;
         }
 
-        // nếu lỡ scan lại PICK -> coi như complete (nếu đủ điều kiện)
-        if (barcode.toUpperCase().startsWith('PICK')) {
-            const allScanned = this.currentItems.every(i => (i.scanned_qty || 0) >= (i.qty || 0));
-            if (allScanned) {
-                await this.completeDelivery();
-            } else {
-                this.showMessage('item-result', 'Chưa quét đủ hàng hóa!', 'warning');
-                this.playSound('error');
-            }
-            return;
+        // Logic: Search barcode in active picking FIRST.
+        // If not found, searching in OTHER picked pickings? 
+        // -> For now, let's strictly require scanning into the Active Picking 
+        //    OR auto-switch if found in another picking?
+        //    Auto-switching is better for UX.
+
+        let targetPickingId = this.activePickingId;
+        let itemFound = null;
+
+        // 1. Check active picking first
+        if (targetPickingId && this.pickingDataMap[targetPickingId]) {
+            const items = this.pickingDataMap[targetPickingId].items;
+            itemFound = items.find(i => i.barcode === barcode);
         }
 
-        this.showMessage('item-result', 'Đang kiểm tra...', 'warning');
-        try {
-            const res = await this.apiCall('/api/barcode/scan_package', {
-                picking_id: this.currentPickingId,
-                barcode,
-            });
-
-            console.log('scan_package result:', res);
-
-            if (res.success) {
-                // Find item in local list
-                let found = false;
-                let alreadyFull = false;
-
-                this.currentItems = (this.currentItems || []).map(item => {
-                    if (!item.barcode) return item;
-                    if (item.barcode === barcode) {
-                        found = true;
-                        let newQty = (item.scanned_qty || 0);
-                        const maxQty = item.qty || 0;
-
-                        // ⭐ FIX: Kiểm tra đã quét đủ chưa
-                        if (newQty >= maxQty) {
-                            alreadyFull = true;
-                            return item; // Không cho quét thêm
-                        }
-
-                        // Logic: Package -> Mark full. Product -> Increment.
-                        if (item.type === 'package') {
-                            newQty = maxQty; // Scan package once = full
-                        } else {
-                            newQty += 1;
-                            // ⭐ FIX: Giới hạn không vượt quá số lượng yêu cầu
-                            if (newQty > maxQty) {
-                                newQty = maxQty;
-                                alreadyFull = true;
-                            }
-                        }
-
-                        return { ...item, scanned_qty: newQty };
-                    }
-                    return item;
-                });
-
-                if (!found) {
-                    // Item not in list (maybe extra item?)
-                    this.showMessage('item-result', '⚠️ Mã này không có trong danh sách đơn hàng!', 'warning');
-                    this.playSound('error');
-                } else if (alreadyFull) {
-                    // ⭐ FIX: Cảnh báo khi đã quét đủ
-                    this.showMessage('item-result', '⚠️ Sản phẩm này đã quét đủ số lượng!', 'warning');
-                    this.playSound('error');
-                } else {
-                    // Success - update UI
-                    this.showMessage('item-result', res.message, 'success');
-                    this.playSound('success');
-
-                    const totalQty = this.currentItems.reduce((sum, i) => sum + (i.qty || 0), 0);
-                    const scannedQty = this.currentItems.reduce((sum, i) => sum + (i.scanned_qty || 0), 0);
-                    const allScanned = this.currentItems.every(i => (i.scanned_qty || 0) >= (i.qty || 0));
-
-                    this.updateItemsList(this.currentItems);
-                    this.updateProgress({
-                        total_qty: totalQty,
-                        scanned_qty: scannedQty,
-                        all_scanned: allScanned,
-                    });
+        // 2. If not found, check other pickings
+        if (!itemFound) {
+            for (const pid of Object.keys(this.pickingDataMap)) {
+                if (pid == this.activePickingId) continue; // skipped
+                const items = this.pickingDataMap[pid].items;
+                const match = items.find(i => i.barcode === barcode);
+                if (match) {
+                    targetPickingId = parseInt(pid);
+                    itemFound = match;
+                    break;
                 }
-
-                if (input) {
-                    input.value = '';
-                    input.focus();
-                }
-            } else {
-                this.showMessage('item-result', res.error || 'Không tìm thấy mã này', 'danger');
-                this.playSound('error');
             }
-        } catch (e) {
-            console.error(e);
-            this.showMessage('item-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
+        }
+
+        if (!itemFound) {
+            this.showMessage('item-result', 'Mã không tìm thấy trong bất kỳ đơn nào đã chọn!', 'danger');
             this.playSound('error');
+            if (input) { input.value = ''; input.focus(); }
+            return;
+        }
+
+        // 3. Switch active if needed
+        if (targetPickingId !== this.activePickingId) {
+            this.setActivePicking(targetPickingId);
+            // Notify user switched
+            // this.showMessage('item-result', `Chuyển sang đơn ${this.pickingDataMap[targetPickingId].info.name}`, 'info');
+        }
+
+        // 4. Perform Update Logic (Client Side Optimistic)
+        const pickingData = this.pickingDataMap[targetPickingId];
+        let item = pickingData.items.find(i => i.barcode === barcode); // refind ref
+
+        const maxQty = item.qty || 0;
+        let newQty = item.scanned_qty || 0;
+
+        if (newQty >= maxQty) {
+            this.showMessage('item-result', 'Sản phẩm này đã đủ số lượng!', 'warning');
+            this.playSound('error');
+            if (input) { input.value = ''; input.focus(); }
+            return;
+        }
+
+        if (item.type === 'package') {
+            newQty = maxQty;
+        } else {
+            newQty += 1;
+        }
+
+        item.scanned_qty = newQty;
+
+        // Recalculate picking progress
+        pickingData.progress = this.calculateProgress(pickingData.items);
+
+        this.renderAccordion();
+        this.updateGlobalProgress();
+        this.playSound('success');
+        this.showMessage('item-result', `Đã quét: ${item.name}`, 'success');
+
+        // Call Server to validate/log scan (Optional but good for history)
+        // We can background check this OR just trust client until complete.
+        // Let's call server async to keep log updated
+        this.apiCall('/api/barcode/scan_package', {
+            picking_id: targetPickingId,
+            barcode: barcode
+        }).catch(err => console.error("Log scan failed", err));
+
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+
+        // 5. Auto-switch to next picking if this one is DONE?
+        if (pickingData.progress.isDone) {
+            // Find next incomplete
+            const allIds = [].concat(...this.soGroups.map(g => g.pickingIds));
+            const currentIndex = allIds.indexOf(targetPickingId);
+            let nextId = null;
+
+            // Search forward
+            for (let i = currentIndex + 1; i < allIds.length; i++) {
+                if (!this.pickingDataMap[allIds[i]].progress.isDone) {
+                    nextId = allIds[i];
+                    break;
+                }
+            }
+            // Search backward (wrap)
+            if (!nextId) {
+                for (let i = 0; i < currentIndex; i++) {
+                    if (!this.pickingDataMap[allIds[i]].progress.isDone) {
+                        nextId = allIds[i];
+                        break;
+                    }
+                }
+            }
+
+            if (nextId) {
+                setTimeout(() => {
+                    this.setActivePicking(nextId);
+                    // this.showMessage('item-result', 'Đơn đã xong, tự động chuyển tiếp...', 'success');
+                }, 500);
+            }
         }
     }
 
-    async completeDelivery() {
-        if (!this.currentPickingId) {
-            this.showMessage('item-result', 'Không có đơn nào để hoàn tất.', 'danger');
-            return;
-        }
+    async completeAllDelivery() {
+        const pickingIds = Object.keys(this.pickingDataMap).map(id => parseInt(id));
+        if (pickingIds.length === 0) return;
 
-        this.showMessage('item-result', 'Đang xử lý...', 'warning');
+        if (!confirm(`Bạn có chắc muốn hoàn tất ${pickingIds.length} đơn hàng?`)) return;
+
+        this.showMessage('item-result', 'Đang xử lý hoàn tất...', 'warning');
         try {
             const res = await this.apiCall('/api/barcode/complete_out', {
-                picking_id: this.currentPickingId,
+                picking_ids: pickingIds
             });
-            if (res.success) {
-                this.showMessage('pick-result', '✅ Giao hàng thành công! Đã sẵn sàng cho đơn tiếp theo.', 'success');
-                this.playSound('success');
 
-                // Reset immediately to Step 1
-                this.startNewDelivery();
+            if (res.success) {
+                // Show success screen
+                document.getElementById('completion-result').textContent = res.message;
+                this.showStep('step-complete');
+                this.playSound('success');
+                this.pickingDataMap = {}; // clear
             } else {
-                this.showMessage('item-result', res.error || 'Không hoàn tất được', 'danger');
+                this.showMessage('item-result', res.error || 'Có lỗi xảy ra', 'danger');
                 this.playSound('error');
             }
         } catch (e) {
             console.error(e);
-            this.showMessage('item-result', 'Lỗi kết nối, vui lòng thử lại.', 'danger');
+            this.showMessage('item-result', 'Lỗi kết nối', 'danger');
             this.playSound('error');
         }
     }
 
     resetScan() {
-        if (confirm('⚠️ CẢNH BÁO: Dữ liệu quét hiện tại sẽ bị MẤT.\nBạn có chắc chắn muốn làm lại từ đầu không?')) {
+        if (confirm('Dữ liệu quét chưa lưu sẽ bị mất. Bạn muốn quét lại từ đầu?')) {
             this.startNewDelivery();
         }
     }
 
     startNewDelivery() {
-        this.currentPickingId = null;
-        this.currentItems = [];
-        this.scannedBarcodes = new Set();
-
-        this.sessionId = this.generateSessionId();
-
-        const pickInput = document.getElementById('pick-barcode-input');
-        const itemInput = document.getElementById('item-barcode-input');
-        if (pickInput) pickInput.value = '';
-        if (itemInput) itemInput.value = '';
+        this.pickingDataMap = {};
+        this.soGroups = [];
+        this.activePickingId = null;
+        this.customerName = '';
 
         this.clearMessage('pick-result');
         this.clearMessage('item-result');
-        this.clearMessage('completion-result');
 
-        const list = document.getElementById('items-list');
-        const info = document.getElementById('order-info');
-        const fill = document.getElementById('progress-fill');
-        const text = document.getElementById('progress-text');
-        const btn = document.getElementById('complete-delivery-btn');
-
-        if (list) list.innerHTML = '';
+        const info = document.getElementById('so-accordion');
         if (info) info.innerHTML = '';
-        if (fill) fill.style.width = '0%';
-        if (text) text.textContent = '0 / 0 sản phẩm';
-        if (btn) btn.style.display = 'none';
+
+        document.getElementById('pick-barcode-input').value = '';
+        document.getElementById('item-barcode-input').value = '';
+        document.getElementById('global-progress-fill').style.width = '0%';
+        document.getElementById('global-progress-text').textContent = '0 / 0';
+        document.getElementById('customer-header').style.display = 'none';
 
         this.showStep('step-scan-pick');
     }
 
+    // Reuse history...
     async showHistory() {
         const modal = document.getElementById('history-modal');
         const content = document.getElementById('history-content');
@@ -650,8 +738,13 @@ class BarcodeShipper {
         content.innerHTML = 'Đang tải...';
         this.showModal(modal);
         try {
+            // Just show history for the first picking or user?
+            // If strictly per picking, we might need to select which picking...
+            // Ideally history should be global for the session.
+            const pid = this.activePickingId || (Object.keys(this.pickingDataMap)[0] ? parseInt(Object.keys(this.pickingDataMap)[0]) : null);
+
             const res = await this.apiCall('/api/barcode/scan_history', {
-                picking_id: this.currentPickingId,
+                picking_id: pid,
                 limit: 50,
             });
             if (res.success && res.history && res.history.length) {
@@ -665,6 +758,7 @@ class BarcodeShipper {
                             <span class="${log.scan_type}">${log.scan_type}</span>
                             <span class="${log.status}" style="color: ${log.status === 'success' ? 'green' : 'red'}">${log.status}</span>
                         </div>
+                        <div style="font-size: 11px; color: #555;">${log.picking_name || ''}</div>
                         ${log.message ? `<div style="font-size: 12px; color: #666;">${log.message}</div>` : ''}
                     </div>`
                     )

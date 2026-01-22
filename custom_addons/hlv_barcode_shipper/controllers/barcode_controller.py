@@ -100,8 +100,6 @@ class BarcodeShipperController(http.Controller):
 
         return out_pickings
 
-
-
     def _get_packages_info(self, picking):
         """
         Đọc danh sách kiện / sản phẩm từ phiếu OUT.
@@ -132,6 +130,7 @@ class BarcodeShipperController(http.Controller):
                     "barcode": pl.package_id.name,
                     "qty": pl.move_line_ids and sum(pl.move_line_ids.mapped("quantity")) or 0,
                     "scanned": skip_package,  # True = tự động đã quét
+                    "picking_id": picking.id, # Link item to picking
                 }
             )
 
@@ -149,6 +148,7 @@ class BarcodeShipperController(http.Controller):
                     or "",
                     "qty": ml.quantity,
                     "scanned": skip_product,  # True = tự động đã quét
+                    "picking_id": picking.id, # Link item to picking
                 }
             )
 
@@ -173,6 +173,7 @@ class BarcodeShipperController(http.Controller):
                     "type": "package",
                     "name": pl.package_id.name,
                     "message": f"Đã tìm thấy kiện {barcode}",
+                    "picking_id": picking.id
                 }
 
         # Kiểm tra Product barcode / default_code
@@ -190,6 +191,7 @@ class BarcodeShipperController(http.Controller):
                 "type": "product",
                 "name": prod.display_name,
                 "message": f"Đã tìm thấy sản phẩm {barcode}",
+                "picking_id": picking.id
             }
 
         return {
@@ -207,14 +209,13 @@ class BarcodeShipperController(http.Controller):
     )
     def scan_pick_order(self, **kwargs):
         """
-        Scan PICK order barcode and find related OUT order(s).
-
-        Payload:
-        { "barcode": "PICK00001" }
+        Scan PICK order barcode.
         
-        Response:
-        - Nếu có 1 OUT: { success: true, out_picking_id, out_picking_name, ... }
-        - Nếu có nhiều OUT: { success: true, multiple: true, pickings: [...] }
+        Logic Mới: 
+        1. Tìm các OUT liên quan đến mã quét.
+        2. Từ đó xác định Partner (Khách hàng).
+        3. Tìm TẤT CẢ các phiếu OUT khác của Partner này mà đang sẵn sàng.
+        4. Gom nhóm theo SO (Origin).
         """
         barcode = ""
         try:
@@ -228,50 +229,72 @@ class BarcodeShipperController(http.Controller):
             if not barcode:
                 return {"success": False, "error": "Vui lòng nhập mã vạch"}
 
-            out_pickings = self._find_out_pickings_by_pick_name(barcode)
+            # 1. Tìm initial OUTs
+            initial_out_pickings = self._find_out_pickings_by_pick_name(barcode)
+            
+            if not initial_out_pickings:
+                 return {"success": False, "error": "Không tìm thấy phiếu xuất kho nào."}
 
-            if len(out_pickings) == 1:
-                # Chỉ có 1 phiếu -> tự động chọn
-                out_picking = out_pickings[0]
-                self._log_scan(
-                    barcode=barcode,
-                    scan_type="pick",
-                    picking_id=out_picking.id,
-                    status="success",
-                    message=f"Tìm thấy đơn xuất kho {out_picking.name}",
-                )
-                return {
-                    "success": True,
-                    "out_picking_id": out_picking.id,
-                    "out_picking_name": out_picking.name,
-                    "message": f"Đã tìm thấy đơn giao hàng {out_picking.name}",
-                }
-            else:
-                # Có nhiều phiếu -> trả về danh sách để user chọn
-                pickings_list = []
-                for p in out_pickings:
-                    pickings_list.append({
-                        "id": p.id,
-                        "name": p.name,
-                        "partner_name": p.partner_id.name or "",
-                        "origin": p.origin or "",
-                        "state": p.state,
-                        "scheduled_date": p.scheduled_date.strftime("%d/%m/%Y") if p.scheduled_date else "",
-                    })
+            # 2. Xác định Partner từ phiếu đầu tiên tìm thấy
+            # Chúng ta giả định tất cả phiếu tìm thấy từ 1 mã scan (ví dụ PICK) đều cùng 1 luồng/khách hàng
+            partner = initial_out_pickings[0].partner_id
+            if not partner:
+                return {"success": False, "error": f"Phiếu {initial_out_pickings[0].name} không có thông tin Khách hàng."}
+
+            # 3. Tìm tất cả OUT của Partner này
+            # State: assigned (Sẵn sàng), partially_available (Sẵn sàng một phần)
+            # Type: outgoing
+            all_partner_outs = request.env["stock.picking"].sudo().search([
+                ("partner_id", "=", partner.id),
+                ("picking_type_id.code", "=", "outgoing"),
+                ("state", "in", ["assigned", "partially_available"]),
+            ])
+
+            if not all_partner_outs:
+                # Should not happen since initial_out_pickings exists
+                 return {"success": False, "error": "Không tìm thấy phiếu xuất kho của khách hàng này."}
+
+            # 4. Group by SO (Origin)
+            so_groups_map = {}
+            
+            related_ids = initial_out_pickings.ids
+
+            for p in all_partner_outs:
+                # Group key: Origin (thường là SO name) hoặc 'Undefined'
+                group_key = p.origin or "Không xác định"
                 
-                self._log_scan(
-                    barcode=barcode,
-                    scan_type="pick",
-                    status="success",
-                    message=f"Tìm thấy {len(out_pickings)} phiếu OUT",
-                )
+                if group_key not in so_groups_map:
+                    so_groups_map[group_key] = {
+                        "so_name": group_key,
+                        "pickings": []
+                    }
                 
-                return {
-                    "success": True,
-                    "multiple": True,
-                    "pickings": pickings_list,
-                    "message": f"Tìm thấy {len(out_pickings)} phiếu xuất kho. Vui lòng chọn một phiếu.",
-                }
+                so_groups_map[group_key]["pickings"].append({
+                    "id": p.id,
+                    "name": p.name,
+                    "state": p.state,
+                    "scheduled_date": p.scheduled_date.strftime("%d/%m/%Y") if p.scheduled_date else "",
+                    "is_related": p.id in related_ids, # Flag để default check nếu muốn
+                })
+
+            so_groups_list = list(so_groups_map.values())
+            # Sort groups by name
+            so_groups_list.sort(key=lambda x: x["so_name"])
+
+            self._log_scan(
+                barcode=barcode,
+                scan_type="pick",
+                status="success",
+                message=f"Tìm thấy {len(all_partner_outs)} phiếu OUT cho khách {partner.name}",
+            )
+
+            return {
+                "success": True,
+                "multiple": True, # Luôn coi là multiple để hiện giao diện chọn
+                "customer_name": partner.name or "Khách hàng",
+                "so_groups": so_groups_list,
+                "message": f"Tìm thấy {len(all_partner_outs)} phiếu của {partner.name}",
+            }
 
         except UserError as e:
             self._log_scan(
@@ -283,29 +306,23 @@ class BarcodeShipperController(http.Controller):
             return {"success": False, "error": str(e)}
         except Exception as e:
             _logger.exception("Error in scan_pick_order")
-            self._log_scan(
-                barcode=barcode,
-                scan_type="pick",
-                status="error",
-                message=f"Lỗi hệ thống: {e}",
-            )
             return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
 
 
-    # ===== API: get OUT details =====
+    # ===== API: get details for MULTIPLE OUT pickings =====
     @http.route(
-        "/api/barcode/get_out",
+        "/api/barcode/get_multiple_outs",
         type="json",
         auth="user",
         methods=["POST"],
         csrf=False,
     )
-    def get_out_order_details(self, **kwargs):
+    def get_multiple_out_details(self, **kwargs):
         """
-        Return OUT picking info + list packages/products for mobile.
-
+        Return list of details for provided picking_ids.
+        
         Payload:
-        { "picking_id": 123 }
+        { "picking_ids": [1, 2, 3] }
         """
         try:
             access = self._check_shipper_access()
@@ -313,39 +330,37 @@ class BarcodeShipperController(http.Controller):
                 return access
 
             data = json.loads(request.httprequest.data.decode("utf-8"))
-            picking_id = data.get("picking_id")
+            picking_ids = data.get("picking_ids", [])
 
-            if not picking_id:
-                return {"success": False, "error": "Thiếu Picking ID"}
+            if not picking_ids:
+                return {"success": False, "error": "Chưa chọn phiếu nào"}
 
-            picking = request.env["stock.picking"].sudo().browse(picking_id)
-            if not picking.exists():
-                return {"success": False, "error": "Không tìm thấy phiếu kho"}
+            pickings = request.env["stock.picking"].sudo().browse(picking_ids)
+            result_data = []
 
-            items = self._get_packages_info(picking)
-            total = len(items)
-
+            for picking in pickings:
+                items = self._get_packages_info(picking)
+                result_data.append({
+                    "picking": {
+                        "id": picking.id,
+                        "name": picking.name,
+                        "origin": picking.origin or "",
+                        "partner_name": picking.partner_id.name or "",
+                    },
+                    "items": items,
+                })
+            
             return {
                 "success": True,
-                "picking": {
-                    "id": picking.id,
-                    "name": picking.name,
-                    "partner_name": picking.partner_id.name or "",
-                    "state": picking.state,
-                    "origin": picking.origin or "",
-                },
-                "items": items,
-                "summary": {
-                    "total_items": total,
-                    "scanned_items": 0,      # scan client-side
-                    "all_scanned": False,    # scan client-side
-                },
+                "data": result_data
             }
-        except Exception as e:
-            _logger.exception("Error in get_out_order_details")
-            return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
 
-    # ===== API: scan package/product =====
+        except Exception as e:
+            _logger.exception("Error in get_multiple_out_details")
+            return {"success": False, "error": "Lỗi khi tải thông tin đơn hàng"}
+
+
+    # ===== API: scan package/product (Vẫn giữ logic cũ, chỉ cần loop qua picking list ở JS) =====
     @http.route(
         "/api/barcode/scan_package",
         type="json",
@@ -355,8 +370,9 @@ class BarcodeShipperController(http.Controller):
     )
     def scan_package_or_product(self, **kwargs):
         """
-        Scan package or product barcode.
-
+        Scan package or product barcode inside A SPECIFIC PICKING.
+        Current UI will likely scan against the 'active' picking.
+        
         Payload:
         { "picking_id": 123, "barcode": "PACK001" }
         """
@@ -383,6 +399,9 @@ class BarcodeShipperController(http.Controller):
             result = self._scan_package_in_picking(picking, barcode)
 
             status = "success" if result.get("success") else "error"
+            
+            # Chỉ log nếu thành công hoặc lỗi nghiêm trọng? 
+            # Log mọi lần scan cũng được
             self._log_scan(
                 barcode=barcode,
                 scan_type=result.get("type") or "package",
@@ -391,20 +410,13 @@ class BarcodeShipperController(http.Controller):
                 message=result.get("message") or result.get("error"),
             )
 
-            # TẠM THỜI: không trả summary, để JS tự đếm trên client
             return result
 
         except Exception as e:
             _logger.exception("Error in scan_package_or_product")
-            self._log_scan(
-                barcode=barcode,
-                scan_type="package",
-                status="error",
-                message=f"Lỗi hệ thống: {e}",
-            )
             return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
 
-    # ===== API: complete OUT (DONE) =====
+    # ===== API: complete OUT (BATCH) =====
     @http.route(
         "/api/barcode/complete_out",
         type="json",
@@ -414,10 +426,10 @@ class BarcodeShipperController(http.Controller):
     )
     def complete_out(self, **kwargs):
         """
-        Call Odoo standard button_validate() để DONE phiếu OUT.
-
+        Call button_validate() for MULTIPLE pickings.
+        
         Payload:
-        { "picking_id": 123 }
+        { "picking_ids": [123, 124] }
         """
         try:
             access = self._check_shipper_access()
@@ -425,36 +437,61 @@ class BarcodeShipperController(http.Controller):
                 return access
 
             data = json.loads(request.httprequest.data.decode("utf-8"))
-            picking_id = data.get("picking_id")
+            picking_ids = data.get("picking_ids", [])
+            
+            # Backup for backward compatibility (if single picking_id passed)
+            if not picking_ids and data.get("picking_id"):
+                 picking_ids = [data.get("picking_id")]
 
-            if not picking_id:
+            if not picking_ids:
                 return {"success": False, "error": "Thiếu Picking ID"}
 
-            picking = request.env["stock.picking"].sudo().browse(picking_id)
-            if not picking.exists():
-                return {"success": False, "error": "Không tìm thấy phiếu kho"}
+            pickings = request.env["stock.picking"].sudo().browse(picking_ids)
+            
+            success_names = []
+            errors = []
 
-            if picking.picking_type_id.code != "outgoing":
+            for picking in pickings:
+                try:
+                    if picking.picking_type_id.code != "outgoing":
+                        errors.append(f"{picking.name}: Không phải phiếu xuất kho")
+                        continue
+                    
+                    if picking.state not in ['assigned', 'partially_available']:
+                        # Có thể đã done rồi
+                        if picking.state == 'done':
+                            success_names.append(picking.name)
+                            continue
+                        else:
+                            errors.append(f"{picking.name}: Trạng thái không hợp lệ ({picking.state})")
+                            continue
+
+                    picking.button_validate()
+                    success_names.append(picking.name)
+                    
+                    self._log_scan(
+                        barcode=picking.name,
+                        scan_type="complete",
+                        picking_id=picking.id,
+                        status="success",
+                        message=f"Đơn hàng {picking.name} đã hoàn tất",
+                    )
+                except Exception as e:
+                    _logger.exception(f"Error validating picking {picking.name}")
+                    errors.append(f"{picking.name}: Lỗi hệ thống ({str(e)})")
+
+            if errors:
                 return {
-                    "success": False,
-                    "error": "Chỉ có thể hoàn tất phiếu xuất kho (OUT) tại đây",
+                    "success": False, 
+                    "error": "\n".join(errors),
+                    "partial_success": len(success_names) > 0
                 }
-
-            # GỌI LUỒNG CHUẨN – KHÔNG OVERRIDE GÌ CẢ
-            picking.button_validate()
-
-            self._log_scan(
-                barcode=picking.name,
-                scan_type="complete",
-                picking_id=picking.id,
-                status="success",
-                message="Đơn hàng đã được Shipper hoàn tất",
-            )
-
+            
             return {
                 "success": True,
-                "message": f"Đơn hàng {picking.name} đã hoàn tất",
+                "message": f"Đã hoàn tất {len(success_names)} đơn hàng thành công!",
             }
+            
         except Exception as e:
             _logger.exception("Error in complete_out")
             return {"success": False, "error": "Đã xảy ra lỗi hệ thống"}
@@ -479,6 +516,8 @@ class BarcodeShipperController(http.Controller):
             limit = int(data.get("limit") or 50)
 
             log_obj = request.env["barcode.scan.log"]
+            # TODO: Support filtering by list of pickings? 
+            # For now, just show logs for specific picking or user's recent logs.
             logs = log_obj.get_scan_history(
                 picking_id=picking_id, user_id=request.env.user.id, limit=limit
             )

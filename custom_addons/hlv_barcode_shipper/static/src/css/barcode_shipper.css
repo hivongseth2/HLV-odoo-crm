@@ -590,3 +590,226 @@ body {
     font-size: 1rem;
   }
 }
+
+/* =========================================
+   NEW STYLES FOR SO GROUPING & ACCORDION
+   ========================================= */
+
+/* Customer Header */
+.customer-header {
+  background: var(--primary-color);
+  color: white;
+  padding: 12px 15px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Accordion Container */
+.accordion-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+/* SO Group (Level 1) */
+.so-group {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.so-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  background: #f8f9fa;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.so-group-header:hover {
+  background: #e9ecef;
+}
+
+.so-group.expanded .so-group-header {
+  border-bottom-color: var(--border-color);
+  background: #eef2f5;
+}
+
+.so-name {
+  font-weight: 700;
+  color: var(--primary-color);
+  font-size: 1rem;
+}
+
+.so-count {
+  background: var(--secondary-color);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.so-group-content {
+  display: none;
+  padding: 10px;
+  background: #fff;
+}
+
+.so-group.expanded .so-group-content {
+  display: block;
+  animation: slideDown 0.2s ease-out;
+}
+
+/* OUT Item (Level 2) */
+.out-item {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  transition: all 0.2s;
+}
+
+.out-item:last-child {
+  margin-bottom: 0;
+}
+
+.out-item-header {
+  padding: 10px 12px;
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+}
+
+.out-item-header:hover {
+  background: #fafafa;
+}
+
+.out-item.active {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color), var(--shadow-sm);
+}
+
+.out-item.active .out-item-header {
+  background: #e3f2fd;
+  color: var(--primary-color);
+}
+
+.out-info-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.out-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.out-status-badge {
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #eee;
+  color: #666;
+}
+
+.out-status-badge.done {
+  background: #d4edda;
+  color: #155724;
+}
+
+/* Mini Progress in OUT header */
+.out-mini-progress {
+  width: 100%;
+  height: 4px;
+  background: #e9ecef;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.out-mini-progress-fill {
+  height: 100%;
+  background: var(--success-color);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+/* Content inside OUT (Level 3 - Items List) */
+.out-item-content {
+  display: none;
+  padding: 0;
+  border-top: 1px solid var(--border-color);
+  background: #fff;
+}
+
+.out-item.active .out-item-content {
+  display: block;
+}
+
+/* Checkbox style for picking selection modal */
+.picking-checkbox {
+  width: 20px;
+  height: 20px;
+  margin-right: 12px;
+  cursor: pointer;
+}
+
+.picking-line {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.picking-line:last-child {
+  border-bottom: none;
+}
+
+/* Global Progress */
+.global-progress-wrapper {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding: 15px;
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.05);
+  z-index: 100;
+  margin: 0 -20px -20px -20px;
+  /* Compensate padding of card-box */
+  border-radius: 0 0 12px 12px;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Override existing items-list style to fit inside OUT content */
+.out-item-content .items-list {
+  max-height: none;
+  /* Let the container handle height or scroll */
+  margin-top: 0;
+  padding: 10px;
+}
