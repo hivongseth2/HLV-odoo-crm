@@ -72,12 +72,7 @@ def _is_combo_product(env, product_tmpl_id):
     # Check if this product template has any active phantom BoM (Kit)
     if not product_tmpl_id: return False
     
-    # 1. Check field is_combo (backward compatibility/fast check)
-    if 'is_combo' in env['product.template']._fields:
-        if product_tmpl_id.is_combo: return True
-        
-    # 2. Check BoM Kit
-    # Cache optimization could be needed here but for now direct search
+    # Check BoM Kit only (removed is_combo field dependency)
     count = env['mrp.bom'].sudo().search_count([
         ('product_tmpl_id', '=', product_tmpl_id.id),
         ('active', '=', True),
@@ -303,26 +298,19 @@ class PublicInventory(http.Controller):
             },
         )
 
-    # ... (Keep _compute_combo_qty and others) ...
     def _compute_combo_qty(self, env, product, warehouse_id):
-        # ... existing improved logic ...
-        ComboLines = []
-        if hasattr(env, 'combo.product'):
-            ComboLines = env['combo.product'].sudo().search([('product_template_id', '=', product.product_tmpl_id.id)])
+        # Get BOM Kit lines
+        bom = env['mrp.bom'].sudo().search([
+            ('product_tmpl_id', '=', product.product_tmpl_id.id),
+            ('active', '=', True),
+            ('type', '=', 'phantom')
+        ], limit=1)
         
-        if not ComboLines:
-            bom = env['mrp.bom'].sudo().search([
-                ('product_tmpl_id', '=', product.product_tmpl_id.id),
-                ('active', '=', True),
-                ('type', '=', 'phantom')
-            ], limit=1)
-            if bom:
-                ComboLines = bom.bom_line_ids
-
-        if not ComboLines: return 0.0
+        if not bom or not bom.bom_line_ids:
+            return 0.0
         
         possible_sets = []
-        for line in ComboLines:
+        for line in bom.bom_line_ids:
             comp = line.product_id
             if not comp: continue
             
@@ -330,7 +318,7 @@ class PublicInventory(http.Controller):
             else: comp_ctx = comp.with_context(warehouse=False, location=False)
             
             hand_qty = comp_ctx.qty_available
-            needed_qty = getattr(line, 'product_quantity', 0) or getattr(line, 'product_qty', 1.0)
+            needed_qty = line.product_qty or 1.0
             
             if needed_qty > 0: possible_sets.append(int(hand_qty // needed_qty))
             else: possible_sets.append(999999)
@@ -383,18 +371,13 @@ class PublicInventory(http.Controller):
             else: warehouses = _get_allowed_warehouses() or Warehouse.search([])
             
             lines = []
-            if hasattr(env, 'combo.product'):
-                ComboLine = env["combo.product"].sudo().with_context(allowed_company_ids=company_ids)
-                lines = ComboLine.search([("product_template_id", "=", tmpl.id)])
-            
-            if not lines:
-                 bom = env['mrp.bom'].sudo().search([
-                    ('product_tmpl_id', '=', tmpl.id),
-                    ('active', '=', True),
-                    ('type', '=', 'phantom')
-                ], limit=1)
-                 if bom:
-                     lines = bom.bom_line_ids
+            bom = env['mrp.bom'].sudo().search([
+                ('product_tmpl_id', '=', tmpl.id),
+                ('active', '=', True),
+                ('type', '=', 'phantom')
+            ], limit=1)
+            if bom:
+                lines = bom.bom_line_ids
             
             rows = []
             for line in lines:
