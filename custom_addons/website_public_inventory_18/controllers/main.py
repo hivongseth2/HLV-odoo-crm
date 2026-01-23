@@ -415,7 +415,8 @@ class PublicInventory(http.Controller):
         
         if domains_per_token: domain = expression.AND([domain, expression.AND(domains_per_token)])
         
-        products = Product.search(domain, limit=10, order='name')
+        # Search ALL matching products first (no limit yet) to calculate stock for sorting
+        products = Product.search(domain, limit=100, order='name')
         
         # Tính toán tồn kho
         pids = products.ids
@@ -455,5 +456,8 @@ class PublicInventory(http.Controller):
                 "is_combo": is_combo,
             })
         
-        results.sort(key=lambda x: x['qty_total'], reverse=True)
+        # Sort by quantity (stock first), then limit to 10
+        results.sort(key=lambda x: (-x['qty_total'], x['name']))  # Negative for descending qty, then name ascending
+        results = results[:10]
+        
         return {"ok": True, "products": results}
