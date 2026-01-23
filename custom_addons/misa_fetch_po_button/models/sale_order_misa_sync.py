@@ -298,16 +298,6 @@ class SaleOrder(models.Model):
             return self._partial_resync_open_pickings_when_done_present(data, lines, headers)
         if self.invoice_ids.filtered(lambda m: m.state == 'posted'):
             raise UserError(_("Không thể xoá & tạo lại vì đã có hoá đơn 'posted'."))
-
-        # Lưu info trước khi xoá
-        # Ưu tiên lấy warehouse từ picking đầu tiên (giải quyết vấn đề combo không có kho ở dòng cha)
-        # old_wh = self.warehouse_id
-        # if not old_wh and self.picking_ids:
-        #     # Nếu SO không có warehouse, lấy từ picking đầu tiên
-        #     first_pick = self.picking_ids.filtered(lambda p: p.picking_type_id and p.picking_type_id.warehouse_id)[:1]
-        #     if first_pick:
-        #         old_wh = first_pick.picking_type_id.warehouse_id
-        # order_no_fallback = self.name
         
                 # ===== Xác định warehouse theo dòng đầu tiên có StockIDText =====
         stock_mapping = {
