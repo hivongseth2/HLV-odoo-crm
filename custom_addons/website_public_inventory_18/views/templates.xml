@@ -216,7 +216,7 @@
 
         <t t-if="pw_ok">
           <section>
-            <div class="container mt-3 mb-6">
+            <div class="container-fluid px-4 mt-3 mb-6">
               <h2 class="mb-4 text-primary fw-bold">Tra cứu tồn kho</h2>
               <form t-att-action="request.httprequest.path" method="get" class="row g-2 mb-4" id="search-form">
                 <div class="col-md-5 position-relative">
@@ -364,15 +364,22 @@
                                         <div class="detail-container-mobile">
                                             <!-- Desktop -->
                                             <div class="d-none d-md-block p-3 bg-white">
-                                                <table class="table table-sm mb-0">
-                                                    <thead><tr><th>Kho hàng</th><th class="text-end">Tồn</th><th class="text-end">Giữ</th><th class="text-end">Sẵn sàng</th></tr></thead>
+                                                <table class="table table-sm mb-0 shadow-sm border">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th class="py-2 ps-3 text-muted fst-italic">Kho hàng</th>
+                                                            <th class="py-2 text-end text-muted fst-italic">Tồn</th>
+                                                            <th class="py-2 text-end text-muted fst-italic">Giữ</th>
+                                                            <th class="py-2 text-end text-muted fst-italic pe-3">Sẵn sàng</th>
+                                                        </tr>
+                                                    </thead>
                                                     <tbody>
                                                         <t t-foreach="bk.get('rows', [])" t-as="w">
                                                             <tr>
-                                                                <td><t t-esc="w['warehouse_name']"/></td>
+                                                                <td class="ps-3"><t t-esc="w['warehouse_name']"/></td>
                                                                 <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_total'])"/></td>
                                                                 <td class="text-end"><t t-esc="'{:,.0f}'.format(w['qty_reserved'])"/></td>
-                                                                <td t-attf-class="text-end #{ 'text-success fw-bold' if w['qty_available'] > 0 else 'text-muted' }">
+                                                                <td t-attf-class="text-end pe-3 #{ 'text-success fw-bold' if w['qty_available'] > 0 else 'text-muted' }">
                                                                     <t t-esc="'{:,.0f}'.format(w['qty_available'])"/>
                                                                 </td>
                                                             </tr>
