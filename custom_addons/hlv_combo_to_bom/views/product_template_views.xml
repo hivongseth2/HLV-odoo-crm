@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add button on product form in Combo Items tab -->
+    <record id="product_template_form_view_combo_bom" model="ir.ui.view">
+        <field name="name">product.template.form.combo.bom</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="combo_product.product_template_form_view_combo"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='combo_product']" position="inside">
+                <group invisible="not is_combo">
+                    <group>
+                        <field name="has_bom_from_combo" readonly="1"/>
+                    </group>
+                    <group>
+                        <button name="action_open_combo_to_bom_wizard" 
+                                type="object" 
+                                string="🔄 Tạo BOM từ Combo" 
+                                class="btn-primary"
+                                invisible="has_bom_from_combo"/>
+                        <label string="✅ Đã tạo BOM" class="text-success"
+                               invisible="not has_bom_from_combo"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

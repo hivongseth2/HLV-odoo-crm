@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Wizard Form View -->
+    <record id="combo_to_bom_wizard_form_view" model="ir.ui.view">
+        <field name="name">combo.to.bom.wizard.form</field>
+        <field name="model">combo.to.bom.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Chuyển Combo thành BOM">
+                <group>
+                    <group string="Sản phẩm Combo">
+                        <field name="product_template_ids" widget="many2many_tags" 
+                               options="{'no_create': True}"
+                               domain="[('is_combo', '=', True)]"/>
+                    </group>
+                    <group string="Cấu hình BOM">
+                        <field name="bom_type"/>
+                        <field name="convert_product_type"/>
+                        <field name="new_product_type" invisible="not convert_product_type"/>
+                        <field name="skip_existing_bom"/>
+                    </group>
+                </group>
+                <separator string="Combo Items sẽ được chuyển thành BOM Lines"/>
+                <field name="product_template_ids" mode="tree" readonly="1">
+                    <tree string="Chi tiết Combo Items" create="0" delete="0">
+                        <field name="name"/>
+                        <field name="default_code"/>
+                        <field name="combo_product_id" widget="many2many_tags" string="Thành phần"/>
+                    </tree>
+                </field>
+                <footer>
+                    <button name="action_convert" type="object" string="Chuyển đổi" class="btn-primary"/>
+                    <button name="action_preview" type="object" string="Xem trước" class="btn-secondary"/>
+                    <button string="Hủy" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open wizard from menu -->
+    <record id="action_combo_to_bom_wizard" model="ir.actions.act_window">
+        <field name="name">Chuyển Combo thành BOM</field>
+        <field name="res_model">combo.to.bom.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="context">{'active_ids': active_ids}</field>
+    </record>
+
+    <!-- Server action for multi-select on product list -->
+    <record id="action_server_combo_to_bom" model="ir.actions.server">
+        <field name="name">Chuyển Combo thành BOM</field>
+        <field name="model_id" ref="product.model_product_template"/>
+        <field name="binding_model_id" ref="product.model_product_template"/>
+        <field name="binding_view_types">list,form</field>
+        <field name="state">code</field>
+        <field name="code">
+if records:
+    action = {
+        'name': 'Chuyển Combo thành BOM',
+        'type': 'ir.actions.act_window',
+        'res_model': 'combo.to.bom.wizard',
+        'view_mode': 'form',
+        'target': 'new',
+        'context': {
+            'default_product_template_ids': [(6, 0, records.filtered(lambda r: r.is_combo).ids)],
+        },
+    }
+        </field>
+    </record>
+</odoo>
